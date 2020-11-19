@@ -1,0 +1,3 @@
+bonfire_common = "https://github.com/bonfire-ecosystem/bonfire_common#main"
+bonfire_data_post = "https://github.com/bonfire-ecosystem/bonfire_data_post#main"
+bonfire_data_content = "https://github.com/bonfire-ecosystem/bonfire_data_content#main"
