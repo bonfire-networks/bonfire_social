@@ -25,3 +25,5 @@ bonfire_social-*.tar
 
 # Temporary files for e.g. tests
 /tmp
+
+deps.path

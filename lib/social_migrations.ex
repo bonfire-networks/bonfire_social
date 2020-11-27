@@ -8,7 +8,7 @@ defmodule Bonfire.Social.Migrations do
     migrate_post()
     migrate_content_media()
     migrate_content_text()
-    migrate_follow()
+    migrate_follow([using: "btree"])
   end
 
   def down do
