@@ -17,6 +17,7 @@
   "cpub_actors": {:git, "https://github.com/commonspub/cpub_actors", "b3c591fa3227d70c7a159fb14d18d3295a514346", [branch: "main"]},
   "cpub_characters": {:git, "https://github.com/commonspub/cpub_characters", "8a091481c23896ba4e594ba6438bd3ec6fbb8f0e", [branch: "main"]},
   "cpub_emails": {:git, "https://github.com/commonspub/cpub_emails", "9ce5af3da39c8d8488d3de5fbb760e4c7706578c", [branch: "main"]},
+  "cpub_follows": {:git, "https://github.com/bonfire-ecosystem/cpub_follows", "80dbbefc963391bb545daadaafee1aace27922b9", [branch: "main"]},
   "cpub_local_auth": {:git, "https://github.com/commonspub/cpub_local_auth", "f3e4393659718044cc985b9958684cc791844d66", [branch: "main"]},
   "cpub_profiles": {:git, "https://github.com/commonspub/cpub_profiles", "c0f8d35eb1a6417ed7a4a772f039655d4886d0b2", [branch: "main"]},
   "cpub_users": {:git, "https://github.com/commonspub/cpub_users", "94c56849af715c314860d52a08e191f5b274045a", [branch: "main"]},
