@@ -1,6 +1,6 @@
 defmodule Bonfire.Social.Follows do
-  alias CommonsPub.Users.User
-  alias CommonsPub.Follows.Follow
+  alias Bonfire.Data.Identity.User
+  alias Bonfire.Data.Social.Follow
 
   defp repo, do: Application.get_env(:bonfire_social, :repo_module)
 
