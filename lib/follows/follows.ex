@@ -1,15 +1,14 @@
 defmodule Bonfire.Social.Follows do
   alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Follow
+  import Bonfire.Me.Integration
 
-  defp repo, do: Application.get_env(:bonfire_social, :repo_module)
-
-  def create(%User{} = follower, followed) do
+  def follow(%User{} = follower, %{} = followed) do
     create_changeset(follower, followed)
     |> repo().insert()
   end
 
-  def create_changeset(follower, followed) do
-    Follow.changeset(%Follow{}, %{follower_id: follower.id, followed_id: followed.id})
+  def create_changeset(%{id: follower}, %{id: followed}) do
+    Follow.changeset(%Follow{}, %{follower_id: follower, followed_id: followed})
   end
 end
