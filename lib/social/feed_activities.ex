@@ -28,7 +28,7 @@ defmodule Bonfire.Social.FeedActivities do
 
     build_query(feed_id: feed_id_or_ids) # query FeedPublish + assocs needed in timelines/feeds
       |> preload_join(:activity)
-      |> Activities.activity_preloads(current_user)
+      |> Activities.activity_preloads(current_user, :all)
       |> Bonfire.Repo.many_paginated(before: cursor_after) # return a page of items + pagination metadata
       # |> IO.inspect
   end

@@ -45,7 +45,7 @@ defmodule Bonfire.Social.Activities do
       select: f.id
   end
 
-  def object_preload_create_activity(q, current_user, preloads \\ :without_creator) do
+  def object_preload_create_activity(q, current_user, preloads \\ :default) do
     verb_id = Verbs.verbs()[:create]
 
     q
@@ -54,7 +54,24 @@ defmodule Bonfire.Social.Activities do
     |> activity_preloads(current_user, preloads)
   end
 
-  def activity_preloads(query, current_user, :all \\ :all) do
+  def activity_preloads(query, current_user, preloads) when is_list(preloads) do
+    IO.inspect(preloads)
+    Enum.reduce(preloads, query, fn preload, query ->
+      query
+      |> activity_preloads(current_user, preload)
+    end)
+  end
+
+  def activity_preloads(query, current_user, :all) do
+
+    query
+      |> activity_preloads(current_user, :with_parents)
+      |> activity_preloads(current_user, :with_creator)
+      |> activity_preloads(current_user, :default)
+      # |> IO.inspect
+  end
+
+  def activity_preloads(query, current_user, :with_parents) do
 
     query
       # |> preload_join(:activity, :reply_to)
@@ -62,21 +79,18 @@ defmodule Bonfire.Social.Activities do
       |> preload_join(:activity, :reply_to_creator_profile)
       |> preload_join(:activity, :reply_to_creator_character)
       |> preload_join(:activity, :thread_post_content)
-      |> activity_preloads(current_user, :without_parents)
       # |> IO.inspect
   end
 
-
-  def activity_preloads(query, current_user, :without_parents) do
+  def activity_preloads(query, current_user, :with_creator) do
 
     query
       |> preload_join(:activity, :object_creator_profile)
       |> preload_join(:activity, :object_creator_character)
-      |> activity_preloads(current_user, :without_creator)
       # |> IO.inspect
   end
 
-  def activity_preloads(query, current_user, :without_creator) do
+  def activity_preloads(query, current_user, :default) do
 
     query
       |> preload_join(:activity, :verb)

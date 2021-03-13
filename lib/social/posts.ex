@@ -85,7 +85,7 @@ defmodule Bonfire.Social.Posts do
       # |> preload_join(:reply_to)
       # |> preload_join(:reply_to_post_content)
       # |> preload_join(:thread_post_content)
-      |> Activities.object_preload_create_activity(current_user)
+      |> Activities.object_preload_create_activity(current_user, [:default, :with_parents])
       # |> IO.inspect
       |> repo().single()
       # |> IO.inspect
@@ -134,7 +134,7 @@ defmodule Bonfire.Social.Posts do
       # |> preload_join(:activity)
       # |> preload_join(:activity, :subject_profile)
       # |> preload_join(:activity, :subject_character)
-      #|> IO.inspect
+      # |> IO.inspect
       |> repo().all # TODO: pagination
   end
 
