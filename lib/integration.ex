@@ -1,4 +1,4 @@
-defmodule Bonfire.Me.Integration do
+defmodule Bonfire.Social.Integration do
 
   def repo, do: Bonfire.Common.Config.get!(:repo_module)
 
