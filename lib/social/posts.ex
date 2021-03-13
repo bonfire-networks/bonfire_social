@@ -35,8 +35,13 @@ defmodule Bonfire.Social.Posts do
   def reply(creator, attrs) do
     with  {:ok, published} <- publish(creator, attrs),
           {:ok, r} <- get_replied(published.post.id) do
-      # TODO: send pubsub to thread
-      {:ok, Map.merge(r, published)}
+
+      reply = Map.merge(r, published)
+      # |> IO.inspect
+
+      Utils.pubsub_broadcast(Utils.e(reply, :thread_id, nil), {:thread_new_reply, reply}) # push to online users
+
+      {:ok, reply}
     end
   end
 
@@ -78,7 +83,7 @@ defmodule Bonfire.Social.Posts do
 
   def read(post_id, current_user) when is_binary(post_id) do
 
-    build_query(id: post_id)
+    with {:ok, post} <- build_query(id: post_id)
       # |> preload_join(:post_content)
       # |> preload_join(:creator_profile)
       # |> preload_join(:creator_character)
@@ -87,8 +92,12 @@ defmodule Bonfire.Social.Posts do
       # |> preload_join(:thread_post_content)
       |> Activities.object_preload_create_activity(current_user, [:default, :with_parents])
       # |> IO.inspect
-      |> repo().single()
-      # |> IO.inspect
+      |> repo().single() do
+
+        Utils.pubsub_subscribe(Utils.e(post, :activity, :thread_post_content, :id, nil) || post.id) # subscribe to realtime feed updates
+
+        {:ok, post}
+      end
   end
 
   def get(id) when is_binary(id) do

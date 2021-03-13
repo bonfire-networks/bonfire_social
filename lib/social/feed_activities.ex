@@ -128,8 +128,8 @@ defmodule Bonfire.Social.FeedActivities do
 
       published = %{published | activity: activity}
 
-      # Utils.pubsub_broadcast(feed.id, {:feed_activity, activity}) # push to online users
-      Utils.pubsub_broadcast(feed_id, published) # push to online users
+      Utils.pubsub_broadcast(feed.id, {:feed_new_activity, activity}) # push to online users
+      # Utils.pubsub_broadcast(feed_id, published) # push to online users
 
       {:ok, published}
     end

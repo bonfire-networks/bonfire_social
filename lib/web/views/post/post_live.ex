@@ -22,7 +22,7 @@ defmodule Bonfire.Social.Web.PostLive do
   defp mounted(params, session, socket) do
 
     with {:ok, post} <- Bonfire.Social.Posts.read(Map.get(params, "post_id"), e(socket, :assigns, :current_user, nil)) do
-      IO.inspect(post, label: "the post:")
+      # IO.inspect(post, label: "the post:")
 
       {activity, object} = Map.pop(post, :activity)
 

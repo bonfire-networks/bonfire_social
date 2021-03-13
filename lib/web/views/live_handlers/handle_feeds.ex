@@ -34,12 +34,12 @@ defmodule Bonfire.Social.Web.LiveHandlers.Feeds do
       )}
   end
 
-  def handle_info(%Bonfire.Data.Social.FeedPublish{}=fp, socket) do
+  def handle_info({:feed_new_activity, data}, socket) do
     # IO.inspect(pubsub_received: fp)
 
     {:noreply,
         Phoenix.LiveView.assign(socket,
-          feed: [fp] ++ Map.get(socket.assigns, :feed, [])
+          feed: [data] ++ Map.get(socket.assigns, :feed, [])
       )}
   end
 

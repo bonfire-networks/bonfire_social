@@ -36,16 +36,29 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
     attrs = attrs |> input_to_atoms()
 
     with {:ok, published} <- Bonfire.Social.Posts.reply(socket.assigns.current_user, attrs) do
-      replies = [published] ++ socket.assigns.replies # TODO: replace with pubsub
-    # IO.inspect(replies, label: "rep:")
+
+      # replies = [published] ++ socket.assigns.replies # TODO: replace with pubsub
+
       {:noreply,
-        assign(socket,
-        replies: replies,
-        threaded_replies: Bonfire.Social.Posts.arrange_replies_tree(replies) || []
-    )}
+        socket
+        # assign(socket,
+        #   replies: replies,
+        #   threaded_replies: Bonfire.Social.Posts.arrange_replies_tree(replies) || []
+        # )
+    }
     end
 
   end
 
+  def handle_info({:thread_new_reply, data}, socket) do
+
+    replies = [data] ++ Utils.e(socket.assigns, :replies, [])
+
+    {:noreply,
+        Phoenix.LiveView.assign(socket,
+          replies: replies,
+          threaded_replies: Bonfire.Social.Posts.arrange_replies_tree(replies) || []
+      )}
+  end
 
 end
