@@ -8,8 +8,8 @@ defmodule Bonfire.Social.Feeds do
   import Bonfire.Me.Integration
   alias Bonfire.Common.Utils
 
-  def instance_feed_id, do: Bonfire.Me.AccessControl.Circles.circles[:local]
-  def fediverse_feed_id, do: Bonfire.Me.AccessControl.Circles.circles[:activity_pub]
+  def instance_feed_id, do: Bonfire.Boundaries.Circles.circles[:local]
+  def fediverse_feed_id, do: Bonfire.Boundaries.Circles.circles[:activity_pub]
 
   def my_feed_ids(%{} = user, extra_feeds \\ []) do
     extra_feeds = extra_feeds ++ [user.id]

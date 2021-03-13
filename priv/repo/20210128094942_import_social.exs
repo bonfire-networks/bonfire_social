@@ -1,4 +1,4 @@
-defmodule Bonfire.Repo.Migrations.ImportSocial do
+defmodule Bonfire.Social.Repo.Migrations.ImportSocial do
   use Ecto.Migration
 
   import Bonfire.Social.Migrations

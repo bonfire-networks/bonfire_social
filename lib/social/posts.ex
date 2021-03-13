@@ -2,7 +2,7 @@ defmodule Bonfire.Social.Posts do
 
   alias Bonfire.Data.Social.{Post, PostContent, Replied, Activity}
   alias Bonfire.Social.{Activities, FeedActivities}
-  alias Bonfire.Me.AccessControl.Verbs
+  alias Bonfire.Boundaries.Verbs
   alias Bonfire.Common.Utils
   alias Ecto.Changeset
   use Bonfire.Repo.Query,

@@ -1,7 +1,7 @@
 defmodule Bonfire.Social.Web.PostLive do
   use Bonfire.Web, {:live_view, [layout: {Bonfire.Web.LayoutView, "thread.html"}]}
   alias Bonfire.Fake
-  alias Bonfire.Common.Web.LivePlugs
+  alias Bonfire.Web.LivePlugs
   alias Bonfire.Me.Users
   alias Bonfire.Me.Web.{CreateUserLive, LoggedDashboardLive}
   import Bonfire.Me.Integration

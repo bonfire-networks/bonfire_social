@@ -91,7 +91,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def maybe_notify_admins(subject, verb, object) when is_atom(verb) do
-    admins = Bonfire.Me.Identity.Users.list_admins()
+    admins = Bonfire.Me.Users.list_admins()
 
     inboxes = admins_inbox(admins) #|> IO.inspect
 

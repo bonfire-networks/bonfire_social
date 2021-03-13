@@ -2,7 +2,7 @@ defmodule Bonfire.Social.Activities do
 
   alias Bonfire.Data.Social.{Activity, Like, Boost, Flag}
   alias Bonfire.Data.Identity.{User}
-  alias Bonfire.Me.AccessControl.Verbs
+  alias Bonfire.Boundaries.Verbs
   alias Ecto.Changeset
   # import Bonfire.Me.Integration
   # import Ecto.Query
