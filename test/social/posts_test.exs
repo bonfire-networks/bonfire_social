@@ -8,7 +8,7 @@ defmodule Bonfire.Social.PostsTest do
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
     account = Fake.fake_account!()
     user = Fake.fake_user!(account)
-    assert {:ok, activty} = Posts.publish(user, attrs)
+    assert {:ok, activity} = Posts.publish(user, attrs)
     assert activity.post.post_content.html_body == "<p>epic html message</p>"
     assert activity.post.post_content.name == "name"
     assert activity.post.post_content.summary == "summary"
