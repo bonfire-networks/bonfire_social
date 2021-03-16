@@ -52,6 +52,16 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
 
   end
 
+  def handle_event("post_follow", %{"id" => thread_id}, socket) do
+    with {:ok, _follow} <- Bonfire.Social.Follows.follow(e(socket.assigns, :current_user, nil), thread_id) do
+      {:noreply, assign(socket,
+       following: true
+     )}
+    else e ->
+      {:noreply, socket} # TODO: handle errors
+    end
+  end
+
   def handle_info({:thread_new_reply, data}, socket) do
 
     replies = [data] ++ Utils.e(socket.assigns, :replies, [])

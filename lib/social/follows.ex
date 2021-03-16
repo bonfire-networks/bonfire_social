@@ -21,10 +21,20 @@ defmodule Bonfire.Social.Follows do
       {:ok, follow}
     end
   end
+  def follow(%User{} = user, object) when is_binary(object) do
+    with {:ok, object} <- Bonfire.Common.Pointers.get(object) do
+      follow(user, object)
+    end
+  end
 
   def unfollow(%User{}=follower, %{}=followed) do
     delete_by_both(follower, followed)
     Activities.delete_by_subject_verb_object(follower, :follow, followed) # delete the like activity & feed entries
+  end
+  def unfollow(%User{} = user, object) when is_binary(object) do
+    with {:ok, object} <- Bonfire.Common.Pointers.get(object) do
+      unfollow(user, object)
+    end
   end
 
   defp create(%{} = follower, %{} = followed) do
