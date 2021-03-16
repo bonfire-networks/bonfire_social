@@ -16,13 +16,15 @@ defmodule Bonfire.Social.Follows do
 
   def follow(%User{} = follower, %{} = followed) do
     with {:ok, follow} <- create(follower, followed) do
-      FeedActivities.publish(follower, :follow, followed)
+      # FeedActivities.publish(follower, :follow, followed)
+      FeedActivities.maybe_notify_object(follower, :follow, followed)
       {:ok, follow}
     end
   end
 
   def unfollow(%User{}=follower, %{}=followed) do
     delete_by_both(follower, followed)
+    Activities.delete_by_subject_verb_object(follower, :follow, followed) # delete the like activity & feed entries
   end
 
   defp create(%{} = follower, %{} = followed) do

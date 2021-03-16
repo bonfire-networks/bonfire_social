@@ -50,6 +50,30 @@ defmodule Bonfire.Social.Feeds do
     nil
   end
 
+  def creator_feed(object) do
+    object = object |> Bonfire.Repo.maybe_preload([creator_character: [:inbox]]) #|> IO.inspect
+
+    Utils.e(object, :creator_character, :inbox, :feed_id, nil)
+      || Feeds.inbox_feed_id(Utils.e(object, :creator_character, nil)) |> IO.inspect
+  end
+
+  def tags_feed(tags) when is_list(tags), do: Enum.map(tags, fn x -> tags_feed(x) end)
+  def tags_feed(%{character: character}) do
+    character = character |> Bonfire.Repo.maybe_preload([:inbox]) #|> IO.inspect
+
+    Utils.e(character, :inbox, :feed_id, nil)
+      || Feeds.inbox_feed_id(character)
+  end
+
+  defp admins_inbox(), do: Bonfire.Me.Users.list_admins() |> admins_inbox()
+  defp admins_inbox(admins) when is_list(admins), do: Enum.map(admins, fn x -> admins_inbox(x) end)
+  defp admins_inbox(admin) do
+    admin = admin |> Bonfire.Repo.maybe_preload(:inbox) #|> IO.inspect
+    Utils.e(admin, :inbox, :feed_id, nil)
+      || Feeds.inbox_feed_id(admin)
+  end
+
+
   @doc """
   Create a OUTBOX feed for an existing Pointable (eg. User)
   """

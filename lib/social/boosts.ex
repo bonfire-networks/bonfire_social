@@ -16,10 +16,19 @@ defmodule Bonfire.Social.Boosts do
   def by_any(%User{}=user), do: repo().all(by_any_q(user))
 
   def boost(%User{} = booster, %{} = boosted) do
-    with {:ok, boost} <- create(booster, boosted) do
+    with {:ok, boost} <- create(booster, boosted),
+    {:ok, published} <- FeedActivities.publish(booster, :boost, boosted) do
       # TODO: increment the boost count
-      FeedActivities.publish(booster, :boost, boosted)
+
+      FeedActivities.maybe_notify_creator(published, boosted) |> IO.inspect
+
       {:ok, boost}
+    end
+  end
+  def boost(%User{} = booster, boosted) when is_binary(boosted) do
+    with {:ok, boosted} <- Bonfire.Common.Pointers.get(boosted) do
+      # IO.inspect(liked)
+      boost(booster, boosted)
     end
   end
 
@@ -27,6 +36,12 @@ defmodule Bonfire.Social.Boosts do
     delete_by_both(booster, boosted) # delete the Boost
     Activities.delete_by_subject_verb_object(booster, :boost, boosted) # delete the boost activity & feed entries
     # TODO: decrement the boost count
+  end
+  def unboost(%User{} = booster, boosted) when is_binary(boosted) do
+    with {:ok, boosted} <- Bonfire.Common.Pointers.get(boosted) do
+      # IO.inspect(liked)
+      unboost(booster, boosted)
+    end
   end
 
   defp create(%{} = booster, %{} = boosted) do

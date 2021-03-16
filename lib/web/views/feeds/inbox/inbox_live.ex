@@ -19,10 +19,10 @@ defmodule Bonfire.Social.Web.Feeds.InboxLive do
 
   defp mounted(params, session, socket) do
 
-    # IO.inspect(socket.assigns.current_user)
     feed_id = Bonfire.Social.Feeds.my_inbox_feed_id(socket.assigns)
+    IO.inspect(feed_id: feed_id)
 
-    feed = Bonfire.Social.FeedActivities.feed(feed_id, e(socket.assigns, :current_user, nil))
+    feed = Bonfire.Social.FeedActivities.feed(feed_id, e(socket.assigns, :current_user, nil), nil, [:default]) # FIXME: for some reason preloading creator or reply_to when we have a boost in inbox breaks ecto
 
     {:ok, socket
     |> assign(
