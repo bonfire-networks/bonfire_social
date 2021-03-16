@@ -6,7 +6,6 @@ defmodule Bonfire.Social.Web.PostLive do
   alias Bonfire.Me.Web.{CreateUserLive, LoggedDashboardLive}
   import Bonfire.Me.Integration
 
-  @thread_max_depth 3 # TODO: put in config
 
   def mount(params, session, socket) do
     LivePlugs.live_plug(params, session, socket, [

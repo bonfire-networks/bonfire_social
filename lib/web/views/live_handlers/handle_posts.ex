@@ -4,6 +4,8 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
   import Utils
   import Phoenix.LiveView
 
+  @thread_max_depth 3 # TODO: put in config
+
   def handle_event("post", params, socket) do
     attrs = params
     |> input_to_atoms()
