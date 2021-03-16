@@ -23,11 +23,21 @@ defmodule Bonfire.Social.Flags do
       {:ok, flag}
     end
   end
+  def flag(%User{} = user, object) when is_binary(object) do
+    with {:ok, object} <- Bonfire.Common.Pointers.get(object) do
+      flag(user, object)
+    end
+  end
 
   def unflag(%User{}=flagger, %{}=flagged) do
     delete_by_both(flagger, flagged) # delete the Flag
     Activities.delete_by_subject_verb_object(flagger, :flag, flagged) # delete the flag activity & feed entries (not needed unless publishing flags to feeds)
     # TODO: decrement the flag count
+  end
+  def unflag(%User{} = user, object) when is_binary(object) do
+    with {:ok, object} <- Bonfire.Common.Pointers.get(object) do
+      unflag(user, object)
+    end
   end
 
   defp create(%{} = flagger, %{} = flagged) do
