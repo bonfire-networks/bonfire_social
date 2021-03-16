@@ -1,5 +1,5 @@
 defmodule Bonfire.Social.Web.PostLive do
-  use Bonfire.Web, {:live_view, [layout: {Bonfire.Web.LayoutView, "thread.html"}]}
+  use Bonfire.Web, :live_view
   alias Bonfire.Fake
   alias Bonfire.Web.LivePlugs
   alias Bonfire.Me.Users
@@ -30,6 +30,7 @@ defmodule Bonfire.Social.Web.PostLive do
       |> assign(
         page_title: "Post",
         activity: activity,
+        page: "Discussion",
         object: object
       )}
 
