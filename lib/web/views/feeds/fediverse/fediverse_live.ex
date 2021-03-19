@@ -29,6 +29,7 @@ defmodule Bonfire.Social.Web.Feeds.FediverseLive do
     |> assign(
       page: "fediverse",
       page_title: "Fediverse Feed",
+      smart_input: true,
       feed_title: title,
       feed_id: feed_id,
       feed: e(feed, :entries, []),
