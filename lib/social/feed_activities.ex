@@ -11,6 +11,22 @@ defmodule Bonfire.Social.FeedActivities do
       searchable_fields: [:id, :feed_id, :object_id],
       sortable_fields: [:id]
 
+  # def base_query(user) do
+  #   import Bonfire.Boundaries.Queries
+
+  #   cs = can_see?({:activity, :object_id}, user)
+  #   from obj in FeedPublish,
+  #     left_lateral_join: _cs in ^cs
+  # end
+
+  def as_permitted_for(q, user, verb \\ :see) do
+    import Bonfire.Boundaries.Queries
+
+    cs = can?({:activity, :object_id}, user, verb)
+
+    q |> join(:left_lateral, _cs in ^cs)
+  end
+
   def my_feed(user, cursor_before \\ nil) do
 
     # feeds the user is following
@@ -26,9 +42,13 @@ defmodule Bonfire.Social.FeedActivities do
 
     Utils.pubsub_subscribe(feed_id_or_ids) # subscribe to realtime feed updates
 
-    build_query(feed_id: feed_id_or_ids) # query FeedPublish + assocs needed in timelines/feeds
+    # query FeedPublish + assocs needed in timelines/feeds
+    # build_query(base_query(current_user), feed_id: feed_id_or_ids)
+    build_query(feed_id: feed_id_or_ids)
       |> preload_join(:activity)
+      |> as_permitted_for(current_user)
       |> Activities.activity_preloads(current_user, preloads)
+      |> IO.inspect
       # |> Bonfire.Repo.all() # return all items
       |> Bonfire.Repo.many_paginated(before: cursor_before) # return a page of items (reverse chronological) + pagination metadata
       # |> IO.inspect

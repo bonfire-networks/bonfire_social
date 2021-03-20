@@ -18,12 +18,17 @@ defmodule Bonfire.Social.Posts do
   end
 
   def publish(creator, attrs) do
+    IO.inspect(attrs)
     with  {:ok, post} <- create(creator, attrs),
           {:ok, maybe_tagged} <- maybe_tag(creator, post),
           {:ok, activity} <- FeedActivities.publish(creator, :create, Map.merge(post, maybe_tagged)) do
 
+            Bonfire.Me.Users.Boundaries.maybe_grant_read_to_circles(creator, post, Utils.e(attrs, :circles, nil))
+
             # IO.inspect(post)
             maybe_notify_thread(post, activity)
+
+
 
       {:ok, %{post: post, activity: activity}}
     end
