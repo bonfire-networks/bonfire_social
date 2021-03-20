@@ -5,6 +5,8 @@ defmodule Bonfire.Social.Web.Feeds.InboxLive do
   alias Bonfire.Me.Users
   alias Bonfire.Me.Web.{CreateUserLive}
   alias Bonfire.UI.Social.FeedLive
+  alias Bonfire.Me.Fake
+
 
   def mount(params, session, socket) do
     LivePlugs.live_plug params, session, socket, [
@@ -18,6 +20,15 @@ defmodule Bonfire.Social.Web.Feeds.InboxLive do
   end
 
   defp mounted(params, session, socket) do
+    current_user = Map.get(socket.assigns, :current_user)
+
+    user = case Map.get(params, "username") do
+      nil -> e(socket.assigns, :current_user, Fake.user_live())
+      username ->
+        with {:ok, user} <- Bonfire.Me.Users.by_username(username) do
+          user
+        end
+    end
 
     feed_id = Bonfire.Social.Feeds.my_inbox_feed_id(socket.assigns)
     IO.inspect(feed_id: feed_id)
@@ -29,7 +40,9 @@ defmodule Bonfire.Social.Web.Feeds.InboxLive do
       page: "notifications",
       page_title: "Notifications",
       feed_title: "Notifications",
+      smart_input: false,
       feed_id: feed_id,
+      user: user,
       feed: e(feed, :entries, []),
       page_info: e(feed, :metadata, [])
       )}

@@ -27,6 +27,7 @@ defmodule Bonfire.Social.Web.Feeds.InstanceLive do
     |> assign(
       page: "instance",
       page_title: "Instance Feed",
+      smart_input: true,
       feed_title: title,
       feed_id: feed_id,
       feed: e(feed, :entries, []),

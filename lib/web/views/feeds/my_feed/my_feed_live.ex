@@ -25,6 +25,7 @@ defmodule Bonfire.Social.Web.Feeds.MyFeedLive do
     |> assign(
       page: "feed",
       page_title: "My Feed",
+      smart_input: true,
       feed_title: "My Feed",
       feed: e(feed, :entries, []),
       page_info: e(feed, :metadata, [])
