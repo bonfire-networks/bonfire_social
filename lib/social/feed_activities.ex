@@ -19,10 +19,10 @@ defmodule Bonfire.Social.FeedActivities do
   #     left_lateral_join: _cs in ^cs
   # end
 
-  def as_permitted_for(q, user, verb \\ :see) do
+  def as_permitted_for(q, user) do
     import Bonfire.Boundaries.Queries
 
-    cs = can?({:activity, :object_id}, user, verb)
+    cs = can_see?({:activity, :object_id}, user)
 
     q |> join(:left_lateral, _cs in ^cs)
   end

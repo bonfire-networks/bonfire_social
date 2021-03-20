@@ -113,7 +113,30 @@ defmodule Bonfire.Social.Posts do
 
         Utils.pubsub_subscribe(Utils.e(post, :activity, :thread_post_content, :id, nil) || post.id) # subscribe to realtime feed updates
 
-        {:ok, post}
+        # verb_ids = Bonfire.Boundaries.Queries.verb_ids(:see)
+        # guest_circle_id = Bonfire.Boundaries.Circles.circles()[:guest]
+
+        # Ecto.Query.from(controlled in Bonfire.Data.AccessControl.Controlled, [
+        #   join: acl in assoc(controlled, :acl),
+        #   join: grant in assoc(acl, :grants),
+        #   join: access in assoc(grant, :access),
+        #   join: interact in assoc(access, :interacts),
+        #   left_join: circle in Bonfire.Data.Social.Circle,
+        #   on: grant.subject_id == circle.id,
+        #   where: interact.verb_id in ^verb_ids,
+        #   where: controlled.id == ^post.id,
+        #   group_by: [controlled.id, interact.id],
+        #   having: fragment("agg_perms(?)", interact.value),
+        #   # select: struct(interact, [:id]),
+        #   # guest or admin or user or circle-user-is-in can:
+        #   left_join: encircle in assoc(circle, :encircles),
+        #   where: circle.id == ^guest_circle_id or grant.subject_id == ^current_user.id or encircle.subject_id == ^current_user.id,
+        # ])
+        # |> IO.inspect
+        # |> repo.all()
+        # |> IO.inspect
+
+        {:ok, post} #|> repo().maybe_preload(controlled: [acl: [grants: [access: [:interacts]]]]) |> IO.inspect
       end
   end
 
