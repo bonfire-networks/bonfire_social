@@ -22,6 +22,9 @@ defmodule Bonfire.Social.Posts do
           {:ok, maybe_tagged} <- maybe_tag(creator, post),
           {:ok, activity} <- FeedActivities.publish(creator, :create, Map.merge(post, maybe_tagged)) do
 
+            # IO.inspect(post)
+            maybe_notify_thread(post, activity)
+
       {:ok, %{post: post, activity: activity}}
     end
   end
@@ -31,6 +34,15 @@ defmodule Bonfire.Social.Posts do
     else: {:ok, post}
     # {:ok, post}
   end
+
+  defp maybe_notify_thread(%{replied: %{thread_id: thread_id, reply_to_id: reply_to_id}} = reply, activity) when is_binary(thread_id) and is_binary(reply_to_id) do
+
+    FeedActivities.maybe_notify(activity, thread_id) |> IO.inspect # push to user following the thread
+
+    Utils.pubsub_broadcast(thread_id, {:thread_new_reply, reply}) # push to users viewing the thread
+
+  end
+  defp maybe_notify_thread(_, _), do: nil
 
   def reply(creator, attrs) do
     with  {:ok, published} <- publish(creator, attrs),
@@ -129,11 +141,12 @@ defmodule Bonfire.Social.Posts do
     repo().single(from p in Replied, where: p.id == ^id)
   end
 
-  def list_replies(%{id: thread_id}, current_user, max_depth \\ 3), do: list_replies(thread_id, current_user, max_depth)
-  def list_replies(%{thread_id: thread_id}, current_user, max_depth), do: list_replies(thread_id, current_user, max_depth)
-  def list_replies(thread_id, current_user, max_depth) when is_binary(thread_id), do: Pointers.ULID.dump(thread_id) |> do_list_replies(current_user, max_depth)
+  def list_replies(%{id: thread_id}, current_user, cursor \\ nil, max_depth \\ 3, limit \\ 500), do: list_replies(thread_id, current_user, cursor, max_depth, limit)
+  def list_replies(%{thread_id: thread_id}, current_user, cursor, max_depth, limit), do: list_replies(thread_id, current_user, cursor, max_depth, limit)
+  def list_replies(thread_id, current_user, cursor, max_depth, limit) when is_binary(thread_id), do: Pointers.ULID.dump(thread_id) |> do_list_replies(current_user, cursor, max_depth, limit)
 
-  defp do_list_replies({:ok, thread_id}, current_user, max_depth) do
+  defp do_list_replies({:ok, thread_id}, current_user, cursor, max_depth, limit) do
+    IO.inspect(cursor: cursor)
     %Replied{id: thread_id}
       |> Replied.descendants()
       |> Replied.where_depth(is_smaller_than_or_equal_to: max_depth)
@@ -143,8 +156,9 @@ defmodule Bonfire.Social.Posts do
       # |> preload_join(:activity)
       # |> preload_join(:activity, :subject_profile)
       # |> preload_join(:activity, :subject_character)
+      |> Bonfire.Repo.many_paginated(limit: limit, before: Utils.e(cursor, :before, nil), after: Utils.e(cursor, :after, nil)) # return a page of items + pagination metadata
+      # |> repo().all # without pagination
       # |> IO.inspect
-      |> repo().all # TODO: pagination
   end
 
   def arrange_replies_tree(replies), do: replies |> Replied.arrange()

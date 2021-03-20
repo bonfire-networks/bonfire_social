@@ -11,8 +11,9 @@ defmodule Bonfire.Social.Web.Routes do
 
         live "/instance", Feeds.InstanceLive
 
-        live "/post/:post_id", PostLive
-        live "/discussion/:post_id", PostLive
+        live "/post/:id", PostLive
+        live "/discussion/:id", DiscussionLive
+        live "/discussion/:id/reply/:reply_id", DiscussionLive
 
       end
 

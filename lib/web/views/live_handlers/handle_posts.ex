@@ -6,6 +6,35 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
 
   @thread_max_depth 3 # TODO: put in config
 
+  def handle_params(%{"cursor" => cursor} = _attrs, _, %{assigns: %{thread_id: thread_id}} = socket) do
+    live_more(thread_id, cursor, socket, false)
+  end
+
+  def handle_event("feed_load_more", %{"cursor" => cursor} = _attrs, %{assigns: %{thread_id: thread_id}} = socket) do
+    live_more(thread_id, cursor, socket)
+  end
+
+  def live_more(thread_id, cursor, socket, infinite_scroll \\ true) do
+    IO.inspect(pagination: cursor)
+
+    with %{entries: replies, metadata: page_info} <- Bonfire.Social.Posts.list_replies(thread_id, e(socket, :assigns, :current_user, nil), cursor, @thread_max_depth) do
+
+      replies = if infinite_scroll, do: e(socket.assigns, :replies, []) ++ (replies || []),
+      else: replies || []
+
+      threaded_replies = if is_list(replies) and length(replies)>0, do: Bonfire.Social.Posts.arrange_replies_tree(replies), else: []
+      # IO.inspect(replies, label: "REPLIES:")
+
+      {:noreply,
+      socket
+      |> Phoenix.LiveView.assign(
+        replies: replies || [],
+        threaded_replies: threaded_replies,
+        page_info: page_info,
+      )}
+    end
+  end
+
   def handle_event("post", params, socket) do
     attrs = params
     |> input_to_atoms()
@@ -24,7 +53,7 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
 
   def handle_event("post_load_replies", %{"id" => id, "level" => level}, socket) do
     {level, _} = Integer.parse(level)
-    replies = Bonfire.Social.Posts.list_replies(id, level + @thread_max_depth)
+    replies = Bonfire.Social.Posts.list_replies(id, nil, level + @thread_max_depth)
     replies = replies ++ socket.assigns.replies
     {:noreply,
         assign(socket,

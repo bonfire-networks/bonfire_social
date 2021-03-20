@@ -51,7 +51,7 @@ defmodule Bonfire.Social.Web.Feeds.FediverseLive do
   #    )}
   # end
 
-
+  defdelegate handle_params(params, attrs, socket), to: Bonfire.Web.LiveHandler
   defdelegate handle_event(action, attrs, socket), to: Bonfire.Web.LiveHandler
   defdelegate handle_info(info, socket), to: Bonfire.Web.LiveHandler
 

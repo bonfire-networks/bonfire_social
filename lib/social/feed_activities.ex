@@ -11,18 +11,18 @@ defmodule Bonfire.Social.FeedActivities do
       searchable_fields: [:id, :feed_id, :object_id],
       sortable_fields: [:id]
 
-  def my_feed(user, cursor_after \\ nil) do
+  def my_feed(user, cursor_before \\ nil) do
 
     # feeds the user is following
     feed_ids = Feeds.my_feed_ids(user)
     # IO.inspect(inbox_feed_ids: feed_ids)
 
-    feed(feed_ids, user, cursor_after)
+    feed(feed_ids, user, cursor_before)
   end
 
-  def feed(%{id: feed_id}, current_user \\ nil, cursor_after \\ nil, preloads \\ :all), do: feed(feed_id, current_user, cursor_after, preloads)
+  def feed(%{id: feed_id}, current_user \\ nil, cursor_before \\ nil, preloads \\ :all), do: feed(feed_id, current_user, cursor_before, preloads)
 
-  def feed(feed_id_or_ids, current_user, cursor_after, preloads) when is_binary(feed_id_or_ids) or is_list(feed_id_or_ids) do
+  def feed(feed_id_or_ids, current_user, cursor_before, preloads) when is_binary(feed_id_or_ids) or is_list(feed_id_or_ids) do
 
     Utils.pubsub_subscribe(feed_id_or_ids) # subscribe to realtime feed updates
 
@@ -30,7 +30,7 @@ defmodule Bonfire.Social.FeedActivities do
       |> preload_join(:activity)
       |> Activities.activity_preloads(current_user, preloads)
       # |> Bonfire.Repo.all() # return all items
-      |> Bonfire.Repo.many_paginated(before: cursor_after) # return a page of items + pagination metadata
+      |> Bonfire.Repo.many_paginated(before: cursor_before) # return a page of items (reverse chronological) + pagination metadata
       # |> IO.inspect
   end
 
@@ -79,11 +79,10 @@ defmodule Bonfire.Social.FeedActivities do
   @doc """
   Takes an existing activity and puts it in the object creator's inbox
   """
-  def maybe_notify_creator(%{activity: activity}, object), do: maybe_notify_creator(activity, object)
   def maybe_notify_creator(%Bonfire.Data.Social.Activity{} = activity, object) do
     # IO.inspect(activity)
     # IO.inspect(object)
-    put_in_feeds(Feeds.creator_feed(object), activity)
+    maybe_notify(activity, Feeds.creator_feed(object))
     # TODO: notify remote users via AP
   end
 
@@ -102,6 +101,12 @@ defmodule Bonfire.Social.FeedActivities do
   def maybe_notify_admins(subject, verb, object) when is_atom(verb) do
 
     create_and_put_in_feeds(subject, verb, object, Feeds.admins_inbox())
+    # TODO: notify remote users via AP
+  end
+
+  def maybe_notify(%{activity: activity}, feed), do: maybe_notify(activity, feed)
+  def maybe_notify(%Bonfire.Data.Social.Activity{} = activity, feed) do
+    put_in_feeds(feed, activity)
     # TODO: notify remote users via AP
   end
 

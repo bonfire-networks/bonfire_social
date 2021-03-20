@@ -3,8 +3,11 @@ defmodule Bonfire.Social.Follows do
   alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Follow
   alias Bonfire.Social.FeedActivities
-  import Ecto.Query
-  import Bonfire.Me.Integration
+
+  use Bonfire.Repo.Query,
+    schema: Follow,
+    searchable_fields: [:id, :follower_id, :followed_id],
+    sortable_fields: [:id]
 
   def following?(%User{}=user, followed), do: not is_nil(get!(user, followed))
   def get(%User{}=user, followed), do: repo().single(by_both_q(user, followed))
@@ -13,6 +16,18 @@ defmodule Bonfire.Social.Follows do
   # def by_follower(%User{}=user), do: repo().all(by_follower_q(user))
   def by_followed(%User{}=user), do: repo().all(by_followed_q(user))
   def by_any(%User{}=user), do: repo().all(by_any_q(user))
+
+  defp list(filters, current_user) do
+    # TODO: check permissions
+   build_query(filters)
+  end
+
+  def list_followed(%{id: user_id} = user, current_user \\ nil) when is_binary(user_id) do
+    list([follower_id: user_id], current_user)
+    |> preload_join(:followed_profile)
+    |> preload_join(:followed_character)
+    |> repo().all
+  end
 
   def follow(%User{} = follower, %{} = followed) do
     with {:ok, follow} <- create(follower, followed) do
