@@ -65,11 +65,11 @@ defmodule Bonfire.Social.Feeds do
       || inbox_feed_id(character)
   end
 
-  defp admins_inbox(), do: Bonfire.Me.Users.list_admins() |> admins_inbox()
-  defp admins_inbox(admins) when is_list(admins), do: Enum.map(admins, fn x -> admins_inbox(x) end)
-  defp admins_inbox(admin) do
-    admin = admin |> Bonfire.Repo.maybe_preload(:inbox) #|> IO.inspect
-    Utils.e(admin, :inbox, :feed_id, nil)
+  def admins_inbox(), do: Bonfire.Me.Users.list_admins() |> admins_inbox()
+  def admins_inbox(admins) when is_list(admins), do: Enum.map(admins, fn x -> admins_inbox(x) end)
+  def admins_inbox(admin) do
+    admin = admin |> Bonfire.Repo.maybe_preload([character: [:inbox]]) # |> IO.inspect
+    Utils.e(admin, :character, :inbox, :feed_id, nil)
       || inbox_feed_id(admin)
   end
 
@@ -107,7 +107,7 @@ defmodule Bonfire.Social.Feeds do
   end
 
   defp do_create_inbox(attrs) do
-    repo().put(Inbox.changeset(attrs))
+    repo().upsert(Inbox.changeset(attrs))
   end
 
   @doc """

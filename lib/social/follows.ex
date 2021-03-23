@@ -3,6 +3,7 @@ defmodule Bonfire.Social.Follows do
   alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Follow
   alias Bonfire.Social.FeedActivities
+  alias Bonfire.Social.Activities
 
   use Bonfire.Repo.Query,
     schema: Follow,
@@ -26,6 +27,13 @@ defmodule Bonfire.Social.Follows do
     list([follower_id: user_id], current_user)
     |> preload_join(:followed_profile)
     |> preload_join(:followed_character)
+    |> repo().all
+  end
+
+  def list_followers(%{id: user_id} = user, current_user \\ nil) when is_binary(user_id) do
+    list([followed_id: user_id], current_user)
+    |> preload_join(:follower_profile)
+    |> preload_join(:follower_character)
     |> repo().all
   end
 

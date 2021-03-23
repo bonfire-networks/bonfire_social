@@ -129,6 +129,8 @@ defmodule Bonfire.Social.FeedActivities do
       publishes when is_list(publishes) -> List.first(publishes)
     end
   end
+  defp create_and_put_in_feeds(subject, verb, object, %{feed_id: feed_id}), do: create_and_put_in_feeds(subject, verb, object, feed_id)
+
 
   defp put_in_feeds(feeds, activity) when is_list(feeds), do: Enum.map(feeds, fn x -> put_in_feeds(x, activity) end) # TODO: optimise?
 
