@@ -6,10 +6,21 @@ defmodule Bonfire.Social.Activities do
   alias Ecto.Changeset
   # import Bonfire.Me.Integration
   # import Ecto.Query
+  import Bonfire.Boundaries.Queries
   use Bonfire.Repo.Query,
     schema: Activity,
     searchable_fields: [:id, :subject_id, :verb_id, :object_id],
     sortable_fields: [:id, :subject_id, :verb_id, :object_id]
+
+  def as_permitted_for(q, user \\ nil) do
+
+    cs = can_see?({:activity, :object_id}, user)
+
+    q
+    |> join(:left_lateral, [], cs in ^cs, as: :cs)
+    |> where([cs: cs], cs.can_see == true)
+
+  end
 
   @doc """
   Create an Activity

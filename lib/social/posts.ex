@@ -12,16 +12,6 @@ defmodule Bonfire.Social.Posts do
       searchable_fields: [:id],
       sortable_fields: [:id]
 
-  def as_permitted_for(q, user \\ nil) do
-
-    cs = can_see?({:activity, :object_id}, user)
-
-    q
-    |> join(:left_lateral, [], cs in ^cs, as: :cs)
-    |> where([cs: cs], cs.can_see == true)
-
-  end
-
   def draft(creator, attrs) do
     # TODO: create as private
     with {:ok, post} <- create(creator, attrs) do
@@ -118,7 +108,7 @@ defmodule Bonfire.Social.Posts do
       # |> preload_join(:reply_to_post_content)
       # |> preload_join(:thread_post_content)
       |> Activities.object_preload_create_activity(current_user, [:default, :with_parents])
-      |> as_permitted_for(current_user)
+      |> Activities.as_permitted_for(current_user)
       # |> IO.inspect
       |> repo().single() do
 

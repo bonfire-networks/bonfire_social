@@ -5,22 +5,12 @@ defmodule Bonfire.Social.FeedActivities do
   alias Bonfire.Social.Feeds
   alias Bonfire.Social.Activities
   alias Bonfire.Common.Utils
-  import Bonfire.Boundaries.Queries
 
   use Bonfire.Repo.Query,
       schema: FeedPublish,
       searchable_fields: [:id, :feed_id, :object_id],
       sortable_fields: [:id]
 
-  def as_permitted_for(q, user \\ nil) do
-
-    cs = can_see?({:activity, :object_id}, user)
-
-    q
-    |> join(:left_lateral, [], cs in ^cs, as: :cs)
-    |> where([cs: cs], cs.can_see == true)
-
-  end
 
   def my_feed(user, cursor_before \\ nil) do
 
@@ -41,7 +31,7 @@ defmodule Bonfire.Social.FeedActivities do
     # build_query(base_query(current_user), feed_id: feed_id_or_ids)
     build_query(feed_id: feed_id_or_ids)
       |> preload_join(:activity)
-      |> as_permitted_for(current_user)
+      |> Activities.as_permitted_for(current_user)
       |> Activities.activity_preloads(current_user, preloads)
       # |> IO.inspect
       # |> Bonfire.Repo.all() # return all items
