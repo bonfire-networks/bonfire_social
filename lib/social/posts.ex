@@ -5,10 +5,22 @@ defmodule Bonfire.Social.Posts do
   alias Bonfire.Boundaries.Verbs
   alias Bonfire.Common.Utils
   alias Ecto.Changeset
+  import Bonfire.Boundaries.Queries
+
   use Bonfire.Repo.Query,
       schema: Post,
       searchable_fields: [:id],
       sortable_fields: [:id]
+
+  def as_permitted_for(q, user \\ nil) do
+
+    cs = can_see?({:activity, :object_id}, user)
+
+    q
+    |> join(:left_lateral, [], cs in ^cs, as: :cs)
+    |> where([cs: cs], cs.can_see == true)
+
+  end
 
   def draft(creator, attrs) do
     # TODO: create as private
@@ -18,17 +30,15 @@ defmodule Bonfire.Social.Posts do
   end
 
   def publish(creator, attrs) do
-    IO.inspect(attrs)
+    # IO.inspect(attrs)
     with  {:ok, post} <- create(creator, attrs),
           {:ok, maybe_tagged} <- maybe_tag(creator, post),
           {:ok, activity} <- FeedActivities.publish(creator, :create, Map.merge(post, maybe_tagged)) do
 
-            Bonfire.Me.Users.Boundaries.maybe_grant_read_to_circles(creator, post, Utils.e(attrs, :circles, nil))
+            Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, post, Utils.e(attrs, :circles, nil))
 
             # IO.inspect(post)
             maybe_notify_thread(post, activity)
-
-
 
       {:ok, %{post: post, activity: activity}}
     end
@@ -98,7 +108,7 @@ defmodule Bonfire.Social.Posts do
     |> Changeset.cast_assoc(:replied, [:required, with: &Replied.changeset/2])
   end
 
-  def read(post_id, current_user) when is_binary(post_id) do
+  def read(post_id, current_user \\ nil) when is_binary(post_id) do
 
     with {:ok, post} <- build_query(id: post_id)
       # |> preload_join(:post_content)
@@ -108,33 +118,11 @@ defmodule Bonfire.Social.Posts do
       # |> preload_join(:reply_to_post_content)
       # |> preload_join(:thread_post_content)
       |> Activities.object_preload_create_activity(current_user, [:default, :with_parents])
+      |> as_permitted_for(current_user)
       # |> IO.inspect
       |> repo().single() do
 
         Utils.pubsub_subscribe(Utils.e(post, :activity, :thread_post_content, :id, nil) || post.id) # subscribe to realtime feed updates
-
-        # verb_ids = Bonfire.Boundaries.Queries.verb_ids(:see)
-        # guest_circle_id = Bonfire.Boundaries.Circles.circles()[:guest]
-
-        # Ecto.Query.from(controlled in Bonfire.Data.AccessControl.Controlled, [
-        #   join: acl in assoc(controlled, :acl),
-        #   join: grant in assoc(acl, :grants),
-        #   join: access in assoc(grant, :access),
-        #   join: interact in assoc(access, :interacts),
-        #   left_join: circle in Bonfire.Data.Social.Circle,
-        #   on: grant.subject_id == circle.id,
-        #   where: interact.verb_id in ^verb_ids,
-        #   where: controlled.id == ^post.id,
-        #   group_by: [controlled.id, interact.id],
-        #   having: fragment("agg_perms(?)", interact.value),
-        #   # select: struct(interact, [:id]),
-        #   # guest or admin or user or circle-user-is-in can:
-        #   left_join: encircle in assoc(circle, :encircles),
-        #   where: circle.id == ^guest_circle_id or grant.subject_id == ^current_user.id or encircle.subject_id == ^current_user.id,
-        # ])
-        # |> IO.inspect
-        # |> repo.all()
-        # |> IO.inspect
 
         {:ok, post} #|> repo().maybe_preload(controlled: [acl: [grants: [access: [:interacts]]]]) |> IO.inspect
       end
