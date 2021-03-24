@@ -33,7 +33,7 @@ defmodule Bonfire.Social.FeedActivities do
       |> preload_join(:activity)
       |> Activities.as_permitted_for(current_user)
       |> Activities.activity_preloads(current_user, preloads)
-      # |> IO.inspect
+      |> IO.inspect
       # |> Bonfire.Repo.all() # return all items
       |> Bonfire.Repo.many_paginated(before: cursor_before) # return a page of items (reverse chronological) + pagination metadata
       # |> IO.inspect
