@@ -30,7 +30,7 @@ defmodule Bonfire.Social.FeedActivities do
     # query FeedPublish + assocs needed in timelines/feeds
     # build_query(base_query(current_user), feed_id: feed_id_or_ids)
     build_query(feed_id: feed_id_or_ids)
-      |> preload_join(:activity)
+      |> join_preload([:activity])
       |> Activities.as_permitted_for(current_user)
       |> Activities.activity_preloads(current_user, preloads)
       |> IO.inspect

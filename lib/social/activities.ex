@@ -86,29 +86,29 @@ defmodule Bonfire.Social.Activities do
 
     query
       # |> preload_join(:activity, :reply_to)
-      |> preload_join(:activity, :reply_to_post_content)
-      |> preload_join(:activity, :reply_to_creator_profile)
-      |> preload_join(:activity, :reply_to_creator_character)
-      |> preload_join(:activity, :thread_post_content)
+      |> join_preload([:activity, :reply_to_post_content])
+      |> join_preload([:activity, :reply_to_creator_profile])
+      |> join_preload([:activity, :reply_to_creator_character])
+      |> join_preload([:activity, :thread_post_content])
       # |> IO.inspect
   end
 
   def activity_preloads(query, current_user, :with_creator) do
 
     query
-      |> preload_join(:activity, :object_creator_profile)
-      |> preload_join(:activity, :object_creator_character)
+      |> join_preload([:activity, :object_creator_profile])
+      |> join_preload([:activity, :object_creator_character])
       # |> IO.inspect
   end
 
   def activity_preloads(query, current_user, :default) do
 
     query
-      |> preload_join(:activity, :verb)
+      |> join_preload([:activity, :verb])
       # |> preload_join(:activity, :object)
-      |> preload_join(:activity, :object_post_content)
-      |> preload_join(:activity, :subject_profile)
-      |> preload_join(:activity, :subject_character)
+      |> join_preload([:activity, :object_post_content])
+      |> join_preload([:activity, :subject_profile])
+      |> join_preload([:activity, :subject_character])
       |> maybe_my_like(current_user)
       |> maybe_my_boost(current_user)
       |> maybe_my_flag(current_user)
@@ -118,22 +118,23 @@ defmodule Bonfire.Social.Activities do
 
   def maybe_my_like(q, %{id: current_user_id} = _current_user) do
     q
-    |> join(:left, [o, activity: a], l in Like, on: l.liked_id == a.object_id and l.liker_id == ^current_user_id)
-    |> preload([l], activity: [:my_like])
+    # |> join_preload([:activity, :my_like], ass.liked_id == via.object_id and ass.liker_id == ^current_user_id) # TODO: figure out how to use bindings
+    |> join(:left, [o, activity: activity], l in Like, as: :my_like, on: l.liked_id == activity.object_id and l.liker_id == ^current_user_id)
+    |> preload([l, activity: activity, my_like: my_like], activity: {activity, [my_like: my_like]})
   end
   def maybe_my_like(q, _), do: q
 
   def maybe_my_boost(q, %{id: current_user_id} = _current_user) do
     q
-    |> join(:left, [o, activity: a], l in Boost, on: l.boosted_id == a.object_id and l.booster_id == ^current_user_id)
-    |> preload([l], activity: [:my_boost])
+    |> join(:left, [o, activity: activity], l in Boost, as: :my_boost, on: l.boosted_id == activity.object_id and l.booster_id == ^current_user_id)
+    |> preload([l, activity: activity, my_boost: my_boost], activity: {activity, [my_boost: my_boost]})
   end
   def maybe_my_boost(q, _), do: q
 
   def maybe_my_flag(q, %{id: current_user_id} = _current_user) do
     q
-    |> join(:left, [o, activity: a], l in Flag, on: l.flagged_id == a.object_id and l.flagger_id == ^current_user_id)
-    |> preload([l], activity: [:my_flag])
+    |> join(:left, [o, activity: activity], l in Flag, as: :my_flag, on: l.flagged_id == activity.object_id and l.flagger_id == ^current_user_id)
+    |> preload([l, activity: activity, my_flag: my_flag], activity: {activity, [my_flag: my_flag]})
   end
   def maybe_my_flag(q, _), do: q
 

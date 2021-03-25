@@ -25,15 +25,15 @@ defmodule Bonfire.Social.Follows do
 
   def list_followed(%{id: user_id} = user, current_user \\ nil) when is_binary(user_id) do
     list([follower_id: user_id], current_user)
-    |> preload_join(:followed_profile)
-    |> preload_join(:followed_character)
+    |> join_preload([:followed_profile])
+    |> join_preload([:followed_character])
     |> repo().all
   end
 
   def list_followers(%{id: user_id} = user, current_user \\ nil) when is_binary(user_id) do
     list([followed_id: user_id], current_user)
-    |> preload_join(:follower_profile)
-    |> preload_join(:follower_character)
+    |> join_preload([:follower_profile])
+    |> join_preload([:follower_character])
     |> repo().all
   end
 

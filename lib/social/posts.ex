@@ -157,6 +157,7 @@ defmodule Bonfire.Social.Posts do
       |> Replied.descendants()
       |> Replied.where_depth(is_smaller_than_or_equal_to: max_depth)
       |> Activities.object_preload_create_activity(current_user)
+      |> Activities.as_permitted_for(current_user)
       # |> preload_join(:post)
       # |> preload_join(:post, :post_content)
       # |> preload_join(:activity)
