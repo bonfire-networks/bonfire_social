@@ -44,6 +44,14 @@ defmodule Bonfire.Social.Boosts do
     end
   end
 
+  @doc "List boosts by the user and which are in their outbox"
+  def list_by(by_user, current_user \\ nil, cursor_before \\ nil, preloads \\ :all) when is_binary(by_user) or is_list(by_user) do
+
+    # query FeedPublish
+    FeedActivities.build_query(feed_id: by_user, boosts_by: by_user)
+    |> FeedActivities.feed_query_paginated(current_user, cursor_before, preloads)
+  end
+
   defp create(%{} = booster, %{} = boosted) do
     changeset(booster, boosted) |> repo().insert()
   end

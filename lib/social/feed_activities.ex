@@ -2,6 +2,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   alias Bonfire.Data.Social.{Feed, FeedPublish, Like, Boost}
   alias Bonfire.Data.Identity.{User}
+  alias Bonfire.Boundaries.Verbs
   alias Bonfire.Social.Feeds
   alias Bonfire.Social.Activities
   alias Bonfire.Common.Utils
@@ -27,9 +28,17 @@ defmodule Bonfire.Social.FeedActivities do
 
     Utils.pubsub_subscribe(feed_id_or_ids) # subscribe to realtime feed updates
 
-    # query FeedPublish + assocs needed in timelines/feeds
-    # build_query(base_query(current_user), feed_id: feed_id_or_ids)
+    # query FeedPublish
     build_query(feed_id: feed_id_or_ids)
+    |> feed_query_paginated(current_user, cursor_before, preloads)
+  end
+
+  def feed(_, _, _, _), do: []
+
+  def feed_query_paginated(query, current_user \\ nil, cursor_before \\ nil, preloads \\ :all) do
+
+    query
+      # add assocs needed in timelines/feeds
       |> join_preload([:activity])
       |> Activities.as_permitted_for(current_user)
       |> Activities.activity_preloads(current_user, preloads)
@@ -38,8 +47,6 @@ defmodule Bonfire.Social.FeedActivities do
       |> Bonfire.Repo.many_paginated(before: cursor_before) # return a page of items (reverse chronological) + pagination metadata
       # |> IO.inspect
   end
-
-  def feed(_, _, _, _), do: []
 
   # def feed(%{feed_publishes: _} = feed_for, _) do
   #   repo().maybe_preload(feed_for, [feed_publishes: [activity: [:verb, :object, subject_user: [:profile, :character]]]]) |> Map.get(:feed_publishes)
@@ -158,5 +165,52 @@ defmodule Bonfire.Social.FeedActivities do
   def delete_for_object(ids) when is_list(ids), do: Enum.each(ids, fn x -> delete_for_object(x) end)
   def delete_for_object(_), do: nil
 
+  @doc "Defines additional query filters"
+
+  #doc "List posts created by the user and which are in their outbox, which are not replies"
+  def filter(:posts_by, user_id, query) when is_binary(user_id) do
+    verb_id = Verbs.verbs()[:create]
+
+    {
+      query
+      |> join_preload([:activity, :object_post_content])
+      |> join_preload([:activity, :object_creator_character])
+      |> join_preload([:activity, :reply_to_creator_character]),
+      dynamic(
+        [activity: activity, object_post_content: post, object_creator_character: creator, reply_to_creator_character: reply_to],
+        is_nil(reply_to.id) and not is_nil(post.id) and activity.verb_id==^verb_id and creator.id == ^user_id
+      )
+    }
+  end
+
+  #doc "List likes created by the user and which are in their outbox, which are not replies"
+  # FIXME: we are not putting likes in outbox
+  def filter(:boosts_by, user_id, query) when is_binary(user_id) do
+    verb_id = Verbs.verbs()[:boost]
+
+    {
+      query
+      |> join_preload([:activity, :subject_character]),
+      dynamic(
+        [activity: activity, subject_character: booster],
+        activity.verb_id==^verb_id and booster.id == ^user_id
+      )
+    }
+  end
+
+  #doc "List likes created by the user and which are in their outbox, which are not replies"
+  # FIXME: we are not putting likes in outbox
+  def filter(:likes_by, user_id, query) when is_binary(user_id) do
+    verb_id = Verbs.verbs()[:like]
+
+    {
+      query
+      |> join_preload([:activity, :subject_character]),
+      dynamic(
+        [activity: activity, subject_character: liker],
+        activity.verb_id==^verb_id and liker.id == ^user_id
+      )
+    }
+  end
 
 end
