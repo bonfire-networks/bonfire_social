@@ -9,7 +9,7 @@ defmodule Bonfire.Social.FollowsTest do
     me = Fake.fake_user!()
     followed = Fake.fake_user!()
     assert {:ok, follow} = Follows.follow(me, followed)
-    # IO.inspect(follow)
+    #IO.inspect(follow)
     assert follow.follower_id == me.id
     assert follow.followed_id == followed.id
   end

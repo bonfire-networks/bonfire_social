@@ -20,14 +20,14 @@ defmodule Bonfire.Social.Posts do
   end
 
   def publish(creator, attrs) do
-    # IO.inspect(attrs)
+    #IO.inspect(attrs)
     with  {:ok, post} <- create(creator, attrs),
           {:ok, maybe_tagged} <- maybe_tag(creator, post),
           {:ok, activity} <- FeedActivities.publish(creator, :create, Map.merge(post, maybe_tagged)) do
 
             Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, post, Utils.e(attrs, :circles, nil))
 
-            # IO.inspect(post)
+            #IO.inspect(post)
             maybe_notify_thread(post, activity)
 
       {:ok, %{post: post, activity: activity}}
@@ -42,25 +42,26 @@ defmodule Bonfire.Social.Posts do
 
   defp maybe_notify_thread(%{replied: %{thread_id: thread_id, reply_to_id: reply_to_id}} = reply, activity) when is_binary(thread_id) and is_binary(reply_to_id) do
 
-    FeedActivities.maybe_notify(activity, thread_id) |> IO.inspect # push to user following the thread
+    with {:ok, published} <- FeedActivities.maybe_notify(activity, thread_id) do #|> IO.inspect # push to user following the thread
 
-    Utils.pubsub_broadcast(thread_id, {:thread_new_reply, reply}) # push to users viewing the thread
-
-  end
-  defp maybe_notify_thread(_, _), do: nil
-
-  def reply(creator, attrs) do
-    with  {:ok, published} <- publish(creator, attrs),
-          {:ok, r} <- get_replied(published.post.id) do
-
-      reply = Map.merge(r, published)
-      # |> IO.inspect
-
-      Utils.pubsub_broadcast(Utils.e(reply, :thread_id, nil), {:thread_new_reply, reply}) # push to online users
-
-      {:ok, reply}
+      Utils.pubsub_broadcast(thread_id, {:post_new_reply, published}) # push to users viewing the thread
     end
   end
+
+  defp maybe_notify_thread(_, _), do: nil
+
+  # def reply(creator, attrs) do
+  #   with  {:ok, published} <- publish(creator, attrs),
+  #         {:ok, r} <- get_replied(published.post.id) do
+
+  #     reply = Map.merge(r, published)
+  #     # |> IO.inspect
+
+  #     Utils.pubsub_broadcast(Utils.e(reply, :thread_id, nil), {:post_new_reply, reply}) # push to online users
+
+  #     {:ok, reply}
+  #   end
+  # end
 
   defp create(%{id: creator_id}, attrs) do
     attrs = attrs
@@ -160,7 +161,7 @@ defmodule Bonfire.Social.Posts do
   def list_replies(thread_id, current_user, cursor, max_depth, limit) when is_binary(thread_id), do: Pointers.ULID.dump(thread_id) |> do_list_replies(current_user, cursor, max_depth, limit)
 
   defp do_list_replies({:ok, thread_id}, current_user, cursor, max_depth, limit) do
-    IO.inspect(cursor: cursor)
+    # IO.inspect(cursor: cursor)
     %Replied{id: thread_id}
       |> Replied.descendants()
       |> Replied.where_depth(is_smaller_than_or_equal_to: max_depth)
@@ -189,9 +190,9 @@ defmodule Bonfire.Social.Posts do
   #     {_id, %{reply_to_id: reply_to_id, thread_id: thread_id} =_reply} = reply_with_id,
   #     acc
   #     when is_binary(reply_to_id) and reply_to_id != thread_id ->
-  #       # IO.inspect(acc: acc)
-  #       # IO.inspect(reply_ok: reply)
-  #       # IO.inspect(reply_to_id: reply_to_id)
+  #       #IO.inspect(acc: acc)
+  #       #IO.inspect(reply_ok: reply)
+  #       #IO.inspect(reply_to_id: reply_to_id)
 
   #       if Map.get(acc, reply_to_id) do
 
@@ -208,7 +209,7 @@ defmodule Bonfire.Social.Posts do
   #       end
 
   #     reply, acc ->
-  #       # IO.inspect(reply_skip: reply)
+  #       #IO.inspect(reply_skip: reply)
 
   #       acc
   #   end

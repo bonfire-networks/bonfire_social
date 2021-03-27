@@ -21,7 +21,7 @@ defmodule Bonfire.Social.Web.LiveHandlers.Feeds do
   end
 
   def live_more(%{} = feed, socket, infinite_scroll \\ true) do
-    # IO.inspect(feed_pagination: feed)
+    #IO.inspect(feed_pagination: feed)
 
     feed = if infinite_scroll, do: e(socket.assigns, :feed, []) ++ e(feed, :entries, []),
            else: e(feed, :entries, [])
@@ -35,7 +35,7 @@ defmodule Bonfire.Social.Web.LiveHandlers.Feeds do
   end
 
   def handle_info({:feed_new_activity, data}, socket) do
-    # IO.inspect(pubsub_received: fp)
+    #IO.inspect(pubsub_received: fp)
 
     {:noreply,
         Phoenix.LiveView.assign(socket,

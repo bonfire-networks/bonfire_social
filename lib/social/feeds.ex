@@ -14,11 +14,11 @@ defmodule Bonfire.Social.Feeds do
   def my_feed_ids(%{} = user, extra_feeds \\ []) do
     extra_feeds = extra_feeds ++ [user.id]
     with following_ids when is_list(following_ids) <- Follows.by_follower(user) do
-      # IO.inspect(subs: following_ids)
+      #IO.inspect(subs: following_ids)
       extra_feeds ++ following_ids
     else
       _e ->
-        # IO.inspect(e: e)
+        #IO.inspect(e: e)
         extra_feeds
     end
   end
@@ -86,7 +86,7 @@ defmodule Bonfire.Social.Feeds do
   """
   def create_inbox(%{id: id}=_thing) do
     with {:ok, %{id: feed_id} = feed} <- create() do
-      # IO.inspect(feed: feed)
+      #IO.inspect(feed: feed)
       do_create_inbox(%{id: id, feed_id: feed_id})
     end
   end

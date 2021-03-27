@@ -27,7 +27,7 @@ defmodule Bonfire.Social.Boosts do
   end
   def boost(%User{} = booster, boosted) when is_binary(boosted) do
     with {:ok, boosted} <- Bonfire.Common.Pointers.get(boosted) do
-      # IO.inspect(liked)
+      #IO.inspect(liked)
       boost(booster, boosted)
     end
   end
@@ -39,7 +39,7 @@ defmodule Bonfire.Social.Boosts do
   end
   def unboost(%User{} = booster, boosted) when is_binary(boosted) do
     with {:ok, boosted} <- Bonfire.Common.Pointers.get(boosted) do
-      # IO.inspect(liked)
+      #IO.inspect(liked)
       unboost(booster, boosted)
     end
   end

@@ -15,7 +15,7 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
   end
 
   def live_more(thread_id, cursor, socket, infinite_scroll \\ true) do
-    IO.inspect(pagination: cursor)
+    # IO.inspect(pagination: cursor)
 
     with %{entries: replies, metadata: page_info} <- Bonfire.Social.Posts.list_replies(thread_id, e(socket, :assigns, :current_user, nil), cursor, @thread_max_depth) do
 
@@ -23,7 +23,7 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
       else: replies || []
 
       threaded_replies = if is_list(replies) and length(replies)>0, do: Bonfire.Social.Posts.arrange_replies_tree(replies), else: []
-      # IO.inspect(replies, label: "REPLIES:")
+      #IO.inspect(replies, label: "REPLIES:")
 
       {:noreply,
       socket
@@ -41,7 +41,7 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
     # |> IO.inspect
 
     with {:ok, published} <- Bonfire.Social.Posts.publish(socket.assigns.current_user, attrs) do
-      # IO.inspect("published!")
+      #IO.inspect("published!")
       {:noreply,
         socket
         # Phoenix.LiveView.assign(socket,
@@ -66,7 +66,7 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
 
     attrs = attrs |> input_to_atoms()
 
-    with {:ok, published} <- Bonfire.Social.Posts.reply(socket.assigns.current_user, attrs) do
+    with {:ok, published} <- Bonfire.Social.Posts.publish(socket.assigns.current_user, attrs) do
 
       # replies = [published] ++ socket.assigns.replies # TODO: replace with pubsub
 
@@ -91,14 +91,17 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
     end
   end
 
-  def handle_info({:thread_new_reply, data}, socket) do
+  def handle_info({:post_new_reply, data}, socket) do
+
+    # IO.inspect(post_new_reply: data)
+    # IO.inspect(replies: Utils.e(socket.assigns, :replies, []))
 
     replies = [data] ++ Utils.e(socket.assigns, :replies, [])
 
     {:noreply,
         Phoenix.LiveView.assign(socket,
           replies: replies,
-          threaded_replies: Bonfire.Social.Posts.arrange_replies_tree(replies) || []
+          # threaded_replies: Bonfire.Social.Posts.arrange_replies_tree(replies) || []
       )}
   end
 

@@ -17,7 +17,7 @@ defmodule Bonfire.Social.FeedActivities do
 
     # feeds the user is following
     feed_ids = Feeds.my_feed_ids(user)
-    # IO.inspect(inbox_feed_ids: feed_ids)
+    #IO.inspect(inbox_feed_ids: feed_ids)
 
     feed(feed_ids, user, cursor_before)
   end
@@ -42,7 +42,7 @@ defmodule Bonfire.Social.FeedActivities do
       |> join_preload([:activity])
       |> Activities.as_permitted_for(current_user)
       |> Activities.activity_preloads(current_user, preloads)
-      |> IO.inspect
+      # |> IO.inspect
       # |> Bonfire.Repo.all() # return all items
       |> Bonfire.Repo.many_paginated(before: cursor_before) # return a page of items (reverse chronological) + pagination metadata
       # |> IO.inspect
@@ -58,13 +58,13 @@ defmodule Bonfire.Social.FeedActivities do
 
   def publish(subject, verb, %{replied: %{reply_to_id: reply_to_id}} = object) when is_atom(verb) and is_binary(reply_to_id) do
     # publishing a reply to something
-    # IO.inspect(publish_reply: object)
+    #IO.inspect(publish_reply: object)
     do_publish(subject, verb, object, [Feeds.instance_feed_id(), Feeds.creator_feed(object)])
   end
 
   def publish(subject, verb, %{tags: tags} = object) when is_atom(verb) and is_list(tags) do
     # publishing something with @ mentions or other tags
-    # IO.inspect(publish_tagged: tags)
+    #IO.inspect(publish_tagged: tags)
     do_publish(subject, verb, object, [Feeds.instance_feed_id(), Feeds.tags_feed(tags)])
   end
 
@@ -92,11 +92,12 @@ defmodule Bonfire.Social.FeedActivities do
   Takes an existing activity and puts it in the object creator's inbox
   """
   def maybe_notify_creator(%Bonfire.Data.Social.Activity{} = activity, object) do
-    # IO.inspect(activity)
-    # IO.inspect(object)
+    #IO.inspect(activity)
+    #IO.inspect(object)
     maybe_notify(activity, Feeds.creator_feed(object))
     # TODO: notify remote users via AP
   end
+  def maybe_notify_creator(%{activity: activity}, object), do: maybe_notify_creator(activity, object)
 
   @doc """
   Creates a new local activity and publishes to object's inbox (if object is an actor)

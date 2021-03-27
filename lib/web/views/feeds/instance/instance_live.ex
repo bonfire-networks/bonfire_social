@@ -22,7 +22,7 @@ defmodule Bonfire.Social.Web.Feeds.InstanceLive do
 
     feed = Bonfire.Social.FeedActivities.feed(feed_id, e(socket.assigns, :current_user, nil))
 
-    title = "Feed of all activities by users on this instance"
+    title = "Activities by users on this instance"
     {:ok, socket
     |> assign(
       page: "instance",
@@ -51,7 +51,7 @@ defmodule Bonfire.Social.Web.Feeds.InstanceLive do
   # end
 
   defdelegate handle_params(params, attrs, socket), to: Bonfire.Web.LiveHandler
-  defdelegate handle_event(action, attrs, socket), to: Bonfire.Web.LiveHandler
-  defdelegate handle_info(info, socket), to: Bonfire.Web.LiveHandler
+  def handle_event(action, attrs, socket), do: Bonfire.Web.LiveHandler.handle_event(action, attrs, socket, __MODULE__)
+  def handle_info(info, socket), do: Bonfire.Web.LiveHandler.handle_info(info, socket, __MODULE__)
 
 end

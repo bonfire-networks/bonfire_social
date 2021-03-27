@@ -24,7 +24,7 @@ defmodule Bonfire.Social.Likes do
   end
   def like(%User{} = liker, liked) when is_binary(liked) do
     with {:ok, liked} <- Bonfire.Common.Pointers.get(liked) do
-      # IO.inspect(liked)
+      #IO.inspect(liked)
       like(liker, liked)
     end
   end

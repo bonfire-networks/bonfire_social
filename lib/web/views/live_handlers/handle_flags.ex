@@ -5,7 +5,7 @@ defmodule Bonfire.Social.Web.LiveHandlers.Flags do
   import Phoenix.LiveView
 
   def handle_event("flag", %{"id"=> id}, socket) do # flag in LV
-    # IO.inspect(socket)
+    #IO.inspect(socket)
     with {:ok, _flag} <- Bonfire.Social.Flags.flag(socket.assigns.current_user, id) do
       {:noreply, Phoenix.LiveView.assign(socket,
       flagged: Map.get(socket.assigns, :flagged, []) ++ [{id, true}]

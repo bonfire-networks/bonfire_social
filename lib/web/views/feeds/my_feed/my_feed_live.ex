@@ -26,7 +26,7 @@ defmodule Bonfire.Social.Web.Feeds.MyFeedLive do
       page: "feed",
       page_title: "My Feed",
       smart_input: true,
-      feed_title: "My Feed",
+      feed_title: "Activities I am following",
       feed: e(feed, :entries, []),
       page_info: e(feed, :metadata, [])
       )}
@@ -50,7 +50,7 @@ defmodule Bonfire.Social.Web.Feeds.MyFeedLive do
 
 
   defdelegate handle_params(params, attrs, socket), to: Bonfire.Web.LiveHandler
-  defdelegate handle_event(action, attrs, socket), to: Bonfire.Web.LiveHandler
-  defdelegate handle_info(info, socket), to: Bonfire.Web.LiveHandler
+  def handle_event(action, attrs, socket), do: Bonfire.Web.LiveHandler.handle_event(action, attrs, socket, __MODULE__)
+  def handle_info(info, socket), do: Bonfire.Web.LiveHandler.handle_info(info, socket, __MODULE__)
 
 end

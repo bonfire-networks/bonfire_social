@@ -21,7 +21,7 @@ defmodule Bonfire.Social.Web.PostLive do
   defp mounted(params, session, socket) do
 
     with {:ok, post} <- Bonfire.Social.Posts.read(Map.get(params, "id"), e(socket, :assigns, :current_user, nil)) do
-      # IO.inspect(post, label: "the post:")
+      #IO.inspect(post, label: "the post:")
 
       {activity, object} = Map.pop(post, :activity)
 
@@ -33,7 +33,8 @@ defmodule Bonfire.Social.Web.PostLive do
         reply_id: Map.get(params, "reply_id"),
         activity: activity,
         object: object,
-        thread_id: e(object, :id, nil)
+        thread_id: e(object, :id, nil),
+        replies: []
       )}
 
     else _e ->
@@ -58,7 +59,7 @@ defmodule Bonfire.Social.Web.PostLive do
   # end
 
   defdelegate handle_params(params, attrs, socket), to: Bonfire.Web.LiveHandler
-  defdelegate handle_event(action, attrs, socket), to: Bonfire.Web.LiveHandler
-  defdelegate handle_info(info, socket), to: Bonfire.Web.LiveHandler
+  def handle_event(action, attrs, socket), do: Bonfire.Web.LiveHandler.handle_event(action, attrs, socket, __MODULE__)
+  def handle_info(info, socket), do: Bonfire.Web.LiveHandler.handle_info(info, socket, __MODULE__)
 
 end

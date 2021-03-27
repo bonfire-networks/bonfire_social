@@ -66,7 +66,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   def activity_preloads(query, current_user, preloads) when is_list(preloads) do
-    # IO.inspect(preloads)
+    #IO.inspect(preloads)
     Enum.reduce(preloads, query, fn preload, query ->
       query
       |> activity_preloads(current_user, preload)

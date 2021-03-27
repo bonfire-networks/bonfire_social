@@ -22,7 +22,7 @@ defmodule Bonfire.Social.Web.DiscussionLive do
 
     # FIXME
     with {:ok, post} <- Bonfire.Social.Posts.read(Map.get(params, "id"), e(socket, :assigns, :current_user, nil)) do
-      # IO.inspect(post, label: "the post:")
+      #IO.inspect(post, label: "the post:")
 
       {activity, object} = Map.pop(post, :activity)
 
@@ -59,7 +59,7 @@ defmodule Bonfire.Social.Web.DiscussionLive do
   # end
 
   defdelegate handle_params(params, attrs, socket), to: Bonfire.Web.LiveHandler
-  defdelegate handle_event(action, attrs, socket), to: Bonfire.Web.LiveHandler
-  defdelegate handle_info(info, socket), to: Bonfire.Web.LiveHandler
+  def handle_event(action, attrs, socket), do: Bonfire.Web.LiveHandler.handle_event(action, attrs, socket, __MODULE__)
+  def handle_info(info, socket), do: Bonfire.Web.LiveHandler.handle_info(info, socket, __MODULE__)
 
 end
