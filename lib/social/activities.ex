@@ -105,6 +105,8 @@ defmodule Bonfire.Social.Activities do
 
     query
       |> join_preload([:activity, :verb])
+      |> join_preload([:activity, :boost_count])
+      |> join_preload([:activity, :like_count])
       # |> preload_join(:activity, :object)
       |> join_preload([:activity, :object_post_content])
       |> join_preload([:activity, :subject_profile])
