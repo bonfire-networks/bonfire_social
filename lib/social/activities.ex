@@ -85,7 +85,8 @@ defmodule Bonfire.Social.Activities do
   def activity_preloads(query, current_user, :with_parents) do
 
     query
-      # |> preload_join(:activity, :reply_to)
+    # |> join_preload([:activity, :reply_to])
+      |> join_preload([:activity, :reply_to])
       |> join_preload([:activity, :reply_to_post_content])
       |> join_preload([:activity, :reply_to_creator_profile])
       |> join_preload([:activity, :reply_to_creator_character])
@@ -107,10 +108,11 @@ defmodule Bonfire.Social.Activities do
       |> join_preload([:activity, :verb])
       |> join_preload([:activity, :boost_count])
       |> join_preload([:activity, :like_count])
-      # |> preload_join(:activity, :object)
+      # |> join_preload([:activity, :object])
       |> join_preload([:activity, :object_post_content])
       |> join_preload([:activity, :subject_profile])
       |> join_preload([:activity, :subject_character])
+      |> join_preload([:activity, :replied])
       |> maybe_my_like(current_user)
       |> maybe_my_boost(current_user)
       |> maybe_my_flag(current_user)

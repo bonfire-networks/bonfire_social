@@ -53,12 +53,12 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
 
   def handle_event("post_load_replies", %{"id" => id, "level" => level}, socket) do
     {level, _} = Integer.parse(level)
-    replies = Bonfire.Social.Posts.list_replies(id, nil, level + @thread_max_depth)
-    replies = replies ++ socket.assigns.replies
+    %{entries: replies} = Bonfire.Social.Posts.list_replies(id, nil, level + 1)
+    replies = replies ++ Utils.e(socket.assigns, :replies, [])
     {:noreply,
         assign(socket,
         replies: replies,
-        threaded_replies: Bonfire.Social.Posts.arrange_replies_tree(replies) || []
+        # threaded_replies: Bonfire.Social.Posts.arrange_replies_tree(replies) || []
     )}
   end
 
