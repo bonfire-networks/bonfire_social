@@ -44,7 +44,7 @@ defmodule Bonfire.Social.Activities do
   @doc "Delete an activity (usage by things like unlike)"
   def delete_by_subject_verb_object(%{}=subject, verb, %{}=object) do
     q = by_subject_verb_object_q(subject, Verbs.verbs()[verb], object)
-    Bonfire.Social.FeedActivities.delete_for_object(repo.all(q)) # TODO: see why cascading delete doesn't take care of this
+    Bonfire.Social.FeedActivities.delete_for_object(repo().all(q)) # TODO: see why cascading delete doesn't take care of this
     elem(repo().delete_all(q), 1)
   end
 
@@ -85,20 +85,19 @@ defmodule Bonfire.Social.Activities do
   def activity_preloads(query, current_user, :with_parents) do
 
     query
-    # |> join_preload([:activity, :reply_to])
-      |> join_preload([:activity, :reply_to])
-      |> join_preload([:activity, :reply_to_post_content])
-      |> join_preload([:activity, :reply_to_creator_profile])
-      |> join_preload([:activity, :reply_to_creator_character])
-      |> join_preload([:activity, :thread_post_content])
+      # |> join_preload([:activity, :replied, :reply_to])
+      |> join_preload([:activity, :replied, :thread_post_content])
+      |> join_preload([:activity, :replied, :reply_to_post_content])
+      |> join_preload([:activity, :replied, :reply_to_created, :creator_profile])
+      |> join_preload([:activity, :replied, :reply_to_created, :creator_character])
       # |> IO.inspect
   end
 
   def activity_preloads(query, current_user, :with_creator) do
 
     query
-      |> join_preload([:activity, :object_creator_profile])
-      |> join_preload([:activity, :object_creator_character])
+      |> join_preload([:activity, :object_created, :creator_profile])
+      |> join_preload([:activity, :object_created, :creator_character])
       # |> IO.inspect
   end
 

@@ -102,18 +102,12 @@ defmodule Bonfire.Social.Posts do
   def read(post_id, current_user \\ nil) when is_binary(post_id) do
 
     with {:ok, post} <- build_query(id: post_id)
-      # |> preload_join(:post_content)
-      # |> preload_join(:creator_profile)
-      # |> preload_join(:creator_character)
-      # |> preload_join(:reply_to)
-      # |> preload_join(:reply_to_post_content)
-      # |> preload_join(:thread_post_content)
       |> Activities.object_preload_create_activity(current_user, [:default, :with_parents])
       |> Activities.as_permitted_for(current_user)
       # |> IO.inspect
       |> repo().single() do
 
-        Utils.pubsub_subscribe(Utils.e(post, :activity, :thread_post_content, :id, nil) || post.id) # subscribe to realtime feed updates
+        Utils.pubsub_subscribe(Utils.e(post, :activity, :replied, :thread_id, nil) || post.id) # subscribe to realtime feed updates
 
         {:ok, post} #|> repo().maybe_preload(controlled: [acl: [grants: [access: [:interacts]]]]) |> IO.inspect
       end
@@ -135,9 +129,10 @@ defmodule Bonfire.Social.Posts do
     from p in Post,
      left_join: pc in assoc(p, :post_content),
      left_join: cr in assoc(p, :created),
-     left_join: rt in assoc(p, :reply_to),
+     left_join: re in assoc(p, :replied),
+     left_join: rt in assoc(re, :reply_to),
      where: p.id == ^id,
-     preload: [post_content: pc, created: cr, reply_to: rt]
+     preload: [post_content: pc, created: cr, replied: {re, [reply_to: rt]}]
   end
 
   def by_user(user_id) do

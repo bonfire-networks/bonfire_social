@@ -41,8 +41,9 @@ defmodule Bonfire.Social.FeedActivities do
       # add assocs needed in timelines/feeds
       |> join_preload([:activity])
       |> Activities.as_permitted_for(current_user)
+      # |> IO.inspect(label: "pre-preloads")
       |> Activities.activity_preloads(current_user, preloads)
-      # |> IO.inspect
+      # |> IO.inspect(label: "post-preloads")
       # |> Bonfire.Repo.all() # return all items
       |> Bonfire.Repo.many_paginated(before: cursor_before) # return a page of items (reverse chronological) + pagination metadata
       # |> IO.inspect
@@ -175,11 +176,11 @@ defmodule Bonfire.Social.FeedActivities do
     {
       query
       |> join_preload([:activity, :object_post_content])
-      |> join_preload([:activity, :object_creator_character])
-      |> join_preload([:activity, :reply_to_creator_character]),
+      |> join_preload([:activity, :object_created])
+      |> join_preload([:activity, :replied]),
       dynamic(
-        [activity: activity, object_post_content: post, object_creator_character: creator, reply_to_creator_character: reply_to],
-        is_nil(reply_to.id) and not is_nil(post.id) and activity.verb_id==^verb_id and creator.id == ^user_id
+        [activity: activity, object_post_content: post, object_created: created, replied: replied],
+        is_nil(replied.reply_to_id) and not is_nil(post.id) and activity.verb_id==^verb_id and created.creator_id == ^user_id
       )
     }
   end

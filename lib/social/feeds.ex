@@ -51,10 +51,10 @@ defmodule Bonfire.Social.Feeds do
   end
 
   def creator_feed(object) do
-    object = object |> Bonfire.Repo.maybe_preload([creator_character: [:inbox]]) #|> IO.inspect
+    object = object |> Bonfire.Repo.maybe_preload([created: [creator_character: [:inbox]]]) #|> IO.inspect
 
-    Utils.e(object, :creator_character, :inbox, :feed_id, nil)
-      || inbox_feed_id(Utils.e(object, :creator_character, nil)) |> IO.inspect
+    Utils.e(object, :created, :creator_character, :inbox, :feed_id, nil)
+      || inbox_feed_id(Utils.e(object, :created, :creator_character, nil)) #|> IO.inspect
   end
 
   def tags_feed(tags) when is_list(tags), do: Enum.map(tags, fn x -> tags_feed(x) end)
