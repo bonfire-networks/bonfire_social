@@ -20,10 +20,15 @@ defmodule Bonfire.Social.Web.PostLive do
 
   defp mounted(params, session, socket) do
 
-    with {:ok, post} <- Bonfire.Social.Posts.read(Map.get(params, "id"), e(socket, :assigns, :current_user, nil)) do
+    current_user = e(socket, :assigns, :current_user, nil)
+
+    with {:ok, post} <- Bonfire.Social.Posts.read(Map.get(params, "id"), current_user) do
       #IO.inspect(post, label: "the post:")
 
       {activity, object} = Map.pop(post, :activity)
+
+      following = if current_user && module_enabled?(Bonfire.Social.Follows) && Bonfire.Social.Follows.following?(current_user, object), do: [object.id]
+
 
       {:ok,
       socket
@@ -34,7 +39,8 @@ defmodule Bonfire.Social.Web.PostLive do
         activity: activity,
         object: object,
         thread_id: e(object, :id, nil),
-        replies: []
+        replies: [],
+        following: following || []
       )}
 
     else _e ->

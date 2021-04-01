@@ -20,11 +20,20 @@ defmodule Bonfire.Social.Web.DiscussionLive do
 
   defp mounted(params, session, socket) do
 
+    current_user = e(socket, :assigns, :current_user, nil)
+
     # FIXME
-    with {:ok, post} <- Bonfire.Social.Posts.read(Map.get(params, "id"), e(socket, :assigns, :current_user, nil)) do
+    with {:ok, post} <- Bonfire.Social.Posts.read(Map.get(params, "id"), current_user) do
       #IO.inspect(post, label: "the post:")
 
       {activity, object} = Map.pop(post, :activity)
+
+      following = if current_user && module_enabled?(Bonfire.Social.Follows) do
+        a = if Bonfire.Social.Follows.following?(current_user, object), do: object.id
+        thread_id = e(activity, :replied, :thread_id, nil)
+        b = if thread_id && Bonfire.Social.Follows.following?(current_user, thread_id), do: thread_id
+        [a, b]
+      end
 
       {:ok,
       socket
@@ -34,7 +43,8 @@ defmodule Bonfire.Social.Web.DiscussionLive do
         reply_id: Map.get(params, "reply_id"),
         activity: activity,
         object: object,
-        thread_id: e(object, :id, nil)
+        thread_id: e(object, :id, nil),
+        following: following || []
       )}
 
     else _e ->

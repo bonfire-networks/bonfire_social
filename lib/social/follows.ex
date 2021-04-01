@@ -106,7 +106,8 @@ defmodule Bonfire.Social.Follows do
       select: f.id
   end
 
-  def by_both_q(%User{id: follower}, %{id: followed}), do: by_both_q(follower, followed)
+  def by_both_q(%User{id: follower}, followed), do: by_both_q(follower, followed)
+  def by_both_q(follower, %{id: followed}), do: by_both_q(follower, followed)
 
   def by_both_q(follower, followed) when is_binary(follower) and is_binary(followed) do
     from f in Follow,
