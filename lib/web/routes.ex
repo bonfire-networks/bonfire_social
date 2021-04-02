@@ -32,7 +32,8 @@ defmodule Bonfire.Social.Web.Routes do
         pipe_through :browser
         pipe_through :user_required
 
-        live "/feed", Feeds.MyFeedLive
+        live "/browse/", Feeds.BrowseLive
+        live "/browse/:tab", Feeds.BrowseLive
 
       end
 
