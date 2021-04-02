@@ -34,6 +34,7 @@ defmodule Bonfire.Social.Web.Routes do
 
         live "/browse/", Feeds.BrowseLive
         live "/browse/:tab", Feeds.BrowseLive
+        live "/private", PrivateLive
 
       end
 

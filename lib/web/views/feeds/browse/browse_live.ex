@@ -24,7 +24,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
 
     {:ok, socket
     |> assign(
-      page: "Browse",
+      page: "browse",
       page_title: "Browse",
       selected_tab: "feed",
       smart_input: true,

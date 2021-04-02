@@ -67,6 +67,16 @@ defmodule Bonfire.Social.Web.DiscussionLive do
   #      current_user: Fake.user_live()
   #    )}
   # end
+  def handle_event("create_reply", %{"id"=> id}, socket) do # boost in LV
+    IO.inspect(id: id)
+    IO.inspect("create reply")
+    # with {:ok, _boost} <- Bonfire.Social.Boosts.boost(socket.assigns.current_user, id) do
+    #   {:noreply, Phoenix.LiveView.assign(socket,
+    #   boosted: Map.get(socket.assigns, :boosted, []) ++ [{id, true}]
+    # )}
+    # end
+    {:noreply, assign(socket, comment_reply_to_id: id)}
+  end
 
   defdelegate handle_params(params, attrs, socket), to: Bonfire.Web.LiveHandler
   def handle_event(action, attrs, socket), do: Bonfire.Web.LiveHandler.handle_event(action, attrs, socket, __MODULE__)

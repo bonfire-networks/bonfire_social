@@ -38,7 +38,7 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
   def handle_event("post", params, socket) do
     attrs = params
     |> input_to_atoms()
-    # |> IO.inspect
+    |> IO.inspect
 
     with {:ok, published} <- Bonfire.Social.Posts.publish(socket.assigns.current_user, attrs) do
       #IO.inspect("published!")
