@@ -6,6 +6,7 @@ defmodule Bonfire.Social.Posts do
   alias Bonfire.Common.Utils
   alias Ecto.Changeset
   import Bonfire.Boundaries.Queries
+  import Bonfire.Common.Hooks
 
   use Bonfire.Repo.Query,
       schema: Post,
@@ -21,17 +22,19 @@ defmodule Bonfire.Social.Posts do
 
   def publish(creator, attrs) do
     #IO.inspect(attrs)
-    with  {:ok, post} <- create(creator, attrs),
-          {:ok, maybe_tagged} <- maybe_tag(creator, post),
-          {:ok, activity} <- FeedActivities.publish(creator, :create, Map.merge(post, maybe_tagged)) do
+    hook_transact_with(fn ->
+      with  {:ok, post} <- create(creator, attrs),
+            {:ok, maybe_tagged} <- maybe_tag(creator, post),
+            {:ok, activity} <- FeedActivities.publish(creator, :create, Map.merge(post, maybe_tagged)) do
 
-            Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, post, Utils.e(attrs, :circles, nil))
+              Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, post, Utils.e(attrs, :circles, nil))
 
-            #IO.inspect(post)
-            maybe_notify_thread(post, activity)
+              #IO.inspect(post)
+              maybe_notify_thread(post, activity)
 
-      {:ok, %{post: post, activity: activity}}
-    end
+              {:ok, %{post: post, activity: activity}}
+      end
+    end)
   end
 
   defp maybe_tag(creator, post) do
