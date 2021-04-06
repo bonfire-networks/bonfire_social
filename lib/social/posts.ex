@@ -29,7 +29,7 @@ defmodule Bonfire.Social.Posts do
             {:ok, maybe_tagged} <- maybe_tag(creator, post, mentions),
             {:ok, activity} <- FeedActivities.publish(creator, :create, Map.merge(post, maybe_tagged)) do
 
-              Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, post, Utils.e(attrs, :circles, nil))
+              Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, post, Utils.e(attrs, :circles, []) ++ (Bonfire.Tag.Tags.tag_ids(mentions) || [])) # make visible for creator, any selected circles, and mentioned characters (should be configurable)
 
               #IO.inspect(post)
               Threads.maybe_push_thread(creator, activity, post)
@@ -44,6 +44,7 @@ defmodule Bonfire.Social.Posts do
     else: {:ok, post}
     # {:ok, post}
   end
+
 
 
   # def reply(creator, attrs) do

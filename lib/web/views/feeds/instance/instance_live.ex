@@ -10,6 +10,7 @@ defmodule Bonfire.Social.Web.Feeds.InstanceLive do
       LivePlugs.LoadCurrentAccount,
       LivePlugs.LoadCurrentUser,
       # LivePlugs.LoadCurrentAccountUsers,
+      LivePlugs.LoadCurrentUserCircles,
       LivePlugs.StaticChanged,
       LivePlugs.Csrf,
       &mounted/3,

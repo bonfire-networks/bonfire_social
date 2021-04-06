@@ -43,7 +43,7 @@ defmodule Bonfire.Social.FeedActivities do
       |> Activities.as_permitted_for(current_user)
       # |> IO.inspect(label: "pre-preloads")
       |> Activities.activity_preloads(current_user, preloads)
-      |> distinct([fp], [desc: fp.id, desc: fp.object_id]) # not sure why needed
+      # |> distinct([fp], [desc: fp.id, desc: fp.object_id]) # not sure if/why needed...
       # |> order_by([fp], desc: fp.id)
       # |> IO.inspect(label: "post-preloads")
       # |> Bonfire.Repo.all() # return all items

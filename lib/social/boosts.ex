@@ -20,7 +20,7 @@ defmodule Bonfire.Social.Boosts do
     {:ok, published} <- FeedActivities.publish(booster, :boost, boosted) do
       # TODO: increment the boost count
 
-      FeedActivities.maybe_notify_creator(published, boosted) #|> IO.inspect
+      FeedActivities.maybe_notify_creator(booster, published, boosted) #|> IO.inspect
 
       {:ok, boost}
     end

@@ -23,19 +23,26 @@ defmodule Bonfire.Social.Follows do
     build_query(filters)
   end
 
-  def list_followed(%{id: user_id} = user, current_user \\ nil) when is_binary(user_id) do
+  def list_followed(%{id: user_id} = user, current_user \\ nil, with_profile_only \\ true) when is_binary(user_id) do
     list([follower_id: user_id], current_user)
     |> join_preload([:followed_profile])
     |> join_preload([:followed_character])
+    |> maybe_with_followed_profile_only(with_profile_only)
     |> repo().all
   end
 
-  def list_followers(%{id: user_id} = user, current_user \\ nil) when is_binary(user_id) do
+  def list_followers(%{id: user_id} = user, current_user \\ nil, with_profile_only \\ true) when is_binary(user_id) do
     list([followed_id: user_id], current_user)
     |> join_preload([:follower_profile])
     |> join_preload([:follower_character])
+    |> maybe_with_follower_profile_only(with_profile_only)
     |> repo().all
   end
+
+  defp maybe_with_follower_profile_only(q, true), do: q |> where([follower_profile: p], not is_nil(p.id))
+  defp maybe_with_follower_profile_only(q, _), do: q
+  defp maybe_with_followed_profile_only(q, true), do: q |> where([followed_profile: p], not is_nil(p.id))
+  defp maybe_with_followed_profile_only(q, _), do: q
 
   def follow(%{} = follower, %{} = followed) do
     with {:ok, follow} <- create(follower, followed) do

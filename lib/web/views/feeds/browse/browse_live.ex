@@ -11,6 +11,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
     LivePlugs.live_plug params, session, socket, [
       LivePlugs.LoadCurrentAccount,
       LivePlugs.LoadCurrentUser,
+      LivePlugs.LoadCurrentUserCircles,
       # LivePlugs.LoadCurrentAccountUsers,
       LivePlugs.StaticChanged,
       LivePlugs.Csrf,
