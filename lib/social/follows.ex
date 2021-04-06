@@ -136,7 +136,7 @@ defmodule Bonfire.Social.Follows do
       ActivityPub.accept(%{
         to: [activity.data["actor"]],
         actor: object,
-        object: activity,
+        object: activity.data,
         local: true
       })
     end
