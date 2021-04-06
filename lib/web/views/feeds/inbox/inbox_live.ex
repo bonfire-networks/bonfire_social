@@ -41,6 +41,7 @@ defmodule Bonfire.Social.Web.Feeds.InboxLive do
       page_title: "Notifications",
       feed_title: "Notifications",
       smart_input: false,
+      has_private_tab: false,
       feed_id: feed_id,
       user: user,
       feed: e(feed, :entries, []),

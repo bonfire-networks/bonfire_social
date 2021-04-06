@@ -28,6 +28,8 @@ defmodule Bonfire.Social.Web.Feeds.InstanceLive do
       page: "instance",
       page_title: "Instance Feed",
       smart_input: true,
+      has_private_tab: false,
+      smart_input_placeholder: "Write something to the instance",
       feed_title: title,
       feed_id: feed_id,
       feed: e(feed, :entries, []),
