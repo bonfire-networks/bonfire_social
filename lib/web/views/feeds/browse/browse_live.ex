@@ -28,6 +28,8 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
       page_title: "Browse",
       selected_tab: "feed",
       smart_input: true,
+      has_private_tab: false,
+      smart_input_placeholder: "Write something meaningful",
       feed_title: "Browse",
       # feed: e(feed, :entries, []),
       # page_info: e(feed, :metadata, [])
