@@ -17,12 +17,12 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
   def live_more(thread_id, cursor, socket, infinite_scroll \\ true) do
     # IO.inspect(pagination: cursor)
 
-    with %{entries: replies, metadata: page_info} <- Bonfire.Social.Posts.list_replies(thread_id, e(socket, :assigns, :current_user, nil), cursor, @thread_max_depth) do
+    with %{entries: replies, metadata: page_info} <- Bonfire.Social.Threads.list_replies(thread_id, e(socket, :assigns, :current_user, nil), cursor, @thread_max_depth) do
 
       replies = if infinite_scroll, do: e(socket.assigns, :replies, []) ++ (replies || []),
       else: replies || []
 
-      threaded_replies = if is_list(replies) and length(replies)>0, do: Bonfire.Social.Posts.arrange_replies_tree(replies), else: []
+      threaded_replies = if is_list(replies) and length(replies)>0, do: Bonfire.Social.Threads.arrange_replies_tree(replies), else: []
       #IO.inspect(replies, label: "REPLIES:")
 
       {:noreply,
@@ -53,12 +53,12 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
 
   def handle_event("post_load_replies", %{"id" => id, "level" => level}, socket) do
     {level, _} = Integer.parse(level)
-    %{entries: replies} = Bonfire.Social.Posts.list_replies(id, nil, level + 1)
+    %{entries: replies} = Bonfire.Social.Threads.list_replies(id, nil, level + 1)
     replies = replies ++ Utils.e(socket.assigns, :replies, [])
     {:noreply,
         assign(socket,
         replies: replies,
-        # threaded_replies: Bonfire.Social.Posts.arrange_replies_tree(replies) || []
+        # threaded_replies: Bonfire.Social.Threads.arrange_replies_tree(replies) || []
     )}
   end
 
@@ -74,7 +74,7 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
         socket
         # assign(socket,
         #   replies: replies,
-        #   threaded_replies: Bonfire.Social.Posts.arrange_replies_tree(replies) || []
+        #   threaded_replies: Bonfire.Social.Threads.arrange_replies_tree(replies) || []
         # )
     }
     end
@@ -91,7 +91,7 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
     {:noreply,
         Phoenix.LiveView.assign(socket,
           replies: replies,
-          # threaded_replies: Bonfire.Social.Posts.arrange_replies_tree(replies) || []
+          # threaded_replies: Bonfire.Social.Threads.arrange_replies_tree(replies) || []
       )}
   end
 

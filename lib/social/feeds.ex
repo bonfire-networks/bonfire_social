@@ -41,6 +41,10 @@ defmodule Bonfire.Social.Feeds do
     inbox_feed_id(account)
   end
 
+  def inbox_feed_id(%{character: _} = for_subject) do
+    for_subject |> Bonfire.Repo.maybe_preload(character: [:inbox]) |> Utils.e(:character, nil) |> inbox_feed_id()
+  end
+  def inbox_feed_id(%{inbox: %{feed_id: feed_id}}), do: feed_id
   def inbox_feed_id(%{} = for_subject) do
     with {:ok, %{feed_id: feed_id} = inbox} <- create_inbox(for_subject) do
       feed_id
@@ -50,7 +54,7 @@ defmodule Bonfire.Social.Feeds do
     nil
   end
 
-  def creator_feed(object) do
+  def creator_inbox(object) do
     object = object |> Bonfire.Repo.maybe_preload([created: [creator_character: [:inbox]]]) #|> IO.inspect
 
     Utils.e(object, :created, :creator_character, :inbox, :feed_id, nil)
@@ -58,11 +62,11 @@ defmodule Bonfire.Social.Feeds do
   end
 
   def tags_feed(tags) when is_list(tags), do: Enum.map(tags, fn x -> tags_feed(x) end)
-  def tags_feed(%{character: character}) do
-    character = character |> Bonfire.Repo.maybe_preload([:inbox]) #|> IO.inspect
-
-    Utils.e(character, :inbox, :feed_id, nil)
-      || inbox_feed_id(character)
+  def tags_feed(%{} = tag) do
+    inbox_feed_id(tag)
+  end
+  def tags_feed(_) do
+    nil
   end
 
   def admins_inbox(), do: Bonfire.Me.Users.list_admins() |> admins_inbox()

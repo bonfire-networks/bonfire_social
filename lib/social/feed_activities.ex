@@ -62,18 +62,26 @@ defmodule Bonfire.Social.FeedActivities do
   def publish(subject, verb, %{replied: %{reply_to_id: reply_to_id}} = object) when is_atom(verb) and is_binary(reply_to_id) do
     # publishing a reply to something
     #IO.inspect(publish_reply: object)
-    do_publish(subject, verb, object, [Feeds.instance_feed_id(), Feeds.creator_feed(object)])
+    do_publish(subject, verb, object, [Feeds.instance_feed_id(), Feeds.creator_inbox(object)]) # FIXME, enable tagging in replies too
   end
 
   def publish(subject, verb, %{tags: tags} = object) when is_atom(verb) and is_list(tags) do
     # publishing something with @ mentions or other tags
-    #IO.inspect(publish_tagged: tags)
-    do_publish(subject, verb, object, [Feeds.instance_feed_id(), Feeds.tags_feed(tags)])
+    IO.inspect(publish_to_tagged: tags)
+    tagged_inboxes = Feeds.tags_feed(tags)
+    IO.inspect(tagged_inboxes: tagged_inboxes)
+    do_publish(subject, verb, object, [Feeds.instance_feed_id(), tagged_inboxes])
   end
 
   def publish(subject, verb, object) when is_atom(verb) do
     do_publish(subject, verb, object, Feeds.instance_feed_id())
   end
+
+
+  defp do_publish(subject, verb, object, feeds \\ nil) when is_list(feeds), do: maybe_notify(subject, verb, object, feeds ++ [subject])
+  defp do_publish(subject, verb, object, feed_id) when not is_nil(feed_id), do: maybe_notify(subject, verb, object, [feed_id, subject])
+  defp do_publish(subject, verb, object, _), do: maybe_notify(subject, verb, object, subject) # just publish to subject's outbox
+
 
   @doc """
   Records a remote activity and puts in appropriate feeds
@@ -83,53 +91,51 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   @doc """
-  Creates a new local activity and publishes to object creator's inbox
+  Takes or creates an activity and publishes to object creator's inbox
   """
-  def maybe_notify_creator(subject, verb, object) when is_atom(verb) do
-
-    create_and_put_in_feeds(subject, verb, object, Feeds.creator_feed(object))
-    # TODO: notify remote users via AP
-  end
-
-  @doc """
-  Takes an existing activity and puts it in the object creator's inbox
-  """
-  def maybe_notify_creator(%Bonfire.Data.Social.Activity{} = activity, object) do
+  def maybe_notify_creator(subject, %{activity: activity}, object), do: maybe_notify_creator(subject, activity, object)
+  def maybe_notify_creator(%{id: subject_id} = subject, verb_or_activity, %{} = object) do
     #IO.inspect(activity)
+    object = object_with_creator(object)
     #IO.inspect(object)
-    maybe_notify(activity, Feeds.creator_feed(object))
+    if subject_id != Utils.e(object, :created, :creator_id, nil), do: maybe_notify(subject, verb_or_activity, Feeds.creator_inbox(object))
     # TODO: notify remote users via AP
   end
-  def maybe_notify_creator(%{activity: activity}, object), do: maybe_notify_creator(activity, object)
 
-  @doc """
-  Creates a new local activity and publishes to object's inbox (if object is an actor)
-  """
-  def maybe_notify_object(subject, verb, object) when is_atom(verb) do
-
-    create_and_put_in_feeds(subject, verb, object, Feeds.inbox_feed_id(object))
-    # TODO: notify remote users via AP
+  def object_with_creator(object) do
+    object = object |> Bonfire.Repo.maybe_preload([created: [creator_character: [:inbox]]]) #|> IO.inspect
   end
 
   @doc """
-  Creates a new local activity and publishes to creator's inbox
+  Creates a new local activity or takes an existing one and publishes to object's inbox (if object is an actor)
   """
-  def maybe_notify_admins(subject, verb, object) when is_atom(verb) do
+  def maybe_notify_object(subject, verb_or_activity, object) do
 
-    create_and_put_in_feeds(subject, verb, object, Feeds.admins_inbox())
+    maybe_notify(subject, verb_or_activity, object, Feeds.inbox_feed_id(object))
     # TODO: notify remote users via AP
   end
 
-  def maybe_notify(%{activity: activity}, feed), do: maybe_notify(activity, feed)
-  def maybe_notify(%Bonfire.Data.Social.Activity{} = activity, feed) do
-    put_in_feeds(feed, activity)
+  @doc """
+  Creates a new local activity or takes an existing one and publishes to creator's inbox
+  """
+  def maybe_notify_admins(subject, verb_or_activity, object) do
+
+    maybe_notify(subject, verb_or_activity, object, Feeds.admins_inbox())
     # TODO: notify remote users via AP
   end
 
+  @doc """
+  Creates a new local activity or takes an existing one and publishes to specified feeds
+  """
+  def maybe_notify(subject, verb_or_activity, object \\ nil, feeds)
+  def maybe_notify(subject, verb, object, feeds) when is_atom(verb), do: create_and_put_in_feeds(subject, verb, object, feeds)
+  def maybe_notify(subject, %{activity: activity}, _, feeds), do: maybe_notify(subject, activity, feeds)
+  def maybe_notify(_subject, %Bonfire.Data.Social.Activity{} = activity, _, feeds) do
+    put_in_feeds(feeds, activity)
+    # TODO: notify remote users via AP
+  end
+  def maybe_notify(_, _, _, _), do: nil
 
-  defp do_publish(subject, verb, object, feeds \\ nil) when is_list(feeds), do: create_and_put_in_feeds(subject, verb, object, feeds ++ [subject])
-  defp do_publish(subject, verb, object, feed_id) when not is_nil(feed_id), do: create_and_put_in_feeds(subject, verb, object, [feed_id, subject])
-  defp do_publish(subject, verb, object, _), do: create_and_put_in_feeds(subject, verb, object, subject) # just publish to subject's outbox
 
   defp create_and_put_in_feeds(subject, verb, object, feed_id) when is_binary(feed_id) or is_list(feed_id) do
     with {:ok, activity} <- Activities.create(subject, verb, object),

@@ -7,6 +7,7 @@ defmodule Bonfire.Social.Posts do
   alias Ecto.Changeset
   import Bonfire.Boundaries.Queries
   import Bonfire.Common.Hooks
+  alias Bonfire.Social.Threads
 
   use Bonfire.Repo.Query,
       schema: Post,
@@ -23,35 +24,27 @@ defmodule Bonfire.Social.Posts do
   def publish(creator, attrs) do
     #IO.inspect(attrs)
     hook_transact_with(fn ->
-      with  {:ok, post} <- create(creator, attrs),
-            {:ok, maybe_tagged} <- maybe_tag(creator, post),
+      with  {text, mentions, hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs),
+            {:ok, post} <- create(creator, attrs, text),
+            {:ok, maybe_tagged} <- maybe_tag(creator, post, mentions),
             {:ok, activity} <- FeedActivities.publish(creator, :create, Map.merge(post, maybe_tagged)) do
 
               Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, post, Utils.e(attrs, :circles, nil))
 
               #IO.inspect(post)
-              maybe_notify_thread(post, activity)
+              Threads.maybe_push_thread(creator, activity, post)
 
               {:ok, %{post: post, activity: activity}}
       end
     end)
   end
 
-  defp maybe_tag(creator, post) do
-    if Utils.module_enabled?(Bonfire.Tag.Tags), do: Bonfire.Tag.Tags.maybe_tag(creator, post), #|> IO.inspect
+  defp maybe_tag(creator, post, tags) do
+    if Utils.module_enabled?(Bonfire.Tag.Tags), do: Bonfire.Tag.Tags.maybe_tag(creator, post, tags), #|> IO.inspect
     else: {:ok, post}
     # {:ok, post}
   end
 
-  defp maybe_notify_thread(%{replied: %{thread_id: thread_id, reply_to_id: reply_to_id}} = reply, activity) when is_binary(thread_id) and is_binary(reply_to_id) do
-
-    with {:ok, published} <- FeedActivities.maybe_notify(activity, thread_id) do #|> IO.inspect # push to user following the thread
-
-      Utils.pubsub_broadcast(thread_id, {:post_new_reply, published}) # push to users viewing the thread
-    end
-  end
-
-  defp maybe_notify_thread(_, _), do: nil
 
   # def reply(creator, attrs) do
   #   with  {:ok, published} <- publish(creator, attrs),
@@ -66,34 +59,28 @@ defmodule Bonfire.Social.Posts do
   #   end
   # end
 
-  defp create(%{id: creator_id}, attrs) do
+  defp create(%{id: creator_id}, attrs, text \\ nil) do
     attrs = attrs
-      |> Map.put(:post_content, prepare_content(attrs))
+      |> Map.put(:post_content, prepare_content(attrs, text))
       |> Map.put(:created, %{creator_id: creator_id})
-      |> Map.put(:replied, maybe_reply(attrs))
+      |> Map.put(:replied, Threads.maybe_reply(attrs))
       # |> IO.inspect
 
     repo().put(changeset(:create, attrs))
   end
 
-  def prepare_content(%{post_content: %{} = attrs}), do: prepare_content(attrs)
-  def prepare_content(%{name: name, html_body: body} = attrs) when is_nil(body) or body=="" do
+  def prepare_content(attrs, text \\ nil)
+  def prepare_content(%{post_content: %{} = attrs}, text), do: prepare_content(attrs, text)
+  def prepare_content(attrs, text) when is_binary(text) and bit_size(text) > 0 do
+    # use text overide if provided
+    Map.merge(attrs, %{html_body: text})
+  end
+  def prepare_content(%{name: name, html_body: body} = attrs, _) when is_nil(body) or body=="" do
     # use title as body if no body entered
     Map.merge(attrs, %{html_body: name, name: ""})
   end
-  def prepare_content(attrs), do: attrs
+  def prepare_content(attrs, _), do: attrs
 
-  def maybe_reply(%{reply_to: reply_attrs}), do: maybe_reply(reply_attrs)
-  def maybe_reply(%{reply_to_id: reply_to_id} = reply_attrs) when is_binary(reply_to_id) and reply_to_id !="" do
-     with {:ok, r} <- get_replied(reply_to_id) do
-      Map.merge(reply_attrs, %{reply_to: r})
-     else _ ->
-      Map.drop(reply_attrs, :reply_to_id)
-      |> maybe_reply()
-     end
-  end
-  def maybe_reply(%{} = reply_attrs), do: Map.merge(reply_attrs, maybe_reply(nil))
-  def maybe_reply(_), do: %{set: true} # makes sure a Replied entry is inserted even for first posts
 
   defp changeset(:create, attrs) do
     Post.changeset(%Post{}, attrs)
@@ -150,83 +137,6 @@ defmodule Bonfire.Social.Posts do
      preload: [post_content: pc, created: cr]
   end
 
-  def get_replied(id) do
-    repo().single(from p in Replied, where: p.id == ^id)
-  end
-
-  def list_replies(%{id: thread_id}, current_user, cursor \\ nil, max_depth \\ 3, limit \\ 500), do: list_replies(thread_id, current_user, cursor, max_depth, limit)
-  def list_replies(%{thread_id: thread_id}, current_user, cursor, max_depth, limit), do: list_replies(thread_id, current_user, cursor, max_depth, limit)
-  def list_replies(thread_id, current_user, cursor, max_depth, limit) when is_binary(thread_id), do: Pointers.ULID.dump(thread_id) |> do_list_replies(current_user, cursor, max_depth, limit)
-
-  defp do_list_replies({:ok, thread_id}, current_user, cursor, max_depth, limit) do
-    # IO.inspect(cursor: cursor)
-    %Replied{id: thread_id}
-      |> Replied.descendants()
-      |> Replied.where_depth(is_smaller_than_or_equal_to: max_depth)
-      |> Activities.object_preload_create_activity(current_user)
-      |> Activities.as_permitted_for(current_user)
-      # |> preload_join(:post)
-      # |> preload_join(:post, :post_content)
-      # |> preload_join(:activity)
-      # |> preload_join(:activity, :subject_profile)
-      # |> preload_join(:activity, :subject_character)
-      |> Bonfire.Repo.many_paginated(limit: limit, before: Utils.e(cursor, :before, nil), after: Utils.e(cursor, :after, nil)) # return a page of items + pagination metadata
-      # |> repo().all # without pagination
-      # |> IO.inspect
-  end
-
-  def arrange_replies_tree(replies), do: replies |> Replied.arrange()
-
-  # def replies_tree(replies) do
-  #   thread = replies
-  #   |> Enum.reverse()
-  #   |> Enum.map(&Map.from_struct/1)
-  #   |> Enum.reduce(%{}, &Map.put(&2, &1.id, &1))
-  #   # |> IO.inspect
-
-  #   do_reply_tree = fn
-  #     {_id, %{reply_to_id: reply_to_id, thread_id: thread_id} =_reply} = reply_with_id,
-  #     acc
-  #     when is_binary(reply_to_id) and reply_to_id != thread_id ->
-  #       #IO.inspect(acc: acc)
-  #       #IO.inspect(reply_ok: reply)
-  #       #IO.inspect(reply_to_id: reply_to_id)
-
-  #       if Map.get(acc, reply_to_id) do
-
-  #           acc
-  #           |> put_in(
-  #               [reply_to_id, :direct_replies],
-  #               Bonfire.Common.Utils.maybe_get(acc[reply_to_id], :direct_replies, []) ++ [reply_with_id]
-  #             )
-  #           # |> IO.inspect
-  #           # |> Map.delete(id)
-
-  #       else
-  #         acc
-  #       end
-
-  #     reply, acc ->
-  #       #IO.inspect(reply_skip: reply)
-
-  #       acc
-  #   end
-
-  #   Enum.reduce(thread, thread, do_reply_tree)
-  #   |> Enum.reduce(thread, do_reply_tree)
-  #   # |> IO.inspect
-  #   |> Enum.reduce(%{}, fn
-
-  #     {id, %{reply_to_id: reply_to_id, thread_id: thread_id} =reply} = reply_with_id, acc when not is_binary(reply_to_id) or reply_to_id == thread_id ->
-
-  #       acc |> Map.put(id, reply)
-
-  #     reply, acc ->
-
-  #       acc
-
-  #   end)
-  # end
 
 
 end
