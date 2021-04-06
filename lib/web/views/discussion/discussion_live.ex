@@ -40,6 +40,7 @@ defmodule Bonfire.Social.Web.DiscussionLive do
       |> assign(
         page_title: "Discussion",
         page: "Discussion",
+        search_placeholder: "Search this discussion",
         reply_id: Map.get(params, "reply_id"),
         activity: activity,
         object: object,

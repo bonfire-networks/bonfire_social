@@ -29,6 +29,7 @@ defmodule Bonfire.Social.Web.PrivateLive do
         page_title: "Private",
         page: "private",
         smart_input: true,
+        search_placeholder: "Search in private messages",
         has_private_tab: false,
         smart_input_placeholder: "Write a private message to one or more users",
       )}
