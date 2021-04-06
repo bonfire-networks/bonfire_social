@@ -1,5 +1,4 @@
 defmodule Bonfire.Social.Follows do
-
   alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Follow
   alias Bonfire.Social.FeedActivities
@@ -21,7 +20,7 @@ defmodule Bonfire.Social.Follows do
 
   defp list(filters, current_user) do
     # TODO: check permissions
-   build_query(filters)
+    build_query(filters)
   end
 
   def list_followed(%{id: user_id} = user, current_user \\ nil) when is_binary(user_id) do
@@ -45,16 +44,19 @@ defmodule Bonfire.Social.Follows do
       {:ok, follow}
     end
   end
+
   def follow(user, object) when is_binary(object) do
     with {:ok, object} <- Bonfire.Common.Pointers.get(object) do
       follow(user, object)
     end
   end
 
-  def unfollow(follower, %{}=followed) do
+  def unfollow(follower, %{} = followed) do
     delete_by_both(follower, followed)
-    Activities.delete_by_subject_verb_object(follower, :follow, followed) # delete the like activity & feed entries
+    # delete the like activity & feed entries
+    Activities.delete_by_subject_verb_object(follower, :follow, followed)
   end
+
   def unfollow(%{} = user, object) when is_binary(object) do
     with {:ok, object} <- Bonfire.Common.Pointers.get(object) do
       unfollow(user, object)
@@ -113,4 +115,30 @@ defmodule Bonfire.Social.Follows do
       select: f.id
   end
 
+  def ap_publish_activity("create", follow) do
+    with {:ok, follower} <- ActivityPub.Adapter.get_actor_by_id(follow.follower_id),
+         {:ok, followed} <- ActivityPub.Adapter.get_actor_by_id(follow.followed_id) do
+      ActivityPub.follow(follower, followed, nil, true)
+    end
+  end
+
+  def ap_publish_activity("delete", follow) do
+    with {:ok, follower} <- ActivityPub.Adapter.get_actor_by_id(follow.follower_id),
+         {:ok, followed} <- ActivityPub.Adapter.get_actor_by_id(follow.followed_id) do
+      ActivityPub.unfollow(follower, followed, nil, true)
+    end
+  end
+
+  def ap_receive_activity(activity, object) do
+    with {:ok, follower} <- Bonfire.Me.Users.ActivityPub.by_ap_id(activity.data["actor"]),
+         {:ok, followed} <- Bonfire.Me.Users.ActivityPub.by_username(object.username),
+         {:ok, _} <- follow(follower, followed) do
+      ActivityPub.accept(%{
+        to: [activity.data["actor"]],
+        actor: object,
+        object: activity,
+        local: true
+      })
+    end
+  end
 end
