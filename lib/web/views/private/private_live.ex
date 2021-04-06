@@ -27,7 +27,10 @@ defmodule Bonfire.Social.Web.PrivateLive do
       socket
       |> assign(
         page_title: "Private",
-        page: "private"
+        page: "private",
+        smart_input: true,
+        has_private_tab: false,
+        smart_input_placeholder: "Write a private message to one or more users",
       )}
 
   end

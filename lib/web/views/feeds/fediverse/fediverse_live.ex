@@ -30,6 +30,8 @@ defmodule Bonfire.Social.Web.Feeds.FediverseLive do
       page: "fediverse",
       page_title: "Fediverse Feed",
       smart_input: true,
+      has_private_tab: false,
+      smart_input_placeholder: "Write something to the fediverse",
       feed_title: title,
       feed_id: feed_id,
       feed: e(feed, :entries, []),

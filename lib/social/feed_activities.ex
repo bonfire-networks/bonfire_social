@@ -43,6 +43,8 @@ defmodule Bonfire.Social.FeedActivities do
       |> Activities.as_permitted_for(current_user)
       # |> IO.inspect(label: "pre-preloads")
       |> Activities.activity_preloads(current_user, preloads)
+      |> distinct([fp], [desc: fp.id, desc: fp.object_id]) # not sure why needed
+      # |> order_by([fp], desc: fp.id)
       # |> IO.inspect(label: "post-preloads")
       # |> Bonfire.Repo.all() # return all items
       |> Bonfire.Repo.many_paginated(before: cursor_before) # return a page of items (reverse chronological) + pagination metadata
