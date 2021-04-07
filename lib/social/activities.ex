@@ -108,6 +108,8 @@ defmodule Bonfire.Social.Activities do
       |> join_preload([:activity, :boost_count])
       |> join_preload([:activity, :like_count])
       # |> join_preload([:activity, :object])
+      |> join_preload([:activity, :object_message])
+      # |> join_preload([:activity, :object_post])
       |> join_preload([:activity, :object_post_content])
       |> join_preload([:activity, :subject_profile])
       |> join_preload([:activity, :subject_character])

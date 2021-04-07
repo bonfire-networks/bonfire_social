@@ -151,7 +151,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp put_in_feeds(feeds, activity) when is_list(feeds), do: Enum.map(feeds, fn x -> put_in_feeds(x, activity) end) # TODO: optimise?
 
-  defp put_in_feeds(feed_or_subject, activity) do
+  defp put_in_feeds(feed_or_subject, activity) when is_map(feed_or_subject) or (is_binary(feed_or_subject) and feed_or_subject !="") do
     with {:ok, %{id: feed_id} = feed} <- Feeds.feed_for_id(feed_or_subject),
     {:ok, published} <- do_put_in_feeds(feed, activity) do
 
@@ -163,6 +163,7 @@ defmodule Bonfire.Social.FeedActivities do
       {:ok, published}
     end
   end
+  defp put_in_feeds(_, activity), do: nil
 
   defp do_put_in_feeds(%{id: feed_id}, %{id: activity_as_object_id}) do
     attrs = %{feed_id: feed_id, object_id: activity_as_object_id}
@@ -183,15 +184,47 @@ defmodule Bonfire.Social.FeedActivities do
 
     {
       query
-      |> join_preload([:activity, :object_post_content])
+      |> join_preload([:activity, :object_post])
       |> join_preload([:activity, :object_created])
       |> join_preload([:activity, :replied]),
       dynamic(
-        [activity: activity, object_post_content: post, object_created: created, replied: replied],
+        [activity: activity, object_post: post, object_created: created, replied: replied],
         is_nil(replied.reply_to_id) and not is_nil(post.id) and activity.verb_id==^verb_id and created.creator_id == ^user_id
       )
     }
   end
+
+  #doc "List messages "
+  def filter(:messages_with, user_id, query) when is_binary(user_id) do
+    verb_id = Verbs.verbs()[:create]
+
+    {
+      query
+      |> join_preload([:activity, :object_message])
+      |> join_preload([:activity, :object_created])
+      |> join_preload([:activity, :replied]),
+      dynamic(
+        [activity: activity, object_message: message, object_created: created, replied: replied],
+        not is_nil(message.id) and activity.verb_id==^verb_id and created.creator_id == ^user_id
+      )
+    }
+  end
+
+  def filter(:messages_for, user_id, query) when is_binary(user_id) do
+    verb_id = Verbs.verbs()[:create]
+
+    {
+      query
+      |> join_preload([:activity, :object_message])
+      |> join_preload([:activity, :object_created])
+      |> join_preload([:activity, :replied]),
+      dynamic(
+        [activity: activity, object_message: message, object_created: created, replied: replied],
+        not is_nil(message.id) and activity.verb_id==^verb_id
+      )
+    }
+  end
+
 
   #doc "List likes created by the user and which are in their outbox, which are not replies"
   # FIXME: we are not putting likes in outbox

@@ -35,6 +35,19 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
     end
   end
 
+  def handle_event("post", %{"is_private"=>"1"}=params, socket) do
+    attrs = params
+    |> input_to_atoms()
+    |> IO.inspect
+
+    with {:ok, published} <- Bonfire.Social.Messages.send(socket.assigns.current_user, attrs) do
+      IO.inspect("sent!")
+      {:noreply,
+        socket
+      }
+    end
+  end
+
   def handle_event("post", params, socket) do
     attrs = params
     |> input_to_atoms()

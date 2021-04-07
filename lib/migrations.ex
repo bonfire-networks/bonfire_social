@@ -28,6 +28,7 @@ defmodule Bonfire.Social.Migrations do
       require Bonfire.Data.Social.Flag.Migration
       require Bonfire.Data.Social.FlagCount.Migration
       require Bonfire.Data.Social.Inbox.Migration
+      require Bonfire.Data.Social.Message.Migration
 
       Bonfire.Data.Social.Article.Migration.migrate_article()
       Bonfire.Data.Social.Block.Migration.migrate_block()
@@ -53,6 +54,7 @@ defmodule Bonfire.Social.Migrations do
       Bonfire.Data.Social.Flag.Migration.migrate_flag()
       Bonfire.Data.Social.FlagCount.Migration.migrate_flag_count()
       Bonfire.Data.Social.Inbox.Migration.migrate_inbox()
+      Bonfire.Data.Social.Message.Migration.migrate_message()
     end
   end
 
@@ -82,7 +84,16 @@ defmodule Bonfire.Social.Migrations do
       require Bonfire.Data.Social.Flag.Migration
       require Bonfire.Data.Social.FlagCount.Migration
       require Bonfire.Data.Social.Inbox.Migration
+      require Bonfire.Data.Social.Message.Migration
 
+      Bonfire.Data.Social.Message.Migration.migrate_message()
+      Bonfire.Data.Social.FeedPublish.Migration.migrate_feed_publish()
+      Bonfire.Data.Social.Replied.Migration.migrate_replied()
+      Bonfire.Data.Social.Boost.Migration.migrate_boost()
+      Bonfire.Data.Social.BoostCount.Migration.migrate_boost_count()
+      Bonfire.Data.Social.Flag.Migration.migrate_flag()
+      Bonfire.Data.Social.FlagCount.Migration.migrate_flag_count()
+      Bonfire.Data.Social.Inbox.Migration.migrate_inbox()
       Bonfire.Data.Social.Profile.Migration.migrate_profile()
       Bonfire.Data.Social.PostContent.Migration.migrate_post_content()
       Bonfire.Data.Social.Post.Migration.migrate_post()
@@ -100,13 +111,7 @@ defmodule Bonfire.Social.Migrations do
       Bonfire.Data.Social.Created.Migration.migrate_created()
       Bonfire.Data.Social.Activity.Migration.migrate_activity()
       Bonfire.Data.Social.Feed.Migration.migrate_feed()
-      Bonfire.Data.Social.FeedPublish.Migration.migrate_feed_publish()
-      Bonfire.Data.Social.Replied.Migration.migrate_replied()
-      Bonfire.Data.Social.Boost.Migration.migrate_boost()
-      Bonfire.Data.Social.BoostCount.Migration.migrate_boost_count()
-      Bonfire.Data.Social.Flag.Migration.migrate_flag()
-      Bonfire.Data.Social.FlagCount.Migration.migrate_flag_count()
-      Bonfire.Data.Social.Inbox.Migration.migrate_inbox()
+
     end
   end
 

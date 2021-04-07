@@ -8,6 +8,7 @@ defmodule Bonfire.Social.Posts do
   import Bonfire.Boundaries.Queries
   import Bonfire.Common.Hooks
   alias Bonfire.Social.Threads
+  alias Bonfire.Social.PostContents
 
   use Bonfire.Repo.Query,
       schema: Post,
@@ -26,23 +27,17 @@ defmodule Bonfire.Social.Posts do
     hook_transact_with(fn ->
       with  {text, mentions, hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs),
             {:ok, post} <- create(creator, attrs, text),
-            {:ok, maybe_tagged} <- maybe_tag(creator, post, mentions),
-            {:ok, activity} <- FeedActivities.publish(creator, :create, Map.merge(post, maybe_tagged)) do
+            {:ok, post} <- Bonfire.Social.Tags.maybe_tag(creator, post, mentions),
+            {:ok, activity} <- FeedActivities.publish(creator, :create, post) do
 
               Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, post, Utils.e(attrs, :circles, []) ++ (Bonfire.Tag.Tags.tag_ids(mentions) || [])) # make visible for creator, any selected circles, and mentioned characters (should be configurable)
 
               #IO.inspect(post)
               Threads.maybe_push_thread(creator, activity, post)
 
-              {:ok, %{post: post, activity: activity}}
+              {:ok, %{post: post, is_private: true, activity: activity}}
       end
     end)
-  end
-
-  defp maybe_tag(creator, post, tags) do
-    if Utils.module_enabled?(Bonfire.Tag.Tags), do: Bonfire.Tag.Tags.maybe_tag(creator, post, tags), #|> IO.inspect
-    else: {:ok, post}
-    # {:ok, post}
   end
 
 
@@ -62,25 +57,13 @@ defmodule Bonfire.Social.Posts do
 
   defp create(%{id: creator_id}, attrs, text \\ nil) do
     attrs = attrs
-      |> Map.put(:post_content, prepare_content(attrs, text))
+      |> Map.put(:post_content, PostContents.prepare_content(attrs, text))
       |> Map.put(:created, %{creator_id: creator_id})
       |> Map.put(:replied, Threads.maybe_reply(attrs))
       # |> IO.inspect
 
     repo().put(changeset(:create, attrs))
   end
-
-  def prepare_content(attrs, text \\ nil)
-  def prepare_content(%{post_content: %{} = attrs}, text), do: prepare_content(attrs, text)
-  def prepare_content(attrs, text) when is_binary(text) and bit_size(text) > 0 do
-    # use text overide if provided
-    Map.merge(attrs, %{html_body: text})
-  end
-  def prepare_content(%{name: name, html_body: body} = attrs, _) when is_nil(body) or body=="" do
-    # use title as body if no body entered
-    Map.merge(attrs, %{html_body: name, name: ""})
-  end
-  def prepare_content(attrs, _), do: attrs
 
 
   defp changeset(:create, attrs) do
