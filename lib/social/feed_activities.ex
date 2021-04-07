@@ -195,6 +195,16 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   #doc "List messages "
+  def filter(:distinct, :threads, query) do
+    {
+      query
+      |> join_preload([:activity, :replied])
+      |> distinct([fp, replied: replied], [desc: replied.thread_id]),
+      dynamic([fp], true)
+    }
+  end
+
+  #doc "List messages "
   def filter(:messages_with, user_id, query) when is_binary(user_id) do
     verb_id = Verbs.verbs()[:create]
 

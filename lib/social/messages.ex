@@ -81,8 +81,8 @@ defmodule Bonfire.Social.Messages do
 
     # query FeedPublish
 
-    q = if with_user && Utils.ulid(with_user) != current_user_id, do: FeedActivities.build_query(messages_with: Utils.ulid(with_user)),
-    else: FeedActivities.build_query(messages_for: current_user_id)
+    q = if with_user && Utils.ulid(with_user) != current_user_id, do: FeedActivities.build_query(messages_with: Utils.ulid(with_user), distinct: :threads),
+    else: FeedActivities.build_query(messages_for: current_user_id, distinct: :threads)
 
     q
     |> FeedActivities.feed_query_paginated(current_user, cursor_before, preloads)
