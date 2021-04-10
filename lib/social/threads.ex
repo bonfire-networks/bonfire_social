@@ -5,11 +5,13 @@ defmodule Bonfire.Social.Threads do
   alias Bonfire.Boundaries.Verbs
   alias Bonfire.Common.Utils
   alias Ecto.Changeset
-  import Bonfire.Boundaries.Queries
   import Bonfire.Common.Hooks
 
-  import Ecto.Query
-  import Bonfire.Me.Integration
+  use Bonfire.Repo.Query,
+    schema: Replied,
+    searchable_fields: [:id, :thread_id, :reply_to_id],
+    sortable_fields: [:id]
+
 
   def maybe_push_thread(%{} = creator, %{} = activity, %{replied: %{thread_id: thread_id, reply_to_id: reply_to_id}} = reply) when is_binary(thread_id) and is_binary(reply_to_id) do
 
@@ -37,6 +39,27 @@ defmodule Bonfire.Social.Threads do
 
   def get_replied(id) do
     repo().single(from p in Replied, where: p.id == ^id)
+  end
+
+  @doc "List participants in a thread (depending on user's boundaries)"
+  def list_participants(thread_id, current_user \\ nil, cursor_before \\ nil, preloads \\ :minimal) when is_binary(thread_id) or is_list(thread_id) do
+
+    build_query(participants_in: thread_id)
+    |> FeedActivities.feed_query_paginated(current_user, cursor_before, preloads)
+  end
+
+  def filter(:participants_in, thread_id, query) do
+    verb_id = Verbs.verbs()[:create]
+
+    {
+      query
+      |> join_preload([:activity, :subject_character])
+      |> distinct([fp, subject_character: subject_character], [desc: subject_character.id]),
+      dynamic(
+        [replied, activity: activity, subject_character: subject_character],
+          (replied.thread_id == ^thread_id  or replied.id == ^thread_id or replied.reply_to_id == ^thread_id) and activity.verb_id==^verb_id
+      )
+    }
   end
 
   def list_replies(%{id: thread_id}, current_user, cursor \\ nil, max_depth \\ 3, limit \\ 500), do: list_replies(thread_id, current_user, cursor, max_depth, limit)

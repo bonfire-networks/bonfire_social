@@ -104,6 +104,7 @@ defmodule Bonfire.Social.Activities do
   def activity_preloads(query, current_user, :default) do
 
     query
+      |> activity_preloads(current_user, :minimal)
       |> join_preload([:activity, :verb])
       |> join_preload([:activity, :boost_count])
       |> join_preload([:activity, :like_count])
@@ -111,8 +112,6 @@ defmodule Bonfire.Social.Activities do
       |> join_preload([:activity, :object_message])
       # |> join_preload([:activity, :object_post])
       |> join_preload([:activity, :object_post_content])
-      |> join_preload([:activity, :subject_profile])
-      |> join_preload([:activity, :subject_character])
       |> join_preload([:activity, :replied])
       |> maybe_my_like(current_user)
       |> maybe_my_boost(current_user)
@@ -120,6 +119,13 @@ defmodule Bonfire.Social.Activities do
       # |> IO.inspect
   end
 
+  def activity_preloads(query, current_user, :minimal) do
+
+    query
+      |> join_preload([:activity, :subject_character])
+      |> join_preload([:activity, :subject_profile])
+      # |> IO.inspect
+  end
 
   def maybe_my_like(q, %{id: current_user_id} = _current_user) do
     q

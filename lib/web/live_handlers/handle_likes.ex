@@ -8,7 +8,7 @@ defmodule Bonfire.Social.Web.LiveHandlers.Likes do
     #IO.inspect(socket)
     with {:ok, _like} <- Bonfire.Social.Likes.like(socket.assigns.current_user, id) do
       {:noreply, Phoenix.LiveView.assign(socket,
-      liked: Map.get(socket.assigns, :liked, []) ++ [{id, true}]
+      liked: Map.get(socket.assigns, :liked, []) ++ [id]
     )}
     end
   end
@@ -16,7 +16,7 @@ defmodule Bonfire.Social.Web.LiveHandlers.Likes do
   def handle_event("like", %{"direction"=>"down", "id"=> id}, socket) do # unlike in LV
     with _ <- Bonfire.Social.Likes.unlike(socket.assigns.current_user, id) do
       {:noreply, Phoenix.LiveView.assign(socket,
-      liked: Map.get(socket.assigns, :liked, []) ++ [{id, false}]
+      liked: Enum.reject(Map.get(socket.assigns, :liked, []), &Enum.member?(&1, id))
     )}
     end
   end

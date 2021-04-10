@@ -138,12 +138,13 @@ defmodule Bonfire.Social.FeedActivities do
 
 
   defp create_and_put_in_feeds(subject, verb, object, feed_id) when is_binary(feed_id) or is_list(feed_id) do
-    with {:ok, activity} <- Activities.create(subject, verb, object),
-    {:ok, published} <- put_in_feeds(feed_id, activity) # publish in specified feed
-     do
-      {:ok, published}
-     else
-      publishes when is_list(publishes) -> List.first(publishes)
+    with {:ok, activity} <- Activities.create(subject, verb, object) do
+      with {:ok, published} <- put_in_feeds(feed_id, activity) do # publish in specified feed
+        {:ok, published}
+      else
+        publishes when is_list(publishes) -> List.first(publishes)
+        _ -> {:ok, activity}
+      end
     end
   end
   defp create_and_put_in_feeds(subject, verb, object, %{feed_id: feed_id}), do: create_and_put_in_feeds(subject, verb, object, feed_id)
@@ -194,7 +195,7 @@ defmodule Bonfire.Social.FeedActivities do
     }
   end
 
-  #doc "List messages "
+  #doc "Group per-thread "
   def filter(:distinct, :threads, query) do
     {
       query

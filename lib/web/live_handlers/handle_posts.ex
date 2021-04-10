@@ -124,19 +124,19 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
      Enum.map(selected_circles, &Bonfire.Boundaries.Circles.get_tuple/1)
     )
     |> Enum.filter(& &1) |> Enum.dedup()
+    |> IO.inspect()
 
     {:noreply,
         socket
         |> assign(
-          to_circles: new_circles
-            |> IO.inspect(),
+          to_circles: new_circles,
         )
     }
   end
 
   def known_circle_tuples(selected_circles, old_circles) do
     old_circles
-    |> Enum.map(fn
+    |> Enum.filter(fn
         {name, id} -> id in selected_circles
         _ -> nil
       end)
