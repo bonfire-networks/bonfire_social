@@ -46,7 +46,7 @@ defmodule Bonfire.Social.Web.Feeds.InboxLive do
       feed_id: feed_id,
       user: user,
       feed: e(feed, :entries, []),
-      page_info: e(feed, :metadata, [])
+      page_info: e(feed, :metadata, []),
       )}
 
   end

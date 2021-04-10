@@ -9,7 +9,8 @@ defmodule Bonfire.Social.Web.Routes do
       scope "/", Bonfire.Social.Web do
         pipe_through :browser
 
-        live "/instance", Feeds.InstanceLive
+        live "/browse/", Feeds.BrowseLive
+        live "/browse/:tab", Feeds.BrowseLive
 
         live "/post/:id", PostLive
         live "/discussion/:id", DiscussionLive
@@ -24,7 +25,6 @@ defmodule Bonfire.Social.Web.Routes do
         pipe_through :browser
         pipe_through :account_required
 
-        live "/fediverse", Feeds.FediverseLive
         live "/notifications", Feeds.InboxLive
 
     end
@@ -34,8 +34,7 @@ defmodule Bonfire.Social.Web.Routes do
         pipe_through :browser
         pipe_through :user_required
 
-        live "/browse/", Feeds.BrowseLive
-        live "/browse/:tab", Feeds.BrowseLive
+
         live "/private", PrivateLive
 
       end
