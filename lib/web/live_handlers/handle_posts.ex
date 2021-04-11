@@ -110,10 +110,10 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
 
   def handle_event("post_input", %{"circles" => selected_circles} = attrs, socket) when is_list(selected_circles) and length(selected_circles)>0 do
 
-    old_circles = e(socket, :assigns, :to_circles, []) |> Enum.dedup()
+    old_circles = e(socket, :assigns, :to_circles, []) |> Enum.uniq()
     IO.inspect(old_circles: old_circles)
 
-    selected_circles = Enum.dedup(selected_circles)
+    selected_circles = Enum.uniq(selected_circles)
 
     IO.inspect(selected_circles: selected_circles)
 
@@ -123,7 +123,7 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
      ++
      Enum.map(selected_circles, &Bonfire.Boundaries.Circles.get_tuple/1)
     )
-    |> Enum.filter(& &1) |> Enum.dedup()
+    |> Enum.filter(& &1) |> Enum.uniq()
     |> IO.inspect()
 
     {:noreply,
