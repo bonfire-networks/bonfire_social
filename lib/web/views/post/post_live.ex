@@ -36,6 +36,7 @@ defmodule Bonfire.Social.Web.PostLive do
       |> assign(
         page_title: "Post",
         page: "Discussion",
+        has_private_tab: false,
         reply_id: Map.get(params, "reply_id"),
         activity: activity,
         object: object,

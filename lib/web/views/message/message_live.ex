@@ -35,6 +35,7 @@ defmodule Bonfire.Social.Web.MessageLive do
       |> assign(
         page_title: "Private Message",
         page: "Private Message",
+        has_private_tab: false,
         search_placeholder: "Search this discussion",
         smart_input_private: true,
         smart_input_placeholder: "Reply privately",
