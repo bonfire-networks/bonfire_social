@@ -1,7 +1,6 @@
 defmodule Bonfire.Social.FeedActivities do
 
-  alias Bonfire.Data.Social.{Feed, FeedPublish, Like, Boost}
-  alias Bonfire.Data.Identity.{User}
+  alias Bonfire.Data.Social.FeedPublish
   alias Bonfire.Boundaries.Verbs
   alias Bonfire.Social.Feeds
   alias Bonfire.Social.Activities
@@ -9,7 +8,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   use Bonfire.Repo.Query,
       schema: FeedPublish,
-      searchable_fields: [:id, :feed_id, :object_id],
+      searchable_fields: [:id, :feed_id, :activity_id],
       sortable_fields: [:id]
 
 
@@ -22,7 +21,9 @@ defmodule Bonfire.Social.FeedActivities do
     feed(feed_ids, user, cursor_before)
   end
 
-  def feed(%{id: feed_id}, current_user \\ nil, cursor_before \\ nil, preloads \\ :all), do: feed(feed_id, current_user, cursor_before, preloads)
+  def feed(feed, current_user \\ nil, cursor_before \\ nil, preloads \\ :all)
+
+  def feed(%{id: feed_id}, current_user, cursor_before, preloads), do: feed(feed_id, current_user, cursor_before, preloads)
 
   def feed(feed_id_or_ids, current_user, cursor_before, preloads) when is_binary(feed_id_or_ids) or is_list(feed_id_or_ids) do
 
@@ -43,7 +44,7 @@ defmodule Bonfire.Social.FeedActivities do
       |> Activities.as_permitted_for(current_user)
       # |> IO.inspect(label: "pre-preloads")
       |> Activities.activity_preloads(current_user, preloads)
-      # |> distinct([fp], [desc: fp.id, desc: fp.object_id]) # not sure if/why needed...
+      # |> distinct([fp], [desc: fp.id, desc: fp.activity_id]) # not sure if/why needed...
       # |> order_by([fp], desc: fp.id)
       # |> IO.inspect(label: "post-preloads")
       # |> Bonfire.Repo.all() # return all items
@@ -78,7 +79,8 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
 
-  defp do_publish(subject, verb, object, feeds \\ nil) when is_list(feeds), do: maybe_notify(subject, verb, object, feeds ++ [subject])
+  defp do_publish(subject, verb, object, feeds \\ nil)
+  defp do_publish(subject, verb, object, feeds) when is_list(feeds), do: maybe_notify(subject, verb, object, feeds ++ [subject])
   defp do_publish(subject, verb, object, feed_id) when not is_nil(feed_id), do: maybe_notify(subject, verb, object, [feed_id, subject])
   defp do_publish(subject, verb, object, _), do: maybe_notify(subject, verb, object, subject) # just publish to subject's outbox
 
@@ -103,7 +105,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def object_with_creator(object) do
-    object = object |> Bonfire.Repo.maybe_preload([created: [creator_character: [:inbox]]]) #|> IO.inspect
+    object |> Bonfire.Repo.maybe_preload([created: [creator_character: [:inbox]]]) #|> IO.inspect
   end
 
   @doc """
@@ -158,22 +160,21 @@ defmodule Bonfire.Social.FeedActivities do
 
       published = %{published | activity: activity}
 
-      Utils.pubsub_broadcast(feed.id, {:feed_new_activity, activity}) # push to online users
-      # Utils.pubsub_broadcast(feed_id, published) # push to online users
+      Utils.pubsub_broadcast(feed_id, {:feed_new_activity, activity}) # push to online users
 
       {:ok, published}
     end
   end
-  defp put_in_feeds(_, activity), do: nil
+  defp put_in_feeds(_, _), do: nil
 
-  defp do_put_in_feeds(%{id: feed_id}, %{id: activity_as_object_id}) do
-    attrs = %{feed_id: feed_id, object_id: activity_as_object_id}
+  defp do_put_in_feeds(%{id: feed_id}, %{id: activity_id}) do
+    attrs = %{feed_id: feed_id, activity_id: activity_id}
     repo().put(FeedPublish.changeset(attrs))
   end
 
   @doc "Delete an activity (usage by things like unlike)"
   def delete_for_object(%{id: id}), do: delete_for_object(id)
-  def delete_for_object(id) when is_binary(id) and id !="", do: build_query(object_id: id) |> repo().delete_all() |> elem(1)
+  def delete_for_object(id) when is_binary(id) and id !="", do: build_query(activity_id: id) |> repo().delete_all() |> elem(1)
   def delete_for_object(ids) when is_list(ids), do: Enum.each(ids, fn x -> delete_for_object(x) end)
   def delete_for_object(_), do: nil
 

@@ -1,11 +1,10 @@
 defmodule Bonfire.Social.Posts do
 
-  alias Bonfire.Data.Social.{Post, PostContent, Replied, Activity}
+  alias Bonfire.Data.Social.{Post, PostContent, Replied}
   alias Bonfire.Social.{Activities, FeedActivities}
-  alias Bonfire.Boundaries.Verbs
   alias Bonfire.Common.Utils
   alias Ecto.Changeset
-  import Bonfire.Boundaries.Queries
+  # import Bonfire.Boundaries.Queries
   import Bonfire.Common.Hooks
   alias Bonfire.Social.Threads
   alias Bonfire.Social.PostContents
@@ -25,7 +24,7 @@ defmodule Bonfire.Social.Posts do
   def publish(creator, attrs) do
     #IO.inspect(attrs)
     hook_transact_with(fn ->
-      with  {text, mentions, hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs),
+      with  {text, mentions, _hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs),
             {:ok, post} <- create(creator, attrs, text),
             {:ok, post} <- Bonfire.Social.Tags.maybe_tag(creator, post, mentions),
             {:ok, activity} <- FeedActivities.publish(creator, :create, post) do

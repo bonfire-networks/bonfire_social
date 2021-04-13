@@ -1,9 +1,7 @@
 defmodule Bonfire.Social.Activities do
 
   alias Bonfire.Data.Social.{Activity, Like, Boost, Flag}
-  alias Bonfire.Data.Identity.{User}
   alias Bonfire.Boundaries.Verbs
-  alias Ecto.Changeset
   # import Bonfire.Me.Integration
   # import Ecto.Query
   import Bonfire.Boundaries.Queries
@@ -82,7 +80,7 @@ defmodule Bonfire.Social.Activities do
       # |> IO.inspect
   end
 
-  def activity_preloads(query, current_user, :with_parents) do
+  def activity_preloads(query, _current_user, :with_parents) do
 
     query
       # |> join_preload([:activity, :replied, :reply_to])
@@ -93,7 +91,7 @@ defmodule Bonfire.Social.Activities do
       # |> IO.inspect
   end
 
-  def activity_preloads(query, current_user, :with_creator) do
+  def activity_preloads(query, _current_user, :with_creator) do
 
     query
       |> join_preload([:activity, :object_created, :creator_profile])
@@ -119,7 +117,7 @@ defmodule Bonfire.Social.Activities do
       # |> IO.inspect
   end
 
-  def activity_preloads(query, current_user, :minimal) do
+  def activity_preloads(query, _current_user, :minimal) do
 
     query
       |> join_preload([:activity, :subject_character])

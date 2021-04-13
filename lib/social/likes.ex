@@ -2,11 +2,11 @@ defmodule Bonfire.Social.Likes do
 
   alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Like
-  alias Bonfire.Data.Social.LikeCount
+  # alias Bonfire.Data.Social.LikeCount
   alias Bonfire.Social.{Activities, FeedActivities}
   import Ecto.Query
   import Bonfire.Me.Integration
-  alias Bonfire.Common.Utils
+  # alias Bonfire.Common.Utils
 
   def liked?(%User{}=user, liked), do: not is_nil(get!(user, liked))
   def get(%User{}=user, liked), do: repo().single(by_both_q(user, liked))
@@ -56,39 +56,39 @@ defmodule Bonfire.Social.Likes do
     Like.changeset(%Like{}, %{liker_id: liker, liked_id: liked})
   end
 
-  @doc "Delete likes where i am the liker"
+  #doc "Delete likes where i am the liker"
   defp delete_by_liker(%User{}=me), do: elem(repo().delete_all(by_liker_q(me)), 1)
 
-  @doc "Delete likes where i am the liked"
+  #doc "Delete likes where i am the liked"
   defp delete_by_liked(%User{}=me), do: elem(repo().delete_all(by_liked_q(me)), 1)
 
-  @doc "Delete likes where i am the liker or the liked."
+  #doc "Delete likes where i am the liker or the liked."
   defp delete_by_any(%User{}=me), do: elem(repo().delete_all(by_any_q(me)), 1)
 
-  @doc "Delete likes where i am the liker and someone else is the liked."
+  #doc "Delete likes where i am the liker and someone else is the liked."
   defp delete_by_both(%User{}=me, %{}=liked), do: elem(repo().delete_all(by_both_q(me, liked)), 1)
 
-  def by_liker_q(%User{id: id}) do
+  defp by_liker_q(%User{id: id}) do
     from f in Like,
       where: f.liker_id == ^id,
       select: f.id
   end
 
-  def by_liked_q(%User{id: id}) do
+  defp by_liked_q(%User{id: id}) do
     from f in Like,
       where: f.liked_id == ^id,
       select: f.id
   end
 
-  def by_any_q(%User{id: id}) do
+  defp by_any_q(%User{id: id}) do
     from f in Like,
       where: f.liker_id == ^id or f.liked_id == ^id,
       select: f.id
   end
 
-  def by_both_q(%User{id: liker}, %{id: liked}), do: by_both_q(liker, liked)
+  defp by_both_q(%User{id: liker}, %{id: liked}), do: by_both_q(liker, liked)
 
-  def by_both_q(liker, liked) when is_binary(liker) and is_binary(liked) do
+  defp by_both_q(liker, liked) when is_binary(liker) and is_binary(liked) do
     from f in Like,
       where: f.liker_id == ^liker or f.liked_id == ^liked,
       select: f.id

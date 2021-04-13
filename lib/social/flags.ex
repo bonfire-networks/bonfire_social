@@ -2,11 +2,11 @@ defmodule Bonfire.Social.Flags do
 
   alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Flag
-  alias Bonfire.Data.Social.FlagCount
+  # alias Bonfire.Data.Social.FlagCount
   alias Bonfire.Social.{Activities, FeedActivities}
   import Ecto.Query
   import Bonfire.Me.Integration
-  alias Bonfire.Common.Utils
+  # alias Bonfire.Common.Utils
 
   def flagged?(%User{}=user, flagged), do: not is_nil(get!(user, flagged))
   def get(%User{}=user, flagged), do: repo().single(by_both_q(user, flagged))
@@ -48,39 +48,39 @@ defmodule Bonfire.Social.Flags do
     Flag.changeset(%Flag{}, %{flagger_id: flagger, flagged_id: flagged})
   end
 
-  @doc "Delete flags where i am the flagger"
+  #doc "Delete flags where i am the flagger"
   defp delete_by_flagger(%User{}=me), do: elem(repo().delete_all(by_flagger_q(me)), 1)
 
-  @doc "Delete flags where i am the flagged"
+  #doc "Delete flags where i am the flagged"
   defp delete_by_flagged(%User{}=me), do: elem(repo().delete_all(by_flagged_q(me)), 1)
 
-  @doc "Delete flags where i am the flagger or the flagged."
+  #doc "Delete flags where i am the flagger or the flagged."
   defp delete_by_any(%User{}=me), do: elem(repo().delete_all(by_any_q(me)), 1)
 
-  @doc "Delete flags where i am the flagger and someone else is the flagged."
+  #doc "Delete flags where i am the flagger and someone else is the flagged."
   defp delete_by_both(%User{}=me, %{}=flagged), do: elem(repo().delete_all(by_both_q(me, flagged)), 1)
 
-  def by_flagger_q(%User{id: id}) do
+  defp by_flagger_q(%User{id: id}) do
     from f in Flag,
       where: f.flagger_id == ^id,
       select: f.id
   end
 
-  def by_flagged_q(%User{id: id}) do
+  defp by_flagged_q(%User{id: id}) do
     from f in Flag,
       where: f.flagged_id == ^id,
       select: f.id
   end
 
-  def by_any_q(%User{id: id}) do
+  defp by_any_q(%User{id: id}) do
     from f in Flag,
       where: f.flagger_id == ^id or f.flagged_id == ^id,
       select: f.id
   end
 
-  def by_both_q(%User{id: flagger}, %{id: flagged}), do: by_both_q(flagger, flagged)
+  defp by_both_q(%User{id: flagger}, %{id: flagged}), do: by_both_q(flagger, flagged)
 
-  def by_both_q(flagger, flagged) when is_binary(flagger) and is_binary(flagged) do
+  defp by_both_q(flagger, flagged) when is_binary(flagger) and is_binary(flagged) do
     from f in Flag,
       where: f.flagger_id == ^flagger or f.flagged_id == ^flagged,
       select: f.id

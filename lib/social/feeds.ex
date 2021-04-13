@@ -1,9 +1,7 @@
 defmodule Bonfire.Social.Feeds do
 
-  alias Bonfire.Data.Social.{Feed, FeedPublish, Inbox}
-  alias Bonfire.Data.Identity.{User}
-  alias Bonfire.Social.{Activities, Follows}
-  alias Ecto.Changeset
+  alias Bonfire.Data.Social.{Feed, Inbox}
+  alias Bonfire.Social.Follows
   import Ecto.Query
   import Bonfire.Me.Integration
   alias Bonfire.Common.Utils
@@ -11,7 +9,9 @@ defmodule Bonfire.Social.Feeds do
   def instance_feed_id, do: Bonfire.Boundaries.Circles.circles[:local]
   def fediverse_feed_id, do: Bonfire.Boundaries.Circles.circles[:activity_pub]
 
-  def my_feed_ids(%{} = user, extra_feeds \\ []) do
+  def my_feed_ids(user, extra_feeds \\ [])
+
+  def my_feed_ids(%{} = user, extra_feeds) do
     extra_feeds = extra_feeds ++ [user.id]
     with following_ids when is_list(following_ids) <- Follows.by_follower(user) do
       #IO.inspect(subs: following_ids)
@@ -46,7 +46,7 @@ defmodule Bonfire.Social.Feeds do
   end
   def inbox_feed_id(%{inbox: %{feed_id: feed_id}}), do: feed_id
   def inbox_feed_id(%{} = for_subject) do
-    with {:ok, %{feed_id: feed_id} = inbox} <- create_inbox(for_subject) do
+    with {:ok, %{feed_id: feed_id} = _inbox} <- create_inbox(for_subject) do
       feed_id
     end
   end
@@ -89,7 +89,7 @@ defmodule Bonfire.Social.Feeds do
   Create a INBOX feed for an existing Pointable (eg. User)
   """
   def create_inbox(%{id: id}=_thing) do
-    with {:ok, %{id: feed_id} = feed} <- create() do
+    with {:ok, %{id: feed_id} = _feed} <- create() do
       #IO.inspect(feed: feed)
       do_create_inbox(%{id: id, feed_id: feed_id})
     end

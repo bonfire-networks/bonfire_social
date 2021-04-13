@@ -9,7 +9,7 @@ defmodule Bonfire.Social.Web.LiveHandlers.Follows do
       {:noreply, assign(socket,
        following: e(socket, :assigns, :following, []) ++ [id]
      )}
-    else e ->
+    else _e ->
       {:noreply, socket} # TODO: handle errors
     end
   end
@@ -19,8 +19,7 @@ defmodule Bonfire.Social.Web.LiveHandlers.Follows do
       {:noreply, assign(socket,
        following: Enum.reject(e(socket, :assigns, :following, []), fn x -> x == id end)
      )}
-    else e ->
-      {:noreply, socket} # TODO: handle errors
+     #TODO: handle errors
     end
   end
 

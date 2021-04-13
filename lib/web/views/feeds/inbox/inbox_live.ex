@@ -1,12 +1,6 @@
 defmodule Bonfire.Social.Web.Feeds.InboxLive do
   use Bonfire.Web, :live_view
-  alias Bonfire.Fake
   alias Bonfire.Web.LivePlugs
-  alias Bonfire.Me.Users
-  alias Bonfire.Me.Web.{CreateUserLive}
-  alias Bonfire.UI.Social.FeedLive
-  alias Bonfire.Me.Fake
-
 
   def mount(params, session, socket) do
     LivePlugs.live_plug params, session, socket, [
@@ -19,21 +13,13 @@ defmodule Bonfire.Social.Web.Feeds.InboxLive do
     ]
   end
 
-  defp mounted(params, session, socket) do
+  defp mounted(params, _session, socket) do
     current_user = Map.get(socket.assigns, :current_user)
-
-    user = case Map.get(params, "username") do
-      nil -> e(socket.assigns, :current_user, Fake.user_live())
-      username ->
-        with {:ok, user} <- Bonfire.Me.Users.by_username(username) do
-          user
-        end
-    end
 
     feed_id = Bonfire.Social.Feeds.my_inbox_feed_id(socket.assigns)
     IO.inspect(feed_id: feed_id)
 
-    feed = Bonfire.Social.FeedActivities.feed(feed_id, e(socket.assigns, :current_user, nil), nil, [:default]) # FIXME: for some reason preloading creator or reply_to when we have a boost in inbox breaks ecto
+    feed = Bonfire.Social.FeedActivities.feed(feed_id, current_user, nil, [:default]) # FIXME: for some reason preloading creator or reply_to when we have a boost in inbox breaks ecto
 
     {:ok, socket
     |> assign(
@@ -44,9 +30,8 @@ defmodule Bonfire.Social.Web.Feeds.InboxLive do
       has_private_tab: false,
       search_placeholder: "Search my notifications",
       feed_id: feed_id,
-      user: user,
       feed: e(feed, :entries, []),
-      page_info: e(feed, :metadata, []),
+      page_info: e(feed, :metadata, [])
       )}
 
   end

@@ -8,13 +8,12 @@ defmodule Bonfire.Social.PostPostsTest do
   alias Bonfire.Repo
 
 
-
   test "creating & then reading my own post works" do
     user = fake_user!()
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
 
     assert {:ok, activity} = Posts.publish(user, attrs)
-    assert activity.post.post_content.html_body == "<p>epic html message</p>"
+    assert String.contains?(activity.post.post_content.html_body, "epic html message")
     assert activity.post.post_content.name == "name"
 
     assert {:ok, post} = Posts.read(activity.post.id, user)

@@ -1,11 +1,11 @@
 defmodule Bonfire.Social.Messages do
 
-  alias Bonfire.Data.Social.{Message, PostContent, Replied, Activity}
+  alias Bonfire.Data.Social.{Message, PostContent, Replied}
   alias Bonfire.Social.{Activities, FeedActivities}
-  alias Bonfire.Boundaries.Verbs
+  # alias Bonfire.Boundaries.Verbs
   alias Bonfire.Common.Utils
   alias Ecto.Changeset
-  import Bonfire.Boundaries.Queries
+  # import Bonfire.Boundaries.Queries
   alias Bonfire.Social.Threads
   alias Bonfire.Social.PostContents
 
@@ -28,7 +28,7 @@ defmodule Bonfire.Social.Messages do
     # cc = cc ++ (Bonfire.Tag.Tags.tag_ids(mentions) || []) # to make visible & notify for mentioned characters (should be configurable)
 
     repo().transact_with(fn ->
-      with  {text, mentions, hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs),
+      with  {text, mentions, _hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs),
             {:ok, message} <- create(creator, attrs, text),
             {:ok, post} <- Bonfire.Social.Tags.maybe_tag(creator, message, mentions),
             {:ok, activity} <- FeedActivities.maybe_notify(creator, :create, post, cc) do

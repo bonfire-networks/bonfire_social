@@ -1,11 +1,6 @@
 defmodule Bonfire.Social.Web.Feeds.BrowseLive do
   use Bonfire.Web, :live_view
-  alias Bonfire.Fake
   alias Bonfire.Web.LivePlugs
-  alias Bonfire.Me.Users
-  alias Bonfire.Me.Web.{CreateUserLive}
-  alias Bonfire.UI.Social.FeedLive
-  import Bonfire.Me.Integration
 
   def mount(params, session, socket) do
     LivePlugs.live_plug params, session, socket, [
@@ -19,7 +14,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
     ]
   end
 
-  defp mounted(params, session, socket) do
+  defp mounted(_params, _session, socket) do
 
     # feed = Bonfire.Social.FeedActivities.my_feed(socket.assigns.current_user)
 
@@ -47,7 +42,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
         selected_tab: tab,
         feed: e(feed, :entries, []),
         page_info: e(feed, :metadata, []),
-        to_circles: [Bonfire.Boundaries.Circles.get_tuple(:activity_pub)],
+        to_circles: [Bonfire.Boundaries.Circles.get_tuple(:activity_pub)]
       )}
   end
 
@@ -66,7 +61,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
   end
 
 
-  def do_handle_params(%{"tab" => "feed" = tab} = _params, _url, socket) do
+  def do_handle_params(%{"tab" => "feed" = _tab} = _params, _url, socket) do
 
     do_handle_params(nil, nil, socket) # my feed (if logged in)
   end

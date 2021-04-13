@@ -1,5 +1,4 @@
 defmodule Bonfire.Social.Follows do
-  alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Follow
   alias Bonfire.Social.FeedActivities
   alias Bonfire.Social.Activities
@@ -18,12 +17,12 @@ defmodule Bonfire.Social.Follows do
   def by_followed(user), do: repo().all(by_followed_q(user))
   def by_any(user), do: repo().all(by_any_q(user))
 
-  defp list(filters, current_user) do
+  defp list(filters, _current_user) do
     # TODO: check permissions
     build_query(filters)
   end
 
-  def list_followed(%{id: user_id} = user, current_user \\ nil, with_profile_only \\ true) when is_binary(user_id) do
+  def list_followed(%{id: user_id} = _user, current_user \\ nil, with_profile_only \\ true) when is_binary(user_id) do
     list([follower_id: user_id], current_user)
     |> join_preload([:followed_profile])
     |> join_preload([:followed_character])
@@ -31,7 +30,7 @@ defmodule Bonfire.Social.Follows do
     |> repo().all
   end
 
-  def list_followers(%{id: user_id} = user, current_user \\ nil, with_profile_only \\ true) when is_binary(user_id) do
+  def list_followers(%{id: user_id} = _user, current_user \\ nil, with_profile_only \\ true) when is_binary(user_id) do
     list([followed_id: user_id], current_user)
     |> join_preload([:follower_profile])
     |> join_preload([:follower_character])
@@ -78,49 +77,51 @@ defmodule Bonfire.Social.Follows do
     Follow.changeset(%Follow{}, %{follower_id: ulid(follower), followed_id: ulid(followed)})
   end
 
-  @doc "Delete Follows where i am the follower"
+  #doc "Delete Follows where i am the follower"
   defp delete_by_follower(me), do: do_delete(by_follower_q(me))
 
-  @doc "Delete Follows where i am the followed"
+  #doc "Delete Follows where i am the followed"
   defp delete_by_followed(me), do: do_delete(by_followed_q(me))
 
-  @doc "Delete Follows where i am the follower or the followed."
+  #doc "Delete Follows where i am the follower or the followed."
   defp delete_by_any(me), do: do_delete(by_any_q(me))
 
-  @doc "Delete Follows where i am the follower and someone else is the followed."
+  #doc "Delete Follows where i am the follower and someone else is the followed."
   defp delete_by_both(me, followed), do: do_delete(by_both_q(me, followed))
 
   defp do_delete(q), do: elem(repo().delete_all(q), 1)
 
-  def by_follower_q(id) do
+  defp by_follower_q(id) do
     from f in Follow,
       where: f.follower_id == ^ulid(id),
       select: f.id
   end
 
-  def followed_by_follower_q(id) do
+  defp followed_by_follower_q(id) do
     from f in Follow,
       where: f.follower_id == ^ulid(id),
       select: f.followed_id
   end
 
-  def by_followed_q(id) do
+  defp by_followed_q(id) do
     from f in Follow,
       where: f.followed_id == ^ulid(id),
       select: f.id
   end
 
-  def by_any_q(id) do
+  defp by_any_q(id) do
     from f in Follow,
       where: f.follower_id == ^ulid(id) or f.followed_id == ^ulid(id),
       select: f.id
   end
 
-  def by_both_q(follower, followed) do
+  defp by_both_q(follower, followed) do
     from f in Follow,
       where: f.follower_id == ^ulid(follower) and f.followed_id == ^ulid(followed),
       select: f.id
   end
+
+  ###
 
   def ap_publish_activity("create", follow) do
     with {:ok, follower} <- ActivityPub.Adapter.get_actor_by_id(follow.follower_id),

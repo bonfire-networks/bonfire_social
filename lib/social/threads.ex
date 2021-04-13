@@ -1,11 +1,10 @@
 defmodule Bonfire.Social.Threads do
 
-  alias Bonfire.Data.Social.{Post, PostContent, Replied, Activity}
+  alias Bonfire.Data.Social.Replied
   alias Bonfire.Social.{Activities, FeedActivities}
   alias Bonfire.Boundaries.Verbs
   alias Bonfire.Common.Utils
-  alias Ecto.Changeset
-  import Bonfire.Common.Hooks
+  # import Bonfire.Common.Hooks
 
   use Bonfire.Repo.Query,
     schema: Replied,
@@ -13,7 +12,7 @@ defmodule Bonfire.Social.Threads do
     sortable_fields: [:id]
 
 
-  def maybe_push_thread(%{} = creator, %{} = activity, %{replied: %{thread_id: thread_id, reply_to_id: reply_to_id}} = reply) when is_binary(thread_id) and is_binary(reply_to_id) do
+  def maybe_push_thread(%{} = creator, %{} = activity, %{replied: %{thread_id: thread_id, reply_to_id: reply_to_id}} = _reply) when is_binary(thread_id) and is_binary(reply_to_id) do
 
     with {:ok, published} <- FeedActivities.maybe_notify(creator, activity, thread_id) do #|> IO.inspect # push to user following the thread
 
@@ -62,7 +61,8 @@ defmodule Bonfire.Social.Threads do
     }
   end
 
-  def list_replies(%{id: thread_id}, current_user, cursor \\ nil, max_depth \\ 3, limit \\ 500), do: list_replies(thread_id, current_user, cursor, max_depth, limit)
+  def list_replies(thread, current_user, cursor \\ nil, max_depth \\ 3, limit \\ 500)
+  def list_replies(%{id: thread_id}, current_user, cursor, max_depth, limit), do: list_replies(thread_id, current_user, cursor, max_depth, limit)
   def list_replies(%{thread_id: thread_id}, current_user, cursor, max_depth, limit), do: list_replies(thread_id, current_user, cursor, max_depth, limit)
   def list_replies(thread_id, current_user, cursor, max_depth, limit) when is_binary(thread_id), do: Pointers.ULID.dump(thread_id) |> do_list_replies(current_user, cursor, max_depth, limit)
 

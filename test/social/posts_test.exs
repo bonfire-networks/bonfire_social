@@ -9,7 +9,7 @@ defmodule Bonfire.Social.PostsTest do
     account = Fake.fake_account!()
     user = Fake.fake_user!(account)
     assert {:ok, activity} = Posts.publish(user, attrs)
-    assert activity.post.post_content.html_body == "<p>epic html message</p>"
+    assert String.contains?(activity.post.post_content.html_body, "epic html message")
     assert activity.post.post_content.name == "name"
     assert activity.post.post_content.summary == "summary"
     assert activity.post.created.creator_id == user.id

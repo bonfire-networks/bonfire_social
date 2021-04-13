@@ -1,11 +1,6 @@
 defmodule Bonfire.Social.Web.DiscussionLive do
   use Bonfire.Web, :live_view
-  alias Bonfire.Fake
   alias Bonfire.Web.LivePlugs
-  alias Bonfire.Me.Users
-  alias Bonfire.Me.Web.{CreateUserLive, LoggedDashboardLive}
-  import Bonfire.Me.Integration
-
 
   def mount(params, session, socket) do
     LivePlugs.live_plug(params, session, socket, [
@@ -19,11 +14,11 @@ defmodule Bonfire.Social.Web.DiscussionLive do
     ])
   end
 
-  defp mounted(params, session, socket) do
+  defp mounted(params, _session, socket) do
 
     current_user = e(socket, :assigns, :current_user, nil)
 
-    # FIXME
+    # FIXME - switch to getting by Pointer (to support other object types)
     with {:ok, post} <- Bonfire.Social.Posts.read(Map.get(params, "id"), current_user) do
       #IO.inspect(post, label: "the post:")
 

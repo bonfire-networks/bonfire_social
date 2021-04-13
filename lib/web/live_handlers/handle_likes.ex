@@ -1,8 +1,8 @@
 defmodule Bonfire.Social.Web.LiveHandlers.Likes do
 
-  alias Bonfire.Common.Utils
-  import Utils
-  import Phoenix.LiveView
+  # alias Bonfire.Common.Utils
+  # import Utils
+  # import Phoenix.LiveView
 
   def handle_event("like", %{"direction"=>"up", "id"=> id}, socket) do # like in LV
     #IO.inspect(socket)
