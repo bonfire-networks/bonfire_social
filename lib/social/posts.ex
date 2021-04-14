@@ -34,7 +34,7 @@ defmodule Bonfire.Social.Posts do
               #IO.inspect(post)
               Threads.maybe_push_thread(creator, activity, post)
 
-              {:ok, %{post: post, is_private: true, activity: activity}}
+              {:ok, %{post: post, activity: activity}}
       end
     end)
   end
