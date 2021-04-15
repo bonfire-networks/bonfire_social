@@ -58,21 +58,9 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
 
   def handle_event("post_input", %{"circles" => selected_circles} = _attrs, socket) when is_list(selected_circles) and length(selected_circles)>0 do
 
-    old_circles = e(socket, :assigns, :to_circles, []) |> Enum.uniq()
-    IO.inspect(old_circles: old_circles)
+    previous_circles = e(socket, :assigns, :to_circles, []) #|> Enum.uniq()
 
-    selected_circles = Enum.uniq(selected_circles)
-
-    IO.inspect(selected_circles: selected_circles)
-
-    new_circles =
-    (
-     known_circle_tuples(selected_circles, old_circles)
-     ++
-     Enum.map(selected_circles, &Bonfire.Boundaries.Circles.get_tuple/1)
-    )
-    |> Enum.filter(& &1) |> Enum.uniq()
-    |> IO.inspect()
+    new_circles = set_circles(selected_circles, previous_circles)
 
     {:noreply,
         socket
@@ -82,9 +70,12 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
     }
   end
 
-  def handle_event("post_input", _attrs, socket) do # nothing
+  def handle_event("post_input", _attrs, socket) do # no circle
     {:noreply,
       socket
+        |> assign(
+          to_circles: []
+        )
     }
   end
 
@@ -102,10 +93,45 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
       )}
   end
 
+  def set_circles(selected_circles, previous_circles) do
 
+    # IO.inspect(previous_circles: previous_circles)
+    # selected_circles = Enum.uniq(selected_circles)
 
-  def known_circle_tuples(selected_circles, old_circles) do
-    old_circles
+    # IO.inspect(selected_circles: selected_circles)
+
+    public = Bonfire.Boundaries.Circles.circles()[:guest]
+
+    previous_ids = previous_circles |> Enum.map(fn
+        {_name, id} -> id
+        _ -> nil
+      end)
+    # IO.inspect(previous_ids: previous_ids)
+
+    selected_circles = if public in selected_circles and public not in previous_ids do
+      selected_circles ++ [
+        Bonfire.Boundaries.Circles.circles()[:local],
+        Bonfire.Boundaries.Circles.circles()[:admin],
+        Bonfire.Boundaries.Circles.circles()[:activity_pub]
+      ]
+    else
+      selected_circles
+    end
+
+    # IO.inspect(new_selected_circles: selected_circles)
+
+    # fix this ugly thing
+    (
+     known_circle_tuples(selected_circles, previous_circles)
+     ++
+     Enum.map(selected_circles, &Bonfire.Boundaries.Circles.get_tuple/1)
+    )
+    |> Enum.filter(& &1) |> Enum.uniq()
+    # |> IO.inspect()
+  end
+
+  def known_circle_tuples(selected_circles, previous_circles) do
+    previous_circles
     |> Enum.filter(fn
         {_name, id} -> id in selected_circles
         _ -> nil

@@ -75,7 +75,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
      selected_tab: "feed",
      feed: e(feed, :entries, []),
      page_info: e(feed, :metadata, [])
-     )}
+    )}
   end
 
   def do_handle_params(_params, url, socket) do
