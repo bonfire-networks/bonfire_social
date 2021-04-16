@@ -22,6 +22,9 @@ defmodule Bonfire.Social.Posts do
   end
 
   def publish(creator, attrs) do
+
+    cc = Utils.e(attrs, :circles, [])
+
     #IO.inspect(attrs)
     hook_transact_with(fn ->
       with  {text, mentions, _hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs),
@@ -29,7 +32,13 @@ defmodule Bonfire.Social.Posts do
             {:ok, post} <- Bonfire.Social.Tags.maybe_tag(creator, post, mentions),
             {:ok, activity} <- FeedActivities.publish(creator, :create, post) do
 
-              Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, post, Utils.e(attrs, :circles, []) ++ (Bonfire.Tag.Tags.tag_ids(mentions) || [])) # make visible for creator, any selected circles, and mentioned characters (should be configurable)
+              Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, post, cc ++ (Bonfire.Tag.Tags.tag_ids(mentions) || [])) # make visible for:
+              # - creator
+              # - any selected circles
+              # - mentioned characters (FIXME, should not be the default or be configurable)
+
+              # put in feeds
+              FeedActivities.maybe_notify(creator, activity, cc)
 
               #IO.inspect(post)
               Threads.maybe_push_thread(creator, activity, post)

@@ -1,5 +1,6 @@
 defmodule Bonfire.Social.Feeds do
 
+  require Logger
   alias Bonfire.Data.Social.{Feed, Inbox}
   alias Bonfire.Social.Follows
   import Ecto.Query
@@ -25,20 +26,26 @@ defmodule Bonfire.Social.Feeds do
 
   def my_feed_ids(_, extra_feeds), do: extra_feeds
 
-  def my_inbox_feed_id(%{current_user: %{character: %{inbox: %{feed_id: feed_id}}}, current_account:  %{inbox: %{feed_id: account_feed_id}}}) when is_binary(feed_id) do
+  def my_inbox_feed_id(%{current_user: %{character: %{inbox: %{feed_id: feed_id}}}, current_account:  %{inbox: %{feed_id: account_feed_id}}} = _assigns) when is_binary(feed_id) do
     [feed_id, account_feed_id]
   end
-  def my_inbox_feed_id(%{current_user: %{character: %{inbox: %{feed_id: feed_id}}}}) when is_binary(feed_id) do
-    feed_id
+  def my_inbox_feed_id(%{current_user: user} = _assigns) when not is_nil(user) do
+    my_inbox_feed_id(user)
   end
-  def my_inbox_feed_id(%{current_user: user}) when not is_nil(user) do
-    inbox_feed_id(user)
-  end
-  def my_inbox_feed_id(%{current_account: %{inbox: %{feed_id: account_feed_id}}}) when is_binary(account_feed_id) do
+  def my_inbox_feed_id(%{current_account: %{inbox: %{feed_id: account_feed_id}}} = _assigns) when is_binary(account_feed_id) do
     account_feed_id
   end
-  def my_inbox_feed_id(%{current_account: account}) when not is_nil(account) do
+  def my_inbox_feed_id(%{current_account: account} = _assigns) when not is_nil(account) do
     inbox_feed_id(account)
+  end
+  def my_inbox_feed_id(%{character: %{inbox: %{feed_id: feed_id}}} = _user) when is_binary(feed_id) do
+    feed_id
+  end
+  def my_inbox_feed_id(%{} = user) when not is_nil(user) do
+    inbox_feed_id(user)
+  end
+  def my_inbox_feed_id(_) do
+    nil
   end
 
   def inbox_feed_id(%{character: _} = for_subject) do
@@ -46,7 +53,10 @@ defmodule Bonfire.Social.Feeds do
   end
   def inbox_feed_id(%{inbox: %{feed_id: feed_id}}), do: feed_id
   def inbox_feed_id(%{} = for_subject) do
-    with {:ok, %{feed_id: feed_id} = _inbox} <- create_inbox(for_subject) do
+    Logger.warn("creating new inbox")
+    # IO.inspect(for_subject: for_subject)
+    with %{feed_id: feed_id} = _inbox <- create_inbox(for_subject) do
+      # IO.inspect(created_feed_id: feed_id)
       feed_id
     end
   end
@@ -91,7 +101,7 @@ defmodule Bonfire.Social.Feeds do
   def create_inbox(%{id: id}=_thing) do
     with {:ok, %{id: feed_id} = _feed} <- create() do
       #IO.inspect(feed: feed)
-      do_create_inbox(%{id: id, feed_id: feed_id})
+      save_inbox_feed(%{id: id, feed_id: feed_id})
     end
   end
 
@@ -110,7 +120,7 @@ defmodule Bonfire.Social.Feeds do
     Feed.changeset(activity, attrs)
   end
 
-  defp do_create_inbox(attrs) do
+  defp save_inbox_feed(attrs) do
     repo().upsert(Inbox.changeset(attrs))
   end
 
