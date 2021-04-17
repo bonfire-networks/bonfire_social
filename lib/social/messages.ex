@@ -77,7 +77,9 @@ defmodule Bonfire.Social.Messages do
   end
 
   @doc "List posts created by the user and which are in their outbox, which are not replies"
-  def list(%{id: current_user_id} = current_user, with_user \\ nil, cursor_before \\ nil, preloads \\ :all) when is_binary(with_user) or is_list(with_user) do
+  def list(current_user, with_user \\ nil, cursor_before \\ nil, preloads \\ :all)
+
+    def list(%{id: current_user_id} = current_user, with_user, cursor_before, preloads) when is_binary(with_user) or is_list(with_user) do
 
     # query FeedPublish
 
@@ -88,5 +90,6 @@ defmodule Bonfire.Social.Messages do
     |> FeedActivities.feed_query_paginated(current_user, cursor_before, preloads)
   end
 
+  def list(_current_user, _with_user, _cursor_before, _preloads), do: []
 
 end

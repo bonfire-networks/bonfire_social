@@ -67,14 +67,15 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
   end
 
   def do_handle_params(_params, _url, %{assigns: %{current_user: %{id: _} = current_user}} = socket) do
-    IO.inspect("feed: feed")
+    # IO.inspect(myfeed: feed)
     # current_user = e(socket.assigns, :current_user, nil)
     feed = Bonfire.Social.FeedActivities.my_feed(current_user)
     {:noreply,
      assign(socket,
      selected_tab: "feed",
      feed: e(feed, :entries, []),
-     page_info: e(feed, :metadata, [])
+     page_info: e(feed, :metadata, []),
+     to_circles: Bonfire.Me.Users.Circles.list_my_defaults(current_user)
     )}
   end
 
