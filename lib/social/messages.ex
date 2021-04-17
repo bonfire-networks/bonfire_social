@@ -30,15 +30,23 @@ defmodule Bonfire.Social.Messages do
     repo().transact_with(fn ->
       with  {text, mentions, _hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs),
             {:ok, message} <- create(creator, attrs, text),
-            {:ok, post} <- Bonfire.Social.Tags.maybe_tag(creator, message, mentions),
-            {:ok, activity} <- FeedActivities.maybe_notify(creator, :create, post, cc) do
+            {:ok, post} <- Bonfire.Social.Tags.maybe_tag(creator, message, mentions) do
+
+              #IO.inspect(message)
 
               Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, message, cc)
 
-              #IO.inspect(message)
-              Threads.maybe_push_thread(creator, activity, message)
+              with {:ok, activity} <- FeedActivities.maybe_notify(creator, :create, post, cc) do
+                Threads.maybe_push_thread(creator, activity, message)
 
-              {:ok, %{message: message, activity: activity}}
+                {:ok, %{message: message, activity: activity}}
+
+              else e ->
+                IO.inspect(could_not_notify: e)
+
+                {:ok, %{message: message}}
+              end
+
       end
     end)
   end
@@ -79,14 +87,25 @@ defmodule Bonfire.Social.Messages do
   @doc "List posts created by the user and which are in their outbox, which are not replies"
   def list(current_user, with_user \\ nil, cursor_before \\ nil, preloads \\ :all)
 
-    def list(%{id: current_user_id} = current_user, with_user, cursor_before, preloads) when is_binary(with_user) or is_list(with_user) do
+  def list(%{id: current_user_id} = current_user, with_user, cursor_before, preloads) when ( is_binary(with_user) or is_list(with_user) or is_map(with_user) ) and with_user != current_user_id do
 
     # query FeedPublish
 
-    q = if with_user && Utils.ulid(with_user) != current_user_id, do: FeedActivities.build_query(messages_with: Utils.ulid(with_user), distinct: :threads),
-    else: FeedActivities.build_query(messages_for: current_user_id, distinct: :threads)
+    user_id = Utils.ulid(with_user) || with_user
+
+    q = if with_user && user_id != current_user_id, do: FeedActivities.build_query(messages_between: {user_id, current_user_id}, distinct: :threads),
+    else: FeedActivities.build_query(messages_involving: current_user_id, distinct: :threads)
 
     q
+    # |> IO.inspect
+    |> FeedActivities.feed_query_paginated(current_user, cursor_before, preloads)
+  end
+
+  def list(%{id: current_user_id} = current_user, _, cursor_before, preloads) do
+
+    # query FeedPublish
+
+    FeedActivities.build_query(messages_involving: current_user_id, distinct: :threads)
     |> FeedActivities.feed_query_paginated(current_user, cursor_before, preloads)
   end
 

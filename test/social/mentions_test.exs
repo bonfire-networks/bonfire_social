@@ -20,9 +20,7 @@ defmodule Bonfire.Social.MentionsTest do
 
     assert {:ok, mention} = Posts.publish(me, attrs)
 
-    feed_id = Feeds.my_inbox_feed_id(mentioned)
-
-    assert %{entries: feed} = FeedActivities.feed(feed_id, mentioned)
+    assert %{entries: feed} = FeedActivities.feed(:notifications, mentioned)
     fp = List.first(feed)
 
     assert fp.activity.id == mention.activity.activity.id
@@ -35,9 +33,7 @@ defmodule Bonfire.Social.MentionsTest do
 
     assert {:ok, mention} = Posts.publish(me, attrs)
 
-    feed_id = Feeds.my_inbox_feed_id(me)
-
-    assert %{entries: []} = FeedActivities.feed(feed_id, me)
+    assert %{entries: []} = FeedActivities.feed(:notifications, me)
   end
 
   test "mentioning someone else does not appear in a 3rd party's notifications" do
@@ -49,24 +45,22 @@ defmodule Bonfire.Social.MentionsTest do
 
     third = Fake.fake_user!()
 
-    feed_id = Feeds.my_inbox_feed_id(third)
-
-    assert %{entries: []} = FeedActivities.feed(feed_id, third)
+    assert %{entries: []} = FeedActivities.feed(:notifications, third)
   end
 
-  # FIXME
-  # test "mentioning someone appears in their feed" do
-  #   me = Fake.fake_user!()
-  #   mentioned = Fake.fake_user!()
-  #   attrs = %{post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
+  @tag :skip # FIXME!
+  test "mentioning someone appears in their feed" do
+    me = Fake.fake_user!()
+    mentioned = Fake.fake_user!()
+    attrs = %{post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
 
-  #   assert {:ok, mention} = Posts.publish(me, attrs)
+    assert {:ok, mention} = Posts.publish(me, attrs)
 
-  #   assert %{entries: feed} = FeedActivities.my_feed(mentioned)
-  #    fp = List.first(feed)
+    assert %{entries: feed} = FeedActivities.my_feed(mentioned)
+     fp = List.first(feed)
 
-  #   assert fp.activity.id == mention.activity.activity.id
-  # end
+    assert fp.activity.id == mention.activity.activity.id
+  end
 
   test "mentioning someone appears in their instance feed" do
     me = Fake.fake_user!()

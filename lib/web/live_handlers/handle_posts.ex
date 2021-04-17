@@ -14,8 +14,7 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
     live_more(thread_id, cursor, socket)
   end
 
-
-  def handle_event("post", %{"is_private"=>"1"}=params, socket) do
+  def handle_event("post", %{"create_activity_type"=>"message"}=params, socket) do
     attrs = params
     |> input_to_atoms()
     |> IO.inspect
@@ -24,19 +23,28 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
       IO.inspect("sent!")
       {:noreply,
         socket
+        |> put_flash(:info, "Sent!")
+      }
+    else e ->
+      IO.inspect(message_error: e)
+      {:noreply,
+        socket
+        |> put_flash(:error, "Could not send...")
       }
     end
   end
 
-  def handle_event("post", params, socket) do
+  def handle_event("post", params, socket) do # if not message, it's a post by default
     attrs = params
     |> input_to_atoms()
     |> IO.inspect
 
     with {:ok, _published} <- Bonfire.Social.Posts.publish(socket.assigns.current_user, attrs) do
-      #IO.inspect("published!")
+      IO.inspect("published!")
       {:noreply,
         socket
+        |> put_flash(:info, "Posted!")
+
         # Phoenix.LiveView.assign(socket,
         #   feed: [%{published.activity | object_post: published.post, subject_user: socket.assigns.current_user}] ++ Map.get(socket.assigns, :feed, [])
         # )
@@ -81,7 +89,7 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
 
   def handle_info({:post_new_reply, data}, socket) do
 
-    # IO.inspect(post_new_reply: data)
+    # IO.inspect(received_post_new_reply: data)
     # IO.inspect(replies: Utils.e(socket.assigns, :replies, []))
 
     replies = [data] ++ Utils.e(socket.assigns, :replies, [])

@@ -26,7 +26,8 @@ defmodule Bonfire.Social.Posts do
     cc = Utils.e(attrs, :circles, [])
 
     #IO.inspect(attrs)
-    hook_transact_with(fn ->
+    # hook_transact_with(fn ->
+    repo().transact_with(fn ->
       with  {text, mentions, _hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs),
             {:ok, post} <- create(creator, attrs, text),
             {:ok, post} <- Bonfire.Social.Tags.maybe_tag(creator, post, mentions),

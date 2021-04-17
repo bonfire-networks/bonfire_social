@@ -25,7 +25,7 @@ defmodule Bonfire.Social.Web.Routes do
         pipe_through :browser
         pipe_through :account_required
 
-        live "/notifications", Feeds.InboxLive
+        live "/notifications", Feeds.NotificationsLive
 
     end
 
