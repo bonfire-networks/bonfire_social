@@ -40,6 +40,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
     {:noreply,
       assign(socket,
         selected_tab: tab,
+        feed_title: "Browse the fediverse",
         feed: e(feed, :entries, []),
         page_info: e(feed, :metadata, []),
         to_circles: [Bonfire.Boundaries.Circles.get_tuple(:activity_pub)]
@@ -54,6 +55,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
     {:noreply,
       assign(socket,
         selected_tab: tab,
+        feed_title: "Browse the local instance",
         feed: e(feed, :entries, []),
         page_info: e(feed, :metadata, []),
         to_circles: [Bonfire.Boundaries.Circles.get_tuple(:local)]
@@ -73,6 +75,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
     {:noreply,
      assign(socket,
      selected_tab: "feed",
+     feed_title: "Browse your feed",
      feed: e(feed, :entries, []),
      page_info: e(feed, :metadata, []),
      to_circles: Bonfire.Me.Users.Circles.list_my_defaults(current_user)
