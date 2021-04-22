@@ -31,20 +31,23 @@ defmodule Bonfire.Social.Posts do
       with  {text, mentions, _hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs),
             {:ok, post} <- create(creator, attrs, text),
             {:ok, post} <- Bonfire.Social.Tags.maybe_tag(creator, post, mentions),
-            {:ok, activity} <- FeedActivities.publish(creator, :create, post) do
+            {:ok, feed_activity} <- FeedActivities.publish(creator, :create, post) do
 
               Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, post, cc ++ (Bonfire.Tag.Tags.tag_ids(mentions) || [])) # make visible for:
               # - creator
               # - any selected circles
               # - mentioned characters (FIXME, should not be the default or be configurable)
 
+              IO.inspect(feed_activity: feed_activity)
+
               # put in feeds
-              FeedActivities.maybe_notify(creator, activity, cc)
+              FeedActivities.maybe_notify(creator, feed_activity, cc)
 
-              #IO.inspect(post)
-              Threads.maybe_push_thread(creator, activity, post)
+              Threads.maybe_push_thread(creator, feed_activity, post)
 
-              {:ok, %{post: post, activity: activity}}
+              indexing_object_format(feed_activity) |> Bonfire.Social.Integration.maybe_index()
+
+              {:ok, feed_activity}
       end
     end)
   end
@@ -130,6 +133,26 @@ defmodule Bonfire.Social.Posts do
      preload: [post_content: pc, created: cr]
   end
 
+  def indexing_object_format(%{activity: %{object: object} = activity}), do: indexing_object_format(activity, object)
+
+  def indexing_object_format(%{subject_profile: subject_profile, subject_character: subject_character} = _activity, %Post{id: id, post_content: post_content} = obj) do
+
+    # IO.inspect(obj)
+
+    %{
+      # "index_type" => Bonfire.Data.Social.Activity,
+      "id" => id,
+      "index_type" => Bonfire.Data.Social.Post,
+      # "url" => Activities.permalink(obj),
+      "post_content" => PostContents.indexing_object_format(post_content),
+      "activity" => %{
+        "subject_profile" => Bonfire.Me.Profiles.indexing_object_format(subject_profile),
+        "subject_character" => Bonfire.Me.Characters.indexing_object_format(subject_character),
+      }
+    } |> IO.inspect
+  end
+
+  def indexing_object_format(_), do: nil
 
 
 end

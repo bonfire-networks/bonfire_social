@@ -147,4 +147,32 @@ defmodule Bonfire.Social.Activities do
   end
   def maybe_my_flag(q, _), do: q
 
+  # TODO: extensions can add types / routes
+  def permalink(assigns \\ nil, activity_or_object)
+  # def permalink(%{reply_to_thread_id: reply_to_thread_id}, %{object: %{id: id}}) do
+  #   "/discussion/"<>reply_to_thread_id<>"/reply/"<>id
+  # end
+  def permalink(_, %{url: url}) when is_binary(url), do: url
+  def permalink(_, %{object: %{} = obj}), do: permalink(obj)
+  def permalink(_, %{object_post: %{id: id}}) when is_binary(id) do
+    "/post/"<>id
+  end
+  def permalink(_, %Bonfire.Data.Social.Post{id: id}) when is_binary(id) do
+    "/post/"<>id
+  end
+  def permalink(_, %Bonfire.Data.Social.PostContent{id: id}) when is_binary(id) do
+    "/post/"<>id
+  end
+  def permalink(_, %{object_post_content: %{id: id}}) when is_binary(id) do
+    "/post/"<>id
+  end
+  def permalink(_, %{object_message: %{id: id}}) when is_binary(id) do
+    "/message/"<>id
+  end
+  def permalink(_, %{object_id: id}) when is_binary(id) do
+    "/discussion/"<>id
+  end
+  def permalink(_, %{id: id}) when is_binary(id) do
+    "/discussion/"<>id
+  end
 end
