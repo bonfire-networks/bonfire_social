@@ -45,7 +45,7 @@ defmodule Bonfire.Social.Posts do
 
               Threads.maybe_push_thread(creator, feed_activity, post)
 
-              indexing_object_format(feed_activity) |> Bonfire.Social.Integration.maybe_index()
+              maybe_index(feed_activity)
 
               {:ok, feed_activity}
       end
@@ -153,6 +153,8 @@ defmodule Bonfire.Social.Posts do
   end
 
   def indexing_object_format(_), do: nil
+
+  def maybe_index(object), do: indexing_object_format(object) |> Bonfire.Social.Integration.maybe_index()
 
 
 end
