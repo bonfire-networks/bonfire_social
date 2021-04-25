@@ -1,6 +1,6 @@
 defmodule Bonfire.Social.Posts do
 
-  alias Bonfire.Data.Social.{Post, PostContent, Replied}
+  alias Bonfire.Data.Social.{Post, PostContent, Replied, Activity}
   alias Bonfire.Social.{Activities, FeedActivities}
   alias Bonfire.Common.Utils
   alias Ecto.Changeset
@@ -133,9 +133,8 @@ defmodule Bonfire.Social.Posts do
      preload: [post_content: pc, created: cr]
   end
 
-  def indexing_object_format(%{activity: %{object: object} = activity}), do: indexing_object_format(activity, object)
-
-  def indexing_object_format(%{subject_profile: subject_profile, subject_character: subject_character} = _activity, %Post{id: id, post_content: post_content} = obj) do
+  def indexing_object_format(feed_activity_or_activity, object \\ nil)
+  def indexing_object_format(%{subject_profile: subject_profile, subject_character: subject_character} = _activity, %{id: id, post_content: post_content} = obj) do
 
     # IO.inspect(obj)
 
@@ -148,11 +147,18 @@ defmodule Bonfire.Social.Posts do
       "activity" => %{
         "subject_profile" => Bonfire.Me.Profiles.indexing_object_format(subject_profile),
         "subject_character" => Bonfire.Me.Characters.indexing_object_format(subject_character),
-      }
+      },
+      "tag_names" => Bonfire.Social.Integration.indexing_format_tags(obj)
     } |> IO.inspect
   end
-
-  def indexing_object_format(_), do: nil
+  def indexing_object_format(%{activity: %{object: object} = activity}, nil), do: indexing_object_format(activity, object)
+  def indexing_object_format(%Activity{object: object} = activity, nil), do: indexing_object_format(activity, object)
+  def indexing_object_format(a, b) do
+    Logger.info("Not indexing")
+    IO.inspect(a)
+    IO.inspect(b)
+    nil
+  end
 
   def maybe_index(object), do: indexing_object_format(object) |> Bonfire.Social.Integration.maybe_index()
 
