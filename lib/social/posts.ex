@@ -38,7 +38,7 @@ defmodule Bonfire.Social.Posts do
               # - any selected circles
               # - mentioned characters (FIXME, should not be the default or be configurable)
 
-              IO.inspect(feed_activity: feed_activity)
+              # IO.inspect(feed_activity: feed_activity)
 
               # put in feeds
               FeedActivities.maybe_notify(creator, feed_activity, cc)
@@ -134,7 +134,7 @@ defmodule Bonfire.Social.Posts do
   end
 
   def indexing_object_format(feed_activity_or_activity, object \\ nil)
-  def indexing_object_format(%{subject_profile: subject_profile, subject_character: subject_character} = _activity, %{id: id, post_content: post_content} = obj) do
+  def indexing_object_format(%{subject_profile: subject_profile, subject_character: subject_character} = activity, %{id: id, post_content: post_content} = post) do
 
     # IO.inspect(obj)
 
@@ -142,14 +142,14 @@ defmodule Bonfire.Social.Posts do
       # "index_type" => Bonfire.Data.Social.Activity,
       "id" => id,
       "index_type" => Bonfire.Data.Social.Post,
-      # "url" => Activities.permalink(obj),
+      # "url" => Activities.permalink(post),
       "post_content" => PostContents.indexing_object_format(post_content),
       "activity" => %{
         "subject_profile" => Bonfire.Me.Profiles.indexing_object_format(subject_profile),
         "subject_character" => Bonfire.Me.Characters.indexing_object_format(subject_character),
       },
-      "tag_names" => Bonfire.Social.Integration.indexing_format_tags(obj)
-    } |> IO.inspect
+      "tag_names" => Bonfire.Social.Integration.indexing_format_tags(activity)
+    } #|> IO.inspect
   end
   def indexing_object_format(%{activity: %{object: object} = activity}, nil), do: indexing_object_format(activity, object)
   def indexing_object_format(%Activity{object: object} = activity, nil), do: indexing_object_format(activity, object)
