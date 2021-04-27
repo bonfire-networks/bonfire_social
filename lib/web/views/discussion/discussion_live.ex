@@ -38,6 +38,7 @@ defmodule Bonfire.Social.Web.DiscussionLive do
         page: "Discussion",
         has_private_tab: false,
         search_placeholder: "Search this discussion",
+        smart_input_placeholder: "Reply to the discussion",
         reply_id: Map.get(params, "reply_id"),
         activity: activity,
         object: object,

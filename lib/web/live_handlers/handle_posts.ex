@@ -1,6 +1,11 @@
 defmodule Bonfire.Social.Web.LiveHandlers.Posts do
 
   alias Bonfire.Common.Utils
+  alias Bonfire.Social.Posts
+  alias Bonfire.Social.PostContents
+  alias Bonfire.Data.Social.PostContent
+  alias Bonfire.Data.Social.Post
+  alias Ecto.Changeset
   import Utils
   import Phoenix.LiveView
 
@@ -39,7 +44,8 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
     |> input_to_atoms()
     |> IO.inspect
 
-    with {:ok, _published} <- Bonfire.Social.Posts.publish(socket.assigns.current_user, attrs) do
+    with %{valid?: true} <- post_changeset(attrs),
+         {:ok, _published} <- Bonfire.Social.Posts.publish(socket.assigns.current_user, attrs) do
       IO.inspect("published!")
       {:noreply,
         socket
@@ -121,6 +127,18 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
         page_info: page_info
       )}
     end
+  end
+
+
+  def post_changeset(%Post{} = cs \\ %Post{}, attrs) do
+    Posts.changeset(:create, attrs)
+    |> Changeset.cast_assoc(:post_content, [:required, with: &post_content_changeset/2])
+    |> IO.inspect
+  end
+
+  def post_content_changeset(%PostContent{} = cs \\ %PostContent{}, attrs) do
+    PostContents.changeset(cs, attrs)
+    # |> Changeset.validate_required(:name)
   end
 
 end

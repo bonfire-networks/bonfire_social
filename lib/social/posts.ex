@@ -78,9 +78,9 @@ defmodule Bonfire.Social.Posts do
   end
 
 
-  defp changeset(:create, attrs) do
+  def changeset(:create, attrs) do
     Post.changeset(%Post{}, attrs)
-    |> Changeset.cast_assoc(:post_content, [:required, with: &PostContent.changeset/2])
+    |> Changeset.cast_assoc(:post_content, [:required, with: &PostContents.changeset/2])
     |> Changeset.cast_assoc(:created)
     |> Changeset.cast_assoc(:replied, [:required, with: &Replied.changeset/2])
   end
