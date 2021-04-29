@@ -85,7 +85,9 @@ defmodule Bonfire.Social.Posts do
     |> Changeset.cast_assoc(:replied, [:required, with: &Replied.changeset/2])
   end
 
-  def read(post_id, current_user \\ nil) when is_binary(post_id) do
+  def read(post_id, socket_or_current_user \\ nil) when is_binary(post_id) do
+
+    current_user = Utils.current_user(socket_or_current_user)
 
     with {:ok, post} <- build_query(id: post_id)
       |> Activities.object_preload_create_activity(current_user, [:default, :with_parents])
@@ -93,7 +95,7 @@ defmodule Bonfire.Social.Posts do
       # |> IO.inspect
       |> repo().single() do
 
-        Utils.pubsub_subscribe(Utils.e(post, :activity, :replied, :thread_id, nil) || post.id) # subscribe to realtime feed updates
+        Utils.pubsub_subscribe(Utils.e(post, :activity, :replied, :thread_id, nil) || post.id, socket_or_current_user) # subscribe to realtime feed updates
 
         {:ok, post} #|> repo().maybe_preload(controlled: [acl: [grants: [access: [:interacts]]]]) |> IO.inspect
       end

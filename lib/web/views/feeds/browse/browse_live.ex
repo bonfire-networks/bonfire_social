@@ -16,7 +16,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
 
   defp mounted(_params, _session, socket) do
 
-    # feed = Bonfire.Social.FeedActivities.my_feed(socket.assigns.current_user)
+    # feed = Bonfire.Social.FeedActivities.my_feed(socket)
 
     {:ok, socket
     |> assign(
@@ -35,7 +35,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
   def do_handle_params(%{"tab" => "fediverse" = tab} = _params, _url, %{assigns: %{current_user: %{id: _} = current_user}} = socket) do
     # current_user = e(socket.assigns, :current_user, nil)
     feed_id = Bonfire.Social.Feeds.fediverse_feed_id()
-    feed = Bonfire.Social.FeedActivities.feed(feed_id, current_user)
+    feed = Bonfire.Social.FeedActivities.feed(feed_id, socket)
 
     {:noreply,
       assign(socket,
@@ -43,23 +43,25 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
         feed_title: "Browse the fediverse",
         feed: e(feed, :entries, []),
         page_info: e(feed, :metadata, []),
-        to_circles: [Bonfire.Boundaries.Circles.get_tuple(:activity_pub)]
-      )}
+      )
+      |> cast_self(to_circles: [Bonfire.Boundaries.Circles.get_tuple(:activity_pub)])
+    }
   end
 
   def do_handle_params(%{"tab" => "instance" = tab} = _params, _url, socket) do
     current_user = e(socket.assigns, :current_user, nil)
     feed_id = Bonfire.Social.Feeds.instance_feed_id()
-    feed = Bonfire.Social.FeedActivities.feed(feed_id, current_user)
+    feed = Bonfire.Social.FeedActivities.feed(feed_id, socket)
 
     {:noreply,
       assign(socket,
         selected_tab: tab,
         feed_title: "Browse the local instance",
         feed: e(feed, :entries, []),
-        page_info: e(feed, :metadata, []),
-        to_circles: [Bonfire.Boundaries.Circles.get_tuple(:local)]
-      )}
+        page_info: e(feed, :metadata, [])
+      )
+      |> cast_self(to_circles: [Bonfire.Boundaries.Circles.get_tuple(:local)])
+      }
   end
 
 
@@ -71,15 +73,16 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
   def do_handle_params(_params, _url, %{assigns: %{current_user: %{id: _} = current_user}} = socket) do
     # IO.inspect(myfeed: feed)
     # current_user = e(socket.assigns, :current_user, nil)
-    feed = Bonfire.Social.FeedActivities.my_feed(current_user)
+    feed = Bonfire.Social.FeedActivities.my_feed(socket)
     {:noreply,
      assign(socket,
      selected_tab: "feed",
      feed_title: "Browse your feed",
      feed: e(feed, :entries, []),
-     page_info: e(feed, :metadata, []),
-     to_circles: Bonfire.Me.Users.Circles.list_my_defaults(current_user)
-    )}
+     page_info: e(feed, :metadata, [])
+    )
+    |> cast_self(to_circles: Bonfire.Me.Users.Circles.list_my_defaults(current_user))
+    }
   end
 
   def do_handle_params(_params, url, socket) do

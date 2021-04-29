@@ -15,7 +15,7 @@ defmodule Bonfire.Social.Web.Feeds.NotificationsLive do
 
   defp mounted(params, _session, socket) do
 
-    feed = Bonfire.Social.FeedActivities.feed(:notifications, socket.assigns)
+    feed = Bonfire.Social.FeedActivities.feed(:notifications, socket)
 
     {:ok, socket
     |> assign(

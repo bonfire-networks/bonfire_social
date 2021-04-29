@@ -14,39 +14,44 @@ defmodule Bonfire.Social.FeedActivities do
       sortable_fields: [:id]
 
 
-  def my_feed(user, cursor_before \\ nil) do
+  def my_feed(socket_or_user, cursor_before \\ nil) do
 
     # feeds the user is following
-    feed_ids = Feeds.my_feed_ids(user)
+    feed_ids = Feeds.my_feed_ids(Utils.current_user(socket_or_user))
     #IO.inspect(inbox_feed_ids: feed_ids)
 
-    feed(feed_ids, user, cursor_before)
+    feed(feed_ids, socket_or_user, cursor_before)
   end
 
-  def feed(feed, current_user \\ nil, cursor_before \\ nil, preloads \\ :all)
+  def feed(feed, current_user_or_socket \\ nil, cursor_before \\ nil, preloads \\ :all)
 
-  def feed(%{id: feed_id}, current_user, cursor_before, preloads), do: feed(feed_id, current_user, cursor_before, preloads)
+  def feed(%{id: feed_id}, current_user_or_socket, cursor_before, preloads), do: feed(feed_id, current_user_or_socket, cursor_before, preloads)
 
-  def feed(feed_id_or_ids, current_user, cursor_before, preloads) when is_binary(feed_id_or_ids) or is_list(feed_id_or_ids) do
+  def feed(feed_id_or_ids, current_user_or_socket, cursor_before, preloads) when is_binary(feed_id_or_ids) or is_list(feed_id_or_ids) do
     # IO.inspect(feed_id_or_ids: feed_id_or_ids)
 
-    Utils.pubsub_subscribe(feed_id_or_ids) # subscribe to realtime feed updates
+    Utils.pubsub_subscribe(feed_id_or_ids, current_user_or_socket) # subscribe to realtime feed updates
 
     # query FeedPublish, without messages
     build_query(feed_id: feed_id_or_ids, exclude: :messages)
-    |> feed_query_paginated(current_user, cursor_before, preloads)
+    |> feed_query_paginated(Utils.current_user(current_user_or_socket), cursor_before, preloads)
   end
 
-  def feed(:notifications, %{current_user: current_user} = assigns, cursor_before, preloads) do
-    feed_id = Bonfire.Social.Feeds.my_inbox_feed_id(assigns)
+  def feed(:notifications, current_user_or_socket, cursor_before, preloads) do
+    current_user = Utils.current_user(current_user_or_socket)
+
+    feed_id = Bonfire.Social.Feeds.my_inbox_feed_id(current_user)
     IO.inspect(notifications_feed_id: feed_id)
+
+    Utils.pubsub_subscribe(feed_id, current_user_or_socket) # subscribe to realtime feed updates
 
     build_query(feed_id: feed_id) # FIXME: for some reason preloading creator or reply_to when we have a boost in inbox breaks ecto
     |> feed_query_paginated(current_user, cursor_before, preloads)
   end
-  def feed(:notifications, %User{} = current_user, cursor_before, preloads), do: feed(:notifications, %{current_user: current_user}, cursor_before, preloads)
 
-  def feed(_, _, _, _), do: []
+  def feed(_, _, _, _, _), do: []
+
+
 
   def feed_query_paginated(query, current_user \\ nil, cursor_before \\ nil, preloads \\ :all) do
 
@@ -75,7 +80,7 @@ defmodule Bonfire.Social.FeedActivities do
   def publish(subject, verb, %{replied: %{reply_to_id: reply_to_id}} = object) when is_atom(verb) and is_binary(reply_to_id) do
     # publishing a reply to something
     #IO.inspect(publish_reply: object)
-    do_publish(subject, verb, object, [Feeds.instance_feed_id(), Feeds.creator_inbox(object)]) # FIXME, enable tagging in replies too
+    do_publish(subject, verb, object, [Feeds.instance_feed_id(), Feeds.inbox_of_obj_creator(object)]) # FIXME, enable tagging in replies too
   end
 
   def publish(subject, verb, %{tags: tags} = object) when is_atom(verb) and is_list(tags) do
@@ -112,7 +117,7 @@ defmodule Bonfire.Social.FeedActivities do
     #IO.inspect(activity)
     object = object_with_creator(object)
     #IO.inspect(object)
-    if subject_id != Utils.e(object, :created, :creator_id, nil), do: maybe_notify(subject, verb_or_activity, Feeds.creator_inbox(object))
+    if subject_id != Utils.e(object, :created, :creator_id, nil), do: maybe_notify(subject, verb_or_activity, Feeds.inbox_of_obj_creator(object))
     # TODO: notify remote users via AP
   end
 

@@ -41,7 +41,7 @@ defmodule Bonfire.Social.Feeds do
   def my_inbox_feed_id(%{character: %{inbox: %{feed_id: feed_id}}} = _user) when is_binary(feed_id) do
     feed_id
   end
-  def my_inbox_feed_id(%{} = user) when not is_nil(user) do
+  def my_inbox_feed_id(%{id: _} = user) when not is_nil(user) do
     inbox_feed_id(user)
   end
   def my_inbox_feed_id(_) do
@@ -64,7 +64,7 @@ defmodule Bonfire.Social.Feeds do
     nil
   end
 
-  def creator_inbox(object) do
+  def inbox_of_obj_creator(object) do
     object = object |> Bonfire.Repo.maybe_preload([created: [creator_character: [:inbox]]]) #|> IO.inspect
 
     Utils.e(object, :created, :creator_character, :inbox, :feed_id, nil)

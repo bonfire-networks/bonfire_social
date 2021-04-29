@@ -19,7 +19,7 @@ defmodule Bonfire.Social.Web.MessageLive do
     current_user = e(socket, :assigns, :current_user, nil)
 
     # FIXME
-    with {:ok, post} <- Bonfire.Social.Messages.read(Map.get(params, "id"), current_user) do
+    with {:ok, post} <- Bonfire.Social.Messages.read(Map.get(params, "id"), socket) do
       #IO.inspect(post, label: "the post:")
 
       {activity, object} = Map.pop(post, :activity)
