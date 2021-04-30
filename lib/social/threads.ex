@@ -25,7 +25,7 @@ defmodule Bonfire.Social.Threads do
 
   def maybe_reply(%{reply_to: reply_attrs}), do: maybe_reply(reply_attrs)
   def maybe_reply(%{reply_to_id: reply_to_id} = reply_attrs) when is_binary(reply_to_id) and reply_to_id !="" do
-     with {:ok, r} <- get_replied(reply_to_id) do
+     with {:ok, r} <- get_replied(reply_to_id) |> IO.inspect do
       Map.merge(reply_attrs, %{reply_to: r})
      else _ ->
       Map.drop(reply_attrs, :reply_to_id)

@@ -65,6 +65,7 @@ defmodule Bonfire.Social.FeedActivities do
       # |> order_by([fp], desc: fp.id)
       # |> IO.inspect(label: "post-preloads")
       # |> Bonfire.Repo.all() # return all items
+      |> preload([activity: [subject_profile: [:icon]]]) # temp hack because not working in preload_join
       |> Bonfire.Repo.many_paginated(before: cursor_before) # return a page of items (reverse chronological) + pagination metadata
       # |> IO.inspect
   end

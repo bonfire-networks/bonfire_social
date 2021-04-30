@@ -122,6 +122,7 @@ defmodule Bonfire.Social.Activities do
     query
       |> join_preload([:activity, :subject_character])
       |> join_preload([:activity, :subject_profile])
+      # |> join_preload([:activity, :subject_profile, :icon]) # no clue why this doesn't load icons
       # |> IO.inspect
   end
 
