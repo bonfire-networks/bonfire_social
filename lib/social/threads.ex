@@ -28,8 +28,12 @@ defmodule Bonfire.Social.Threads do
      with {:ok, r} <- get_replied(reply_to_id) |> IO.inspect do
       Map.merge(reply_attrs, %{reply_to: r})
      else _ ->
-      Map.drop(reply_attrs, :reply_to_id)
-      |> maybe_reply()
+      with {:ok, r} <- create_for_object(%{id: reply_to_id}) do
+        Map.merge(reply_attrs, %{reply_to: r})
+      else _ ->
+         Map.drop(reply_attrs, [:reply_to_id])
+        |> maybe_reply()
+      end
      end
   end
   def maybe_reply(%{} = reply_attrs), do: Map.merge(reply_attrs, maybe_reply(nil))
@@ -37,7 +41,20 @@ defmodule Bonfire.Social.Threads do
 
 
   def get_replied(id) do
+    # Bonfire.Common.Pointers.get(id)
     repo().single(from p in Replied, where: p.id == ^id)
+  end
+
+  def create_for_object(%{id: id}=_thing) do
+    create(%{id: id})
+  end
+
+  defp create(attrs) do
+    repo().put(changeset(attrs))
+  end
+
+  def changeset(replied \\ %Replied{}, %{} = attrs) do
+    Replied.changeset(replied, attrs)
   end
 
   @doc "List participants in a thread (depending on user's boundaries)"

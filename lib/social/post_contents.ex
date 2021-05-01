@@ -8,7 +8,11 @@ defmodule Bonfire.Social.PostContents do
     # use text overide if provided
     Map.merge(attrs, %{html_body: text})
   end
-  def prepare_content(%{name: name, html_body: body} = attrs, _) when is_nil(body) or body=="" do
+  def prepare_content(%{summary: summary, html_body: body} = attrs, _) when (is_nil(body) or body=="") and not (is_nil(summary) or summary=="")  do
+    # use summary as body if no body entered
+    Map.merge(attrs, %{html_body: summary, summary: ""})
+  end
+  def prepare_content(%{name: name, html_body: body} = attrs, _) when (is_nil(body) or body=="") and not (is_nil(name) or name=="") do
     # use title as body if no body entered
     Map.merge(attrs, %{html_body: name, name: ""})
   end
