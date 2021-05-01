@@ -26,7 +26,7 @@ defmodule Bonfire.Social.Activities do
   """
   def create(%{id: subject_id}=subject, verb, %{id: object_id}=object) when is_atom(verb) do
 
-    verb_id = Verbs.verbs()[verb]
+    verb_id = Verbs.verbs()[verb] || Verbs.verbs()[:create]
 
     attrs = %{subject_id: subject_id, verb_id: verb_id, object_id: object_id}
 
