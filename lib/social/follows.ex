@@ -2,6 +2,7 @@ defmodule Bonfire.Social.Follows do
   alias Bonfire.Data.Social.Follow
   alias Bonfire.Social.FeedActivities
   alias Bonfire.Social.Activities
+  alias Bonfire.Social.APActivities
   import Bonfire.Common.Utils
 
   use Bonfire.Repo.Query,
@@ -47,6 +48,8 @@ defmodule Bonfire.Social.Follows do
     with {:ok, follow} <- create(follower, followed) do
       # FeedActivities.publish(follower, :follow, followed)
       FeedActivities.maybe_notify_object(follower, :follow, followed)
+      APActivities.publish(follower, "create", follow)
+
       {:ok, follow}
     end
   end
@@ -58,9 +61,10 @@ defmodule Bonfire.Social.Follows do
   end
 
   def unfollow(follower, %{} = followed) do
-    delete_by_both(follower, followed)
+    [id] = delete_by_both(follower, followed)
     # delete the like activity & feed entries
     Activities.delete_by_subject_verb_object(follower, :follow, followed)
+    APActivities.publish(follower, "delete", id)
   end
 
   def unfollow(%{} = user, object) when is_binary(object) do
