@@ -62,9 +62,10 @@ defmodule Bonfire.Social.Follows do
 
   def unfollow(follower, %{} = followed) do
     [id] = delete_by_both(follower, followed)
+    # FIXME: this might not publish properly due to the follow being deleted while ap publish is in queue
+    APActivities.publish(follower, "delete", id)
     # delete the like activity & feed entries
     Activities.delete_by_subject_verb_object(follower, :follow, followed)
-    APActivities.publish(follower, "delete", id)
   end
 
   def unfollow(%{} = user, object) when is_binary(object) do
