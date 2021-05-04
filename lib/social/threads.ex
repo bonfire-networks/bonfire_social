@@ -57,6 +57,17 @@ defmodule Bonfire.Social.Threads do
     Replied.changeset(replied, attrs)
   end
 
+  def read(object_id, socket_or_current_user) when is_binary(object_id) do
+
+    current_user = Utils.current_user(socket_or_current_user)
+
+    with {:ok, object} <- build_query(id: object_id)
+      |> Activities.read(socket_or_current_user) do
+
+        {:ok, object}
+      end
+  end
+
   @doc "List participants in a thread (depending on user's boundaries)"
   def list_participants(thread_id, current_user \\ nil, cursor_before \\ nil, preloads \\ :minimal) when is_binary(thread_id) or is_list(thread_id) do
 

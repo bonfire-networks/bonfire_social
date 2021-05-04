@@ -90,14 +90,9 @@ defmodule Bonfire.Social.Posts do
     current_user = Utils.current_user(socket_or_current_user)
 
     with {:ok, post} <- build_query(id: post_id)
-      |> Activities.object_preload_create_activity(current_user, [:default, :with_parents])
-      |> Activities.as_permitted_for(current_user)
-      # |> IO.inspect
-      |> repo().single() do
+      |> Activities.read(socket_or_current_user) do
 
-        Utils.pubsub_subscribe(Utils.e(post, :activity, :replied, :thread_id, nil) || post.id, socket_or_current_user) # subscribe to realtime feed updates
-
-        {:ok, post} #|> repo().maybe_preload(controlled: [acl: [grants: [access: [:interacts]]]]) |> IO.inspect
+        {:ok, post}
       end
   end
 

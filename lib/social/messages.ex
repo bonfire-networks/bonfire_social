@@ -75,14 +75,9 @@ defmodule Bonfire.Social.Messages do
     current_user = Utils.current_user(socket_or_current_user)
 
     with {:ok, message} <- build_query(id: message_id)
-      |> Activities.object_preload_create_activity(current_user, [:default, :with_parents])
-      |> Activities.as_permitted_for(current_user)
-      # |> IO.inspect
-      |> repo().single() do
+      |> Activities.read(socket_or_current_user) do
 
-        Utils.pubsub_subscribe(Utils.e(message, :activity, :replied, :thread_id, nil) || message.id, socket_or_current_user) # subscribe to realtime feed updates
-
-        {:ok, message} #|> repo().maybe_preload(controlled: [acl: [grants: [access: [:interacts]]]]) |> IO.inspect
+        {:ok, message}
       end
   end
 

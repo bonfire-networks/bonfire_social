@@ -18,11 +18,11 @@ defmodule Bonfire.Social.Web.DiscussionLive do
 
     current_user = e(socket, :assigns, :current_user, nil)
 
-    # FIXME - switch to getting by Pointer (to support other object types)
-    with {:ok, post} <- Bonfire.Social.Posts.read(Map.get(params, "id"), socket) do
-      #IO.inspect(post, label: "the post:")
+    with {:ok, object} <- Bonfire.Social.Objects.read(Map.get(params, "id"), socket) do
 
-      {activity, object} = Map.pop(post, :activity)
+      {activity, object} = Map.pop(object, :activity)
+
+      # IO.inspect(object, label: "the object:")
 
       following = if current_user && module_enabled?(Bonfire.Social.Follows) do
         a = if Bonfire.Social.Follows.following?(current_user, object), do: object.id

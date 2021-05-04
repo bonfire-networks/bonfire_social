@@ -2,6 +2,7 @@ defmodule Bonfire.Social.Activities do
 
   alias Bonfire.Data.Social.{Activity, Like, Boost, Flag}
   alias Bonfire.Boundaries.Verbs
+  alias Bonfire.Common.Utils
   # import Bonfire.Me.Integration
   # import Ecto.Query
   import Bonfire.Boundaries.Queries
@@ -59,7 +60,7 @@ defmodule Bonfire.Social.Activities do
 
     q
     |> join(:left, [o], activity in Activity, as: :activity, on: activity.object_id == o.id and activity.verb_id == ^verb_id)
-    |> preload([activity], :activity)
+    # |> preload([activity], :activity)
     |> activity_preloads(current_user, preloads)
   end
 
@@ -147,6 +148,24 @@ defmodule Bonfire.Social.Activities do
     |> preload([l, activity: activity, my_flag: my_flag], activity: {activity, [my_flag: my_flag]})
   end
   def maybe_my_flag(q, _), do: q
+
+
+  def read(query, socket_or_current_user \\ nil) do
+
+    current_user = Utils.current_user(socket_or_current_user)
+
+    with {:ok, object} <- query
+      |> object_preload_create_activity(current_user, [:default, :with_parents])
+      |> IO.inspect
+      |> as_permitted_for(current_user)
+      # |> IO.inspect
+      |> repo().single() do
+
+        Utils.pubsub_subscribe(Utils.e(object, :activity, :replied, :thread_id, nil) || object.id, socket_or_current_user) # subscribe to realtime feed updates
+
+        {:ok, object} #|> repo().maybe_preload(controlled: [acl: [grants: [access: [:interacts]]]]) |> IO.inspect
+      end
+  end
 
   # TODO: extensions can add types / routes
   def permalink(assigns \\ nil, activity_or_object)
