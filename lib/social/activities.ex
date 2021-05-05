@@ -5,6 +5,7 @@ defmodule Bonfire.Social.Activities do
   alias Bonfire.Common.Utils
   # import Bonfire.Me.Integration
   # import Ecto.Query
+  require Logger
   import Bonfire.Boundaries.Queries
   use Bonfire.Repo.Query,
     schema: Activity,
@@ -194,5 +195,10 @@ defmodule Bonfire.Social.Activities do
   end
   def permalink(_, %{id: id}) when is_binary(id) do
     "/discussion/"<>id
+  end
+  def permalink(_, obj) do
+    Logger.error("No permalink/2 function matches this object")
+    IO.inspect(obj)
+    "/"
   end
 end
