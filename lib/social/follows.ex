@@ -19,9 +19,11 @@ defmodule Bonfire.Social.Follows do
   def by_any(user), do: repo().all(by_any_q(user))
 
   defp list(filters, _current_user) do
-    # TODO: check permissions
+    # TODO: check permissions for current_user
     build_query(filters)
   end
+
+  def list_my_followed(current_user, with_profile_only \\ true), do: list_followed(current_user, current_user, with_profile_only)
 
   def list_followed(%{id: user_id} = _user, current_user \\ nil, with_profile_only \\ true) when is_binary(user_id) do
     list([follower_id: user_id], current_user)
@@ -30,6 +32,8 @@ defmodule Bonfire.Social.Follows do
     |> maybe_with_followed_profile_only(with_profile_only)
     |> repo().all
   end
+
+  def list_my_followers(current_user, with_profile_only \\ true), do: list_followers(current_user, current_user, with_profile_only)
 
   def list_followers(%{id: user_id} = _user, current_user \\ nil, with_profile_only \\ true) when is_binary(user_id) do
     list([followed_id: user_id], current_user)
