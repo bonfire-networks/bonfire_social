@@ -1,13 +1,11 @@
 defmodule Bonfire.Social.Web.LiveHandlers.Posts do
+  use Bonfire.Web, :live_handler
 
-  alias Bonfire.Common.Utils
   alias Bonfire.Social.Posts
   alias Bonfire.Social.PostContents
   alias Bonfire.Data.Social.PostContent
   alias Bonfire.Data.Social.Post
   alias Ecto.Changeset
-  import Utils
-  import Phoenix.LiveView
 
   @thread_max_depth 3 # TODO: put in config
 

@@ -1,8 +1,5 @@
 defmodule Bonfire.Social.Web.LiveHandlers.Flags do
-
-  # alias Bonfire.Common.Utils
-  # import Utils
-  # import Phoenix.LiveView
+  use Bonfire.Web, :live_handler
 
   def handle_event("flag", %{"id"=> id}, socket) do # flag in LV
     #IO.inspect(socket)

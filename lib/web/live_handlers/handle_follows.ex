@@ -1,8 +1,5 @@
 defmodule Bonfire.Social.Web.LiveHandlers.Follows do
-
-  alias Bonfire.Common.Utils
-  import Utils
-  import Phoenix.LiveView
+  use Bonfire.Web, :live_handler
 
   def handle_event("follow", %{"id"=> id}, socket) do
     with {:ok, _follow} <- Bonfire.Social.Follows.follow(e(socket.assigns, :current_user, nil), id) do
