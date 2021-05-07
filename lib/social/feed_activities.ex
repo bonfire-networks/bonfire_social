@@ -96,6 +96,10 @@ defmodule Bonfire.Social.FeedActivities do
     do_publish(subject, verb, object, Feeds.instance_feed_id())
   end
 
+  def publish(subject, verb, object) when is_binary(verb) do
+    Logger.error("Defaulting to a :create activity, because no such verb is defined: "<>verb)
+    do_publish(subject, :create, object, Feeds.instance_feed_id())
+  end
 
   defp do_publish(subject, verb, object, feeds \\ nil)
   defp do_publish(subject, verb, object, feeds) when is_list(feeds), do: maybe_notify(subject, verb, object, feeds ++ [subject])
