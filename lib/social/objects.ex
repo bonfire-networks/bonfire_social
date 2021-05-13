@@ -2,7 +2,6 @@ defmodule Bonfire.Social.Objects do
 
   alias Bonfire.Social.{Activities}
   alias Bonfire.Common.Utils
-  # import Bonfire.Common.Hooks
 
   use Bonfire.Repo.Query,
     schema: Pointers.Pointer,

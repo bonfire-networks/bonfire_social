@@ -4,7 +4,6 @@ defmodule Bonfire.Social.Threads do
   alias Bonfire.Social.{Activities, FeedActivities}
   alias Bonfire.Boundaries.Verbs
   alias Bonfire.Common.Utils
-  # import Bonfire.Common.Hooks
 
   use Bonfire.Repo.Query,
     schema: Replied,
