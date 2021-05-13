@@ -13,6 +13,7 @@ defmodule Bonfire.Social.Feeds do
   def my_feed_ids(user, extra_feeds \\ [])
 
   def my_feed_ids(%{} = user, extra_feeds) do
+    # IO.inspect(my_feed_ids_user: user)
     extra_feeds = extra_feeds ++ [user.id]
     with following_ids when is_list(following_ids) <- Follows.by_follower(user) do
       #IO.inspect(subs: following_ids)

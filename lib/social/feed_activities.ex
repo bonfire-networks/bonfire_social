@@ -18,7 +18,7 @@ defmodule Bonfire.Social.FeedActivities do
 
     # feeds the user is following
     feed_ids = Feeds.my_feed_ids(Utils.current_user(socket_or_user))
-    #IO.inspect(inbox_feed_ids: feed_ids)
+    # IO.inspect(my_feed_ids: feed_ids)
 
     feed(feed_ids, socket_or_user, cursor_before)
   end

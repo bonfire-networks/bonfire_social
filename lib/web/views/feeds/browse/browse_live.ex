@@ -49,7 +49,6 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
   end
 
   def do_handle_params(%{"tab" => "instance" = tab} = _params, _url, socket) do
-    current_user = e(socket.assigns, :current_user, nil)
     feed_id = Bonfire.Social.Feeds.instance_feed_id()
     feed = Bonfire.Social.FeedActivities.feed(feed_id, socket)
 
