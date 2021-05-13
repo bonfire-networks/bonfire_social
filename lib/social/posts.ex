@@ -5,7 +5,6 @@ defmodule Bonfire.Social.Posts do
   alias Bonfire.Common.Utils
   alias Ecto.Changeset
   # import Bonfire.Boundaries.Queries
-  import Bonfire.Common.Hooks
   alias Bonfire.Social.Threads
   alias Bonfire.Social.PostContents
 
@@ -26,7 +25,6 @@ defmodule Bonfire.Social.Posts do
     cc = Utils.e(attrs, :circles, [])
 
     #IO.inspect(attrs)
-    # hook_transact_with(fn ->
     repo().transact_with(fn ->
       with  {text, mentions, _hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs),
             {:ok, post} <- create(creator, attrs, text),
