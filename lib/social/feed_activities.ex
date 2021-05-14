@@ -122,12 +122,17 @@ defmodule Bonfire.Social.FeedActivities do
     #IO.inspect(activity)
     object = object_with_creator(object)
     #IO.inspect(object)
-    if subject_id != Utils.e(object, :created, :creator_id, nil), do: maybe_notify(subject, verb_or_activity, Feeds.inbox_of_obj_creator(object))
+    if subject_id != object_creator(object), do: maybe_notify(subject, verb_or_activity, Feeds.inbox_of_obj_creator(object))
     # TODO: notify remote users via AP
   end
 
   def object_with_creator(object) do
-    object |> Bonfire.Repo.maybe_preload([created: [creator_character: [:inbox]]]) #|> IO.inspect
+    object
+    |> Bonfire.Repo.maybe_preload([created: [creator_character: [:inbox]]]) #|> IO.inspect
+    |> Bonfire.Repo.maybe_preload([creator: [character: [:inbox]]]) #|> IO.inspect
+  end
+  def object_creator(object) do
+    Utils.e(object, :created, :creator_id, Utils.e(object, :creator, :id, nil))
   end
 
   @doc """
