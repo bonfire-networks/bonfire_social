@@ -70,7 +70,7 @@ defmodule Bonfire.Social.Posts do
       |> Map.put(:post_content, PostContents.prepare_content(attrs, text))
       |> Map.put(:created, %{creator_id: creator_id})
       |> Map.put(:replied, Threads.maybe_reply(attrs))
-      # |> IO.inspect
+      |> IO.inspect(label: "Posts.create attrs")
 
     repo().put(changeset(:create, attrs))
   end

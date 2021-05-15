@@ -9,6 +9,13 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
 
   @thread_max_depth 3 # TODO: put in config
 
+  def merge_child(%{} = map, key) do
+    map
+    |> Map.merge(
+      Map.get(map, key)
+    )
+  end
+
   def handle_params(%{"cursor" => cursor} = _attrs, _, %{assigns: %{thread_id: thread_id}} = socket) do
     live_more(thread_id, cursor, socket, false)
   end
@@ -20,6 +27,7 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
   def handle_event("post", %{"create_activity_type"=>"message"}=params, socket) do
     attrs = params
     |> input_to_atoms()
+    |> merge_child(:post)
     |> IO.inspect
 
     with {:ok, _sent} <- Bonfire.Social.Messages.send(socket.assigns.current_user, attrs) do
@@ -128,7 +136,7 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
   end
 
 
-  def post_changeset(%Post{} = cs \\ %Post{}, attrs) do
+  def post_changeset(attrs \\ %{}) do
     Posts.changeset(:create, attrs)
     |> Changeset.cast_assoc(:post_content, [:required, with: &post_content_changeset/2])
     |> IO.inspect

@@ -3,8 +3,6 @@ defmodule Bonfire.Social.Web.Routes do
 
     quote do
 
-      alias Bonfire.Social.Web.Routes.Helpers, as: SocialRoutes
-
       # pages anyone can view
       scope "/", Bonfire.Social.Web do
         pipe_through :browser
