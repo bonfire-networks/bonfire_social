@@ -60,7 +60,7 @@ defmodule Bonfire.Social.Threads do
 
     current_user = Utils.current_user(socket_or_current_user)
 
-    with {:ok, object} <- build_query(id: object_id)
+    with {:ok, object} <- Replied |> EctoShorts.filter(id: object_id)
       |> Activities.read(socket_or_current_user) do
 
         {:ok, object}
@@ -70,23 +70,30 @@ defmodule Bonfire.Social.Threads do
   @doc "List participants in a thread (depending on user's boundaries)"
   def list_participants(thread_id, current_user \\ nil, cursor_before \\ nil, preloads \\ :minimal) when is_binary(thread_id) or is_list(thread_id) do
 
-    build_query(participants_in: thread_id)
-    |> FeedActivities.feed_query_paginated(current_user, cursor_before, preloads)
+     FeedActivities.feed_query_paginated(
+      [participants_in: {thread_id, &filter/3}],
+      current_user, cursor_before, preloads, Replied)
   end
 
   def filter(:participants_in, thread_id, query) do
     verb_id = Verbs.verbs()[:create]
 
-    {
-      query
+    query
       |> join_preload([:activity, :subject_character])
-      |> distinct([fp, subject_character: subject_character], [desc: subject_character.id]),
-      dynamic(
+      |> distinct([fp, subject_character: subject_character], [desc: subject_character.id])
+      |> where(
         [replied, activity: activity, subject_character: subject_character],
           (replied.thread_id == ^thread_id  or replied.id == ^thread_id or replied.reply_to_id == ^thread_id) and activity.verb_id==^verb_id
       )
-    }
   end
+
+  #doc "Group per-thread "
+  def filter(:distinct, :threads, query) do
+    query
+      |> join_preload([:activity, :replied])
+      |> distinct([fp, replied: replied], [desc: replied.thread_id])
+  end
+
 
   def list_replies(thread, current_user, cursor \\ nil, max_depth \\ 3, limit \\ 500)
   def list_replies(%{id: thread_id}, current_user, cursor, max_depth, limit), do: list_replies(thread_id, current_user, cursor, max_depth, limit)

@@ -33,7 +33,11 @@ defmodule Bonfire.Social.FeedActivities do
     Utils.pubsub_subscribe(feed_id_or_ids, current_user_or_socket) # subscribe to realtime feed updates
 
     # query FeedPublish, without messages
-    build_query(feed_id: feed_id_or_ids, exclude: :messages)
+    [
+      feed_id: feed_id_or_ids,
+      # exclude: {:messages, &filter/3},
+      exclude_messages: dynamic([object_message: message], is_nil(message.id))
+    ]
     |> feed_query_paginated(Utils.current_user(current_user_or_socket), cursor_before, preloads)
   end
 
@@ -45,27 +49,27 @@ defmodule Bonfire.Social.FeedActivities do
 
     Utils.pubsub_subscribe(feed_id, current_user_or_socket) # subscribe to realtime feed updates
 
-    build_query(feed_id: feed_id) # FIXME: for some reason preloading creator or reply_to when we have a boost in inbox breaks ecto
+    [feed_id: feed_id] # FIXME: for some reason preloading creator or reply_to when we have a boost in inbox breaks ecto
     |> feed_query_paginated(current_user, cursor_before, preloads)
   end
 
   def feed(_, _, _, _, _), do: []
 
 
-
-  def feed_query_paginated(query, current_user \\ nil, cursor_before \\ nil, preloads \\ :all) do
+  def feed_query_paginated(filters, current_user \\ nil, cursor_before \\ nil, preloads \\ :all, query \\ FeedPublish) do
 
     query
       # add assocs needed in timelines/feeds
-      |> join_preload([:activity])
-      |> Activities.as_permitted_for(current_user)
+      # |> join_preload([:activity])
       # |> IO.inspect(label: "pre-preloads")
       |> Activities.activity_preloads(current_user, preloads)
+      |> EctoShorts.filter(filters)
+      |> IO.inspect(label: "post-preloads")
+      |> Activities.as_permitted_for(current_user)
       # |> distinct([fp], [desc: fp.id, desc: fp.activity_id]) # not sure if/why needed... but possible fix for found duplicate ID for component Bonfire.UI.Social.ActivityLive in UI
       # |> order_by([fp], desc: fp.id)
-      # |> IO.inspect(label: "post-preloads")
+      # |> IO.inspect(label: "post-permissions")
       # |> Bonfire.Repo.all() # return all items
-      |> preload([activity: [subject_profile: [:icon]]]) # temp hack because not working in preload_join
       |> Bonfire.Repo.many_paginated(before: cursor_before) # return a page of items (reverse chronological) + pagination metadata
       # |> IO.inspect
   end
@@ -213,91 +217,15 @@ defmodule Bonfire.Social.FeedActivities do
 
   @doc "Delete an activity (usage by things like unlike)"
   def delete_for_object(%{id: id}), do: delete_for_object(id)
-  def delete_for_object(id) when is_binary(id) and id !="", do: build_query(activity_id: id) |> repo().delete_all() |> elem(1)
+  def delete_for_object(id) when is_binary(id) and id !="", do: FeedPublish |> EctoShorts.filter(activity_id: id) |> repo().delete_all() |> elem(1)
   def delete_for_object(ids) when is_list(ids), do: Enum.each(ids, fn x -> delete_for_object(x) end)
   def delete_for_object(_), do: nil
 
   @doc "Defines additional query filters"
 
-  #doc "List posts created by the user and which are in their outbox, which are not replies"
-  def filter(:posts_by, user_id, query) when is_binary(user_id) do
-    verb_id = Verbs.verbs()[:create]
 
-    {
-      query
-      |> join_preload([:activity, :object_post])
-      |> join_preload([:activity, :object_created])
-      |> join_preload([:activity, :replied]),
-      dynamic(
-        [activity: activity, object_post: post, object_created: created, replied: replied],
-        is_nil(replied.reply_to_id) and not is_nil(post.id) and activity.verb_id==^verb_id and created.creator_id == ^user_id
-      )
-    }
-  end
 
-  #doc "Group per-thread "
-  def filter(:distinct, :threads, query) do
-    {
-      query
-      |> join_preload([:activity, :replied])
-      |> distinct([fp, replied: replied], [desc: replied.thread_id]),
-      dynamic([fp], true)
-    }
-  end
 
-  #doc "List messages "
-  def filter(:messages_between, {user_id, current_user_id}, query) when is_binary(user_id) do
-    verb_id = Verbs.verbs()[:create]
-
-    {
-      query
-      |> join_preload([:activity, :object_message])
-      |> join_preload([:activity, :object_created])
-      |> join_preload([:activity, :replied])
-      |> join_preload([:activity, :tags]),
-      dynamic(
-        [activity: activity, object_message: message, object_created: created, replied: replied, tags: tags],
-        not is_nil(message.id)
-        and activity.verb_id==^verb_id
-        and (
-          (
-            created.creator_id == ^current_user_id
-            and tags.id == ^user_id
-          ) or (
-            created.creator_id == ^user_id
-            and tags.id == ^current_user_id
-          )
-        )
-      )
-    }
-  end
-
-  def filter(:messages_involving, user_id, query) when is_binary(user_id) do
-    verb_id = Verbs.verbs()[:create]
-
-    {
-      query
-      |> join_preload([:activity, :object_message])
-      |> join_preload([:activity, :object_created])
-      |> join_preload([:activity, :replied]),
-      dynamic(
-        [activity: activity, object_message: message, object_created: created, replied: replied],
-        not is_nil(message.id) and activity.verb_id==^verb_id
-      )
-    }
-  end
-
-  def filter(:exclude, :messages, query)  do
-
-    {
-      query
-      |> join_preload([:activity, :object_message]),
-      dynamic(
-        [object_message: message],
-        is_nil(message.id)
-      )
-    }
-  end
 
   #doc "List likes created by the user and which are in their outbox, which are not replies"
   # FIXME: we are not putting likes in outbox

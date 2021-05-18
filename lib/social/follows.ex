@@ -20,7 +20,7 @@ defmodule Bonfire.Social.Follows do
 
   defp list(filters, _current_user) do
     # TODO: check permissions for current_user
-    build_query(filters)
+    Follow |> EctoShorts.filter(filters)
   end
 
   def list_my_followed(current_user, with_profile_only \\ true), do: list_followed(current_user, current_user, with_profile_only)

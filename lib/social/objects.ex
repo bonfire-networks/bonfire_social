@@ -13,7 +13,7 @@ defmodule Bonfire.Social.Objects do
 
     current_user = Utils.current_user(socket_or_current_user)
 
-    with {:ok, object} <- build_query(id: object_id)
+    with {:ok, object} <- Pointers.Pointer |> EctoShorts.filter(id: object_id)
       |> Activities.read(socket_or_current_user) do
 
         {:ok, object |> Bonfire.Common.Pointers.follow!()}

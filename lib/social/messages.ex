@@ -8,6 +8,7 @@ defmodule Bonfire.Social.Messages do
   # import Bonfire.Boundaries.Queries
   alias Bonfire.Social.Threads
   alias Bonfire.Social.PostContents
+  alias Bonfire.Boundaries.Verbs
 
   use Bonfire.Repo.Query,
       schema: Message,
@@ -74,7 +75,7 @@ defmodule Bonfire.Social.Messages do
 
     current_user = Utils.current_user(socket_or_current_user)
 
-    with {:ok, message} <- build_query(id: message_id)
+    with {:ok, message} <- Message |> EctoShorts.filter(id: message_id)
       |> Activities.read(socket_or_current_user) do
 
         {:ok, message}
@@ -90,10 +91,16 @@ defmodule Bonfire.Social.Messages do
 
     user_id = Utils.ulid(with_user) || with_user
 
-    q = if with_user && user_id != current_user_id, do: FeedActivities.build_query(messages_between: {user_id, current_user_id}, distinct: :threads),
-    else: FeedActivities.build_query(messages_involving: current_user_id, distinct: :threads)
+    filters = if with_user && user_id != current_user_id, do: [
+      messages_between: {user_id, current_user_id},
+      distinct: {:threads, &Bonfire.Social.Threads.filter/3}
+    ],
+    else: [
+      messages_involving: {current_user_id, &filter/3},
+      distinct: {:threads, &Bonfire.Social.Threads.filter/3}
+    ]
 
-    q
+    filters
     # |> IO.inspect
     |> FeedActivities.feed_query_paginated(current_user, cursor_before, preloads)
   end
@@ -102,10 +109,51 @@ defmodule Bonfire.Social.Messages do
 
     # query FeedPublish
 
-    FeedActivities.build_query(messages_involving: current_user_id, distinct: :threads)
+    [
+      messages_involving: {current_user_id, &filter/3},
+      distinct: {:threads, &Bonfire.Social.Threads.filter/3}
+    ]
     |> FeedActivities.feed_query_paginated(current_user, cursor_before, preloads)
   end
 
   def list(_current_user, _with_user, _cursor_before, _preloads), do: []
+
+    #doc "List messages "
+  def filter(:messages_between, {user_id, current_user_id}, query) when is_binary(user_id) do
+    verb_id = Verbs.verbs()[:create]
+
+    query
+    |> join_preload([:activity, :object_message])
+    |> join_preload([:activity, :object_created])
+    |> join_preload([:activity, :replied])
+    |> join_preload([:activity, :tags])
+    |> where(
+      [activity: activity, object_message: message, object_created: created, replied: replied, tags: tags],
+      not is_nil(message.id)
+      and activity.verb_id==^verb_id
+      and (
+        (
+          created.creator_id == ^current_user_id
+          and tags.id == ^user_id
+        ) or (
+          created.creator_id == ^user_id
+          and tags.id == ^current_user_id
+        )
+      )
+    )
+  end
+
+  def filter(:messages_involving, user_id, query) when is_binary(user_id) do
+    verb_id = Verbs.verbs()[:create]
+
+    query
+    |> join_preload([:activity, :object_message])
+    |> join_preload([:activity, :object_created])
+    |> join_preload([:activity, :replied])
+    |> where(
+      [activity: activity, object_message: message, object_created: created, replied: replied],
+      not is_nil(message.id) and activity.verb_id==^verb_id
+    )
+  end
 
 end

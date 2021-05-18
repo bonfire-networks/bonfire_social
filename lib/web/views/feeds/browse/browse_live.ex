@@ -85,7 +85,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
   end
 
   def do_handle_params(_params, url, socket) do
-    IO.inspect(socket.assigns)
+    # IO.inspect(socket.assigns)
     do_handle_params(%{"tab" => "instance"}, url, socket) # fallback to showing instance feed
   end
 

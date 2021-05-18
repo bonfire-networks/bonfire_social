@@ -44,7 +44,7 @@ defmodule Bonfire.Social.Likes do
   def list_by(by_user, current_user \\ nil, cursor_before \\ nil, preloads \\ :all) when is_binary(by_user) or is_list(by_user) do
 
     # query FeedPublish
-    FeedActivities.build_query(feed_id: by_user, likes_by: by_user)
+    [feed_id: by_user, likes_by: by_user]
     |> FeedActivities.feed_query_paginated(current_user, cursor_before, preloads)
   end
 

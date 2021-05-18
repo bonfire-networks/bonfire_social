@@ -124,7 +124,7 @@ defmodule Bonfire.Social.Activities do
     query
       |> join_preload([:activity, :subject_character])
       |> join_preload([:activity, :subject_profile])
-      # |> join_preload([:activity, :subject_profile, :icon]) # no clue why this doesn't load icons
+      |> join_preload([:activity, :subject_profile, :icon])
       # |> IO.inspect
   end
 
@@ -157,7 +157,7 @@ defmodule Bonfire.Social.Activities do
 
     with {:ok, object} <- query
       |> object_preload_create_activity(current_user, [:default, :with_parents])
-      |> IO.inspect
+      # |> IO.inspect
       |> as_permitted_for(current_user)
       # |> IO.inspect
       |> repo().single() do
@@ -198,7 +198,7 @@ defmodule Bonfire.Social.Activities do
   end
   def permalink(_, obj) do
     Logger.error("No permalink/2 function matches this object")
-    IO.inspect(obj)
+    IO.inspect(permalink_obj: obj)
     "/"
   end
 end

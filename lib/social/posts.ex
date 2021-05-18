@@ -7,6 +7,7 @@ defmodule Bonfire.Social.Posts do
   # import Bonfire.Boundaries.Queries
   alias Bonfire.Social.Threads
   alias Bonfire.Social.PostContents
+  alias Bonfire.Boundaries.Verbs
 
   use Bonfire.Repo.Query,
       schema: Post,
@@ -87,7 +88,7 @@ defmodule Bonfire.Social.Posts do
 
     current_user = Utils.current_user(socket_or_current_user)
 
-    with {:ok, post} <- build_query(id: post_id)
+    with {:ok, post} <- Post |> EctoShorts.filter(id: post_id)
       |> Activities.read(socket_or_current_user) do
 
         {:ok, post}
@@ -98,12 +99,26 @@ defmodule Bonfire.Social.Posts do
   def list_by(by_user, current_user \\ nil, cursor_before \\ nil, preloads \\ :all) when is_binary(by_user) or is_list(by_user) do
 
     # query FeedPublish
-    FeedActivities.build_query(feed_id: by_user, posts_by: by_user)
+    [feed_id: by_user, posts_by: {by_user, &filter/3}]
     |> FeedActivities.feed_query_paginated(current_user, cursor_before, preloads)
   end
 
   def get(id) when is_binary(id) do
     repo().single(get_query(id))
+  end
+
+  #doc "List posts created by the user and which are in their outbox, which are not replies"
+  def filter(:posts_by, user_id, query) when is_binary(user_id) do
+    verb_id = Verbs.verbs()[:create]
+
+    query
+      |> join_preload([:activity, :object_post])
+      |> join_preload([:activity, :object_created])
+      |> join_preload([:activity, :replied])
+      |> where(
+        [activity: activity, object_post: post, object_created: created, replied: replied],
+        is_nil(replied.reply_to_id) and not is_nil(post.id) and activity.verb_id==^verb_id and created.creator_id == ^user_id
+      )
   end
 
   def get_query(id) do
