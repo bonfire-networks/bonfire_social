@@ -91,9 +91,12 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
 
   def handle_params(params, uri, socket) do
     # IO.inspect(params)
-    undead_params(socket, fn ->
+    with {_, socket} <- undead_params(socket, fn ->
       do_handle_params(params, uri, socket)
-    end)
+    end) do
+      # poor man's hook I guess
+      Bonfire.Web.LiveHandler.handle_params(params, uri, socket)
+    end
   end
 
   def handle_event(action, attrs, socket), do: Bonfire.Web.LiveHandler.handle_event(action, attrs, socket, __MODULE__)
