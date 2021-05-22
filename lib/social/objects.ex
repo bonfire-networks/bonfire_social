@@ -13,10 +13,14 @@ defmodule Bonfire.Social.Objects do
 
     current_user = Utils.current_user(socket_or_current_user)
 
-    with {:ok, object} <- Pointers.Pointer |> EctoShorts.filter(id: object_id)
-      |> Activities.read(socket_or_current_user) do
+    with {:ok, pointer} <- Pointers.Pointer
+                            |> EctoShorts.filter(id: object_id)
+                            |> Activities.read(socket_or_current_user),
+         {:ok, object} <- Bonfire.Common.Pointers.get(pointer) do
 
-        {:ok, object |> Bonfire.Common.Pointers.follow!()}
+        IO.inspect(read_object: object)
+
+        {:ok, Map.merge(object, pointer)}
       end
   end
 

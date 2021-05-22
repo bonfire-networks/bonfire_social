@@ -24,7 +24,6 @@ defmodule Bonfire.Social.Web.MessageLive do
 
       {activity, object} = Map.pop(post, :activity)
 
-
       {:ok,
       socket
       |> assign(

@@ -64,7 +64,7 @@ defmodule Bonfire.Social.FeedActivities do
       # |> IO.inspect(label: "pre-preloads")
       |> Activities.activity_preloads(current_user, preloads)
       |> EctoShorts.filter(filters)
-      |> IO.inspect(label: "post-preloads")
+      |> IO.inspect(label: "feed_query_paginated_post-preloads")
       |> Activities.as_permitted_for(current_user)
       # |> distinct([fp], [desc: fp.id, desc: fp.activity_id]) # not sure if/why needed... but possible fix for found duplicate ID for component Bonfire.UI.Social.ActivityLive in UI
       # |> order_by([fp], desc: fp.id)

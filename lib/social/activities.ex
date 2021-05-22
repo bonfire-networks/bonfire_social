@@ -61,7 +61,6 @@ defmodule Bonfire.Social.Activities do
 
     q
     |> join(:left, [o], activity in Activity, as: :activity, on: activity.object_id == o.id and activity.verb_id == ^verb_id)
-    # |> preload([activity], :activity)
     |> activity_preloads(current_user, preloads)
   end
 
@@ -150,8 +149,16 @@ defmodule Bonfire.Social.Activities do
   end
   def maybe_my_flag(q, _), do: q
 
+  def read(query, socket_or_current_user \\ nil)
 
-  def read(query, socket_or_current_user \\ nil) do
+  def read(object_id, socket_or_current_user) when is_binary(object_id) do # note: we're fetching by object_id, and not activity.id
+
+    read([object_id: object_id], socket_or_current_user)
+  end
+
+  def read(%Ecto.Query{} = query, socket_or_current_user) do
+
+    IO.inspect(query: query)
 
     current_user = Utils.current_user(socket_or_current_user)
 
@@ -165,6 +172,17 @@ defmodule Bonfire.Social.Activities do
         Utils.pubsub_subscribe(Utils.e(object, :activity, :replied, :thread_id, nil) || object.id, socket_or_current_user) # subscribe to realtime feed updates
 
         {:ok, object} #|> repo().maybe_preload(controlled: [acl: [grants: [access: [:interacts]]]]) |> IO.inspect
+      end
+  end
+
+  def read(filters, socket_or_current_user) when is_map(filters) or is_list(filters) do # note: we're fetching by object_id, and not activity.id
+
+    current_user = Utils.current_user(socket_or_current_user)
+
+    with {:ok, activity} <- Activity |> EctoShorts.filter(filters)
+      |> read(socket_or_current_user) do
+
+        {:ok, activity}
       end
   end
 
