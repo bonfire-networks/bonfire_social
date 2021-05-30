@@ -36,7 +36,8 @@ defmodule Bonfire.Social.FeedActivities do
     [
       feed_id: feed_id_or_ids,
       # exclude: {:messages, &filter/3},
-      exclude_messages: dynamic([object_message: message], is_nil(message.id))
+      # exclude_messages: dynamic([object_message: message], is_nil(message.id))
+      exclude_messages: dynamic([object: object], object.table_id != ^("6R1VATEMESAGEC0MMVN1CAT10N"))
     ]
     |> feed_query_paginated(Utils.current_user(current_user_or_socket), cursor_before, preloads)
   end
@@ -71,7 +72,7 @@ defmodule Bonfire.Social.FeedActivities do
       # |> IO.inspect(label: "post-permissions")
       # |> Bonfire.Repo.all() # return all items
       |> Bonfire.Repo.many_paginated(before: cursor_before) # return a page of items (reverse chronological) + pagination metadata
-      # |> IO.inspect
+      # |> IO.inspect(label: "feed")
   end
 
   # def feed(%{feed_publishes: _} = feed_for, _) do

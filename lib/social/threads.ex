@@ -98,9 +98,9 @@ defmodule Bonfire.Social.Threads do
   def list_replies(thread, current_user, cursor \\ nil, max_depth \\ 3, limit \\ 500)
   def list_replies(%{id: thread_id}, current_user, cursor, max_depth, limit), do: list_replies(thread_id, current_user, cursor, max_depth, limit)
   def list_replies(%{thread_id: thread_id}, current_user, cursor, max_depth, limit), do: list_replies(thread_id, current_user, cursor, max_depth, limit)
-  def list_replies(thread_id, current_user, cursor, max_depth, limit) when is_binary(thread_id), do: Pointers.ULID.dump(thread_id) |> do_list_replies(current_user, cursor, max_depth, limit)
+  def list_replies(thread_id, current_user, cursor, max_depth, limit) when is_binary(thread_id), do: Bonfire.Common.Pointers.id_binary(thread_id) |> do_list_replies(current_user, cursor, max_depth, limit)
 
-  defp do_list_replies({:ok, thread_id}, current_user, cursor, max_depth, limit) do
+  defp do_list_replies(thread_id, current_user, cursor, max_depth, limit) do
     # IO.inspect(cursor: cursor)
     %Replied{id: thread_id}
       |> Replied.descendants()
