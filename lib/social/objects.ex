@@ -15,12 +15,16 @@ defmodule Bonfire.Social.Objects do
 
     with {:ok, pointer} <- Pointers.Pointer
                             |> EctoShorts.filter(id: object_id)
-                            |> Activities.read(socket_or_current_user),
-         {:ok, object} <- Bonfire.Common.Pointers.get(pointer) do
+                            |> Activities.read(socket_or_current_user) #|> IO.inspect,
+        #  {:ok, object} <- Bonfire.Common.Pointers.get(pointer)
+        do
 
-        IO.inspect(read_object: object)
+        # IO.inspect(read_object: pointer)
 
-        {:ok, Map.merge(object, pointer)}
+        {:ok,
+          pointer
+          |> Bonfire.Common.Pointers.Preload.maybe_preload_nested_pointers([activity: [:object]])
+        }
       end
   end
 

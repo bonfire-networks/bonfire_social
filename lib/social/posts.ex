@@ -152,7 +152,7 @@ defmodule Bonfire.Social.Posts do
       # "index_type" => Bonfire.Data.Social.Activity,
       "id" => id,
       "index_type" => Bonfire.Data.Social.Post,
-      # "url" => Activities.permalink(post),
+      # "url" => path(post),
       "post_content" => PostContents.indexing_object_format(post_content),
       "activity" => %{
         "subject_profile" => Bonfire.Me.Profiles.indexing_object_format(subject_profile),

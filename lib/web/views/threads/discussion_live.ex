@@ -23,6 +23,7 @@ defmodule Bonfire.Social.Web.DiscussionLive do
       {activity, object} = Map.pop(object, :activity)
 
       # IO.inspect(object, label: "the object:")
+      IO.inspect(activity, label: "the activity:")
 
       following = if current_user && module_enabled?(Bonfire.Social.Follows) do
         a = if Bonfire.Social.Follows.following?(current_user, object), do: object.id
@@ -41,7 +42,7 @@ defmodule Bonfire.Social.Web.DiscussionLive do
         smart_input_placeholder: "Reply to the discussion",
         reply_id: Map.get(params, "reply_id"),
         activity: activity,
-        object: object,
+        # object: object,
         thread_id: e(object, :id, nil),
         following: following || []
       )}

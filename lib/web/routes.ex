@@ -10,10 +10,10 @@ defmodule Bonfire.Social.Web.Routes do
         live "/browse/", Feeds.BrowseLive, as: :browse
         live "/browse/:tab", Feeds.BrowseLive
 
-        live "/post/:id", PostLive
-        live "/discussion/:id", DiscussionLive
+        live "/post/:id", PostLive, as: Bonfire.Data.Social.Post
+        live "/discussion/:id", DiscussionLive, as: Bonfire.Data.Social.PostContent
         live "/discussion/:id/reply/:reply_id", DiscussionLive
-        live "/message/:id", MessageLive
+        live "/message/:id", MessageLive, as: Bonfire.Data.Social.Message
         live "/message/:id/reply/:reply_id", MessageLive
 
       end
