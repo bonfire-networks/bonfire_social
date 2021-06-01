@@ -4,14 +4,16 @@ defmodule Bonfire.Social.Likes do
   alias Bonfire.Data.Social.Like
   # alias Bonfire.Data.Social.LikeCount
   alias Bonfire.Social.{Activities, FeedActivities}
-  import Ecto.Query
-  import Bonfire.Me.Integration
+  # import Ecto.Query
+  # import Bonfire.Me.Integration
   # alias Bonfire.Common.Utils
+  use Bonfire.Repo.Query
 
   def liked?(%User{}=user, liked), do: not is_nil(get!(user, liked))
   def get(%User{}=user, liked), do: repo().single(by_both_q(user, liked))
   def get!(%User{}=user, liked), do: repo().one(by_both_q(user, liked))
   def by_liker(%User{}=user), do: repo().all(by_liker_q(user))
+  def by_liker(%User{}=user, type), do: repo().all(by_liker_q(user) |> by_type_q(type))
   def by_liked(%User{}=user), do: repo().all(by_liked_q(user))
   def by_any(%User{}=user), do: repo().all(by_any_q(user))
 
@@ -40,7 +42,7 @@ defmodule Bonfire.Social.Likes do
     end
   end
 
-  @doc "List likes by the user and which are in their outbox"
+  @doc "List likes by the user, but only present in their outbox"
   def list_by(by_user, current_user \\ nil, cursor_before \\ nil, preloads \\ :all) when is_binary(by_user) or is_list(by_user) do
 
     # query FeedPublish
@@ -70,28 +72,30 @@ defmodule Bonfire.Social.Likes do
 
   defp by_liker_q(%User{id: id}) do
     from f in Like,
-      where: f.liker_id == ^id,
-      select: f.id
+      where: f.liker_id == ^id
   end
 
   defp by_liked_q(%User{id: id}) do
     from f in Like,
-      where: f.liked_id == ^id,
-      select: f.id
+      where: f.liked_id == ^id
   end
 
   defp by_any_q(%User{id: id}) do
     from f in Like,
-      where: f.liker_id == ^id or f.liked_id == ^id,
-      select: f.id
+      where: f.liker_id == ^id or f.liked_id == ^id
   end
 
   defp by_both_q(%User{id: liker}, %{id: liked}), do: by_both_q(liker, liked)
 
   defp by_both_q(liker, liked) when is_binary(liker) and is_binary(liked) do
     from f in Like,
-      where: f.liker_id == ^liker or f.liked_id == ^liked,
-      select: f.id
+      where: f.liker_id == ^liker or f.liked_id == ^liked
+  end
+
+  defp by_type_q(q, type) do
+    q
+    |> join(:inner, [l], ot in ^type, as: :liked, on: ot.id == l.liked_id)
+    |> join_preload([:liked])
   end
 
 end
