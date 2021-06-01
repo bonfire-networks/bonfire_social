@@ -2,6 +2,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   require Logger
   alias Bonfire.Data.Social.FeedPublish
+  alias Bonfire.Data.Social.PostContent
   alias Bonfire.Data.Identity.User
   alias Bonfire.Boundaries.Verbs
   alias Bonfire.Social.Feeds

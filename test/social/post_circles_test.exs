@@ -17,7 +17,7 @@ defmodule Bonfire.Social.PostPostsTest do
     assert activity.post.post_content.name == "name"
 
     assert {:ok, post} = Posts.read(activity.post.id, user)
-    assert "name" == post.activity.object_post_content.name
+    assert "name" == post.activity.object.post_content.name
 
   end
 
@@ -45,7 +45,7 @@ defmodule Bonfire.Social.PostPostsTest do
 
     assert %Paginator.Page{entries: activities} = FeedActivities.feed(feed_id, user)
     assert feed_entry = List.first(activities)
-    assert "name" == feed_entry.activity.object_post_content.name
+    assert "name" == feed_entry.activity.object.post_content.name
 
   end
 

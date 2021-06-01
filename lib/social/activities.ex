@@ -1,6 +1,6 @@
 defmodule Bonfire.Social.Activities do
 
-  alias Bonfire.Data.Social.{Activity, Like, Boost, Flag}
+  alias Bonfire.Data.Social.{Activity, Like, Boost, Flag, PostContent}
   alias Bonfire.Boundaries.Verbs
   alias Bonfire.Common.Utils
   # import Bonfire.Me.Integration
@@ -110,7 +110,7 @@ defmodule Bonfire.Social.Activities do
       |> join_preload([:activity, :object])
       # |> join_preload([:activity, :object_message])
       # |> join_preload([:activity, :object_post])
-      |> join_preload([:activity, :object_post_content])
+      |> join_preload([:activity, :object, :post_content])
       |> join_preload([:activity, :replied])
       |> maybe_my_like(current_user)
       |> maybe_my_boost(current_user)
@@ -199,10 +199,10 @@ defmodule Bonfire.Social.Activities do
   def permalink(_, %Bonfire.Data.Social.Post{id: id}) when is_binary(id) do
     "/post/"<>id
   end
-  def permalink(_, %Bonfire.Data.Social.PostContent{id: id}) when is_binary(id) do
+  def permalink(_, %PostContent{id: id}) when is_binary(id) do
     "/post/"<>id
   end
-  def permalink(_, %{object_post_content: %{id: id}}) when is_binary(id) do
+  def permalink(_, %{object: %{post_content: %{id: id}}}) when is_binary(id) do
     "/post/"<>id
   end
   def permalink(_, %{object_message: %{id: id}}) when is_binary(id) do
