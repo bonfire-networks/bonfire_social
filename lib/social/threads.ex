@@ -15,7 +15,7 @@ defmodule Bonfire.Social.Threads do
 
     with {:ok, published} <- FeedActivities.maybe_notify(creator, activity, thread_id) do #|> IO.inspect # push to user following the thread
 
-      Utils.pubsub_broadcast(thread_id, {:post_new_reply, published}) # push to users viewing the thread
+      Utils.pubsub_broadcast(thread_id, {:post_new_reply, {thread_id, published}}) # push to users viewing the thread
     end
   end
 
@@ -96,13 +96,18 @@ defmodule Bonfire.Social.Threads do
 
 
   def list_replies(thread, current_user, cursor \\ nil, max_depth \\ 3, limit \\ 500)
-  def list_replies(%{id: thread_id}, current_user, cursor, max_depth, limit), do: list_replies(thread_id, current_user, cursor, max_depth, limit)
   def list_replies(%{thread_id: thread_id}, current_user, cursor, max_depth, limit), do: list_replies(thread_id, current_user, cursor, max_depth, limit)
-  def list_replies(thread_id, current_user, cursor, max_depth, limit) when is_binary(thread_id), do: Bonfire.Common.Pointers.id_binary(thread_id) |> do_list_replies(current_user, cursor, max_depth, limit)
+  def list_replies(%{id: thread_id}, current_user, cursor, max_depth, limit), do: list_replies(thread_id, current_user, cursor, max_depth, limit)
+  def list_replies(thread_id, current_user, cursor, max_depth, limit) when is_binary(thread_id), do: do_list_replies(thread_id, current_user, cursor, max_depth, limit)
 
-  defp do_list_replies(thread_id, current_user, cursor, max_depth, limit) do
+  defp do_list_replies(thread_id, current_user_or_socket, cursor, max_depth, limit) do
     # IO.inspect(cursor: cursor)
-    %Replied{id: thread_id}
+
+    Utils.pubsub_subscribe(thread_id, current_user_or_socket) # subscribe to realtime thread updates
+
+    current_user = Utils.current_user(current_user_or_socket)
+
+    %Replied{id: Bonfire.Common.Pointers.id_binary(thread_id)}
       |> Replied.descendants()
       |> Replied.where_depth(is_smaller_than_or_equal_to: max_depth)
       |> Activities.object_preload_create_activity(current_user)
@@ -117,7 +122,7 @@ defmodule Bonfire.Social.Threads do
       # |> IO.inspect
   end
 
-  def arrange_replies_tree(replies), do: replies |> Replied.arrange()
+  def arrange_replies_tree(replies), do: replies |> Replied.arrange() # uses https://github.com/asiniy/ecto_materialized_path
 
   # def replies_tree(replies) do
   #   thread = replies

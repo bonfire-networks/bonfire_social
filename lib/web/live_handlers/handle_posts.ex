@@ -1,5 +1,6 @@
 defmodule Bonfire.Social.Web.LiveHandlers.Posts do
   use Bonfire.Web, :live_handler
+  require Logger
 
   alias Bonfire.Social.Posts
   alias Bonfire.Social.PostContents
@@ -17,7 +18,7 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
   end
 
   def handle_params(%{"cursor" => cursor} = _attrs, _, %{assigns: %{thread_id: thread_id}} = socket) do
-    live_more(thread_id, cursor, socket, false)
+    live_more(thread_id, cursor, socket)
   end
 
   def handle_event("feed_load_more", %{"cursor" => cursor} = _attrs, %{assigns: %{thread_id: thread_id}} = socket) do
@@ -66,7 +67,7 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
 
   def handle_event("post_load_replies", %{"id" => id, "level" => level}, socket) do
     {level, _} = Integer.parse(level)
-    %{entries: replies} = Bonfire.Social.Threads.list_replies(id, nil, level + 1)
+    %{entries: replies} = Bonfire.Social.Threads.list_replies(id, socket, level + 1)
     replies = replies ++ Utils.e(socket.assigns, :replies, [])
     {:noreply,
         assign(socket,
@@ -99,40 +100,39 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
     }
   end
 
-  def handle_info({:post_new_reply, data}, socket) do
+  def handle_info({:post_new_reply, {thread_id, data}}, socket) do
 
-    # IO.inspect(received_post_new_reply: data)
+    Logger.info("Bonfire.Social.Web.LiveHandlers.Posts.handle_info received :post_new_reply")
     # IO.inspect(replies: Utils.e(socket.assigns, :replies, []))
 
-    replies = [data] ++ Utils.e(socket.assigns, :replies, [])
+    # replies = [data] ++ Utils.e(socket.assigns, :replies, [])
 
-    {:noreply,
-        Phoenix.LiveView.assign(socket,
-          replies: replies
-          # threaded_replies: Bonfire.Social.Threads.arrange_replies_tree(replies) || []
-      )}
+    send_update(Bonfire.UI.Social.ThreadLive, id: thread_id, post_new_reply: data)
+
+    {:noreply, socket}
   end
 
 
-  def live_more(thread_id, cursor, socket, infinite_scroll \\ true) do
+  def live_more(thread_id, cursor, socket) do
     # IO.inspect(pagination: cursor)
 
-    with %{entries: replies, metadata: page_info} <- Bonfire.Social.Threads.list_replies(thread_id, e(socket, :assigns, :current_user, nil), cursor, @thread_max_depth) do
+    with %{entries: replies, metadata: page_info} <- Bonfire.Social.Threads.list_replies(thread_id, socket, cursor, @thread_max_depth) do
 
-      replies = if infinite_scroll, do: e(socket.assigns, :replies, []) ++ (replies || []),
-      else: replies || []
+      replies = e(socket.assigns, :replies, []) ++ (replies || [])
 
-      threaded_replies = if is_list(replies) and length(replies)>0, do: Bonfire.Social.Threads.arrange_replies_tree(replies), else: []
+      # threaded_replies = if is_list(replies) and length(replies)>0, do: Bonfire.Social.Threads.arrange_replies_tree(replies), else: []
       #IO.inspect(replies, label: "REPLIES:")
 
-      {:noreply,
-      socket
-      |> Phoenix.LiveView.assign(
+      new = [
         replies: replies || [],
-        threaded_replies: threaded_replies,
+        # threaded_replies: threaded_replies,
         page_info: page_info
-      )}
+      ]
+
+      {:noreply, socket}
     end
+
+    {:noreply, socket}
   end
 
 

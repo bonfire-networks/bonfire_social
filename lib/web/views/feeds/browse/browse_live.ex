@@ -57,7 +57,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
         selected_tab: tab,
         feed_title: "Browse the local instance",
         feed: e(feed, :entries, []),
-        page_info: e(feed, :metadata, [])
+        page_info: e(feed, :metadata, []) |> IO.inspect
       )
       |> cast_self(to_circles: [Bonfire.Boundaries.Circles.get_tuple(:local)])
       }

@@ -169,7 +169,7 @@ defmodule Bonfire.Social.Activities do
       # |> IO.inspect
       |> repo().single() do
 
-        Utils.pubsub_subscribe(Utils.e(object, :activity, :replied, :thread_id, nil) || object.id, socket_or_current_user) # subscribe to realtime feed updates
+        # Utils.pubsub_subscribe(Utils.e(object, :activity, :replied, :thread_id, nil) || object.id, socket_or_current_user) # subscribe to realtime feed updates
 
         {:ok, object} #|> repo().maybe_preload(controlled: [acl: [grants: [access: [:interacts]]]]) |> IO.inspect
       end
