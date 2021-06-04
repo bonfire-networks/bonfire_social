@@ -8,7 +8,7 @@ defmodule Bonfire.Social.Web.Feeds.NotificationsLive do
       LivePlugs.LoadCurrentUser,
       # LivePlugs.LoadCurrentAccountUsers,
       LivePlugs.StaticChanged,
-      LivePlugs.Csrf,
+      LivePlugs.Csrf, LivePlugs.Locale,
       &mounted/3,
     ]
   end

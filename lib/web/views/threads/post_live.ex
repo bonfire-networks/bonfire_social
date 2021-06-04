@@ -9,7 +9,7 @@ defmodule Bonfire.Social.Web.PostLive do
       LivePlugs.LoadCurrentUserCircles,
       # LivePlugs.LoadCurrentAccountUsers,
       LivePlugs.StaticChanged,
-      LivePlugs.Csrf,
+      LivePlugs.Csrf, LivePlugs.Locale,
       &mounted/3
     ])
   end
