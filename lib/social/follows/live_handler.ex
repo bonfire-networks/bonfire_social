@@ -1,4 +1,4 @@
-defmodule Bonfire.Social.Web.LiveHandlers.Follows do
+defmodule Bonfire.Social.Follows.LiveHandler do
   use Bonfire.Web, :live_handler
 
   def handle_event("follow", %{"id"=> id}, socket) do

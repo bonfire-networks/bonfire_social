@@ -47,7 +47,7 @@ defmodule Bonfire.Social.Likes do
 
     # query FeedPublish
     [feed_id: by_user, likes_by: by_user]
-    |> FeedActivities.feed_query_paginated(current_user, cursor_before, preloads)
+    |> FeedActivities.feed_paginated(current_user, cursor_before, preloads)
   end
 
   defp create(%{} = liker, %{} = liked) do

@@ -23,6 +23,7 @@ defmodule Bonfire.Social.Web.MessageLive do
       #IO.inspect(post, label: "the post:")
 
       {activity, object} = Map.pop(post, :activity)
+      {preloaded_object, activity} = Map.pop(activity, :object)
 
       {:ok,
       socket
@@ -31,13 +32,17 @@ defmodule Bonfire.Social.Web.MessageLive do
         page: "Private Message",
         has_private_tab: false,
         search_placeholder: "Search this discussion",
-        smart_input_private: true,
-        smart_input_placeholder: "Reply privately",
         reply_id: Map.get(params, "reply_id"),
         activity: activity,
-        object: object,
+        object: Map.merge(object, preloaded_object),
         thread_id: e(object, :id, nil)
-      )}
+      ) #|> IO.inspect
+      |> assign_global(
+        smart_input_private: true,
+        create_activity_type: "message",
+        smart_input_placeholder: "Reply privately"
+      )
+    }
 
     else _e ->
       {:error, "Not found"}
@@ -62,7 +67,7 @@ defmodule Bonfire.Social.Web.MessageLive do
   def handle_event("create_reply", %{"id"=> id}, socket) do # boost in LV
     IO.inspect(id: id)
     IO.inspect("create reply")
-    # with {:ok, _boost} <- Bonfire.Social.Boosts.boost(socket.assigns.current_user, id) do
+    # with {:ok, _boost} <- Bonfire.Social.Boosts.boost(e(socket.assigns, :current_user, nil), id) do
     #   {:noreply, Phoenix.LiveView.assign(socket,
     #   boosted: Map.get(socket.assigns, :boosted, []) ++ [{id, true}]
     # )}

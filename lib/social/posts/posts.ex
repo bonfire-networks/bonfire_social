@@ -28,30 +28,28 @@ defmodule Bonfire.Social.Posts do
     #IO.inspect(attrs)
     repo().transact_with(fn ->
       with  {text, mentions, _hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs),
-            {:ok, post} <- create(creator, attrs, text),
-            {:ok, post} <- Bonfire.Social.Tags.maybe_tag(creator, post, mentions),
-            {:ok, feed_activity} <- FeedActivities.publish(creator, :create, post) do
+        {:ok, post} <- create(creator, attrs, text),
+        {:ok, post} <- Bonfire.Social.Tags.maybe_tag(creator, post, mentions),
+        {:ok, feed_activity} <- FeedActivities.publish(creator, :create, post) do
 
-              Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, post, cc ++ (Bonfire.Tag.Tags.tag_ids(mentions) || [])) # make visible for:
-              # - creator
-              # - any selected circles
-              # - mentioned characters (FIXME, should not be the default or be configurable)
+          Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, post, cc ++ (Bonfire.Tag.Tags.tag_ids(mentions) || [])) # make visible for:
+          # - creator
+          # - any selected circles
+          # - mentioned characters (FIXME, should not be the default or be configurable)
 
-              # IO.inspect(feed_activity: feed_activity)
+          # IO.inspect(feed_activity: feed_activity)
 
-              # put in feeds
-              FeedActivities.maybe_notify(creator, feed_activity, cc)
+          # put in feeds
+          FeedActivities.maybe_notify(creator, feed_activity, cc)
 
-              Threads.maybe_push_thread(creator, feed_activity, post)
+          Threads.maybe_push_thread(creator, feed_activity, post)
 
-              maybe_index(feed_activity)
+          maybe_index(feed_activity)
 
-              {:ok, feed_activity}
+          {:ok, feed_activity}
       end
     end)
   end
-
-
 
   # def reply(creator, attrs) do
   #   with  {:ok, published} <- publish(creator, attrs),
@@ -100,7 +98,7 @@ defmodule Bonfire.Social.Posts do
 
     # query FeedPublish
     [feed_id: by_user, posts_by: {by_user, &filter/3}]
-    |> FeedActivities.feed_query_paginated(current_user, cursor_before, preloads)
+    |> FeedActivities.feed_paginated(current_user, cursor_before, preloads)
   end
 
   def get(id) when is_binary(id) do

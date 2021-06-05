@@ -22,6 +22,7 @@ defmodule Bonfire.Social.Web.PostLive do
       # IO.inspect(post, label: "the post:")
 
       {activity, object} = Map.pop(post, :activity)
+      {preloaded_object, activity} = Map.pop(activity, :object)
 
       following = if current_user && module_enabled?(Bonfire.Social.Follows) && Bonfire.Social.Follows.following?(current_user, object), do: [object.id]
 
@@ -34,7 +35,7 @@ defmodule Bonfire.Social.Web.PostLive do
         has_private_tab: false,
         reply_id: Map.get(params, "reply_id"),
         activity: activity,
-        object: object,
+        object: Map.merge(object, preloaded_object),
         thread_id: e(object, :id, nil),
         replies: [],
         following: following || []

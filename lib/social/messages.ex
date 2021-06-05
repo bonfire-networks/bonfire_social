@@ -30,24 +30,23 @@ defmodule Bonfire.Social.Messages do
 
     repo().transact_with(fn ->
       with  {text, mentions, _hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs),
-            {:ok, message} <- create(creator, attrs, text),
-            {:ok, post} <- Bonfire.Social.Tags.maybe_tag(creator, message, mentions) do
+        {:ok, message} <- create(creator, attrs, text),
+        {:ok, post} <- Bonfire.Social.Tags.maybe_tag(creator, message, mentions) do
 
-              #IO.inspect(message)
+          #IO.inspect(message)
 
-              Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, message, cc)
+          Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, message, cc)
 
-              with {:ok, activity} <- FeedActivities.maybe_notify(creator, :create, post, cc) do
-                Threads.maybe_push_thread(creator, activity, message)
+          with {:ok, activity} <- FeedActivities.maybe_notify(creator, :create, post, cc) do
+            Threads.maybe_push_thread(creator, activity, message)
 
-                {:ok, %{message: message, activity: activity}}
+            {:ok, %{message: message, activity: activity}}
 
-              else e ->
-                IO.inspect(could_not_notify: e)
+          else e ->
+            IO.inspect(could_not_notify: e)
 
-                {:ok, %{message: message}}
-              end
-
+            {:ok, %{message: message}}
+          end
       end
     end)
   end
@@ -85,41 +84,54 @@ defmodule Bonfire.Social.Messages do
   @doc "List posts created by the user and which are in their outbox, which are not replies"
   def list(current_user, with_user \\ nil, cursor_before \\ nil, preloads \\ :all)
 
-  def list(%{id: current_user_id} = current_user, with_user, cursor_before, preloads) when ( is_binary(with_user) or is_list(with_user) or is_map(with_user) ) and with_user != current_user_id do
+  def list(%{id: current_user_id} = current_user, with_user, cursor_before, preloads) when ( is_binary(with_user) or is_list(with_user) or is_map(with_user) ) and with_user != current_user_id and with_user != current_user do
+    # all messages between two people
 
-    # query FeedPublish
+    with_user_id = Utils.ulid(with_user)
 
-    user_id = Utils.ulid(with_user) || with_user
-
-    filters = if with_user && user_id != current_user_id, do: [
-      messages_between: {user_id, current_user_id},
-      distinct: {:threads, &Bonfire.Social.Threads.filter/3}
-    ],
-    else: [
-      messages_involving: {current_user_id, &filter/3},
-      distinct: {:threads, &Bonfire.Social.Threads.filter/3}
+    if with_user_id && with_user_id != current_user_id, do: [
+      messages_involving: {{with_user_id, current_user_id}, &filter/3},
+      # distinct: {:threads, &Bonfire.Social.Threads.filter/3}
     ]
+    |> IO.inspect(label: "list message filters")
+    |> list_paginated(current_user, cursor_before, preloads),
+    else: list(current_user, nil, cursor_before, preloads)
 
-    filters
-    # |> IO.inspect
-    |> FeedActivities.feed_query_paginated(current_user, cursor_before, preloads)
   end
 
   def list(%{id: current_user_id} = current_user, _, cursor_before, preloads) do
-
-    # query FeedPublish
+    # all current_user's message
 
     [
       messages_involving: {current_user_id, &filter/3},
-      distinct: {:threads, &Bonfire.Social.Threads.filter/3}
+      # distinct: {:threads, &Bonfire.Social.Threads.filter/3}
     ]
-    |> FeedActivities.feed_query_paginated(current_user, cursor_before, preloads)
+    |> IO.inspect(label: "my messages filters")
+    |> list_paginated(current_user, cursor_before, preloads)
   end
 
   def list(_current_user, _with_user, _cursor_before, _preloads), do: []
 
+  def list_paginated(filters, current_user \\ nil, cursor_before \\ nil, preloads \\ :all, query \\ Message) do
+
+    query
+      # add assocs needed in timelines/feeds
+      # |> join_preload([:activity])
+      # |> IO.inspect(label: "pre-preloads")
+      |> Activities.activity_preloads(current_user, preloads)
+      |> EctoShorts.filter(filters)
+      |> IO.inspect(label: "message_paginated_post-preloads")
+      |> Activities.as_permitted_for(current_user)
+      # |> distinct([fp], [desc: fp.id, desc: fp.activity_id]) # not sure if/why needed... but possible fix for found duplicate ID for component Bonfire.UI.Social.ActivityLive in UI
+      # |> order_by([fp], desc: fp.id)
+      # |> IO.inspect(label: "post-permissions")
+      # |> Bonfire.Repo.all() # return all items
+      |> Bonfire.Repo.many_paginated(before: cursor_before) # return a page of items (reverse chronological) + pagination metadata
+      # |> IO.inspect(label: "feed")
+  end
+
     #doc "List messages "
-  def filter(:messages_between, {user_id, current_user_id}, query) when is_binary(user_id) do
+  def filter(:messages_involving, {user_id, current_user_id}, query) when is_binary(user_id) and is_binary(current_user_id) do
     verb_id = Verbs.verbs()[:create]
 
     query
@@ -137,13 +149,13 @@ defmodule Bonfire.Social.Messages do
           and tags.id == ^user_id
         ) or (
           created.creator_id == ^user_id
-          and tags.id == ^current_user_id
+          # and tags.id == ^current_user_id
         )
       )
     )
   end
 
-  def filter(:messages_involving, user_id, query) when is_binary(user_id) do
+  def filter(:messages_involving, _user_id, query) do # replies on boundaries to filter which messages to show
     verb_id = Verbs.verbs()[:create]
 
     query
@@ -152,7 +164,7 @@ defmodule Bonfire.Social.Messages do
     |> join_preload([:activity, :replied])
     |> where(
       [activity: activity, object_message: message, object_created: created, replied: replied],
-      not is_nil(message.id) and activity.verb_id==^verb_id
+      not is_nil(message.id) # and activity.verb_id==^verb_id
     )
   end
 

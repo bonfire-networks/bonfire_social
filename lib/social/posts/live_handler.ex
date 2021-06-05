@@ -1,4 +1,4 @@
-defmodule Bonfire.Social.Web.LiveHandlers.Posts do
+defmodule Bonfire.Social.Posts.LiveHandler do
   use Bonfire.Web, :live_handler
   require Logger
 
@@ -26,24 +26,11 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
   end
 
   def handle_event("post", %{"create_activity_type"=>"message"}=params, socket) do
-    attrs = params
-    |> input_to_atoms()
-    |> merge_child(:post)
-    |> IO.inspect
+    send_message(params, socket)
+  end
 
-    with {:ok, _sent} <- Bonfire.Social.Messages.send(socket.assigns.current_user, attrs) do
-      IO.inspect("sent!")
-      {:noreply,
-        socket
-        |> put_flash(:info, "Sent!")
-      }
-    else e ->
-      IO.inspect(message_error: e)
-      {:noreply,
-        socket
-        |> put_flash(:error, "Could not send...")
-      }
-    end
+  def handle_event("post", %{"post" => %{"create_activity_type"=>"message"}}=params, socket) do
+    send_message(params, socket)
   end
 
   def handle_event("post", params, socket) do # if not message, it's a post by default
@@ -52,14 +39,14 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
     |> IO.inspect
 
     with %{valid?: true} <- post_changeset(attrs),
-         {:ok, _published} <- Bonfire.Social.Posts.publish(socket.assigns.current_user, attrs) do
+         {:ok, _published} <- Bonfire.Social.Posts.publish(e(socket.assigns, :current_user, nil), attrs) do
       IO.inspect("published!")
       {:noreply,
         socket
         |> put_flash(:info, "Posted!")
 
         # Phoenix.LiveView.assign(socket,
-        #   feed: [%{published.activity | object_post: published.post, subject_user: socket.assigns.current_user}] ++ Map.get(socket.assigns, :feed, [])
+        #   feed: [%{published.activity | object_post: published.post, subject_user: e(socket.assigns, :current_user, nil)}] ++ Map.get(socket.assigns, :feed, [])
         # )
       }
     end
@@ -102,7 +89,7 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
 
   def handle_info({:post_new_reply, {thread_id, data}}, socket) do
 
-    Logger.info("Bonfire.Social.Web.LiveHandlers.Posts.handle_info received :post_new_reply")
+    Logger.info("Bonfire.Social.Posts handle_info received :post_new_reply")
     # IO.inspect(replies: Utils.e(socket.assigns, :replies, []))
 
     # replies = [data] ++ Utils.e(socket.assigns, :replies, [])
@@ -147,4 +134,24 @@ defmodule Bonfire.Social.Web.LiveHandlers.Posts do
     # |> Changeset.validate_required(:name)
   end
 
+  def send_message(params, socket) do
+    attrs = params
+    |> input_to_atoms()
+    # |> merge_child(:post)
+    |> IO.inspect
+
+    with {:ok, _sent} <- Bonfire.Social.Messages.send(e(socket.assigns, :current_user, nil), attrs) do
+      IO.inspect("sent!")
+      {:noreply,
+        socket
+        |> put_flash(:info, "Sent!")
+      }
+    else e ->
+      IO.inspect(message_error: e)
+      {:noreply,
+        socket
+        |> put_flash(:error, "Could not send...")
+      }
+    end
+  end
 end

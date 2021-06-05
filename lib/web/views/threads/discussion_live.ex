@@ -21,9 +21,10 @@ defmodule Bonfire.Social.Web.DiscussionLive do
     with {:ok, object} <- Bonfire.Social.Objects.read(Map.get(params, "id"), socket) do
 
       {activity, object} = Map.pop(object, :activity)
+      {preloaded_object, activity} = Map.pop(activity, :object)
 
       # IO.inspect(object, label: "the object:")
-      IO.inspect(activity, label: "the activity:")
+      # IO.inspect(activity, label: "the activity:")
 
       following = if current_user && module_enabled?(Bonfire.Social.Follows) do
         a = if Bonfire.Social.Follows.following?(current_user, object), do: object.id
@@ -42,7 +43,7 @@ defmodule Bonfire.Social.Web.DiscussionLive do
         smart_input_placeholder: "Reply to the discussion",
         reply_id: Map.get(params, "reply_id"),
         activity: activity,
-        # object: object,
+        object: Map.merge(object, preloaded_object),
         thread_id: e(object, :id, nil),
         following: following || []
       )}
@@ -70,7 +71,7 @@ defmodule Bonfire.Social.Web.DiscussionLive do
   def handle_event("create_reply", %{"id"=> id}, socket) do # boost in LV
     IO.inspect(id: id)
     IO.inspect("create reply")
-    # with {:ok, _boost} <- Bonfire.Social.Boosts.boost(socket.assigns.current_user, id) do
+    # with {:ok, _boost} <- Bonfire.Social.Boosts.boost(e(socket.assigns, :current_user, nil), id) do
     #   {:noreply, Phoenix.LiveView.assign(socket,
     #   boosted: Map.get(socket.assigns, :boosted, []) ++ [{id, true}]
     # )}

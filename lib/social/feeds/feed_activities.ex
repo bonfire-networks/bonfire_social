@@ -40,7 +40,7 @@ defmodule Bonfire.Social.FeedActivities do
       # exclude_messages: dynamic([object_message: message], is_nil(message.id))
       exclude_messages: dynamic([object: object], object.table_id != ^("6R1VATEMESAGEC0MMVN1CAT10N"))
     ]
-    |> feed_query_paginated(Utils.current_user(current_user_or_socket), cursor_before, preloads)
+    |> feed_paginated(Utils.current_user(current_user_or_socket), cursor_before, preloads)
   end
 
   def feed(:notifications, current_user_or_socket, cursor_before, preloads) do
@@ -52,13 +52,13 @@ defmodule Bonfire.Social.FeedActivities do
     Utils.pubsub_subscribe(feed_id, current_user_or_socket) # subscribe to realtime feed updates
 
     [feed_id: feed_id] # FIXME: for some reason preloading creator or reply_to when we have a boost in inbox breaks ecto
-    |> feed_query_paginated(current_user, cursor_before, preloads)
+    |> feed_paginated(current_user, cursor_before, preloads)
   end
 
   def feed(_, _, _, _, _), do: []
 
 
-  def feed_query_paginated(filters, current_user \\ nil, cursor_before \\ nil, preloads \\ :all, query \\ FeedPublish) do
+  def feed_paginated(filters, current_user \\ nil, cursor_before \\ nil, preloads \\ :all, query \\ FeedPublish) do
 
     query
       # add assocs needed in timelines/feeds
@@ -66,7 +66,7 @@ defmodule Bonfire.Social.FeedActivities do
       # |> IO.inspect(label: "pre-preloads")
       |> Activities.activity_preloads(current_user, preloads)
       |> EctoShorts.filter(filters)
-      |> IO.inspect(label: "feed_query_paginated_post-preloads")
+      |> IO.inspect(label: "feed_paginated_post-preloads")
       |> Activities.as_permitted_for(current_user)
       # |> distinct([fp], [desc: fp.id, desc: fp.activity_id]) # not sure if/why needed... but possible fix for found duplicate ID for component Bonfire.UI.Social.ActivityLive in UI
       # |> order_by([fp], desc: fp.id)

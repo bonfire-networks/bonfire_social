@@ -44,7 +44,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
         feed: e(feed, :entries, []),
         page_info: e(feed, :metadata, []),
       )
-      |> cast_self(to_circles: [Bonfire.Boundaries.Circles.get_tuple(:activity_pub)])
+      |> assign_global(to_circles: [Bonfire.Boundaries.Circles.get_tuple(:activity_pub)])
     }
   end
 
@@ -59,7 +59,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
         feed: e(feed, :entries, []),
         page_info: e(feed, :metadata, []) |> IO.inspect
       )
-      |> cast_self(to_circles: [Bonfire.Boundaries.Circles.get_tuple(:local)])
+      |> assign_global(to_circles: [Bonfire.Boundaries.Circles.get_tuple(:local)])
       }
   end
 
@@ -80,7 +80,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
      feed: e(feed, :entries, []),
      page_info: e(feed, :metadata, [])
     )
-    |> cast_self(to_circles: Bonfire.Me.Users.Circles.list_my_defaults(current_user))
+    |> assign_global(to_circles: Bonfire.Me.Users.Circles.list_my_defaults(current_user))
     }
   end
 

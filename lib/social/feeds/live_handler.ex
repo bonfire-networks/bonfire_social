@@ -1,4 +1,4 @@
-defmodule Bonfire.Social.Web.LiveHandlers.Feeds do
+defmodule Bonfire.Social.Feeds.LiveHandler do
   use Bonfire.Web, :live_handler
 
   def handle_params(%{"after" => cursor_after} = _attrs, _, %{assigns: %{feed_id: feed_id}} = socket) do # if a feed_id has been assigned in the view, load that
