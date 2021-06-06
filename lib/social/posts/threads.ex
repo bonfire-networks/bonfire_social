@@ -15,7 +15,7 @@ defmodule Bonfire.Social.Threads do
 
     with {:ok, published} <- FeedActivities.maybe_notify(creator, activity, thread_id) do #|> IO.inspect # push to user following the thread
 
-      Utils.pubsub_broadcast(thread_id, {:post_new_reply, {thread_id, published}}) # push to users viewing the thread
+      Utils.pubsub_broadcast(thread_id, {{Bonfire.Social.Posts, :new_reply}, {thread_id, published}}) # push to users viewing the thread
     end
   end
 

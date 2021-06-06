@@ -58,7 +58,7 @@ defmodule Bonfire.Social.Posts do
   #     reply = Map.merge(r, published)
   #     # |> IO.inspect
 
-  #     Utils.pubsub_broadcast(Utils.e(reply, :thread_id, nil), {:post_new_reply, reply}) # push to online users
+  #     Utils.pubsub_broadcast(Utils.e(reply, :thread_id, nil), {{Bonfire.Social.Posts, :new_reply}, reply}) # push to online users
 
   #     {:ok, reply}
   #   end

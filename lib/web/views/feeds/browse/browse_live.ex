@@ -95,11 +95,11 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
       do_handle_params(params, uri, socket)
     end) do
       # poor man's hook I guess
-      Bonfire.Web.LiveHandler.handle_params(params, uri, socket)
+      Bonfire.Common.LiveHandlers.handle_params(params, uri, socket)
     end
   end
 
-  def handle_event(action, attrs, socket), do: Bonfire.Web.LiveHandler.handle_event(action, attrs, socket, __MODULE__)
-  def handle_info(info, socket), do: Bonfire.Web.LiveHandler.handle_info(info, socket, __MODULE__)
+  def handle_event(action, attrs, socket), do: Bonfire.Common.LiveHandlers.handle_event(action, attrs, socket, __MODULE__)
+  def handle_info(info, socket), do: Bonfire.Common.LiveHandlers.handle_info(info, socket, __MODULE__)
 
 end

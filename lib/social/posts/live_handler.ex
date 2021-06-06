@@ -21,7 +21,7 @@ defmodule Bonfire.Social.Posts.LiveHandler do
     live_more(thread_id, cursor, socket)
   end
 
-  def handle_event("feed_load_more", %{"cursor" => cursor} = _attrs, %{assigns: %{thread_id: thread_id}} = socket) do
+  def handle_event("load_more", %{"cursor" => cursor} = _attrs, %{assigns: %{thread_id: thread_id}} = socket) do
     live_more(thread_id, cursor, socket)
   end
 
@@ -52,7 +52,7 @@ defmodule Bonfire.Social.Posts.LiveHandler do
     end
   end
 
-  def handle_event("post_load_replies", %{"id" => id, "level" => level}, socket) do
+  def handle_event("load_replies", %{"id" => id, "level" => level}, socket) do
     {level, _} = Integer.parse(level)
     %{entries: replies} = Bonfire.Social.Threads.list_replies(id, socket, level + 1)
     replies = replies ++ Utils.e(socket.assigns, :replies, [])
@@ -64,7 +64,7 @@ defmodule Bonfire.Social.Posts.LiveHandler do
   end
 
 
-  def handle_event("post_input", %{"circles" => selected_circles} = _attrs, socket) when is_list(selected_circles) and length(selected_circles)>0 do
+  def handle_event("input", %{"circles" => selected_circles} = _attrs, socket) when is_list(selected_circles) and length(selected_circles)>0 do
 
     previous_circles = e(socket, :assigns, :to_circles, []) #|> Enum.uniq()
 
@@ -78,7 +78,7 @@ defmodule Bonfire.Social.Posts.LiveHandler do
     }
   end
 
-  def handle_event("post_input", _attrs, socket) do # no circle
+  def handle_event("input", _attrs, socket) do # no circle
     {:noreply,
       socket
         |> assign(
@@ -87,14 +87,14 @@ defmodule Bonfire.Social.Posts.LiveHandler do
     }
   end
 
-  def handle_info({:post_new_reply, {thread_id, data}}, socket) do
+  def handle_info({:new_reply, {thread_id, data}}, socket) do
 
-    Logger.info("Bonfire.Social.Posts handle_info received :post_new_reply")
+    Logger.info("Bonfire.Social.Posts handle_info received :new_reply")
     # IO.inspect(replies: Utils.e(socket.assigns, :replies, []))
 
     # replies = [data] ++ Utils.e(socket.assigns, :replies, [])
 
-    send_update(Bonfire.UI.Social.ThreadLive, id: thread_id, post_new_reply: data)
+    send_update(Bonfire.UI.Social.ThreadLive, id: thread_id, new_reply: data)
 
     {:noreply, socket}
   end

@@ -10,7 +10,7 @@ defmodule Bonfire.Social.Flags.LiveHandler do
     end
   end
 
-  def handle_event("flag_undo", %{"id"=> id}, socket) do # unflag in LV
+  def handle_event("unflag", %{"id"=> id}, socket) do # unflag in LV
     with _ <- Bonfire.Social.Flags.unflag(e(socket.assigns, :current_user, nil), id) do
       {:noreply, Phoenix.LiveView.assign(socket,
       flagged: Map.get(socket.assigns, :flagged, []) ++ [{id, false}]

@@ -10,7 +10,7 @@ defmodule Bonfire.Social.Boosts.LiveHandler do
     end
   end
 
-  def handle_event("boost_undo", %{"id"=> id}, socket) do # unboost in LV
+  def handle_event("unboost", %{"id"=> id}, socket) do # unboost in LV
     with _ <- Bonfire.Social.Boosts.unboost(e(socket.assigns, :current_user, nil), id) do
       {:noreply, Phoenix.LiveView.assign(socket,
       boosted: Map.get(socket.assigns, :boosted, []) ++ [id]
