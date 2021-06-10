@@ -16,7 +16,7 @@ defmodule Bonfire.Social.Web.PostLive do
 
   defp mounted(params, _session, socket) do
 
-    current_user = e(socket, :assigns, :current_user, nil)
+    current_user = current_user(socket)
 
     with {:ok, post} <- Bonfire.Social.Posts.read(Map.get(params, "id"), socket) do
       # IO.inspect(post, label: "the post:")

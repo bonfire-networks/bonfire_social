@@ -16,7 +16,7 @@ defmodule Bonfire.Social.Web.UsersLive do
 
   defp mounted(params, _session, socket) do
 
-    current_user = e(socket, :assigns, :current_user, nil)
+    current_user = current_user(socket)
 
     {:ok,
       socket

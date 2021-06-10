@@ -39,14 +39,14 @@ defmodule Bonfire.Social.Posts.LiveHandler do
     |> IO.inspect
 
     with %{valid?: true} <- post_changeset(attrs),
-         {:ok, _published} <- Bonfire.Social.Posts.publish(e(socket.assigns, :current_user, nil), attrs) do
+         {:ok, _published} <- Bonfire.Social.Posts.publish(current_user(socket), attrs) do
       IO.inspect("published!")
       {:noreply,
         socket
         |> put_flash(:info, "Posted!")
 
         # Phoenix.LiveView.assign(socket,
-        #   feed: [%{published.activity | object_post: published.post, subject_user: e(socket.assigns, :current_user, nil)}] ++ Map.get(socket.assigns, :feed, [])
+        #   feed: [%{published.activity | object_post: published.post, subject_user: current_user(socket)}] ++ Map.get(socket.assigns, :feed, [])
         # )
       }
     end
@@ -140,7 +140,7 @@ defmodule Bonfire.Social.Posts.LiveHandler do
     # |> merge_child(:post)
     |> IO.inspect
 
-    with {:ok, _sent} <- Bonfire.Social.Messages.send(e(socket.assigns, :current_user, nil), attrs) do
+    with {:ok, _sent} <- Bonfire.Social.Messages.send(current_user(socket), attrs) do
       IO.inspect("sent!")
       {:noreply,
         socket

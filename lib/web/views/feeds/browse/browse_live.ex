@@ -33,7 +33,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
   end
 
   def do_handle_params(%{"tab" => "fediverse" = tab} = _params, _url, %{assigns: %{current_user: %{id: _} = current_user}} = socket) do
-    # current_user = e(socket.assigns, :current_user, nil)
+    # current_user = current_user(socket)
     feed_id = Bonfire.Social.Feeds.fediverse_feed_id()
     feed = Bonfire.Social.FeedActivities.feed(feed_id, socket)
 
@@ -71,7 +71,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
 
   def do_handle_params(_params, _url, %{assigns: %{current_user: %{id: _} = current_user}} = socket) do
     # IO.inspect(myfeed: feed)
-    # current_user = e(socket.assigns, :current_user, nil)
+    # current_user = current_user(socket)
     feed = Bonfire.Social.FeedActivities.my_feed(socket)
     {:noreply,
      assign(socket,

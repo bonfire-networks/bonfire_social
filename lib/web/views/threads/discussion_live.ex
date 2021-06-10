@@ -16,7 +16,7 @@ defmodule Bonfire.Social.Web.DiscussionLive do
 
   defp mounted(params, _session, socket) do
 
-    current_user = e(socket, :assigns, :current_user, nil)
+    current_user = current_user(socket)
 
     with {:ok, object} <- Bonfire.Social.Objects.read(Map.get(params, "id"), socket) do
 
@@ -71,7 +71,7 @@ defmodule Bonfire.Social.Web.DiscussionLive do
   def handle_event("create_reply", %{"id"=> id}, socket) do # boost in LV
     IO.inspect(id: id)
     IO.inspect("create reply")
-    # with {:ok, _boost} <- Bonfire.Social.Boosts.boost(e(socket.assigns, :current_user, nil), id) do
+    # with {:ok, _boost} <- Bonfire.Social.Boosts.boost(current_user(socket), id) do
     #   {:noreply, Phoenix.LiveView.assign(socket,
     #   boosted: Map.get(socket.assigns, :boosted, []) ++ [{id, true}]
     # )}
