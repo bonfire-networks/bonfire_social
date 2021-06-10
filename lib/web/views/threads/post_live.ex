@@ -21,10 +21,9 @@ defmodule Bonfire.Social.Web.PostLive do
     with {:ok, post} <- Bonfire.Social.Posts.read(Map.get(params, "id"), socket) do
       # IO.inspect(post, label: "the post:")
 
-      {activity, object} = Map.pop(post, :activity)
-      {preloaded_object, activity} = Map.pop(activity, :object)
+      {activity, post} = Map.pop(post, :activity)
 
-      following = if current_user && module_enabled?(Bonfire.Social.Follows) && Bonfire.Social.Follows.following?(current_user, object), do: [object.id]
+      following = if current_user && module_enabled?(Bonfire.Social.Follows) && Bonfire.Social.Follows.following?(current_user, post), do: [post.id]
 
       {:ok,
       socket
@@ -35,8 +34,8 @@ defmodule Bonfire.Social.Web.PostLive do
         has_private_tab: false,
         reply_id: Map.get(params, "reply_id"),
         activity: activity,
-        object: Map.merge(object, preloaded_object),
-        thread_id: e(object, :id, nil),
+        post: post,
+        thread_id: e(post, :id, nil),
         replies: [],
         following: following || []
       )}

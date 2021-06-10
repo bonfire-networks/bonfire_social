@@ -186,5 +186,10 @@ defmodule Bonfire.Social.Activities do
       end
   end
 
-
+  def activity_under_object(%{activity: %{object: activity_object} = activity} = _top_object) do
+    activity_under_object(activity) # TODO: merge top_object ?
+  end
+  def activity_under_object(%Activity{object: activity_object} = activity) do
+    Map.put(activity_object, :activity, Map.drop(activity, [:object])) # ugly, but heh
+  end
 end

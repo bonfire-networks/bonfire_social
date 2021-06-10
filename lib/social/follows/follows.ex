@@ -11,36 +11,51 @@ defmodule Bonfire.Social.Follows do
     sortable_fields: [:id]
 
   def following?(user, followed), do: not is_nil(get!(user, followed))
+
   def get(user, followed), do: repo().single(by_both_q(user, followed))
   def get!(user, followed), do: repo().one(by_both_q(user, followed))
+
   def by_follower(user), do: repo().all(followed_by_follower_q(user))
   # def by_follower(user), do: repo().all(by_follower_q(user))
   def by_followed(user), do: repo().all(by_followed_q(user))
+
   def by_any(user), do: repo().all(by_any_q(user))
 
   defp list(filters, _current_user) do
-    # TODO: check permissions for current_user
+    # TODO: check see/read permissions for current_user
     Follow |> EctoShorts.filter(filters)
   end
 
-  def list_my_followed(current_user, with_profile_only \\ true), do: list_followed(current_user, current_user, with_profile_only)
+  def list_my_followed(current_user, paginate? \\ true, cursor_before \\ nil, with_profile_only \\ true), do: list_followed(current_user, current_user, with_profile_only)
 
-  def list_followed(%{id: user_id} = _user, current_user \\ nil, with_profile_only \\ true) when is_binary(user_id) do
+  def list_followed(%{id: user_id} = _user, current_user \\ nil, paginate? \\ true, cursor_before \\ nil, with_profile_only \\ true) when is_binary(user_id) do
     list([follower_id: user_id], current_user)
     |> join_preload([:followed_profile])
     |> join_preload([:followed_character])
     |> maybe_with_followed_profile_only(with_profile_only)
-    |> repo().all
+    |> many(paginate?, cursor_before)
   end
 
-  def list_my_followers(current_user, with_profile_only \\ true), do: list_followers(current_user, current_user, with_profile_only)
+  def list_my_followers(current_user, paginate? \\ true, cursor_before \\ nil, with_profile_only \\ true), do: list_followers(current_user, current_user, with_profile_only)
 
-  def list_followers(%{id: user_id} = _user, current_user \\ nil, with_profile_only \\ true) when is_binary(user_id) do
+  def list_followers(%{id: user_id} = _user, current_user \\ nil, paginate? \\ true, cursor_before \\ nil, with_profile_only \\ true) when is_binary(user_id) do
     list([followed_id: user_id], current_user)
     |> join_preload([:follower_profile])
     |> join_preload([:follower_character])
     |> maybe_with_follower_profile_only(with_profile_only)
-    |> repo().all
+    |> many(paginate?, cursor_before)
+  end
+
+  defp many(query, paginate?, cursor_before \\ nil)
+
+  defp many(query, true, cursor_before) do
+    query
+    |> Bonfire.Repo.many_paginated(before: cursor_before)
+  end
+
+  defp many(query, _, _) do
+    query
+    |> repo().many
   end
 
   defp maybe_with_follower_profile_only(q, true), do: q |> where([follower_profile: p], not is_nil(p.id))

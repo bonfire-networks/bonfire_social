@@ -25,27 +25,27 @@ defmodule Bonfire.Social.Messages do
   def send(%{id: _} = creator, attrs) do
     #IO.inspect(attrs)
 
-    cc = Utils.e(attrs, :circles, [])
-    # cc = cc ++ (Bonfire.Tag.Tags.tag_ids(mentions) || []) # to make visible & notify for mentioned characters (should be configurable)
-
     repo().transact_with(fn ->
-      with  {text, mentions, _hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs),
+      with circles <- Utils.e(attrs, :circles, []),
+        {text, mentions, _hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs),
         {:ok, message} <- create(creator, attrs, text),
-        {:ok, post} <- Bonfire.Social.Tags.maybe_tag(creator, message, mentions) do
+        {:ok, tagged} <- Bonfire.Social.Tags.maybe_tag(creator, message, circles ++ mentions),
+        :ok <- Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, message, circles) do
+         # TODO: optionally make visible to & notify mentioned characters (should be configurable)
 
-          #IO.inspect(message)
+          # IO.inspect(circles: circles)
+          # IO.inspect(mentions: mentions)
 
-          Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, message, cc)
+          with {:ok, activity} <- FeedActivities.maybe_notify(creator, :create, message, circles) do
 
-          with {:ok, activity} <- FeedActivities.maybe_notify(creator, :create, post, cc) do
             Threads.maybe_push_thread(creator, activity, message)
 
-            {:ok, %{message: message, activity: activity}}
+            {:ok, Activities.activity_under_object(activity)}
 
           else e ->
             IO.inspect(could_not_notify: e)
 
-            {:ok, %{message: message}}
+            {:ok, message}
           end
       end
     end)
@@ -93,7 +93,7 @@ defmodule Bonfire.Social.Messages do
       messages_involving: {{with_user_id, current_user_id}, &filter/3},
       # distinct: {:threads, &Bonfire.Social.Threads.filter/3}
     ]
-    |> IO.inspect(label: "list message filters")
+    # |> IO.inspect(label: "list message filters")
     |> list_paginated(current_user, cursor_before, preloads),
     else: list(current_user, nil, cursor_before, preloads)
 
@@ -106,7 +106,7 @@ defmodule Bonfire.Social.Messages do
       messages_involving: {current_user_id, &filter/3},
       # distinct: {:threads, &Bonfire.Social.Threads.filter/3}
     ]
-    |> IO.inspect(label: "my messages filters")
+    # |> IO.inspect(label: "my messages filters")
     |> list_paginated(current_user, cursor_before, preloads)
   end
 
@@ -120,7 +120,7 @@ defmodule Bonfire.Social.Messages do
       # |> IO.inspect(label: "pre-preloads")
       |> Activities.activity_preloads(current_user, preloads)
       |> EctoShorts.filter(filters)
-      |> IO.inspect(label: "message_paginated_post-preloads")
+      # |> IO.inspect(label: "message_paginated_post-preloads")
       |> Activities.as_permitted_for(current_user)
       # |> distinct([fp], [desc: fp.id, desc: fp.activity_id]) # not sure if/why needed... but possible fix for found duplicate ID for component Bonfire.UI.Social.ActivityLive in UI
       # |> order_by([fp], desc: fp.id)

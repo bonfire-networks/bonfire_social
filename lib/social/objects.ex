@@ -24,6 +24,7 @@ defmodule Bonfire.Social.Objects do
         {:ok,
           pointer
           |> Bonfire.Common.Pointers.Preload.maybe_preload_nested_pointers([activity: [:object]])
+          |> Activities.activity_under_object()
         }
       end
   end

@@ -7,23 +7,24 @@ defmodule Bonfire.Social.MentionsTest do
   test "can post with a mention" do
     me = Fake.fake_user!()
     mentioned = Fake.fake_user!()
-    attrs = %{post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
-    assert {:ok, mention} = Posts.publish(me, attrs)
+    msg = "hey @#{mentioned.character.username} you have an epic text message"
+    attrs = %{post_content: %{html_body: msg}}
+    assert {:ok, post} = Posts.publish(me, attrs)
 
-    assert mention.activity.activity.object.created.creator_id == me.id
+    assert String.contains?(post.post_content.html_body, "epic text message")
   end
 
-  test "can see activities mentioning me (as part of notifications)" do
+  test "can see activities mentioning me in my notifications (with private mentions turned off)" do
+    poster = Fake.fake_user!()
     me = Fake.fake_user!()
-    mentioned = Fake.fake_user!()
-    attrs = %{post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
+    attrs = %{post_content: %{html_body: "<p>hey @#{me.character.username} you have an epic html message</p>"}}
 
-    assert {:ok, mention} = Posts.publish(me, attrs)
+    assert {:ok, mention} = Posts.publish(poster, attrs, false)
 
-    assert %{entries: feed} = FeedActivities.feed(:notifications, mentioned)
+    assert %{entries: feed} = FeedActivities.feed(:notifications, me)
     fp = List.first(feed)
 
-    assert fp.activity.id == mention.activity.activity.id
+    assert fp.activity.id == mention.activity.id
   end
 
   test "mentioning someone does not appear in my own notifications" do
@@ -48,33 +49,32 @@ defmodule Bonfire.Social.MentionsTest do
     assert %{entries: []} = FeedActivities.feed(:notifications, third)
   end
 
-  @tag :skip # FIXME!
   test "mentioning someone appears in their feed" do
     me = Fake.fake_user!()
     mentioned = Fake.fake_user!()
     attrs = %{post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
 
-    assert {:ok, mention} = Posts.publish(me, attrs)
+    assert {:ok, mention} = Posts.publish(me, attrs, false)
 
     assert %{entries: feed} = FeedActivities.my_feed(mentioned)
      fp = List.first(feed)
 
-    assert fp.activity.id == mention.activity.activity.id
+    assert fp.activity.id == mention.activity.id
   end
 
-  test "mentioning someone appears in their instance feed" do
+  test "mentioning someone appears (with private mentions turned off) in their instance feed" do
     me = Fake.fake_user!()
     mentioned = Fake.fake_user!()
     attrs = %{post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
 
-    assert {:ok, mention} = Posts.publish(me, attrs)
+    assert {:ok, mention} = Posts.publish(me, attrs, false)
 
     feed_id = Bonfire.Social.Feeds.instance_feed_id()
 
     assert %{entries: feed} = FeedActivities.feed(feed_id, mentioned)
      fp = List.first(feed)
 
-    assert fp.activity.id == mention.activity.activity.id
+    assert fp.activity.id == mention.activity.id
   end
 
   test "mentioning someone appears in my instance feed" do
@@ -89,7 +89,7 @@ defmodule Bonfire.Social.MentionsTest do
     assert %{entries: feed} = FeedActivities.feed(feed_id, me)
     fp = List.first(feed)
 
-    assert fp.activity.id == mention.activity.activity.id
+    assert fp.activity.id == mention.activity.id
   end
 
   test "mentioning someone does not appear in a 3rd party's instance feed" do

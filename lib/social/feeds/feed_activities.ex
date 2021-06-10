@@ -15,10 +15,10 @@ defmodule Bonfire.Social.FeedActivities do
       sortable_fields: [:id]
 
 
-  def my_feed(socket_or_user, cursor_before \\ nil) do
+  def my_feed(socket_or_user, cursor_before \\ nil, include_notifications? \\ true) do
 
     # feeds the user is following
-    feed_ids = Feeds.my_feed_ids(Utils.current_user(socket_or_user))
+    feed_ids = Feeds.my_feed_ids(Utils.current_user(socket_or_user), include_notifications?)
     # IO.inspect(my_feed_ids: feed_ids)
 
     feed(feed_ids, socket_or_user, cursor_before)
@@ -47,7 +47,7 @@ defmodule Bonfire.Social.FeedActivities do
     current_user = Utils.current_user(current_user_or_socket)
 
     feed_id = Bonfire.Social.Feeds.my_inbox_feed_id(current_user)
-    IO.inspect(notifications_feed_id: feed_id)
+    # IO.inspect(query_notifications_feed_id: feed_id)
 
     Utils.pubsub_subscribe(feed_id, current_user_or_socket) # subscribe to realtime feed updates
 
@@ -66,7 +66,7 @@ defmodule Bonfire.Social.FeedActivities do
       # |> IO.inspect(label: "pre-preloads")
       |> Activities.activity_preloads(current_user, preloads)
       |> EctoShorts.filter(filters)
-      |> IO.inspect(label: "feed_paginated_post-preloads")
+      # |> IO.inspect(label: "feed_paginated_post-preloads")
       |> Activities.as_permitted_for(current_user)
       # |> distinct([fp], [desc: fp.id, desc: fp.activity_id]) # not sure if/why needed... but possible fix for found duplicate ID for component Bonfire.UI.Social.ActivityLive in UI
       # |> order_by([fp], desc: fp.id)
@@ -108,9 +108,9 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   defp do_publish(subject, verb, object, feeds \\ nil)
-  defp do_publish(subject, verb, object, feeds) when is_list(feeds), do: maybe_notify(subject, verb, object, feeds ++ [subject])
-  defp do_publish(subject, verb, object, feed_id) when not is_nil(feed_id), do: maybe_notify(subject, verb, object, [feed_id, subject])
-  defp do_publish(subject, verb, object, _), do: maybe_notify(subject, verb, object, subject) # just publish to subject's outbox
+  defp do_publish(subject, verb, object, feeds) when is_list(feeds), do: maybe_feed_publish(subject, verb, object, feeds ++ [subject])
+  defp do_publish(subject, verb, object, feed_id) when not is_nil(feed_id), do: maybe_feed_publish(subject, verb, object, [feed_id, subject])
+  defp do_publish(subject, verb, object, _), do: maybe_feed_publish(subject, verb, object, subject) # just publish to subject's outbox
 
 
   @doc """
@@ -128,7 +128,7 @@ defmodule Bonfire.Social.FeedActivities do
     #IO.inspect(activity)
     object = object_with_creator(object)
     #IO.inspect(object)
-    if subject_id != object_creator(object), do: maybe_notify(subject, verb_or_activity, Feeds.inbox_of_obj_creator(object))
+    if subject_id != object_creator(object), do: maybe_feed_publish(subject, verb_or_activity, Feeds.inbox_of_obj_creator(object))
     # TODO: notify remote users via AP
   end
 
@@ -144,9 +144,18 @@ defmodule Bonfire.Social.FeedActivities do
   @doc """
   Creates a new local activity or takes an existing one and publishes to object's inbox (if object is an actor)
   """
+  def maybe_notify(subject, verb_or_activity, object, character) do
+
+    maybe_feed_publish(subject, verb_or_activity, object, Feeds.inbox_feed_id(character))
+    # TODO: notify remote users via AP
+  end
+
+  @doc """
+  Creates a new local activity or takes an existing one and publishes to object's inbox (if object is an actor)
+  """
   def maybe_notify_object(subject, verb_or_activity, object) do
 
-    maybe_notify(subject, verb_or_activity, object, Feeds.inbox_feed_id(object))
+    maybe_notify(subject, verb_or_activity, object, object)
     # TODO: notify remote users via AP
   end
 
@@ -155,21 +164,22 @@ defmodule Bonfire.Social.FeedActivities do
   """
   def maybe_notify_admins(subject, verb_or_activity, object) do
 
-    maybe_notify(subject, verb_or_activity, object, Feeds.admins_inbox())
+    maybe_feed_publish(subject, verb_or_activity, object, Feeds.admins_inbox())
     # TODO: notify remote users via AP
   end
 
   @doc """
   Creates a new local activity or takes an existing one and publishes to specified feeds
   """
-  def maybe_notify(subject, verb_or_activity, object \\ nil, feeds)
-  def maybe_notify(subject, verb, object, feeds) when is_atom(verb), do: create_and_put_in_feeds(subject, verb, object, feeds)
-  def maybe_notify(subject, %{activity: activity}, _, feeds), do: maybe_notify(subject, activity, feeds)
-  def maybe_notify(_subject, %Bonfire.Data.Social.Activity{} = activity, _, feeds) do
+  def maybe_feed_publish(subject, verb_or_activity, object \\ nil, feeds)
+  def maybe_feed_publish(subject, verb, object, feeds) when is_atom(verb), do: create_and_put_in_feeds(subject, verb, object, feeds)
+  def maybe_feed_publish(subject, %{activity: activity}, _, feeds), do: maybe_feed_publish(subject, activity, feeds)
+  def maybe_feed_publish(_subject, %Bonfire.Data.Social.Activity{} = activity, _, feeds) do
     put_in_feeds(feeds, activity)
+    {:ok, activity}
     # TODO: notify remote users via AP
   end
-  def maybe_notify(_, _, _, _) do
+  def maybe_feed_publish(_, _, _, _) do
     Logger.warn("did not notify")
     {:ok, nil}
   end
@@ -177,12 +187,12 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp create_and_put_in_feeds(subject, verb, object, feed_id) when is_binary(feed_id) or is_list(feed_id) do
     with {:ok, activity} <- Activities.create(subject, verb, object) do
-      with {:ok, published} <- put_in_feeds(feed_id, activity) do # publish in specified feed
-        {:ok, published}
-      else
-        publishes when is_list(publishes) and length(publishes)>0 -> List.first(publishes) # meh
+      with {:ok, _published} <- put_in_feeds(feed_id, activity) do # publish in specified feed
+        {:ok, activity}
+      else # meh
+        publishes when is_list(publishes) and length(publishes)>0 -> {:ok, activity}
         _ ->
-          Logger.warn("did not put_in_feeds: #{inspect feed_id}")
+          Logger.warn("did not create_and_put_in_feeds: #{inspect feed_id}")
           {:ok, activity}
       end
     end
@@ -202,7 +212,7 @@ defmodule Bonfire.Social.FeedActivities do
 
       {:ok, published}
     else e ->
-      Logger.warn("error when trying to feed_or_subject")
+      Logger.warn("put_in_feeds: error when trying with feed_or_subject")
       IO.inspect(put_in_feeds_e: e)
       {:ok, nil}
     end
@@ -212,14 +222,14 @@ defmodule Bonfire.Social.FeedActivities do
     {:ok, nil}
   end
 
-  defp do_put_in_feeds(feed_id, activity_id) do
-    attrs = %{feed_id: Utils.ulid(feed_id), activity_id: Utils.ulid(activity_id)}
+  defp do_put_in_feeds(feed_id, activity) do
+    attrs = %{feed_id: Utils.ulid(feed_id), activity_id: Utils.ulid(activity)}
     repo().put(FeedPublish.changeset(attrs))
   end
 
   @doc "Delete an activity (usage by things like unlike)"
   def delete_for_object(%{id: id}), do: delete_for_object(id)
-  def delete_for_object(id) when is_binary(id) and id !="", do: FeedPublish |> EctoShorts.filter(activity_id: id) |> repo().delete_all() |> elem(1)
+  def delete_for_object(id) when is_binary(id) and id !="", do: FeedPublish |> EctoShorts.filter(activity_id: id) |> repo().delete_many() |> elem(1)
   def delete_for_object(ids) when is_list(ids), do: Enum.each(ids, fn x -> delete_for_object(x) end)
   def delete_for_object(_), do: nil
 

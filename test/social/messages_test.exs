@@ -6,130 +6,133 @@ defmodule Bonfire.Social.MessagesTest do
 
   test "can message a user" do
     me = Fake.fake_user!()
-    mentioned = Fake.fake_user!()
-    attrs = %{circles: [mentioned.id], post_content: %{html_body: "<p>hey you have an epic html message</p>"}}
-    assert {:ok, mention} = Messages.send(me, attrs)
+    messaged = Fake.fake_user!()
+    msg = "hey you have an epic text message"
+    attrs = %{circles: [messaged.id], post_content: %{html_body: msg}}
+    assert {:ok, message} = Messages.send(me, attrs)
 
-    assert mention.activity.activity.object.created.creator_id == me.id
+    assert message.post_content.html_body == msg
   end
 
   test "can list messages I sent" do
     me = Fake.fake_user!()
-    mentioned = Fake.fake_user!()
-    attrs = %{circles: [mentioned.id], post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
+    messaged = Fake.fake_user!()
+    attrs = %{circles: [messaged.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
 
-    assert {:ok, mention} = Messages.send(me, attrs)
+    assert {:ok, message} = Messages.send(me, attrs)
 
     assert %{entries: feed} = Messages.list(me)
     fp = List.first(feed)
 
-    assert fp.activity.id == mention.activity.activity.id
+    assert fp.activity.id == message.activity.id
   end
 
   test "can list messages I received" do
     me = Fake.fake_user!()
     other = Fake.fake_user!()
-    attrs = %{circles: [me.id], post_content: %{html_body: "<p>hey @#{me.character.username} you have an epic html message</p>"}}
+    attrs = %{circles: [me.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
 
-    assert {:ok, mention} = Messages.send(other, attrs)
+    assert {:ok, message} = Messages.send(other, attrs)
 
     assert %{entries: feed} = Messages.list(me)
     fp = List.first(feed)
 
-    assert fp.activity.id == mention.activity.activity.id
+    assert fp.activity.id == message.activity.id
   end
 
   test "can list messages I sent to a specific person" do
     me = Fake.fake_user!()
-    mentioned = Fake.fake_user!()
+    messaged = Fake.fake_user!()
     other = Fake.fake_user!()
+    fourth = Fake.fake_user!()
 
-    attrs = %{circles: [mentioned.id], post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
+    attrs = %{circles: [fourth.id], post_content: %{html_body: "<p>hey fourth, you have an epic html message</p>"}}
+    attrs = %{circles: [messaged.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
 
-    assert {:ok, mention} = Messages.send(me, attrs)
+    assert {:ok, message} = Messages.send(me, attrs)
 
     assert %{entries: feed} = Messages.list(me)
-    assert List.first(feed).activity.id == mention.activity.activity.id
+    assert List.first(feed).activity.id == message.activity.id
 
-    assert %{entries: feed} = Messages.list(mentioned)
-    assert List.first(feed).activity.id == mention.activity.activity.id
+    assert %{entries: feed} = Messages.list(messaged)
+    assert List.first(feed).activity.id == message.activity.id
 
-    assert %{entries: feed} = Messages.list(me, mentioned)
-    assert List.first(feed).activity.id == mention.activity.activity.id
+    assert %{entries: feed} = Messages.list(me, messaged)
+    assert List.first(feed).activity.id == message.activity.id
 
-    assert %{entries: feed} = Messages.list(mentioned, me)
-    assert List.first(feed).activity.id == mention.activity.activity.id
+    assert %{entries: feed} = Messages.list(messaged, me)
+    assert List.first(feed).activity.id == message.activity.id
 
     assert %{entries: []} = Messages.list(me, other)
 
     assert %{entries: []} = Messages.list(other, me)
   end
 
-  @tag :skip # FIXME!
-  test "can see messages addressed to me (as part of notifications)" do
+  test "messages addressed to me appear in my notifications" do
     me = Fake.fake_user!()
     other = Fake.fake_user!()
-    attrs = %{circles: [me.id], post_content: %{html_body: "<p>hey @#{me.character.username} you have an epic html message</p>"}}
+    attrs = %{circles: [me.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
 
-    assert {:ok, mention} = Messages.send(other, attrs)
+    assert {:ok, m} = Messages.send(other, attrs)
 
     assert %{entries: feed} = FeedActivities.feed(:notifications, me)
     fp = List.first(feed)
+    assert %{} = fp
 
-    assert fp.activity.id == mention.activity.activity.id
+    assert fp.activity.id == m.activity.id
   end
 
-  test "messaging someone does not appear in my own notifications" do
+  test "messaging someone does NOT appear in my own notifications" do
     me = Fake.fake_user!()
-    mentioned = Fake.fake_user!()
-    attrs = %{circles: [mentioned.id], post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
+    messaged = Fake.fake_user!()
+    attrs = %{circles: [messaged.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
 
-    assert {:ok, mention} = Messages.send(me, attrs)
+    assert {:ok, message} = Messages.send(me, attrs)
 
     assert %{entries: []} = FeedActivities.feed(:notifications, me)
   end
 
-  test "messaging someone else does not appear in a 3rd party's notifications" do
+  test "messaging someone else does NOT appear in a 3rd party's notifications" do
     me = Fake.fake_user!()
-    mentioned = Fake.fake_user!()
-    attrs = %{circles: [mentioned.id], post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
+    messaged = Fake.fake_user!()
+    attrs = %{circles: [messaged.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
 
-    assert {:ok, mention} = Messages.send(me, attrs)
+    assert {:ok, message} = Messages.send(me, attrs)
 
     third = Fake.fake_user!()
 
     assert %{entries: []} = FeedActivities.feed(:notifications, third)
   end
 
-  test "messaging someone does not appear in their feed" do
+  test "messaging someone does NOT appear in their feed" do
     me = Fake.fake_user!()
-    mentioned = Fake.fake_user!()
-    attrs = %{post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
+    messaged = Fake.fake_user!()
+    attrs = %{post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
 
-    assert {:ok, mention} = Messages.send(me, attrs)
+    assert {:ok, message} = Messages.send(me, attrs)
 
-    assert %{entries: []} = FeedActivities.my_feed(mentioned)
+    assert %{entries: []} = FeedActivities.my_feed(messaged)
   end
 
-  test "messaging someone does not appear in their instance feed" do
+  test "messaging someone does NOT appear in their instance feed" do
     me = Fake.fake_user!()
-    mentioned = Fake.fake_user!()
-    attrs = %{circles: [mentioned.id], post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
+    messaged = Fake.fake_user!()
+    attrs = %{circles: [messaged.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
 
-    assert {:ok, mention} = Messages.send(me, attrs)
+    assert {:ok, message} = Messages.send(me, attrs)
 
     feed_id = Bonfire.Social.Feeds.instance_feed_id()
 
-    assert %{entries: []} = FeedActivities.feed(feed_id, mentioned)
+    assert %{entries: []} = FeedActivities.feed(feed_id, messaged)
 
   end
 
-  test "messaging someone does not appear in my instance feed" do
+  test "messaging someone does NOT appear in my instance feed" do
     me = Fake.fake_user!()
-    mentioned = Fake.fake_user!()
-    attrs = %{circles: [mentioned.id], post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
+    messaged = Fake.fake_user!()
+    attrs = %{circles: [messaged.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
 
-    assert {:ok, mention} = Messages.send(me, attrs)
+    assert {:ok, message} = Messages.send(me, attrs)
 
     feed_id = Bonfire.Social.Feeds.instance_feed_id()
 
@@ -137,12 +140,12 @@ defmodule Bonfire.Social.MessagesTest do
 
   end
 
-  test "mentioning someone does not appear in a 3rd party's instance feed" do
+  test "messaging someone does NOT appear in a 3rd party's instance feed" do
     me = Fake.fake_user!()
-    mentioned = Fake.fake_user!()
-    attrs = %{circles: [mentioned.id], post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
+    messaged = Fake.fake_user!()
+    attrs = %{circles: [messaged.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
 
-    assert {:ok, mention} = Messages.send(me, attrs)
+    assert {:ok, message} = Messages.send(me, attrs)
 
     third = Fake.fake_user!()
 
@@ -151,12 +154,12 @@ defmodule Bonfire.Social.MessagesTest do
     assert %{entries: []} = FeedActivities.feed(feed_id, third)
   end
 
-  test "mentioning someone does not appear in the public instance feed" do
+  test "messaging someone does NOT appear in the public instance feed" do
     me = Fake.fake_user!()
-    mentioned = Fake.fake_user!()
-    attrs = %{circles: [mentioned.id], post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
+    messaged = Fake.fake_user!()
+    attrs = %{circles: [messaged.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
 
-    assert {:ok, mention} = Messages.send(me, attrs)
+    assert {:ok, message} = Messages.send(me, attrs)
 
     feed_id = Bonfire.Social.Feeds.instance_feed_id()
 

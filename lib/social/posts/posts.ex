@@ -21,32 +21,37 @@ defmodule Bonfire.Social.Posts do
     end
   end
 
-  def publish(creator, attrs) do
+  def publish(creator, attrs, mentions_are_private? \\ true) do
 
-    cc = Utils.e(attrs, :circles, [])
+    circles = Utils.e(attrs, :circles, [])
 
     #IO.inspect(attrs)
     repo().transact_with(fn ->
       with  {text, mentions, _hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs),
         {:ok, post} <- create(creator, attrs, text),
-        {:ok, post} <- Bonfire.Social.Tags.maybe_tag(creator, post, mentions),
-        {:ok, feed_activity} <- FeedActivities.publish(creator, :create, post) do
+        {:ok, tagged} <- Bonfire.Social.Tags.maybe_tag(creator, post, mentions),
+        {:ok, activity} <- FeedActivities.publish(creator, :create, post) do
 
-          Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, post, cc ++ (Bonfire.Tag.Tags.tag_ids(mentions) || [])) # make visible for:
+          # IO.inspect(activity: activity)
+          # make visible for and put in feeds of:
           # - creator
           # - any selected circles
-          # - mentioned characters (FIXME, should not be the default or be configurable)
+          # - mentioned characters & notify them (TODO: should be opt-in)
+          mentioned = Bonfire.Tag.Tags.tag_ids(mentions) || []
+          cc = if mentions_are_private?, do: circles, else: circles ++ mentioned # TODO: don't re-fetch tags
+          Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, post, cc)
+          FeedActivities.maybe_feed_publish(creator, activity, cc)
+          unless mentions_are_private?, do: FeedActivities.maybe_notify(creator, activity, post, mentioned)
 
-          # IO.inspect(feed_activity: feed_activity)
+          Threads.maybe_push_thread(creator, activity, post)
 
-          # put in feeds
-          FeedActivities.maybe_notify(creator, feed_activity, cc)
+          maybe_index(activity)
 
-          Threads.maybe_push_thread(creator, feed_activity, post)
+          # {post, activity} = Map.pop!(activity, :object)
 
-          maybe_index(feed_activity)
+          # {:ok, post}
+          {:ok, Activities.activity_under_object(activity)}
 
-          {:ok, feed_activity}
       end
     end)
   end
@@ -69,7 +74,7 @@ defmodule Bonfire.Social.Posts do
       |> Map.put(:post_content, PostContents.prepare_content(attrs, text))
       |> Map.put(:created, %{creator_id: creator_id})
       |> Map.put(:replied, Threads.maybe_reply(attrs))
-      |> IO.inspect(label: "Posts.create attrs")
+      # |> IO.inspect(label: "Posts.create attrs")
 
     repo().put(changeset(:create, attrs))
   end
@@ -89,7 +94,9 @@ defmodule Bonfire.Social.Posts do
     with {:ok, post} <- Post |> EctoShorts.filter(id: post_id)
       |> Activities.read(socket_or_current_user) do
 
-        {:ok, post}
+
+        {:ok, Activities.activity_under_object(post) } # ugly, but heh
+
       end
   end
 
@@ -101,7 +108,7 @@ defmodule Bonfire.Social.Posts do
     |> FeedActivities.feed_paginated(current_user, cursor_before, preloads)
   end
 
-  def get(id) when is_binary(id) do
+  defp get(id) when is_binary(id) do
     repo().single(get_query(id))
   end
 
@@ -129,11 +136,11 @@ defmodule Bonfire.Social.Posts do
      preload: [post_content: pc, created: cr, replied: {re, [reply_to: rt]}]
   end
 
-  def by_user(user_id) do
-    repo().all(by_user_query(user_id))
+  defp by_user(user_id) do
+    repo().many(by_user_query(user_id))
   end
 
-  def by_user_query(user_id) do
+  defp by_user_query(user_id) do
     from p in Post,
      left_join: pc in assoc(p, :post_content),
      left_join: cr in assoc(p, :created),

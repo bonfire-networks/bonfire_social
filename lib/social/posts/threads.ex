@@ -13,7 +13,7 @@ defmodule Bonfire.Social.Threads do
 
   def maybe_push_thread(%{} = creator, %{} = activity, %{replied: %{thread_id: thread_id, reply_to_id: reply_to_id}} = _reply) when is_binary(thread_id) and is_binary(reply_to_id) do
 
-    with {:ok, published} <- FeedActivities.maybe_notify(creator, activity, thread_id) do #|> IO.inspect # push to user following the thread
+    with {:ok, published} <- FeedActivities.maybe_feed_publish(creator, activity, thread_id) do #|> IO.inspect # push to user following the thread
 
       Utils.pubsub_broadcast(thread_id, {{Bonfire.Social.Posts, :new_reply}, {thread_id, published}}) # push to users viewing the thread
     end
@@ -24,12 +24,16 @@ defmodule Bonfire.Social.Threads do
 
   def maybe_reply(%{reply_to: reply_attrs}), do: maybe_reply(reply_attrs)
   def maybe_reply(%{reply_to_id: reply_to_id} = reply_attrs) when is_binary(reply_to_id) and reply_to_id !="" do
-     with {:ok, r} <- get_replied(reply_to_id) do
-      Map.merge(reply_attrs, %{reply_to: r})
+
+     with {:ok, reply_to_replied} <- get_replied(reply_to_id) do
+      # object we are replying to already has replied mixin
+      reply_obj(reply_attrs, reply_to_replied, reply_to_id)
      else _ ->
-      with {:ok, r} <- create_for_object(%{id: reply_to_id}) do
-        Map.merge(reply_attrs, %{reply_to: r})
+      with {:ok, reply_to_replied} <- create(%{id: reply_to_id, thread_id: Map.get(reply_attrs, :thread_id, reply_to_id)}) do
+        # created replied mixin for reply_to object
+        reply_obj(reply_attrs, reply_to_replied, reply_to_id)
       else _ ->
+        # could not
          Map.drop(reply_attrs, [:reply_to_id])
         |> maybe_reply()
       end
@@ -38,15 +42,22 @@ defmodule Bonfire.Social.Threads do
   def maybe_reply(%{} = reply_attrs), do: Map.merge(reply_attrs, maybe_reply(nil))
   def maybe_reply(_), do: %{set: true} # makes sure a Replied entry is inserted even for first posts
 
+  defp reply_obj(reply_attrs, reply_to_replied, reply_to_id) do
+    Map.merge(reply_attrs, %{
+      reply_to: reply_to_replied,
+      thread_id: Utils.e(reply_attrs, :thread_id,
+                    Utils.e(reply_to_replied, :thread_id, reply_to_id))
+      })
+  end
 
   def get_replied(id) do
     # Bonfire.Common.Pointers.get(id)
     repo().single(from p in Replied, where: p.id == ^id)
   end
 
-  def create_for_object(%{id: id}=_thing) do
-    create(%{id: id})
-  end
+  # def create_for_object(%{id: id}=_thing) do
+  #   create(%{id: id})
+  # end
 
   defp create(attrs) do
     repo().put(changeset(attrs))

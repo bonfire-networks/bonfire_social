@@ -10,11 +10,12 @@ defmodule Bonfire.Social.Feeds do
   def instance_feed_id, do: Bonfire.Boundaries.Circles.circles[:local]
   def fediverse_feed_id, do: Bonfire.Boundaries.Circles.circles[:activity_pub]
 
-  def my_feed_ids(user, extra_feeds \\ [])
+  def my_feed_ids(user, include_notifications? \\ true, extra_feeds \\ [])
 
-  def my_feed_ids(%{} = user, extra_feeds) do
+  def my_feed_ids(%{id: id} = user, include_notifications?, extra_feeds) do
     # IO.inspect(my_feed_ids_user: user)
-    extra_feeds = extra_feeds ++ [user.id]
+    extra_feeds = if include_notifications?, do: extra_feeds ++ [id, my_inbox_feed_id(user)], else: extra_feeds ++ [id]
+
     with following_ids when is_list(following_ids) <- Follows.by_follower(user) do
       #IO.inspect(subs: following_ids)
       extra_feeds ++ following_ids
@@ -25,7 +26,7 @@ defmodule Bonfire.Social.Feeds do
     end
   end
 
-  def my_feed_ids(_, extra_feeds), do: extra_feeds
+  def my_feed_ids(_, _, extra_feeds), do: extra_feeds
 
   def my_inbox_feed_id(%{current_user: %{character: %{inbox: %{feed_id: feed_id}}}, current_account:  %{inbox: %{feed_id: account_feed_id}}} = _assigns) when is_binary(feed_id) do
     [feed_id, account_feed_id]
@@ -42,6 +43,9 @@ defmodule Bonfire.Social.Feeds do
   def my_inbox_feed_id(%{character: %{inbox: %{feed_id: feed_id}}} = _user) when is_binary(feed_id) do
     feed_id
   end
+  def my_inbox_feed_id(%{__context__: context}) do
+    my_inbox_feed_id(context)
+  end
   def my_inbox_feed_id(%{id: _} = user) when not is_nil(user) do
     inbox_feed_id(user)
   end
@@ -49,11 +53,14 @@ defmodule Bonfire.Social.Feeds do
     nil
   end
 
+  def inbox_feed_id(for_subjects) when is_list(for_subjects) do
+    for_subjects |> Enum.map(&inbox_feed_id/1)
+  end
   def inbox_feed_id(%{character: _} = for_subject) do
     for_subject |> Bonfire.Repo.maybe_preload(character: [:inbox]) |> Utils.e(:character, nil) |> inbox_feed_id()
   end
   def inbox_feed_id(%{inbox: %{feed_id: feed_id}}), do: feed_id
-  def inbox_feed_id(%{} = for_subject) do
+  def inbox_feed_id(for_subject) do
     # Logger.warn("creating new inbox")
     # IO.inspect(for_subject: for_subject)
     with %{feed_id: feed_id} = _inbox <- create_inbox(for_subject) do
@@ -99,7 +106,8 @@ defmodule Bonfire.Social.Feeds do
   @doc """
   Create a INBOX feed for an existing Pointable (eg. User)
   """
-  def create_inbox(%{id: id}=_thing) do
+  def create_inbox(%{id: id}=_thing), do: create_inbox(id)
+  def create_inbox(id) do
     with {:ok, %{id: feed_id} = _feed} <- create() do
       #IO.inspect(feed: feed)
       save_inbox_feed(%{id: id, feed_id: feed_id})
