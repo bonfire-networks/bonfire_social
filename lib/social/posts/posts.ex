@@ -27,7 +27,7 @@ defmodule Bonfire.Social.Posts do
 
     #IO.inspect(attrs)
     repo().transact_with(fn ->
-      with  {text, mentions, _hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs),
+      with  {text, mentions, hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs),
         {:ok, post} <- create(creator, attrs, text),
         {:ok, tagged} <- Bonfire.Social.Tags.maybe_tag(creator, post, mentions),
         {:ok, activity} <- FeedActivities.publish(creator, :create, post) do
@@ -154,9 +154,8 @@ defmodule Bonfire.Social.Posts do
     # IO.inspect(obj)
 
     %{
-      # "index_type" => Bonfire.Data.Social.Activity,
       "id" => id,
-      "index_type" => Bonfire.Data.Social.Post,
+      "index_type" => "Bonfire.Data.Social.Post",
       # "url" => path(post),
       "post_content" => PostContents.indexing_object_format(post_content),
       "activity" => %{

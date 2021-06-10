@@ -41,7 +41,7 @@ defmodule Bonfire.Social.PostContents do
     # image = Bonfire.Files.ImageUploader.remote_url(obj.image)
 
     %{
-      "index_type" => Bonfire.Data.Social.PostContent,
+      "index_type" => "Bonfire.Data.Social.PostContent",
       "name" => obj.name,
       "summary" => obj.summary,
       "html_body" => obj.html_body,
