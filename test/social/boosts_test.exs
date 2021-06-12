@@ -3,6 +3,7 @@ defmodule Bonfire.Social.BoostsTest do
 
   alias Bonfire.Social.Boosts
   alias Bonfire.Social.Posts
+  alias Bonfire.Social.FeedActivities
   alias Bonfire.Me.Fake
 
   test "boost works" do
@@ -80,5 +81,19 @@ defmodule Bonfire.Social.BoostsTest do
 
     assert fetched_boost.activity.object_id == boosted.id
   end
+
+  test "see a boost of something I posted in my notifications" do
+    me = Fake.fake_user!()
+    someone = Fake.fake_user!()
+    attrs = %{post_content: %{html_body: "<p>hey you have an epic html post</p>"}}
+
+    assert {:ok, post} = Posts.publish(me, attrs, false)
+    assert {:ok, boost} = Boosts.boost(someone, post)
+
+    assert %{entries: [fetched_boost]} = FeedActivities.feed(:notifications, me)
+
+    assert fetched_boost.activity.object_id == post.id
+  end
+
 
 end

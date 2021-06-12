@@ -1,4 +1,4 @@
-defmodule Bonfire.Social.PostPostsTest do
+defmodule Bonfire.Social.PostCirclesTest do
 
   use Bonfire.DataCase, async: true
   alias Bonfire.Me.Fake
@@ -8,7 +8,7 @@ defmodule Bonfire.Social.PostPostsTest do
   alias Bonfire.Repo
 
 
-  test "creating & then reading my own post works" do
+  test "creating & then reading my own post" do
     user = fake_user!()
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
 
@@ -34,14 +34,14 @@ defmodule Bonfire.Social.PostPostsTest do
 
   end
 
-  test "creating & then seeing my own post in feeds works" do
+  test "creating & then seeing my own post in feeds" do
     user = fake_user!()
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
 
     assert {:ok, post} = Posts.publish(user, attrs)
     assert post.post_content.name == "name"
 
-    feed_id = Bonfire.Social.Feeds.instance_feed_id()
+    feed_id = user.id
 
     assert %Paginator.Page{entries: activities} = FeedActivities.feed(feed_id, user)
     assert feed_entry = List.first(activities)

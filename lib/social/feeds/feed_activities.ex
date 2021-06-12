@@ -99,31 +99,46 @@ defmodule Bonfire.Social.FeedActivities do
   Creates a new local activity and publishes to appropriate feeds
   """
 
-  def publish(subject, verb, %{replied: %{reply_to_id: reply_to_id}} = object) when is_atom(verb) and is_binary(reply_to_id) do
+  def publish(subject, verb, object, circles \\ [], mentions_tags_are_private? \\ true, replies_are_private? \\ false)
+
+  def publish(subject, verb, %{replied: %{reply_to_id: reply_to_id}} = object, circles, _, false = replies_are_private?) when is_atom(verb) and is_binary(reply_to_id) do
     # publishing a reply to something
-    #IO.inspect(publish_reply: object)
-    do_publish(subject, verb, object, [Feeds.instance_feed_id(), Feeds.inbox_of_obj_creator(object)]) # FIXME, enable tagging in replies too
+    # FIXME, enable tagging + reply at same time
+    # FIXME, only if OP is included in audience
+    object = Objects.object_with_reply_creator(object)
+    reply_to_object = e(object, :replied, :reply_to, nil)
+    reply_to_creator = Objects.object_creator(reply_to_object)
+    reply_to_inbox = Feeds.inbox_of_obj_creator(reply_to_object)
+    IO.inspect(publishing_reply: reply_to_creator)
+
+    with {:ok, activity} <- do_publish(subject, verb, object, circles ++ [e(reply_to_creator, :id, nil)]) do
+      IO.inspect(notify_reply: reply_to_inbox)
+      maybe_notify(subject, activity, object, reply_to_inbox)
+    end
   end
 
-  def publish(subject, verb, %{tags: tags} = object) when is_atom(verb) and is_list(tags) do
-    # publishing something with @ mentions or other tags
+  def publish(subject, verb, %{tags: tags} = object, circles, false = tags_are_private?, _) when is_atom(verb) and is_list(tags) do
     # IO.inspect(publish_to_tagged: tags)
-    tagged_inboxes = Feeds.tags_feed(tags)
-    # IO.inspect(tagged_inboxes: tagged_inboxes)
-    do_publish(subject, verb, object, [Feeds.instance_feed_id(), tagged_inboxes])
+
+    # publishing to those @ mentionned or other tags
+    mentioned = Feeds.tags_inbox_feeds(tags) |> IO.inspect(label: "publish tag / mention")
+
+    with {:ok, activity} <- do_publish(subject, verb, object, circles ++ mentioned) do
+      maybe_notify(subject, activity, object, mentioned)
+    end
   end
 
-  def publish(subject, verb, object) when is_atom(verb) do
-    do_publish(subject, verb, object, Feeds.instance_feed_id())
+  def publish(subject, verb, object, circles, _, _) when is_atom(verb) do
+    do_publish(subject, verb, object, circles)
   end
 
-  def publish(subject, verb, object) when is_binary(verb) do
-    Logger.info("Defaulting to a :create activity, because no such verb is defined: "<>verb)
-    do_publish(subject, :create, object, Feeds.instance_feed_id())
+  def publish(subject, verb, object, circles, tags_are_private?, replies_are_private?) do
+    Logger.info("Defaulting to a :create activity, because no such verb is defined: #{inspect verb} ")
+    publish(subject, :create, object, circles, tags_are_private?, replies_are_private?)
   end
 
   defp do_publish(subject, verb, object, feeds \\ nil)
-  defp do_publish(subject, verb, object, feeds) when is_list(feeds), do: maybe_feed_publish(subject, verb, object, feeds ++ [subject])
+  defp do_publish(subject, verb, object, feeds) when is_list(feeds), do: maybe_feed_publish(subject, verb, object, feeds ++ [subject]) # also put in subject's outbox
   defp do_publish(subject, verb, object, feed_id) when not is_nil(feed_id), do: maybe_feed_publish(subject, verb, object, [feed_id, subject])
   defp do_publish(subject, verb, object, _), do: maybe_feed_publish(subject, verb, object, subject) # just publish to subject's outbox
 

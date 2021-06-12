@@ -1,8 +1,7 @@
 defmodule Bonfire.Social.LikesTest do
   use Bonfire.DataCase
 
-  alias Bonfire.Social.Likes
-  alias Bonfire.Social.Posts
+  alias Bonfire.Social.{Likes, Posts, FeedActivities}
   alias Bonfire.Me.Fake
 
   test "like works" do
@@ -77,6 +76,19 @@ defmodule Bonfire.Social.LikesTest do
     assert {:ok, like} = Likes.like(someone, post)
 
     assert %{entries: [fetched_liked]} = Likes.list_by(someone, me)
+
+    assert fetched_liked.activity.object_id == post.id
+  end
+
+  test "see a like of something I posted in my notifications" do
+    me = Fake.fake_user!()
+    someone = Fake.fake_user!()
+    attrs = %{post_content: %{html_body: "<p>hey you have an epic html post</p>"}}
+
+    assert {:ok, post} = Posts.publish(me, attrs, false)
+    assert {:ok, like} = Likes.like(someone, post)
+
+    assert %{entries: [fetched_liked]} = FeedActivities.feed(:notifications, me)
 
     assert fetched_liked.activity.object_id == post.id
   end

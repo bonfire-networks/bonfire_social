@@ -74,11 +74,11 @@ defmodule Bonfire.Social.Feeds do
     Objects.object_with_creator(object) |> Objects.object_creator() |> inbox_feed_id() #|> IO.inspect
   end
 
-  def tags_feed(tags) when is_list(tags), do: Enum.map(tags, fn x -> tags_feed(x) end)
-  def tags_feed(%{} = tag) do
+  def tags_inbox_feeds(tags) when is_list(tags), do: Enum.map(tags, fn x -> tags_inbox_feeds(x) end)
+  def tags_inbox_feeds(%{} = tag) do
     inbox_feed_id(tag)
   end
-  def tags_feed(_) do
+  def tags_inbox_feeds(_) do
     nil
   end
 

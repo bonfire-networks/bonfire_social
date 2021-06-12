@@ -3,6 +3,7 @@ defmodule Bonfire.Social.ThreadsPostsTest do
 
   alias Bonfire.Social.Posts
   alias Bonfire.Social.Threads
+  alias Bonfire.Social.FeedActivities
   alias Bonfire.Me.Fake
 
   test "reply works" do
@@ -16,6 +17,19 @@ defmodule Bonfire.Social.ThreadsPostsTest do
     # IO.inspect(post_reply)
     assert post_reply.replied.reply_to_id == post.id
     assert post_reply.replied.thread_id == post.id
+  end
+
+  test "see a reply (that I am permitted to see) to something I posted in my notifications" do
+    me = Fake.fake_user!()
+    someone = Fake.fake_user!()
+    attrs = %{post_content: %{html_body: "<p>hey you have an epic html post</p>"}}
+
+    assert {:ok, post} = Posts.publish(me, attrs)
+    assert {:ok, post_reply} = Posts.publish(someone, Map.put(attrs, :circles, [me.id]))
+    me = Bonfire.Me.Users.get_current(me.id)
+    assert %{entries: [fetched]} = FeedActivities.feed(:notifications, me)
+
+    assert fetched.activity.object_id == post_reply.id
   end
 
   test "fetching a reply works" do

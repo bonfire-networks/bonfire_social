@@ -1,13 +1,14 @@
 defmodule Bonfire.Social.Posts do
 
   alias Bonfire.Data.Social.{Post, PostContent, Replied, Activity}
-  alias Bonfire.Social.{Activities, FeedActivities}
-  alias Bonfire.Common.Utils
+  alias Bonfire.Social.{Activities, FeedActivities, Objects}
   alias Ecto.Changeset
   # import Bonfire.Boundaries.Queries
   alias Bonfire.Social.Threads
   alias Bonfire.Social.PostContents
   alias Bonfire.Boundaries.Verbs
+
+  import Bonfire.Common.Utils
 
   use Bonfire.Repo.Query,
       schema: Post,
@@ -21,36 +22,31 @@ defmodule Bonfire.Social.Posts do
     end
   end
 
-  def publish(creator, attrs, mentions_are_private? \\ true) do
+  def publish(creator, attrs, mentions_are_private? \\ true, replies_are_private? \\ false) do
+  # TODO: make mentions_are_private? and replies_are_private? defaults configurable
 
-    circles = Utils.e(attrs, :circles, [])
+    circles = e(attrs, :circles, [])
 
     #IO.inspect(attrs)
     repo().transact_with(fn ->
       with  {text, mentions, hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs),
         {:ok, post} <- create(creator, attrs, text),
-        {:ok, tagged} <- Bonfire.Social.Tags.maybe_tag(creator, post, mentions),
-        {:ok, activity} <- FeedActivities.publish(creator, :create, post) do
+        {:ok, post} <- Bonfire.Social.Tags.maybe_tag(creator, post, mentions),
+        {:ok, activity} <- FeedActivities.publish(creator, :create, post, circles, mentions_are_private?, replies_are_private?) do
 
-          # IO.inspect(activity: activity)
-          # make visible for and put in feeds of:
-          # - creator
-          # - any selected circles
-          # - mentioned characters & notify them (TODO: should be opt-in)
-          mentioned = Bonfire.Tag.Tags.tag_ids(mentions) || []
-          cc = if mentions_are_private?, do: circles, else: circles ++ mentioned # TODO: don't re-fetch tags
-          Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, post, cc)
-          FeedActivities.maybe_feed_publish(creator, activity, cc)
-          unless mentions_are_private?, do: FeedActivities.maybe_notify(creator, activity, post, mentioned)
+          post_with_activity = Activities.activity_under_object(activity)
+
+          cc = if mentions_are_private?, do: circles, else: circles ++ (Bonfire.Tag.Tags.tag_ids(mentions) || []) # TODO: don't re-fetch tags
+
+          cc = if replies_are_private?, do: cc, else: cc ++ [ e(post_with_activity, :replied, :reply_to, %{}) |> Objects.object_creator() |> e(:id, nil) ]
+
+          Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, post, cc |> IO.inspect(label: "grant"))
 
           Threads.maybe_push_thread(creator, activity, post)
 
           maybe_index(activity)
 
-          # {post, activity} = Map.pop!(activity, :object)
-
-          # {:ok, post}
-          {:ok, Activities.activity_under_object(activity)}
+          {:ok, post_with_activity}
 
       end
     end)
@@ -63,7 +59,7 @@ defmodule Bonfire.Social.Posts do
   #     reply = Map.merge(r, published)
   #     # |> IO.inspect
 
-  #     Utils.pubsub_broadcast(Utils.e(reply, :thread_id, nil), {{Bonfire.Social.Posts, :new_reply}, reply}) # push to online users
+  #     pubsub_broadcast(e(reply, :thread_id, nil), {{Bonfire.Social.Posts, :new_reply}, reply}) # push to online users
 
   #     {:ok, reply}
   #   end
@@ -89,7 +85,7 @@ defmodule Bonfire.Social.Posts do
 
   def read(post_id, socket_or_current_user \\ nil) when is_binary(post_id) do
 
-    current_user = Utils.current_user(socket_or_current_user)
+    current_user = current_user(socket_or_current_user)
 
     with {:ok, post} <- Post |> EctoShorts.filter(id: post_id)
       |> Activities.read(socket_or_current_user) do
