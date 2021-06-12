@@ -40,7 +40,7 @@ defmodule Bonfire.Social.Posts do
 
           cc = if replies_are_private?, do: cc, else: cc ++ [ e(post_with_activity, :replied, :reply_to, %{}) |> Objects.object_creator() |> e(:id, nil) ]
 
-          Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, post, cc |> IO.inspect(label: "grant"))
+          Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, post, cc) # |> IO.inspect(label: "grant")
 
           Threads.maybe_push_thread(creator, activity, post)
 

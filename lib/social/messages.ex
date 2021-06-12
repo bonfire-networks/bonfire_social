@@ -36,7 +36,7 @@ defmodule Bonfire.Social.Messages do
           # IO.inspect(circles: circles)
           # IO.inspect(mentions: mentions)
 
-          with {:ok, activity} <- FeedActivities.maybe_notify(creator, :create, message, circles) do
+          with {:ok, activity} <- FeedActivities.maybe_notify_character(creator, :create, message, circles) do
 
             Threads.maybe_push_thread(creator, activity, message)
 

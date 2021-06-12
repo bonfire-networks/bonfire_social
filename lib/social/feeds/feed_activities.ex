@@ -59,9 +59,18 @@ defmodule Bonfire.Social.FeedActivities do
   def feed(_, _, _, _, _), do: []
 
 
-  def feed_paginated(filters \\ [], current_user \\ nil, cursor_before \\ nil, preloads \\ :all, query \\ FeedPublish)
+  def feed_paginated(filters \\ [], current_user \\ nil, cursor_before \\ nil, preloads \\ :all, query \\ FeedPublish, distinct \\ true)
 
-  def feed_paginated(filters, current_user, cursor_before, preloads, query) when is_list(filters) do
+  def feed_paginated(filters, current_user, cursor_before, preloads, query, true) when is_list(filters) do
+
+    query
+      |> preloads(current_user, preloads)
+      |> EctoShorts.filter(filters)
+      |> distinct([activity: activity], [desc: activity.id])
+      |> feed_paginated_permissioned(current_user, cursor_before)
+  end
+
+  def feed_paginated(filters, current_user, cursor_before, preloads, query, _) when is_list(filters) do
 
     query
       |> preloads(current_user, preloads)
@@ -74,7 +83,6 @@ defmodule Bonfire.Social.FeedActivities do
     query
       |> Activities.as_permitted_for(current_user)
       # |> distinct([fp], [desc: fp.id, desc: fp.activity_id]) # not sure if/why needed... but possible fix for found duplicate ID for component Bonfire.UI.Social.ActivityLive in UI
-      |> distinct([activity: activity], [desc: activity.id])
       |> order_by([activity: activity], [desc: activity.id])
       # |> IO.inspect(label: "feed_paginated full")
       # |> Bonfire.Repo.all() # return all items
@@ -108,23 +116,23 @@ defmodule Bonfire.Social.FeedActivities do
     object = Objects.object_with_reply_creator(object)
     reply_to_object = e(object, :replied, :reply_to, nil)
     reply_to_creator = Objects.object_creator(reply_to_object)
-    reply_to_inbox = Feeds.inbox_of_obj_creator(reply_to_object)
-    IO.inspect(publishing_reply: reply_to_creator)
+    # reply_to_inbox = Feeds.inbox_of_obj_creator(reply_to_object)
+    # IO.inspect(publishing_reply: reply_to_creator)
 
     with {:ok, activity} <- do_publish(subject, verb, object, circles ++ [e(reply_to_creator, :id, nil)]) do
-      IO.inspect(notify_reply: reply_to_inbox)
-      maybe_notify(subject, activity, object, reply_to_inbox)
+      # IO.inspect(notify_reply: reply_to_creator)
+      maybe_notify_character(subject, activity, object, reply_to_creator)
     end
   end
 
-  def publish(subject, verb, %{tags: tags} = object, circles, false = tags_are_private?, _) when is_atom(verb) and is_list(tags) do
+  def publish(subject, verb, %{tags: tags} = object, circles, false = tags_are_private?, _) when is_atom(verb) and is_list(tags) and length(tags) > 0 do
     # IO.inspect(publish_to_tagged: tags)
 
     # publishing to those @ mentionned or other tags
-    mentioned = Feeds.tags_inbox_feeds(tags) |> IO.inspect(label: "publish tag / mention")
+    mentioned = Feeds.tags_inbox_feeds(tags) #|> IO.inspect(label: "publish tag / mention")
 
     with {:ok, activity} <- do_publish(subject, verb, object, circles ++ mentioned) do
-      maybe_notify(subject, activity, object, mentioned)
+      maybe_notify_character(subject, activity, object, mentioned)
     end
   end
 
@@ -170,7 +178,7 @@ defmodule Bonfire.Social.FeedActivities do
   @doc """
   Creates a new local activity or takes an existing one and publishes to object's inbox (if object is an actor)
   """
-  def maybe_notify(subject, verb_or_activity, object, character) do
+  def maybe_notify_character(subject, verb_or_activity, object, character) do
 
     maybe_feed_publish(subject, verb_or_activity, object, Feeds.inbox_feed_id(character))
     # TODO: notify remote users via AP
@@ -181,7 +189,7 @@ defmodule Bonfire.Social.FeedActivities do
   """
   def maybe_notify_object(subject, verb_or_activity, object) do
 
-    maybe_notify(subject, verb_or_activity, object, object)
+    maybe_notify_character(subject, verb_or_activity, object, object)
     # TODO: notify remote users via AP
   end
 

@@ -6,6 +6,8 @@ defmodule Bonfire.Social.ThreadsPostsTest do
   alias Bonfire.Social.FeedActivities
   alias Bonfire.Me.Fake
 
+  # import ExUnit.CaptureLog
+
   test "reply works" do
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
     user = Fake.fake_user!()
@@ -25,11 +27,13 @@ defmodule Bonfire.Social.ThreadsPostsTest do
     attrs = %{post_content: %{html_body: "<p>hey you have an epic html post</p>"}}
 
     assert {:ok, post} = Posts.publish(me, attrs)
-    assert {:ok, post_reply} = Posts.publish(someone, Map.put(attrs, :circles, [me.id]))
-    me = Bonfire.Me.Users.get_current(me.id)
-    assert %{entries: [fetched]} = FeedActivities.feed(:notifications, me)
 
-    assert fetched.activity.object_id == post_reply.id
+    attrs_reply = %{post_content: %{summary: "summary", name: "name 2", html_body: "<p>epic html message</p>"}, reply_to_id: post.id}
+    assert {:ok, post_reply} = Posts.publish(someone, attrs_reply, false, false)
+    # me = Bonfire.Me.Users.get_current(me.id)
+    assert %{entries: fetched} = FeedActivities.feed(:notifications, me)
+
+    assert List.first(fetched).activity.object_id == post_reply.id
   end
 
   test "fetching a reply works" do

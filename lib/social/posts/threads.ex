@@ -84,7 +84,7 @@ defmodule Bonfire.Social.Threads do
 
      FeedActivities.feed_paginated(
       [participants_in: {thread_id, &filter/3}],
-      current_user, cursor_before, preloads, Replied)
+      current_user, cursor_before, preloads, Replied, false)
   end
 
   def filter(:participants_in, thread_id, query) do
