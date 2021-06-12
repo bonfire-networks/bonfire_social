@@ -29,4 +29,16 @@ defmodule Bonfire.Social.Objects do
       end
   end
 
+
+  def object_with_creator(object) do
+    object
+    |> Bonfire.Repo.maybe_preload([created: [creator_character: [:inbox]]]) #|> IO.inspect
+    |> Bonfire.Repo.maybe_preload([creator: [character: [:inbox]]]) #|> IO.inspect
+  end
+
+  def object_creator(object) do
+    Utils.e(object, :created, :creator_character, Utils.e(object, :creator, nil))
+  end
+
+
 end

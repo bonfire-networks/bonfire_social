@@ -7,7 +7,8 @@ defmodule Bonfire.Social.FeedActivities do
   alias Bonfire.Boundaries.Verbs
   alias Bonfire.Social.Feeds
   alias Bonfire.Social.Activities
-  alias Bonfire.Common.Utils
+  alias Bonfire.Social.Objects
+  import Bonfire.Common.Utils
 
   use Bonfire.Repo.Query,
       schema: FeedPublish,
@@ -18,7 +19,7 @@ defmodule Bonfire.Social.FeedActivities do
   def my_feed(socket_or_user, cursor_before \\ nil, include_notifications? \\ true) do
 
     # feeds the user is following
-    feed_ids = Feeds.my_feed_ids(Utils.current_user(socket_or_user), include_notifications?)
+    feed_ids = Feeds.my_feed_ids(current_user(socket_or_user), include_notifications?)
     # IO.inspect(my_feed_ids: feed_ids)
 
     feed(feed_ids, socket_or_user, cursor_before)
@@ -31,7 +32,7 @@ defmodule Bonfire.Social.FeedActivities do
   def feed(feed_id_or_ids, current_user_or_socket, cursor_before, preloads) when is_binary(feed_id_or_ids) or is_list(feed_id_or_ids) do
     # IO.inspect(feed_id_or_ids: feed_id_or_ids)
 
-    Utils.pubsub_subscribe(feed_id_or_ids, current_user_or_socket) # subscribe to realtime feed updates
+    pubsub_subscribe(feed_id_or_ids, current_user_or_socket) # subscribe to realtime feed updates
 
     # query FeedPublish, without messages
     [
@@ -40,16 +41,16 @@ defmodule Bonfire.Social.FeedActivities do
       # exclude_messages: dynamic([object_message: message], is_nil(message.id))
       exclude_messages: dynamic([object: object], object.table_id != ^("6R1VATEMESAGEC0MMVN1CAT10N"))
     ]
-    |> feed_paginated(Utils.current_user(current_user_or_socket), cursor_before, preloads)
+    |> feed_paginated(current_user(current_user_or_socket), cursor_before, preloads)
   end
 
   def feed(:notifications, current_user_or_socket, cursor_before, preloads) do
-    current_user = Utils.current_user(current_user_or_socket)
+    current_user = current_user(current_user_or_socket)
 
     feed_id = Bonfire.Social.Feeds.my_inbox_feed_id(current_user)
     # IO.inspect(query_notifications_feed_id: feed_id)
 
-    Utils.pubsub_subscribe(feed_id, current_user_or_socket) # subscribe to realtime feed updates
+    pubsub_subscribe(feed_id, current_user_or_socket) # subscribe to realtime feed updates
 
     [feed_id: feed_id] # FIXME: for some reason preloading creator or reply_to when we have a boost in inbox breaks ecto
     |> feed_paginated(current_user, cursor_before, preloads)
@@ -58,22 +59,36 @@ defmodule Bonfire.Social.FeedActivities do
   def feed(_, _, _, _, _), do: []
 
 
-  def feed_paginated(filters, current_user \\ nil, cursor_before \\ nil, preloads \\ :all, query \\ FeedPublish) do
+  def feed_paginated(filters \\ [], current_user \\ nil, cursor_before \\ nil, preloads \\ :all, query \\ FeedPublish)
+
+  def feed_paginated(filters, current_user, cursor_before, preloads, query) when is_list(filters) do
 
     query
-      # add assocs needed in timelines/feeds
-      # |> join_preload([:activity])
-      # |> IO.inspect(label: "pre-preloads")
-      |> Activities.activity_preloads(current_user, preloads)
+      |> preloads(current_user, preloads)
       |> EctoShorts.filter(filters)
-      # |> IO.inspect(label: "feed_paginated_post-preloads")
+      |> feed_paginated_permissioned(current_user, cursor_before)
+  end
+
+  defp feed_paginated_permissioned(query, current_user, cursor_before) do
+
+    query
       |> Activities.as_permitted_for(current_user)
       # |> distinct([fp], [desc: fp.id, desc: fp.activity_id]) # not sure if/why needed... but possible fix for found duplicate ID for component Bonfire.UI.Social.ActivityLive in UI
-      # |> order_by([fp], desc: fp.id)
-      # |> IO.inspect(label: "post-permissions")
+      |> distinct([activity: activity], [desc: activity.id])
+      |> order_by([activity: activity], [desc: activity.id])
+      # |> IO.inspect(label: "feed_paginated full")
       # |> Bonfire.Repo.all() # return all items
       |> Bonfire.Repo.many_paginated(before: cursor_before) # return a page of items (reverse chronological) + pagination metadata
       # |> IO.inspect(label: "feed")
+  end
+
+  defp preloads(query, current_user, preloads) do
+    query
+      # add assocs needed in timelines/feeds
+      |> join_preload([:activity])
+      # |> IO.inspect(label: "feed_paginated pre-preloads")
+      |> Activities.activity_preloads(current_user, preloads)
+      # |> IO.inspect(label: "feed_paginated post-preloads")
   end
 
   # def feed(%{feed_publishes: _} = feed_for, _) do
@@ -125,21 +140,17 @@ defmodule Bonfire.Social.FeedActivities do
   """
   def maybe_notify_creator(subject, %{activity: activity}, object), do: maybe_notify_creator(subject, activity, object)
   def maybe_notify_creator(%{id: subject_id} = subject, verb_or_activity, %{} = object) do
-    #IO.inspect(activity)
-    object = object_with_creator(object)
-    #IO.inspect(object)
-    if subject_id != object_creator(object), do: maybe_feed_publish(subject, verb_or_activity, Feeds.inbox_of_obj_creator(object))
+    object = Objects.object_with_creator(object)
+    # IO.inspect(maybe_notify_creator: object)
+    creator = Objects.object_creator(object)
+    # IO.inspect(maybe_notify_creator: creator)
+    feed = Feeds.inbox_feed_id(creator)
+    # IO.inspect(maybe_notify_feed: feed)
+    if feed && subject_id != ulid(creator), do: maybe_feed_publish(subject, verb_or_activity, object, feed),
+    else: maybe_feed_publish(subject, verb_or_activity, object, nil)
     # TODO: notify remote users via AP
   end
 
-  def object_with_creator(object) do
-    object
-    |> Bonfire.Repo.maybe_preload([created: [creator_character: [:inbox]]]) #|> IO.inspect
-    |> Bonfire.Repo.maybe_preload([creator: [character: [:inbox]]]) #|> IO.inspect
-  end
-  def object_creator(object) do
-    Utils.e(object, :created, :creator_id, Utils.e(object, :creator, :id, nil))
-  end
 
   @doc """
   Creates a new local activity or takes an existing one and publishes to object's inbox (if object is an actor)
@@ -185,7 +196,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
 
-  defp create_and_put_in_feeds(subject, verb, object, feed_id) when is_binary(feed_id) or is_list(feed_id) do
+  defp create_and_put_in_feeds(subject, verb, object, feed_id) when is_map(object) and is_binary(feed_id) or is_list(feed_id) do
     with {:ok, activity} <- Activities.create(subject, verb, object) do
       with {:ok, _published} <- put_in_feeds(feed_id, activity) do # publish in specified feed
         {:ok, activity}
@@ -198,7 +209,11 @@ defmodule Bonfire.Social.FeedActivities do
     end
   end
   defp create_and_put_in_feeds(subject, verb, object, %{feed_id: feed_id}), do: create_and_put_in_feeds(subject, verb, object, feed_id)
-
+  defp create_and_put_in_feeds(subject, verb, object, _) when is_map(object) do # for activities with no target feed, still create the activity
+    with {:ok, activity} <- Activities.create(subject, verb, object) do
+        {:ok, activity}
+    end
+  end
 
   defp put_in_feeds(feeds, activity) when is_list(feeds), do: Enum.map(feeds, fn x -> put_in_feeds(x, activity) end) # TODO: optimise?
 
@@ -208,7 +223,7 @@ defmodule Bonfire.Social.FeedActivities do
 
       published = %{published | activity: activity}
 
-      Utils.pubsub_broadcast(feed_id, {{Bonfire.Social.Feeds, :new_activity}, activity}) # push to online users
+      pubsub_broadcast(feed_id, {{Bonfire.Social.Feeds, :new_activity}, activity}) # push to online users
 
       {:ok, published}
     else e ->
@@ -223,7 +238,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   defp do_put_in_feeds(feed_id, activity) do
-    attrs = %{feed_id: Utils.ulid(feed_id), activity_id: Utils.ulid(activity)}
+    attrs = %{feed_id: ulid(feed_id), activity_id: ulid(activity)}
     repo().put(FeedPublish.changeset(attrs))
   end
 
@@ -234,40 +249,5 @@ defmodule Bonfire.Social.FeedActivities do
   def delete_for_object(_), do: nil
 
   @doc "Defines additional query filters"
-
-
-
-
-
-  #doc "List likes created by the user and which are in their outbox, which are not replies"
-  # FIXME: we are not putting likes in outbox
-  def filter(:boosts_by, user_id, query) when is_binary(user_id) do
-    verb_id = Verbs.verbs()[:boost]
-
-    {
-      query
-      |> join_preload([:activity, :subject_character]),
-      dynamic(
-        [activity: activity, subject_character: booster],
-        activity.verb_id==^verb_id and booster.id == ^user_id
-      )
-    }
-  end
-
-  #doc "List likes created by the user and which are in their outbox, which are not replies"
-  # FIXME: we are not putting likes in outbox
-  def filter(:likes_by, user_id, query) when is_binary(user_id) do
-    verb_id = Verbs.verbs()[:like]
-
-    {
-      query
-      |> join_preload([:activity, :subject_character]),
-      dynamic(
-        [activity: activity, subject_character: liker],
-        activity.verb_id==^verb_id and liker.id == ^user_id
-      )
-    }
-  end
-
 
 end

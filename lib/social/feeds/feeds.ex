@@ -3,6 +3,7 @@ defmodule Bonfire.Social.Feeds do
   require Logger
   alias Bonfire.Data.Social.{Feed, Inbox}
   alias Bonfire.Social.Follows
+  alias Bonfire.Social.Objects
   import Ecto.Query
   import Bonfire.Me.Integration
   alias Bonfire.Common.Utils
@@ -68,15 +69,9 @@ defmodule Bonfire.Social.Feeds do
       feed_id
     end
   end
-  def inbox_feed_id(_) do
-    nil
-  end
 
   def inbox_of_obj_creator(object) do
-    object = object |> Bonfire.Repo.maybe_preload([created: [creator_character: [:inbox]]]) #|> IO.inspect
-
-    Utils.e(object, :created, :creator_character, :inbox, :feed_id, nil)
-      || inbox_feed_id(Utils.e(object, :created, :creator_character, nil)) #|> IO.inspect
+    Objects.object_with_creator(object) |> Objects.object_creator() |> inbox_feed_id() #|> IO.inspect
   end
 
   def tags_feed(tags) when is_list(tags), do: Enum.map(tags, fn x -> tags_feed(x) end)

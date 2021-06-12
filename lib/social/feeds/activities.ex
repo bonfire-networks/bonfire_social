@@ -57,10 +57,14 @@ defmodule Bonfire.Social.Activities do
   end
 
   def object_preload_create_activity(q, current_user, preloads \\ :default) do
-    verb_id = Verbs.verbs()[:create]
+    object_preload_activity(q, :create, :id, current_user, preloads)
+  end
+
+  def object_preload_activity(q, verb \\ :create, object_id_field \\ :id, current_user \\ nil, preloads \\ :default) do
+    verb_id = Verbs.verbs()[verb]
 
     q
-    |> join(:left, [o], activity in Activity, as: :activity, on: activity.object_id == o.id and activity.verb_id == ^verb_id)
+    |> reusable_join(:left, [o], activity in Activity, as: :activity, on: activity.object_id == field(o, ^object_id_field) and activity.verb_id == ^verb_id)
     |> activity_preloads(current_user, preloads)
   end
 
@@ -127,24 +131,29 @@ defmodule Bonfire.Social.Activities do
       # |> IO.inspect
   end
 
+
+  def activity_preloads(query, _current_user, _) do
+    query
+  end
+
   def maybe_my_like(q, %{id: current_user_id} = _current_user) do
     q
     # |> join_preload([:activity, :my_like], ass.liked_id == via.object_id and ass.liker_id == ^current_user_id) # TODO: figure out how to use bindings
-    |> join(:left, [o, activity: activity], l in Like, as: :my_like, on: l.liked_id == activity.object_id and l.liker_id == ^current_user_id)
+    |> reusable_join(:left, [o, activity: activity], l in Like, as: :my_like, on: l.liked_id == activity.object_id and l.liker_id == ^current_user_id)
     |> preload([l, activity: activity, my_like: my_like], activity: {activity, [my_like: my_like]})
   end
   def maybe_my_like(q, _), do: q
 
   def maybe_my_boost(q, %{id: current_user_id} = _current_user) do
     q
-    |> join(:left, [o, activity: activity], l in Boost, as: :my_boost, on: l.boosted_id == activity.object_id and l.booster_id == ^current_user_id)
+    |> reusable_join(:left, [o, activity: activity], l in Boost, as: :my_boost, on: l.boosted_id == activity.object_id and l.booster_id == ^current_user_id)
     |> preload([l, activity: activity, my_boost: my_boost], activity: {activity, [my_boost: my_boost]})
   end
   def maybe_my_boost(q, _), do: q
 
   def maybe_my_flag(q, %{id: current_user_id} = _current_user) do
     q
-    |> join(:left, [o, activity: activity], l in Flag, as: :my_flag, on: l.flagged_id == activity.object_id and l.flagger_id == ^current_user_id)
+    |> reusable_join(:left, [o, activity: activity], l in Flag, as: :my_flag, on: l.flagged_id == activity.object_id and l.flagger_id == ^current_user_id)
     |> preload([l, activity: activity, my_flag: my_flag], activity: {activity, [my_flag: my_flag]})
   end
   def maybe_my_flag(q, _), do: q

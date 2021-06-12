@@ -3,10 +3,11 @@ defmodule Bonfire.Social.Likes do
   alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Like
   # alias Bonfire.Data.Social.LikeCount
+  alias Bonfire.Boundaries.Verbs
   alias Bonfire.Social.{Activities, FeedActivities}
   # import Ecto.Query
   # import Bonfire.Me.Integration
-  # alias Bonfire.Common.Utils
+  import Bonfire.Common.Utils
   use Bonfire.Repo.Query
 
   def liked?(%User{}=user, liked), do: not is_nil(get!(user, liked))
@@ -42,12 +43,30 @@ defmodule Bonfire.Social.Likes do
     end
   end
 
-  @doc "List likes by the user, but only present in their outbox"
-  def list_by(by_user, current_user \\ nil, cursor_before \\ nil, preloads \\ :all) when is_binary(by_user) or is_list(by_user) do
+  defp list(filters, current_user, cursor_before \\ nil, preloads \\ nil) do
+    # TODO: check the like's see/read permissions for current_user?
+    Like
+    |> Activities.object_preload_activity(:like, :liked_id, current_user, preloads)
+    |> EctoShorts.filter(filters)
+    |> Activities.as_permitted_for(current_user)
+    |> Bonfire.Repo.many_paginated(before: cursor_before)
+  end
 
-    # query FeedPublish
-    [feed_id: by_user, likes_by: by_user]
-    |> FeedActivities.feed_paginated(current_user, cursor_before, preloads)
+  @doc "List current user's likes"
+  def list_my(current_user, cursor_before \\ nil, preloads \\ nil) when is_binary(current_user) or is_map(current_user) do
+    list_by(current_user, current_user, cursor_before, preloads)
+  end
+
+  @doc "List likes by the user"
+  def list_by(by_user, current_user \\ nil, cursor_before \\ nil, preloads \\ nil) when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
+
+    list([likes_by: {ulid(by_user), &filter/3}], current_user, cursor_before, preloads)
+  end
+
+  @doc "List likes of something"
+  def list_of(id, current_user \\ nil, cursor_before \\ nil, preloads \\ nil) when is_binary(id) or is_list(id) or is_map(id) do
+
+    list([likes_of: {ulid(id), &filter/3}], current_user, cursor_before, preloads)
   end
 
   defp create(%{} = liker, %{} = liked) do
@@ -97,5 +116,34 @@ defmodule Bonfire.Social.Likes do
     |> join(:inner, [l], ot in ^type, as: :liked, on: ot.id == l.liked_id)
     |> join_preload([:liked])
   end
+
+  #doc "List likes created by the user and which are in their outbox, which are not replies"
+  # FIXME: we are not putting likes in outbox
+  def filter(:likes_by, user_id, query) do
+    verb_id = Verbs.verbs()[:like]
+
+      query
+      |> join_preload([:activity, :subject_character])
+      |> where(
+        [activity: activity, subject_character: liker],
+        activity.verb_id==^verb_id and liker.id == ^ulid(user_id)
+      )
+
+  end
+
+  #doc "List likes created by the user and which are in their outbox, which are not replies"
+  # FIXME: we are not putting likes in outbox
+  def filter(:likes_of, id, query) do
+    verb_id = Verbs.verbs()[:like]
+
+      query
+      |> join_preload([:activity])
+      |> where(
+        [activity: activity],
+        activity.verb_id==^verb_id and activity.object_id == ^ulid(id)
+      )
+
+  end
+
 
 end

@@ -2,11 +2,13 @@ defmodule Bonfire.Social.Boosts do
 
   alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Boost
+  alias Bonfire.Boundaries.Verbs
   # alias Bonfire.Data.Social.BoostCount
   alias Bonfire.Social.{Activities, FeedActivities}
-  import Ecto.Query
-  import Bonfire.Me.Integration
-  # alias Bonfire.Common.Utils
+  use Bonfire.Repo.Query,
+    searchable_fields: [:booster_id, :boosted_id]
+  # import Bonfire.Me.Integration
+  import Bonfire.Common.Utils
 
   def boosted?(%User{}=user, boosted), do: not is_nil(get!(user, boosted))
   def get(%User{}=user, boosted), do: repo().single(by_both_q(user, boosted))
@@ -44,20 +46,33 @@ defmodule Bonfire.Social.Boosts do
     end
   end
 
+  @doc "List current user's boosts, which are in their outbox"
+  def list_my(current_user, cursor_before \\ nil, preloads \\ :all) when is_binary(current_user) or is_map(current_user) do
+    list_by(current_user, current_user, cursor_before, preloads)
+  end
+
   @doc "List boosts by the user and which are in their outbox"
-  def list_by(by_user, current_user \\ nil, cursor_before \\ nil, preloads \\ :all) when is_binary(by_user) or is_list(by_user) do
+  def list_by(by_user, current_user \\ nil, cursor_before \\ nil, preloads \\ :all) when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
 
     # query FeedPublish
-    [feed_id: by_user, boosts_by: by_user]
+    [feed_id: ulid(by_user), boosts_by: {ulid(by_user), &filter/3} ]
     |> FeedActivities.feed_paginated(current_user, cursor_before, preloads)
   end
 
-  defp create(%{} = booster, %{} = boosted) do
+  @doc "List boost of an object and which are in a feed"
+  def list_of(id, current_user \\ nil, cursor_before \\ nil, preloads \\ :all) when is_binary(id) or is_list(id) or is_map(id) do
+
+    # query FeedPublish
+    [boosts_of: {ulid(id), &filter/3} ]
+    |> FeedActivities.feed_paginated(current_user, cursor_before, preloads)
+  end
+
+  defp create(booster, boosted) do
     changeset(booster, boosted) |> repo().insert()
   end
 
-  defp changeset(%{id: booster}, %{id: boosted}) do
-    Boost.changeset(%Boost{}, %{booster_id: booster, boosted_id: boosted})
+  defp changeset(booster, boosted) do
+    Boost.changeset(%Boost{}, %{booster_id: ulid(booster), boosted_id: ulid(boosted)})
   end
 
   #doc "Delete boosts where i am the booster"
@@ -98,4 +113,31 @@ defmodule Bonfire.Social.Boosts do
       select: f.id
   end
 
+
+  #doc "List likes created by the user and which are in their outbox, which are not replies"
+  # FIXME: we are not putting likes in outbox
+  def filter(:boosts_of, id, query) do
+    verb_id = Verbs.verbs()[:boost]
+
+    query
+    |> join_preload([:activity])
+    |> where(
+      [activity: activity],
+      activity.verb_id==^verb_id and activity.object_id == ^ulid(id)
+    )
+  end
+
+
+  #doc "List likes created by the user and which are in their outbox, which are not replies"
+  # FIXME: we are not putting likes in outbox
+  def filter(:boosts_by, user_id, query) do
+    verb_id = Verbs.verbs()[:boost]
+
+      query
+      |> join_preload([:activity, :subject_character])
+      |> where(
+        [activity: activity, subject_character: booster],
+        activity.verb_id==^verb_id and booster.id == ^ulid(user_id)
+      )
+  end
 end
