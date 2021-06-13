@@ -1,7 +1,7 @@
 defmodule Bonfire.Social.FollowsTest do
   use Bonfire.DataCase
 
-  alias Bonfire.Social.Follows
+  alias Bonfire.Social.{Follows, FeedActivities}
   alias Bonfire.Me.Fake
 
   test "follow works" do
@@ -84,8 +84,25 @@ defmodule Bonfire.Social.FollowsTest do
     assert {:ok, follow} = Follows.follow(me, someone)
 
     assert %{entries: [fetched_follow]} = Follows.list_followers(someone, me)
-
     assert fetched_follow.id == follow.id
+  end
+
+  test "follow appears in followed's notifications" do
+
+    follower = Fake.fake_user!("follower")
+    followed = Fake.fake_user!("followed")
+    assert {:ok, follow} = Follows.follow(follower, followed)
+
+    assert %{entries: [fetched_follow]} = Follows.list_followers(followed, follower)
+    assert fetched_follow.id == follow.id
+
+    assert %{entries: fetched} = p = FeedActivities.feed(:notifications, followed)
+    # IO.inspect(notifications: p)
+    assert activity = List.first(fetched).activity |> Bonfire.Repo.maybe_preload([object: [:profile]])
+    # IO.inspect(followed: followed)
+    # IO.inspect(notifications: activity)
+
+    assert activity.object_id == followed.id
   end
 
 end

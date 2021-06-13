@@ -65,7 +65,7 @@ defmodule Bonfire.Social.FeedActivities do
 
     query
       |> preloads(current_user, preloads)
-      |> EctoShorts.filter(filters)
+      |> EctoShorts.filter(filters, nil, nil)
       |> distinct([activity: activity], [desc: activity.id])
       |> feed_paginated_permissioned(current_user, cursor_before)
   end
@@ -74,7 +74,7 @@ defmodule Bonfire.Social.FeedActivities do
 
     query
       |> preloads(current_user, preloads)
-      |> EctoShorts.filter(filters)
+      |> EctoShorts.filter(filters, nil, nil)
       |> feed_paginated_permissioned(current_user, cursor_before)
   end
 
@@ -82,8 +82,8 @@ defmodule Bonfire.Social.FeedActivities do
 
     query
       |> Activities.as_permitted_for(current_user)
-      # |> distinct([fp], [desc: fp.id, desc: fp.activity_id]) # not sure if/why needed... but possible fix for found duplicate ID for component Bonfire.UI.Social.ActivityLive in UI
       |> order_by([activity: activity], [desc: activity.id])
+      # |> distinct([fp], [desc: fp.id, desc: fp.activity_id]) # not sure if/why needed... but possible fix for found duplicate ID for component Bonfire.UI.Social.ActivityLive in UI
       # |> IO.inspect(label: "feed_paginated full")
       # |> Bonfire.Repo.all() # return all items
       |> Bonfire.Repo.many_paginated(before: cursor_before) # return a page of items (reverse chronological) + pagination metadata
@@ -121,7 +121,7 @@ defmodule Bonfire.Social.FeedActivities do
 
     with {:ok, activity} <- do_publish(subject, verb, object, circles ++ [e(reply_to_creator, :id, nil)]) do
       # IO.inspect(notify_reply: reply_to_creator)
-      maybe_notify_character(subject, activity, object, reply_to_creator)
+      notify_characters(subject, activity, object, reply_to_creator)
     end
   end
 
@@ -132,7 +132,7 @@ defmodule Bonfire.Social.FeedActivities do
     mentioned = Feeds.tags_inbox_feeds(tags) #|> IO.inspect(label: "publish tag / mention")
 
     with {:ok, activity} <- do_publish(subject, verb, object, circles ++ mentioned) do
-      maybe_notify_character(subject, activity, object, mentioned)
+      notify_characters(subject, activity, object, mentioned)
     end
   end
 
@@ -164,13 +164,10 @@ defmodule Bonfire.Social.FeedActivities do
   def maybe_notify_creator(subject, %{activity: activity}, object), do: maybe_notify_creator(subject, activity, object)
   def maybe_notify_creator(%{id: subject_id} = subject, verb_or_activity, %{} = object) do
     object = Objects.object_with_creator(object)
-    # IO.inspect(maybe_notify_creator: object)
     creator = Objects.object_creator(object)
-    # IO.inspect(maybe_notify_creator: creator)
-    feed = Feeds.inbox_feed_id(creator)
-    # IO.inspect(maybe_notify_feed: feed)
+    feed = Feeds.inbox_feed_ids(creator)
     if feed && subject_id != ulid(creator), do: maybe_feed_publish(subject, verb_or_activity, object, feed),
-    else: maybe_feed_publish(subject, verb_or_activity, object, nil)
+    else: maybe_feed_publish(subject, verb_or_activity, object, nil) # just create an unpublished activity
     # TODO: notify remote users via AP
   end
 
@@ -178,25 +175,25 @@ defmodule Bonfire.Social.FeedActivities do
   @doc """
   Creates a new local activity or takes an existing one and publishes to object's inbox (if object is an actor)
   """
-  def maybe_notify_character(subject, verb_or_activity, object, character) do
+  def notify_characters(subject, verb_or_activity, object, characters) do
 
-    maybe_feed_publish(subject, verb_or_activity, object, Feeds.inbox_feed_id(character))
+    maybe_feed_publish(subject, verb_or_activity, object, Feeds.inbox_feed_ids(characters)) #|> IO.inspect(label: "notify_feeds")
     # TODO: notify remote users via AP
   end
 
   @doc """
   Creates a new local activity or takes an existing one and publishes to object's inbox (if object is an actor)
   """
-  def maybe_notify_object(subject, verb_or_activity, object) do
+  def notify_object(subject, verb_or_activity, object) do
 
-    maybe_notify_character(subject, verb_or_activity, object, object)
+    notify_characters(subject, verb_or_activity, object, object)
     # TODO: notify remote users via AP
   end
 
   @doc """
   Creates a new local activity or takes an existing one and publishes to creator's inbox
   """
-  def maybe_notify_admins(subject, verb_or_activity, object) do
+  def notify_admins(subject, verb_or_activity, object) do
 
     maybe_feed_publish(subject, verb_or_activity, object, Feeds.admins_inbox())
     # TODO: notify remote users via AP
@@ -221,7 +218,8 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp create_and_put_in_feeds(subject, verb, object, feed_id) when is_map(object) and is_binary(feed_id) or is_list(feed_id) do
     with {:ok, activity} <- Activities.create(subject, verb, object) do
-      with {:ok, _published} <- put_in_feeds(feed_id, activity) do # publish in specified feed
+      with {:ok, published} <- put_in_feeds(feed_id, activity) do # publish in specified feed
+        # IO.inspect(published, label: "create_and_put_in_feeds")
         {:ok, activity}
       else # meh
         publishes when is_list(publishes) and length(publishes)>0 -> {:ok, activity}

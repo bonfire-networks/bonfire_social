@@ -39,7 +39,7 @@ defmodule Bonfire.Social.Feeds do
     account_feed_id
   end
   def my_inbox_feed_id(%{current_account: account} = _assigns) when not is_nil(account) do
-    inbox_feed_id(account)
+    inbox_feed_ids(account)
   end
   def my_inbox_feed_id(%{character: %{inbox: %{feed_id: feed_id}}} = _user) when is_binary(feed_id) do
     feed_id
@@ -48,20 +48,20 @@ defmodule Bonfire.Social.Feeds do
     my_inbox_feed_id(context)
   end
   def my_inbox_feed_id(%{id: _} = user) when not is_nil(user) do
-    inbox_feed_id(user)
+    inbox_feed_ids(user)
   end
   def my_inbox_feed_id(_) do
     nil
   end
 
-  def inbox_feed_id(for_subjects) when is_list(for_subjects) do
-    for_subjects |> Enum.map(&inbox_feed_id/1)
+  def inbox_feed_ids(for_subjects) when is_list(for_subjects) do
+    for_subjects |> Enum.map(&inbox_feed_ids/1)
   end
-  def inbox_feed_id(%{character: _} = for_subject) do
-    for_subject |> Bonfire.Repo.maybe_preload(character: [:inbox]) |> Utils.e(:character, nil) |> inbox_feed_id()
+  def inbox_feed_ids(%{character: _} = for_subject) do
+    for_subject |> Bonfire.Repo.maybe_preload(character: [:inbox]) |> Utils.e(:character, nil) |> inbox_feed_ids()
   end
-  def inbox_feed_id(%{inbox: %{feed_id: feed_id}}), do: feed_id
-  def inbox_feed_id(for_subject) do
+  def inbox_feed_ids(%{inbox: %{feed_id: feed_id}}), do: feed_id
+  def inbox_feed_ids(for_subject) do
     # Logger.warn("creating new inbox")
     # IO.inspect(for_subject: for_subject)
     with %{feed_id: feed_id} = _inbox <- create_inbox(for_subject) do
@@ -71,12 +71,12 @@ defmodule Bonfire.Social.Feeds do
   end
 
   def inbox_of_obj_creator(object) do
-    Objects.object_with_creator(object) |> Objects.object_creator() |> inbox_feed_id() #|> IO.inspect
+    Objects.object_with_creator(object) |> Objects.object_creator() |> inbox_feed_ids() #|> IO.inspect
   end
 
   def tags_inbox_feeds(tags) when is_list(tags), do: Enum.map(tags, fn x -> tags_inbox_feeds(x) end)
   def tags_inbox_feeds(%{} = tag) do
-    inbox_feed_id(tag)
+    inbox_feed_ids(tag)
   end
   def tags_inbox_feeds(_) do
     nil
@@ -87,7 +87,7 @@ defmodule Bonfire.Social.Feeds do
   def admins_inbox(admin) do
     admin = admin |> Bonfire.Repo.maybe_preload([character: [:inbox]]) # |> IO.inspect
     Utils.e(admin, :character, :inbox, :feed_id, nil)
-      || inbox_feed_id(admin)
+      || inbox_feed_ids(admin)
   end
 
 

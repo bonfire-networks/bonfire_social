@@ -2,11 +2,12 @@ defmodule Bonfire.Social.Flags do
 
   alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Flag
+  alias Bonfire.Boundaries.Verbs
   # alias Bonfire.Data.Social.FlagCount
   alias Bonfire.Social.{Activities, FeedActivities}
-  import Ecto.Query
-  import Bonfire.Me.Integration
-  # alias Bonfire.Common.Utils
+  use Bonfire.Repo.Query,
+    searchable_fields: [:flagger_id, :flagged_id]
+  import Bonfire.Common.Utils
 
   def flagged?(%User{}=user, flagged), do: not is_nil(get!(user, flagged))
   def get(%User{}=user, flagged), do: repo().single(by_both_q(user, flagged))
@@ -19,7 +20,7 @@ defmodule Bonfire.Social.Flags do
     with {:ok, flag} <- create(flagger, flagged) do
       # TODO: increment the flag count
       # TODO: put in admin(s) inbox feed
-      FeedActivities.maybe_notify_admins(flagger, :flag, flagged)
+      FeedActivities.notify_admins(flagger, :flag, flagged)
       {:ok, flag}
     end
   end
@@ -39,6 +40,37 @@ defmodule Bonfire.Social.Flags do
       unflag(user, object)
     end
   end
+
+
+  @doc "List boost of an object and which are in a feed"
+  def list(current_user, cursor_before \\ nil, preloads \\ :all) when not is_nil(current_user) do
+    # TODO: double check that we're admin
+    # query FeedPublish
+    [flags: {:all, &filter/3} ]
+    |> FeedActivities.feed_paginated(current_user, cursor_before, preloads)
+  end
+
+  @doc "List current user's boosts, which are in their outbox"
+  def list_my(current_user, cursor_before \\ nil, preloads \\ :all) when is_binary(current_user) or is_map(current_user) do
+    list_by(current_user, current_user, cursor_before, preloads)
+  end
+
+  @doc "List boosts by the user and which are in their outbox"
+  def list_by(by_user, current_user \\ nil, cursor_before \\ nil, preloads \\ :all) when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
+
+    # query FeedPublish
+    [feed_id: ulid(by_user), flags_by: {ulid(by_user), &filter/3} ]
+    |> FeedActivities.feed_paginated(current_user, cursor_before, preloads)
+  end
+
+  @doc "List boost of an object and which are in a feed"
+  def list_of(id, current_user \\ nil, cursor_before \\ nil, preloads \\ :all) when is_binary(id) or is_list(id) or is_map(id) do
+
+    # query FeedPublish
+    [flags_of: {ulid(id), &filter/3} ]
+    |> FeedActivities.feed_paginated(current_user, cursor_before, preloads)
+  end
+
 
   defp create(%{} = flagger, %{} = flagged) do
     changeset(flagger, flagged) |> repo().insert()
@@ -86,4 +118,39 @@ defmodule Bonfire.Social.Flags do
       select: f.id
   end
 
+  #doc "List flags which are in a feed"
+  def filter(:flags, :all, query) do
+    verb_id = Verbs.verbs()[:flag]
+
+    query
+    |> join_preload([:activity])
+    |> where(
+      [activity: activity],
+      activity.verb_id==^verb_id
+    )
+  end
+
+  #doc "List flags created by the user and which are in their outbox"
+  def filter(:flags_of, id, query) do
+    verb_id = Verbs.verbs()[:flag]
+
+    query
+    |> join_preload([:activity])
+    |> where(
+      [activity: activity],
+      activity.verb_id==^verb_id and activity.object_id == ^ulid(id)
+    )
+  end
+
+  #doc "List flags created by the user and which are in their outbox"
+  def filter(:flags_by, user_id, query) do
+    verb_id = Verbs.verbs()[:flag]
+
+      query
+      |> join_preload([:activity, :subject_character])
+      |> where(
+        [activity: activity, subject_character: flagger],
+        activity.verb_id==^verb_id and flagger.id == ^ulid(user_id)
+      )
+  end
 end

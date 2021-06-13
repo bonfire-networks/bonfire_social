@@ -118,7 +118,6 @@ defmodule Bonfire.Social.Likes do
   end
 
   #doc "List likes created by the user and which are in their outbox, which are not replies"
-  # FIXME: we are not putting likes in outbox
   def filter(:likes_by, user_id, query) do
     verb_id = Verbs.verbs()[:like]
 
@@ -132,7 +131,6 @@ defmodule Bonfire.Social.Likes do
   end
 
   #doc "List likes created by the user and which are in their outbox, which are not replies"
-  # FIXME: we are not putting likes in outbox
   def filter(:likes_of, id, query) do
     verb_id = Verbs.verbs()[:like]
 

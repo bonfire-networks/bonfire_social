@@ -115,7 +115,6 @@ defmodule Bonfire.Social.Boosts do
 
 
   #doc "List likes created by the user and which are in their outbox, which are not replies"
-  # FIXME: we are not putting likes in outbox
   def filter(:boosts_of, id, query) do
     verb_id = Verbs.verbs()[:boost]
 
@@ -129,7 +128,6 @@ defmodule Bonfire.Social.Boosts do
 
 
   #doc "List likes created by the user and which are in their outbox, which are not replies"
-  # FIXME: we are not putting likes in outbox
   def filter(:boosts_by, user_id, query) do
     verb_id = Verbs.verbs()[:boost]
 
