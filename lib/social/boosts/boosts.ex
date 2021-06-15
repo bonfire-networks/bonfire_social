@@ -10,6 +10,9 @@ defmodule Bonfire.Social.Boosts do
   # import Bonfire.Me.Integration
   import Bonfire.Common.Utils
 
+  # def queries_module, do: Boost
+  def context_module, do: Boost
+
   def boosted?(%User{}=user, boosted), do: not is_nil(get!(user, boosted))
   def get(%User{}=user, boosted), do: repo().single(by_both_q(user, boosted))
   def get!(%User{}=user, boosted), do: repo().one(by_both_q(user, boosted))

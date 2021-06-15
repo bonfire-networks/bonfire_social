@@ -10,6 +10,9 @@ defmodule Bonfire.Social.Likes do
   import Bonfire.Common.Utils
   use Bonfire.Repo.Query
 
+  # def queries_module, do: Like
+  def context_module, do: Like
+
   def liked?(%User{}=user, liked), do: not is_nil(get!(user, liked))
   def get(%User{}=user, liked), do: repo().single(by_both_q(user, liked))
   def get!(%User{}=user, liked), do: repo().one(by_both_q(user, liked))

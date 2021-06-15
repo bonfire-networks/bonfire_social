@@ -6,7 +6,10 @@ defmodule Bonfire.Social.Feeds do
   alias Bonfire.Social.Objects
   import Ecto.Query
   import Bonfire.Me.Integration
-  alias Bonfire.Common.Utils
+  import Bonfire.Common.Utils
+
+  # def queries_module, do: Feed
+  def context_module, do: Feed
 
   def instance_feed_id, do: Bonfire.Boundaries.Circles.circles[:local]
   def fediverse_feed_id, do: Bonfire.Boundaries.Circles.circles[:activity_pub]
@@ -58,7 +61,7 @@ defmodule Bonfire.Social.Feeds do
     for_subjects |> Enum.map(&inbox_feed_ids/1)
   end
   def inbox_feed_ids(%{character: _} = for_subject) do
-    for_subject |> Bonfire.Repo.maybe_preload(character: [:inbox]) |> Utils.e(:character, nil) |> inbox_feed_ids()
+    for_subject |> Bonfire.Repo.maybe_preload(character: [:inbox]) |> e(:character, nil) |> inbox_feed_ids()
   end
   def inbox_feed_ids(%{inbox: %{feed_id: feed_id}}), do: feed_id
   def inbox_feed_ids(for_subject) do
@@ -86,7 +89,7 @@ defmodule Bonfire.Social.Feeds do
   def admins_inbox(admins) when is_list(admins), do: Enum.map(admins, fn x -> admins_inbox(x) end)
   def admins_inbox(admin) do
     admin = admin |> Bonfire.Repo.maybe_preload([character: [:inbox]]) # |> IO.inspect
-    Utils.e(admin, :character, :inbox, :feed_id, nil)
+    e(admin, :character, :inbox, :feed_id, nil)
       || inbox_feed_ids(admin)
   end
 
@@ -131,14 +134,30 @@ defmodule Bonfire.Social.Feeds do
   @doc """
   Get or create feed for something
   """
-  def feed_for_id(%Feed{id: _} = feed), do: feed
-  def feed_for_id(%{id: subject_id}), do: feed_for_id(subject_id)
-  def feed_for_id(subject_id) when is_binary(subject_id) do
-    with {:error, _} <- repo().single(feed_for_id_query(subject_id)) do
-      create(%{id: subject_id})
+  def feed_for(subject) do
+    case maybe_feed_for(subject) do
+      %Feed{} = feed -> feed
+      _ ->
+        with {:ok, feed} <- create(%{id: ulid(subject)}) do
+          feed
+        end
     end
   end
-  def feed_for_id(_), do: nil
+
+
+  @doc """
+  Get a feed for something if any exists
+  """
+  def maybe_feed_for(%Feed{id: _} = feed), do: feed
+  def maybe_feed_for(%{id: subject_id}), do: maybe_feed_for(subject_id)
+  def maybe_feed_for(subject_id) when is_binary(subject_id) do
+    with {:ok, feed} <- repo().single(feed_for_id_query(subject_id)) do
+      feed
+    else _ -> nil
+    end
+  end
+  def maybe_feed_for(_), do: nil
+
 
   def feed_for_id_query(subject_id) do
     from f in Feed,

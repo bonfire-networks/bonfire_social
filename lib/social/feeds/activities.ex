@@ -12,6 +12,9 @@ defmodule Bonfire.Social.Activities do
     searchable_fields: [:id, :subject_id, :verb_id, :object_id],
     sortable_fields: [:id, :subject_id, :verb_id, :object_id]
 
+  # def queries_module, do: Activity
+  def context_module, do: Activity
+
   def as_permitted_for(q, user \\ nil) do
 
     cs = can_see?({:activity, :object_id}, user)

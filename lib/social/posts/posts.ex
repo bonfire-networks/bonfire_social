@@ -15,6 +15,9 @@ defmodule Bonfire.Social.Posts do
       searchable_fields: [:id],
       sortable_fields: [:id]
 
+  # def queries_module, do: Post
+  def context_module, do: Post
+
   def draft(creator, attrs) do
     # TODO: create as private
     with {:ok, post} <- create(creator, attrs) do
@@ -83,15 +86,15 @@ defmodule Bonfire.Social.Posts do
     |> Changeset.cast_assoc(:replied, [:required, with: &Replied.changeset/2])
   end
 
-  def read(post_id, socket_or_current_user \\ nil) when is_binary(post_id) do
+  def read(post_id, socket_or_current_user \\ nil, preloads \\ :all) when is_binary(post_id) do
 
     current_user = current_user(socket_or_current_user)
 
-    with {:ok, post} <- Post |> EctoShorts.filter(id: post_id)
+    with {:ok, post} <- query([id: post_id], current_user, preloads)
       |> Activities.read(socket_or_current_user) do
 
 
-        {:ok, Activities.activity_under_object(post) } # ugly, but heh
+        {:ok, Activities.activity_under_object(post) }
 
       end
   end
@@ -106,6 +109,18 @@ defmodule Bonfire.Social.Posts do
 
   defp get(id) when is_binary(id) do
     repo().single(get_query(id))
+  end
+
+
+  def query(filters \\ [], current_user \\ nil, preloads \\ :all)
+
+  def query(filters, current_user, preloads) when is_list(filters) or is_tuple(filters) do
+
+    Post
+    |> EctoShorts.filter(filters, nil, nil)
+    |> join_preload([:post_content])
+    |> IO.inspect(label: "post query")
+    # TODO: preloads? + check boundaries
   end
 
   #doc "List posts created by the user and which are in their outbox, which are not replies"
@@ -164,7 +179,7 @@ defmodule Bonfire.Social.Posts do
   def indexing_object_format(%{activity: %{object: object} = activity}, nil), do: indexing_object_format(activity, object)
   def indexing_object_format(%Activity{object: object} = activity, nil), do: indexing_object_format(activity, object)
   def indexing_object_format(a, b) do
-    Logger.info("Not indexing")
+    Logger.info("Post not indexing")
     IO.inspect(a)
     IO.inspect(b)
     nil

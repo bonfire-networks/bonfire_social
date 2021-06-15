@@ -1,7 +1,7 @@
 defmodule Bonfire.Social.FeedActivities do
 
   require Logger
-  alias Bonfire.Data.Social.FeedPublish
+  alias Bonfire.Data.Social.{FeedPublish, Feed}
   alias Bonfire.Data.Social.PostContent
   alias Bonfire.Data.Identity.User
   alias Bonfire.Boundaries.Verbs
@@ -15,6 +15,8 @@ defmodule Bonfire.Social.FeedActivities do
       searchable_fields: [:id, :feed_id, :activity_id],
       sortable_fields: [:id]
 
+  def queries_module, do: FeedPublish
+  def context_module, do: FeedPublish
 
   def my_feed(socket_or_user, cursor_before \\ nil, include_notifications? \\ true) do
 
@@ -61,43 +63,42 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed_paginated(filters \\ [], current_user \\ nil, cursor_before \\ nil, preloads \\ :all, query \\ FeedPublish, distinct \\ true)
 
-  def feed_paginated(filters, current_user, cursor_before, preloads, query, true) when is_list(filters) do
+  def feed_paginated(filters, current_user, cursor_before, preloads, query, distinct) when is_list(filters) do
+
+    query(filters, current_user, preloads, query, distinct)
+      |> Bonfire.Repo.many_paginated(before: cursor_before) # return a page of items (reverse chronological) + pagination metadata
+  end
+
+  def query(filters \\ [], current_user \\ nil, preloads \\ :all, query \\ FeedPublish, distinct \\ true)
+
+  def query(filters, current_user, preloads, query, true = _distinct) when is_list(filters) do
 
     query
-      |> preloads(current_user, preloads)
+      |> query_extras(current_user, preloads)
       |> EctoShorts.filter(filters, nil, nil)
       |> distinct([activity: activity], [desc: activity.id])
-      |> feed_paginated_permissioned(current_user, cursor_before)
   end
 
-  def feed_paginated(filters, current_user, cursor_before, preloads, query, _) when is_list(filters) do
+  def query(filters, current_user, preloads, query, _) when is_list(filters) do
 
     query
-      |> preloads(current_user, preloads)
+      |> query_extras(current_user, preloads)
       |> EctoShorts.filter(filters, nil, nil)
-      |> feed_paginated_permissioned(current_user, cursor_before)
   end
 
-  defp feed_paginated_permissioned(query, current_user, cursor_before) do
 
-    query
-      |> Activities.as_permitted_for(current_user)
-      |> order_by([activity: activity], [desc: activity.id])
-      # |> distinct([fp], [desc: fp.id, desc: fp.activity_id]) # not sure if/why needed... but possible fix for found duplicate ID for component Bonfire.UI.Social.ActivityLive in UI
-      # |> IO.inspect(label: "feed_paginated full")
-      # |> Bonfire.Repo.all() # return all items
-      |> Bonfire.Repo.many_paginated(before: cursor_before) # return a page of items (reverse chronological) + pagination metadata
-      # |> IO.inspect(label: "feed")
-  end
-
-  defp preloads(query, current_user, preloads) do
+  defp query_extras(query, current_user, preloads) do
     query
       # add assocs needed in timelines/feeds
       |> join_preload([:activity])
       # |> IO.inspect(label: "feed_paginated pre-preloads")
       |> Activities.activity_preloads(current_user, preloads)
       # |> IO.inspect(label: "feed_paginated post-preloads")
+      |> Activities.as_permitted_for(current_user)
+      # |> IO.inspect(label: "feed_paginated post-boundaries")
+      |> order_by([activity: activity], [desc: activity.id])
   end
+
 
   # def feed(%{feed_publishes: _} = feed_for, _) do
   #   repo().maybe_preload(feed_for, [feed_publishes: [activity: [:verb, :object, subject_user: [:profile, :character]]]]) |> Map.get(:feed_publishes)
@@ -144,11 +145,6 @@ defmodule Bonfire.Social.FeedActivities do
     Logger.info("Defaulting to a :create activity, because no such verb is defined: #{inspect verb} ")
     publish(subject, :create, object, circles, tags_are_private?, replies_are_private?)
   end
-
-  defp do_publish(subject, verb, object, feeds \\ nil)
-  defp do_publish(subject, verb, object, feeds) when is_list(feeds), do: maybe_feed_publish(subject, verb, object, feeds ++ [subject]) # also put in subject's outbox
-  defp do_publish(subject, verb, object, feed_id) when not is_nil(feed_id), do: maybe_feed_publish(subject, verb, object, [feed_id, subject])
-  defp do_publish(subject, verb, object, _), do: maybe_feed_publish(subject, verb, object, subject) # just publish to subject's outbox
 
 
   @doc """
@@ -216,6 +212,12 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
 
+  defp do_publish(subject, verb, object, feeds \\ nil)
+  defp do_publish(subject, verb, object, feeds) when is_list(feeds), do: maybe_feed_publish(subject, verb, object, feeds ++ [subject]) # also put in subject's outbox
+  defp do_publish(subject, verb, object, feed_id) when not is_nil(feed_id), do: maybe_feed_publish(subject, verb, object, [feed_id, subject])
+  defp do_publish(subject, verb, object, _), do: maybe_feed_publish(subject, verb, object, subject) # just publish to subject's outbox
+
+
   defp create_and_put_in_feeds(subject, verb, object, feed_id) when is_map(object) and is_binary(feed_id) or is_list(feed_id) do
     with {:ok, activity} <- Activities.create(subject, verb, object) do
       with {:ok, published} <- put_in_feeds(feed_id, activity) do # publish in specified feed
@@ -230,8 +232,16 @@ defmodule Bonfire.Social.FeedActivities do
     end
   end
   defp create_and_put_in_feeds(subject, verb, object, %{feed_id: feed_id}), do: create_and_put_in_feeds(subject, verb, object, feed_id)
-  defp create_and_put_in_feeds(subject, verb, object, _) when is_map(object) do # for activities with no target feed, still create the activity
+  defp create_and_put_in_feeds(subject, verb, object, _) when is_map(object) do
+    # for activities with no target feed, still create the activity
+    Activities.create(subject, verb, object)
+  end
+
+  defp maybe_index_activity(subject, verb, object) do
     with {:ok, activity} <- Activities.create(subject, verb, object) do
+
+        # maybe_index(activity) # TODO, indexing here?
+
         {:ok, activity}
     end
   end
@@ -239,8 +249,8 @@ defmodule Bonfire.Social.FeedActivities do
   defp put_in_feeds(feeds, activity) when is_list(feeds), do: Enum.map(feeds, fn x -> put_in_feeds(x, activity) end) # TODO: optimise?
 
   defp put_in_feeds(feed_or_subject, activity) when is_map(feed_or_subject) or (is_binary(feed_or_subject) and feed_or_subject !="") do
-    with {:ok, %{id: feed_id} = feed} <- Feeds.feed_for_id(feed_or_subject),
-    {:ok, published} <- do_put_in_feeds(feed, activity) do
+    with %Feed{id: feed_id} = feed <- Feeds.feed_for(feed_or_subject),
+    {:ok, published} <- do_put_in_feeds(feed_id, ulid(activity)) do
 
       published = %{published | activity: activity}
 
@@ -258,8 +268,8 @@ defmodule Bonfire.Social.FeedActivities do
     {:ok, nil}
   end
 
-  defp do_put_in_feeds(feed_id, activity) do
-    attrs = %{feed_id: ulid(feed_id), activity_id: ulid(activity)}
+  defp do_put_in_feeds(feed, activity) when is_binary(activity) and is_binary(feed) do
+    attrs = %{feed_id: (feed), activity_id: (activity)}
     repo().put(FeedPublish.changeset(attrs))
   end
 

@@ -9,6 +9,9 @@ defmodule Bonfire.Social.Flags do
     searchable_fields: [:flagger_id, :flagged_id]
   import Bonfire.Common.Utils
 
+  # def queries_module, do: Flag
+  def context_module, do: Flag
+
   def flagged?(%User{}=user, flagged), do: not is_nil(get!(user, flagged))
   def get(%User{}=user, flagged), do: repo().single(by_both_q(user, flagged))
   def get!(%User{}=user, flagged), do: repo().one(by_both_q(user, flagged))

@@ -15,6 +15,9 @@ defmodule Bonfire.Social.Messages do
       searchable_fields: [:id],
       sortable_fields: [:id]
 
+  # def queries_module, do: Message
+  def context_module, do: Message
+
   def draft(creator, attrs) do
     # TODO: create as private
     with {:ok, message} <- create(creator, attrs) do

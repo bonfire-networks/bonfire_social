@@ -10,6 +10,9 @@ defmodule Bonfire.Social.Follows do
     searchable_fields: [:id, :follower_id, :followed_id],
     sortable_fields: [:id]
 
+  # def queries_module, do: Follow
+  def context_module, do: Follow
+
   def following?(user, followed), do: not is_nil(get!(user, followed))
 
   def get(user, followed), do: repo().single(by_both_q(user, followed))
