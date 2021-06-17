@@ -170,14 +170,17 @@ defmodule Bonfire.Social.Follows do
     end
   end
 
-  def ap_receive_activity(activity, object) do # record an incoming follow
-    with {:ok, follower} <- Bonfire.Me.Users.ActivityPub.by_ap_id(activity.data["actor"]),
+
+  def ap_receive_activity(%{data: %{"actor" => actor} = data} = _activity, object) do # record an incoming follow
+  IO.inspect(activity_data: data)
+  IO.inspect(object: object)
+    with {:ok, follower} <- Bonfire.Me.Users.ActivityPub.by_ap_id(actor),
          {:ok, followed} <- Bonfire.Me.Users.ActivityPub.by_username(e(object, :username, object)),
          {:ok, _} <- follow(follower, followed) do
       ActivityPub.accept(%{
-        to: [activity.data["actor"]],
+        to: [actor],
         actor: object,
-        object: activity.data,
+        object: data,
         local: true
       })
     end
