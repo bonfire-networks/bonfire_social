@@ -6,6 +6,16 @@ defmodule Bonfire.Social.Integration do
 
   def mailer, do: Config.get!(:mailer_module)
 
+  def ap_publish(verb, thing_id, user_id) do
+    if Bonfire.Common.Utils.module_enabled?(Bonfire.Federate.ActivityPub.APPublishWorker) do
+      Bonfire.Federate.ActivityPub.APPublishWorker.enqueue(verb, %{
+        "context_id" => thing_id,
+        "user_id" => user_id
+      })
+    end
+
+    :ok
+  end
 
   def maybe_index(object) do
     if Config.module_enabled?(Bonfire.Search.Indexer) do

@@ -12,6 +12,7 @@ defmodule Bonfire.Social.Likes do
 
   # def queries_module, do: Like
   def context_module, do: Like
+  def federation_module, do: ["Like", {"Create", "Like"}, {"Undo", "Like"}, {"Delete", "Like"}]
 
   def liked?(%User{}=user, liked), do: not is_nil(get!(user, liked))
   def get(%User{}=user, liked), do: repo().single(by_both_q(user, liked))

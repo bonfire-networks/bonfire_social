@@ -3,6 +3,7 @@ defmodule Bonfire.Social.Follows do
   alias Bonfire.Social.FeedActivities
   alias Bonfire.Social.Activities
   alias Bonfire.Social.APActivities
+  alias Bonfire.Social.Integration
   import Bonfire.Common.Utils
 
   use Bonfire.Repo.Query,
@@ -12,6 +13,7 @@ defmodule Bonfire.Social.Follows do
 
   # def queries_module, do: Follow
   def context_module, do: Follow
+  def federation_module, do: ["Follow", {"Create", "Follow"}, {"Undo", "Follow"}, {"Delete", "Follow"}]
 
   def following?(user, followed), do: not is_nil(get!(user, followed))
 
@@ -66,7 +68,31 @@ defmodule Bonfire.Social.Follows do
   defp maybe_with_followed_profile_only(q, true), do: q |> where([followed_profile: p], not is_nil(p.id))
   defp maybe_with_followed_profile_only(q, _), do: q
 
-  def follow(%{} = follower, %{} = followed) do
+  @doc """
+  Follow someone/something, and federate it
+  """
+  def follow(follower, followed) do
+    with {:ok, follow} <- do_follow(follower, followed) do
+
+      Integration.ap_publish("create", follow.id, ulid(follower))
+
+      {:ok, follow}
+    end
+  end
+
+  defp do_follow(subject, object) when is_binary(object) do
+    with {:ok, object} <- Bonfire.Common.Pointers.get(object) do
+      do_follow(subject, object)
+    end
+  end
+
+  defp do_follow(subject, object) when is_binary(subject) do
+    with {:ok, subject} <- Bonfire.Common.Pointers.get(subject) do
+      do_follow(subject, object)
+    end
+  end
+
+  defp do_follow(%{} = follower, %{} = followed) do
     with {:ok, follow} <- create(follower, followed) do
 
       # FeedActivities.publish(follower, :follow, followed) # TODO: make configurable where the follow gets published
@@ -79,12 +105,6 @@ defmodule Bonfire.Social.Follows do
       APActivities.publish(follower, "create", follow)
 
       {:ok, follow}
-    end
-  end
-
-  def follow(user, object) when is_binary(object) do
-    with {:ok, object} <- Bonfire.Common.Pointers.get(object) do
-      follow(user, object)
     end
   end
 
@@ -171,14 +191,14 @@ defmodule Bonfire.Social.Follows do
   end
 
 
-  def ap_receive_activity(%{data: %{"actor" => actor} = data} = _activity, object) do # record an incoming follow
-  IO.inspect(activity_data: data)
-  IO.inspect(object: object)
-    with {:ok, follower} <- Bonfire.Me.Users.ActivityPub.by_ap_id(actor),
-         {:ok, followed} <- Bonfire.Me.Users.ActivityPub.by_username(e(object, :username, object)),
-         {:ok, _} <- follow(follower, followed) do
+  def ap_receive_activity(follower, %{data: data} = _activity, object) when is_binary(follower) or is_struct(follower) do # record an incoming follow
+    IO.inspect(follower: follower)
+    IO.inspect(activity_data: data)
+    IO.inspect(object: object)
+    with {:ok, followed} <- Bonfire.Me.Users.ActivityPub.by_username(e(object, :username, object)),
+         {:ok, _} <- do_follow(follower, followed) do
       ActivityPub.accept(%{
-        to: [actor],
+        to: [data["actor"]],
         actor: object,
         object: data,
         local: true

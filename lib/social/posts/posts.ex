@@ -7,6 +7,7 @@ defmodule Bonfire.Social.Posts do
   alias Bonfire.Social.Threads
   alias Bonfire.Social.PostContents
   alias Bonfire.Boundaries.Verbs
+  alias Bonfire.Social.Integration
 
   import Bonfire.Common.Utils
 
@@ -17,6 +18,7 @@ defmodule Bonfire.Social.Posts do
 
   # def queries_module, do: Post
   def context_module, do: Post
+  def federation_module, do: [{"Create", "Note"}, {"Update", "Note"}, {"Create", "Article"}, {"Update", "Article"}]
 
   def draft(creator, attrs) do
     # TODO: create as private
@@ -25,7 +27,16 @@ defmodule Bonfire.Social.Posts do
     end
   end
 
-  def publish(creator, attrs, mentions_are_private? \\ true, replies_are_private? \\ false) do
+  def publish(%{} = creator, attrs, mentions_are_private? \\ true, replies_are_private? \\ false) do
+    with  {:ok, post} <- do_publish(creator, attrs, mentions_are_private?, replies_are_private?) do
+
+      Integration.ap_publish("create", post.id, ulid(creator))
+
+      {:ok, post}
+    end
+  end
+
+  defp do_publish(%{} = creator, attrs, mentions_are_private? \\ true, replies_are_private? \\ false) do
   # TODO: make mentions_are_private? and replies_are_private? defaults configurable
 
     circles = e(attrs, :circles, [])
@@ -107,7 +118,10 @@ defmodule Bonfire.Social.Posts do
     |> FeedActivities.feed_paginated(current_user, cursor_before, preloads)
   end
 
-  defp get(id) when is_binary(id) do
+  @doc """
+  For internal use only (doesn't check permissions). Use `read` instead.
+  """
+  def get(id) when is_binary(id) do
     repo().single(get_query(id))
   end
 
@@ -158,6 +172,63 @@ defmodule Bonfire.Social.Posts do
      where: cr.creator_id == ^user_id,
      preload: [post_content: pc, created: cr]
   end
+
+  def ap_publish_activity("create", post) do
+    IO.inspect(ap_publish_activity: post)
+
+    object = %{
+      "type" => "Note",
+      "name" => e(post, :post_content, :name, nil),
+      "summary" => e(post, :post_content, :summary, nil),
+      "content" => e(post, :post_content, :html_body, nil),
+    }
+
+    {:ok, from} = ActivityPub.Adapter.get_actor_by_id(e(post, :created, :creator_id, nil))
+    to = [] # TODO
+
+    attrs = %{
+      actor: from,
+      context: nil, #TODO
+      object: object,
+      to: to
+    }
+
+    ActivityPub.create(attrs)
+  end
+
+  @doc """
+  record an incoming post
+  """
+  def ap_receive_activity(creator, activity, object, circles \\ [])
+
+  def ap_receive_activity(creator, activity, %{public: true} = object, []) do
+    ap_receive_activity(creator, activity, object, [:guests])
+  end
+
+  def ap_receive_activity(creator, %{data: _activity_data} = _activity, %{data: post_data} = _object, circles) do # record an incoming post
+    # IO.inspect(activity: activity)
+    # IO.inspect(creator: creator)
+    # IO.inspect(object: object)
+
+    attrs = %{
+      local: false, # FIXME?
+      canonical_url: nil, # TODO, in a mixin?
+      circles: circles,
+      post_content: %{
+        name: post_data["name"],
+        html_body: post_data["content"]
+      },
+      created: %{
+        date: post_data["published"] # FIXME
+      }
+    }
+
+    with {:ok, post} <- do_publish(creator, attrs, false) do
+      # IO.inspect(remote_post: post)
+      {:ok, post}
+    end
+  end
+
 
   def indexing_object_format(feed_activity_or_activity, object \\ nil)
   def indexing_object_format(%{subject_profile: subject_profile, subject_character: subject_character} = activity, %{id: id, post_content: post_content} = post) do

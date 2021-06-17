@@ -12,6 +12,7 @@ defmodule Bonfire.Social.Boosts do
 
   # def queries_module, do: Boost
   def context_module, do: Boost
+  def federation_module, do: ["Announce", {"Create", "Announce"}, {"Undo", "Announce"}, {"Delete", "Announce"}]
 
   def boosted?(%User{}=user, boosted), do: not is_nil(get!(user, boosted))
   def get(%User{}=user, boosted), do: repo().single(by_both_q(user, boosted))

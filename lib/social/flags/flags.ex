@@ -11,6 +11,7 @@ defmodule Bonfire.Social.Flags do
 
   # def queries_module, do: Flag
   def context_module, do: Flag
+  def federation_module, do: ["Flag", {"Create", "Flag"}, {"Undo", "Flag"}, {"Delete", "Flag"}]
 
   def flagged?(%User{}=user, flagged), do: not is_nil(get!(user, flagged))
   def get(%User{}=user, flagged), do: repo().single(by_both_q(user, flagged))
