@@ -174,7 +174,7 @@ defmodule Bonfire.Social.Posts do
   end
 
   def ap_publish_activity("create", post) do
-    IO.inspect(ap_publish_activity: post)
+    # IO.inspect(ap_publish_activity: post)
 
     object = %{
       "type" => "Note",
