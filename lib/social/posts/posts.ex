@@ -176,21 +176,31 @@ defmodule Bonfire.Social.Posts do
   def ap_publish_activity("create", post) do
     # IO.inspect(ap_publish_activity: post)
 
+    {:ok, actor} = ActivityPub.Adapter.get_actor_by_id(e(post, :created, :creator_id, nil))
+    to = if post.public do
+      ["https://www.w3.org/ns/activitystreams#Public"]
+    else
+      []
+    end
+    cc = [actor.data["followers"]]
+
     object = %{
       "type" => "Note",
       "name" => e(post, :post_content, :name, nil),
       "summary" => e(post, :post_content, :summary, nil),
       "content" => e(post, :post_content, :html_body, nil),
+      "to" => to,
+      "cc" => cc
     }
 
-    {:ok, from} = ActivityPub.Adapter.get_actor_by_id(e(post, :created, :creator_id, nil))
-    to = [] # TODO
-
     attrs = %{
-      actor: from,
-      context: nil, #TODO
+      actor: actor,
+      context: ActivityPub.Utils.generate_context_id(),
       object: object,
-      to: to
+      to: to,
+      additional: %{
+        "cc" => cc
+      }
     }
 
     ActivityPub.create(attrs)
