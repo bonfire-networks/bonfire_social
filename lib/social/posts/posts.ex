@@ -177,11 +177,9 @@ defmodule Bonfire.Social.Posts do
     # IO.inspect(ap_publish_activity: post)
 
     {:ok, actor} = ActivityPub.Adapter.get_actor_by_id(e(post, :created, :creator_id, nil))
-    to = if post.public do
-      ["https://www.w3.org/ns/activitystreams#Public"]
-    else
-      []
-    end
+    #FIXME only publish to public URI if in a public enough cirlce
+    to = ["https://www.w3.org/ns/activitystreams#Public"]
+
     cc = [actor.data["followers"]]
 
     object = %{
