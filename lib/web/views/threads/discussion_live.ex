@@ -43,7 +43,7 @@ defmodule Bonfire.Social.Web.DiscussionLive do
         smart_input_placeholder: "Reply to the discussion",
         reply_id: Map.get(params, "reply_id"),
         activity: activity,
-        object: Map.merge(object, preloaded_object),
+        object: Map.merge(object, preloaded_object || %{}),
         thread_id: e(object, :id, nil),
         following: following || []
       )}
