@@ -32,6 +32,7 @@ defmodule Bonfire.Social.Objects do
   def object_with_reply_creator(object) do
     object
     |> Bonfire.Repo.maybe_preload([replied: [reply_to: [created: [creator_character: [:inbox]]]]]) #|> IO.inspect
+    # |> Bonfire.Repo.maybe_preload([replied: [:reply_to]]) #|> IO.inspect
     |> Bonfire.Repo.maybe_preload([replied: [reply_to: [creator: [character: [:inbox]]]]]) #|> IO.inspect
   end
 
