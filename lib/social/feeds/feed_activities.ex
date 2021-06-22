@@ -1,13 +1,18 @@
 defmodule Bonfire.Social.FeedActivities do
 
   require Logger
+
   alias Bonfire.Data.Social.{FeedPublish, Feed}
   alias Bonfire.Data.Social.PostContent
   alias Bonfire.Data.Identity.User
+
   alias Bonfire.Boundaries.Verbs
+  alias Bonfire.Boundaries.Circles
+
   alias Bonfire.Social.Feeds
   alias Bonfire.Social.Activities
   alias Bonfire.Social.Objects
+
   import Bonfire.Common.Utils
 
   use Bonfire.Repo.Query,
@@ -248,7 +253,7 @@ defmodule Bonfire.Social.FeedActivities do
     end
   end
 
-  defp put_in_feeds(feeds, activity) when is_list(feeds), do: Enum.map(feeds, fn x -> put_in_feeds(x, activity) end) # TODO: optimise?
+  defp put_in_feeds(feeds, activity) when is_list(feeds), do: feeds |> Circles.circle_ids() |> Enum.map(fn x -> put_in_feeds(x, activity) end) # TODO: optimise?
 
   defp put_in_feeds(feed_or_subject, activity) when is_map(feed_or_subject) or (is_binary(feed_or_subject) and feed_or_subject !="") do
     with %Feed{id: feed_id} = feed <- Feeds.feed_for(feed_or_subject),
