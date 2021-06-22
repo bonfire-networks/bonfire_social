@@ -16,9 +16,9 @@ defmodule Bonfire.Social.Flags do
   def flagged?(%User{}=user, flagged), do: not is_nil(get!(user, flagged))
   def get(%User{}=user, flagged), do: repo().single(by_both_q(user, flagged))
   def get!(%User{}=user, flagged), do: repo().one(by_both_q(user, flagged))
-  def by_flagger(%User{}=user), do: repo().all(by_flagger_q(user))
-  def by_flagged(%User{}=user), do: repo().all(by_flagged_q(user))
-  def by_any(%User{}=user), do: repo().all(by_any_q(user))
+  def by_flagger(%User{}=user), do: repo().many(by_flagger_q(user))
+  def by_flagged(%User{}=user), do: repo().many(by_flagged_q(user))
+  def by_any(%User{}=user), do: repo().many(by_any_q(user))
 
   def flag(%User{} = flagger, %{} = flagged) do
     with {:ok, flag} <- create(flagger, flagged) do

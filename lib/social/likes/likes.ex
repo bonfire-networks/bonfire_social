@@ -17,10 +17,10 @@ defmodule Bonfire.Social.Likes do
   def liked?(%User{}=user, liked), do: not is_nil(get!(user, liked))
   def get(%User{}=user, liked), do: repo().single(by_both_q(user, liked))
   def get!(%User{}=user, liked), do: repo().one(by_both_q(user, liked))
-  def by_liker(%User{}=user), do: repo().all(by_liker_q(user))
-  def by_liker(%User{}=user, type), do: repo().all(by_liker_q(user) |> by_type_q(type))
-  def by_liked(%User{}=user), do: repo().all(by_liked_q(user))
-  def by_any(%User{}=user), do: repo().all(by_any_q(user))
+  def by_liker(%User{}=user), do: repo().many(by_liker_q(user))
+  def by_liker(%User{}=user, type), do: repo().many(by_liker_q(user) |> by_type_q(type))
+  def by_liked(%User{}=user), do: repo().many(by_liked_q(user))
+  def by_any(%User{}=user), do: repo().many(by_any_q(user))
 
   def like(%User{} = liker, %{} = liked) do
     with {:ok, like} <- create(liker, liked) do

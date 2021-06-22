@@ -130,7 +130,7 @@ defmodule Bonfire.Social.Threads do
       # |> preload_join(:activity, :subject_profile)
       # |> preload_join(:activity, :subject_character)
       |> Bonfire.Repo.many_paginated(limit: limit, before: Utils.e(cursor, :before, nil), after: Utils.e(cursor, :after, nil)) # return a page of items + pagination metadata
-      # |> repo().all # without pagination
+      # |> repo().many # without pagination
       # |> IO.inspect
   end
 

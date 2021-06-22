@@ -17,9 +17,9 @@ defmodule Bonfire.Social.Boosts do
   def boosted?(%User{}=user, boosted), do: not is_nil(get!(user, boosted))
   def get(%User{}=user, boosted), do: repo().single(by_both_q(user, boosted))
   def get!(%User{}=user, boosted), do: repo().one(by_both_q(user, boosted))
-  def by_booster(%User{}=user), do: repo().all(by_booster_q(user))
-  def by_boosted(%User{}=user), do: repo().all(by_boosted_q(user))
-  def by_any(%User{}=user), do: repo().all(by_any_q(user))
+  def by_booster(%User{}=user), do: repo().many(by_booster_q(user))
+  def by_boosted(%User{}=user), do: repo().many(by_boosted_q(user))
+  def by_any(%User{}=user), do: repo().many(by_any_q(user))
 
   def boost(%User{} = booster, %{} = boosted) do
     with {:ok, boost} <- create(booster, boosted),

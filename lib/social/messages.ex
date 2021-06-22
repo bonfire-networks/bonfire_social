@@ -128,7 +128,7 @@ defmodule Bonfire.Social.Messages do
       # |> distinct([fp], [desc: fp.id, desc: fp.activity_id]) # not sure if/why needed... but possible fix for found duplicate ID for component Bonfire.UI.Social.ActivityLive in UI
       # |> order_by([fp], desc: fp.id)
       # |> IO.inspect(label: "post-permissions")
-      # |> Bonfire.Repo.all() # return all items
+      # |> repo().many() # return all items
       |> Bonfire.Repo.many_paginated(before: cursor_before) # return a page of items (reverse chronological) + pagination metadata
       # |> IO.inspect(label: "feed")
   end

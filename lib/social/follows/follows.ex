@@ -20,11 +20,11 @@ defmodule Bonfire.Social.Follows do
   def get(user, followed), do: repo().single(by_both_q(user, followed))
   def get!(user, followed), do: repo().one(by_both_q(user, followed))
 
-  def by_follower(user), do: repo().all(followed_by_follower_q(user))
-  # def by_follower(user), do: repo().all(by_follower_q(user))
-  def by_followed(user), do: repo().all(by_followed_q(user))
+  def by_follower(user), do: repo().many(followed_by_follower_q(user))
+  # def by_follower(user), do: repo().many(by_follower_q(user))
+  def by_followed(user), do: repo().many(by_followed_q(user))
 
-  def by_any(user), do: repo().all(by_any_q(user))
+  def by_any(user), do: repo().many(by_any_q(user))
 
   defp list(filters, _current_user) do
     # TODO: check see/read permissions for current_user
