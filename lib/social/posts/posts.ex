@@ -133,7 +133,7 @@ defmodule Bonfire.Social.Posts do
     Post
     |> EctoShorts.filter(filters, nil, nil)
     |> join_preload([:post_content])
-    |> IO.inspect(label: "post query")
+    # |> IO.inspect(label: "post query")
     # TODO: preloads? + check boundaries
   end
 

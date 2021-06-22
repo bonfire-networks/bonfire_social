@@ -115,11 +115,11 @@ defmodule Bonfire.Social.FeedActivities do
     # FIXME, enable tagging + reply at same time
     # FIXME, only if OP is included in audience
     object = Objects.object_with_reply_creator(object)
-    IO.inspect(object_with_reply_creator: object)
+    # IO.inspect(object_with_reply_creator: object)
     reply_to_object = e(object, :replied, :reply_to, nil)
-    IO.inspect(reply_to_object: reply_to_object)
+    # IO.inspect(reply_to_object: reply_to_object)
     reply_to_creator = Objects.object_creator(reply_to_object)
-    IO.inspect(publishing_reply: reply_to_creator)
+    # IO.inspect(publishing_reply: reply_to_creator)
     # reply_to_inbox = Feeds.inbox_of_obj_creator(reply_to_object)
 
     with {:ok, activity} <- do_publish(subject, verb, object, circles ++ [e(reply_to_creator, :id, nil)]) do
