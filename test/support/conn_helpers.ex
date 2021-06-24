@@ -92,24 +92,37 @@ defmodule Bonfire.Social.Test.ConnHelpers do
     html
   end
 
-  def floki_live(conn) do
-    assert {:ok, view, html} = live(conn)
+  defp do_live(conn, path \\ nil)
+  defp do_live(conn, nil), do: live(conn)
+  defp do_live(conn, path) when is_binary(path), do: live(conn, path)
+  defp do_live(conn, path), do: live(conn, Bonfire.Common.URIs.path(path))
+
+  def floki_live(%Plug.Conn{} = conn \\ conn(), path \\ nil) do
+    assert {:ok, view, html} = do_live(conn, path)
     assert {:ok, doc} = Floki.parse_document(html)
     {view, doc}
   end
 
-  def floki_live(conn, path) do
-    assert {:ok, view, html} = live(conn, path)
-    assert {:ok, doc} = Floki.parse_document(html)
-    {view, doc}
+  def floki_click(conn_or_view \\ conn(), path_or_value \\ %{}, value \\ %{})
+
+  def floki_click(%Plug.Conn{} = conn, path, value) do
+    {view, _doc} = floki_live(conn, path)
+    floki_click(view, value)
   end
 
-  def floki_click(view, value \\ %{}) do
+  def floki_click(view, value, _) do
     assert {:ok, doc} = Floki.parse_fragment(render_click(view, value))
     doc
   end
 
-  def floki_submit(view, event, value \\ %{}) do
+  def floki_submit(conn_or_view \\ conn(), path_or_event, event_or_value \\ %{}, value \\ %{})
+
+  def floki_submit(%Plug.Conn{} = view, path, event, value) do
+    {view, _doc} = floki_live(conn, path)
+    floki_submit(view, event, value)
+  end
+
+  def floki_submit(view, event, value, _) do
     assert {:ok, doc} = Floki.parse_fragment(render_submit(view, event, value))
     doc
   end
