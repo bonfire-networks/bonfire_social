@@ -201,7 +201,7 @@ defmodule Bonfire.Social.Posts do
       }
     }
 
-    ActivityPub.create(attrs)
+    ActivityPub.create(attrs, post.id)
   end
 
   @doc """
