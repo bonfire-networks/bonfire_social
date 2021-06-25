@@ -14,13 +14,19 @@ defmodule Bonfire.Social.Feeds do
   def instance_feed_id, do: Bonfire.Boundaries.Circles.circles[:local]
   def fediverse_feed_id, do: Bonfire.Boundaries.Circles.circles[:activity_pub]
 
-  def my_feed_ids(user, include_notifications? \\ true, extra_feeds \\ [])
+  def my_feed_ids(socket, include_notifications? \\ true, extra_feeds \\ [])
 
-  def my_feed_ids(%{id: id} = user, include_notifications?, extra_feeds) do
+  def my_feed_ids(socket, include_notifications?, extra_feeds) do
     # IO.inspect(my_feed_ids_user: user)
-    extra_feeds = if include_notifications?, do: extra_feeds ++ [id, my_inbox_feed_id(user)], else: extra_feeds ++ [id]
 
-    with following_ids when is_list(following_ids) <- Follows.by_follower(user) do
+    current_user = current_user(socket)
+    my_outbox_id = ulid(current_user) || ulid(current_account(socket))
+
+    extra_feeds = if include_notifications?, do: extra_feeds ++ [my_outbox_id, my_inbox_feed_id(socket)],
+    else: extra_feeds ++ [my_outbox_id]
+
+    with current_user when not is_nil(current_user) <- current_user,
+         following_ids when is_list(following_ids) <- Follows.by_follower(current_user) do
       #IO.inspect(subs: following_ids)
       extra_feeds ++ following_ids
     else
@@ -32,26 +38,26 @@ defmodule Bonfire.Social.Feeds do
 
   def my_feed_ids(_, _, extra_feeds), do: extra_feeds
 
-  def my_inbox_feed_id(%{current_user: %{character: %{inbox: %{feed_id: feed_id}}}, current_account:  %{inbox: %{feed_id: account_feed_id}}} = _assigns) when is_binary(feed_id) do
-    [feed_id, account_feed_id]
+  def my_inbox_feed_id(%{current_user: user, current_account: account} = _assigns) when not is_nil(user) and not is_nil(account) do
+    [my_inbox_feed_id(user), my_inbox_feed_id(account)]
+  end
+  def my_inbox_feed_id(%{character: %{inbox: %{feed_id: feed_id}}}) when is_binary(feed_id) do
+    feed_id
+  end
+  def my_inbox_feed_id(%{inbox: %{feed_id: feed_id}}) when is_binary(feed_id) do
+    feed_id
   end
   def my_inbox_feed_id(%{current_user: user} = _assigns) when not is_nil(user) do
     my_inbox_feed_id(user)
   end
-  def my_inbox_feed_id(%{current_account: %{inbox: %{feed_id: account_feed_id}}} = _assigns) when is_binary(account_feed_id) do
-    account_feed_id
-  end
   def my_inbox_feed_id(%{current_account: account} = _assigns) when not is_nil(account) do
-    inbox_feed_ids(account)
-  end
-  def my_inbox_feed_id(%{character: %{inbox: %{feed_id: feed_id}}} = _user) when is_binary(feed_id) do
-    feed_id
+    my_inbox_feed_id(account)
   end
   def my_inbox_feed_id(%{__context__: context}) do
     my_inbox_feed_id(context)
   end
-  def my_inbox_feed_id(%{id: _} = user) when not is_nil(user) do
-    inbox_feed_ids(user)
+  def my_inbox_feed_id(%{id: id} = user) do
+    if is_ulid?(id), do: inbox_feed_ids(user)
   end
   def my_inbox_feed_id(_) do
     nil

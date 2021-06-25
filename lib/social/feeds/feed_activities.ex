@@ -23,13 +23,13 @@ defmodule Bonfire.Social.FeedActivities do
   def queries_module, do: FeedPublish
   def context_module, do: FeedPublish
 
-  def my_feed(socket_or_user, cursor_before \\ nil, include_notifications? \\ true) do
+  def my_feed(socket, cursor_before \\ nil, include_notifications? \\ true) do
 
     # feeds the user is following
-    feed_ids = Feeds.my_feed_ids(current_user(socket_or_user), include_notifications?)
+    feed_ids = Feeds.my_feed_ids(socket, include_notifications?)
     # IO.inspect(my_feed_ids: feed_ids)
 
-    feed(feed_ids, socket_or_user, cursor_before)
+    feed(feed_ids, socket, cursor_before)
   end
 
   def feed(feed, current_user_or_socket \\ nil, cursor_before \\ nil, preloads \\ :all)
@@ -52,15 +52,20 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed(:notifications, current_user_or_socket, cursor_before, preloads) do
-    current_user = current_user(current_user_or_socket)
+    # current_user = current_user(current_user_or_socket)
 
-    feed_id = Bonfire.Social.Feeds.my_inbox_feed_id(current_user)
-    # IO.inspect(query_notifications_feed_id: feed_id)
+    case Bonfire.Social.Feeds.my_inbox_feed_id(current_user_or_socket) do
+      feed_id when is_binary(feed_id) ->
+        IO.inspect(query_notifications_feed_id: feed_id)
 
-    pubsub_subscribe(feed_id, current_user_or_socket) # subscribe to realtime feed updates
+        pubsub_subscribe(feed_id, current_user_or_socket) # subscribe to realtime feed updates
 
-    [feed_id: feed_id] # FIXME: for some reason preloading creator or reply_to when we have a boost in inbox breaks ecto
-    |> feed_paginated(current_user, cursor_before, preloads)
+        [feed_id: feed_id] # FIXME: for some reason preloading creator or reply_to when we have a boost in inbox breaks ecto
+        |> feed_paginated(current_user_or_socket, cursor_before, preloads)
+
+        _ -> nil
+    end
+
   end
 
   def feed(_, _, _, _, _), do: []

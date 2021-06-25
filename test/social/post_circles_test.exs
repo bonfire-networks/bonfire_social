@@ -34,7 +34,7 @@ defmodule Bonfire.Social.PostCirclesTest do
 
   end
 
-  test "creating & then seeing my own post in feeds" do
+  test "creating & then seeing my own post in my outbox feed" do
     user = fake_user!()
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
 
@@ -49,7 +49,7 @@ defmodule Bonfire.Social.PostCirclesTest do
 
   end
 
-  test "cannot see posts I'm not allowed to see in feed" do
+  test "cannot see posts I'm not allowed to see in instance feed" do
     user = fake_user!()
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
 

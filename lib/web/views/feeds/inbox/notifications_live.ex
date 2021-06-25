@@ -20,6 +20,7 @@ defmodule Bonfire.Social.Web.Feeds.NotificationsLive do
     {:ok, socket
     |> assign(
       page: "notifications",
+      selected_tab: "notifications",
       page_title: "Notifications",
       feed_title: "Notifications",
       smart_input: false,
