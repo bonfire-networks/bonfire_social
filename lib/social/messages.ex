@@ -41,8 +41,6 @@ defmodule Bonfire.Social.Messages do
 
           with {:ok, activity} <- FeedActivities.notify_characters(creator, :create, message, circles) do
 
-            Threads.maybe_push_thread(creator, activity, message)
-
             {:ok, Activities.activity_under_object(activity)}
 
           else e ->

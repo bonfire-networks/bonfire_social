@@ -2,7 +2,7 @@ defmodule Bonfire.Social.Activities do
 
   alias Bonfire.Data.Social.{Activity, Like, Boost, Flag, PostContent}
   alias Bonfire.Boundaries.Verbs
-  alias Bonfire.Common.Utils
+  import Bonfire.Common.Utils
   # import Bonfire.Me.Integration
   # import Ecto.Query
   require Logger
@@ -16,6 +16,7 @@ defmodule Bonfire.Social.Activities do
   def context_module, do: Activity
 
   def as_permitted_for(q, user \\ nil) do
+    user = current_user(user)
 
     cs = can_see?({:activity, :object_id}, user)
 
@@ -108,7 +109,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   def activity_preloads(query, current_user, :default) do
-
+    current_user = current_user(current_user)
     query
       |> activity_preloads(current_user, :minimal)
       |> join_preload([:activity, :verb])
@@ -172,7 +173,7 @@ defmodule Bonfire.Social.Activities do
 
     IO.inspect(query: query)
 
-    current_user = Utils.current_user(socket_or_current_user)
+    current_user = current_user(socket_or_current_user)
 
     with {:ok, object} <- query
       |> object_preload_create_activity(current_user, [:default, :with_parents])
@@ -181,7 +182,7 @@ defmodule Bonfire.Social.Activities do
       # |> IO.inspect
       |> repo().single() do
 
-        # Utils.pubsub_subscribe(Utils.e(object, :activity, :replied, :thread_id, nil) || object.id, socket_or_current_user) # subscribe to realtime feed updates
+        # pubsub_subscribe(e(object, :activity, :replied, :thread_id, nil) || object.id, socket_or_current_user) # subscribe to realtime feed updates
 
         {:ok, object} #|> repo().maybe_preload(controlled: [acl: [grants: [access: [:interacts]]]]) |> IO.inspect
       end
@@ -189,7 +190,7 @@ defmodule Bonfire.Social.Activities do
 
   def read(filters, socket_or_current_user) when is_map(filters) or is_list(filters) do # note: we're fetching by object_id, and not activity.id
 
-    current_user = Utils.current_user(socket_or_current_user)
+    current_user = current_user(socket_or_current_user)
 
     with {:ok, activity} <- Activity |> EctoShorts.filter(filters)
       |> read(socket_or_current_user) do

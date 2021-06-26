@@ -2,8 +2,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   require Logger
 
-  alias Bonfire.Data.Social.{FeedPublish, Feed}
-  alias Bonfire.Data.Social.PostContent
+  alias Bonfire.Data.Social.{FeedPublish, Feed, PostContent}
   alias Bonfire.Data.Identity.User
 
   alias Bonfire.Boundaries.Verbs
@@ -12,6 +11,7 @@ defmodule Bonfire.Social.FeedActivities do
   alias Bonfire.Social.Feeds
   alias Bonfire.Social.Activities
   alias Bonfire.Social.Objects
+  alias Bonfire.Social.Threads
 
   import Bonfire.Common.Utils
 
@@ -38,6 +38,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed(feed_id_or_ids, current_user_or_socket, cursor_before, preloads) when is_binary(feed_id_or_ids) or is_list(feed_id_or_ids) do
     # IO.inspect(feed_id_or_ids: feed_id_or_ids)
+    feed_id_or_ids = maybe_flatten(feed_id_or_ids)
 
     pubsub_subscribe(feed_id_or_ids, current_user_or_socket) # subscribe to realtime feed updates
 
@@ -55,15 +56,19 @@ defmodule Bonfire.Social.FeedActivities do
     # current_user = current_user(current_user_or_socket)
 
     case Bonfire.Social.Feeds.my_inbox_feed_id(current_user_or_socket) do
-      feed_id when is_binary(feed_id) ->
-        IO.inspect(query_notifications_feed_id: feed_id)
+      feeds when is_binary(feeds) or is_list(feeds) ->
+        # IO.inspect(query_notifications_feed_id: feeds)
 
-        pubsub_subscribe(feed_id, current_user_or_socket) # subscribe to realtime feed updates
+        feeds = maybe_flatten(feeds)
 
-        [feed_id: feed_id] # FIXME: for some reason preloading creator or reply_to when we have a boost in inbox breaks ecto
+        pubsub_subscribe(feeds, current_user_or_socket) # subscribe to realtime feed updates
+
+        [feed_id: feeds] # FIXME: for some reason preloading creator or reply_to when we have a boost in inbox breaks ecto
         |> feed_paginated(current_user_or_socket, cursor_before, preloads)
 
-        _ -> nil
+        e ->
+          Logger.error("no feed for :notifications - #{e}")
+          nil
     end
 
   end
@@ -122,18 +127,25 @@ defmodule Bonfire.Social.FeedActivities do
 
   def publish(subject, verb, %{replied: %{reply_to_id: reply_to_id}} = object, circles, _, false = replies_are_private?) when is_atom(verb) and is_binary(reply_to_id) do
     # publishing a reply to something
-    # FIXME, enable tagging + reply at same time
-    # FIXME, only if OP is included in audience
-    object = Objects.object_with_reply_creator(object)
-    # IO.inspect(object_with_reply_creator: object)
+    # TODO share some logic with maybe_notify_creator?
+    # TODO enable by default only if OP is included in audience?
+    # FIXME should be possible to notify tag + reply_to at same time
+    # FIXME should notify reply_to user if included in target circles even when replies_are_private?==true
+    object = Objects.preload_reply_creator(object)
+    # IO.inspect(preload_reply_creator: object)
     reply_to_object = e(object, :replied, :reply_to, nil)
     # IO.inspect(reply_to_object: reply_to_object)
     reply_to_creator = Objects.object_creator(reply_to_object)
     # IO.inspect(publishing_reply: reply_to_creator)
     # reply_to_inbox = Feeds.inbox_of_obj_creator(reply_to_object)
+    creator_id = e(reply_to_creator, :id, nil)
 
-    with {:ok, activity} <- do_publish(subject, verb, object, circles ++ [e(reply_to_creator, :id, nil)]) do
+    with {:ok, activity} <- do_publish(subject, verb, object, circles ++ [creator_id]) do
+
+      Threads.maybe_push_thread(subject, activity, object)
+
       # IO.inspect(notify_reply: reply_to_creator)
+      Logger.info("putting in feed + notifications of the user being replied to: #{inspect creator_id}")
       notify_characters(subject, activity, object, reply_to_creator)
     end
   end
@@ -145,6 +157,7 @@ defmodule Bonfire.Social.FeedActivities do
     mentioned = Feeds.tags_inbox_feeds(tags) #|> IO.inspect(label: "publish tag / mention")
 
     with {:ok, activity} <- do_publish(subject, verb, object, circles ++ mentioned) do
+      Logger.info("putting in feed + notifications of @ mentioned / tagged characters: #{inspect mentioned}")
       notify_characters(subject, activity, object, mentioned)
     end
   end
@@ -171,11 +184,16 @@ defmodule Bonfire.Social.FeedActivities do
   """
   def maybe_notify_creator(subject, %{activity: activity}, object), do: maybe_notify_creator(subject, activity, object)
   def maybe_notify_creator(%{id: subject_id} = subject, verb_or_activity, %{} = object) do
-    object = Objects.object_with_creator(object)
-    creator = Objects.object_creator(object)
-    feed = Feeds.inbox_feed_ids(creator)
-    if feed && subject_id != ulid(creator), do: maybe_feed_publish(subject, verb_or_activity, object, feed),
-    else: maybe_feed_publish(subject, verb_or_activity, object, nil) # just create an unpublished activity
+    object = Objects.preload_creator(object)
+    object_creator = Objects.object_creator(object)
+    object_creator_id = ulid(object_creator)
+    if object_creator_id && subject_id != object_creator_id do
+      Logger.info("maybe_notify_creator: #{inspect object_creator_id}")
+      notify_characters(subject, verb_or_activity, object, object_creator)
+    else
+      Logger.info("maybe_notify_creator: just create an activity")
+      maybe_feed_publish(subject, verb_or_activity, object, nil)
+    end
     # TODO: notify remote users via AP
   end
 
@@ -184,13 +202,13 @@ defmodule Bonfire.Social.FeedActivities do
   Creates a new local activity or takes an existing one and publishes to object's inbox (if object is an actor)
   """
   def notify_characters(subject, verb_or_activity, object, characters) do
-
+    Logger.info("notify_characters: #{inspect characters}")
     maybe_feed_publish(subject, verb_or_activity, object, Feeds.inbox_feed_ids(characters)) #|> IO.inspect(label: "notify_feeds")
     # TODO: notify remote users via AP
   end
 
   @doc """
-  Creates a new local activity or takes an existing one and publishes to object's inbox (if object is an actor)
+  Creates a new local activity or takes an existing one and publishes to object's inbox (assuming object is treated as a character)
   """
   def notify_object(subject, verb_or_activity, object) do
 

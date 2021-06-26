@@ -56,35 +56,45 @@ defmodule Bonfire.Social.Feeds do
   def my_inbox_feed_id(%{__context__: context}) do
     my_inbox_feed_id(context)
   end
-  def my_inbox_feed_id(%{id: id} = user) do
+  def my_inbox_feed_id(%{assigns: assigns}) do
+    my_inbox_feed_id(assigns)
+  end
+  def my_inbox_feed_id(%{id: id} = user) when is_binary(id) do
     if is_ulid?(id), do: inbox_feed_ids(user)
   end
-  def my_inbox_feed_id(_) do
+  def my_inbox_feed_id(other) do
+    Logger.error("my_inbox_feed_id: no function matched for #{inspect other}")
     nil
   end
 
   def inbox_feed_ids(for_subjects) when is_list(for_subjects) do
-    for_subjects |> Enum.map(&inbox_feed_ids/1)
+    for_subjects
+    |> Enum.map(&inbox_feed_ids/1)
   end
   def inbox_feed_ids(%{character: _} = for_subject) do
-    for_subject |> Bonfire.Repo.maybe_preload(character: [:inbox]) |> e(:character, nil) |> inbox_feed_ids()
+    for_subject
+    |> Bonfire.Repo.maybe_preload(character: [:inbox])
+    |> e(:character, nil)
+    |> inbox_feed_ids()
   end
   def inbox_feed_ids(%{inbox: %{feed_id: feed_id}}), do: feed_id
   def inbox_feed_ids(for_subject) do
-    # Logger.warn("creating new inbox")
-    # IO.inspect(for_subject: for_subject)
     with %{feed_id: feed_id} = _inbox <- create_inbox(for_subject) do
-      # IO.inspect(created_feed_id: feed_id)
+      Logger.info("created new inbox #{inspect feed_id} for #{inspect ulid(for_subject)}")
       feed_id
+    else e ->
+      IO.inspect(inbox_feed_ids: e)
+      nil
     end
   end
 
   def inbox_of_obj_creator(object) do
-    Objects.object_with_creator(object) |> Objects.object_creator() |> inbox_feed_ids() #|> IO.inspect
+    Objects.preload_creator(object) |> Objects.object_creator() |> inbox_feed_ids() #|> IO.inspect
   end
 
   def tags_inbox_feeds(tags) when is_list(tags), do: Enum.map(tags, fn x -> tags_inbox_feeds(x) end)
   def tags_inbox_feeds(%{} = tag) do
+    # Logger.warn("tags_inbox_feeds: #{inspect tag}")
     inbox_feed_ids(tag)
   end
   def tags_inbox_feeds(_) do
@@ -95,6 +105,7 @@ defmodule Bonfire.Social.Feeds do
   def admins_inbox(admins) when is_list(admins), do: Enum.map(admins, fn x -> admins_inbox(x) end)
   def admins_inbox(admin) do
     admin = admin |> Bonfire.Repo.maybe_preload([character: [:inbox]]) # |> IO.inspect
+    # Logger.warn("admins_inbox: #{inspect admin}")
     e(admin, :character, :inbox, :feed_id, nil)
       || inbox_feed_ids(admin)
   end

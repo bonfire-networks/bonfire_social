@@ -56,7 +56,6 @@ defmodule Bonfire.Social.Posts do
 
           Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, post, cc) # |> IO.inspect(label: "grant")
 
-          Threads.maybe_push_thread(creator, activity, post)
 
           maybe_index(activity)
 
