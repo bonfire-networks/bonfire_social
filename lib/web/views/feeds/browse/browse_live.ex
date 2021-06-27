@@ -35,69 +35,77 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
   def do_handle_params(%{"tab" => "fediverse" = tab} = _params, _url, socket) do
     current_user = current_user(socket)
 
-    if current_user || current_account(socket) do
-
-      feed_id = Bonfire.Social.Feeds.fediverse_feed_id()
-      feed = Bonfire.Social.FeedActivities.feed(feed_id, socket)
-
-      {:noreply,
-        assign(socket,
-          selected_tab: tab,
-          feed_title: "Activities from around the fediverse",
-          feed: e(feed, :entries, []),
-          page_info: e(feed, :metadata, []),
-        )
-        |> assign_global(to_circles: [Bonfire.Boundaries.Circles.get_tuple(:activity_pub)])
-      }
-
+    assigns = if current_user || current_account(socket) do
+      fediverse_feed(current_user, socket)
     else
-      do_handle_params(%{"tab" => "instance"}, nil, socket) # fallback to showing instance feed
+      instance_feed(current_user, socket) # fallback to showing instance feed
     end
+
+    {:noreply, assign(socket, assigns)}
   end
 
   def do_handle_params(%{"tab" => "instance" = tab} = _params, _url, socket) do
-    feed_id = Bonfire.Social.Feeds.instance_feed_id()
-    feed = Bonfire.Social.FeedActivities.feed(feed_id, socket)
+    current_user = current_user(socket)
 
-    {:noreply,
-      assign(socket,
-        selected_tab: tab,
-        feed_title: "Activities on this instance",
-        feed: e(feed, :entries, []),
-        page_info: e(feed, :metadata, []) |> IO.inspect
-      )
-      |> assign_global(to_circles: [Bonfire.Boundaries.Circles.get_tuple(:local)])
-      }
+    {:noreply, assign(socket, instance_feed(current_user, socket)) }
   end
 
   def do_handle_params(_params, _url, socket) do
-    default_feed(socket)
+    {:noreply, assign(socket, default_feed(socket))}
   end
 
   def default_feed(socket) do
-    # IO.inspect(socket.assigns)
     current_user = current_user(socket)
 
     if current_user || current_account(socket) do
       my_feed(current_user, socket) # my feed
     else
-      do_handle_params(%{"tab" => "instance"}, nil, socket) # fallback to showing instance feed
+      instance_feed(current_user, socket) # fallback to showing instance feed
     end
+  end
+
+  def fediverse_feed(current_user, socket) do
+    feed_id = Bonfire.Social.Feeds.fediverse_feed_id()
+    feed = Bonfire.Social.FeedActivities.feed(feed_id, socket)
+    to_circles = [Bonfire.Boundaries.Circles.get_tuple(:activity_pub)]
+
+    [
+      selected_tab: "fediverse",
+      to_circles: to_circles,
+      feed_title: "Activities from around the fediverse",
+      feed: e(feed, :entries, []),
+      page_info: e(feed, :metadata, []),
+    ]
+    #|> assign_global(to_circles: to_circles)
+  end
+
+  def instance_feed(_current_user, socket) do
+    feed_id = Bonfire.Social.Feeds.instance_feed_id()
+    feed = Bonfire.Social.FeedActivities.feed(feed_id, socket)
+    to_circles = [Bonfire.Boundaries.Circles.get_tuple(:local)]
+
+    [
+      selected_tab: "instance",
+      feed_title: "Activities on this instance",
+      to_circles: to_circles,
+      feed: e(feed, :entries, []),
+      page_info: e(feed, :metadata, []) #|> IO.inspect
+    ]
+    #|> assign_global(to_circles: to_circles)
   end
 
   def my_feed(current_user, socket) do
     # IO.inspect(myfeed: feed)
-    # current_user = current_user(socket)
     feed = Bonfire.Social.FeedActivities.my_feed(socket)
-    {:noreply,
-      assign(socket,
+    to_circles = Bonfire.Me.Users.Circles.list_my_defaults(current_user)
+    [
       selected_tab: "feed",
       feed_title: "My Feed",
+      to_circles: to_circles,
       feed: e(feed, :entries, []),
       page_info: e(feed, :metadata, [])
-    )
-    |> assign_global(to_circles: Bonfire.Me.Users.Circles.list_my_defaults(current_user))
-    }
+    ]
+    #|> assign_global(to_circles: to_circles)
   end
 
 

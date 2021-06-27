@@ -57,9 +57,9 @@ defmodule Bonfire.Social.FeedActivities do
 
     case Bonfire.Social.Feeds.my_inbox_feed_id(current_user_or_socket) do
       feeds when is_binary(feeds) or is_list(feeds) ->
-        # IO.inspect(query_notifications_feed_id: feeds)
 
         feeds = maybe_flatten(feeds)
+        IO.inspect(query_notifications_feed_ids: feeds)
 
         pubsub_subscribe(feeds, current_user_or_socket) # subscribe to realtime feed updates
 
@@ -88,9 +88,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   def query(filters, current_user, preloads, query, true = _distinct) when is_list(filters) do
 
-    query
-      |> query_extras(current_user, preloads)
-      |> EctoShorts.filter(filters, nil, nil)
+    query(filters, current_user, preloads, query, false)
       |> distinct([activity: activity], [desc: activity.id])
   end
 
@@ -99,6 +97,7 @@ defmodule Bonfire.Social.FeedActivities do
     query
       |> query_extras(current_user, preloads)
       |> EctoShorts.filter(filters, nil, nil)
+      # |> IO.inspect(label: "feed query")
   end
 
 
@@ -220,8 +219,9 @@ defmodule Bonfire.Social.FeedActivities do
   Creates a new local activity or takes an existing one and publishes to creator's inbox
   """
   def notify_admins(subject, verb_or_activity, object) do
-
-    maybe_feed_publish(subject, verb_or_activity, object, Feeds.admins_inbox())
+    inboxes = Feeds.admins_inbox()
+    Logger.warn("notify_admins: #{inspect inboxes}")
+    maybe_feed_publish(subject, verb_or_activity, object, inboxes)
     # TODO: notify remote users via AP
   end
 

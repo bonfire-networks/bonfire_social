@@ -8,7 +8,7 @@ defmodule Bonfire.Social.Activities.CreatePost.Test do
 
   describe "create a post" do
 
-    test "- basic" do
+    test "works" do
 
       some_account = fake_account!()
       someone = fake_user!(some_account)
@@ -24,7 +24,7 @@ defmodule Bonfire.Social.Activities.CreatePost.Test do
       |> render_submit(%{"post" => %{"post_content" => %{"html_body" => content}}})
       |> Floki.text() =~ "Posted"
 
-      # TODO: check if post appears instantly
+      # TODO: check if post appears instantly (websocket)
 
       next = "/user"
       {view, doc} = floki_live(conn, next) #|> IO.inspect

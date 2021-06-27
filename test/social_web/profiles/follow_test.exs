@@ -17,7 +17,7 @@ defmodule Bonfire.Social.Follows.Test do
 
       conn = conn(user: me, account: my_account)
       next = "/user/"<>someone.character.username
-      {view, doc} = floki_live(conn, next) |> IO.inspect
+      {view, doc} = floki_live(conn, next) #|> IO.inspect
 
       assert follow = view |> element(".profile_follow") |> render_click()
 
