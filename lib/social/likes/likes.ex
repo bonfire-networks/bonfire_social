@@ -15,8 +15,11 @@ defmodule Bonfire.Social.Likes do
   def federation_module, do: ["Like", {"Create", "Like"}, {"Undo", "Like"}, {"Delete", "Like"}]
 
   def liked?(%User{}=user, liked), do: not is_nil(get!(user, liked))
+
   def get(%User{}=user, liked), do: repo().single(by_both_q(user, liked))
+  def get!(%User{}=user, liked) when is_list(liked), do: repo().all(by_both_q(user, liked))
   def get!(%User{}=user, liked), do: repo().one(by_both_q(user, liked))
+
   def by_liker(%User{}=user), do: repo().many(by_liker_q(user))
   def by_liker(%User{}=user, type), do: repo().many(by_liker_q(user) |> by_type_q(type))
   def by_liked(%User{}=user), do: repo().many(by_liked_q(user))
@@ -108,11 +111,14 @@ defmodule Bonfire.Social.Likes do
       where: f.liker_id == ^id or f.liked_id == ^id
   end
 
-  defp by_both_q(%User{id: liker}, %{id: liked}), do: by_both_q(liker, liked)
-
-  defp by_both_q(liker, liked) when is_binary(liker) and is_binary(liked) do
+  defp by_both_q(liker, liked) when is_list(liked) do
     from f in Like,
-      where: f.liker_id == ^liker or f.liked_id == ^liked
+      where: f.liker_id == ^ulid(liker) or f.liked_id in ^ulid(liked),
+      select: {f.liked_id, f}
+  end
+  defp by_both_q(liker, liked) do
+    from f in Like,
+      where: f.liker_id == ^ulid(liker) or f.liked_id == ^ulid(liked)
   end
 
   defp by_type_q(q, type) do

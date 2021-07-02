@@ -26,7 +26,6 @@ defmodule Bonfire.Social.Notifications.Test do
       assert [_] = Floki.find(doc, ".feed")
     end
 
-
   end
 
   describe "DO NOT show" do
