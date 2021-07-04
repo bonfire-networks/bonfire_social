@@ -110,11 +110,11 @@ defmodule Bonfire.Social.Posts do
   end
 
   @doc "List posts created by the user and which are in their outbox, which are not replies"
-  def list_by(by_user, current_user \\ nil, cursor_before \\ nil, preloads \\ :all) when is_binary(by_user) or is_list(by_user) do
+  def list_by(by_user, current_user \\ nil, cursor_after \\ nil, preloads \\ :all) when is_binary(by_user) or is_list(by_user) do
 
     # query FeedPublish
     [feed_id: by_user, posts_by: {by_user, &filter/3}]
-    |> FeedActivities.feed_paginated(current_user, cursor_before, preloads)
+    |> FeedActivities.feed_paginated(current_user, cursor_after, preloads)
   end
 
   @doc """

@@ -47,32 +47,32 @@ defmodule Bonfire.Social.Flags do
 
 
   @doc "List flag of an object and which are in a feed"
-  def list(current_user, cursor_before \\ nil, preloads \\ :all) when not is_nil(current_user) do
+  def list(current_user, cursor_after \\ nil, preloads \\ :all) when not is_nil(current_user) do
     # TODO: double check that we're admin
     # query FeedPublish
     [flags: {:all, &filter/3} ]
-    |> FeedActivities.feed_paginated(current_user, cursor_before, preloads)
+    |> FeedActivities.feed_paginated(current_user, cursor_after, preloads)
   end
 
   @doc "List current user's flags, which are in their outbox"
-  def list_my(current_user, cursor_before \\ nil, preloads \\ :all) when is_binary(current_user) or is_map(current_user) do
-    list_by(current_user, current_user, cursor_before, preloads)
+  def list_my(current_user, cursor_after \\ nil, preloads \\ :all) when is_binary(current_user) or is_map(current_user) do
+    list_by(current_user, current_user, cursor_after, preloads)
   end
 
   @doc "List flags by the user and which are in their outbox"
-  def list_by(by_user, current_user \\ nil, cursor_before \\ nil, preloads \\ :all) when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
+  def list_by(by_user, current_user \\ nil, cursor_after \\ nil, preloads \\ :all) when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
 
     # query FeedPublish
     [flags_by: {ulid(by_user), &filter/3} ]
-    |> FeedActivities.feed_paginated(current_user, cursor_before, preloads)
+    |> FeedActivities.feed_paginated(current_user, cursor_after, preloads)
   end
 
   @doc "List flag of an object and which are in a feed"
-  def list_of(id, current_user \\ nil, cursor_before \\ nil, preloads \\ :all) when is_binary(id) or is_list(id) or is_map(id) do
+  def list_of(id, current_user \\ nil, cursor_after \\ nil, preloads \\ :all) when is_binary(id) or is_list(id) or is_map(id) do
 
     # query FeedPublish
     [flags_of: {ulid(id), &filter/3} ]
-    |> FeedActivities.feed_paginated(current_user, cursor_before, preloads)
+    |> FeedActivities.feed_paginated(current_user, cursor_after, preloads)
   end
 
 

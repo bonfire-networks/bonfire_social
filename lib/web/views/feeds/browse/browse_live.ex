@@ -32,6 +32,11 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
       )}
   end
 
+  def handle_params(_attrs, _, %{assigns: %{feed: _, page_info: pi}} = socket) when pi !=[] do
+    # Logger.log(@log_level, "we already have a feed loaded")
+    {:noreply, socket}
+  end
+
   def do_handle_params(%{"tab" => "fediverse" = tab} = _params, _url, socket) do
     current_user = current_user(socket)
 
@@ -110,12 +115,11 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
 
 
   def handle_params(params, uri, socket) do
-    # IO.inspect(params)
-    with {_, socket} <- undead_params(socket, fn ->
-      do_handle_params(params, uri, socket)
-    end) do
-      # poor man's hook I guess
-      Bonfire.Common.LiveHandlers.handle_params(params, uri, socket)
+    # poor man's hook I guess
+    with {_, socket} <- Bonfire.Common.LiveHandlers.handle_params(params, uri, socket) do
+      undead_params(socket, fn ->
+        do_handle_params(params, uri, socket)
+      end)
     end
   end
 

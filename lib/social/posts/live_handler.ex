@@ -36,11 +36,11 @@ defmodule Bonfire.Social.Posts.LiveHandler do
   def handle_event("post", params, socket) do # if not message, it's a post by default
     attrs = params
     |> input_to_atoms()
-    |> IO.inspect
+    # |> IO.inspect
 
     with %{valid?: true} <- post_changeset(attrs),
          {:ok, _published} <- Bonfire.Social.Posts.publish(current_user(socket), attrs) do
-      IO.inspect("published!")
+      # IO.inspect("published!")
       {:noreply,
         socket
         |> put_flash(:info, "Posted!")
@@ -126,7 +126,7 @@ defmodule Bonfire.Social.Posts.LiveHandler do
   def post_changeset(attrs \\ %{}) do
     Posts.changeset(:create, attrs)
     |> Changeset.cast_assoc(:post_content, [:required, with: &post_content_changeset/2])
-    |> IO.inspect
+    # |> IO.inspect
   end
 
   def post_content_changeset(%PostContent{} = cs \\ %PostContent{}, attrs) do
@@ -138,10 +138,10 @@ defmodule Bonfire.Social.Posts.LiveHandler do
     attrs = params
     |> input_to_atoms()
     # |> merge_child(:post)
-    |> IO.inspect
+    # |> IO.inspect
 
     with {:ok, _sent} <- Bonfire.Social.Messages.send(current_user(socket), attrs) do
-      IO.inspect("sent!")
+      # IO.inspect("sent!")
       {:noreply,
         socket
         |> put_flash(:info, "Sent!")

@@ -83,9 +83,9 @@ defmodule Bonfire.Social.Messages do
   end
 
   @doc "List posts created by the user and which are in their outbox, which are not replies"
-  def list(current_user, with_user \\ nil, cursor_before \\ nil, preloads \\ :all)
+  def list(current_user, with_user \\ nil, cursor_after \\ nil, preloads \\ :all)
 
-  def list(%{id: current_user_id} = current_user, with_user, cursor_before, preloads) when ( is_binary(with_user) or is_list(with_user) or is_map(with_user) ) and with_user != current_user_id and with_user != current_user do
+  def list(%{id: current_user_id} = current_user, with_user, cursor_after, preloads) when ( is_binary(with_user) or is_list(with_user) or is_map(with_user) ) and with_user != current_user_id and with_user != current_user do
     # all messages between two people
 
     with_user_id = Utils.ulid(with_user)
@@ -95,12 +95,12 @@ defmodule Bonfire.Social.Messages do
       # distinct: {:threads, &Bonfire.Social.Threads.filter/3}
     ]
     # |> IO.inspect(label: "list message filters")
-    |> list_paginated(current_user, cursor_before, preloads),
-    else: list(current_user, nil, cursor_before, preloads)
+    |> list_paginated(current_user, cursor_after, preloads),
+    else: list(current_user, nil, cursor_after, preloads)
 
   end
 
-  def list(%{id: current_user_id} = current_user, _, cursor_before, preloads) do
+  def list(%{id: current_user_id} = current_user, _, cursor_after, preloads) do
     # all current_user's message
 
     [
@@ -108,12 +108,12 @@ defmodule Bonfire.Social.Messages do
       # distinct: {:threads, &Bonfire.Social.Threads.filter/3}
     ]
     # |> IO.inspect(label: "my messages filters")
-    |> list_paginated(current_user, cursor_before, preloads)
+    |> list_paginated(current_user, cursor_after, preloads)
   end
 
   def list(_current_user, _with_user, _cursor_before, _preloads), do: []
 
-  def list_paginated(filters, current_user \\ nil, cursor_before \\ nil, preloads \\ :all, query \\ Message) do
+  def list_paginated(filters, current_user \\ nil, cursor_after \\ nil, preloads \\ :all, query \\ Message) do
 
     query
       # add assocs needed in timelines/feeds
@@ -127,7 +127,7 @@ defmodule Bonfire.Social.Messages do
       # |> order_by([fp], desc: fp.id)
       # |> IO.inspect(label: "post-permissions")
       # |> repo().many() # return all items
-      |> Bonfire.Repo.many_paginated(before: cursor_before) # return a page of items (reverse chronological) + pagination metadata
+      |> Bonfire.Repo.many_paginated(before: cursor_after) # return a page of items (reverse chronological) + pagination metadata
       # |> IO.inspect(label: "feed")
   end
 

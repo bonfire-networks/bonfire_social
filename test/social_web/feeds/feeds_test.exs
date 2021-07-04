@@ -6,78 +6,6 @@ defmodule Bonfire.Social.Feeds.Test do
 
 
   describe "Feeds UX" do
-    test "As a user when I navigate on a feed I want to see the first 10 activities" do
-
-      total_posts = 7
-      # Create alice user
-      account = fake_account!()
-      alice = fake_user!(account)
-      # Create bob user
-      account2 = fake_account!()
-      bob = fake_user!(account2)
-      # bob follows alice
-      Follows.follow(bob, alice)
-      attrs = %{circles: [:guest], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
-
-      for n <- 1..total_posts do
-        assert {:ok, post} = Posts.publish(alice, attrs)
-      end
-
-      conn = conn(user: bob, account: account2)
-      next = "/browse"
-      {view, doc} = floki_live(conn, next)
-      assert Enum.count(Floki.find(doc, "#feed_past  > article")) == total_posts
-
-    end
-
-    test "As a user I dont want to see the load more button if there are less than 11 activities" do
-      total_posts = 10
-      # Create alice user
-      account = fake_account!()
-      alice = fake_user!(account)
-      # Create bob user
-      account2 = fake_account!()
-      bob = fake_user!(account2)
-      # bob follows alice
-      Follows.follow(bob, alice)
-      attrs = %{circles: [:guest], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
-
-      for n <- 1..total_posts do
-        assert {:ok, post} = Posts.publish(alice, attrs)
-      end
-
-      conn = conn(user: bob, account: account2)
-      next = "/browse"
-      {view, doc} = floki_live(conn, next)
-      assert Floki.find(doc, "#load_more") == []
-    end
-
-    test "As a user I want to see the load more button if there are more than 11 activities" do
-      total_posts = 11
-      # Create alice user
-      account = fake_account!()
-      alice = fake_user!(account)
-      # Create bob user
-      account2 = fake_account!()
-      bob = fake_user!(account2)
-      # bob follows alice
-      Follows.follow(bob, alice)
-      attrs = %{circles: [:guest], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
-
-      for n <- 1..total_posts do
-        assert {:ok, post} = Posts.publish(alice, attrs)
-      end
-
-      conn = conn(user: bob, account: account2)
-      next = "/browse"
-      {view, doc} = floki_live(conn, next)
-      assert Floki.find(doc, "#load_more") != []
-    end
-
-    test "As a user when I click on load more I want to see next 10 activities below the others" do
-
-    end
-
 
     test "As a user when I publish a new post I want to see it appearing at the beginning of the feed without refreshing the page" do
 
@@ -156,7 +84,7 @@ defmodule Bonfire.Social.Feeds.Test do
       assert doc
         |> Floki.find("#feed_past  > article")
         |> List.last
-        |> Floki.text =~ "Liked (1)"
+        |> Floki.text =~ "Like (1)"
     end
 
     test "As a user I want to see if I already boosted an activity" do

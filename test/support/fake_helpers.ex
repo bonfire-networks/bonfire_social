@@ -8,4 +8,6 @@ defmodule Bonfire.Social.Test.FakeHelpers do
   import Bonfire.Social.Integration
   import Bonfire.Me.Fake
 
+  def post_attrs(n), do: %{circles: [:guest], post_content: %{summary: "summary", name: "#{n}", html_body: "<p>epic html message</p>"}}
+
 end

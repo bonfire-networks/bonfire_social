@@ -50,30 +50,30 @@ defmodule Bonfire.Social.Likes do
     end
   end
 
-  defp list(filters, current_user, cursor_before \\ nil, preloads \\ nil) do
+  defp list(filters, current_user, cursor_after \\ nil, preloads \\ nil) do
     # TODO: check the like's see/read permissions for current_user?
     Like
     |> Activities.object_preload_activity(:like, :liked_id, current_user, preloads)
     |> EctoShorts.filter(filters)
     |> Activities.as_permitted_for(current_user)
-    |> Bonfire.Repo.many_paginated(before: cursor_before)
+    |> Bonfire.Repo.many_paginated(before: cursor_after)
   end
 
   @doc "List current user's likes"
-  def list_my(current_user, cursor_before \\ nil, preloads \\ nil) when is_binary(current_user) or is_map(current_user) do
-    list_by(current_user, current_user, cursor_before, preloads)
+  def list_my(current_user, cursor_after \\ nil, preloads \\ nil) when is_binary(current_user) or is_map(current_user) do
+    list_by(current_user, current_user, cursor_after, preloads)
   end
 
   @doc "List likes by the user"
-  def list_by(by_user, current_user \\ nil, cursor_before \\ nil, preloads \\ nil) when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
+  def list_by(by_user, current_user \\ nil, cursor_after \\ nil, preloads \\ nil) when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
 
-    list([likes_by: {ulid(by_user), &filter/3}], current_user, cursor_before, preloads)
+    list([likes_by: {ulid(by_user), &filter/3}], current_user, cursor_after, preloads)
   end
 
   @doc "List likes of something"
-  def list_of(id, current_user \\ nil, cursor_before \\ nil, preloads \\ nil) when is_binary(id) or is_list(id) or is_map(id) do
+  def list_of(id, current_user \\ nil, cursor_after \\ nil, preloads \\ nil) when is_binary(id) or is_list(id) or is_map(id) do
 
-    list([likes_of: {ulid(id), &filter/3}], current_user, cursor_before, preloads)
+    list([likes_of: {ulid(id), &filter/3}], current_user, cursor_after, preloads)
   end
 
   defp create(%{} = liker, %{} = liked) do

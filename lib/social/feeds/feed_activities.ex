@@ -23,20 +23,20 @@ defmodule Bonfire.Social.FeedActivities do
   def queries_module, do: FeedPublish
   def context_module, do: FeedPublish
 
-  def my_feed(socket, cursor_before \\ nil, include_notifications? \\ true) do
+  def my_feed(socket, cursor_after \\ nil, include_notifications? \\ true) do
 
     # feeds the user is following
     feed_ids = Feeds.my_feed_ids(socket, include_notifications?)
     # IO.inspect(my_feed_ids: feed_ids)
 
-    feed(feed_ids, socket, cursor_before)
+    feed(feed_ids, socket, cursor_after)
   end
 
-  def feed(feed, current_user_or_socket \\ nil, cursor_before \\ nil, preloads \\ :all)
+  def feed(feed, current_user_or_socket \\ nil, cursor_after \\ nil, preloads \\ :all)
 
-  def feed(%{id: feed_id}, current_user_or_socket, cursor_before, preloads), do: feed(feed_id, current_user_or_socket, cursor_before, preloads)
+  def feed(%{id: feed_id}, current_user_or_socket, cursor_after, preloads), do: feed(feed_id, current_user_or_socket, cursor_after, preloads)
 
-  def feed(feed_id_or_ids, current_user_or_socket, cursor_before, preloads) when is_binary(feed_id_or_ids) or is_list(feed_id_or_ids) do
+  def feed(feed_id_or_ids, current_user_or_socket, cursor_after, preloads) when is_binary(feed_id_or_ids) or is_list(feed_id_or_ids) do
     # IO.inspect(feed_id_or_ids: feed_id_or_ids)
     feed_id_or_ids = maybe_flatten(feed_id_or_ids)
 
@@ -49,10 +49,10 @@ defmodule Bonfire.Social.FeedActivities do
       # exclude_messages: dynamic([object_message: message], is_nil(message.id))
       exclude_messages: dynamic([object: object], object.table_id != ^("6R1VATEMESAGEC0MMVN1CAT10N"))
     ]
-    |> feed_paginated(current_user(current_user_or_socket), cursor_before, preloads)
+    |> feed_paginated(current_user(current_user_or_socket), cursor_after, preloads)
   end
 
-  def feed(:notifications, current_user_or_socket, cursor_before, preloads) do
+  def feed(:notifications, current_user_or_socket, cursor_after, preloads) do
     # current_user = current_user(current_user_or_socket)
 
     case Bonfire.Social.Feeds.my_inbox_feed_id(current_user_or_socket) do
@@ -64,7 +64,7 @@ defmodule Bonfire.Social.FeedActivities do
         pubsub_subscribe(feeds, current_user_or_socket) # subscribe to realtime feed updates
 
         [feed_id: feeds] # FIXME: for some reason preloading creator or reply_to when we have a boost in inbox breaks ecto
-        |> feed_paginated(current_user_or_socket, cursor_before, preloads)
+        |> feed_paginated(current_user_or_socket, cursor_after, preloads)
 
         e ->
           Logger.error("no feed for :notifications - #{e}")
@@ -76,12 +76,12 @@ defmodule Bonfire.Social.FeedActivities do
   def feed(_, _, _, _, _), do: []
 
 
-  def feed_paginated(filters \\ [], current_user \\ nil, cursor_before \\ nil, preloads \\ :all, query \\ FeedPublish, distinct \\ true)
+  def feed_paginated(filters \\ [], current_user \\ nil, cursor_after \\ nil, preloads \\ :all, query \\ FeedPublish, distinct \\ true)
 
-  def feed_paginated(filters, current_user, cursor_before, preloads, query, distinct) when is_list(filters) do
+  def feed_paginated(filters, current_user, cursor_after, preloads, query, distinct) when is_list(filters) do
 
     query(filters, current_user, preloads, query, distinct)
-      |> Bonfire.Repo.many_paginated(before: cursor_before) # return a page of items (reverse chronological) + pagination metadata
+      |> Bonfire.Repo.many_paginated(after: cursor_after) # return a page of items (reverse chronological) + pagination metadata
   end
 
   def query(filters \\ [], current_user \\ nil, preloads \\ :all, query \\ FeedPublish, distinct \\ true)
