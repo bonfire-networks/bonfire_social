@@ -19,14 +19,14 @@ defmodule Bonfire.Social.Likes.LiveHandler do
   end
 
   def preload(list_of_assigns) do
-    list_of_ids = Enum.map(list_of_assigns, & &1.id)
+    list_of_ids = Enum.map(list_of_assigns, & &1.object_id)
 
     current_user = current_user(List.first(list_of_assigns))
 
     my_likes = if current_user, do: Bonfire.Social.Likes.get!(current_user, list_of_ids) |> Map.new(), else: %{}
 
     Enum.map(list_of_assigns, fn assigns ->
-      Map.put(assigns, :my_like, Map.get(my_likes, assigns.id))
+      Map.put(assigns, :my_like, Map.get(my_likes, assigns.object_id))
     end)
   end
 
