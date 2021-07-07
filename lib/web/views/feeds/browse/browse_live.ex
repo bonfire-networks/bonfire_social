@@ -41,11 +41,12 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
     current_user = current_user(socket)
 
     assigns = if current_user || current_account(socket) do
+
       fediverse_feed(current_user, socket)
     else
       instance_feed(current_user, socket) # fallback to showing instance feed
     end
-
+    IO.inspect(assigns)
     {:noreply, assign(socket, assigns)}
   end
 
