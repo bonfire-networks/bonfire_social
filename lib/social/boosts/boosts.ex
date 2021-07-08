@@ -142,4 +142,31 @@ defmodule Bonfire.Social.Boosts do
         activity.verb_id==^verb_id and booster.id == ^ulid(user_id)
       )
   end
+
+  def ap_publish_activity("create", boost) do
+    boost = Bonfire.Repo.preload(boost, :boosted)
+
+    with {:ok, booster} <- ActivityPub.Actor.get_cached_by_local_id(boost.booster_id),
+         boosted when not is_nil(boosted) <- Bonfire.Common.Pointers.follow!(boost.boosted),
+         object when not is_nil(boosted) <- Bonfire.Federate.ActivityPub.Utils.get_object(boosted) do
+            ActivityPub.boost(booster, object)
+    end
+  end
+
+  def ap_publish_activity("delete", boost) do
+    boost = Bonfire.Repo.preload(boost, :boosted)
+
+    with {:ok, booster} <- ActivityPub.Actor.get_cached_by_local_id(boost.booster_id),
+         boosted when not is_nil(boosted) <- Bonfire.Common.Pointers.follow!(boost.boosted),
+         object when not is_nil(boosted) <- Bonfire.Federate.ActivityPub.Utils.get_object(boosted) do
+            ActivityPub.unboost(booster, object)
+    end
+  end
+
+  def ap_receive_activity(creator, activity, object) do
+    with {:ok, pointer} <- Bonfire.Common.Pointers.one(object.pointer_id),
+         boosted = Bonfire.Common.Pointers.follow!(pointer) do
+           boost(creator, boosted)
+    end
+  end
 end
