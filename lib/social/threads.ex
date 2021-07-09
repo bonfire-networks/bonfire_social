@@ -3,7 +3,7 @@ defmodule Bonfire.Social.Threads do
   alias Bonfire.Data.Social.Replied
   alias Bonfire.Social.{Activities, FeedActivities}
   alias Bonfire.Boundaries.Verbs
-  alias Bonfire.Common.Utils
+  import Bonfire.Common.Utils
 
   use Bonfire.Repo.Query,
     schema: Replied,
@@ -17,7 +17,7 @@ defmodule Bonfire.Social.Threads do
       Logger.warn("put in thread feed for anyone following the thread: #{inspect thread_id}")
 
       Logger.warn("broadcasting to anyone currently viewing the thread")
-      Utils.pubsub_broadcast(thread_id, {{Bonfire.Social.Posts, :new_reply}, {thread_id, published}})
+      pubsub_broadcast(thread_id, {{Bonfire.Social.Posts, :new_reply}, {thread_id, published}})
 
     end
   end
@@ -48,8 +48,8 @@ defmodule Bonfire.Social.Threads do
   defp reply_obj(reply_attrs, reply_to_replied, reply_to_id) do
     Map.merge(reply_attrs, %{
       reply_to: reply_to_replied,
-      thread_id: Utils.e(reply_attrs, :thread_id,
-                    Utils.e(reply_to_replied, :thread_id, reply_to_id))
+      thread_id: e(reply_attrs, :thread_id,
+                    e(reply_to_replied, :thread_id, reply_to_id))
       })
   end
 
@@ -72,7 +72,7 @@ defmodule Bonfire.Social.Threads do
 
   def read(object_id, socket_or_current_user) when is_binary(object_id) do
 
-    current_user = Utils.current_user(socket_or_current_user)
+    current_user = current_user(socket_or_current_user)
 
     with {:ok, object} <- Replied |> EctoShorts.filter(id: object_id)
       |> Activities.read(socket_or_current_user) do
@@ -116,23 +116,25 @@ defmodule Bonfire.Social.Threads do
   def list_replies(thread_id, current_user, cursor, max_depth, limit) when is_binary(thread_id), do: do_list_replies(thread_id, current_user, cursor, max_depth, limit)
 
   defp do_list_replies(thread_id, current_user_or_socket, cursor, max_depth, limit) do
-    # IO.inspect(cursor: cursor)
+    IO.inspect(current_user_or_socket: current_user_or_socket)
 
-    Utils.pubsub_subscribe(thread_id, current_user_or_socket) # subscribe to realtime thread updates
+    pubsub_subscribe(thread_id, current_user_or_socket) # subscribe to realtime thread updates
 
-    current_user = Utils.current_user(current_user_or_socket)
+    current_user = current_user(current_user_or_socket)
+    IO.inspect(current_user: current_user)
 
     %Replied{id: Bonfire.Common.Pointers.id_binary(thread_id)}
       |> Replied.descendants()
       |> Replied.where_depth(is_smaller_than_or_equal_to: max_depth)
       |> Activities.object_preload_create_activity(current_user)
       |> Activities.as_permitted_for(current_user)
+      |> IO.inspect(label: "thread query")
       # |> preload_join(:post)
       # |> preload_join(:post, :post_content)
       # |> preload_join(:activity)
       # |> preload_join(:activity, :subject_profile)
       # |> preload_join(:activity, :subject_character)
-      |> Bonfire.Repo.many_paginated(limit: limit, before: Utils.e(cursor, :before, nil), after: Utils.e(cursor, :after, nil)) # return a page of items + pagination metadata
+      |> Bonfire.Repo.many_paginated(limit: limit, before: e(cursor, :before, nil), after: e(cursor, :after, nil)) # return a page of items + pagination metadata
       # |> repo().many # without pagination
       # |> IO.inspect
   end
@@ -159,7 +161,7 @@ defmodule Bonfire.Social.Threads do
   #           acc
   #           |> put_in(
   #               [reply_to_id, :direct_replies],
-  #               Bonfire.Common.Utils.maybe_get(acc[reply_to_id], :direct_replies, []) ++ [reply_with_id]
+  #               Bonfire.Common.maybe_get(acc[reply_to_id], :direct_replies, []) ++ [reply_with_id]
   #             )
   #           # |> IO.inspect
   #           # |> Map.delete(id)

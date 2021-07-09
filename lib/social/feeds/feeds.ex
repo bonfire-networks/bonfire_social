@@ -122,7 +122,7 @@ defmodule Bonfire.Social.Feeds do
   Create a INBOX feed for an existing Pointable (eg. User)
   """
   def create_inbox(%{id: id}=_thing), do: create_inbox(id)
-  def create_inbox(id) do
+  def create_inbox(id) when is_binary(id) do
     with {:ok, %{id: feed_id} = _feed} <- create() do
       #IO.inspect(feed: feed)
       save_inbox_feed(%{id: id, feed_id: feed_id})
