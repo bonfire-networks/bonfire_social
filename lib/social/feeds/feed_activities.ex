@@ -59,7 +59,7 @@ defmodule Bonfire.Social.FeedActivities do
       feeds when is_binary(feeds) or is_list(feeds) ->
 
         feeds = maybe_flatten(feeds)
-        IO.inspect(query_notifications_feed_ids: feeds)
+        # IO.inspect(query_notifications_feed_ids: feeds)
 
         pubsub_subscribe(feeds, current_user_or_socket) # subscribe to realtime feed updates
 
@@ -220,7 +220,7 @@ defmodule Bonfire.Social.FeedActivities do
   """
   def notify_admins(subject, verb_or_activity, object) do
     inboxes = Feeds.admins_inbox()
-    Logger.warn("notify_admins: #{inspect inboxes}")
+    Logger.debug("notify_admins: #{inspect inboxes}")
     maybe_feed_publish(subject, verb_or_activity, object, inboxes)
     # TODO: notify remote users via AP
   end

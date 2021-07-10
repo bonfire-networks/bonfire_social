@@ -27,7 +27,7 @@ defmodule Bonfire.Social.Likes do
 
   def like(%User{} = liker, %{} = liked) do
     with {:ok, like} <- create(liker, liked) do
-      # TODO: increment the like count
+    # Note: the like count is automatically incremented by DB triggers
       FeedActivities.maybe_notify_creator(liker, :like, liked)
       {:ok, like}
     end
@@ -42,7 +42,7 @@ defmodule Bonfire.Social.Likes do
   def unlike(%User{}=liker, %{}=liked) do
     delete_by_both(liker, liked) # delete the Like
     Activities.delete_by_subject_verb_object(liker, :like, liked) # delete the like activity & feed entries
-    # TODO: decrement the like count
+    # Note: the like count is automatically decremented by DB triggers
   end
   def unlike(%User{} = liker, liked) when is_binary(liked) do
     with {:ok, liked} <- Bonfire.Common.Pointers.get(liked) do

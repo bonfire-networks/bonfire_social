@@ -123,7 +123,7 @@ defmodule Bonfire.Social.Activities do
       |> maybe_my_like(current_user)
       |> maybe_my_boost(current_user)
       |> maybe_my_flag(current_user)
-      # |> IO.inspect
+      # |> IO.inspect(label: "activity with preloads")
   end
 
   def activity_preloads(query, _current_user, :minimal) do
@@ -142,7 +142,7 @@ defmodule Bonfire.Social.Activities do
 
   def maybe_my_like(q, %{id: current_user_id} = _current_user) do
     q
-    # |> join_preload([:activity, :my_like], ass.liked_id == via.object_id and ass.liker_id == ^current_user_id) # TODO: figure out how to use bindings
+    # |> join_preload([:activity, :my_like], ass.liked_id == via.object_id and ass.liker_id == ^current_user_id) # TODO: figure out how to use bindings in join_preload with ON
     |> reusable_join(:left, [o, activity: activity], l in Like, as: :my_like, on: l.liked_id == activity.object_id and l.liker_id == ^current_user_id)
     |> preload([l, activity: activity, my_like: my_like], activity: {activity, [my_like: my_like]})
   end

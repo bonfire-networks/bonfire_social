@@ -25,7 +25,8 @@ defmodule Bonfire.Social.Threads do
   def maybe_push_thread(_, _, _), do: nil
 
 
-  def maybe_reply(%{reply_to: reply_attrs}), do: maybe_reply(reply_attrs)
+  def maybe_reply(%{reply_to: reply_attrs}) when is_map(reply_attrs), do: maybe_reply(reply_attrs)
+  def maybe_reply(%{reply_to: reply_to_id}) when is_binary(reply_to_id), do: maybe_reply(%{reply_to_id: reply_to_id})
   def maybe_reply(%{reply_to_id: reply_to_id} = reply_attrs) when is_binary(reply_to_id) and reply_to_id !="" do
 
      with {:ok, reply_to_replied} <- get_replied(reply_to_id) do
@@ -116,19 +117,19 @@ defmodule Bonfire.Social.Threads do
   def list_replies(thread_id, current_user, cursor, max_depth, limit) when is_binary(thread_id), do: do_list_replies(thread_id, current_user, cursor, max_depth, limit)
 
   defp do_list_replies(thread_id, current_user_or_socket, cursor, max_depth, limit) do
-    IO.inspect(current_user_or_socket: current_user_or_socket)
+    # IO.inspect(current_user_or_socket: current_user_or_socket)
 
     pubsub_subscribe(thread_id, current_user_or_socket) # subscribe to realtime thread updates
 
     current_user = current_user(current_user_or_socket)
-    IO.inspect(current_user: current_user)
+    # IO.inspect(current_user: current_user)
 
     %Replied{id: Bonfire.Common.Pointers.id_binary(thread_id)}
       |> Replied.descendants()
       |> Replied.where_depth(is_smaller_than_or_equal_to: max_depth)
       |> Activities.object_preload_create_activity(current_user)
       |> Activities.as_permitted_for(current_user)
-      |> IO.inspect(label: "thread query")
+      # |> IO.inspect(label: "thread query")
       # |> preload_join(:post)
       # |> preload_join(:post, :post_content)
       # |> preload_join(:activity)

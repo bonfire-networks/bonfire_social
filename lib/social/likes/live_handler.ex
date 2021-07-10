@@ -3,9 +3,11 @@ defmodule Bonfire.Social.Likes.LiveHandler do
 
   def handle_event("like", %{"direction"=>"up", "id"=> id}, socket) do # like in LV
     #IO.inspect(socket)
-    with {:ok, _like} <- Bonfire.Social.Likes.like(current_user(socket), id) do
+    with {:ok, like} <- Bonfire.Social.Likes.like(current_user(socket), id) do
       {:noreply, Phoenix.LiveView.assign(socket,
-      liked: Map.get(socket.assigns, :liked, []) ++ [id]
+      my_like: like,
+      like_count: liker_count(socket)+1
+      # liked: Map.get(socket.assigns, :liked, []) ++ [id]
     )}
     end
   end
@@ -13,10 +15,18 @@ defmodule Bonfire.Social.Likes.LiveHandler do
   def handle_event("like", %{"direction"=>"down", "id"=> id}, socket) do # unlike in LV
     with _ <- Bonfire.Social.Likes.unlike(current_user(socket), id) do
       {:noreply, Phoenix.LiveView.assign(socket,
-      liked: Enum.reject(Map.get(socket.assigns, :liked, []), &Enum.member?(&1, id))
+      my_like: nil,
+      like_count: liker_count(socket)-1
+      # liked: Enum.reject(Map.get(socket.assigns, :liked, []), &Enum.member?(&1, id))
     )}
     end
   end
+
+  def liker_count(%{assigns: a}), do: liker_count(a)
+  def liker_count(%{like_count: like_count}), do: liker_count(like_count)
+  def liker_count(%{liker_count: liker_count}), do: liker_count(liker_count)
+  def liker_count(liker_count) when is_integer(liker_count), do: liker_count
+  def liker_count(_), do: 0
 
   def preload(list_of_assigns) do
     list_of_ids = Enum.map(list_of_assigns, & &1.object_id)

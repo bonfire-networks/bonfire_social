@@ -42,14 +42,16 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
   def live_more(%{} = feed, socket) do
     # IO.inspect(feed_pagination: feed)
 
-    new = [
-      feed: e(feed, :entries, []),
-      page_info: e(feed, :metadata, [])
-    ]
+    assign_feed(feed, socket)
 
-    send_update(Bonfire.UI.Social.FeedLive, [id: "feed"] ++ new)
+    # new = [
+    #   feed: e(feed, :entries, []),
+    #   page_info: e(feed, :metadata, [])
+    # ]
 
-    {:noreply, socket}
+    # send_update(Bonfire.UI.Social.FeedLive, [id: "feed"] ++ new)
+
+    # {:noreply, socket}
   end
 
   def handle_info({:new_activity, data}, socket) do

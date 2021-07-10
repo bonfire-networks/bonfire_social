@@ -17,11 +17,11 @@ defmodule Bonfire.Social.Posts.LiveHandler do
     )
   end
 
-  def handle_params(%{"cursor" => cursor} = _attrs, _, %{assigns: %{thread_id: thread_id}} = socket) do
+  def handle_params(%{"after" => cursor} = _attrs, _, %{assigns: %{thread_id: thread_id}} = socket) do
     live_more(thread_id, cursor, socket)
   end
 
-  def handle_event("load_more", %{"cursor" => cursor} = _attrs, %{assigns: %{thread_id: thread_id}} = socket) do
+  def handle_event("load_more", %{"after" => cursor} = _attrs, %{assigns: %{thread_id: thread_id}} = socket) do
     live_more(thread_id, cursor, socket)
   end
 
@@ -105,21 +105,20 @@ defmodule Bonfire.Social.Posts.LiveHandler do
 
     with %{entries: replies, metadata: page_info} <- Bonfire.Social.Threads.list_replies(thread_id, socket, cursor, @thread_max_depth) do
 
-      replies = e(socket.assigns, :replies, []) ++ (replies || [])
+      replies = ( e(socket.assigns, :replies, []) ++ (replies || []) ) |> Enum.uniq()
+      # IO.inspect(replies, label: "REPLIES:")
 
-      # threaded_replies = if is_list(replies) and length(replies)>0, do: Bonfire.Social.Threads.arrange_replies_tree(replies), else: []
-      #IO.inspect(replies, label: "REPLIES:")
+      threaded_replies = if is_list(replies) and length(replies)>0, do: Bonfire.Social.Threads.arrange_replies_tree(replies), else: []
+      # IO.inspect(threaded_replies, label: "REPLIES threaded")
 
       new = [
         replies: replies || [],
-        # threaded_replies: threaded_replies,
+        threaded_replies: threaded_replies,
         page_info: page_info
       ]
 
-      {:noreply, socket}
+      {:noreply, socket |> assign(new)}
     end
-
-    {:noreply, socket}
   end
 
 

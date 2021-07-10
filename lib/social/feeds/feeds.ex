@@ -105,7 +105,7 @@ defmodule Bonfire.Social.Feeds do
   def admins_inbox(admins) when is_list(admins), do: Enum.map(admins, fn x -> admins_inbox(x) end)
   def admins_inbox(admin) do
     admin = admin |> Bonfire.Repo.maybe_preload([character: [:inbox]]) # |> IO.inspect
-    Logger.warn("admins_inbox: #{inspect admin}")
+    # Logger.warn("admins_inbox: #{inspect admin}")
     e(admin, :character, :inbox, :feed_id, nil)
       || inbox_feed_ids(admin)
   end

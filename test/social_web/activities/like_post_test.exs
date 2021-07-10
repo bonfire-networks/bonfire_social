@@ -21,9 +21,41 @@ defmodule Bonfire.Social.Activities.LikePost.Test do
       next = "/browse/instance"
       {view, doc} = floki_live(conn, next) #|> IO.inspect
       assert view
-      |> element(".feed .like")
+      |> element(".feed button.like")
+      # |> IO.inspect
       |> render_click()
-      # |> Floki.text() =~ "Liked"
+      |> Floki.text() =~ "Liked (1)"
+
+      assert true == Likes.liked?(someone, post)
+
+    end
+
+    test "shows the right number of likes" do
+      poster = fake_user!()
+      content = "here is an epic html post"
+      attrs = %{circles: [:local], post_content: %{html_body: content}}
+      assert {:ok, post} = Posts.publish(poster, attrs)
+
+      assert {:ok, like} = Likes.like(fake_user!(), post)
+      assert {:ok, like} = Likes.like(fake_user!(), post)
+
+      some_account = fake_account!()
+      someone = fake_user!(some_account)
+      conn = conn(user: someone, account: some_account)
+
+      next = "/browse/instance"
+      {view, doc} = floki_live(conn, next) #|> IO.inspect
+
+      assert view
+      |> element(".feed button.like")
+      |> render()
+      # |> IO.inspect
+      |> Floki.text() =~ "Liked (2)"
+
+      assert view
+      |> element(".feed button.like")
+      |> render_click()
+      |> Floki.text() =~ "Liked (3)"
 
       assert true == Likes.liked?(someone, post)
 
@@ -49,7 +81,7 @@ defmodule Bonfire.Social.Activities.LikePost.Test do
       next = "/browse/instance"
       {view, doc} = floki_live(conn, next) #|> IO.inspect
       assert view
-      |> element(".feed .like")
+      |> element(".feed button.like")
       |> render_click()
       |> Floki.text() =~ "Like"
 
