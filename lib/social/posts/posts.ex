@@ -247,10 +247,7 @@ defmodule Bonfire.Social.Posts do
       "index_type" => "Bonfire.Data.Social.Post",
       # "url" => path(post),
       "post_content" => PostContents.indexing_object_format(post_content),
-      "activity" => %{
-        "subject_profile" => Bonfire.Me.Profiles.indexing_object_format(subject_profile),
-        "subject_character" => Bonfire.Me.Characters.indexing_object_format(subject_character),
-      },
+      "creator" => Bonfire.Me.Integration.indexing_format(subject_profile, subject_profile),
       "tag_names" => Bonfire.Social.Integration.indexing_format_tags(activity)
     } #|> IO.inspect
   end
