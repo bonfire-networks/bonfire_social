@@ -32,6 +32,7 @@ defmodule Bonfire.Social.Likes do
       {:ok, like}
     end
   end
+
   def like(%User{} = liker, liked) when is_binary(liked) do
     with {:ok, liked} <- Bonfire.Common.Pointers.get(liked) do
       #IO.inspect(liked)
@@ -44,6 +45,7 @@ defmodule Bonfire.Social.Likes do
     Activities.delete_by_subject_verb_object(liker, :like, liked) # delete the like activity & feed entries
     # Note: the like count is automatically decremented by DB triggers
   end
+
   def unlike(%User{} = liker, liked) when is_binary(liked) do
     with {:ok, liked} <- Bonfire.Common.Pointers.get(liked) do
       unlike(liker, liked)

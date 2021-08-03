@@ -30,8 +30,6 @@ defmodule Bonfire.Social.Posts do
   def publish(%{} = creator, attrs, mentions_are_private? \\ true, replies_are_private? \\ false) do
     with  {:ok, post} <- do_publish(creator, attrs, mentions_are_private?, replies_are_private?) do
 
-      Integration.ap_publish("create", post.id, ulid(creator))
-
       {:ok, post}
     end
   end

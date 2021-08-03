@@ -73,9 +73,6 @@ defmodule Bonfire.Social.Follows do
   """
   def follow(follower, followed) do
     with {:ok, follow} <- do_follow(follower, followed) do
-
-      Integration.ap_publish("create", follow.id, ulid(follower))
-
       {:ok, follow}
     end
   end
@@ -102,7 +99,6 @@ defmodule Bonfire.Social.Follows do
       Bonfire.Me.Users.Boundaries.maybe_make_visible_for(followed, followed, follower)
 
       FeedActivities.notify_object(follower, :follow, followed)
-      APActivities.publish(follower, "create", follow)
 
       {:ok, follow}
     end
@@ -110,8 +106,6 @@ defmodule Bonfire.Social.Follows do
 
   def unfollow(follower, %{} = followed) do
     [id] = delete_by_both(follower, followed)
-    # FIXME: this might not publish properly due to the follow being deleted while ap publish is in queue
-    APActivities.publish(follower, "delete", id)
     # delete the like activity & feed entries
     Activities.delete_by_subject_verb_object(follower, :follow, followed)
   end
