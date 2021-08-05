@@ -24,6 +24,8 @@ defmodule Bonfire.Social.Follows do
   # def by_follower(user), do: repo().many(by_follower_q(user))
   def by_followed(user), do: repo().many(by_followed_q(user))
 
+  def follower_by_followed(user), do: repo().many(follower_by_followed_q(user))
+
   def by_any(user), do: repo().many(by_any_q(user))
 
   defp list(filters, _current_user) do
@@ -154,6 +156,12 @@ defmodule Bonfire.Social.Follows do
     from f in Follow,
       where: f.followed_id == ^ulid(id),
       select: f.id
+  end
+
+  defp follower_by_followed_q(id) do
+    from f in Follow,
+      where: f.followed_id == ^ulid(id),
+      select: f.follower_id
   end
 
   defp by_any_q(id) do
