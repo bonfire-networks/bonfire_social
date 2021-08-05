@@ -163,10 +163,19 @@ defmodule Bonfire.Social.Boosts do
     end
   end
 
-  def ap_receive_activity(creator, activity, object) do
+  def ap_receive_activity(creator, %{data: %{"type" => "Announce"}} = _activity, object) do
     with {:ok, pointer} <- Bonfire.Common.Pointers.one(object.pointer_id),
          boosted = Bonfire.Common.Pointers.follow!(pointer) do
            boost(creator, boosted)
+    end
+  end
+
+  def ap_receive_activity(creator, %{data: %{"type" => "Undo"}} = _activity, %{data: %{"object" => boosted_object}} = _object) do
+    with object when not is_nil(object) <- ActivityPub.Object.get_cached_by_ap_id(boosted_object),
+         {:ok, pointer} <- Bonfire.Common.Pointers.one(object.pointer_id),
+         boosted <- Bonfire.Common.Pointers.follow!(pointer),
+         [id] <- unboost(creator, boosted) do
+          {:ok, id}
     end
   end
 end
