@@ -149,7 +149,7 @@ defmodule Bonfire.Social.Boosts do
     with {:ok, booster} <- ActivityPub.Actor.get_cached_by_local_id(boost.booster_id),
          boosted when not is_nil(boosted) <- Bonfire.Common.Pointers.follow!(boost.boosted),
          object when not is_nil(boosted) <- Bonfire.Federate.ActivityPub.Utils.get_object(boosted) do
-            ActivityPub.unannounce(booster, object)
+            ActivityPub.announce(booster, object)
     end
   end
 
@@ -159,7 +159,7 @@ defmodule Bonfire.Social.Boosts do
     with {:ok, booster} <- ActivityPub.Actor.get_cached_by_local_id(boost.booster_id),
          boosted when not is_nil(boosted) <- Bonfire.Common.Pointers.follow!(boost.boosted),
          object when not is_nil(boosted) <- Bonfire.Federate.ActivityPub.Utils.get_object(boosted) do
-            ActivityPub.announce(booster, object)
+            ActivityPub.unannounce(booster, object)
     end
   end
 
