@@ -185,7 +185,7 @@ defmodule Bonfire.Social.Follows do
   end
 
 
-  def ap_receive_activity(follower, %{data: data} = _activity, object) when is_binary(follower) or is_struct(follower) do # record an incoming follow
+  def ap_receive_activity(follower, %{data: %{"type" => "Follow"} = data} = _activity, object) when is_binary(follower) or is_struct(follower) do # record an incoming follow
     with {:ok, followed} <- Bonfire.Me.Users.ActivityPub.by_username(e(object, :username, object)),
          {:ok, follow} <- do_follow(follower, followed) do
       ActivityPub.accept(%{
@@ -195,6 +195,13 @@ defmodule Bonfire.Social.Follows do
         local: true
       })
       {:ok, follow}
+    end
+  end
+
+  def ap_receive_activity(follower, %{data: %{"type" => "Undo"} = _data} = _activity, %{data: %{"object" => followed_ap_id}} = _object) do
+    with {:ok, followed} <- Bonfire.Me.Users.ActivityPub.by_ap_id(followed_ap_id),
+         [id] <- unfollow(follower, followed) do
+          {:ok, id}
     end
   end
 end
