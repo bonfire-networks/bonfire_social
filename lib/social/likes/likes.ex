@@ -175,10 +175,19 @@ defmodule Bonfire.Social.Likes do
     end
   end
 
-  def ap_receive_activity(creator, activity, object) do
+  def ap_receive_activity(creator, %{data: %{"type" => "Like"}} = _activity, object) do
     with {:ok, pointer} <- Bonfire.Common.Pointers.one(object.pointer_id),
          liked = Bonfire.Common.Pointers.follow!(pointer) do
            like(creator, liked)
+    end
+  end
+
+  def ap_receive_activity(creator, %{data: %{"type" => "Undo"}} = _activity, %{data: %{"object" => liked_object}} = _object) do
+    with object when not is_nil(object) <- ActivityPub.Object.get_cached_by_ap_id(liked_object),
+         {:ok, pointer} <- Bonfire.Common.Pointers.one(object.pointer_id),
+         liked <- Bonfire.Common.Pointers.follow!(pointer),
+         [id] <- unlike(creator, liked) do
+          {:ok, id}
     end
   end
 end
