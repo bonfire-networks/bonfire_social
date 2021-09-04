@@ -20,9 +20,11 @@ defmodule Bonfire.Social.Activities do
     user = current_user(user)
 
     cs = can_see?({:activity, :object_id}, user)
+    # perms = permitted_on({:activity, :object_id}, user)
 
     q
     |> join(:left_lateral, [], cs in ^cs, as: :cs)
+    # |> join(:left_lateral, [], perms in ^perms, as: :perms)
     |> where([cs: cs], cs.can_see == true)
 
   end
