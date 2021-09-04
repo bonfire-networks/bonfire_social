@@ -4,9 +4,10 @@ defmodule Bonfire.Social.Activities do
   alias Bonfire.Boundaries.Verbs
   import Bonfire.Common.Utils
   # import Bonfire.Me.Integration
-  # import Ecto.Query
+  import Ecto.Query
   require Logger
   import Bonfire.Boundaries.Queries
+
   use Bonfire.Repo.Query,
     schema: Activity,
     searchable_fields: [:id, :subject_id, :verb_id, :object_id],
