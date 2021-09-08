@@ -198,4 +198,11 @@ defmodule Bonfire.Social.Messages do
 
       ActivityPub.create(attrs, message.id)
   end
+
+  def ap_receive_activity(creator, activity, object) do
+    with {:ok, messaged} <- Bonfire.Me.Users.ActivityPub.by_ap_id(hd(activity.data["to"])) do
+      attrs = %{circles: [messaged.id], post_content: %{html_body: object.data["content"]}}
+      Bonfire.Social.Messages.send(creator, attrs)
+    end
+  end
 end
