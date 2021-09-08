@@ -18,6 +18,8 @@ defmodule Bonfire.Social.Messages do
   # def queries_module, do: Message
   def context_module, do: Message
 
+  def federation_module, do: [{"Create", "ChatMessage"}, {"Delete", "ChatMessage"}]
+
   def draft(creator, attrs) do
     # TODO: create as private
     with {:ok, message} <- create(creator, attrs) do
@@ -169,4 +171,31 @@ defmodule Bonfire.Social.Messages do
     )
   end
 
+  def ap_publish_activity("create", message) do
+    message = repo().preload(message, [activity: [:tags]])
+
+    {:ok, actor} = ActivityPub.Adapter.get_actor_by_id(Utils.e(message, :created, :creator_id, nil))
+
+
+    recipients =
+      Enum.filter(message.activity.tags, fn tag -> tag.facet == "User" end)
+      |> Enum.map(fn tag -> ActivityPub.Actor.get_by_local_id!(tag.id) end)
+      |> Enum.map(fn actor -> actor.ap_id end)
+
+      object = %{
+        "type" => "ChatMessage",
+        "actor" => actor.ap_id,
+        "content" => Utils.e(message, :post_content, :html_body, nil),
+        "to" => recipients
+      }
+
+      attrs = %{
+        actor: actor,
+        context: ActivityPub.Utils.generate_context_id(),
+        object: object,
+        to: recipients,
+      }
+
+      ActivityPub.create(attrs, message.id)
+  end
 end
