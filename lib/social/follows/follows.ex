@@ -195,6 +195,7 @@ defmodule Bonfire.Social.Follows do
 
   def ap_receive_activity(follower, %{data: %{"type" => "Follow"} = data} = _activity, object) when is_binary(follower) or is_struct(follower) do # record an incoming follow
     with {:ok, followed} <- Bonfire.Me.Users.ActivityPub.by_username(e(object, :username, object)),
+         {:error, _} <- get(follower, followed), # check if not already followed
          {:ok, follow} <- do_follow(follower, followed) do
       ActivityPub.accept(%{
         to: [data["actor"]],
@@ -203,6 +204,17 @@ defmodule Bonfire.Social.Follows do
         local: true
       })
       {:ok, follow}
+    else
+      # reaffirm that the follow has gone through
+      {:ok, _} ->
+        ActivityPub.accept(%{
+          to: [data["actor"]],
+          actor: object,
+          object: data,
+          local: true
+        })
+
+      e -> e
     end
   end
 
