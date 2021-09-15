@@ -232,7 +232,7 @@ defmodule Bonfire.Social.FeedActivities do
   def maybe_feed_publish(subject, verb, object, feeds) when is_atom(verb), do: create_and_put_in_feeds(subject, verb, object, feeds)
   def maybe_feed_publish(subject, %{activity: activity}, _, feeds), do: maybe_feed_publish(subject, activity, feeds)
   def maybe_feed_publish(_subject, %Bonfire.Data.Social.Activity{} = activity, _, feeds) do
-    put_in_feeds(feeds, activity)
+    federate_and_put_in_feeds(feeds, activity)
     {:ok, activity}
     # TODO: notify remote users via AP
   end
@@ -250,7 +250,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp create_and_put_in_feeds(subject, verb, object, feed_id) when is_map(object) and is_binary(feed_id) or is_list(feed_id) do
     with {:ok, activity} <- Activities.create(subject, verb, object) do
-      with {:ok, published} <- put_in_feeds(feed_id, activity) do # publish in specified feed
+      with {:ok, published} <- federate_and_put_in_feeds(feed_id, activity) do # publish in specified feed
         # IO.inspect(published, label: "create_and_put_in_feeds")
         {:ok, activity}
       else # meh
@@ -273,6 +273,18 @@ defmodule Bonfire.Social.FeedActivities do
         # maybe_index(activity) # TODO, indexing here?
 
         {:ok, activity}
+    end
+  end
+
+  # TODO Maybe hook this only to the ActivityPub feed?
+  defp federate_and_put_in_feeds(feeds, activity) do
+    # This makes sure it gets put in feed even if the
+    # federation hook fails
+    try do
+      maybe_federate_activity(activity)
+      put_in_feeds(feeds, activity)
+    rescue
+      _ -> put_in_feeds(feeds, activity)
     end
   end
 
@@ -308,6 +320,35 @@ defmodule Bonfire.Social.FeedActivities do
   def delete_for_object(id) when is_binary(id) and id !="", do: FeedPublish |> EctoShorts.filter(activity_id: id) |> repo().delete_many() |> elem(1)
   def delete_for_object(ids) when is_list(ids), do: Enum.each(ids, fn x -> delete_for_object(x) end)
   def delete_for_object(_), do: nil
+
+  def maybe_federate_activity(activity) do
+    verb = Bonfire.Data.AccessControl.Verbs.verb!(activity.verb_id).verb
+
+    do_federate_activity(activity.subject_id, verb, activity)
+  end
+
+  defp do_federate_activity(subject_id, :create, activity) do
+    Bonfire.Social.Integration.ap_publish("create", activity.object_id, subject_id)
+  end
+
+  defp do_federate_activity(subject_id, :follow, activity) do
+    follow = Bonfire.Social.Follows.get!(subject_id, activity.object_id)
+    Bonfire.Social.Integration.ap_publish("create", follow, subject_id)
+  end
+
+  defp do_federate_activity(subject_id, :like, activity) do
+    like = Bonfire.Social.Likes.get!(activity.subject, activity.object_id)
+    Bonfire.Social.Integration.ap_publish("create", like.id, subject_id)
+  end
+
+  defp do_federate_activity(subject_id, :boost, activity) do
+    boost = Bonfire.Social.Boosts.get!(activity.subject, activity.object)
+    Bonfire.Social.Integration.ap_publish("create", boost, subject_id)
+  end
+
+  defp do_federate_activity(_, verb, _) do
+    Logger.warn("unhandled outgoing federation verb: #{Atom.to_string(verb)}")
+  end
 
   @doc "Defines additional query filters"
 
