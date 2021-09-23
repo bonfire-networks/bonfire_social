@@ -281,15 +281,18 @@ defmodule Bonfire.Social.FeedActivities do
     end
   end
 
-  # TODO Maybe hook this only to the ActivityPub feed?
   defp federate_and_put_in_feeds(feeds, activity) do
     # This makes sure it gets put in feed even if the
     # federation hook fails
+    ret = put_in_feeds(feeds, activity)
+    # TODO: add ActivityPub feed for remote activities
+
     try do
+    # FIXME only run if ActivityPub is a target feed
+    # TODO: only run for non-local activity
       maybe_federate_activity(activity)
-      put_in_feeds(feeds, activity)
     rescue
-      _ -> put_in_feeds(feeds, activity)
+      _ -> ret
     end
   end
 
