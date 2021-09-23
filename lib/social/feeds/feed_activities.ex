@@ -124,7 +124,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   def publish(subject, verb, object, circles \\ [], mentions_tags_are_private? \\ true, replies_are_private? \\ false)
 
-  def publish(subject, verb, %{replied: %{reply_to_id: reply_to_id}} = object, circles, _, false = replies_are_private?) when is_atom(verb) and is_binary(reply_to_id) do
+  def publish(subject, verb, %{replied: %{reply_to_id: reply_to_id}} = object, circles, _, false = replies_are_private?) when is_atom(verb) and is_list(circles) and is_binary(reply_to_id) do
     # publishing a reply to something
     # TODO share some logic with maybe_notify_creator?
     # TODO enable by default only if OP is included in audience?
@@ -161,6 +161,10 @@ defmodule Bonfire.Social.FeedActivities do
     end
   end
 
+  def publish(subject, verb, object, circles, tags_are_private?, replies_are_private?) when not is_list(circles) do
+    publish(subject, verb, object, [circles], tags_are_private?, replies_are_private?)
+  end
+
   def publish(subject, verb, object, circles, _, _) when is_atom(verb) do
     do_publish(subject, verb, object, circles)
   end
@@ -171,11 +175,17 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
 
+  defp do_publish(subject, verb, object, feeds \\ nil)
+  defp do_publish(subject, verb, object, feeds) when is_list(feeds), do: maybe_feed_publish(subject, verb, object, feeds ++ [subject]) # also put in subject's outbox
+  defp do_publish(subject, verb, object, feed_id) when not is_nil(feed_id), do: maybe_feed_publish(subject, verb, object, [feed_id, subject])
+  defp do_publish(subject, verb, object, _), do: maybe_feed_publish(subject, verb, object, subject) # just publish to subject's outbox
+
+
   @doc """
   Records a remote activity and puts in appropriate feeds
   """
   def save_fediverse_incoming_activity(subject, verb, object) when is_atom(verb) do
-    do_publish(subject, verb, object, Feeds.fediverse_feed_id())
+    publish(subject, verb, object, Feeds.fediverse_feed_id())
   end
 
   @doc """
@@ -241,11 +251,6 @@ defmodule Bonfire.Social.FeedActivities do
     {:ok, nil}
   end
 
-
-  defp do_publish(subject, verb, object, feeds \\ nil)
-  defp do_publish(subject, verb, object, feeds) when is_list(feeds), do: maybe_feed_publish(subject, verb, object, feeds ++ [subject]) # also put in subject's outbox
-  defp do_publish(subject, verb, object, feed_id) when not is_nil(feed_id), do: maybe_feed_publish(subject, verb, object, [feed_id, subject])
-  defp do_publish(subject, verb, object, _), do: maybe_feed_publish(subject, verb, object, subject) # just publish to subject's outbox
 
 
   defp create_and_put_in_feeds(subject, verb, object, feed_id) when is_map(object) and is_binary(feed_id) or is_list(feed_id) do
