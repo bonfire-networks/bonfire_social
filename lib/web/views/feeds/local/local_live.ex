@@ -16,21 +16,16 @@ defmodule Bonfire.Social.Web.Feeds.LocalLive do
 
   defp mounted(params, _session, socket) do
 
-    feed = Bonfire.Social.FeedActivities.feed(:notifications, socket)
+    feed_assigns = Bonfire.Social.Web.Feeds.BrowseLive.instance_feed(socket)
 
     {:ok, socket
     |> assign(
-      page: "local",
-      selected_tab: "local",
+      feed_assigns ++ [page: "local",
       page_title: "Local",
-      feed_title: "Local",
       smart_input: false,
       has_private_tab: false,
       search_placeholder: "Search my local feed",
-      feed_id: :notifications,
-      feed: e(feed, :entries, []),
-      page_info: e(feed, :metadata, [])
-      )}
+      ])}
 
   end
 

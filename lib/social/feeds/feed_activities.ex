@@ -291,6 +291,8 @@ defmodule Bonfire.Social.FeedActivities do
     # FIXME only run if ActivityPub is a target feed
     # TODO: only run for non-local activity
       maybe_federate_activity(activity)
+
+      ret
     rescue
       _ -> ret
     end

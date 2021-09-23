@@ -15,21 +15,18 @@ defmodule Bonfire.Social.Web.Feeds.FederationLive do
 
   defp mounted(params, _session, socket) do
 
-    feed = Bonfire.Social.FeedActivities.feed(:notifications, socket)
+    feed_assigns = Bonfire.Social.Web.Feeds.BrowseLive.fediverse_feed(socket)
 
     {:ok, socket
     |> assign(
+      feed_assigns ++ [
       page: "federation",
-      selected_tab: "federation",
       page_title: "Federation",
-      feed_title: "Federation",
       smart_input: false,
       has_private_tab: false,
       search_placeholder: "Search in the whole fediverse",
-      feed_id: :notifications,
-      feed: e(feed, :entries, []),
-      page_info: e(feed, :metadata, [])
-      )}
+      ])
+      }
 
   end
 

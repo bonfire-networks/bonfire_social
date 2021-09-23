@@ -43,9 +43,9 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
 
     assigns = if current_user || current_account(socket) do
 
-      fediverse_feed(current_user, socket)
+      fediverse_feed(socket)
     else
-      instance_feed(current_user, socket) # fallback to showing instance feed
+      []
     end
 
     {:noreply, assign(socket, assigns)}
@@ -54,7 +54,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
   def do_handle_params(%{"tab" => "instance" = tab} = _params, _url, socket) do
     current_user = current_user(socket)
 
-    {:noreply, assign(socket, instance_feed(current_user, socket)) }
+    {:noreply, assign(socket, instance_feed(socket)) }
   end
 
   def do_handle_params(_params, _url, socket) do
@@ -64,15 +64,18 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
 
   def default_feed(socket) do
     current_user = current_user(socket)
+    current_account = current_account(socket)
 
-    if current_user || current_account(socket) do
-      my_feed(current_user, socket) # my feed
+    current = current_user || current_account
+
+    if current do
+      my_feed(current, socket) # my feed
     else
-      instance_feed(current_user, socket) # fallback to showing instance feed
+      instance_feed(socket) # fallback to showing instance feed
     end
   end
 
-  def fediverse_feed(current_user, socket) do
+  def fediverse_feed(socket) do
     feed_id = Bonfire.Social.Feeds.fediverse_feed_id()
     feed = Bonfire.Social.FeedActivities.feed(feed_id, socket)
     to_circles = [Bonfire.Boundaries.Circles.get_tuple(:activity_pub)]
@@ -87,7 +90,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
     #|> assign_global(to_circles: to_circles)
   end
 
-  def instance_feed(_current_user, socket) do
+  def instance_feed(socket) do
     feed_id = Bonfire.Social.Feeds.instance_feed_id()
     feed = Bonfire.Social.FeedActivities.feed(feed_id, socket)
     to_circles = [Bonfire.Boundaries.Circles.get_tuple(:local)]

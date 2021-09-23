@@ -15,21 +15,18 @@ defmodule Bonfire.Social.Web.Feeds.HomeLive do
 
   defp mounted(params, _session, socket) do
 
-    feed = Bonfire.Social.FeedActivities.feed(:notifications, socket)
+    feed_assigns = Bonfire.Social.Web.Feeds.BrowseLive.default_feed(socket)
 
     {:ok, socket
     |> assign(
+      feed_assigns ++ [
       page: "home",
-      selected_tab: "home",
       page_title: "Home",
-      feed_title: "Home",
       smart_input: false,
       has_private_tab: false,
       search_placeholder: "Search my feed",
-      feed_id: :notifications,
-      feed: e(feed, :entries, []),
-      page_info: e(feed, :metadata, [])
-      )}
+      ])
+      }
 
   end
 
