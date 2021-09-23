@@ -171,10 +171,17 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
 
+  defp do_publish(subject, verb, object, feeds \\ nil)
+  defp do_publish(subject, verb, object, feeds) when is_list(feeds), do: maybe_feed_publish(subject, verb, object, feeds ++ [subject]) # also put in subject's outbox
+  defp do_publish(subject, verb, object, feed_id) when not is_nil(feed_id), do: maybe_feed_publish(subject, verb, object, [feed_id, subject])
+  defp do_publish(subject, verb, object, _), do: maybe_feed_publish(subject, verb, object, subject) # just publish to subject's outbox
+
+
   @doc """
   Records a remote activity and puts in appropriate feeds
   """
   def save_fediverse_incoming_activity(subject, verb, object) when is_atom(verb) do
+    # TODO: this should hook into the some of the logic of publish/6 so as to support tagging, notifying characters/threads/etc, but without federating twice
     do_publish(subject, verb, object, Feeds.fediverse_feed_id())
   end
 
@@ -241,11 +248,6 @@ defmodule Bonfire.Social.FeedActivities do
     {:ok, nil}
   end
 
-
-  defp do_publish(subject, verb, object, feeds \\ nil)
-  defp do_publish(subject, verb, object, feeds) when is_list(feeds), do: maybe_feed_publish(subject, verb, object, feeds ++ [subject]) # also put in subject's outbox
-  defp do_publish(subject, verb, object, feed_id) when not is_nil(feed_id), do: maybe_feed_publish(subject, verb, object, [feed_id, subject])
-  defp do_publish(subject, verb, object, _), do: maybe_feed_publish(subject, verb, object, subject) # just publish to subject's outbox
 
 
   defp create_and_put_in_feeds(subject, verb, object, feed_id) when is_map(object) and is_binary(feed_id) or is_list(feed_id) do
