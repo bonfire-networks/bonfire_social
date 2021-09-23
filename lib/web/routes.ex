@@ -6,10 +6,12 @@ defmodule Bonfire.Social.Web.Routes do
       # pages anyone can view
       scope "/", Bonfire.Social.Web do
         pipe_through :browser
-
-        live "/browse/", Feeds.BrowseLive, as: :browse
-        live "/browse/:tab", Feeds.BrowseLive
-
+        
+        live "/home", Feeds.HomeLive, as: :home
+        live "/local", Feeds.LocalLive, as: :local
+        live "/federation", Feeds.FederationLive, as: :federation
+        # live "/browse/", Feeds.BrowseLive, as: :browse
+        # live "/browse/:tab", Feeds.BrowseLive
         live "/post/:id", PostLive, as: Bonfire.Data.Social.Post
         live "/discussion/:id", DiscussionLive, as: Bonfire.Data.Social.PostContent
         live "/discussion/:id/reply/:reply_id", DiscussionLive
