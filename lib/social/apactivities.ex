@@ -18,10 +18,27 @@ defmodule Bonfire.Social.APActivities do
     end
   end
 
-  def create(activity, object, actor) do
+  def create(activity, object, actor) when is_map(object) do
     json =
       activity.data
       |> Map.put("object", object.data)
+
+    with {:ok, apactivity} <- insert(json),
+         {:ok, _} <- FeedActivities.save_fediverse_incoming_activity(actor, :create, apactivity) do
+      {:ok, apactivity}
+    end
+  end
+
+  def create(activity, object, actor) do
+    object = ActivityPub.Object.normalize(object, true)
+
+    json =
+      if is_map(object) do
+        activity.data
+        |> Map.put("object", object.data)
+      else
+        activity.data
+      end
 
     with {:ok, apactivity} <- insert(json),
          {:ok, _} <- FeedActivities.save_fediverse_incoming_activity(actor, :create, apactivity) do
