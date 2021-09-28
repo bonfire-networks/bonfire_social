@@ -7,7 +7,7 @@ defmodule Bonfire.Social.Web.Routes do
       scope "/", Bonfire.Social.Web do
         pipe_through :browser
 
-        live "/home", Feeds.HomeLive, as: :home
+        live "/home", HomeLive, as: :home
         live "/local", Feeds.LocalLive, as: :local
         live "/federation", Feeds.FederationLive, as: :federation
         live "/browse/", Feeds.BrowseLive, as: :browse

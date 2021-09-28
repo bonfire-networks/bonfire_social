@@ -26,12 +26,12 @@ defmodule Bonfire.Social.Web.DiscussionLive do
       # IO.inspect(object, label: "the object:")
       # IO.inspect(activity, label: "the activity:")
 
-      following = if current_user && module_enabled?(Bonfire.Social.Follows) do
-        a = if Bonfire.Social.Follows.following?(current_user, object), do: object.id
-        thread_id = e(activity, :replied, :thread_id, nil)
-        b = if thread_id && Bonfire.Social.Follows.following?(current_user, thread_id), do: thread_id
-        [a, b]
-      end
+      # following = if current_user && module_enabled?(Bonfire.Social.Follows) do
+      #   a = if Bonfire.Social.Follows.following?(current_user, object), do: object.id
+      #   thread_id = e(activity, :replied, :thread_id, nil)
+      #   b = if thread_id && Bonfire.Social.Follows.following?(current_user, thread_id), do: thread_id
+      #   [a, b]
+      # end
 
       {:ok,
       socket
@@ -45,7 +45,6 @@ defmodule Bonfire.Social.Web.DiscussionLive do
         activity: activity,
         object: Map.merge(object, preloaded_object || %{}),
         thread_id: e(object, :id, nil),
-        following: following || []
       )}
 
     else _e ->

@@ -23,7 +23,7 @@ defmodule Bonfire.Social.Web.PostLive do
 
       {activity, post} = Map.pop(post, :activity)
 
-      following = if current_user && module_enabled?(Bonfire.Social.Follows) && Bonfire.Social.Follows.following?(current_user, post), do: [post.id]
+      # following = if current_user && module_enabled?(Bonfire.Social.Follows) && Bonfire.Social.Follows.following?(current_user, post), do: [post.id]
 
       {:ok,
       socket
@@ -37,7 +37,7 @@ defmodule Bonfire.Social.Web.PostLive do
         post: post,
         thread_id: e(post, :id, nil),
         replies: [],
-        following: following || []
+        # following: following || []
       )}
 
     else _e ->

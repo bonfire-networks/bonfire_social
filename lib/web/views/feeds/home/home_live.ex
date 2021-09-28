@@ -1,4 +1,4 @@
-defmodule Bonfire.Social.Web.Feeds.HomeLive do
+defmodule Bonfire.Social.Web.HomeLive do
   use Bonfire.Web, :live_view
   alias Bonfire.Web.LivePlugs
 

@@ -3,6 +3,7 @@ defmodule Bonfire.Social.Follows do
   alias Bonfire.Social.FeedActivities
   alias Bonfire.Social.Activities
   alias Bonfire.Social.APActivities
+  alias Bonfire.Data.Identity.User
   alias Bonfire.Social.Integration
   import Bonfire.Common.Utils
 
@@ -18,6 +19,7 @@ defmodule Bonfire.Social.Follows do
   def following?(user, followed), do: not is_nil(get!(user, followed))
 
   def get(user, followed), do: repo().single(by_both_q(user, followed))
+  def get!(%User{}=user, followed) when is_list(followed), do: repo().all(by_both_q(user, followed))
   def get!(user, followed), do: repo().one(by_both_q(user, followed))
 
   def by_follower(user), do: repo().many(followed_by_follower_q(user))
@@ -170,6 +172,11 @@ defmodule Bonfire.Social.Follows do
       select: f.id
   end
 
+  defp by_both_q(follower, followed) when is_list(followed) do
+    from f in Follow,
+      where: f.follower_id == ^ulid(follower) or f.followed_id in ^ulid(followed),
+      select: {f.followed_id, f}
+  end
   defp by_both_q(follower, followed) do
     from f in Follow,
       where: f.follower_id == ^ulid(follower) and f.followed_id == ^ulid(followed),
