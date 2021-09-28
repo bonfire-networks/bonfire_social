@@ -33,7 +33,8 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
 
     new = [
       feed: e(feed, :entries, []),
-      page_info: e(feed, :metadata, [])
+      page_info: e(feed, :metadata, []),
+      feed_update_mode: "prepend"
     ]
 
     {:noreply, socket |> assign(new) }

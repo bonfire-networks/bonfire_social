@@ -97,7 +97,7 @@ defmodule Bonfire.Social.FeedActivities do
     query
       |> query_extras(current_user, preloads)
       |> EctoShorts.filter(filters, nil, nil)
-      # |> IO.inspect(label: "feed query")
+      |> IO.inspect(label: "feed query")
   end
 
 
