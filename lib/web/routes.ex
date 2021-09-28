@@ -35,8 +35,6 @@ defmodule Bonfire.Social.Web.Routes do
         pipe_through :user_required
 
 
-        live "/private", PrivateLive, as: :private
-
       end
 
     end
