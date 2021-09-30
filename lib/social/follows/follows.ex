@@ -76,9 +76,7 @@ defmodule Bonfire.Social.Follows do
   Follow someone/something, and federate it
   """
   def follow(follower, followed) do
-    with {:ok, follow} <- do_follow(follower, followed) do
-      {:ok, follow}
-    end
+    do_follow(follower, followed)
   end
 
   defp do_follow(subject, object) when is_binary(object) do
@@ -102,6 +100,7 @@ defmodule Bonfire.Social.Follows do
       Bonfire.Me.Users.Boundaries.maybe_make_visible_for(follower, follower, followed)
       Bonfire.Me.Users.Boundaries.maybe_make_visible_for(followed, followed, follower)
 
+      Logger.warn("followed")
       FeedActivities.notify_object(follower, :follow, followed)
 
       {:ok, follow}
@@ -199,10 +198,9 @@ defmodule Bonfire.Social.Follows do
     end
   end
 
-
-  def ap_receive_activity(follower, %{data: %{"type" => "Follow"} = data} = _activity, object) when is_binary(follower) or is_struct(follower) do # record an incoming follow
-    with {:ok, followed} <- Bonfire.Me.Users.ActivityPub.by_username(e(object, :username, object)),
-         {:error, _} <- get(follower, followed), # check if not already followed
+  def ap_receive_activity(follower, %{data: %{"type" => "Follow"} = data} = _activity, %{pointer_id: followed} = object) when is_binary(follower) or is_struct(follower) do
+    Logger.warn("Follows: recording an incoming follow")
+    with {:error, _} <- get(follower, followed), # check if not already followed
          {:ok, follow} <- do_follow(follower, followed) do
       ActivityPub.accept(%{
         to: [data["actor"]],
@@ -226,7 +224,7 @@ defmodule Bonfire.Social.Follows do
   end
 
   def ap_receive_activity(follower, %{data: %{"type" => "Undo"} = _data} = _activity, %{data: %{"object" => followed_ap_id}} = _object) do
-    with {:ok, followed} <- Bonfire.Me.Users.ActivityPub.by_ap_id(followed_ap_id),
+    with {:ok, followed} <- Bonfire.Federate.ActivityPub.Utils.get_character_by_ap_id(followed_ap_id),
          [id] <- unfollow(follower, followed) do
           {:ok, id}
     end
