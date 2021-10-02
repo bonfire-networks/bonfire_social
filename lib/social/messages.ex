@@ -34,9 +34,8 @@ defmodule Bonfire.Social.Messages do
       with circles <- Utils.e(attrs, :circles, []),
         {text, mentions, _hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs),
         {:ok, message} <- create(creator, attrs, text),
-        {:ok, tagged} <- Bonfire.Social.Tags.maybe_tag(creator, message, circles ++ mentions),
+        {:ok, tagged} <- Bonfire.Social.Tags.maybe_tag(creator, message, circles ++ mentions, true),
         {:ok, _} <- Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, message, circles) do
-         # TODO: optionally make visible to & notify mentioned characters (should be configurable)
 
           # IO.inspect(circles: circles)
           # IO.inspect(mentions: mentions)

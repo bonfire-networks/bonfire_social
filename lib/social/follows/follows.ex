@@ -19,7 +19,7 @@ defmodule Bonfire.Social.Follows do
   def following?(user, followed), do: not is_nil(get!(user, followed))
 
   def get(user, followed), do: repo().single(by_both_q(user, followed))
-  def get!(%User{}=user, followed) when is_list(followed), do: repo().all(by_both_q(user, followed))
+  def get!(%{}=user, followed) when is_list(followed), do: repo().all(by_both_q(user, followed))
   def get!(user, followed), do: repo().one(by_both_q(user, followed))
 
   def by_follower(user), do: repo().many(followed_by_follower_q(user))
@@ -96,9 +96,9 @@ defmodule Bonfire.Social.Follows do
 
       # FeedActivities.publish(follower, :follow, followed) # TODO: make configurable where the follow gets published
 
-      # TEMPORARY: make profiles visible between followers
-      Bonfire.Me.Users.Boundaries.maybe_make_visible_for(follower, follower, followed)
-      Bonfire.Me.Users.Boundaries.maybe_make_visible_for(followed, followed, follower)
+      # TEMPORARY: make profiles visible between followers?
+      # Bonfire.Me.Users.Boundaries.maybe_make_visible_for(follower, follower, followed)
+      # Bonfire.Me.Users.Boundaries.maybe_make_visible_for(followed, followed, follower)
 
       Logger.warn("followed")
       FeedActivities.notify_object(follower, :follow, followed)
@@ -108,9 +108,10 @@ defmodule Bonfire.Social.Follows do
   end
 
   def unfollow(follower, %{} = followed) do
-    [id] = delete_by_both(follower, followed)
-    # delete the like activity & feed entries
+    with [id] <- delete_by_both(follower, followed) do
+      # delete the like activity & feed entries
     Activities.delete_by_subject_verb_object(follower, :follow, followed)
+    end
   end
 
   def unfollow(%{} = user, object) when is_binary(object) do

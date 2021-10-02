@@ -14,14 +14,14 @@ defmodule Bonfire.Social.Boosts do
   def context_module, do: Boost
   def federation_module, do: ["Announce", {"Create", "Announce"}, {"Undo", "Announce"}, {"Delete", "Announce"}]
 
-  def boosted?(%User{}=user, boosted), do: not is_nil(get!(user, boosted))
-  def get(%User{}=user, boosted), do: repo().single(by_both_q(user, boosted))
-  def get!(%User{}=user, boosted), do: repo().one(by_both_q(user, boosted))
-  def by_booster(%User{}=user), do: repo().many(by_booster_q(user))
-  def by_boosted(%User{}=user), do: repo().many(by_boosted_q(user))
-  def by_any(%User{}=user), do: repo().many(by_any_q(user))
+  def boosted?(%{}=user, boosted), do: not is_nil(get!(user, boosted))
+  def get(%{}=user, boosted), do: repo().single(by_both_q(user, boosted))
+  def get!(%{}=user, boosted), do: repo().one(by_both_q(user, boosted))
+  def by_booster(%{}=user), do: repo().many(by_booster_q(user))
+  def by_boosted(%{}=user), do: repo().many(by_boosted_q(user))
+  def by_any(%{}=user), do: repo().many(by_any_q(user))
 
-  def boost(%User{} = booster, %{} = boosted) do
+  def boost(%{} = booster, %{} = boosted) do
     with {:ok, boost} <- create(booster, boosted),
     {:ok, published} <- FeedActivities.publish(booster, :boost, boosted) do
       # TODO: increment the boost count
@@ -31,19 +31,19 @@ defmodule Bonfire.Social.Boosts do
       {:ok, boost}
     end
   end
-  def boost(%User{} = booster, boosted) when is_binary(boosted) do
+  def boost(%{} = booster, boosted) when is_binary(boosted) do
     with {:ok, boosted} <- Bonfire.Common.Pointers.get(boosted) do
       #IO.inspect(liked)
       boost(booster, boosted)
     end
   end
 
-  def unboost(%User{}=booster, %{}=boosted) do
+  def unboost(%{}=booster, %{}=boosted) do
     delete_by_both(booster, boosted) # delete the Boost
     Activities.delete_by_subject_verb_object(booster, :boost, boosted) # delete the boost activity & feed entries
     # TODO: decrement the boost count
   end
-  def unboost(%User{} = booster, boosted) when is_binary(boosted) do
+  def unboost(%{} = booster, boosted) when is_binary(boosted) do
     with {:ok, boosted} <- Bonfire.Common.Pointers.get(boosted) do
       #IO.inspect(liked)
       unboost(booster, boosted)
@@ -80,36 +80,36 @@ defmodule Bonfire.Social.Boosts do
   end
 
   #doc "Delete boosts where i am the booster"
-  defp delete_by_booster(%User{}=me), do: elem(repo().delete_all(by_booster_q(me)), 1)
+  defp delete_by_booster(%{}=me), do: elem(repo().delete_all(by_booster_q(me)), 1)
 
   #doc "Delete boosts where i am the boosted"
-  defp delete_by_boosted(%User{}=me), do: elem(repo().delete_all(by_boosted_q(me)), 1)
+  defp delete_by_boosted(%{}=me), do: elem(repo().delete_all(by_boosted_q(me)), 1)
 
   #doc "Delete boosts where i am the booster or the boosted."
-  defp delete_by_any(%User{}=me), do: elem(repo().delete_all(by_any_q(me)), 1)
+  defp delete_by_any(%{}=me), do: elem(repo().delete_all(by_any_q(me)), 1)
 
   #doc "Delete boosts where i am the booster and someone else is the boosted."
-  defp delete_by_both(%User{}=me, %{}=boosted), do: elem(repo().delete_all(by_both_q(me, boosted)), 1)
+  defp delete_by_both(%{}=me, %{}=boosted), do: elem(repo().delete_all(by_both_q(me, boosted)), 1)
 
-  defp by_booster_q(%User{id: id}) do
+  defp by_booster_q(%{id: id}) do
     from f in Boost,
       where: f.booster_id == ^id,
       select: f.id
   end
 
-  defp by_boosted_q(%User{id: id}) do
+  defp by_boosted_q(%{id: id}) do
     from f in Boost,
       where: f.boosted_id == ^id,
       select: f.id
   end
 
-  defp by_any_q(%User{id: id}) do
+  defp by_any_q(%{id: id}) do
     from f in Boost,
       where: f.booster_id == ^id or f.boosted_id == ^id,
       select: f.id
   end
 
-  defp by_both_q(%User{id: booster}, %{id: boosted}), do: by_both_q(booster, boosted)
+  defp by_both_q(%{id: booster}, %{id: boosted}), do: by_both_q(booster, boosted)
 
   defp by_both_q(booster, boosted) when is_binary(booster) and is_binary(boosted) do
     from f in Boost,
@@ -118,7 +118,7 @@ defmodule Bonfire.Social.Boosts do
   end
 
 
-  #doc "List likes created by the user and which are in their outbox, which are not replies"
+  #doc "List boosts created by the user and which are in their outbox, which are not replies"
   def filter(:boosts_of, id, query) do
     verb_id = Verbs.verbs()[:boost]
 
@@ -131,7 +131,7 @@ defmodule Bonfire.Social.Boosts do
   end
 
 
-  #doc "List likes created by the user and which are in their outbox, which are not replies"
+  #doc "List boosts created by the user and which are in their outbox, which are not replies"
   def filter(:boosts_by, user_id, query) do
     verb_id = Verbs.verbs()[:boost]
 

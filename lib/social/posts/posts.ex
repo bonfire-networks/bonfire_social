@@ -43,7 +43,7 @@ defmodule Bonfire.Social.Posts do
     repo().transact_with(fn ->
       with  {text, mentions, hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs),
         {:ok, post} <- create(creator, attrs, text),
-        {:ok, post} <- Bonfire.Social.Tags.maybe_tag(creator, post, mentions),
+        {:ok, post} <- Bonfire.Social.Tags.maybe_tag(creator, post, mentions, mentions_are_private?),
         {:ok, activity} <- FeedActivities.publish(creator, :create, post, circles, mentions_are_private?, replies_are_private?) do
 
           post_with_activity = Activities.activity_under_object(activity)
