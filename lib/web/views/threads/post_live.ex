@@ -1,5 +1,5 @@
 defmodule Bonfire.Social.Web.PostLive do
-  use Bonfire.Web, :live_view
+  use Bonfire.Web, :surface_view
   alias Bonfire.Web.LivePlugs
 
   def mount(params, session, socket) do

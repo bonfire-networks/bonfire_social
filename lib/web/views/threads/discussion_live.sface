@@ -1,0 +1,11 @@
+
+<Bonfire.UI.Social.ObjectThreadLive
+  page={@page}
+  page_title={@page_title}
+  has_private_tab={@has_private_tab}
+  search_placeholder={@search_placeholder}
+  smart_input_placeholder={@smart_input_placeholder}
+  reply_id={@reply_id}
+  activity={@activity}
+  thread_id={@thread_id}
+/>

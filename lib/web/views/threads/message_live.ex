@@ -1,5 +1,5 @@
 defmodule Bonfire.Social.Web.MessageLive do
-  use Bonfire.Web, :live_view
+  use Bonfire.Web, :surface_view
   alias Bonfire.Web.LivePlugs
 
   def mount(params, session, socket) do
@@ -35,13 +35,11 @@ defmodule Bonfire.Social.Web.MessageLive do
         reply_id: Map.get(params, "reply_id"),
         activity: activity,
         object: Map.merge(object, preloaded_object),
-        thread_id: e(object, :id, nil)
-      ) #|> IO.inspect
-      |> assign_global(
+        thread_id: e(object, :id, nil),
         smart_input_private: true,
         create_activity_type: "message",
         smart_input_placeholder: "Reply privately"
-      )
+      ) #|> IO.inspect
     }
 
     else _e ->

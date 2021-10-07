@@ -117,7 +117,6 @@ defmodule Bonfire.Social.Threads do
   def list_replies(thread_id, current_user, cursor, max_depth, limit) when is_binary(thread_id), do: do_list_replies(thread_id, current_user, cursor, max_depth, limit)
 
   defp do_list_replies(thread_id, current_user_or_socket, cursor, max_depth, limit) do
-    # IO.inspect(current_user_or_socket: current_user_or_socket)
 
     pubsub_subscribe(thread_id, current_user_or_socket) # subscribe to realtime thread updates
 
@@ -137,7 +136,7 @@ defmodule Bonfire.Social.Threads do
       # |> preload_join(:activity, :subject_character)
       |> Bonfire.Repo.many_paginated(limit: limit, before: e(cursor, :before, nil), after: e(cursor, :after, nil)) # return a page of items + pagination metadata
       # |> repo().many # without pagination
-      # |> IO.inspect
+      |> IO.inspect(label: "thread query")
   end
 
   def arrange_replies_tree(replies), do: replies |> Replied.arrange() # uses https://github.com/asiniy/ecto_materialized_path
