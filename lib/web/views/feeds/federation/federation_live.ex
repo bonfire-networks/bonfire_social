@@ -1,5 +1,5 @@
 defmodule Bonfire.Social.Web.Feeds.FederationLive do
-  use Bonfire.Web, :live_view
+  use Bonfire.Web, :surface_view
   alias Bonfire.Web.LivePlugs
 
   def mount(params, session, socket) do
@@ -22,9 +22,6 @@ defmodule Bonfire.Social.Web.Feeds.FederationLive do
       feed_assigns ++ [
       page: "federation",
       page_title: "Federation",
-      smart_input: false,
-      has_private_tab: false,
-      search_placeholder: "Search in the whole fediverse",
       ])
       }
 

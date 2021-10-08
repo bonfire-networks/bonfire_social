@@ -1,6 +1,6 @@
 
 defmodule Bonfire.Social.Web.Feeds.LocalLive do
-  use Bonfire.Web, :live_view
+  use Bonfire.Web, :surface_view
   alias Bonfire.Web.LivePlugs
 
   def mount(params, session, socket) do
@@ -22,9 +22,6 @@ defmodule Bonfire.Social.Web.Feeds.LocalLive do
     |> assign(
       feed_assigns ++ [page: "local",
       page_title: "Local",
-      smart_input: false,
-      has_private_tab: false,
-      search_placeholder: "Search my local feed",
       ])}
 
   end

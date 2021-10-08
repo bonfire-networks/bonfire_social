@@ -1,5 +1,5 @@
 defmodule Bonfire.Social.Web.HomeLive do
-  use Bonfire.Web, :live_view
+  use Bonfire.Web, :surface_view
   alias Bonfire.Web.LivePlugs
 
   def mount(params, session, socket) do
@@ -14,7 +14,6 @@ defmodule Bonfire.Social.Web.HomeLive do
   end
 
   defp mounted(params, _session, socket) do
-
     feed_assigns = Bonfire.Social.Web.Feeds.BrowseLive.default_feed(socket)
 
     {:ok, socket
@@ -22,9 +21,6 @@ defmodule Bonfire.Social.Web.HomeLive do
       feed_assigns ++ [
       page: "home",
       page_title: "Home",
-      smart_input: false,
-      has_private_tab: false,
-      search_placeholder: "Search my feed",
       ])
       }
 

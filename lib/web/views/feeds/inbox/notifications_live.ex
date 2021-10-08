@@ -1,5 +1,5 @@
 defmodule Bonfire.Social.Web.Feeds.NotificationsLive do
-  use Bonfire.Web, :live_view
+  use Bonfire.Web, :surface_view
   alias Bonfire.Web.LivePlugs
 
   def mount(params, session, socket) do
@@ -22,10 +22,7 @@ defmodule Bonfire.Social.Web.Feeds.NotificationsLive do
       page: "notifications",
       selected_tab: "notifications",
       page_title: "Notifications",
-      feed_title: "Notifications",
-      smart_input: false,
-      has_private_tab: false,
-      search_placeholder: "Search my notifications",
+      current_user: current_user(socket),
       feed_id: :notifications,
       feed: e(feed, :entries, []),
       page_info: e(feed, :metadata, [])

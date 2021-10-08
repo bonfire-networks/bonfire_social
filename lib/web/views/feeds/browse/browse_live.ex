@@ -81,6 +81,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
     to_circles = [Bonfire.Boundaries.Circles.get_tuple(:activity_pub)]
 
     [
+      current_user: current_user(socket),
       selected_tab: "fediverse",
       to_circles: to_circles,
       feed_title: "Activities from around the fediverse",
@@ -96,6 +97,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
     to_circles = [Bonfire.Boundaries.Circles.get_tuple(:local)]
 
     [
+      current_user: current_user(socket),
       selected_tab: "instance",
       feed_title: "Activities on this instance",
       to_circles: to_circles,
@@ -110,6 +112,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
     feed = Bonfire.Social.FeedActivities.my_feed(socket)
     to_circles = Bonfire.Me.Users.Circles.list_my_defaults(current_user)
     [
+      current_user: current_user,
       selected_tab: "feed",
       feed_title: "My Feed",
       to_circles: to_circles,
