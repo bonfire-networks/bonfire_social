@@ -36,7 +36,7 @@ defmodule Bonfire.Social.Posts.LiveHandler do
   def handle_event("post", params, socket) do # if not message, it's a post by default
     attrs = params
     |> input_to_atoms()
-    |> IO.inspect(label: "params")
+    |> IO.inspect
 
     with %{valid?: true} <- post_changeset(attrs),
          {:ok, _published} <- Bonfire.Social.Posts.publish(current_user(socket), attrs) do
