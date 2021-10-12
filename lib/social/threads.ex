@@ -135,10 +135,10 @@ defmodule Bonfire.Social.Threads do
       # |> preload_join(:activity, :subject_character)
       |> Bonfire.Repo.many_paginated(limit: limit, before: e(cursor, :before, nil), after: e(cursor, :after, nil)) # return a page of items + pagination metadata
       # |> repo().many # without pagination
-      |> IO.inspect(label: "thread query")
+      # |> IO.inspect(label: "thread query")
   end
 
-  def arrange_replies_tree(replies), do: replies |> Replied.arrange() # uses https://github.com/asiniy/ecto_materialized_path
+  def arrange_replies_tree(replies), do: replies |> Replied.arrange() # uses https://github.com/bonfire-networks/ecto_materialized_path
 
   # def replies_tree(replies) do
   #   thread = replies
