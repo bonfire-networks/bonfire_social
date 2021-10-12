@@ -28,17 +28,14 @@ defmodule Bonfire.Social.Threads do
   def maybe_reply(%{reply_to: reply_attrs}) when is_map(reply_attrs), do: maybe_reply(reply_attrs)
   def maybe_reply(%{reply_to: reply_to_id}) when is_binary(reply_to_id), do: maybe_reply(%{reply_to_id: reply_to_id})
   def maybe_reply(%{reply_to_id: reply_to_id} = reply_attrs) when is_binary(reply_to_id) and reply_to_id !="" do
-    IO.inspect("QUI") 
     with {:ok, reply_to_replied} <- get_replied(reply_to_id) do
       # object we are replying to already has replied mixin
       reply_obj(reply_attrs, reply_to_replied, reply_to_id)
      else _ ->
       with {:ok, reply_to_replied} <- create(%{id: reply_to_id, thread_id: Map.get(reply_attrs, :thread_id, reply_to_id)}) do
-        IO.inspect("QUI 2")
         # created replied mixin for reply_to object
         reply_obj(reply_attrs, reply_to_replied, reply_to_id)
       else _ ->
-        IO.inspect("QUI boh")
         # could not
          Map.drop(reply_attrs, [:reply_to_id])
         |> maybe_reply()
