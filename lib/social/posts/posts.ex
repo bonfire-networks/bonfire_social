@@ -171,8 +171,6 @@ defmodule Bonfire.Social.Posts do
   end
 
   def ap_publish_activity("create", post) do
-    # IO.inspect(ap_publish_activity: post)
-
     {:ok, actor} = ActivityPub.Adapter.get_actor_by_id(e(post, :created, :creator_id, nil))
     #FIXME only publish to public URI if in a public enough cirlce
     to = ["https://www.w3.org/ns/activitystreams#Public"]
@@ -188,6 +186,14 @@ defmodule Bonfire.Social.Posts do
       "to" => to,
       "cc" => cc
     }
+
+    object =
+      if post.replied.reply_to_id do
+        ap_object = ActivityPub.Object.get_by_pointer_id(post.replied.reply_to_id)
+        Map.put(object, "inReplyTo", ap_object.data["id"])
+      else
+        object
+      end
 
     attrs = %{
       actor: actor,
@@ -228,6 +234,16 @@ defmodule Bonfire.Social.Posts do
         date: post_data["published"] # FIXME
       }
     }
+
+    attrs =
+      if post_data["inReplyTo"] do
+        case ActivityPub.Object.get_by_ap_id(post_data["inReplyTo"]) do
+          nil -> attrs
+          object -> Map.put(attrs, :reply_to_id, object.pointer_id)
+        end
+      else
+        attrs
+      end
 
     with {:ok, post} <- do_publish(creator, attrs, false) do
       # IO.inspect(remote_post: post)
