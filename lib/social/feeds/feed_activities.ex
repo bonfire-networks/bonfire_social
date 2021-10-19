@@ -23,6 +23,12 @@ defmodule Bonfire.Social.FeedActivities do
   def queries_module, do: FeedPublish
   def context_module, do: FeedPublish
 
+  def feeds_for_activity(%{id: id}), do: feeds_for_activity(id)
+
+  def feeds_for_activity(id) when is_binary(id) do
+    repo().all(from(f in FeedPublish, where: f.activity_id == ^id, select: f.feed_id))
+  end
+
   def my_feed(socket, cursor_after \\ nil, include_notifications? \\ true) do
 
     # feeds the user is following

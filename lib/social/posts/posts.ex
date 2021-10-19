@@ -214,7 +214,7 @@ defmodule Bonfire.Social.Posts do
   def ap_receive_activity(creator, activity, object, circles \\ [])
 
   def ap_receive_activity(creator, activity, %{public: true} = object, []) do
-    ap_receive_activity(creator, activity, object, [:guests])
+    ap_receive_activity(creator, activity, object, [:guest])
   end
 
   def ap_receive_activity(creator, %{data: _activity_data} = _activity, %{data: post_data} = _object, circles) do # record an incoming post
