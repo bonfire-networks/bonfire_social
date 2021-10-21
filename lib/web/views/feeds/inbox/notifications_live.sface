@@ -1,9 +1,10 @@
-<!-- <Bonfire.UI.Social.FeedViewLive 
+<Bonfire.UI.Social.FeedViewLive 
   page_title={@page_title}
   current_user={@current_user}
   feed={@feed}
   page_info={@page_info}
-/> -->
+  showing_within={:notifications}
+/>
 
 <main
   class="mx-3 mb-3 md:flex md:mx-0">
