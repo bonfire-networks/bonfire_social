@@ -51,7 +51,6 @@ defmodule Bonfire.Social.Posts do
 
   def publish(%{} = creator, attrs, mentions_are_private? \\ false, replies_are_private? \\ false, to_circles \\ []) do
   # TODO: make mentions_are_private? and replies_are_private? defaults configurable
-    IO.inspect(attrs)
     circles = to_circles ++ e(attrs, :to_circles, [])
 
     #IO.inspect(attrs)
@@ -188,7 +187,22 @@ defmodule Bonfire.Social.Posts do
   def ap_publish_activity("create", post) do
     {:ok, actor} = ActivityPub.Adapter.get_actor_by_id(e(post, :created, :creator_id, nil))
     #FIXME only publish to public URI if in a public enough cirlce
-    to = ["https://www.w3.org/ns/activitystreams#Public"]
+    to =
+      if Bonfire.Boundaries.Circles.circles[:guest] in Bonfire.Social.FeedActivities.feeds_for_activity(post.activity) do
+        ["https://www.w3.org/ns/activitystreams#Public"]
+      else
+        []
+      end
+
+    # TODO: find a better way of deleting non actor entries from the list
+    # (or represent them in AP)
+    direct_recipients =
+      Bonfire.Social.FeedActivities.feeds_for_activity(post.activity)
+      |> List.delete(post.activity.subject.id)
+      |> List.delete(Bonfire.Boundaries.Circles.circles[:guest])
+      |> Enum.map(fn id -> ActivityPub.Actor.get_by_local_id!(id) end)
+      |> Enum.filter(fn x -> not is_nil(x) end)
+      |> Enum.map(fn actor -> actor.ap_id end)
 
     cc = [actor.data["followers"]]
 
@@ -198,7 +212,7 @@ defmodule Bonfire.Social.Posts do
       "name" => e(post, :post_content, :name, nil),
       "summary" => e(post, :post_content, :summary, nil),
       "content" => e(post, :post_content, :html_body, nil),
-      "to" => to,
+      "to" => to ++ direct_recipients,
       "cc" => cc
     }
 
@@ -214,7 +228,7 @@ defmodule Bonfire.Social.Posts do
       actor: actor,
       context: ActivityPub.Utils.generate_context_id(),
       object: object,
-      to: to,
+      to: to ++ direct_recipients,
       additional: %{
         "cc" => cc
       }
@@ -237,10 +251,19 @@ defmodule Bonfire.Social.Posts do
     # IO.inspect(creator: creator)
     # IO.inspect(object: object)
 
+    direct_recipients = post_data["to"] || []
+
+    direct_recipients =
+      direct_recipients
+      |> List.delete(Bonfire.Federate.ActivityPub.Utils.public_uri())
+      |> Enum.map(fn ap_id -> Bonfire.Me.Users.by_ap_id!(ap_id) end)
+      |> Enum.filter(fn x -> not is_nil(x) end)
+      |> Enum.map(fn user -> user.id end)
+
     attrs = %{
       local: false, # FIXME?
       canonical_url: nil, # TODO, in a mixin?
-      to_circles: circles,
+      to_circles: circles ++ direct_recipients,
       post_content: %{
         name: post_data["name"],
         html_body: post_data["content"]
