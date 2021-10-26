@@ -26,20 +26,21 @@ defmodule Bonfire.Social.Posts.LiveHandler do
   end
 
   def handle_event("post", %{"create_activity_type"=>"message"}=params, socket) do
-    send_message(params, socket)
+    Bonfire.Social.Messages.LiveHandler.send_message(params, socket)
   end
 
   def handle_event("post", %{"post" => %{"create_activity_type"=>"message"}}=params, socket) do
-    send_message(params, socket)
+    Bonfire.Social.Messages.LiveHandler.send_message(params, socket)
   end
 
-  def handle_event("post", params, socket) do # if not message, it's a post by default
+
+  def handle_event("post", params, socket) do # if not a message, it's a post by default
     attrs = params
     |> input_to_atoms()
-    |> IO.inspect
+    # |> IO.inspect
 
     with %{valid?: true} <- post_changeset(attrs),
-         {:ok, _published} <- Bonfire.Social.Posts.publish(current_user(socket), attrs) do
+         {:ok, _published} <- Bonfire.Social.Posts.publish_with_boundary(current_user(socket), attrs, params["boundary_selected"]) do
       # IO.inspect("published!")
       {:noreply,
         socket
@@ -133,24 +134,5 @@ defmodule Bonfire.Social.Posts.LiveHandler do
     # |> Changeset.validate_required(:name)
   end
 
-  def send_message(params, socket) do
-    attrs = params
-    |> input_to_atoms()
-    # |> merge_child(:post)
-    # |> IO.inspect
 
-    with {:ok, _sent} <- Bonfire.Social.Messages.send(current_user(socket), attrs) do
-      # IO.inspect("sent!")
-      {:noreply,
-        socket
-        |> put_flash(:info, "Sent!")
-      }
-    else e ->
-      IO.inspect(message_error: e)
-      {:noreply,
-        socket
-        |> put_flash(:error, "Could not send...")
-      }
-    end
-  end
 end

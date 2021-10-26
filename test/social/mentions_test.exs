@@ -77,7 +77,7 @@ defmodule Bonfire.Social.MentionsTest do
   test "mentioning someone appears in my instance feed, if included in circles" do
     me = Fake.fake_user!()
     mentioned = Fake.fake_user!()
-    attrs = %{circles: [Bonfire.Social.Feeds.instance_feed_id()], post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
+    attrs = %{to_circles: [Bonfire.Social.Feeds.instance_feed_id()], post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
 
     assert {:ok, mention} = Posts.publish(me, attrs)
 
@@ -106,7 +106,7 @@ defmodule Bonfire.Social.MentionsTest do
   test "mentioning someone does not appear in the public instance feed" do
     me = Fake.fake_user!()
     mentioned = Fake.fake_user!()
-    attrs = %{circles: [Bonfire.Social.Feeds.instance_feed_id()], post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
+    attrs = %{to_circles: [Bonfire.Social.Feeds.instance_feed_id()], post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
 
     assert {:ok, mention} = Posts.publish(me, attrs)
 

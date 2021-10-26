@@ -1,6 +1,7 @@
 defmodule Bonfire.Social.Web.MessageLive do
   use Bonfire.Web, :surface_view
   alias Bonfire.Web.LivePlugs
+  alias Bonfire.Social.Integration
 
   def mount(params, session, socket) do
     LivePlugs.live_plug(params, session, socket, [
@@ -25,21 +26,37 @@ defmodule Bonfire.Social.Web.MessageLive do
       {activity, object} = Map.pop(post, :activity)
       {preloaded_object, activity} = Map.pop(activity, :object)
 
+      object = Map.merge(object, preloaded_object)
+              |> Integration.repo().maybe_preload(:tags)
+              |> IO.inspect(label: "the message")
+
+      # IO.inspect(activity)
+      other_user = if e(activity, :subject_character, :id, nil) != e(current_user, :id, nil) && e(activity, :subject_character, :id, nil) do
+        e(activity, :subject_character, nil)
+      else
+        if e(activity, :replied, :reply_to_created, :creator_character, :id, nil) != e(current_user, :id, nil) && e(activity, :replied, :reply_to_created, :creator_character, nil), do: e(activity, :replied, :reply_to_created, :creator_character, nil)
+      end
+
+      mention = if other_user, do: "@"<>e(other_user, :username, "")<>" "
+
       {:ok,
       socket
       |> assign(
         page_title: "Private Message",
         page: "Private Message",
         has_private_tab: false,
-        search_placeholder: "Search this discussion",
         reply_id: Map.get(params, "reply_id"),
         activity: activity,
-        object: Map.merge(object, preloaded_object),
+        object: object,
         thread_id: e(object, :id, nil),
-        smart_input_private: true,
-        create_activity_type: "message",
-        smart_input_placeholder: "Reply privately"
       ) #|> IO.inspect
+      |> assign_global(
+        search_placeholder: "Search this discussion",
+        create_activity_type: "message",
+        smart_input_placeholder: "Reply privately",
+        smart_input_text: mention || "",
+        to_circles: [{e(other_user, :username, l "someone"), e(other_user, :id, nil)}]
+      )
     }
 
     else _e ->

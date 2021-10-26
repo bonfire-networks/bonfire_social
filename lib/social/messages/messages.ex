@@ -31,7 +31,7 @@ defmodule Bonfire.Social.Messages do
     #IO.inspect(attrs)
 
     repo().transact_with(fn ->
-      with circles <- Utils.e(attrs, :circles, []),
+      with circles when is_list(circles) and length(circles)>0 <- Utils.e(attrs, :to_circles, []),
         {text, mentions, _hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs),
         {:ok, message} <- create(creator, attrs, text),
         {:ok, tagged} <- Bonfire.Social.Tags.maybe_tag(creator, message, circles ++ mentions, true),
@@ -49,6 +49,8 @@ defmodule Bonfire.Social.Messages do
 
             {:ok, message}
           end
+        else _ ->
+          {:error, "Did not send the message as the app did not know who to send it to."}
       end
     end)
   end
@@ -200,7 +202,7 @@ defmodule Bonfire.Social.Messages do
 
   def ap_receive_activity(creator, activity, object) do
     with {:ok, messaged} <- Bonfire.Me.Users.by_ap_id(hd(activity.data["to"])) do
-      attrs = %{circles: [messaged.id], post_content: %{html_body: object.data["content"]}}
+      attrs = %{to_circles: [messaged.id], post_content: %{html_body: object.data["content"]}}
       Bonfire.Social.Messages.send(creator, attrs)
     end
   end

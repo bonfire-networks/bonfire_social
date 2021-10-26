@@ -14,7 +14,7 @@ defmodule Bonfire.Social.Notifications.Flag.Test do
       someone = fake_user!(some_account) #|> IO.inspect()
 
       poster = fake_user!()
-      attrs = %{circles: [:local], post_content: %{html_body: "<p>here is an epic html post</p>"}}
+      attrs = %{to_circles: [:local], post_content: %{html_body: "<p>here is an epic html post</p>"}}
       assert {:ok, post} = Posts.publish(poster, attrs)
 
       flagger = fake_user!()

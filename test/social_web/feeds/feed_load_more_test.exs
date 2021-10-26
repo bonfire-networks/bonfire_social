@@ -17,7 +17,7 @@ defmodule Bonfire.Social.Feeds.LoadMoreTest do
       bob = fake_user!(account2)
       # bob follows alice
       Follows.follow(bob, alice)
-      attrs = %{circles: [:guest], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
+      attrs = %{to_circles: [:guest], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
       for n <- 1..total_posts do
         assert {:ok, post} = Posts.publish(alice, attrs)
@@ -40,7 +40,7 @@ defmodule Bonfire.Social.Feeds.LoadMoreTest do
       bob = fake_user!(account2)
       # bob follows alice
       Follows.follow(bob, alice)
-      attrs = %{circles: [:guest], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
+      attrs = %{to_circles: [:guest], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
       for n <- 1..total_posts do
         assert {:ok, post} = Posts.publish(alice, attrs)
@@ -62,7 +62,7 @@ defmodule Bonfire.Social.Feeds.LoadMoreTest do
       bob = fake_user!(account2)
       # bob follows alice
       Follows.follow(bob, alice)
-      attrs = %{circles: [:guest], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
+      attrs = %{to_circles: [:guest], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
       for n <- 1..total_posts do
         assert {:ok, post} = Posts.publish(alice, attrs)

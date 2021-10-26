@@ -56,7 +56,7 @@ defmodule Bonfire.Social.APIntegrationTest do
     messaged = Fake.fake_user!()
 
     msg = "hey you have an epic text message"
-    attrs = %{circles: [messaged.id], post_content: %{html_body: msg}}
+    attrs = %{to_circles: [messaged.id], post_content: %{html_body: msg}}
 
     assert {:ok, message} = Messages.send(me, attrs)
 

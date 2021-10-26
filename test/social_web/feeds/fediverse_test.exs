@@ -37,7 +37,7 @@ defmodule Bonfire.Social.Feeds.Fediverse.Test do
     test "my own posts in fediverse feed (if activity_pub circle selected)" do
       account = fake_account!()
       user = fake_user!(account)
-      attrs = %{circles: [:activity_pub], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
+      attrs = %{to_circles: [:activity_pub], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
       assert {:ok, post} = Posts.publish(user, attrs)
       assert post.post_content.name == "test post name"
@@ -55,7 +55,7 @@ defmodule Bonfire.Social.Feeds.Fediverse.Test do
       account = fake_account!()
       user2 = fake_user!(account)
 
-      attrs = %{circles: [:activity_pub, user2.id], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
+      attrs = %{to_circles: [:activity_pub, user2.id], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
       assert {:ok, post} = Posts.publish(user, attrs)
       assert post.post_content.name == "test post name"
@@ -80,7 +80,7 @@ defmodule Bonfire.Social.Feeds.Fediverse.Test do
       user2 = fake_user!(account2)
       Follows.follow(user2, user)
 
-      attrs = %{circles: [:local], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
+      attrs = %{to_circles: [:local], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
       assert {:ok, post} = Posts.publish(user, attrs)
       assert post.post_content.name == "test post name"

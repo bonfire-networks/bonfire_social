@@ -57,7 +57,7 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
       user2 = fake_user!(account2)
       Follows.follow(user2, user)
 
-      attrs = %{circles: [:guest], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
+      attrs = %{to_circles: [:guest], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
       assert {:ok, post} = Posts.publish(user, attrs)
       assert post.post_content.name == "test post name"
@@ -75,7 +75,7 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
 
     test "posts from people I am not following in my feed" do
       user = fake_user!()
-      attrs = %{circles: [:guest], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
+      attrs = %{to_circles: [:guest], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
       assert {:ok, post} = Posts.publish(user, attrs)
       assert post.post_content.name == "test post name"

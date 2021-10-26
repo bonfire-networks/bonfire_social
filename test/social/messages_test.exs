@@ -8,7 +8,7 @@ defmodule Bonfire.Social.MessagesTest do
     me = Fake.fake_user!()
     messaged = Fake.fake_user!()
     msg = "hey you have an epic text message"
-    attrs = %{circles: [messaged.id], post_content: %{html_body: msg}}
+    attrs = %{to_circles: [messaged.id], post_content: %{html_body: msg}}
     assert {:ok, message} = Messages.send(me, attrs)
 
     assert message.post_content.html_body == msg
@@ -17,7 +17,7 @@ defmodule Bonfire.Social.MessagesTest do
   test "can list messages I sent" do
     me = Fake.fake_user!()
     messaged = Fake.fake_user!()
-    attrs = %{circles: [messaged.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
+    attrs = %{to_circles: [messaged.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
 
     assert {:ok, message} = Messages.send(me, attrs)
 
@@ -30,7 +30,7 @@ defmodule Bonfire.Social.MessagesTest do
   test "can list messages I received" do
     me = Fake.fake_user!()
     other = Fake.fake_user!()
-    attrs = %{circles: [me.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
+    attrs = %{to_circles: [me.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
 
     assert {:ok, message} = Messages.send(other, attrs)
 
@@ -46,8 +46,8 @@ defmodule Bonfire.Social.MessagesTest do
     other = Fake.fake_user!()
     fourth = Fake.fake_user!()
 
-    attrs = %{circles: [fourth.id], post_content: %{html_body: "<p>hey fourth, you have an epic html message</p>"}}
-    attrs = %{circles: [messaged.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
+    attrs = %{to_circles: [fourth.id], post_content: %{html_body: "<p>hey fourth, you have an epic html message</p>"}}
+    attrs = %{to_circles: [messaged.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
 
     assert {:ok, message} = Messages.send(me, attrs)
 
@@ -71,7 +71,7 @@ defmodule Bonfire.Social.MessagesTest do
   test "messages addressed to me appear in my notifications" do
     me = Fake.fake_user!()
     other = Fake.fake_user!()
-    attrs = %{circles: [me.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
+    attrs = %{to_circles: [me.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
 
     assert {:ok, m} = Messages.send(other, attrs)
 
@@ -85,7 +85,7 @@ defmodule Bonfire.Social.MessagesTest do
   test "messaging someone does NOT appear in my own notifications" do
     me = Fake.fake_user!()
     messaged = Fake.fake_user!()
-    attrs = %{circles: [messaged.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
+    attrs = %{to_circles: [messaged.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
 
     assert {:ok, message} = Messages.send(me, attrs)
 
@@ -95,7 +95,7 @@ defmodule Bonfire.Social.MessagesTest do
   test "messaging someone else does NOT appear in a 3rd party's notifications" do
     me = Fake.fake_user!()
     messaged = Fake.fake_user!()
-    attrs = %{circles: [messaged.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
+    attrs = %{to_circles: [messaged.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
 
     assert {:ok, message} = Messages.send(me, attrs)
 
@@ -117,7 +117,7 @@ defmodule Bonfire.Social.MessagesTest do
   test "messaging someone does NOT appear in their instance feed" do
     me = Fake.fake_user!()
     messaged = Fake.fake_user!()
-    attrs = %{circles: [messaged.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
+    attrs = %{to_circles: [messaged.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
 
     assert {:ok, message} = Messages.send(me, attrs)
 
@@ -130,7 +130,7 @@ defmodule Bonfire.Social.MessagesTest do
   test "messaging someone does NOT appear in my instance feed" do
     me = Fake.fake_user!()
     messaged = Fake.fake_user!()
-    attrs = %{circles: [messaged.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
+    attrs = %{to_circles: [messaged.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
 
     assert {:ok, message} = Messages.send(me, attrs)
 
@@ -143,7 +143,7 @@ defmodule Bonfire.Social.MessagesTest do
   test "messaging someone does NOT appear in a 3rd party's instance feed" do
     me = Fake.fake_user!()
     messaged = Fake.fake_user!()
-    attrs = %{circles: [messaged.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
+    attrs = %{to_circles: [messaged.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
 
     assert {:ok, message} = Messages.send(me, attrs)
 
@@ -157,7 +157,7 @@ defmodule Bonfire.Social.MessagesTest do
   test "messaging someone does NOT appear in the public instance feed" do
     me = Fake.fake_user!()
     messaged = Fake.fake_user!()
-    attrs = %{circles: [messaged.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
+    attrs = %{to_circles: [messaged.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
 
     assert {:ok, message} = Messages.send(me, attrs)
 

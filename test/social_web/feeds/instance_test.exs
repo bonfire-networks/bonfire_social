@@ -37,7 +37,7 @@ defmodule Bonfire.Social.Feeds.Instance.Test do
     test "my own posts in instance feed (if local circles selected)" do
       account = fake_account!()
       user = fake_user!(account)
-      attrs = %{circles: [:local], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
+      attrs = %{to_circles: [:local], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
       assert {:ok, post} = Posts.publish(user, attrs)
       assert post.post_content.name == "test post name"
@@ -51,7 +51,7 @@ defmodule Bonfire.Social.Feeds.Instance.Test do
 
     test "local posts from people I am not following in instance feed" do
       user = fake_user!()
-      attrs = %{circles: [:local], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
+      attrs = %{to_circles: [:local], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
       assert {:ok, post} = Posts.publish(user, attrs)
       assert post.post_content.name == "test post name"

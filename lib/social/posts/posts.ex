@@ -27,17 +27,32 @@ defmodule Bonfire.Social.Posts do
     end
   end
 
-  def publish(%{} = creator, attrs, mentions_are_private? \\ true, replies_are_private? \\ false) do
-    with  {:ok, post} <- do_publish(creator, attrs, mentions_are_private?, replies_are_private?) do
-
-      {:ok, post}
-    end
+  def publish_with_boundary(%{} = creator, attrs, "mentions" = set_boundary) do
+    mentions_are_private? = false
+    replies_are_private? = true
+    publish(creator, attrs, mentions_are_private?, replies_are_private?)
   end
 
-  defp do_publish(%{} = creator, attrs, mentions_are_private? \\ true, replies_are_private? \\ false) do
-  # TODO: make mentions_are_private? and replies_are_private? defaults configurable
+  def publish_with_boundary(%{} = creator, attrs, "local" = set_boundary) do
+    mentions_are_private? = true
+    replies_are_private? = true
+    publish(creator, attrs, mentions_are_private?, replies_are_private?, [:local])
+  end
 
-    circles = e(attrs, :circles, [])
+  def publish_with_boundary(%{} = creator, attrs, "guest" = set_boundary) do
+    mentions_are_private? = false
+    replies_are_private? = false
+    publish(creator, attrs, mentions_are_private?, replies_are_private?, [:guest])
+  end
+
+  def publish_with_boundary(%{} = creator, attrs, _unknown) do
+    publish(creator, attrs)
+  end
+
+  def publish(%{} = creator, attrs, mentions_are_private? \\ false, replies_are_private? \\ false, to_circles \\ []) do
+  # TODO: make mentions_are_private? and replies_are_private? defaults configurable
+    IO.inspect(attrs)
+    circles = to_circles ++ e(attrs, :to_circles, [])
 
     #IO.inspect(attrs)
     repo().transact_with(fn ->
@@ -225,7 +240,7 @@ defmodule Bonfire.Social.Posts do
     attrs = %{
       local: false, # FIXME?
       canonical_url: nil, # TODO, in a mixin?
-      circles: circles,
+      to_circles: circles,
       post_content: %{
         name: post_data["name"],
         html_body: post_data["content"]
@@ -245,7 +260,7 @@ defmodule Bonfire.Social.Posts do
         attrs
       end
 
-    with {:ok, post} <- do_publish(creator, attrs, false) do
+    with {:ok, post} <- publish(creator, attrs, false) do
       # IO.inspect(remote_post: post)
       {:ok, post}
     end
