@@ -50,10 +50,10 @@ defmodule Bonfire.Social.Posts do
   end
 
   def publish(%{} = creator, attrs, mentions_are_private? \\ false, replies_are_private? \\ false, to_circles \\ []) do
-  # TODO: make mentions_are_private? and replies_are_private? defaults configurable
+    # TODO: make mentions_are_private? and replies_are_private? defaults configurable
+    # IO.inspect(attrs: attrs)
     circles = to_circles ++ e(attrs, :to_circles, [])
 
-    #IO.inspect(attrs)
     repo().transact_with(fn ->
       with  {text, mentions, hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs),
         {:ok, post} <- create(creator, attrs, text),
