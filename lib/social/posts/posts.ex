@@ -189,7 +189,7 @@ defmodule Bonfire.Social.Posts do
 
     object =
       if post.replied.reply_to_id do
-        ap_object = ActivityPub.Object.get_by_pointer_id(post.replied.reply_to_id)
+        ap_object = ActivityPub.Object.get_cached_by_pointer_id(post.replied.reply_to_id)
         Map.put(object, "inReplyTo", ap_object.data["id"])
       else
         object
@@ -237,7 +237,7 @@ defmodule Bonfire.Social.Posts do
 
     attrs =
       if post_data["inReplyTo"] do
-        case ActivityPub.Object.get_by_ap_id(post_data["inReplyTo"]) do
+        case ActivityPub.Object.get_cached_by_ap_id(post_data["inReplyTo"]) do
           nil -> attrs
           object -> Map.put(attrs, :reply_to_id, object.pointer_id)
         end
