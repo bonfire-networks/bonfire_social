@@ -107,7 +107,7 @@ defmodule Bonfire.Social.MessagesTest do
   test "messaging someone does NOT appear in their feed" do
     me = Fake.fake_user!()
     messaged = Fake.fake_user!()
-    attrs = %{post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
+    attrs = %{to_circles: [messaged.id], post_content: %{html_body: "<p>hey, you have an epic html message</p>"}}
 
     assert {:ok, message} = Messages.send(me, attrs)
 

@@ -98,7 +98,8 @@ defmodule Bonfire.Social.FollowsTest do
 
     assert %{entries: fetched} = p = FeedActivities.feed(:notifications, followed)
     # IO.inspect(notifications: p)
-    assert activity = List.first(fetched).activity |> Bonfire.Repo.maybe_preload([object: [:profile]])
+    assert %{} = notification = List.first(fetched)
+    assert activity = notification.activity |> Bonfire.Repo.maybe_preload([object: [:profile]])
     # IO.inspect(followed: followed)
     # IO.inspect(notifications: activity)
 

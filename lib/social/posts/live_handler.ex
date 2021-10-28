@@ -40,7 +40,7 @@ defmodule Bonfire.Social.Posts.LiveHandler do
     # |> IO.inspect
 
     with %{valid?: true} <- post_changeset(attrs),
-         {:ok, _published} <- Bonfire.Social.Posts.publish_with_boundary(current_user(socket), attrs, params["boundary_selected"]) do
+         {:ok, _published} <- Bonfire.Social.Posts.publish(current_user(socket), attrs, params["boundary_selected"]) do
       # IO.inspect("published!")
       {:noreply,
         socket

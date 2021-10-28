@@ -29,7 +29,7 @@ defmodule Bonfire.Social.ThreadsPostsTest do
     assert {:ok, post} = Posts.publish(me, attrs)
 
     attrs_reply = %{post_content: %{summary: "summary", name: "name 2", html_body: "<p>epic html message</p>"}, reply_to_id: post.id}
-    assert {:ok, post_reply} = Posts.publish(someone, attrs_reply, false, false)
+    assert {:ok, post_reply} = Posts.publish(someone, attrs_reply, "public")
     # me = Bonfire.Me.Users.get_current(me.id)
     assert %{entries: fetched} = FeedActivities.feed(:notifications, me)
 

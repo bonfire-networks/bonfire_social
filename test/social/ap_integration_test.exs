@@ -22,7 +22,7 @@ defmodule Bonfire.Social.APIntegrationTest do
   test "posts get queued to federate" do
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
     user = Fake.fake_user!()
-    assert {:ok, post} = Posts.publish(user, attrs)
+    assert {:ok, post} = Posts.publish(user, attrs, "public")
 
     assert_enqueued(worker: APPublishWorker, args: %{"context_id" => post.id, "op" => "create", "user_id" => user.id})
   end
@@ -68,7 +68,7 @@ defmodule Bonfire.Social.APIntegrationTest do
     test "federates activities from local actors" do
       attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
       user = Fake.fake_user!()
-      assert {:ok, post} = Posts.publish(user, attrs)
+      assert {:ok, post} = Posts.publish(user, attrs, "public")
 
       assert {:ok, _} = perform_job(APPublishWorker, %{"context_id" => post.id, "op" => "create", "user_id" => user.id})
     end

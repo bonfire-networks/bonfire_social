@@ -96,9 +96,10 @@ defmodule Bonfire.Social.Follows do
 
       # FeedActivities.publish(follower, :follow, followed) # TODO: make configurable where the follow gets published
 
-      # TEMPORARY: make profiles visible between followers?
-      # Bonfire.Me.Users.Boundaries.maybe_make_visible_for(follower, follower, followed)
-      # Bonfire.Me.Users.Boundaries.maybe_make_visible_for(followed, followed, follower)
+      # TEMPORARY: make my profile visible to people I follow
+      Bonfire.Me.Users.Boundaries.maybe_make_visible_for(follower, follower, followed)
+      # FIXME: make sure the profile of someone I follow is visible to me
+      Bonfire.Me.Users.Boundaries.maybe_make_visible_for(followed, followed, follower)
 
       Logger.warn("followed")
       FeedActivities.notify_object(follower, :follow, followed)

@@ -63,17 +63,31 @@ defmodule Bonfire.Social.Activities do
       select: f.id
   end
 
-  def object_preload_create_activity(q, current_user, preloads \\ :default) do
-    object_preload_activity(q, :create, :id, current_user, preloads)
+
+  def object_preload_create_activity(object, object_id_field \\ :id) do
+    object_preload_activity(object, :create, object_id_field)
   end
 
-  def object_preload_activity(q, verb \\ :create, object_id_field \\ :id, current_user \\ nil, preloads \\ :default) do
+  def object_preload_activity(object, verb \\ :create, object_id_field \\ :id) do
+    verb_id = Verbs.verbs()[verb]
+
+    query = from activity in Activity, as: :activity, where: activity.verb_id == ^verb_id
+    repo().preload(object, [activity: query])
+  end
+
+
+  def query_object_preload_create_activity(q, current_user, preloads \\ :default) do
+    query_object_preload_activity(q, :create, :id, current_user, preloads)
+  end
+
+  def query_object_preload_activity(q, verb \\ :create, object_id_field \\ :id, current_user \\ nil, preloads \\ :default) do
     verb_id = Verbs.verbs()[verb]
 
     q
     |> reusable_join(:left, [o], activity in Activity, as: :activity, on: activity.object_id == field(o, ^object_id_field) and activity.verb_id == ^verb_id)
     |> activity_preloads(current_user, preloads)
   end
+
 
   def activity_preloads(query, current_user, preloads) when is_list(preloads) do
     #IO.inspect(preloads)
@@ -179,7 +193,7 @@ defmodule Bonfire.Social.Activities do
     current_user = current_user(socket_or_current_user)
 
     with {:ok, object} <- query
-      |> object_preload_create_activity(current_user, [:default, :with_parents])
+      |> query_object_preload_create_activity(current_user, [:default, :with_parents])
       # |> IO.inspect
       |> as_permitted_for(current_user)
       # |> IO.inspect

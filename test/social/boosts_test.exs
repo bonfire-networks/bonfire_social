@@ -87,7 +87,7 @@ defmodule Bonfire.Social.BoostsTest do
     someone = Fake.fake_user!()
     attrs = %{post_content: %{html_body: "<p>hey you have an epic html post</p>"}}
 
-    assert {:ok, post} = Posts.publish(me, attrs, false)
+    assert {:ok, post} = Posts.publish(me, attrs)
     assert {:ok, boost} = Boosts.boost(someone, post)
 
     assert %{entries: [fetched_boost]} = FeedActivities.feed(:notifications, me)

@@ -125,7 +125,7 @@ defmodule Bonfire.Social.Threads do
     %Replied{id: Bonfire.Common.Pointers.id_binary(thread_id)}
       |> Replied.descendants()
       |> Replied.where_depth(is_smaller_than_or_equal_to: max_depth)
-      |> Activities.object_preload_create_activity(current_user)
+      |> Activities.query_object_preload_create_activity(current_user)
       |> Activities.as_permitted_for(current_user)
       # |> IO.inspect(label: "thread query")
       # |> preload_join(:post)

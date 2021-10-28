@@ -85,7 +85,7 @@ defmodule Bonfire.Social.LikesTest do
     someone = Fake.fake_user!()
     attrs = %{post_content: %{html_body: "<p>hey you have an epic html post</p>"}}
 
-    assert {:ok, post} = Posts.publish(me, attrs, false)
+    assert {:ok, post} = Posts.publish(me, attrs)
     assert {:ok, like} = Likes.like(someone, post)
 
     assert %{entries: [fetched_liked]} = FeedActivities.feed(:notifications, me)

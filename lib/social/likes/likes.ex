@@ -55,7 +55,7 @@ defmodule Bonfire.Social.Likes do
   defp list(filters, current_user, cursor_after \\ nil, preloads \\ nil) do
     # TODO: check the like's see/read permissions for current_user?
     Like
-    |> Activities.object_preload_activity(:like, :liked_id, current_user, preloads)
+    |> Activities.query_object_preload_activity(:like, :liked_id, current_user, preloads)
     |> EctoShorts.filter(filters)
     |> Activities.as_permitted_for(current_user)
     |> Bonfire.Repo.many_paginated(before: cursor_after)

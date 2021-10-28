@@ -27,47 +27,20 @@ defmodule Bonfire.Social.Posts do
     end
   end
 
-  def publish_with_boundary(%{} = creator, attrs, "mentions" = set_boundary) do
-    mentions_are_private? = false
-    replies_are_private? = true
-    publish(creator, attrs, mentions_are_private?, replies_are_private?)
-  end
-
-  def publish_with_boundary(%{} = creator, attrs, "local" = set_boundary) do
-    mentions_are_private? = true
-    replies_are_private? = true
-    publish(creator, attrs, mentions_are_private?, replies_are_private?, [:local])
-  end
-
-  def publish_with_boundary(%{} = creator, attrs, "guest" = set_boundary) do
-    mentions_are_private? = false
-    replies_are_private? = false
-    publish(creator, attrs, mentions_are_private?, replies_are_private?, [:guest])
-  end
-
-  def publish_with_boundary(%{} = creator, attrs, _unknown) do
-    publish(creator, attrs)
-  end
-
-  def publish(%{} = creator, attrs, mentions_are_private? \\ false, replies_are_private? \\ false, to_circles \\ []) do
+  def publish(%{} = creator, attrs, preset_boundary \\ nil) do
     # TODO: make mentions_are_private? and replies_are_private? defaults configurable
     # IO.inspect(attrs: attrs)
-    circles = to_circles ++ e(attrs, :to_circles, [])
+    to_circles = e(attrs, :to_circles, [])
+
+    tag_characters_should_boost_mentions? = preset_boundary == "public" or :guest in to_circles or Bonfire.Boundaries.Circles.circles()[:guest] in to_circles
 
     repo().transact_with(fn ->
       with  {text, mentions, hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs),
         {:ok, post} <- create(creator, attrs, text),
-        {:ok, post} <- Bonfire.Social.Tags.maybe_tag(creator, post, mentions, mentions_are_private?),
-        {:ok, activity} <- FeedActivities.publish(creator, :create, post, circles, mentions_are_private?, replies_are_private?) do
+        {:ok, post_with_tags} <- Bonfire.Social.Tags.maybe_tag(creator, post, mentions, tag_characters_should_boost_mentions?),
+        {:ok, activity} <- FeedActivities.publish(creator, :create, post_with_tags, to_circles, preset_boundary) do
 
           post_with_activity = Activities.activity_under_object(activity)
-
-          cc = if mentions_are_private?, do: circles, else: circles ++ (Bonfire.Tag.Tags.tag_ids(mentions) || []) # TODO: don't re-fetch tags
-
-          cc = if replies_are_private?, do: cc, else: cc ++ [ e(post_with_activity, :replied, :reply_to, %{}) |> Objects.object_creator() |> e(:id, nil) ]
-
-          Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, post, cc) # |> IO.inspect(label: "grant")
-
 
           maybe_index(activity)
 
@@ -185,7 +158,14 @@ defmodule Bonfire.Social.Posts do
   end
 
   def ap_publish_activity("create", post) do
-    {:ok, actor} = ActivityPub.Adapter.get_actor_by_id(e(post, :created, :creator_id, nil))
+
+    post = post
+    |> repo().maybe_preload([:created, :replied, :post_content])
+    |> Activities.object_preload_create_activity()
+    # |> IO.inspect(label: "ap_publish_activity post")
+
+    {:ok, actor} = ActivityPub.Adapter.get_actor_by_id(e(post, :activity, :subject_id, nil) || e(post, :created, :creator_id, nil))
+
     #FIXME only publish to public URI if in a public enough cirlce
     to =
       if Bonfire.Boundaries.Circles.circles[:guest] in Bonfire.Social.FeedActivities.feeds_for_activity(post.activity) do
@@ -198,7 +178,7 @@ defmodule Bonfire.Social.Posts do
     # (or represent them in AP)
     direct_recipients =
       Bonfire.Social.FeedActivities.feeds_for_activity(post.activity)
-      |> List.delete(post.activity.subject.id)
+      |> List.delete(e(post, :activity, :subject_id, nil) || e(post, :created, :creator_id, nil))
       |> List.delete(Bonfire.Boundaries.Circles.circles[:guest])
       |> Enum.map(fn id -> ActivityPub.Actor.get_by_local_id!(id) end)
       |> Enum.filter(fn x -> not is_nil(x) end)
@@ -217,7 +197,7 @@ defmodule Bonfire.Social.Posts do
     }
 
     object =
-      if post.replied.reply_to_id do
+      if e(post, :replied, :reply_to_id, nil) do
         ap_object = ActivityPub.Object.get_cached_by_pointer_id(post.replied.reply_to_id)
         Map.put(object, "inReplyTo", ap_object.data["id"])
       else

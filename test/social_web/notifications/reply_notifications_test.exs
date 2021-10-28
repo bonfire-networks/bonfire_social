@@ -19,7 +19,7 @@ defmodule Bonfire.Social.Notifications.Threads.Test do
       responder = fake_user!()
 
       attrs_reply = %{post_content: %{summary: "summary", name: "name 2", html_body: "<p>epic html reply</p>"}, reply_to_id: post.id}
-      assert {:ok, post_reply} = Posts.publish(responder, attrs_reply, false, false)
+      assert {:ok, post_reply} = Posts.publish(responder, attrs_reply, "public")
 
       conn = conn(user: someone, account: some_account)
       next = "/notifications"
@@ -44,7 +44,7 @@ defmodule Bonfire.Social.Notifications.Threads.Test do
       # IO.inspect(responder.id)
 
       attrs_reply = %{post_content: %{summary: "summary", name: "name 2", html_body: "<p>epic html reply</p>"}, reply_to_id: post.id}
-      assert {:ok, post_reply} = Posts.publish(responder, attrs_reply, true, true)
+      assert {:ok, post_reply} = Posts.publish(responder, attrs_reply)
 
       conn = conn(user: someone, account: some_account)
       next = "/notifications"

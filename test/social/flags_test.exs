@@ -99,7 +99,7 @@ defmodule Bonfire.Social.FlagsTest do
     someone = Fake.fake_user!()
     attrs = %{post_content: %{html_body: "<p>hey you have an epic html post</p>"}}
 
-    assert {:ok, post} = Posts.publish(me, attrs, false)
+    assert {:ok, post} = Posts.publish(me, attrs)
     assert {:ok, _} = Flags.flag(someone, post)
 
     assert %{entries: [fetched_flag]} = FeedActivities.feed(:notifications, me)
