@@ -8,7 +8,7 @@ defmodule Bonfire.Social.APActivities do
   import Bonfire.Common.Config, only: [repo: 0]
 
   def create(activity, object, nil) do
-    case Bonfire.Federate.ActivityPub.Adapter.get_actor_by_ap_id(activity.data["actor"]) do
+    case Bonfire.Federate.ActivityPub.Adapter.get_actor_by_ap_id(e(activity, :data, "actor", nil)) do
       {:ok, actor} ->
         create(activity, object, actor)
       _ ->
