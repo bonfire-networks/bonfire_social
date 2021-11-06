@@ -20,7 +20,7 @@ defmodule Bonfire.Social.APActivities do
 
   def create(activity, object, actor) when is_map(object) do
     json =
-      activity.data
+      e(activity, :data, %{})
       |> Map.put("object", object.data)
 
     with {:ok, apactivity} <- insert(json),
@@ -34,10 +34,10 @@ defmodule Bonfire.Social.APActivities do
 
     json =
       if is_map(object) do
-        activity.data
+        e(activity, :data, %{})
         |> Map.put("object", object.data)
       else
-        activity.data
+        e(activity, :data, %{})
       end
 
     with {:ok, apactivity} <- insert(json),
