@@ -8,11 +8,13 @@ defmodule Bonfire.Social.APActivities do
   import Bonfire.Common.Config, only: [repo: 0]
 
   def create(activity, object, nil) do
-    case Bonfire.Federate.ActivityPub.Adapter.get_actor_by_ap_id(e(activity, :data, "actor", nil)) do
-      {:ok, actor} ->
+    with actor_id when is_binary(actor_id) <- e(activity, :data, "actor", nil),
+         {:ok, actor} <- Bonfire.Federate.ActivityPub.Adapter.get_actor_by_ap_id(actor_id) do
+
         create(activity, object, actor)
-      _ ->
-        error = "cannot create fallback activity with nil actor"
+
+      else _ ->
+        error = "AP - cannot create a fallback activity with no actor"
         Logger.error(error)
         {:error, error}
     end
