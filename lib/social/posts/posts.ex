@@ -35,7 +35,7 @@ defmodule Bonfire.Social.Posts do
     tag_characters_should_boost_mentions? = preset_boundary == "public" or :guest in to_circles or Bonfire.Boundaries.Circles.circles()[:guest] in to_circles
 
     repo().transact_with(fn ->
-      with  {text, mentions, hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs),
+      with  {text, mentions, hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs, "text/markdown"),
         {:ok, post} <- create(creator, attrs, text),
         {:ok, post_with_tags} <- Bonfire.Social.Tags.maybe_tag(creator, post, mentions, tag_characters_should_boost_mentions?),
         {:ok, activity} <- FeedActivities.publish(creator, :create, post_with_tags, to_circles, preset_boundary) do
@@ -49,6 +49,8 @@ defmodule Bonfire.Social.Posts do
       end
     end)
   end
+
+
 
   # def reply(creator, attrs) do
   #   with  {:ok, published} <- publish(creator, attrs),
@@ -189,9 +191,9 @@ defmodule Bonfire.Social.Posts do
     object = %{
       "type" => "Note",
       "actor" => actor.ap_id,
-      "name" => e(post, :post_content, :name, nil),
-      "summary" => e(post, :post_content, :summary, nil),
-      "content" => e(post, :post_content, :html_body, nil),
+      "name" => (e(post, :post_content, :name, nil)),
+      "summary" => (e(post, :post_content, :summary, nil)),
+      "content" => (e(post, :post_content, :html_body, nil)),
       "to" => to ++ direct_recipients,
       "cc" => cc
     }

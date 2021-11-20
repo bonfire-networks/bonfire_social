@@ -179,7 +179,7 @@ defmodule Bonfire.Social.FeedActivities do
 
       # IO.inspect(notify_reply: reply_to_creator)
       Logger.info("FeedActivities with replies_are_private?==false -> putting in feeds and making visible for: #{inspect circles} and notifying the user being replied to: #{inspect creator_id}")
-      notify_characters(subject, activity, object, reply_to_creator)
+      if creator_id != subject.id, do: notify_characters(subject, activity, object, reply_to_creator), else: {:ok, activity}
     end
   end
 

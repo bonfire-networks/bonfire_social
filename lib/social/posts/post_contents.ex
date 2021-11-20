@@ -1,12 +1,13 @@
 defmodule Bonfire.Social.PostContents do
   alias Bonfire.Data.Social.PostContent
   alias Bonfire.Common.Extend
+  alias Bonfire.Common.Utils
 
   def prepare_content(attrs, text \\ nil)
   def prepare_content(%{post_content: %{} = attrs}, text), do: prepare_content(attrs, text)
   def prepare_content(%{post: %{} = attrs}, text), do: prepare_content(attrs, text)
   def prepare_content(attrs, text) when is_binary(text) and bit_size(text) > 0 do
-    # use seperate text param if provided
+    # use seperate text param if provided directly
     Map.merge(attrs, %{html_body: prepare_text(text), name: prepare_text(Map.get(attrs, :name)), summary: prepare_text(Map.get(attrs, :summary))})
   end
   def prepare_content(%{summary: summary, html_body: body} = attrs, _) when (not is_binary(body) or body=="") and not (is_nil(summary) or summary=="") do
@@ -22,11 +23,14 @@ defmodule Bonfire.Social.PostContents do
   end
   def prepare_content(attrs, _), do: attrs
 
-  def prepare_text(text) when is_binary(text) do
+  def prepare_text(text) when is_binary(text) and text !="" do
     if Extend.module_enabled?(Emote) do
-      Emote.convert_text(text)
+      text
+      |> Utils.markdown()
+      |> Emote.convert_text()
     else
       text
+      |> Utils.markdown()
     end
   end
   def prepare_text(other), do: other

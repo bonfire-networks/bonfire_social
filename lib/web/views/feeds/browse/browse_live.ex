@@ -85,6 +85,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
       selected_tab: "fediverse",
       to_circles: to_circles,
       feed_title: "Activities from around the fediverse",
+      feed_id: feed_id,
       feed: e(feed, :entries, []),
       page_info: e(feed, :metadata, []),
     ]
@@ -101,6 +102,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
       selected_tab: "instance",
       feed_title: "Activities on this instance",
       to_circles: to_circles,
+      feed_id: feed_id,
       feed: e(feed, :entries, []),
       page_info: e(feed, :metadata, []) #|> IO.inspect
     ]
@@ -116,6 +118,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
       selected_tab: "feed",
       feed_title: "My Feed",
       to_circles: to_circles,
+      feed_id: "my:"<>e(current_user, :id, ""),
       feed: e(feed, :entries, []),
       page_info: e(feed, :metadata, [])
     ]

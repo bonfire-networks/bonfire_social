@@ -186,7 +186,7 @@ defmodule Bonfire.Social.Messages do
       object = %{
         "type" => "ChatMessage",
         "actor" => actor.ap_id,
-        "content" => Utils.e(message, :post_content, :html_body, nil),
+        "content" => (Utils.e(message, :post_content, :html_body, nil)),
         "to" => recipients
       }
 

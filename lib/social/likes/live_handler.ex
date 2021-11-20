@@ -20,7 +20,7 @@ defmodule Bonfire.Social.Likes.LiveHandler do
   def set_liked(id, like, params, socket) do
     set = [
         my_like: like,
-        like_count: liker_count(socket)+1,
+        like_count: liker_count(params)+1,
         # liked: Map.get(socket.assigns, :liked, []) ++ [id]
       ]
 
@@ -33,7 +33,7 @@ defmodule Bonfire.Social.Likes.LiveHandler do
     with _ <- Bonfire.Social.Likes.unlike(current_user(socket), id) do
       set = [
       my_like: nil,
-      like_count: liker_count(socket)-1
+      like_count: liker_count(params)-1
       # liked: Enum.reject(Map.get(socket.assigns, :liked, []), &Enum.member?(&1, id))
       ]
 
@@ -42,10 +42,13 @@ defmodule Bonfire.Social.Likes.LiveHandler do
     end
   end
 
-  def liker_count(%{assigns: a}), do: liker_count(a)
-  def liker_count(%{like_count: like_count}), do: liker_count(like_count)
-  def liker_count(%{liker_count: liker_count}), do: liker_count(liker_count)
-  def liker_count(liker_count) when is_integer(liker_count), do: liker_count
+
+  def liker_count(%{"current_count"=> a}), do: a |> String.to_integer
+  def liker_count(%{current_count: a}), do: a |> String.to_integer
+  # def liker_count(%{assigns: a}), do: liker_count(a)
+  # def liker_count(%{like_count: like_count}), do: liker_count(like_count)
+  # def liker_count(%{liker_count: liker_count}), do: liker_count(liker_count)
+  # def liker_count(liker_count) when is_integer(liker_count), do: liker_count
   def liker_count(_), do: 0
 
   def preload(list_of_assigns) do

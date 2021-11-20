@@ -14,15 +14,17 @@ defmodule Bonfire.Social.Web.Feeds.FavouritedLive do
   end
 
   defp mounted(params, _session, socket) do
+    current_user = current_user(socket)
 
-    feed_assigns = Bonfire.Social.Web.Feeds.BrowseLive.fediverse_feed(socket)
+    %{entries: feed, metadata: page_info} = Bonfire.Social.Likes.list_my(current_user) |> IO.inspect()
 
     {:ok, socket
     |> assign(
-      feed_assigns ++ [
+      feed: feed,
+      page_info: page_info,
       page: "favourited",
       page_title: "Favourited",
-      ])
+      )
       }
 
   end

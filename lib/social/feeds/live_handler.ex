@@ -58,7 +58,11 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
   def handle_info({:new_activity, data}, socket) do
     #IO.inspect(pubsub_received: fp)
 
-    send_update(Bonfire.UI.Social.FeedLive, id: "feed", new_activity: data)
+    current_user_id = e(current_user(socket), :id, nil)
+
+    if current_user_id do
+        send_update(Bonfire.UI.Social.FeedLive, id: "feed:my:"<>current_user_id, new_activity: data)
+    end
 
     {:noreply, socket}
   end
