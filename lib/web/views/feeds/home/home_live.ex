@@ -21,6 +21,7 @@ defmodule Bonfire.Social.Web.HomeLive do
       feed_assigns ++ [
       page: "home",
       page_title: "Home",
+      smart_input_placeholder: "Write something..."
       ])
       }
 
