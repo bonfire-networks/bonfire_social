@@ -63,8 +63,12 @@ defmodule Bonfire.Social.Feeds do
     if is_ulid?(id), do: inbox_feed_ids(user)
   end
   def my_inbox_feed_id(other) do
-    Logger.error("my_inbox_feed_id: no function matched for #{inspect other}")
-    nil
+    case current_user(other) do
+      nil -> Logger.error("my_inbox_feed_id: no function matched for #{inspect other}")
+            nil
+      current_user -> inbox_feed_ids(current_user)
+    end
+
   end
 
   def inbox_feed_ids(for_subjects) when is_list(for_subjects) do
@@ -74,12 +78,15 @@ defmodule Bonfire.Social.Feeds do
   def inbox_feed_ids(%{character: _} = for_subject) do
     for_subject
     |> Bonfire.Repo.maybe_preload(character: [:inbox])
+    |> IO.inspect(label: "inbox_feed_ids")
     |> e(:character, nil)
     |> inbox_feed_ids()
   end
+  def inbox_feed_ids(%Bonfire.Data.Social.Inbox{feed_id: feed_id}), do: feed_id
   def inbox_feed_ids(%{inbox: %{feed_id: feed_id}}), do: feed_id
   def inbox_feed_ids(for_subject) do
     with %{feed_id: feed_id} = _inbox <- create_inbox(for_subject) do
+      IO.inspect(for_subject)
       Logger.info("created new inbox #{inspect feed_id} for #{inspect ulid(for_subject)}")
       feed_id
     else e ->

@@ -197,7 +197,7 @@ defmodule Bonfire.Social.FeedActivities do
 
     with {:ok, activity} <- do_publish(subject, verb, object, feeds) do
       Logger.info("FeedActivities with mentions_and_tags_are_private?==false -> putting in feed + notifications of @ mentioned / tagged characters: #{inspect feeds}")
-      notify_characters(subject, activity, object, mentioned_notifications_inboxes)
+      notify_inboxes(subject, activity, object, mentioned_notifications_inboxes)
     end
   end
 
@@ -255,8 +255,13 @@ defmodule Bonfire.Social.FeedActivities do
   Creates a new local activity or takes an existing one and publishes to object's inbox (if object is an actor)
   """
   def notify_characters(subject, verb_or_activity, object, characters) do
-    Logger.info("notify_characters: #{ulid(characters)}")
-    maybe_feed_publish(subject, verb_or_activity, object, Feeds.inbox_feed_ids(characters)) #|> IO.inspect(label: "notify_feeds")
+    notify_inboxes(subject, verb_or_activity, object, Feeds.inbox_feed_ids(characters))
+  end
+
+  def notify_inboxes(subject, verb_or_activity, object, inbox_ids) do
+    Bonfire.Notifications.notify_users(inbox_ids, e(subject, :profile, :name, e(subject, :character, :username, nil)), e(object, :post_content, :name, e(object, :post_content, :html_body, nil)))
+
+    maybe_feed_publish(subject, verb_or_activity, object, inbox_ids) #|> IO.inspect(label: "notify_feeds")
     # TODO: notify remote users via AP
   end
 
