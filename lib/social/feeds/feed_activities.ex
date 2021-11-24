@@ -89,15 +89,17 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed_paginated(filters \\ [], current_user \\ nil, cursor_after \\ nil, preloads \\ :all, query \\ FeedPublish, distinct \\ true)
 
-  def feed_paginated(filters, current_user, cursor_after, preloads, query, distinct) when is_list(filters) do
+  def feed_paginated(filters, current_user, paginate, preloads, query, distinct) do
+
+    paginate = if paginate[:paginate], do: paginate[:paginate], else: paginate
 
     query(filters, current_user, preloads, query, distinct)
-      |> Bonfire.Repo.many_paginated(after: cursor_after) # return a page of items (reverse chronological) + pagination metadata
+      |> Bonfire.Repo.many_paginated(paginate) # return a page of items (reverse chronological) + pagination metadata
   end
 
   def query(filters \\ [], current_user \\ nil, preloads \\ :all, query \\ FeedPublish, distinct \\ true)
 
-  def query(filters, current_user, preloads, query, true = _distinct) when is_list(filters) do
+  def query(filters, current_user, preloads, query, true = _distinct)  do
 
     query(filters, current_user, preloads, query, false)
       |> distinct([activity: activity], [desc: activity.id])
@@ -111,6 +113,12 @@ defmodule Bonfire.Social.FeedActivities do
       # |> IO.inspect(label: "feed query")
   end
 
+  def query(filters, current_user, preloads, query, _) do
+    query
+      # |> query_extras(current_user, preloads)
+      # |> EctoShorts.filter(filters, nil, nil)
+      |> IO.inspect(label: "invalid feed query")
+  end
 
   defp query_extras(query, current_user, preloads) do
     query

@@ -16,7 +16,7 @@ defmodule Bonfire.Social.Posts do
       searchable_fields: [:id],
       sortable_fields: [:id]
 
-  # def queries_module, do: Post
+  def queries_module, do: Post
   def context_module, do: Post
   def federation_module, do: [{"Create", "Note"}, {"Update", "Note"}, {"Create", "Article"}, {"Update", "Article"}]
 
@@ -90,10 +90,16 @@ defmodule Bonfire.Social.Posts do
     with {:ok, post} <- query([id: post_id], current_user, preloads)
       |> Activities.read(socket_or_current_user) do
 
-
         {:ok, Activities.activity_under_object(post) }
 
       end
+  end
+
+  @doc """
+  For internal use only (doesn't check permissions). Use `read` instead.
+  """
+  def get(id) when is_binary(id) do
+    repo().single(get_query(id))
   end
 
   @doc "List posts created by the user and which are in their outbox, which are not replies"
@@ -104,13 +110,16 @@ defmodule Bonfire.Social.Posts do
     |> FeedActivities.feed_paginated(current_user, cursor_after, preloads)
   end
 
-  @doc """
-  For internal use only (doesn't check permissions). Use `read` instead.
-  """
-  def get(id) when is_binary(id) do
-    repo().single(get_query(id))
-  end
+  @doc "List posts with pagination"
+  def query_paginated(filters, current_user \\ nil, preloads \\ :all)
+  def query_paginated(filters, current_user, preloads) when is_list(filters) do
 
+    filters
+    # |> IO.inspect()
+    |> Keyword.drop([:paginate])
+    |> FeedActivities.feed_paginated(current_user, filters, preloads)
+  end
+  def query_paginated({a,b}, current_user, preloads), do: query_paginated([{a,b}], current_user, preloads)
 
   def query(filters \\ [], current_user \\ nil, preloads \\ :all)
 
