@@ -16,11 +16,30 @@ defmodule Bonfire.Social.Web.MessageLive do
   end
 
   defp mounted(params, _session, socket) do
+    {:ok,
+      socket
+      |> assign(
+        page_title: "Private Message",
+        page: "Private Message",
+        has_private_tab: false,
+        reply_id: nil,
+        activity: nil,
+        object: nil,
+        thread_id: nil,
+      ) #|> IO.inspect
+      |> assign_global(
+        search_placeholder: "Search this discussion",
+        create_activity_type: "message",
+        smart_input_placeholder: "Reply privately",
+      )
+    }
+  end
 
-    current_user = current_user(socket)
+  def handle_params(%{"id" => id} = params, _url, socket) do
+   current_user = current_user(socket)
 
-    # FIXME
-    with {:ok, post} <- Bonfire.Social.Messages.read(Map.get(params, "id"), socket) do
+    # FIXME?
+    with {:ok, post} <- Bonfire.Social.Messages.read(id, socket) do
       #IO.inspect(post, label: "the post:")
 
       {activity, object} = Map.pop(post, :activity)
@@ -28,7 +47,7 @@ defmodule Bonfire.Social.Web.MessageLive do
 
       object = Map.merge(object, preloaded_object)
               |> Integration.repo().maybe_preload(:tags)
-              |> IO.inspect(label: "the message")
+              # |> IO.inspect(label: "the message")
 
       # IO.inspect(activity)
       other_user = if e(activity, :subject_character, :id, nil) != e(current_user, :id, nil) && e(activity, :subject_character, :id, nil) do
@@ -39,7 +58,7 @@ defmodule Bonfire.Social.Web.MessageLive do
 
       mention = if other_user, do: "@"<>e(other_user, :username, "")<>" "
 
-      {:ok,
+      {:noreply,
       socket
       |> assign(
         page_title: "Private Message",
@@ -62,16 +81,7 @@ defmodule Bonfire.Social.Web.MessageLive do
     else _e ->
       {:error, "Not found"}
     end
-
-
   end
-
-  # def handle_params(%{"tab" => tab} = _params, _url, socket) do
-  #   {:noreply,
-  #    assign(socket,
-  #      selected_tab: tab
-  #    )}
-  # end
 
   # def handle_params(%{} = _params, _url, socket) do
   #   {:noreply,
@@ -90,7 +100,7 @@ defmodule Bonfire.Social.Web.MessageLive do
     {:noreply, assign(socket, comment_reply_to_id: id)}
   end
 
-  defdelegate handle_params(params, attrs, socket), to: Bonfire.Common.LiveHandlers
+  def handle_params(params, url, socket), do: Bonfire.Common.LiveHandlers.handle_params(params, url, socket, __MODULE__)
   def handle_event(action, attrs, socket), do: Bonfire.Common.LiveHandlers.handle_event(action, attrs, socket, __MODULE__)
   def handle_info(info, socket), do: Bonfire.Common.LiveHandlers.handle_info(info, socket, __MODULE__)
 

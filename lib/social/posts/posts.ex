@@ -87,7 +87,7 @@ defmodule Bonfire.Social.Posts do
 
     current_user = current_user(socket_or_current_user)
 
-    with {:ok, post} <- query([id: post_id], current_user, preloads)
+    with {:ok, post} <- base_query([id: post_id], current_user, preloads)
       |> Activities.read(socket_or_current_user) do
 
         {:ok, Activities.activity_under_object(post) }
@@ -111,25 +111,30 @@ defmodule Bonfire.Social.Posts do
   end
 
   @doc "List posts with pagination"
-  def query_paginated(filters, current_user \\ nil, preloads \\ :all)
-  def query_paginated(filters, current_user, preloads) when is_list(filters) do
+  def query_paginated(filters, opts_or_current_user \\ nil, preloads \\ :all)
+  def query_paginated(filters, opts_or_current_user, preloads) when is_list(filters) do
 
     filters
     # |> IO.inspect()
     |> Keyword.drop([:paginate])
-    |> FeedActivities.feed_paginated(current_user, filters, preloads)
+    |> FeedActivities.feed_paginated(opts_or_current_user, filters, preloads)
   end
-  def query_paginated({a,b}, current_user, preloads), do: query_paginated([{a,b}], current_user, preloads)
+  def query_paginated({a,b}, opts_or_current_user, preloads), do: query_paginated([{a,b}], opts_or_current_user, preloads)
 
-  def query(filters \\ [], current_user \\ nil, preloads \\ :all)
+  def query(filters \\ [], opts_or_current_user \\ nil, preloads \\ :all)
 
-  def query(filters, current_user, preloads) when is_list(filters) or is_tuple(filters) do
+  def query(filters, opts_or_current_user, preloads) when is_list(filters) or is_tuple(filters) do
 
-    Post
+    q = base_query(filters, opts_or_current_user, preloads)
+        |> join_preload([:post_content])
+
+    maybe_apply(Bonfire.Boundaries.Queries, :object_only_visible_for, [q, opts_or_current_user], q)
+  end
+
+  defp base_query(filters, opts_or_current_user, preloads) when is_list(filters) or is_tuple(filters) do
+
+    (from p in Post, as: :main_object)
     |> EctoShorts.filter(filters, nil, nil)
-    |> join_preload([:post_content])
-    # |> IO.inspect(label: "post query")
-    # TODO: preloads? + check boundaries
   end
 
   #doc "List posts created by the user and which are in their outbox, which are not replies"

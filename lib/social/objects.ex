@@ -23,7 +23,7 @@ defmodule Bonfire.Social.Objects do
 
         {:ok,
           pointer
-          |> Bonfire.Common.Pointers.Preload.maybe_preload_nested_pointers([activity: [:object]])
+          |> Bonfire.Common.Pointers.Preload.maybe_preload_nested_pointers([activity: [:object]], current_user: current_user, skip_boundary_check: true)
           |> Activities.activity_under_object()
         }
       end

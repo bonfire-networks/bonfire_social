@@ -7,5 +7,6 @@
   smart_input_placeholder={@smart_input_placeholder}
   reply_id={@reply_id}
   activity={@activity}
+  object={@object}
   thread_id={@thread_id}
 />

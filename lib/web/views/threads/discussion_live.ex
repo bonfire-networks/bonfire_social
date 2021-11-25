@@ -15,16 +15,28 @@ defmodule Bonfire.Social.Web.DiscussionLive do
   end
 
   defp mounted(params, _session, socket) do
+    {:ok,
+    socket
+    |> assign(
+      page_title: "Discussion",
+      page: "Discussion",
+      has_private_tab: false,
+      search_placeholder: "Search this discussion",
+      smart_input_placeholder: "Reply to the discussion",
 
-    current_user = current_user(socket)
+    )}
+  end
 
-    with {:ok, object} <- Bonfire.Social.Objects.read(Map.get(params, "id"), socket) do
+  def handle_params(%{"id" => id} = params, _url, socket) do
+
+    # current_user = current_user(socket)
+
+    # IO.inspect(params, label: "PARAMS")
+
+    with {:ok, object} <- Bonfire.Social.Objects.read(id, socket) do
 
       {activity, object} = Map.pop(object, :activity)
       {preloaded_object, activity} = Map.pop(activity, :object)
-
-      # IO.inspect(object, label: "the object:")
-      # IO.inspect(activity, label: "the activity:")
 
       # following = if current_user && module_enabled?(Bonfire.Social.Follows) do
       #   a = if Bonfire.Social.Follows.following?(current_user, object), do: object.id
@@ -33,14 +45,9 @@ defmodule Bonfire.Social.Web.DiscussionLive do
       #   [a, b]
       # end
 
-      {:ok,
+      {:noreply,
       socket
       |> assign(
-        page_title: "Discussion",
-        page: "Discussion",
-        has_private_tab: false,
-        search_placeholder: "Search this discussion",
-        smart_input_placeholder: "Reply to the discussion",
         reply_id: Map.get(params, "reply_id"),
         activity: activity,
         object: Map.merge(object, preloaded_object || %{}),
@@ -51,15 +58,7 @@ defmodule Bonfire.Social.Web.DiscussionLive do
       {:error, "Not found"}
     end
 
-
   end
-
-  # def handle_params(%{"tab" => tab} = _params, _url, socket) do
-  #   {:noreply,
-  #    assign(socket,
-  #      selected_tab: tab
-  #    )}
-  # end
 
   # def handle_params(%{} = _params, _url, socket) do
   #   {:noreply,
@@ -69,7 +68,7 @@ defmodule Bonfire.Social.Web.DiscussionLive do
   # end
 
 
-  defdelegate handle_params(params, attrs, socket), to: Bonfire.Common.LiveHandlers
+  def handle_params(params, url, socket), do: Bonfire.Common.LiveHandlers.handle_params(params, url, socket, __MODULE__)
   def handle_event(action, attrs, socket), do: Bonfire.Common.LiveHandlers.handle_event(action, attrs, socket, __MODULE__)
   def handle_info(info, socket), do: Bonfire.Common.LiveHandlers.handle_info(info, socket, __MODULE__)
 
