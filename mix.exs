@@ -8,7 +8,9 @@ defmodule Bonfire.Social.MixProject do
       version: "0.1.0",
       elixir: "~> 1.11",
       start_permanent: Mix.env() == :prod,
-      deps: Mess.deps []
+      deps: Mess.deps [
+        {:bonfire_api_graphql, git: "https://github.com/bonfire-networks/bonfire_api_graphql", branch: "main", optional: true},
+      ]
     ]
   end
 
