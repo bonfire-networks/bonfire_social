@@ -230,4 +230,24 @@ defmodule Bonfire.Social.Activities do
   def activity_under_object(%Activity{object: activity_object} = activity) do
     Map.put(activity_object, :activity, Map.drop(activity, [:object])) # ugly, but heh
   end
+
+  def object_from_activity(%{object: %{post_content: %{id: _} = _content} = object}), do: object # no need to load Post object
+  def object_from_activity(%{object: %Pointers.Pointer{id: _} = object}), do: load_object(object) # get other pointable objects (only as fallback, should normally already be preloaded)
+  def object_from_activity(%{object: %{id: _} = object}), do: object # any other preloaded object
+  def object_from_activity(%{object_id: id}), do: load_object(id) # last fallback, load any non-preloaded pointable object
+  def object_from_activity(activity), do: activity
+
+  def load_object(id_or_pointer) do
+    with {:ok, obj} <- Bonfire.Common.Pointers.get(id_or_pointer)
+      # |> IO.inspect
+      # TODO: avoid so many queries
+      |> repo().maybe_preload([:post_content])
+      |> repo().maybe_preload([created: [:creator_profile, :creator_character]])
+      |> repo().maybe_preload([:profile, :character]) do
+        obj
+      else
+        # {:ok, obj} -> obj
+        _ -> nil
+      end
+  end
 end
