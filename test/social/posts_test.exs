@@ -12,8 +12,8 @@ defmodule Bonfire.Social.PostsTest do
     # post = activity.object
     # IO.inspect(activity)
     assert String.contains?(post.post_content.html_body, "epic html message")
-    assert post.post_content.name == "name"
-    assert post.post_content.summary == "summary"
+    assert post.post_content.name =~ "name"
+    assert post.post_content.summary =~ "summary"
     assert post.created.creator_id == user.id
   end
 

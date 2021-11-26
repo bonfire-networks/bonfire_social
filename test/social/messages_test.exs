@@ -11,7 +11,7 @@ defmodule Bonfire.Social.MessagesTest do
     attrs = %{to_circles: [messaged.id], post_content: %{html_body: msg}}
     assert {:ok, message} = Messages.send(me, attrs)
 
-    assert message.post_content.html_body == msg
+    assert message.post_content.html_body =~ msg
   end
 
   test "can list messages I sent" do

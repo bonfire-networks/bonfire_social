@@ -9,28 +9,28 @@ defmodule Bonfire.Social.Feeds.Fediverse.Test do
 
     test "not logged in: fallback to instance feed" do
       conn = conn()
-      conn = get(conn, "/browse/fediverse")
+      conn = get(conn, "/federation")
       doc = floki_response(conn) #|> IO.inspect
       # assert redirected_to(conn) =~ "/login"
-      assert [_] = Floki.find(doc, "#tab-instance")
+      assert [_] = Floki.find(doc, "#feed:local")
     end
 
     test "with account" do
       account = fake_account!()
       user = fake_user!(account)
       conn = conn(account: account)
-      next = "/browse/fediverse"
+      next = "/federation"
       {view, doc} = floki_live(conn, next) #|> IO.inspect
-      assert [_] = Floki.find(doc, "#tab-fediverse")
+      assert [_] = Floki.find(doc, "#feed:federation")
     end
 
     test "with user" do
       account = fake_account!()
       user = fake_user!(account)
       conn = conn(user: user, account: account)
-      next = "/browse/fediverse"
+      next = "/federation"
       {view, doc} = floki_live(conn, next) #|> IO.inspect
-      assert [_] = Floki.find(doc, "#tab-fediverse")
+      assert [_] = Floki.find(doc, "#feed:federation")
     end
 
 
@@ -40,12 +40,12 @@ defmodule Bonfire.Social.Feeds.Fediverse.Test do
       attrs = %{to_circles: [:activity_pub], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
       assert {:ok, post} = Posts.publish(user, attrs)
-      assert post.post_content.name == "test post name"
+      assert post.post_content.name =~ "test post name"
 
       conn = conn(user: user, account: account)
-      next = "/browse/fediverse"
+      next = "/federation"
       {view, doc} = floki_live(conn, next) #|> IO.inspect
-      assert [feed] = Floki.find(doc, "#tab-fediverse")
+      assert [feed] = Floki.find(doc, "#feed:federation")
       assert Floki.text(feed) =~ "test post name"
     end
 
@@ -58,12 +58,12 @@ defmodule Bonfire.Social.Feeds.Fediverse.Test do
       attrs = %{to_circles: [:activity_pub, user2.id], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
       assert {:ok, post} = Posts.publish(user, attrs)
-      assert post.post_content.name == "test post name"
+      assert post.post_content.name =~ "test post name"
 
       conn = conn(user: user2, account: account)
-      next = "/browse/fediverse"
+      next = "/federation"
       {view, doc} = floki_live(conn, next) #|> IO.inspect
-      assert [feed] = Floki.find(doc, "#tab-fediverse")
+      assert [feed] = Floki.find(doc, "#feed:federation")
       assert Floki.text(feed) =~ "test post name"
 
     end
@@ -83,12 +83,12 @@ defmodule Bonfire.Social.Feeds.Fediverse.Test do
       attrs = %{to_circles: [:local], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
       assert {:ok, post} = Posts.publish(user, attrs)
-      assert post.post_content.name == "test post name"
+      assert post.post_content.name =~ "test post name"
 
       conn = conn(user: user2, account: account2)
-      next = "/browse/fediverse"
+      next = "/federation"
       {view, doc} = floki_live(conn, next) #|> IO.inspect
-      assert [feed] = Floki.find(doc, "#tab-fediverse")
+      assert [feed] = Floki.find(doc, "#feed:federation")
       refute Floki.text(feed) =~ "test post name"
     end
   end

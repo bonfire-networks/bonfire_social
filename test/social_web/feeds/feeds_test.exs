@@ -33,7 +33,7 @@ defmodule Bonfire.Social.Feeds.Test do
       assert {:ok, post_reply} = Posts.publish(bob, attrs_reply)
 
       conn = conn(user: bob, account: account2)
-      next = "/browse"
+      next = "/home"
       {view, doc} = floki_live(conn, next)
       assert doc
         |> Floki.find("#feed_past  > article")
@@ -56,7 +56,7 @@ defmodule Bonfire.Social.Feeds.Test do
       assert {:ok, boost} = Boosts.boost(bob, post)
 
       conn = conn(user: bob, account: account2)
-      next = "/browse"
+      next = "/home"
       {view, doc} = floki_live(conn, next)
       assert doc
         |> Floki.find("#feed_past  > article")
@@ -79,7 +79,7 @@ defmodule Bonfire.Social.Feeds.Test do
       assert {:ok, boost} = Likes.like(bob, post)
 
       conn = conn(user: bob, account: account2)
-      next = "/browse"
+      next = "/home"
       {view, doc} = floki_live(conn, next)
       assert doc
         |> Floki.find("#feed_past  > article")

@@ -11,7 +11,7 @@ defmodule Bonfire.Social.Web.Routes do
         live "/local", Feeds.LocalLive, as: :local
         live "/federation", Feeds.FederationLive, as: :federation
         # live "/browse/", Feeds.BrowseLive, as: :browse
-        live "/browse/:tab", Feeds.BrowseLive
+        # live "/browse/:tab", Feeds.BrowseLive
         live "/post/:id", PostLive, as: Bonfire.Data.Social.Post
         live "/discussion/:id", DiscussionLive, as: Bonfire.Data.Social.PostContent
         live "/discussion/:id/reply/:reply_id", DiscussionLive

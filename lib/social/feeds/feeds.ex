@@ -78,7 +78,7 @@ defmodule Bonfire.Social.Feeds do
   def inbox_feed_ids(%{character: _} = for_subject) do
     for_subject
     |> Bonfire.Repo.maybe_preload(character: [:inbox])
-    |> IO.inspect(label: "inbox_feed_ids")
+    #|> IO.inspect(label: "inbox_feed_ids")
     |> e(:character, nil)
     |> inbox_feed_ids()
   end
@@ -90,7 +90,7 @@ defmodule Bonfire.Social.Feeds do
       Logger.info("created new inbox #{inspect feed_id} for #{inspect ulid(for_subject)}")
       feed_id
     else e ->
-      IO.inspect(inbox_feed_ids: e)
+      #IO.inspect(inbox_feed_ids: e)
       nil
     end
   end

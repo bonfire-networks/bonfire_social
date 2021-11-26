@@ -24,7 +24,7 @@ defmodule Bonfire.Social.Feeds.LoadMoreTest do
       end
 
       conn = conn(user: bob, account: account2)
-      next = "/browse"
+      next = "/home"
       {view, doc} = floki_live(conn, next)
       assert Floki.find(doc, "#load_more") == []
       assert Enum.count(Floki.find(doc, "#feed_past  > article")) == total_posts
@@ -47,7 +47,7 @@ defmodule Bonfire.Social.Feeds.LoadMoreTest do
       end
 
       conn = conn(user: bob, account: account2)
-      next = "/browse"
+      next = "/home"
       {view, doc} = floki_live(conn, next)
       assert Floki.find(doc, "#load_more") != []
     end
@@ -69,13 +69,13 @@ defmodule Bonfire.Social.Feeds.LoadMoreTest do
       end
 
       conn = conn(user: bob, account: account2)
-      next = "/browse"
+      next = "/home"
       {view, doc} = floki_live(conn, next)
 
       more_doc = view
       |> element("#load_more")
       |> render_click()
-      # |> Floki.find("#tab-feed")
+      # |> Floki.find(".feed")
       # |> IO.inspect()
 
       # FIXME: the extra activities are being sent via pubsub, need to figure out how to test that
@@ -100,11 +100,11 @@ defmodule Bonfire.Social.Feeds.LoadMoreTest do
       end
 
       conn = conn(user: bob, account: account2)
-      next = "/browse"
+      next = "/home"
       {view, doc} = floki_live(conn, next)
       assert [load_more_query_string] = Floki.attribute(doc, "#load_more a", "href")
 
-      url = "/browse"<>load_more_query_string
+      url = "/home"<>load_more_query_string
       # IO.inspect(url)
       conn = get(conn, url)
       more_doc = floki_response(conn) #|> IO.inspect

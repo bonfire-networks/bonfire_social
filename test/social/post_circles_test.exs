@@ -14,10 +14,10 @@ defmodule Bonfire.Social.PostCirclesTest do
 
     assert {:ok, post} = Posts.publish(user, attrs)
     assert String.contains?(post.post_content.html_body, "epic html message")
-    assert post.post_content.name == "name"
+    assert post.post_content.name =~ "name"
 
     assert {:ok, post} = Posts.read(post.id, user)
-    assert "name" == post.post_content.name
+    assert post.post_content.name =~ "name"
 
   end
 
@@ -27,7 +27,7 @@ defmodule Bonfire.Social.PostCirclesTest do
     user = fake_user!()
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
     assert {:ok, post} = Posts.publish(user, attrs)
-    assert post.post_content.name == "name"
+    assert post.post_content.name =~ "name"
 
     me = fake_user!()
     assert {:error, :not_found} = Posts.read(post.id, me)
@@ -39,13 +39,13 @@ defmodule Bonfire.Social.PostCirclesTest do
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
 
     assert {:ok, post} = Posts.publish(user, attrs)
-    assert post.post_content.name == "name"
+    assert post.post_content.name =~ "name"
 
     feed_id = user.id
 
     assert %Paginator.Page{entries: activities} = FeedActivities.feed(feed_id, user)
     assert feed_entry = List.first(activities)
-    assert "name" == feed_entry.activity.object.post_content.name
+    assert "name" =~ feed_entry.activity.object.post_content.name
 
   end
 
@@ -54,7 +54,7 @@ defmodule Bonfire.Social.PostCirclesTest do
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
 
     assert {:ok, post} = Posts.publish(user, attrs)
-    assert post.post_content.name == "name"
+    assert post.post_content.name =~ "name"
 
     feed_id = Bonfire.Social.Feeds.instance_feed_id()
 

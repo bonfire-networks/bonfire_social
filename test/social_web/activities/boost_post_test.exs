@@ -18,7 +18,7 @@ defmodule Bonfire.Social.Activities.BoostPost.Test do
       someone = fake_user!(some_account)
       conn = conn(user: someone, account: some_account)
 
-      next = "/browse/instance"
+      next = "/local"
       {view, doc} = floki_live(conn, next) #|> IO.inspect
       assert view
       |> element(".feed .boost")
@@ -51,7 +51,7 @@ defmodule Bonfire.Social.Activities.BoostPost.Test do
       assert {:ok, like} = Boosts.boost(someone, post)
       assert true == Boosts.boosted?(someone, post)
 
-      next = "/browse/instance"
+      next = "/local"
       {view, doc} = floki_live(conn, next) #|> IO.inspect
       assert view
       |> element(".feed .boost")

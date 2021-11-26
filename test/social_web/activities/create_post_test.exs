@@ -17,7 +17,7 @@ defmodule Bonfire.Social.Activities.CreatePost.Test do
 
       conn = conn(user: someone, account: some_account)
 
-      next = "/dashboard"
+      next = "/home"
       {view, doc} = floki_live(conn, next) #|> IO.inspect
       assert view
       |> form(".create_activity form")
