@@ -10,7 +10,7 @@ defmodule Bonfire.Social.Likes do
   import Bonfire.Common.Utils
   use Bonfire.Repo.Query
 
-  # def queries_module, do: Like
+  def queries_module, do: Like
   def context_module, do: Like
   def federation_module, do: ["Like", {"Create", "Like"}, {"Undo", "Like"}, {"Delete", "Like"}]
 

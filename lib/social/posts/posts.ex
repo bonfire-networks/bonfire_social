@@ -107,7 +107,7 @@ defmodule Bonfire.Social.Posts do
 
     # query FeedPublish
     [feed_id: by_user, posts_by: {by_user, &filter/3}]
-    |> FeedActivities.feed_paginated(current_user, cursor_after, preloads)
+    |> FeedActivities.query_paginated(current_user, cursor_after, preloads)
   end
 
   @doc "List posts with pagination"
@@ -117,7 +117,7 @@ defmodule Bonfire.Social.Posts do
     filters
     # |> IO.inspect()
     |> Keyword.drop([:paginate])
-    |> FeedActivities.feed_paginated(opts_or_current_user, filters, preloads)
+    |> FeedActivities.query_paginated(opts_or_current_user, filters, preloads)
   end
   def query_paginated({a,b}, opts_or_current_user, preloads), do: query_paginated([{a,b}], opts_or_current_user, preloads)
 

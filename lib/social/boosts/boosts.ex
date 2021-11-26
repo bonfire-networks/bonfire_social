@@ -10,7 +10,8 @@ defmodule Bonfire.Social.Boosts do
   # import Bonfire.Me.Integration
   import Bonfire.Common.Utils
 
-  # def queries_module, do: Boost
+
+  def queries_module, do: Boost
   def context_module, do: Boost
   def federation_module, do: ["Announce", {"Create", "Announce"}, {"Undo", "Announce"}, {"Delete", "Announce"}]
 
@@ -69,6 +70,13 @@ defmodule Bonfire.Social.Boosts do
     # query FeedPublish
     [boosts_of: {ulid(id), &filter/3} ]
     |> FeedActivities.feed_paginated(current_user, cursor_after, preloads)
+  end
+
+  def query(filters \\ [], opts_or_current_user \\ nil)
+
+  def query(filters, opts_or_current_user) do
+    filters
+    |> FeedActivities.query(current_user(opts_or_current_user), opts_or_current_user)
   end
 
   defp create(booster, boosted) do

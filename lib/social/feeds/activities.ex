@@ -3,7 +3,7 @@ defmodule Bonfire.Social.Activities do
   alias Bonfire.Data.Social.{Activity, Like, Boost, Flag, PostContent}
   alias Bonfire.Boundaries.Verbs
   import Bonfire.Common.Utils
-  # import Bonfire.Me.Integration
+  alias Bonfire.Social.FeedActivities
   import Ecto.Query
   require Logger
   import Bonfire.Boundaries.Queries
@@ -13,7 +13,7 @@ defmodule Bonfire.Social.Activities do
     searchable_fields: [:id, :subject_id, :verb_id, :object_id],
     sortable_fields: [:id, :subject_id, :verb_id, :object_id]
 
-  # def queries_module, do: Activity
+  def queries_module, do: Activity
   def context_module, do: Activity
 
   def as_permitted_for(q, user \\ nil) do
@@ -214,6 +214,14 @@ defmodule Bonfire.Social.Activities do
 
         {:ok, activity}
       end
+  end
+
+  def query(filters \\ [], opts_or_current_user \\ [])
+
+  def query(filters, opts_or_current_user) do
+    # IO.inspect(opts_or_current_user: opts_or_current_user)
+
+    FeedActivities.query(filters, opts_or_current_user, :all, (from a in Activity, as: :main_object) )
   end
 
   def activity_under_object(%{activity: %{object: activity_object} = activity} = _top_object) do

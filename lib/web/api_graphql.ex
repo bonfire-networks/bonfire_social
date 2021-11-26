@@ -10,10 +10,13 @@ defmodule Bonfire.Social.API.GraphQL do
 
   end
 
-  object :posts_page do
-    field(:page_info, non_null(:page_info))
-    field(:edges, non_null(list_of(non_null(:post))))
-    field(:total_count, non_null(:integer))
+  object :activity do
+    field(:subject, :agent)
+
+    field(:verb_id, :string)
+
+    field(:object_id, :string)
+    field :object, :any_context
   end
 
   object :post_content do
@@ -21,6 +24,14 @@ defmodule Bonfire.Social.API.GraphQL do
     field(:summary, :string)
     field(:html_body, :string)
   end
+
+
+  object :posts_page do
+    field(:page_info, non_null(:page_info))
+    field(:edges, non_null(list_of(non_null(:post))))
+    field(:total_count, non_null(:integer))
+  end
+
 
   object :social_queries do
 

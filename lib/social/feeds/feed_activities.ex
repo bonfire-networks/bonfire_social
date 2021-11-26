@@ -2,7 +2,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   require Logger
 
-  alias Bonfire.Data.Social.{FeedPublish, Feed, PostContent}
+  alias Bonfire.Data.Social.{Activity, FeedPublish, Feed, PostContent}
   alias Bonfire.Data.Identity.User
 
   alias Bonfire.Boundaries.Verbs
@@ -87,47 +87,56 @@ defmodule Bonfire.Social.FeedActivities do
   def feed(_, _, _, _, _), do: []
 
 
-  def feed_paginated(filters \\ [], current_user \\ nil, cursor_after \\ nil, preloads \\ :all, query \\ FeedPublish, distinct \\ true)
+  def feed_paginated(filters \\ [], current_user \\ nil, opts \\ nil, preloads \\ :all, query \\ FeedPublish)
 
-  def feed_paginated(filters, current_user, paginate, preloads, query, distinct) do
+  def feed_paginated(filters, current_user, opts, preloads, query) do
 
-    paginate = if paginate[:paginate], do: paginate[:paginate], else: paginate
-
-    query(filters, current_user, preloads, query, distinct)
-      |> Bonfire.Repo.many_paginated(paginate) # return a page of items (reverse chronological) + pagination metadata
+    query_paginated(filters, current_user, opts, preloads, query)
+      |> Bonfire.Repo.many_paginated(opts) # return a page of items (reverse chronological) + pagination metadata
   end
 
-  def query(filters \\ [], current_user \\ nil, preloads \\ :all, query \\ FeedPublish, distinct \\ true)
+  def query_paginated(filters \\ [], current_user \\ nil, paginate \\ nil, preloads \\ :all, query \\ FeedPublish)
 
-  def query(filters, current_user, preloads, query, true = _distinct)  do
+  def query_paginated(filters, current_user, opts, preloads, query) do
 
-    query(filters, current_user, preloads, query, false)
-      |> distinct([activity: activity], [desc: activity.id])
+    paginate = if opts[:paginate], do: opts[:paginate], else: opts
+
+    # TODO: actually return a query with pagination filters
+    query(filters, current_user, preloads, query)
   end
 
-  def query(filters, current_user, preloads, query, _) when is_list(filters) do
+
+  def query(filters \\ [], opts \\ nil, preloads \\ :all, query \\ FeedPublish)
+
+  # def query(filters, opts, preloads, query, true = _distinct)  do
+
+  #   query(filters, opts, preloads, query, false)
+  #     |> distinct([activity: activity], [desc: activity.id])
+  # end
+
+  def query(filters, opts, preloads, query) when is_list(filters) do
 
     query
-      |> query_extras(current_user, preloads)
+      |> query_extras(opts, preloads)
       |> EctoShorts.filter(filters, nil, nil)
       # |> IO.inspect(label: "feed query")
   end
 
-  def query(filters, current_user, preloads, query, _) do
+  def query(filters, opts, preloads, query) do
     query
       # |> query_extras(current_user, preloads)
       # |> EctoShorts.filter(filters, nil, nil)
       |> IO.inspect(label: "invalid feed query")
   end
 
-  defp query_extras(query, current_user, preloads) do
+  defp query_extras(query, opts, preloads) do
+
     query
-      # add assocs needed in timelines/feeds
-      |> join_preload([:activity])
       # |> IO.inspect(label: "feed_paginated pre-preloads")
-      |> Activities.activity_preloads(current_user, preloads)
+      # add assocs needed in timelines/feeds
+      |> Activities.activity_preloads(opts, preloads)
       # |> IO.inspect(label: "feed_paginated post-preloads")
-      |> Activities.as_permitted_for(current_user)
+      |> Activities.as_permitted_for(opts)
       # |> IO.inspect(label: "feed_paginated post-boundaries")
       |> order_by([activity: activity], [desc: activity.id])
   end
