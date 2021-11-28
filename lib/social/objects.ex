@@ -16,7 +16,7 @@ defmodule Bonfire.Social.Objects do
     with {:ok, pointer} <- Pointers.Pointer
                             |> EctoShorts.filter(id: object_id)
                             |> Activities.read(socket_or_current_user) #|> IO.inspect,
-        #  {:ok, object} <- Bonfire.Common.Pointers.get(pointer)
+        #  {:ok, object} <- Bonfire.Common.Pointers.get(pointer, current_user: user)
         do
 
         # IO.inspect(read_object: pointer)

@@ -179,9 +179,21 @@ defmodule Bonfire.Social.Activities do
   end
   def maybe_my_flag(q, _), do: q
 
+  @doc """
+  Get an activity by its ID
+  """
+  def get(id, socket_or_current_user) when is_binary(id) do
+
+    query([id: id], current_user: socket_or_current_user)
+    |> repo().single()
+  end
+
+  @doc """
+  Get an activity by its object ID (usually a create activity)
+  """
   def read(query, socket_or_current_user \\ nil)
 
-  def read(object_id, socket_or_current_user) when is_binary(object_id) do # note: we're fetching by object_id, and not activity.id
+  def read(object_id, socket_or_current_user) when is_binary(object_id) do
 
     read([object_id: object_id], socket_or_current_user)
   end
@@ -205,15 +217,13 @@ defmodule Bonfire.Social.Activities do
       end
   end
 
-  def read(filters, socket_or_current_user) when is_map(filters) or is_list(filters) do # note: we're fetching by object_id, and not activity.id
+  def read(filters, socket_or_current_user) when is_map(filters) or is_list(filters) do
 
     current_user = current_user(socket_or_current_user)
 
-    with {:ok, activity} <- Activity |> EctoShorts.filter(filters)
-      |> read(socket_or_current_user) do
-
-        {:ok, activity}
-      end
+    Activity
+    |> EctoShorts.filter(filters)
+    |> read(socket_or_current_user)
   end
 
   def query(filters \\ [], opts_or_current_user \\ [])
@@ -238,7 +248,7 @@ defmodule Bonfire.Social.Activities do
   def object_from_activity(activity), do: activity
 
   def load_object(id_or_pointer) do
-    with {:ok, obj} <- Bonfire.Common.Pointers.get(id_or_pointer)
+    with {:ok, obj} <- Bonfire.Common.Pointers.get(id_or_pointer, skip_boundary_check: true)
       # |> IO.inspect
       # TODO: avoid so many queries
       |> repo().maybe_preload([:post_content])

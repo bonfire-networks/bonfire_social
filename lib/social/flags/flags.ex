@@ -29,7 +29,7 @@ defmodule Bonfire.Social.Flags do
     end
   end
   def flag(%User{} = user, object) when is_binary(object) do
-    with {:ok, object} <- Bonfire.Common.Pointers.get(object) do
+    with {:ok, object} <- Bonfire.Common.Pointers.get(object, current_user: user) do
       flag(user, object)
     end
   end
@@ -40,7 +40,7 @@ defmodule Bonfire.Social.Flags do
     # TODO: decrement the flag count
   end
   def unflag(%User{} = user, object) when is_binary(object) do
-    with {:ok, object} <- Bonfire.Common.Pointers.get(object) do
+    with {:ok, object} <- Bonfire.Common.Pointers.get(object, current_user: user) do
       unflag(user, object)
     end
   end

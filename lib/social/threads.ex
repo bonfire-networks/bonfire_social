@@ -54,7 +54,6 @@ defmodule Bonfire.Social.Threads do
   end
 
   def get_replied(id) do
-    # Bonfire.Common.Pointers.get(id)
     repo().single(from p in Replied, where: p.id == ^id)
   end
 

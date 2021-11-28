@@ -80,13 +80,13 @@ defmodule Bonfire.Social.Follows do
   end
 
   defp do_follow(subject, object) when is_binary(object) do
-    with {:ok, object} <- Bonfire.Common.Pointers.get(object) do
+    with {:ok, object} <- Bonfire.Common.Pointers.get(object, current_user: subject) do
       do_follow(subject, object)
     end
   end
 
   defp do_follow(subject, object) when is_binary(subject) do
-    with {:ok, subject} <- Bonfire.Common.Pointers.get(subject) do
+    with {:ok, subject} <- Bonfire.Common.Pointers.get(subject, skip_boundary_check: true) do
       do_follow(subject, object)
     end
   end
@@ -116,7 +116,7 @@ defmodule Bonfire.Social.Follows do
   end
 
   def unfollow(%{} = user, object) when is_binary(object) do
-    with {:ok, object} <- Bonfire.Common.Pointers.get(object) do
+    with {:ok, object} <- Bonfire.Common.Pointers.get(object, current_user: user) do
       unfollow(user, object)
     end
   end

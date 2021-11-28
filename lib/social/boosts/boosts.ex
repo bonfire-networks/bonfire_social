@@ -33,7 +33,7 @@ defmodule Bonfire.Social.Boosts do
     end
   end
   def boost(%{} = booster, boosted) when is_binary(boosted) do
-    with {:ok, boosted} <- Bonfire.Common.Pointers.get(boosted) do
+    with {:ok, boosted} <- Bonfire.Common.Pointers.get(boosted, current_user: booster) do
       #IO.inspect(liked)
       boost(booster, boosted)
     end
@@ -45,7 +45,7 @@ defmodule Bonfire.Social.Boosts do
     # TODO: decrement the boost count
   end
   def unboost(%{} = booster, boosted) when is_binary(boosted) do
-    with {:ok, boosted} <- Bonfire.Common.Pointers.get(boosted) do
+    with {:ok, boosted} <- Bonfire.Common.Pointers.get(boosted, current_user: booster) do
       #IO.inspect(liked)
       unboost(booster, boosted)
     end
@@ -172,16 +172,14 @@ defmodule Bonfire.Social.Boosts do
   end
 
   def ap_receive_activity(creator, %{data: %{"type" => "Announce"}} = _activity, object) do
-    with {:ok, pointer} <- Bonfire.Common.Pointers.one(object.pointer_id),
-         boosted = Bonfire.Common.Pointers.follow!(pointer) do
+    with {:ok, boosted} <- Bonfire.Common.Pointers.get(object.pointer_id, current_user: creator) do
            boost(creator, boosted)
     end
   end
 
   def ap_receive_activity(creator, %{data: %{"type" => "Undo"}} = _activity, %{data: %{"object" => boosted_object}} = _object) do
     with object when not is_nil(object) <- ActivityPub.Object.get_cached_by_ap_id(boosted_object),
-         {:ok, pointer} <- Bonfire.Common.Pointers.one(object.pointer_id),
-         boosted <- Bonfire.Common.Pointers.follow!(pointer),
+         {:ok, boosted} <- Bonfire.Common.Pointers.get(object.pointer_id, current_user: creator),
          [id] <- unboost(creator, boosted) do
           {:ok, id}
     end

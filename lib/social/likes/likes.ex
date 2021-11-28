@@ -34,7 +34,7 @@ defmodule Bonfire.Social.Likes do
   end
 
   def like(%User{} = liker, liked) when is_binary(liked) do
-    with {:ok, liked} <- Bonfire.Common.Pointers.get(liked) do
+    with {:ok, liked} <- Bonfire.Common.Pointers.get(liked, current_user: liker) do
       #IO.inspect(liked)
       like(liker, liked)
     end
@@ -47,7 +47,7 @@ defmodule Bonfire.Social.Likes do
   end
 
   def unlike(%User{} = liker, liked) when is_binary(liked) do
-    with {:ok, liked} <- Bonfire.Common.Pointers.get(liked) do
+    with {:ok, liked} <- Bonfire.Common.Pointers.get(liked, current_user: liker) do
       unlike(liker, liked)
     end
   end
@@ -176,16 +176,14 @@ defmodule Bonfire.Social.Likes do
   end
 
   def ap_receive_activity(creator, %{data: %{"type" => "Like"}} = _activity, object) do
-    with {:ok, pointer} <- Bonfire.Common.Pointers.one(object.pointer_id),
-         liked = Bonfire.Common.Pointers.follow!(pointer) do
+    with {:ok, liked} <- Bonfire.Common.Pointers.get(object.pointer_id, current_user: creator) do
            like(creator, liked)
     end
   end
 
   def ap_receive_activity(creator, %{data: %{"type" => "Undo"}} = _activity, %{data: %{"object" => liked_object}} = _object) do
     with object when not is_nil(object) <- ActivityPub.Object.get_cached_by_ap_id(liked_object),
-         {:ok, pointer} <- Bonfire.Common.Pointers.one(object.pointer_id),
-         liked <- Bonfire.Common.Pointers.follow!(pointer),
+         {:ok, liked} <- Bonfire.Common.Pointers.get(object.pointer_id, current_user: creator),
          [id] <- unlike(creator, liked) do
           {:ok, id}
     end
