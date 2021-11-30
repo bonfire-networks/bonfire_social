@@ -14,10 +14,10 @@ defmodule Bonfire.Social.Threads do
   def maybe_push_thread(%{} = creator, %{} = activity, %{replied: %{thread_id: thread_id, reply_to_id: reply_to_id}} = _reply) when is_binary(thread_id) and is_binary(reply_to_id) do
 
     with {:ok, published} <- FeedActivities.maybe_feed_publish(creator, activity, thread_id) do
-      Logger.warn("put in thread feed for anyone following the thread: #{inspect thread_id}")
-
-      Logger.warn("broadcasting to anyone currently viewing the thread")
-      pubsub_broadcast(thread_id, {{Bonfire.Social.Posts, :new_reply}, {thread_id, published}})
+      Logger.debug("Threads: put in thread feed for anyone following the thread: #{inspect thread_id}")
+      IO.inspect(activity: activity)
+      Logger.debug("Threads: broadcasting to anyone currently viewing the thread")
+      pubsub_broadcast(thread_id, {{Bonfire.Social.Posts, :new_reply}, {thread_id, activity}})
 
     end
   end

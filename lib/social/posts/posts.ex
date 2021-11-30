@@ -303,7 +303,7 @@ defmodule Bonfire.Social.Posts do
   def indexing_object_format(%{activity: %{object: object} = activity}, nil), do: indexing_object_format(activity, object)
   def indexing_object_format(%Activity{object: object} = activity, nil), do: indexing_object_format(activity, object)
   def indexing_object_format(a, b) do
-    Logger.info("Post not indexing")
+    Logger.error("Posts: could not indexing_object_format")
     IO.inspect(a)
     IO.inspect(b)
     nil

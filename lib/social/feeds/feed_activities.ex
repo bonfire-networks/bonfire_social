@@ -191,11 +191,12 @@ defmodule Bonfire.Social.FeedActivities do
     Bonfire.Me.Users.Boundaries.maybe_make_visible_for(subject, object, circles) # |> IO.inspect(label: "grant")
 
     with {:ok, activity} <- do_publish(subject, verb, object, circles) do
+      Logger.debug("FeedActivities published to: #{inspect circles}")
 
       Threads.maybe_push_thread(subject, activity, object)
 
       # IO.inspect(notify_reply: reply_to_creator)
-      Logger.info("FeedActivities with replies_are_private?==false -> putting in feeds and making visible for: #{inspect circles} and notifying the user being replied to: #{inspect creator_id}")
+      Logger.debug("FeedActivities with replies_are_private?==false -> notifying the user being replied to: #{inspect creator_id}")
       if creator_id != subject.id, do: notify_characters(subject, activity, object, reply_to_creator), else: {:ok, activity}
     end
   end
@@ -207,13 +208,13 @@ defmodule Bonfire.Social.FeedActivities do
     mentioned_notifications_inboxes = Feeds.tags_inbox_feeds(tags) #|> IO.inspect(label: "publish tag / mention")
 
     tag_ids = circles ++ Bonfire.Tag.Tags.tag_ids(tags) # TODO? don't re-fetch tags
-    Logger.info("FeedActivities with mentions_and_tags_are_private?==false -> making visible for: #{inspect tag_ids}")
+    Logger.debug("FeedActivities with mentions_and_tags_are_private?==false -> making visible for: #{inspect tag_ids}")
     Bonfire.Me.Users.Boundaries.maybe_make_visible_for(subject, object, tag_ids) # |> IO.inspect(label: "grant")
 
     feeds = circles ++ mentioned_notifications_inboxes
 
     with {:ok, activity} <- do_publish(subject, verb, object, feeds) do
-      Logger.info("FeedActivities with mentions_and_tags_are_private?==false -> putting in feed + notifications of @ mentioned / tagged characters: #{inspect feeds}")
+      Logger.debug("FeedActivities with mentions_and_tags_are_private?==false -> putting in feed + notifications of @ mentioned / tagged characters: #{inspect feeds}")
       notify_inboxes(subject, activity, object, mentioned_notifications_inboxes)
     end
   end
@@ -223,7 +224,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def publish(subject, verb, object, circles, _, _) when is_atom(verb) do
-    Logger.info("FeedActivities: just making visible for and putting in these circles/feeds: #{inspect circles}")
+    Logger.debug("FeedActivities: just making visible for and putting in these circles/feeds: #{inspect circles}")
 
     Bonfire.Me.Users.Boundaries.maybe_make_visible_for(subject, object, circles) # |> IO.inspect(label: "grant")
 
@@ -231,7 +232,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def publish(subject, verb, object, circles, tags_are_private?, replies_are_private?) do
-    Logger.info("FeedActivities: defaulting to a :create activity, because this verb is not defined: #{inspect verb} ")
+    Logger.debug("FeedActivities: defaulting to a :create activity, because this verb is not defined: #{inspect verb} ")
     publish(subject, :create, object, circles, tags_are_private?, replies_are_private?)
   end
 
@@ -258,10 +259,10 @@ defmodule Bonfire.Social.FeedActivities do
     object_creator = Objects.object_creator(object)
     object_creator_id = ulid(object_creator)
     if object_creator_id && subject_id != object_creator_id do
-      Logger.info("maybe_notify_creator: #{inspect object_creator_id}")
+      Logger.debug("maybe_notify_creator: #{inspect object_creator_id}")
       notify_characters(subject, verb_or_activity, object, object_creator)
     else
-      Logger.info("maybe_notify_creator: just create an activity")
+      Logger.debug("maybe_notify_creator: just create an activity")
       maybe_feed_publish(subject, verb_or_activity, object, nil)
     end
     # TODO: notify remote users via AP
@@ -306,15 +307,15 @@ defmodule Bonfire.Social.FeedActivities do
   """
   def maybe_feed_publish(subject, verb_or_activity, object \\ nil, feeds)
   def maybe_feed_publish(subject, verb, object, feeds) when is_atom(verb), do: create_and_put_in_feeds(subject, verb, object, feeds)
-  def maybe_feed_publish(subject, %{activity: activity}, _, feeds), do: maybe_feed_publish(subject, activity, feeds)
   def maybe_feed_publish(_subject, %Bonfire.Data.Social.Activity{} = activity, _, feeds) do
     put_in_feeds_and_maybe_federate(feeds, activity)
     {:ok, activity}
     # TODO: notify remote users via AP
   end
-  def maybe_feed_publish(_, _, _, _) do
-    Logger.warn("did not notify")
-    {:ok, nil}
+  def maybe_feed_publish(subject, %{activity: activity}, _, feeds), do: maybe_feed_publish(subject, activity, feeds)
+  def maybe_feed_publish(_, activity, _, _) do
+    Logger.error("FeedActivities: did not notify, expected an Activity, got #{inspect activity}")
+    {:ok, activity}
   end
 
 
@@ -376,13 +377,12 @@ defmodule Bonfire.Social.FeedActivities do
 
       {:ok, published}
     else e ->
-      Logger.warn("put_in_feeds: error when trying with feed_or_subject")
-      IO.inspect(put_in_feeds_e: e)
+      Logger.error("FeedActivities.put_in_feeds: error when trying with feed_or_subject: #{inspect e}")
       {:ok, nil}
     end
   end
   defp put_in_feeds(_, _) do
-    Logger.warn("did not put_in_feeds")
+    Logger.error("FeedActivities: did not put_in_feeds")
     {:ok, nil}
   end
 
