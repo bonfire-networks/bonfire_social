@@ -2,7 +2,7 @@ defmodule Bonfire.Social.Follows.LiveHandler do
   use Bonfire.Web, :live_handler
 
   def handle_event("follow", %{"id"=> id}=params, socket) do
-    IO.inspect(socket)
+    # IO.inspect(socket)
 
       set = [
        following: e(socket, :assigns, :following, []) ++ [id]
@@ -12,8 +12,8 @@ defmodule Bonfire.Social.Follows.LiveHandler do
 
       ComponentID.send_assigns(e(params, "component", Bonfire.UI.Social.FollowButtonLive), id, set, socket)
 
-    else _e ->
-     # handle previously followed, but UI didn't know
+    else e ->
+      Logger.debug("Follows.LiveHandler: maybe it was already followed, but UI didn't know: #{inspect e}")
       ComponentID.send_assigns(e(params, "component", Bonfire.UI.Social.FollowButtonLive), id, set, socket)
 
     end

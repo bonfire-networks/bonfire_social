@@ -25,7 +25,7 @@ defmodule Bonfire.Social.API.GraphQL do
     field(:object_id, :string)
     field(:subject_id, :string)
 
-    field(:subject, :agent)
+    field(:subject, :any_character)
 
     field(:verb, :verb) do
       resolve fn
@@ -54,6 +54,12 @@ defmodule Bonfire.Social.API.GraphQL do
     field(:html_body, :string)
   end
 
+  object :follow do
+    field(:follower_profile, :profile)
+    field(:follower_character, :character)
+    field(:followed_profile, :profile)
+    field(:followed_character, :character)
+  end
 
   object :posts_page do
     field(:page_info, non_null(:page_info))

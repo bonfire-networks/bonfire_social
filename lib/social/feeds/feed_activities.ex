@@ -53,13 +53,7 @@ defmodule Bonfire.Social.FeedActivities do
 
     pubsub_subscribe(feed_id_or_ids, current_user_or_socket) # subscribe to realtime feed updates
 
-    # query FeedPublish, without messages
-    [
-      feed_id: feed_id_or_ids,
-      # exclude: {:messages, &filter/3},
-      # exclude_messages: dynamic([object_message: message], is_nil(message.id))
-      exclude_messages: dynamic([object: object], object.table_id != ^("6R1VATEMESAGEC0MMVN1CAT10N"))
-    ]
+    query([feed_id: feed_id_or_ids], current_user_or_socket)
     |> feed_paginated(current_user(current_user_or_socket), cursor_after, preloads)
   end
 
@@ -95,9 +89,10 @@ defmodule Bonfire.Social.FeedActivities do
       |> Bonfire.Repo.many_paginated(opts) # return a page of items (reverse chronological) + pagination metadata
   end
 
+
   def query_paginated(filters \\ [], current_user \\ nil, paginate \\ nil, preloads \\ :all, query \\ FeedPublish)
 
-  def query_paginated(filters, current_user, opts, preloads, query) do
+  def query_paginated(filters, current_user, opts, preloads, query) when is_list(filters) do
 
     paginate = if opts[:paginate], do: opts[:paginate], else: opts
 
@@ -105,6 +100,13 @@ defmodule Bonfire.Social.FeedActivities do
     query(filters, current_user, preloads, query)
   end
 
+  def query_paginated(query, current_user, opts, preloads, _query) do
+
+    paginate = if opts[:paginate], do: opts[:paginate], else: opts
+
+    # TODO: actually return a query with pagination filters
+    query
+  end
 
   def query(filters \\ [], opts \\ nil, preloads \\ :all, query \\ FeedPublish)
 
@@ -113,6 +115,20 @@ defmodule Bonfire.Social.FeedActivities do
   #   query(filters, opts, preloads, query, false)
   #     |> distinct([activity: activity], [desc: activity.id])
   # end
+
+  def query([feed_id: feed_id_or_ids], opts, preloads, query) when is_binary(feed_id_or_ids) or is_list(feed_id_or_ids) do
+    # IO.inspect(feed_id_or_ids: feed_id_or_ids)
+    feed_id_or_ids = maybe_flatten(feed_id_or_ids)
+
+    # query FeedPublish, without messages
+    [
+      feed_id: feed_id_or_ids,
+      # exclude: {:messages, &filter/3},
+      # exclude_messages: dynamic([object_message: message], is_nil(message.id))
+      exclude_messages: dynamic([object: object], object.table_id != ^("6R1VATEMESAGEC0MMVN1CAT10N"))
+    ]
+    |> query(opts, preloads, query)
+  end
 
   def query(filters, opts, preloads, query) when is_list(filters) do
 
@@ -126,7 +142,7 @@ defmodule Bonfire.Social.FeedActivities do
     query
       # |> query_extras(current_user, preloads)
       # |> EctoShorts.filter(filters, nil, nil)
-      |> IO.inspect(label: "invalid feed query")
+      |> IO.inspect(label: "FeedActivities invalid feed query with filters #{inspect filters}")
   end
 
   defp query_extras(query, opts, preloads) do

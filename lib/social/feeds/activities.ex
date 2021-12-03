@@ -228,7 +228,15 @@ defmodule Bonfire.Social.Activities do
 
   def query(filters \\ [], opts_or_current_user \\ [])
 
+  def query([my: :feed], opts_or_current_user) do
+    # IO.inspect(filters: filters)
+    current_user = current_user(opts_or_current_user)
+
+    query([feed_id: ulid(current_user)], opts_or_current_user)
+  end
+
   def query(filters, opts_or_current_user) do
+    IO.inspect(filters: filters)
     # IO.inspect(opts_or_current_user: opts_or_current_user)
 
     FeedActivities.query(filters, opts_or_current_user, :all, (from a in Activity, as: :main_object) )

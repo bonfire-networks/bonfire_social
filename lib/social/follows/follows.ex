@@ -12,7 +12,7 @@ defmodule Bonfire.Social.Follows do
     searchable_fields: [:id, :follower_id, :followed_id],
     sortable_fields: [:id]
 
-  # def queries_module, do: Follow
+  def queries_module, do: Follow
   def context_module, do: Follow
   def federation_module, do: ["Follow", {"Create", "Follow"}, {"Undo", "Follow"}, {"Delete", "Follow"}]
 
@@ -30,17 +30,44 @@ defmodule Bonfire.Social.Follows do
 
   def by_any(user), do: repo().many(by_any_q(user))
 
-  defp list(filters, _current_user) do
+  defp query_base(filters, _current_user) do
     # TODO: check see/read permissions for current_user
-    Follow |> EctoShorts.filter(filters)
+    Follow
+    |> EctoShorts.filter(filters)
+    |> IO.inspect(label: "Follows: query_base")
   end
+
+  def query([my: :followed], opts) do
+    current_user = current_user(opts)
+    query([followed: current_user], opts)
+  end
+
+  def query([my: :followers], opts) do
+    current_user = current_user(opts)
+    query([followers: current_user], opts)
+  end
+
+  def query([followers: user], opts) do
+    query_base([followed_id: ulid(user)], opts)
+    |> join_preload([:follower_profile])
+    |> join_preload([:follower_character])
+  end
+
+  def query([followed: user], opts) do
+    query_base([follower_id: ulid(user)], opts)
+    |> join_preload([:followed_profile])
+    |> join_preload([:followed_character])
+  end
+
+  def query(filter, opts) do
+    query_base(filter, opts)
+  end
+
 
   def list_my_followed(current_user, paginate? \\ true, cursor_after \\ nil, with_profile_only \\ true), do: list_followed(current_user, current_user, with_profile_only)
 
   def list_followed(%{id: user_id} = _user, current_user \\ nil, paginate? \\ true, cursor_after \\ nil, with_profile_only \\ true) when is_binary(user_id) do
-    list([follower_id: user_id], current_user)
-    |> join_preload([:followed_profile])
-    |> join_preload([:followed_character])
+    query([followed: user_id], current_user)
     |> maybe_with_followed_profile_only(with_profile_only)
     |> many(paginate?, cursor_after)
   end
@@ -48,9 +75,7 @@ defmodule Bonfire.Social.Follows do
   def list_my_followers(current_user, paginate? \\ true, cursor_after \\ nil, with_profile_only \\ true), do: list_followers(current_user, current_user, with_profile_only)
 
   def list_followers(%{id: user_id} = _user, current_user \\ nil, paginate? \\ true, cursor_after \\ nil, with_profile_only \\ true) when is_binary(user_id) do
-    list([followed_id: user_id], current_user)
-    |> join_preload([:follower_profile])
-    |> join_preload([:follower_character])
+    query([followers: user_id], current_user)
     |> maybe_with_follower_profile_only(with_profile_only)
     |> many(paginate?, cursor_after)
   end
@@ -80,7 +105,8 @@ defmodule Bonfire.Social.Follows do
   end
 
   defp do_follow(subject, object) when is_binary(object) do
-    with {:ok, object} <- Bonfire.Common.Pointers.get(object, current_user: subject) do
+    # TODO: once we expose boundaries for profile visibility and follow-ability, enforce that here
+    with {:ok, object} <- Bonfire.Common.Pointers.get(object, skip_boundary_check: true, current_user: subject) do
       do_follow(subject, object)
     end
   end
@@ -98,12 +124,15 @@ defmodule Bonfire.Social.Follows do
 
       # TEMPORARY: make my profile visible to people I follow
       Bonfire.Me.Users.Boundaries.maybe_make_visible_for(follower, follower, followed)
-      # FIXME: make sure the profile of someone I follow is visible to me
+      # TEMPORARY: make sure the profile of someone I follow is visible to me
       Bonfire.Me.Users.Boundaries.maybe_make_visible_for(followed, followed, follower)
 
-      Logger.warn("followed")
+      # make the follow itself visible to both
+      Bonfire.Me.Users.Boundaries.maybe_make_visible_for(follower, follow, followed)
+
       FeedActivities.notify_object(follower, :follow, followed)
 
+      # Logger.warn("Follow: followed")
       {:ok, follow}
     end
   end
