@@ -46,6 +46,13 @@ defmodule Bonfire.Social.API.GraphQL do
     #       {:ok, object}
     #   end
     end
+
+    field(:direct_replies, list_of(:replied)) do
+      arg :paginate, :paginate # TODO
+
+      resolve dataloader(Pointers.Pointer) #, args: %{my: :followed})
+    end
+
   end
 
   object :post_content do
@@ -61,6 +68,22 @@ defmodule Bonfire.Social.API.GraphQL do
     field(:followed_character, :character)
   end
 
+  object :replied do
+    field(:activity, :activity)
+    field(:post, :post)
+    field(:post_content, :post_content)
+
+    field(:thread_id, :string)
+    field(:reply_to_id, :string)
+    # field(:reply_to, :activity)
+
+    field(:direct_replies, list_of(:replied)) do
+      arg :paginate, :paginate # TODO
+
+      resolve dataloader(Pointers.Pointer) #, args: %{my: :followed})
+    end
+  end
+
   object :posts_page do
     field(:page_info, non_null(:page_info))
     field(:edges, non_null(list_of(non_null(:post))))
@@ -70,6 +93,10 @@ defmodule Bonfire.Social.API.GraphQL do
   input_object :activity_filters do
     field :activity_id, :string
     field :object_id, :string
+  end
+
+  input_object :feed_filters do
+    field :feed_name, :string
   end
 
   input_object :post_filters do
@@ -93,6 +120,14 @@ defmodule Bonfire.Social.API.GraphQL do
     field :activity, :activity do
       arg :filter, :activity_filters
       resolve &get_activity/3
+    end
+
+    @desc "Get activities in a feed"
+    field :feed, list_of(:activity) do
+      arg :filter, :feed_filters
+      arg :paginate, :paginate # TODO
+
+      resolve &feed/2
     end
 
   end
@@ -127,6 +162,22 @@ defmodule Bonfire.Social.API.GraphQL do
 
   def activity_object(activity) do
     {:ok, Bonfire.Social.Activities.object_from_activity(activity)}
+  end
+
+  defp feed(%{filter: filter}, info) do
+    feed(filter, info)
+  end
+
+  defp feed(args, info) do
+    Bonfire.Social.FeedActivities.feed(args, info)
+    |> feed()
+  end
+
+  defp feed(%{entries: feed}) when is_list(feed) do
+    {:ok,
+      feed
+      |> Enum.map(& Map.get(&1, :activity))
+    }
   end
 
 end

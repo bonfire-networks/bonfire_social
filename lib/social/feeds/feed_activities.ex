@@ -78,6 +78,17 @@ defmodule Bonfire.Social.FeedActivities do
 
   end
 
+  def feed(feed_name, current_user_or_socket, cursor_after, preloads) when is_atom(feed_name) do
+
+    feed(Feeds.named_feed_id(feed_name), current_user_or_socket, cursor_after, preloads)
+  end
+
+  def feed(%{feed_name: feed_name}, current_user_or_socket, cursor_after, preloads) do
+
+    feed(Feeds.named_feed_id(feed_name), current_user_or_socket, cursor_after, preloads)
+  end
+
+
   def feed(_, _, _, _, _), do: []
 
 
@@ -132,10 +143,12 @@ defmodule Bonfire.Social.FeedActivities do
 
   def query(filters, opts, preloads, query) when is_list(filters) do
 
+    Logger.debug("FeedActivities - query with filters: #{inspect filters}")
+
     query
       |> query_extras(opts, preloads)
       |> EctoShorts.filter(filters, nil, nil)
-      # |> IO.inspect(label: "feed query")
+      # |> IO.inspect(label: "FeedActivities - query")
   end
 
   def query(filters, opts, preloads, query) do
@@ -263,7 +276,7 @@ defmodule Bonfire.Social.FeedActivities do
   Records a remote activity and puts in appropriate feeds
   """
   def save_fediverse_incoming_activity(subject, verb, object) when is_atom(verb) do
-    publish(subject, verb, object, Feeds.fediverse_feed_id())
+    publish(subject, verb, object, Feeds.named_feed_id(:activity_pub))
   end
 
   @doc """

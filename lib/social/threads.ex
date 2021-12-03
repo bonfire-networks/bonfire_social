@@ -1,5 +1,7 @@
 defmodule Bonfire.Social.Threads do
 
+  @default_max_depth 3 # TODO: configurable
+
   alias Bonfire.Data.Social.Replied
   alias Bonfire.Social.{Activities, FeedActivities}
   alias Bonfire.Boundaries.Verbs
@@ -10,6 +12,8 @@ defmodule Bonfire.Social.Threads do
     searchable_fields: [:id, :thread_id, :reply_to_id],
     sortable_fields: [:id]
 
+  def context_module, do: Replied
+  def queries_module, do: Replied
 
   def maybe_push_thread(%{} = creator, %{} = activity, %{replied: %{thread_id: thread_id, reply_to_id: reply_to_id}} = _reply) when is_binary(thread_id) and is_binary(reply_to_id) do
 
@@ -109,7 +113,7 @@ defmodule Bonfire.Social.Threads do
   end
 
 
-  def list_replies(thread, current_user, cursor \\ nil, max_depth \\ 3, limit \\ 500)
+  def list_replies(thread, current_user, cursor \\ nil, max_depth \\ @default_max_depth, limit \\ 500)
   def list_replies(%{thread_id: thread_id}, current_user, cursor, max_depth, limit), do: list_replies(thread_id, current_user, cursor, max_depth, limit)
   def list_replies(%{id: thread_id}, current_user, cursor, max_depth, limit), do: list_replies(thread_id, current_user, cursor, max_depth, limit)
   def list_replies(thread_id, current_user, cursor, max_depth, limit) when is_binary(thread_id), do: do_list_replies(thread_id, current_user, cursor, max_depth, limit)
@@ -118,28 +122,43 @@ defmodule Bonfire.Social.Threads do
 
     pubsub_subscribe(thread_id, current_user_or_socket) # subscribe to realtime thread updates
 
+    query([thread_id: thread_id], current_user_or_socket, max_depth)
+      |> Bonfire.Repo.many_paginated(limit: limit, before: e(cursor, :before, nil), after: e(cursor, :after, nil)) # return a page of items + pagination metadata
+      # |> repo().many # without pagination
+      # |> IO.inspect(label: "thread")
+  end
+
+  def query(filter, current_user_or_socket, max_depth \\ @default_max_depth)
+
+  def query([thread_id: thread_id], current_user_or_socket, max_depth) do
+
     current_user = current_user(current_user_or_socket)
     # IO.inspect(current_user: current_user)
 
     %Replied{id: Bonfire.Common.Pointers.id_binary(thread_id)}
       |> Replied.descendants()
-      |> Replied.where_depth(is_smaller_than_or_equal_to: max_depth)
+      |> Replied.where_depth(is_smaller_than_or_equal_to: (max_depth || @default_max_depth))
       |> Activities.query_object_preload_create_activity(current_user)
       |> Activities.as_permitted_for(current_user)
-      # |> IO.inspect(label: "thread query")
-      # |> preload_join(:post)
-      # |> preload_join(:post, :post_content)
-      # |> preload_join(:activity)
-      # |> preload_join(:activity, :subject_profile)
-      # |> preload_join(:activity, :subject_character)
-      |> Bonfire.Repo.many_paginated(limit: limit, before: e(cursor, :before, nil), after: e(cursor, :after, nil)) # return a page of items + pagination metadata
-      # |> repo().many # without pagination
-      # |> IO.inspect(label: "thread query")
+      # |> IO.inspect(label: "Thread nested query")
+  end
+
+  def query(filter, current_user_or_socket, max_depth) do
+
+    current_user = current_user(current_user_or_socket)
+    # IO.inspect(current_user: current_user)
+
+    Replied
+      |> EctoShorts.filter(filter)
+      |> Activities.query_object_preload_create_activity(current_user)
+      |> Activities.as_permitted_for(current_user)
+      # |> IO.inspect(label: "Thread filtered query")
   end
 
   def arrange_replies_tree(replies), do: replies |> Replied.arrange() # uses https://github.com/bonfire-networks/ecto_materialized_path
 
-  # def replies_tree(replies) do
+  # Deprecated:
+  # def arrange_replies_tree(replies) do
   #   thread = replies
   #   |> Enum.reverse()
   #   |> Enum.map(&Map.from_struct/1)

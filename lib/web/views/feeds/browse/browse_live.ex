@@ -76,7 +76,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
   end
 
   def fediverse_feed(socket) do
-    feed_id = Bonfire.Social.Feeds.fediverse_feed_id()
+    feed_id = Bonfire.Social.Feeds.named_feed_id(:activity_pub)
     feed = Bonfire.Social.FeedActivities.feed(feed_id, socket)
     to_circles = [Bonfire.Boundaries.Circles.get_tuple(:activity_pub)]
 
@@ -93,7 +93,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
   end
 
   def instance_feed(socket) do
-    feed_id = Bonfire.Social.Feeds.instance_feed_id()
+    feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
     feed = Bonfire.Social.FeedActivities.feed(feed_id, socket)
     to_circles = [Bonfire.Boundaries.Circles.get_tuple(:local)]
 

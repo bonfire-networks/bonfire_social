@@ -11,8 +11,15 @@ defmodule Bonfire.Social.Feeds do
   # def queries_module, do: Feed
   def context_module, do: Feed
 
-  def instance_feed_id, do: Bonfire.Boundaries.Circles.circles[:local]
-  def fediverse_feed_id, do: Bonfire.Boundaries.Circles.circles[:activity_pub]
+  def named_feed_id(name) when is_atom(name), do: Bonfire.Boundaries.Circles.circles[name]
+  def named_feed_id(name) when is_binary(name) do
+    case maybe_str_to_atom(name) do
+      named when is_atom(named) -> named_feed_id(named)
+      _ ->
+        Logger.warn("Feed: doesn't seem to be a named feed: #{inspect name}")
+        nil
+    end
+  end
 
   def my_feed_ids(socket, include_notifications? \\ true, extra_feeds \\ [])
 

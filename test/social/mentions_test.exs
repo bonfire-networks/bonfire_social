@@ -69,7 +69,7 @@ defmodule Bonfire.Social.MentionsTest do
 
     assert {:ok, mention} = Posts.publish(me, attrs)
 
-    feed_id = Bonfire.Social.Feeds.instance_feed_id()
+    feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
 
     assert %{entries: []} = FeedActivities.feed(feed_id, mentioned)
   end
@@ -77,11 +77,11 @@ defmodule Bonfire.Social.MentionsTest do
   test "mentioning someone appears in my instance feed, if included in circles" do
     me = Fake.fake_user!()
     mentioned = Fake.fake_user!()
-    attrs = %{to_circles: [Bonfire.Social.Feeds.instance_feed_id()], post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
+    attrs = %{to_circles: [Bonfire.Social.Feeds.named_feed_id(:local)], post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
 
     assert {:ok, mention} = Posts.publish(me, attrs)
 
-    feed_id = Bonfire.Social.Feeds.instance_feed_id()
+    feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
 
     assert %{entries: feed} = FeedActivities.feed(feed_id, me)
     fp = List.first(feed)
@@ -98,7 +98,7 @@ defmodule Bonfire.Social.MentionsTest do
 
     third = Fake.fake_user!()
 
-    feed_id = Bonfire.Social.Feeds.instance_feed_id()
+    feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
 
     assert %{entries: []} = FeedActivities.feed(feed_id, third)
   end
@@ -106,11 +106,11 @@ defmodule Bonfire.Social.MentionsTest do
   test "mentioning someone does not appear in the public instance feed" do
     me = Fake.fake_user!()
     mentioned = Fake.fake_user!()
-    attrs = %{to_circles: [Bonfire.Social.Feeds.instance_feed_id()], post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
+    attrs = %{to_circles: [Bonfire.Social.Feeds.named_feed_id(:local)], post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
 
     assert {:ok, mention} = Posts.publish(me, attrs)
 
-    feed_id = Bonfire.Social.Feeds.instance_feed_id()
+    feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
 
     assert %{entries: []} = FeedActivities.feed(feed_id, nil)
   end

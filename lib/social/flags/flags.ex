@@ -46,7 +46,7 @@ defmodule Bonfire.Social.Flags do
   end
 
 
-  @doc "List flag of an object and which are in a feed"
+  @doc "List all flags (which are in a feed). Only for admins."
   def list(current_user, cursor_after \\ nil, preloads \\ :all) when not is_nil(current_user) do
     # TODO: double check that we're admin
     # query FeedPublish

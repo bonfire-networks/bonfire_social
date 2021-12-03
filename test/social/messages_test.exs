@@ -121,7 +121,7 @@ defmodule Bonfire.Social.MessagesTest do
 
     assert {:ok, message} = Messages.send(me, attrs)
 
-    feed_id = Bonfire.Social.Feeds.instance_feed_id()
+    feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
 
     assert %{entries: []} = FeedActivities.feed(feed_id, messaged)
 
@@ -134,7 +134,7 @@ defmodule Bonfire.Social.MessagesTest do
 
     assert {:ok, message} = Messages.send(me, attrs)
 
-    feed_id = Bonfire.Social.Feeds.instance_feed_id()
+    feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
 
     assert %{entries: []} = FeedActivities.feed(feed_id, me)
 
@@ -149,7 +149,7 @@ defmodule Bonfire.Social.MessagesTest do
 
     third = Fake.fake_user!()
 
-    feed_id = Bonfire.Social.Feeds.instance_feed_id()
+    feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
 
     assert %{entries: []} = FeedActivities.feed(feed_id, third)
   end
@@ -161,7 +161,7 @@ defmodule Bonfire.Social.MessagesTest do
 
     assert {:ok, message} = Messages.send(me, attrs)
 
-    feed_id = Bonfire.Social.Feeds.instance_feed_id()
+    feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
 
     assert %{entries: []} = FeedActivities.feed(feed_id, nil)
   end
