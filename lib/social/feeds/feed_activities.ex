@@ -43,18 +43,18 @@ defmodule Bonfire.Social.FeedActivities do
     feed(feed_ids, socket, cursor_after)
   end
 
-  def feed(feed, current_user_or_socket \\ nil, cursor_after \\ nil, preloads \\ :all)
+  def feed(feed, current_user_or_socket \\ nil, opts \\ [], preloads \\ :all)
 
-  def feed(%{id: feed_id}, current_user_or_socket, cursor_after, preloads), do: feed(feed_id, current_user_or_socket, cursor_after, preloads)
+  def feed(%{id: feed_id}, current_user_or_socket, opts, preloads), do: feed(feed_id, current_user_or_socket, opts, preloads)
 
-  def feed(feed_id_or_ids, current_user_or_socket, cursor_after, preloads) when is_binary(feed_id_or_ids) or is_list(feed_id_or_ids) do
+  def feed(feed_id_or_ids, current_user_or_socket, opts, preloads) when is_binary(feed_id_or_ids) or is_list(feed_id_or_ids) do
     # IO.inspect(feed_id_or_ids: feed_id_or_ids)
     feed_id_or_ids = maybe_flatten(feed_id_or_ids)
 
     pubsub_subscribe(feed_id_or_ids, current_user_or_socket) # subscribe to realtime feed updates
 
     query([feed_id: feed_id_or_ids], current_user_or_socket)
-    |> feed_paginated(current_user(current_user_or_socket), cursor_after, preloads)
+    |> feed_paginated(current_user(current_user_or_socket), opts, preloads)
   end
 
   def feed(:notifications, current_user_or_socket, cursor_after, preloads) do
@@ -92,20 +92,27 @@ defmodule Bonfire.Social.FeedActivities do
   def feed(_, _, _, _, _), do: []
 
 
+  @doc """
+  Return a page of Feed Activities (reverse chronological) + pagination metadata
+  """
   def feed_paginated(filters \\ [], current_user \\ nil, opts \\ nil, preloads \\ :all, query \\ FeedPublish)
 
   def feed_paginated(filters, current_user, opts, preloads, query) do
 
+    paginate = e(opts, :paginate, opts)
+
+    Logger.debug("feed_paginated with: #{inspect paginate}")
+
     query_paginated(filters, current_user, opts, preloads, query)
-      |> Bonfire.Repo.many_paginated(opts) # return a page of items (reverse chronological) + pagination metadata
+      |> Bonfire.Repo.many_paginated(paginate)
   end
 
 
-  def query_paginated(filters \\ [], current_user \\ nil, paginate \\ nil, preloads \\ :all, query \\ FeedPublish)
+  def query_paginated(filters \\ [], current_user \\ nil, opts \\ [], preloads \\ :all, query \\ FeedPublish)
 
   def query_paginated(filters, current_user, opts, preloads, query) when is_list(filters) do
 
-    paginate = if opts[:paginate], do: opts[:paginate], else: opts
+    paginate = e(opts, :paginate, opts)
 
     # TODO: actually return a query with pagination filters
     query(filters, current_user, preloads, query)
@@ -113,7 +120,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   def query_paginated(query, current_user, opts, preloads, _query) do
 
-    paginate = if opts[:paginate], do: opts[:paginate], else: opts
+    paginate = e(opts, :paginate, opts)
 
     # TODO: actually return a query with pagination filters
     query

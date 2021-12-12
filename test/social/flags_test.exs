@@ -53,7 +53,7 @@ defmodule Bonfire.Social.FlagsTest do
     assert {:ok, flagged} = Posts.publish(someone, attrs)
     assert {:ok, _} = Flags.flag(me, flagged)
 
-    assert %{entries: [fetched_flag]} = Flags.list_my(me)
+    assert %{edges: [fetched_flag]} = Flags.list_my(me)
 
     assert fetched_flag.activity.object_id == flagged.id
   end
@@ -65,7 +65,7 @@ defmodule Bonfire.Social.FlagsTest do
     assert {:ok, flagged} = Posts.publish(me, attrs)
     assert {:ok, _} = Flags.flag(someone, flagged)
 
-    assert %{entries: [fetched_flag]} = Flags.list(me)
+    assert %{edges: [fetched_flag]} = Flags.list(me)
 
     assert fetched_flag.activity.object_id == flagged.id
   end
@@ -77,7 +77,7 @@ defmodule Bonfire.Social.FlagsTest do
     assert {:ok, flagged} = Posts.publish(me, attrs)
     assert {:ok, _} = Flags.flag(someone, flagged)
 
-    assert %{entries: fetched_flagged} = Flags.list_of(flagged, me)
+    assert %{edges: fetched_flagged} = Flags.list_of(flagged, me)
 
     assert Enum.count(fetched_flagged, &(&1.activity.object_id == flagged.id)) == 1
   end
@@ -89,7 +89,7 @@ defmodule Bonfire.Social.FlagsTest do
     assert {:ok, flagged} = Posts.publish(me, attrs)
     assert {:ok, _} = Flags.flag(someone, flagged)
 
-    assert %{entries: [fetched_flag]} = Flags.list_by(someone, me)
+    assert %{edges: [fetched_flag]} = Flags.list_by(someone, me)
 
     assert fetched_flag.activity.object_id == flagged.id
   end
@@ -102,7 +102,7 @@ defmodule Bonfire.Social.FlagsTest do
     assert {:ok, post} = Posts.publish(me, attrs)
     assert {:ok, _} = Flags.flag(someone, post)
 
-    assert %{entries: [fetched_flag]} = FeedActivities.feed(:notifications, me)
+    assert %{edges: [fetched_flag]} = FeedActivities.feed(:notifications, me)
 
     assert fetched_flag.activity.object_id == post.id
   end

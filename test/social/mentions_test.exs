@@ -21,7 +21,7 @@ defmodule Bonfire.Social.MentionsTest do
 
     assert {:ok, mention} = Posts.publish(poster, attrs, "mentions")
 
-    assert %{entries: feed} = FeedActivities.feed(:notifications, me)
+    assert %{edges: feed} = FeedActivities.feed(:notifications, me)
     assert %{} = fp = List.first(feed)
 
     assert fp.activity.id == mention.activity.id
@@ -34,7 +34,7 @@ defmodule Bonfire.Social.MentionsTest do
 
     assert {:ok, mention} = Posts.publish(me, attrs, "mentions")
 
-    assert %{entries: []} = FeedActivities.feed(:notifications, me)
+    assert %{edges: []} = FeedActivities.feed(:notifications, me)
   end
 
   test "mentioning someone else does not appear in a 3rd party's notifications" do
@@ -46,7 +46,7 @@ defmodule Bonfire.Social.MentionsTest do
 
     third = Fake.fake_user!()
 
-    assert %{entries: []} = FeedActivities.feed(:notifications, third)
+    assert %{edges: []} = FeedActivities.feed(:notifications, third)
   end
 
   test "mentioning someone appears in their feed, if using the preset 'mentions' boundary" do
@@ -56,7 +56,7 @@ defmodule Bonfire.Social.MentionsTest do
 
     assert {:ok, mention} = Posts.publish(me, attrs, "mentions")
 
-    assert %{entries: feed} = FeedActivities.my_feed(mentioned)
+    assert %{edges: feed} = FeedActivities.my_feed(mentioned)
     assert %{} = fp = List.first(feed)
 
     assert fp.activity.id == mention.activity.id
@@ -71,7 +71,7 @@ defmodule Bonfire.Social.MentionsTest do
 
     feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
 
-    assert %{entries: []} = FeedActivities.feed(feed_id, mentioned)
+    assert %{edges: []} = FeedActivities.feed(feed_id, mentioned)
   end
 
   test "mentioning someone appears in my instance feed, if included in circles" do
@@ -83,7 +83,7 @@ defmodule Bonfire.Social.MentionsTest do
 
     feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
 
-    assert %{entries: feed} = FeedActivities.feed(feed_id, me)
+    assert %{edges: feed} = FeedActivities.feed(feed_id, me)
     fp = List.first(feed)
 
     assert fp.activity.id == mention.activity.id
@@ -100,7 +100,7 @@ defmodule Bonfire.Social.MentionsTest do
 
     feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
 
-    assert %{entries: []} = FeedActivities.feed(feed_id, third)
+    assert %{edges: []} = FeedActivities.feed(feed_id, third)
   end
 
   test "mentioning someone does not appear in the public instance feed" do
@@ -112,7 +112,7 @@ defmodule Bonfire.Social.MentionsTest do
 
     feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
 
-    assert %{entries: []} = FeedActivities.feed(feed_id, nil)
+    assert %{edges: []} = FeedActivities.feed(feed_id, nil)
   end
 
 

@@ -21,7 +21,7 @@ defmodule Bonfire.Social.MessagesTest do
 
     assert {:ok, message} = Messages.send(me, attrs)
 
-    assert %{entries: feed} = Messages.list(me)
+    assert %{edges: feed} = Messages.list(me)
     fp = List.first(feed)
 
     assert fp.activity.id == message.activity.id
@@ -34,7 +34,7 @@ defmodule Bonfire.Social.MessagesTest do
 
     assert {:ok, message} = Messages.send(other, attrs)
 
-    assert %{entries: feed} = Messages.list(me)
+    assert %{edges: feed} = Messages.list(me)
     fp = List.first(feed)
 
     assert fp.activity.id == message.activity.id
@@ -51,21 +51,21 @@ defmodule Bonfire.Social.MessagesTest do
 
     assert {:ok, message} = Messages.send(me, attrs)
 
-    assert %{entries: feed} = Messages.list(me)
+    assert %{edges: feed} = Messages.list(me)
     assert List.first(feed).activity.id == message.activity.id
 
-    assert %{entries: feed} = Messages.list(messaged)
+    assert %{edges: feed} = Messages.list(messaged)
     assert List.first(feed).activity.id == message.activity.id
 
-    assert %{entries: feed} = Messages.list(me, messaged)
+    assert %{edges: feed} = Messages.list(me, messaged)
     assert List.first(feed).activity.id == message.activity.id
 
-    assert %{entries: feed} = Messages.list(messaged, me)
+    assert %{edges: feed} = Messages.list(messaged, me)
     assert List.first(feed).activity.id == message.activity.id
 
-    assert %{entries: []} = Messages.list(me, other)
+    assert %{edges: []} = Messages.list(me, other)
 
-    assert %{entries: []} = Messages.list(other, me)
+    assert %{edges: []} = Messages.list(other, me)
   end
 
   test "messages addressed to me appear in my notifications" do
@@ -75,7 +75,7 @@ defmodule Bonfire.Social.MessagesTest do
 
     assert {:ok, m} = Messages.send(other, attrs)
 
-    assert %{entries: feed} = FeedActivities.feed(:notifications, me)
+    assert %{edges: feed} = FeedActivities.feed(:notifications, me)
     fp = List.first(feed)
     assert %{} = fp
 
@@ -89,7 +89,7 @@ defmodule Bonfire.Social.MessagesTest do
 
     assert {:ok, message} = Messages.send(me, attrs)
 
-    assert %{entries: []} = FeedActivities.feed(:notifications, me)
+    assert %{edges: []} = FeedActivities.feed(:notifications, me)
   end
 
   test "messaging someone else does NOT appear in a 3rd party's notifications" do
@@ -101,7 +101,7 @@ defmodule Bonfire.Social.MessagesTest do
 
     third = Fake.fake_user!()
 
-    assert %{entries: []} = FeedActivities.feed(:notifications, third)
+    assert %{edges: []} = FeedActivities.feed(:notifications, third)
   end
 
   test "messaging someone does NOT appear in their feed" do
@@ -111,7 +111,7 @@ defmodule Bonfire.Social.MessagesTest do
 
     assert {:ok, message} = Messages.send(me, attrs)
 
-    assert %{entries: []} = FeedActivities.my_feed(messaged)
+    assert %{edges: []} = FeedActivities.my_feed(messaged)
   end
 
   test "messaging someone does NOT appear in their instance feed" do
@@ -123,7 +123,7 @@ defmodule Bonfire.Social.MessagesTest do
 
     feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
 
-    assert %{entries: []} = FeedActivities.feed(feed_id, messaged)
+    assert %{edges: []} = FeedActivities.feed(feed_id, messaged)
 
   end
 
@@ -136,7 +136,7 @@ defmodule Bonfire.Social.MessagesTest do
 
     feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
 
-    assert %{entries: []} = FeedActivities.feed(feed_id, me)
+    assert %{edges: []} = FeedActivities.feed(feed_id, me)
 
   end
 
@@ -151,7 +151,7 @@ defmodule Bonfire.Social.MessagesTest do
 
     feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
 
-    assert %{entries: []} = FeedActivities.feed(feed_id, third)
+    assert %{edges: []} = FeedActivities.feed(feed_id, third)
   end
 
   test "messaging someone does NOT appear in the public instance feed" do
@@ -163,7 +163,7 @@ defmodule Bonfire.Social.MessagesTest do
 
     feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
 
-    assert %{entries: []} = FeedActivities.feed(feed_id, nil)
+    assert %{edges: []} = FeedActivities.feed(feed_id, nil)
   end
 
 

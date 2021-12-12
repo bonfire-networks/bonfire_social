@@ -50,7 +50,7 @@ defmodule Bonfire.Social.LikesTest do
     assert {:ok, post} = Posts.publish(me, attrs)
     assert {:ok, like} = Likes.like(me, post)
 
-    assert %{entries: [fetched_liked]} = Likes.list_my(me)
+    assert %{edges: [fetched_liked]} = Likes.list_my(me)
 
     assert fetched_liked.activity.object_id == post.id
   end
@@ -63,7 +63,7 @@ defmodule Bonfire.Social.LikesTest do
     assert {:ok, like} = Likes.like(me, post)
     assert {:ok, like2} = Likes.like(someone, post)
 
-    assert %{entries: fetched_liked} = Likes.list_of(post, me)
+    assert %{edges: fetched_liked} = Likes.list_of(post, me)
 
     assert Enum.count(fetched_liked, &(&1.activity.object_id == post.id)) == 2
   end
@@ -75,7 +75,7 @@ defmodule Bonfire.Social.LikesTest do
     assert {:ok, post} = Posts.publish(me, attrs)
     assert {:ok, like} = Likes.like(someone, post)
 
-    assert %{entries: [fetched_liked]} = Likes.list_by(someone, me)
+    assert %{edges: [fetched_liked]} = Likes.list_by(someone, me)
 
     assert fetched_liked.activity.object_id == post.id
   end
@@ -88,7 +88,7 @@ defmodule Bonfire.Social.LikesTest do
     assert {:ok, post} = Posts.publish(me, attrs)
     assert {:ok, like} = Likes.like(someone, post)
 
-    assert %{entries: [fetched_liked]} = FeedActivities.feed(:notifications, me)
+    assert %{edges: [fetched_liked]} = FeedActivities.feed(:notifications, me)
 
     assert fetched_liked.activity.object_id == post.id
   end

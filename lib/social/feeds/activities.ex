@@ -242,11 +242,15 @@ defmodule Bonfire.Social.Activities do
     FeedActivities.query(filters, opts_or_current_user, :all, (from a in Activity, as: :main_object) )
   end
 
-  def activity_under_object(%{activity: %{object: activity_object} = activity} = _top_object) do
+  def activity_under_object(%{activity: %{object: _activity_object} = activity} = _top_object) do
     activity_under_object(activity) # TODO: merge top_object ?
   end
   def activity_under_object(%Activity{object: activity_object} = activity) do
     Map.put(activity_object, :activity, Map.drop(activity, [:object])) # ugly, but heh
+  end
+
+  def activity_under_object(%Activity{} = activity, %{}=object) do
+    Map.put(object, :activity, activity)
   end
 
   def object_from_activity(%{object: %{post_content: %{id: _} = _content} = object}), do: object # no need to load Post object

@@ -55,7 +55,7 @@ defmodule Bonfire.Social.Posts.LiveHandler do
 
   def handle_event("load_replies", %{"id" => id, "level" => level}, socket) do
     {level, _} = Integer.parse(level)
-    %{entries: replies} = Bonfire.Social.Threads.list_replies(id, socket, level + 1)
+    %{edges: replies} = Bonfire.Social.Threads.list_replies(id, socket, level + 1)
     replies = replies ++ Utils.e(socket.assigns, :replies, [])
     {:noreply,
         assign(socket,
@@ -104,7 +104,7 @@ defmodule Bonfire.Social.Posts.LiveHandler do
   def live_more(thread_id, cursor, socket) do
     # IO.inspect(pagination: cursor)
 
-    with %{entries: replies, metadata: page_info} <- Bonfire.Social.Threads.list_replies(thread_id, socket, cursor, @thread_max_depth) do
+    with %{edges: replies, page_info: page_info} <- Bonfire.Social.Threads.list_replies(thread_id, socket, cursor, @thread_max_depth) do
 
       replies = ( e(socket.assigns, :replies, []) ++ (replies || []) ) |> Enum.uniq()
       # IO.inspect(replies, label: "REPLIES:")

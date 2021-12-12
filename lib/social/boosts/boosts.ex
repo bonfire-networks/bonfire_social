@@ -29,7 +29,8 @@ defmodule Bonfire.Social.Boosts do
 
       FeedActivities.maybe_notify_creator(booster, published, boosted) #|> IO.inspect
 
-      {:ok, boost}
+      with_activity = Activities.activity_under_object(published, boost) #|> IO.inspect()
+      {:ok, with_activity}
     end
   end
   def boost(%{} = booster, boosted) when is_binary(boosted) do
@@ -57,19 +58,19 @@ defmodule Bonfire.Social.Boosts do
   end
 
   @doc "List boosts by the user and which are in their outbox"
-  def list_by(by_user, current_user \\ nil, cursor_after \\ nil, preloads \\ :all) when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
+  def list_by(by_user, current_user \\ nil, opts \\ [], preloads \\ :all) when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
 
     # query FeedPublish
     [feed_id: ulid(by_user), boosts_by: {ulid(by_user), &filter/3} ]
-    |> FeedActivities.feed_paginated(current_user, cursor_after, preloads)
+    |> FeedActivities.feed_paginated(current_user, opts, preloads)
   end
 
   @doc "List boost of an object and which are in a feed"
-  def list_of(id, current_user \\ nil, cursor_after \\ nil, preloads \\ :all) when is_binary(id) or is_list(id) or is_map(id) do
+  def list_of(id, current_user \\ nil, opts \\ [], preloads \\ :all) when is_binary(id) or is_list(id) or is_map(id) do
 
     # query FeedPublish
     [boosts_of: {ulid(id), &filter/3} ]
-    |> FeedActivities.feed_paginated(current_user, cursor_after, preloads)
+    |> FeedActivities.feed_paginated(current_user, opts, preloads)
   end
 
   def query(filters \\ [], opts_or_current_user \\ nil)

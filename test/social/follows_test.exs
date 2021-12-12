@@ -53,7 +53,7 @@ defmodule Bonfire.Social.FollowsTest do
     followed = Fake.fake_user!()
     assert {:ok, follow} = Follows.follow(me, followed)
 
-    assert %{entries: [fetched_follow]} = Follows.list_my_followed(me)
+    assert %{edges: [fetched_follow]} = Follows.list_my_followed(me)
 
     assert fetched_follow.id == follow.id
   end
@@ -63,7 +63,7 @@ defmodule Bonfire.Social.FollowsTest do
     follower = Fake.fake_user!()
     assert {:ok, follow} = Follows.follow(follower, me)
 
-    assert %{entries: [fetched_follow]} = Follows.list_my_followers(me)
+    assert %{edges: [fetched_follow]} = Follows.list_my_followers(me)
 
     assert fetched_follow.id == follow.id
   end
@@ -73,7 +73,7 @@ defmodule Bonfire.Social.FollowsTest do
     someone = Fake.fake_user!()
     assert {:ok, follow} = Follows.follow(me, someone)
 
-    assert %{entries: [fetched_follow]} = Follows.list_followers(someone, me)
+    assert %{edges: [fetched_follow]} = Follows.list_followers(someone, me)
 
     assert fetched_follow.id == follow.id
   end
@@ -83,7 +83,7 @@ defmodule Bonfire.Social.FollowsTest do
     someone = Fake.fake_user!()
     assert {:ok, follow} = Follows.follow(me, someone)
 
-    assert %{entries: [fetched_follow]} = Follows.list_followers(someone, me)
+    assert %{edges: [fetched_follow]} = Follows.list_followers(someone, me)
     assert fetched_follow.id == follow.id
   end
 
@@ -93,10 +93,10 @@ defmodule Bonfire.Social.FollowsTest do
     followed = Fake.fake_user!("followed")
     assert {:ok, follow} = Follows.follow(follower, followed)
 
-    assert %{entries: [fetched_follow]} = Follows.list_followers(followed, follower)
+    assert %{edges: [fetched_follow]} = Follows.list_followers(followed, follower)
     assert fetched_follow.id == follow.id
 
-    assert %{entries: fetched} = p = FeedActivities.feed(:notifications, followed)
+    assert %{edges: fetched} = p = FeedActivities.feed(:notifications, followed)
     # IO.inspect(notifications: p)
     assert %{} = notification = List.first(fetched)
     assert activity = notification.activity |> Bonfire.Repo.maybe_preload([object: [:profile]])

@@ -31,7 +31,7 @@ defmodule Bonfire.Social.ThreadsPostsTest do
     attrs_reply = %{post_content: %{summary: "summary", name: "name 2", html_body: "<p>epic html message</p>"}, reply_to_id: post.id}
     assert {:ok, post_reply} = Posts.publish(someone, attrs_reply, "public")
     # me = Bonfire.Me.Users.get_current(me.id)
-    assert %{entries: fetched} = FeedActivities.feed(:notifications, me)
+    assert %{edges: fetched} = FeedActivities.feed(:notifications, me)
 
     assert List.first(fetched).activity.object_id == post_reply.id
   end
@@ -59,7 +59,7 @@ defmodule Bonfire.Social.ThreadsPostsTest do
     attrs_reply = %{post_content: %{summary: "summary", name: "name 2", html_body: "<p>epic html message</p>"}, reply_to_id: post.id}
     assert {:ok, post_reply} = Posts.publish(user, attrs_reply)
 
-    assert %{entries: replies} = Threads.list_replies(post.id, user)
+    assert %{edges: replies} = Threads.list_replies(post.id, user)
 
     # IO.inspect(replies)
     reply = List.first(replies)
@@ -79,7 +79,7 @@ defmodule Bonfire.Social.ThreadsPostsTest do
     attrs_reply3 = %{post_content: %{summary: "summary", name: "name 3", html_body: "<p>epic html message</p>"}, reply_to_id: post_reply.id}
     assert {:ok, post_reply3} = Posts.publish(user, attrs_reply3)
 
-    assert %{entries: replies} = Threads.list_replies(post.id, user)
+    assert %{edges: replies} = Threads.list_replies(post.id, user)
 
     # IO.inspect(replies)
     assert length(replies) == 2
@@ -106,7 +106,7 @@ defmodule Bonfire.Social.ThreadsPostsTest do
     attrs_reply3 = %{post_content: %{summary: "summary", name: "name 3", html_body: "<p>epic html message</p>"}, reply_to_id: post_reply.id, thread_id: post_reply.id}
     assert {:ok, post_reply3} = Posts.publish(user, attrs_reply3)
 
-    assert %{entries: replies} = Threads.list_replies(post.id, user)
+    assert %{edges: replies} = Threads.list_replies(post.id, user)
 
     # IO.inspect(replies)
     assert length(replies) == 2
@@ -133,7 +133,7 @@ defmodule Bonfire.Social.ThreadsPostsTest do
     attrs_reply3 = %{post_content: %{summary: "summary", name: "name 3", html_body: "<p>epic html message</p>"}, reply_to_id: post_reply.id}
     assert {:ok, post_reply3} = Posts.publish(user, attrs_reply3)
 
-    assert %{entries: replies} = Threads.list_replies(post.id, user)
+    assert %{edges: replies} = Threads.list_replies(post.id, user)
 
     threaded_replies = Bonfire.Social.Threads.arrange_replies_tree(replies)
 

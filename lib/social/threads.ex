@@ -86,11 +86,11 @@ defmodule Bonfire.Social.Threads do
 
 
   @doc "List participants in a thread (depending on user's boundaries)"
-  def list_participants(thread_id, current_user \\ nil, cursor_after \\ nil, preloads \\ :minimal) when is_binary(thread_id) or is_list(thread_id) do
+  def list_participants(thread_id, current_user \\ nil, opts \\ [], preloads \\ :minimal) when is_binary(thread_id) or is_list(thread_id) do
 
      FeedActivities.feed_paginated(
       [participants_in: {thread_id, &filter/3}],
-      current_user, cursor_after, preloads, Replied, false)
+      current_user, opts, preloads, Replied, false)
   end
 
   def filter(:participants_in, thread_id, query) do

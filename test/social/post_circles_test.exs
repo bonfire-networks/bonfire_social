@@ -43,7 +43,7 @@ defmodule Bonfire.Social.PostCirclesTest do
 
     feed_id = user.id
 
-    assert %Paginator.Page{entries: activities} = FeedActivities.feed(feed_id, user)
+    assert %Paginator.Page{edges: activities} = FeedActivities.feed(feed_id, user)
     assert feed_entry = List.first(activities)
     assert "name" =~ feed_entry.activity.object.post_content.name
 
@@ -59,7 +59,7 @@ defmodule Bonfire.Social.PostCirclesTest do
     feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
 
     me = fake_user!()
-    assert %Paginator.Page{entries: activities} = FeedActivities.feed(feed_id, me)
+    assert %Paginator.Page{edges: activities} = FeedActivities.feed(feed_id, me)
     assert activities == []
 
   end

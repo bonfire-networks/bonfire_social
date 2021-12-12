@@ -86,8 +86,8 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
       to_circles: to_circles,
       feed_title: "Activities from around the fediverse",
       feed_id: feed_id,
-      feed: e(feed, :entries, []),
-      page_info: e(feed, :metadata, []),
+      feed: e(feed, :edges, []),
+      page_info: e(feed, :page_info, []),
     ]
     #|> assign_global(to_circles: to_circles)
   end
@@ -103,8 +103,8 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
       feed_title: "Activities on this instance",
       to_circles: to_circles,
       feed_id: feed_id,
-      feed: e(feed, :entries, []),
-      page_info: e(feed, :metadata, []) #|> IO.inspect
+      feed: e(feed, :edges, []),
+      page_info: e(feed, :page_info, []) #|> IO.inspect
     ]
     #|> assign_global(to_circles: to_circles)
   end
@@ -119,8 +119,8 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
       feed_title: "My Feed",
       to_circles: to_circles,
       feed_id: "my:"<>e(current_user, :id, ""),
-      feed: e(feed, :entries, []),
-      page_info: e(feed, :metadata, [])
+      feed: e(feed, :edges, []),
+      page_info: e(feed, :page_info, [])
     ]
     #|> assign_global(to_circles: to_circles)
   end

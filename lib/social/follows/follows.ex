@@ -106,8 +106,15 @@ defmodule Bonfire.Social.Follows do
 
   defp do_follow(subject, object) when is_binary(object) do
     # TODO: once we expose boundaries for profile visibility and follow-ability, enforce that here
-    with {:ok, object} <- Bonfire.Common.Pointers.get(object, skip_boundary_check: true, current_user: subject) do
-      do_follow(subject, object)
+    if is_ulid?(object) do
+      with {:ok, object} <- Bonfire.Common.Pointers.get(object, skip_boundary_check: true, current_user: subject) do
+        do_follow(subject, object)
+      end
+    else
+      # try by username
+      with {:ok, object} <- maybe_apply(Bonfire.Me.Characters, :by_username, object) do
+        do_follow(subject, object)
+      end
     end
   end
 
@@ -130,10 +137,10 @@ defmodule Bonfire.Social.Follows do
       # make the follow itself visible to both
       Bonfire.Me.Users.Boundaries.maybe_make_visible_for(follower, follow, followed)
 
-      FeedActivities.notify_object(follower, :follow, followed)
+      {:ok, activity} = FeedActivities.notify_object(follower, :follow, followed)
 
-      # Logger.warn("Follow: followed")
-      {:ok, follow}
+      with_activity = Activities.activity_under_object(activity, follow) #|> IO.inspect()
+      {:ok, with_activity}
     end
   end
 

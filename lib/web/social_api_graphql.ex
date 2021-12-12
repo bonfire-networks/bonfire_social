@@ -3,10 +3,12 @@ defmodule Bonfire.Social.API.GraphQL do
   use Absinthe.Schema.Notation
   import Absinthe.Resolution.Helpers
   alias Bonfire.GraphQL
+  alias Bonfire.Common.Utils
 
   object :post do
-    field(:id, :string)
+    field(:id, :id)
     field(:post_content, :post_content)
+    field(:activity, :activity)
 
   end
 
@@ -21,7 +23,7 @@ defmodule Bonfire.Social.API.GraphQL do
   end
 
   object :activity do
-    field(:id, :string)
+    field(:id, :id)
     field(:object_id, :string)
     field(:subject_id, :string)
 
@@ -33,6 +35,8 @@ defmodule Bonfire.Social.API.GraphQL do
           {:ok, verb}
         %{activity: %{verb: %{id: _} = verb}}, _, _ ->
           {:ok, verb}
+        %{verb_id: verb}, _, _ -> {:ok, %{verb: verb}}
+        _, _, _ -> {:ok, nil}
       end
     end
 
@@ -60,6 +64,11 @@ defmodule Bonfire.Social.API.GraphQL do
     field(:summary, :string)
     field(:html_body, :string)
   end
+  input_object :post_content_input do
+    field(:title, :string)
+    field(:summary, :string)
+    field(:html_body, :string)
+  end
 
   object :follow do
     field(:follower_profile, :profile)
@@ -73,8 +82,8 @@ defmodule Bonfire.Social.API.GraphQL do
     field(:post, :post)
     field(:post_content, :post_content)
 
-    field(:thread_id, :string)
-    field(:reply_to_id, :string)
+    field(:thread_id, :id)
+    field(:reply_to_id, :id)
     # field(:reply_to, :activity)
 
     field(:direct_replies, list_of(:replied)) do
@@ -91,8 +100,8 @@ defmodule Bonfire.Social.API.GraphQL do
   end
 
   input_object :activity_filters do
-    field :activity_id, :string
-    field :object_id, :string
+    field :activity_id, :id
+    field :object_id, :id
   end
 
   input_object :feed_filters do
@@ -100,7 +109,7 @@ defmodule Bonfire.Social.API.GraphQL do
   end
 
   input_object :post_filters do
-    field :id, :string
+    field :id, :id
   end
 
   object :social_queries do
@@ -134,6 +143,39 @@ defmodule Bonfire.Social.API.GraphQL do
 
   object :social_mutations do
 
+    field :create_post, :post do
+      arg(:post_content, non_null(:post_content_input))
+
+      arg :reply_to, :id
+      arg :to_circles, list_of(:id)
+
+      resolve(&create_post/2)
+    end
+
+    field :follow, :activity do
+      arg(:username, non_null(:string))
+      arg(:id, non_null(:string))
+
+      resolve(&follow/2)
+    end
+
+    field :boost, :activity do
+      arg(:id, non_null(:string))
+
+      resolve(&boost/2)
+    end
+
+    field :like, :activity do
+      arg(:id, non_null(:string))
+
+      resolve(&like/2)
+    end
+
+    field :flag, :activity do
+      arg(:id, non_null(:string))
+
+      resolve(&flag/2)
+    end
   end
 
 
@@ -173,11 +215,61 @@ defmodule Bonfire.Social.API.GraphQL do
     |> feed()
   end
 
-  defp feed(%{entries: feed}) when is_list(feed) do
+  defp feed(%{edges: feed}) when is_list(feed) do
     {:ok,
       feed
       |> Enum.map(& Map.get(&1, :activity))
     }
+  end
+
+  defp create_post(args, info) do
+    user = GraphQL.current_user(info)
+    if user do
+      Bonfire.Social.Posts.publish(user, args)
+    else
+      {:error, "Not authenticated"}
+    end
+  end
+
+  defp follow(%{username: username_to_follow}, info) do
+    # Follows.follow already supports username
+    follow(%{id: username_to_follow}, info)
+  end
+
+  defp follow(%{id: to_follow}, info) do
+    user = GraphQL.current_user(info)
+    if user do
+      with {:ok, f} <- Bonfire.Social.Follows.follow(user, to_follow), do: {:ok, Utils.e(f, :activity, nil)}
+    else
+      {:error, "Not authenticated"}
+    end
+  end
+
+  defp boost(%{id: id}, info) do
+    user = GraphQL.current_user(info)
+    if user do
+      with {:ok, f} <- Bonfire.Social.Boosts.boost(user, id), do: {:ok, Utils.e(f, :activity, nil)}
+    else
+      {:error, "Not authenticated"}
+    end
+  end
+
+  defp like(%{id: id}, info) do
+    user = GraphQL.current_user(info)
+    if user do
+      with {:ok, f} <- Bonfire.Social.Likes.like(user, id), do: {:ok, Utils.e(f, :activity, nil)}
+    else
+      {:error, "Not authenticated"}
+    end
+  end
+
+  defp flag(%{id: id}, info) do
+    user = GraphQL.current_user(info)
+    if user do
+      with {:ok, f} <- Bonfire.Social.Flags.flag(user, id), do: {:ok, Utils.e(f, :activity, nil)}
+    else
+      {:error, "Not authenticated"}
+    end
   end
 
 end

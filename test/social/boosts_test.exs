@@ -52,7 +52,7 @@ defmodule Bonfire.Social.BoostsTest do
     assert {:ok, boosted} = Posts.publish(me, attrs)
     assert {:ok, boost} = Boosts.boost(me, boosted)
 
-    assert %{entries: [fetched_boost]} = Boosts.list_my(me)
+    assert %{edges: [fetched_boost]} = Boosts.list_my(me)
 
     assert fetched_boost.activity.object_id == boosted.id
   end
@@ -65,7 +65,7 @@ defmodule Bonfire.Social.BoostsTest do
     assert {:ok, boost} = Boosts.boost(me, boosted)
     assert {:ok, boost2} = Boosts.boost(someone, boosted)
 
-    assert %{entries: fetched_boosted} = Boosts.list_of(boosted, me)
+    assert %{edges: fetched_boosted} = Boosts.list_of(boosted, me)
 
     assert Enum.count(fetched_boosted, &(&1.activity.object_id == boosted.id)) == 2
   end
@@ -77,7 +77,7 @@ defmodule Bonfire.Social.BoostsTest do
     assert {:ok, boosted} = Posts.publish(me, attrs)
     assert {:ok, boost} = Boosts.boost(someone, boosted)
 
-    assert %{entries: [fetched_boost]} = Boosts.list_by(someone, me)
+    assert %{edges: [fetched_boost]} = Boosts.list_by(someone, me)
 
     assert fetched_boost.activity.object_id == boosted.id
   end
@@ -90,7 +90,7 @@ defmodule Bonfire.Social.BoostsTest do
     assert {:ok, post} = Posts.publish(me, attrs)
     assert {:ok, boost} = Boosts.boost(someone, post)
 
-    assert %{entries: [fetched_boost]} = FeedActivities.feed(:notifications, me)
+    assert %{edges: [fetched_boost]} = FeedActivities.feed(:notifications, me)
 
     assert fetched_boost.activity.object_id == post.id
   end

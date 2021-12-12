@@ -3,28 +3,28 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
   require Logger
   @log_level :warn
 
-  def handle_params(%{"after" => cursor_after} = _attrs, _, %{assigns: %{feed_id: feed_id}} = socket) do
+  def handle_params(%{"after" => _cursor_after} = opts, _, %{assigns: %{feed_id: feed_id}} = socket) do
     Logger.log(@log_level, "if a feed_id has been assigned in the view, load that")
-    Bonfire.Social.FeedActivities.feed(feed_id, socket, cursor_after, nil) |> assign_feed(socket)
+    Bonfire.Social.FeedActivities.feed(feed_id, socket, [paginate: opts], nil) |> assign_feed(socket)
   end
 
-  def handle_params(%{"after" => cursor_after} = _attrs, _, socket) do
+  def handle_params(%{"after" => _cursor_after} = opts, _, socket) do
     Logger.log(@log_level, "if there's no feed_id but we have a user, load My Feed")
-    Bonfire.Social.FeedActivities.my_feed(socket, cursor_after) |> assign_feed(socket)
+    Bonfire.Social.FeedActivities.my_feed(socket, paginate: opts) |> assign_feed(socket)
   end
 
   def handle_params(_attrs, _, socket) do
     {:noreply, socket}
   end
 
-  def handle_event("load_more", %{"after" => cursor_after} = _attrs, %{assigns: %{feed_id: feed_id}} = socket) do
+  def handle_event("load_more", opts, %{assigns: %{feed_id: feed_id}} = socket) do
     Logger.log(@log_level, "if a feed_id has been assigned in the view, load that")
-    Bonfire.Social.FeedActivities.feed(feed_id, socket, cursor_after) |> live_more(socket)
+    Bonfire.Social.FeedActivities.feed(feed_id, socket, paginate: opts) |> live_more(socket)
   end
 
-  def handle_event("load_more", %{"after" => cursor_after} = _attrs, socket) do
+  def handle_event("load_more", opts, socket) do
     Logger.log(@log_level, "if there's no feed_id but we have a user, load My Feed")
-    Bonfire.Social.FeedActivities.my_feed(socket, cursor_after) |> live_more(socket)
+    Bonfire.Social.FeedActivities.my_feed(socket, paginate: opts) |> live_more(socket)
   end
 
 
@@ -32,8 +32,8 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
     # IO.inspect(feed_pagination: feed)
 
     new = [
-      feed: e(feed, :entries, []),
-      page_info: e(feed, :metadata, []),
+      feed: e(feed, :edges, []),
+      page_info: e(feed, :page_info, []),
       feed_update_mode: "prepend"
     ]
 
@@ -46,8 +46,8 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
     assign_feed(feed, socket)
 
     # new = [
-    #   feed: e(feed, :entries, []),
-    #   page_info: e(feed, :metadata, [])
+    #   feed: e(feed, :edges, []),
+    #   page_info: e(feed, :page_info, [])
     # ]
 
     # send_update(Bonfire.UI.Social.FeedLive, [id: "feed"] ++ new)

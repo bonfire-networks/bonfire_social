@@ -24,8 +24,8 @@ defmodule Bonfire.Social.Web.Feeds.NotificationsLive do
       page_title: "Notifications",
       current_user: current_user(socket),
       feed_id: :notifications,
-      feed: e(feed, :entries, []),
-      page_info: e(feed, :metadata, [])
+      feed: e(feed, :edges, []),
+      page_info: e(feed, :page_info, [])
       )}
 
   end

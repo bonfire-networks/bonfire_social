@@ -28,8 +28,11 @@ defmodule Bonfire.Social.Likes do
   def like(%User{} = liker, %{} = liked) do
     with {:ok, like} <- create(liker, liked) do
     # Note: the like count is automatically incremented by DB triggers
-      FeedActivities.maybe_notify_creator(liker, :like, liked)
-      {:ok, like}
+
+      {:ok, activity} = FeedActivities.maybe_notify_creator(liker, :like, liked) #|> IO.inspect
+
+      with_activity = Activities.activity_under_object(activity, like) #|> IO.inspect()
+      {:ok, with_activity}
     end
   end
 

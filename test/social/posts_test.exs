@@ -25,7 +25,7 @@ defmodule Bonfire.Social.PostsTest do
     assert {:ok, _} = Posts.publish(user, attrs_1)
     assert {:ok, _} = Posts.publish(user, attrs_2)
     assert {:ok, _} = Posts.publish(user, attrs_3)
-    assert %{entries: posts} = Posts.list_by(user.id, user)
+    assert %{edges: posts} = Posts.list_by(user.id, user)
     assert length(posts) == 3
   end
 
