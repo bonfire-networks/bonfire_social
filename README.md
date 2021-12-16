@@ -1,4 +1,4 @@
-# Bonfire:Social 
+# Bonfire.Social 
 
 An extension for [Bonfire](https://bonfire.cafe/) that handles:
 
