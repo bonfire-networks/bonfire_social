@@ -8,7 +8,7 @@ defmodule Bonfire.Social.Likes do
   # import Ecto.Query
   # import Bonfire.Me.Integration
   import Bonfire.Common.Utils
-  use Bonfire.Repo.Query
+  use Bonfire.Repo
 
   def queries_module, do: Like
   def context_module, do: Like
@@ -59,7 +59,7 @@ defmodule Bonfire.Social.Likes do
     # TODO: check the like's see/read permissions for current_user?
     Like
     |> Activities.query_object_preload_activity(:like, :liked_id, current_user, preloads)
-    |> EctoShorts.filter(filters)
+    |> query_filter(filters)
     |> Activities.as_permitted_for(current_user)
     |> Bonfire.Repo.many_paginated(before: cursor_after)
   end

@@ -11,7 +11,7 @@ defmodule Bonfire.Social.Posts do
 
   import Bonfire.Common.Utils
 
-  use Bonfire.Repo.Query,
+  use Bonfire.Repo,
       schema: Post,
       searchable_fields: [:id],
       sortable_fields: [:id]
@@ -134,7 +134,7 @@ defmodule Bonfire.Social.Posts do
   defp base_query(filters, opts_or_current_user, preloads) when is_list(filters) or is_tuple(filters) do
 
     (from p in Post, as: :main_object)
-    |> EctoShorts.filter(filters, nil, nil)
+    |> query_filter(filters, nil, nil)
   end
 
   #doc "List posts created by the user and which are in their outbox, which are not replies"

@@ -7,7 +7,7 @@ defmodule Bonfire.Social.Threads do
   alias Bonfire.Boundaries.Verbs
   import Bonfire.Common.Utils
 
-  use Bonfire.Repo.Query,
+  use Bonfire.Repo,
     schema: Replied,
     searchable_fields: [:id, :thread_id, :reply_to_id],
     sortable_fields: [:id]
@@ -77,7 +77,7 @@ defmodule Bonfire.Social.Threads do
 
     current_user = current_user(socket_or_current_user)
 
-    with {:ok, object} <- Replied |> EctoShorts.filter(id: object_id)
+    with {:ok, object} <- Replied |> query_filter(id: object_id)
       |> Activities.read(socket_or_current_user) do
 
         {:ok, object}
@@ -149,7 +149,7 @@ defmodule Bonfire.Social.Threads do
     # IO.inspect(current_user: current_user)
 
     Replied
-      |> EctoShorts.filter(filter)
+      |> query_filter(filter)
       |> Activities.query_object_preload_create_activity(current_user)
       |> Activities.as_permitted_for(current_user)
       # |> IO.inspect(label: "Thread filtered query")

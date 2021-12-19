@@ -7,7 +7,7 @@ defmodule Bonfire.Social.Follows do
   alias Bonfire.Social.Integration
   import Bonfire.Common.Utils
 
-  use Bonfire.Repo.Query,
+  use Bonfire.Repo,
     schema: Follow,
     searchable_fields: [:id, :follower_id, :followed_id],
     sortable_fields: [:id]
@@ -33,7 +33,7 @@ defmodule Bonfire.Social.Follows do
   defp query_base(filters, _current_user) do
     # TODO: check see/read permissions for current_user
     Follow
-    |> EctoShorts.filter(filters)
+    |> query_filter(filters)
     |> IO.inspect(label: "Follows: query_base")
   end
 

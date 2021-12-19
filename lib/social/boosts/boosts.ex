@@ -5,7 +5,7 @@ defmodule Bonfire.Social.Boosts do
   alias Bonfire.Boundaries.Verbs
   # alias Bonfire.Data.Social.BoostCount
   alias Bonfire.Social.{Activities, FeedActivities}
-  use Bonfire.Repo.Query,
+  use Bonfire.Repo,
     searchable_fields: [:booster_id, :boosted_id]
   # import Bonfire.Me.Integration
   import Bonfire.Common.Utils

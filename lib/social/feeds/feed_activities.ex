@@ -15,7 +15,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   import Bonfire.Common.Utils
 
-  use Bonfire.Repo.Query,
+  use Bonfire.Repo,
       schema: FeedPublish,
       searchable_fields: [:id, :feed_id, :activity_id],
       sortable_fields: [:id]
@@ -154,14 +154,14 @@ defmodule Bonfire.Social.FeedActivities do
 
     query
       |> query_extras(opts, preloads)
-      |> EctoShorts.filter(filters, nil, nil)
+      |> query_filter(filters, nil, nil)
       # |> IO.inspect(label: "FeedActivities - query")
   end
 
   def query(filters, opts, preloads, query) do
     query
       # |> query_extras(current_user, preloads)
-      # |> EctoShorts.filter(filters, nil, nil)
+      # |> query_filter(filters, nil, nil)
       |> IO.inspect(label: "FeedActivities invalid feed query with filters #{inspect filters}")
   end
 
@@ -429,7 +429,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   @doc "Delete an activity (usage by things like unlike)"
   def delete_for_object(%{id: id}), do: delete_for_object(id)
-  def delete_for_object(id) when is_binary(id) and id !="", do: FeedPublish |> EctoShorts.filter(activity_id: id) |> repo().delete_many() |> elem(1)
+  def delete_for_object(id) when is_binary(id) and id !="", do: FeedPublish |> query_filter(activity_id: id) |> repo().delete_many() |> elem(1)
   def delete_for_object(ids) when is_list(ids), do: Enum.each(ids, fn x -> delete_for_object(x) end)
   def delete_for_object(_), do: nil
 

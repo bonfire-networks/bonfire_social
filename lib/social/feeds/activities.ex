@@ -8,7 +8,7 @@ defmodule Bonfire.Social.Activities do
   require Logger
   import Bonfire.Boundaries.Queries
 
-  use Bonfire.Repo.Query,
+  use Bonfire.Repo,
     schema: Activity,
     searchable_fields: [:id, :subject_id, :verb_id, :object_id],
     sortable_fields: [:id, :subject_id, :verb_id, :object_id]
@@ -222,7 +222,7 @@ defmodule Bonfire.Social.Activities do
     current_user = current_user(socket_or_current_user)
 
     Activity
-    |> EctoShorts.filter(filters)
+    |> query_filter(filters)
     |> read(socket_or_current_user)
   end
 

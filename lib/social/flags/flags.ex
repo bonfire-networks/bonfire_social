@@ -5,7 +5,7 @@ defmodule Bonfire.Social.Flags do
   alias Bonfire.Boundaries.Verbs
   # alias Bonfire.Data.Social.FlagCount
   alias Bonfire.Social.{Activities, FeedActivities}
-  use Bonfire.Repo.Query,
+  use Bonfire.Repo,
     searchable_fields: [:flagger_id, :flagged_id]
   import Bonfire.Common.Utils
 

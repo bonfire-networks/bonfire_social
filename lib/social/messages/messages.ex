@@ -10,7 +10,7 @@ defmodule Bonfire.Social.Messages do
   alias Bonfire.Social.PostContents
   alias Bonfire.Boundaries.Verbs
 
-  use Bonfire.Repo.Query,
+  use Bonfire.Repo,
       schema: Message,
       searchable_fields: [:id],
       sortable_fields: [:id]
@@ -78,7 +78,7 @@ defmodule Bonfire.Social.Messages do
 
     current_user = Utils.current_user(socket_or_current_user)
 
-    with {:ok, message} <- Message |> EctoShorts.filter(id: message_id)
+    with {:ok, message} <- Message |> query_filter(id: message_id)
       |> Activities.read(socket_or_current_user) do
 
         {:ok, message}
@@ -123,7 +123,7 @@ defmodule Bonfire.Social.Messages do
       # |> join_preload([:activity])
       # |> IO.inspect(label: "pre-preloads")
       |> Activities.activity_preloads(current_user, preloads)
-      |> EctoShorts.filter(filters)
+      |> query_filter(filters)
       # |> IO.inspect(label: "message_paginated_post-preloads")
       |> Activities.as_permitted_for(current_user)
       # |> distinct([fp], [desc: fp.id, desc: fp.activity_id]) # not sure if/why needed... but possible fix for found duplicate ID for component Bonfire.UI.Social.ActivityLive in UI

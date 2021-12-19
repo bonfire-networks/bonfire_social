@@ -3,7 +3,7 @@ defmodule Bonfire.Social.Objects do
   alias Bonfire.Social.{Activities}
   alias Bonfire.Common.Utils
 
-  use Bonfire.Repo.Query,
+  use Bonfire.Repo,
     schema: Pointers.Pointer,
     searchable_fields: [:id],
     sortable_fields: [:id]
@@ -14,7 +14,7 @@ defmodule Bonfire.Social.Objects do
     current_user = Utils.current_user(socket_or_current_user)
 
     with {:ok, pointer} <- Pointers.Pointer
-                            |> EctoShorts.filter(id: object_id)
+                            |> query_filter(id: object_id)
                             |> Activities.read(socket_or_current_user) #|> IO.inspect,
         #  {:ok, object} <- Bonfire.Common.Pointers.get(pointer, current_user: user)
         do
