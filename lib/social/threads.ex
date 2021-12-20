@@ -33,15 +33,15 @@ defmodule Bonfire.Social.Threads do
   def maybe_reply(%{reply_to: reply_to_id}) when is_binary(reply_to_id), do: maybe_reply(%{reply_to_id: reply_to_id})
   def maybe_reply(%{reply_to_id: reply_to_id} = reply_attrs) when is_binary(reply_to_id) and reply_to_id !="" do
     with {:ok, reply_to_replied} <- get_replied(reply_to_id) do
-      # object we are replying to already has replied mixin
+      Logger.debug("Threads.maybe_reply: object we are replying to already has replied mixin")
       reply_obj(reply_attrs, reply_to_replied, reply_to_id)
      else _ ->
       with {:ok, reply_to_replied} <- create(%{id: reply_to_id, thread_id: Map.get(reply_attrs, :thread_id, reply_to_id)}) do
-        # created replied mixin for reply_to object
+        Logger.debug("Threads.maybe_reply: created replied mixin for reply_to object")
         reply_obj(reply_attrs, reply_to_replied, reply_to_id)
       else _ ->
-        # could not
-         Map.drop(reply_attrs, [:reply_to_id])
+        Logger.debug("Threads.maybe_reply: not a reply")
+        Map.drop(reply_attrs, [:reply_to_id])
         |> maybe_reply()
       end
      end
@@ -52,9 +52,11 @@ defmodule Bonfire.Social.Threads do
   defp reply_obj(reply_attrs, reply_to_replied, reply_to_id) do
     Map.merge(reply_attrs, %{
       reply_to: reply_to_replied,
+      # reply_to_id: e(reply_to_replied, :reply_to_id, reply_to_id),
       thread_id: e(reply_attrs, :thread_id,
                     e(reply_to_replied, :thread_id, reply_to_id))
       })
+      # |> IO.inspect(label: "reply_obj")
   end
 
   def get_replied(id) do
