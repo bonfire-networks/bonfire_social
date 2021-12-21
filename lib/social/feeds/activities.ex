@@ -16,17 +16,23 @@ defmodule Bonfire.Social.Activities do
   def queries_module, do: Activity
   def context_module, do: Activity
 
-  def as_permitted_for(q, user \\ nil) do
-    user = current_user(user)
+  def as_permitted_for(q, opts \\ nil) do
 
-    cs = can_see?({:activity, :object_id}, user)
-    # perms = permitted_on({:activity, :object_id}, user)
+    if is_list(opts) and opts[:skip_boundary_check] do
+      q
+    else
+      agent = current_user(opts) || current_account(opts)
 
-    q
-    |> join(:left_lateral, [], cs in ^cs, as: :cs)
-    # |> join(:left_lateral, [], perms in ^perms, as: :perms)
-    |> where([cs: cs], cs.can_see == true)
+      cs = can_see?({:activity, :object_id}, agent)
+      # perms = permitted_on({:activity, :object_id}, agent)
 
+      q
+      |> join(:left_lateral, [], cs in ^cs, as: :cs)
+      # |> join(:left_lateral, [], perms in ^perms, as: :perms)
+      |> where([cs: cs], cs.can_see == true)
+      |> IO.inspect(label: "Activities.as_permitted_for query")
+
+    end
   end
 
   @doc """
@@ -182,32 +188,32 @@ defmodule Bonfire.Social.Activities do
   @doc """
   Get an activity by its ID
   """
-  def get(id, socket_or_current_user) when is_binary(id) do
+  def get(id, opts) when is_binary(id) do
 
-    query([id: id], current_user: socket_or_current_user)
+    query([id: id], opts)
     |> repo().single()
   end
 
   @doc """
   Get an activity by its object ID (usually a create activity)
   """
-  def read(query, socket_or_current_user \\ nil)
+  def read(query, opts \\ [])
 
-  def read(object_id, socket_or_current_user) when is_binary(object_id) do
+  def read(object_id, opts) when is_binary(object_id) do
 
-    read([object_id: object_id], socket_or_current_user)
+    read([object_id: object_id], opts)
   end
 
-  def read(%Ecto.Query{} = query, socket_or_current_user) do
+  def read(%Ecto.Query{} = query, opts) do
 
     IO.inspect(query: query)
 
-    current_user = current_user(socket_or_current_user)
+    current_user = current_user(opts)
 
     with {:ok, object} <- query
       |> query_object_preload_create_activity(current_user, [:default, :with_parents])
       # |> IO.inspect
-      |> as_permitted_for(current_user)
+      |> as_permitted_for(opts)
       # |> IO.inspect
       |> repo().single() do
 
@@ -217,13 +223,13 @@ defmodule Bonfire.Social.Activities do
       end
   end
 
-  def read(filters, socket_or_current_user) when is_map(filters) or is_list(filters) do
+  def read(filters, opts) when is_map(filters) or is_list(filters) do
 
-    current_user = current_user(socket_or_current_user)
+    current_user = current_user(opts)
 
     Activity
     |> query_filter(filters)
-    |> read(socket_or_current_user)
+    |> read(opts)
   end
 
   def query(filters \\ [], opts_or_current_user \\ [])
@@ -248,7 +254,9 @@ defmodule Bonfire.Social.Activities do
   def activity_under_object(%Activity{object: activity_object} = activity) do
     Map.put(activity_object, :activity, Map.drop(activity, [:object])) # ugly, but heh
   end
-
+  def activity_under_object(%{} = object_without_activity) do
+    Map.put(object_without_activity, :activity, %{})
+  end
   def activity_under_object(%Activity{} = activity, %{}=object) do
     Map.put(object, :activity, activity)
   end

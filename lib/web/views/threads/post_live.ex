@@ -30,7 +30,7 @@ defmodule Bonfire.Social.Web.PostLive do
     )}
   end
 
-  def handle_params(%{"id" => id} = _params, _url, socket) do
+  def do_handle_params(%{"id" => id} = _params, _url, socket) do
 
     current_user = current_user(socket)
 
@@ -58,14 +58,16 @@ defmodule Bonfire.Social.Web.PostLive do
 
   end
 
-  # def handle_params(%{} = _params, _url, socket) do
-  #   {:noreply,
-  #    assign(socket,
-  #      current_user: Fake.user_live()
-  #    )}
-  # end
 
-  def handle_params(params, url, socket), do: Bonfire.Common.LiveHandlers.handle_params(params, url, socket, __MODULE__)
+  def handle_params(params, uri, socket) do
+    # poor man's hook I guess
+    with {_, socket} <- Bonfire.Common.LiveHandlers.handle_params(params, uri, socket) do
+      undead_params(socket, fn ->
+        do_handle_params(params, uri, socket)
+      end)
+    end
+  end
+
   def handle_event(action, attrs, socket), do: Bonfire.Common.LiveHandlers.handle_event(action, attrs, socket, __MODULE__)
   def handle_info(info, socket), do: Bonfire.Common.LiveHandlers.handle_info(info, socket, __MODULE__)
 

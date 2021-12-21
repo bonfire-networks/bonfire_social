@@ -19,7 +19,7 @@ defmodule Bonfire.Social.Threads do
 
     with {:ok, published} <- FeedActivities.maybe_feed_publish(creator, activity, thread_id) do
       Logger.debug("Threads: put in thread feed for anyone following the thread: #{inspect thread_id}")
-      IO.inspect(activity: activity)
+      # IO.inspect(activity: activity)
       Logger.debug("Threads: broadcasting to anyone currently viewing the thread")
       pubsub_broadcast(thread_id, {{Bonfire.Social.Posts, :new_reply}, {thread_id, activity}})
 

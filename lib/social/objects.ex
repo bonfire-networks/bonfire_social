@@ -11,11 +11,10 @@ defmodule Bonfire.Social.Objects do
 
   def read(object_id, socket_or_current_user) when is_binary(object_id) do
 
-    current_user = Utils.current_user(socket_or_current_user)
+    current_user = Utils.current_user(socket_or_current_user) #|> IO.inspect
 
-    with {:ok, pointer} <- Pointers.Pointer
-                            |> query_filter(id: object_id)
-                            |> Activities.read(socket_or_current_user) #|> IO.inspect,
+    with {:ok, pointer} <- Bonfire.Common.Pointers.pointer_query([id: object_id], socket_or_current_user)
+                          |> Activities.read(socket: socket_or_current_user, skip_boundary_check: true) #|> IO.inspect,
         #  {:ok, object} <- Bonfire.Common.Pointers.get(pointer, current_user: user)
         do
 
@@ -23,11 +22,17 @@ defmodule Bonfire.Social.Objects do
 
         {:ok,
           pointer
-          |> Bonfire.Common.Pointers.Preload.maybe_preload_nested_pointers([activity: [:object]], current_user: current_user, skip_boundary_check: true)
+          |> maybe_preload_activity_object(current_user)
           |> Activities.activity_under_object()
         }
       end
   end
+
+  def maybe_preload_activity_object(%{activity: %{object: _}} = pointer, current_user) do
+    pointer
+    |> Bonfire.Common.Pointers.Preload.maybe_preload_nested_pointers([activity: [:object]], current_user: current_user, skip_boundary_check: true)
+  end
+  def maybe_preload_activity_object(pointer, _current_user), do: pointer
 
   def preload_reply_creator(object) do
     object

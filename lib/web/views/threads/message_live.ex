@@ -35,7 +35,7 @@ defmodule Bonfire.Social.Web.MessageLive do
     }
   end
 
-  def handle_params(%{"id" => id} = params, _url, socket) do
+  def do_handle_params(%{"id" => id} = params, _url, socket) do
    current_user = current_user(socket)
 
     # FIXME?
@@ -79,16 +79,11 @@ defmodule Bonfire.Social.Web.MessageLive do
     }
 
     else _e ->
-      {:error, "Not found"}
+      {:error, "Not found (or you don't have permission to view this message)"}
     end
   end
 
-  # def handle_params(%{} = _params, _url, socket) do
-  #   {:noreply,
-  #    assign(socket,
-  #      current_user: Fake.user_live()
-  #    )}
-  # end
+
   def handle_event("create_reply", %{"id"=> id}, socket) do # boost in LV
     IO.inspect(id: id)
     IO.inspect("create reply")
@@ -100,7 +95,16 @@ defmodule Bonfire.Social.Web.MessageLive do
     {:noreply, assign(socket, comment_reply_to_id: id)}
   end
 
-  def handle_params(params, url, socket), do: Bonfire.Common.LiveHandlers.handle_params(params, url, socket, __MODULE__)
+
+  def handle_params(params, uri, socket) do
+    # poor man's hook I guess
+    with {_, socket} <- Bonfire.Common.LiveHandlers.handle_params(params, uri, socket) do
+      undead_params(socket, fn ->
+        do_handle_params(params, uri, socket)
+      end)
+    end
+  end
+
   def handle_event(action, attrs, socket), do: Bonfire.Common.LiveHandlers.handle_event(action, attrs, socket, __MODULE__)
   def handle_info(info, socket), do: Bonfire.Common.LiveHandlers.handle_info(info, socket, __MODULE__)
 
