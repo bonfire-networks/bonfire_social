@@ -124,6 +124,7 @@ defmodule Bonfire.Social.Posts.LiveHandler do
 
 
   def post_changeset(attrs \\ %{}) do
+    # IO.inspect(attrs, label: "ATTRS")
     Posts.changeset(:create, attrs)
     |> Changeset.cast_assoc(:post_content, [:required, with: &post_content_changeset/2])
     # |> IO.inspect
