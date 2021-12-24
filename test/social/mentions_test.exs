@@ -22,7 +22,7 @@ defmodule Bonfire.Social.MentionsTest do
     assert {:ok, mention} = Posts.publish(poster, attrs, "mentions")
 
     assert %{edges: feed} = FeedActivities.feed(:notifications, me)
-    assert %{} = fp = List.first(feed)
+    assert %{id: _} = fp = List.first(feed)
 
     assert fp.activity.id == mention.activity.id
   end

@@ -348,9 +348,10 @@ defmodule Bonfire.Social.FeedActivities do
     {:ok, activity}
     # TODO: notify remote users via AP
   end
-  def maybe_feed_publish(subject, %{activity: activity}, _, feeds), do: maybe_feed_publish(subject, activity, feeds)
+  def maybe_feed_publish(subject, %{activity: %{id: _} = activity}, _, feeds), do: maybe_feed_publish(subject, activity, feeds)
+  def maybe_feed_publish(subject, %{activity: _activity_not_loaded} = parent, _, feeds), do: maybe_feed_publish(subject, parent |> repo().maybe_preload(:activity) |> e(:activity, nil), feeds)
   def maybe_feed_publish(_, activity, _, _) do
-    Logger.error("FeedActivities: did not notify, expected an Activity, got #{inspect activity}")
+    Logger.error("FeedActivities.maybe_feed_publish: did not put in feeds or federate, expected an Activity or a Verb+Object, got #{inspect activity}")
     {:ok, activity}
   end
 

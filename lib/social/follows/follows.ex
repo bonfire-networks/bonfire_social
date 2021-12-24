@@ -34,7 +34,7 @@ defmodule Bonfire.Social.Follows do
     # TODO: check see/read permissions for current_user
     Follow
     |> query_filter(filters)
-    |> IO.inspect(label: "Follows: query_base")
+    # |> IO.inspect(label: "Follows: query_base")
   end
 
   def query([my: :followed], opts) do

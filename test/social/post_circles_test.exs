@@ -45,7 +45,7 @@ defmodule Bonfire.Social.PostCirclesTest do
 
     assert %Paginator.Page{edges: activities} = FeedActivities.feed(feed_id, user)
     assert feed_entry = List.first(activities)
-    assert "name" =~ feed_entry.activity.object.post_content.name
+    assert feed_entry.activity.object.post_content.name =~ "name"
 
   end
 

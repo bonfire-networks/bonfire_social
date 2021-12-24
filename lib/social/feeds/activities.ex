@@ -30,7 +30,7 @@ defmodule Bonfire.Social.Activities do
       |> join(:left_lateral, [], cs in ^cs, as: :cs)
       # |> join(:left_lateral, [], perms in ^perms, as: :perms)
       |> where([cs: cs], cs.can_see == true)
-      |> IO.inspect(label: "Activities.as_permitted_for query")
+      # |> IO.inspect(label: "Activities.as_permitted_for query")
 
     end
   end
