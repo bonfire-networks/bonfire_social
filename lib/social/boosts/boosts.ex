@@ -3,6 +3,8 @@ defmodule Bonfire.Social.Boosts do
   alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Boost
   alias Bonfire.Boundaries.Verbs
+  alias Bonfire.Data.Edges.Edge
+
   # alias Bonfire.Data.Social.BoostCount
   alias Bonfire.Social.{Activities, FeedActivities}
   use Bonfire.Repo,
@@ -13,13 +15,23 @@ defmodule Bonfire.Social.Boosts do
 
   def queries_module, do: Boost
   def context_module, do: Boost
-  def federation_module, do: ["Announce", {"Create", "Announce"}, {"Undo", "Announce"}, {"Delete", "Announce"}]
+  def federation_module, do: [
+    "Announce",
+    {"Create", "Announce"},
+    {"Undo", "Announce"},
+    {"Delete", "Announce"},
+  ]
 
   def boosted?(%{}=user, boosted), do: not is_nil(get!(user, boosted))
+
   def get(%{}=user, boosted), do: repo().single(by_both_q(user, boosted))
+
   def get!(%{}=user, boosted), do: repo().one(by_both_q(user, boosted))
+
   def by_booster(%{}=user), do: repo().many(by_booster_q(user))
+
   def by_boosted(%{}=user), do: repo().many(by_boosted_q(user))
+
   def by_any(%{}=user), do: repo().many(by_any_q(user))
 
   def boost(%{} = booster, %{} = boosted) do
@@ -84,8 +96,15 @@ defmodule Bonfire.Social.Boosts do
     changeset(booster, boosted) |> repo().insert()
   end
 
+  defp edge_params(booster, boosted), do: %{
+    subject_id: ulid(booster),
+    object_id:  ulid(boosted),
+    table_id:   Boost.__pointers__(:table_id),
+  }
+
   defp changeset(booster, boosted) do
-    Boost.changeset(%Boost{}, %{booster_id: ulid(booster), boosted_id: ulid(boosted)})
+    Boost.changeset(%Boost{}, %{edge: edge_params(booster, boosted)})
+    |> Changeset.cast_assoc(:edge, required: true, with: &Edge.changeset/2)
   end
 
   #doc "Delete boosts where i am the booster"
