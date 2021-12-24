@@ -92,7 +92,7 @@ defmodule Bonfire.Social.Posts do
 
         {:ok, Activities.activity_under_object(post) }
 
- end
+      end
   end
 
   @doc """
