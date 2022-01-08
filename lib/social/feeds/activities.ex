@@ -17,21 +17,14 @@ defmodule Bonfire.Social.Activities do
   def context_module, do: Activity
 
   def as_permitted_for(q, opts \\ nil) do
-
     if is_list(opts) and opts[:skip_boundary_check] do
       q
     else
       agent = current_user(opts) || current_account(opts)
-
-      cs = can_see?({:activity, :object_id}, agent)
-      # perms = permitted_on({:activity, :object_id}, agent)
-
-      q
-      |> join(:left_lateral, [], cs in ^cs, as: :cs)
-      # |> join(:left_lateral, [], perms in ^perms, as: :perms)
-      |> where([cs: cs], cs.can_see == true)
-      # |> IO.inspect(label: "Activities.as_permitted_for query")
-
+      vis = filter_invisible(agent)
+      join q, :inner, [activity: activity],
+        v in subquery(vis),
+        on: activity.object_id == v.object_id
     end
   end
 
@@ -104,7 +97,6 @@ defmodule Bonfire.Social.Activities do
   end
 
   def activity_preloads(query, current_user, :all) do
-
     query
       |> activity_preloads(current_user, :with_parents)
       |> activity_preloads(current_user, :with_creator)
@@ -113,49 +105,38 @@ defmodule Bonfire.Social.Activities do
   end
 
   def activity_preloads(query, _current_user, :with_parents) do
-
-    query
-      # |> join_preload([:activity, :replied, :reply_to])
-      |> join_preload([:activity, :replied, :thread_post_content])
-      |> join_preload([:activity, :replied, :reply_to_post_content])
-      |> join_preload([:activity, :replied, :reply_to_created, :creator_profile])
-      |> join_preload([:activity, :replied, :reply_to_created, :creator_character])
-      # |> IO.inspect
+    proload query,
+      activity: [replied:
+                 [reply_to:
+                  {"reply_",
+                   [:post_content,
+                    created: [creator: {"creator_", [:profile, :character]}]]}]]
   end
 
   def activity_preloads(query, _current_user, :with_creator) do
-
-    query
-      |> join_preload([:activity, :object_created, :creator_profile])
-      |> join_preload([:activity, :object_created, :creator_character])
-      # |> IO.inspect
+    proload query,
+      activity: [object: {"object_", [created: [creator: [:profile, :character]]]}]
   end
+
+  @default_activity_preloads [
+    :verb, :boost_count, :like_count, :replied,
+    object: {"object_", [:message, :post, :post_content]}
+  ]
 
   def activity_preloads(query, current_user, :default) do
     current_user = current_user(current_user)
     query
-      |> activity_preloads(current_user, :minimal)
-      |> join_preload([:activity, :verb])
-      |> join_preload([:activity, :boost_count])
-      |> join_preload([:activity, :like_count])
-      |> join_preload([:activity, :object])
-      # |> join_preload([:activity, :object_message])
-      # |> join_preload([:activity, :object_post])
-      |> join_preload([:activity, :object, :post_content])
-      |> join_preload([:activity, :replied])
-      |> maybe_my_like(current_user)
-      |> maybe_my_boost(current_user)
-      |> maybe_my_flag(current_user)
-      # |> IO.inspect(label: "activity with preloads")
+    |> activity_preloads(current_user, :minimal)
+    |> proload(activity: @default_activity_preloads)
+    |> maybe_my_like(current_user)
+    |> maybe_my_boost(current_user)
+    |> maybe_my_flag(current_user)
+    # |> IO.inspect(label: "activity with preloads")
   end
 
   def activity_preloads(query, _current_user, :minimal) do
-
-    query
-      |> join_preload([:activity, :subject_character])
-      |> join_preload([:activity, :subject_profile])
-      |> join_preload([:activity, :subject_profile, :icon])
-      # |> IO.inspect
+    proload query,
+      activity: [subject: {"subject_", [:character, profile: :icon]}]
   end
 
 
