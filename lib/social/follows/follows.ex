@@ -5,6 +5,7 @@ defmodule Bonfire.Social.Follows do
   alias Bonfire.Social.APActivities
   alias Bonfire.Data.Identity.User
   alias Bonfire.Social.Integration
+  import Bonfire.Boundaries.Queries
   import Bonfire.Common.Utils
 
   use Bonfire.Repo,
@@ -30,11 +31,11 @@ defmodule Bonfire.Social.Follows do
 
   def by_any(user), do: repo().many(by_any_q(user))
 
-  defp query_base(filters, _current_user) do
-    # TODO: check see/read permissions for current_user
-    Follow
+  defp query_base(filters, current_user) do
+    vis = filter_invisible(current_user)
+    from(f in Follow, join: v in subquery(vis), on: f.id == v.object_id)
+    |> proload(:edge)
     |> query_filter(filters)
-    # |> IO.inspect(label: "Follows: query_base")
   end
 
   def query([my: :followed], opts) do
@@ -48,23 +49,25 @@ defmodule Bonfire.Social.Follows do
   end
 
   def query([followers: user], opts) do
-    query_base([followed_id: ulid(user)], opts)
-    |> join_preload([:follower_profile])
-    |> join_preload([:follower_character])
+    user = ulid(user)
+    query_base([], opts)
+    |> proload(edge: [subject: {"follower_", [:profile, :character]}])
+    |> where([edge: edge], edge.object_id == ^user)
   end
 
   def query([followed: user], opts) do
-    query_base([follower_id: ulid(user)], opts)
-    |> join_preload([:followed_profile])
-    |> join_preload([:followed_character])
+    user = ulid(user)
+    query_base([], opts)
+    |> proload(edge: [object: {"followed_", [:profile, :character]}])
+    |> where([edge: edge], edge.subject_id == ^user)
   end
 
   def query(filter, opts) do
     query_base(filter, opts)
   end
 
-
-  def list_my_followed(current_user, paginate? \\ true, cursor_after \\ nil, with_profile_only \\ true), do: list_followed(current_user, current_user, with_profile_only)
+  def list_my_followed(current_user, paginate? \\ true, cursor_after \\ nil, with_profile_only \\ true),
+    do: list_followed(current_user, current_user, with_profile_only)
 
   def list_followed(%{id: user_id} = _user, current_user \\ nil, paginate? \\ true, cursor_after \\ nil, with_profile_only \\ true) when is_binary(user_id) do
     query([followed: user_id], current_user)

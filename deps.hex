@@ -1,4 +1,5 @@
 ecto_sql = "~> 3.4"
+ecto_shorts = "~> 1.1.0"
 faker = "~> 0.14" # fake data generation
 flexto = "~> 0.2.1"
 gettext = "~> 0.11"
