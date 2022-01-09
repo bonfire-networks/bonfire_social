@@ -13,10 +13,11 @@ defmodule Bonfire.Social.FlagsTest do
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
     assert {:ok, flagged} = Posts.publish(me, attrs)
 
-    assert {:ok, flag} = Flags.flag(me, flagged)
-    #IO.inspect(flag)
-    assert flag.flagger_id == me.id
-    assert flag.flagged_id == flagged.id
+    assert {:ok, %{activity: activity}} = Flags.flag(me, flagged)
+    # IO.inspect(activity)
+    assert activity.subject.id == me.id
+    assert activity.object.id == flagged.id
+
   end
 
   test "can check if I flagged something" do
@@ -65,7 +66,7 @@ defmodule Bonfire.Social.FlagsTest do
     assert {:ok, flagged} = Posts.publish(me, attrs)
     assert {:ok, _} = Flags.flag(someone, flagged)
 
-    assert %{edges: [fetched_flag]} = Flags.list(me)
+    assert %{edges: [fetched_flag]} = Flags.list_paginated(:all, me)
 
     assert fetched_flag.activity.object_id == flagged.id
   end

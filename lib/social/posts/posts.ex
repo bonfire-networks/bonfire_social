@@ -301,7 +301,7 @@ defmodule Bonfire.Social.Posts do
 
 
   def indexing_object_format(feed_activity_or_activity, object \\ nil)
-  def indexing_object_format(%{subject_profile: subject_profile, subject_character: subject_character} = activity, %{id: id, post_content: post_content} = post) do
+  def indexing_object_format(%{subject: %{profile: subject_profile, character: subject_character}} = activity, %{id: id, post_content: post_content} = post) do
 
     # IO.inspect(obj)
 

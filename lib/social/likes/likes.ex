@@ -5,6 +5,8 @@ defmodule Bonfire.Social.Likes do
   # alias Bonfire.Data.Social.LikeCount
   alias Bonfire.Boundaries.Verbs
   alias Bonfire.Social.{Activities, FeedActivities}
+  alias Bonfire.Social.Edges
+
   # import Ecto.Query
   # import Bonfire.Me.Integration
   import Bonfire.Common.Utils
@@ -14,16 +16,16 @@ defmodule Bonfire.Social.Likes do
   def context_module, do: Like
   def federation_module, do: ["Like", {"Create", "Like"}, {"Undo", "Like"}, {"Delete", "Like"}]
 
-  def liked?(%User{}=user, liked), do: not is_nil(get!(user, liked))
+  def liked?(%{}=user, object), do: not is_nil(get!(user, object))
 
-  def get(%User{}=user, liked), do: repo().single(by_both_q(user, liked))
-  def get!(%User{}=user, liked) when is_list(liked), do: repo().all(by_both_q(user, liked))
-  def get!(%User{}=user, liked), do: repo().one(by_both_q(user, liked))
+  def get(%{}=subject, object), do: [subject: subject, object: object] |> query(current_user: subject) |> repo().single()
 
-  def by_liker(%User{}=user), do: repo().many(by_liker_q(user))
-  def by_liker(%User{}=user, type), do: repo().many(by_liker_q(user) |> by_type_q(type))
-  def by_liked(%User{}=user), do: repo().many(by_liked_q(user))
-  def by_any(%User{}=user), do: repo().many(by_any_q(user))
+  def get!(%{}=subject, object) when is_list(object), do: [subject: subject, object: object] |> query(current_user: subject) |> repo().all()
+  def get!(%{}=subject, object), do: [subject: subject, object: object] |> query(current_user: subject) |> repo().one()
+
+  def by_liker(%{}=subject), do: [subject: subject] |> query(current_user: subject) |> repo().many()
+  def by_liker(%{}=subject, type), do: [subject: subject] |> query(current_user: subject) |>  by_type_q(type) |> repo().many()
+  def by_liked(%{}=subject), do: [subject: subject] |> query(current_user: subject) |> repo().many()
 
   def like(%User{} = liker, %{} = liked) do
     with {:ok, like} <- create(liker, liked) do
@@ -52,12 +54,26 @@ defmodule Bonfire.Social.Likes do
     end
   end
 
-  defp list(filters, current_user, cursor_after \\ nil, preloads \\ nil) do
-    # TODO: check the like's see/read permissions for current_user?
-    Like
-    |> Activities.query_object_preload_activity(:like, :liked_id, current_user, preloads)
-    |> query_filter(filters)
-    |> Activities.as_permitted_for(current_user)
+  defp query_base(filters, opts) do
+    Edges.query(Like, filters, opts)
+    # |> proload(edge: [
+    #   # subject: {"liker_", [:profile, :character]},
+    #   # object: {"liked_", [:profile, :character, :post_content]}
+    #   ])
+    # |> query_filter(filters)
+  end
+
+  def query([my: :likes], opts), do: [subject: current_user(opts)] |> query(opts)
+
+  def query(filters, opts) do
+    query_base(filters, opts)
+  end
+
+
+  defp list(filters, opts, cursor_after \\ nil, preloads \\ nil) do
+    query(filters, opts)
+    # |> Activities.query_object_preload_activity(:like, :liked_id, opts, preloads)
+    # |> Activities.as_permitted_for(opts)
     |> Bonfire.Repo.many_paginated(before: cursor_after)
   end
 
@@ -69,13 +85,13 @@ defmodule Bonfire.Social.Likes do
   @doc "List likes by the user"
   def list_by(by_user, current_user \\ nil, cursor_after \\ nil, preloads \\ nil) when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
 
-    list([likes_by: {ulid(by_user), &filter/3}], current_user, cursor_after, preloads)
+    list([subject: by_user], current_user, cursor_after, preloads)
   end
 
   @doc "List likes of something"
   def list_of(id, current_user \\ nil, cursor_after \\ nil, preloads \\ nil) when is_binary(id) or is_list(id) or is_map(id) do
 
-    list([likes_of: {ulid(id), &filter/3}], current_user, cursor_after, preloads)
+    list([object: id], current_user, cursor_after, preloads)
   end
 
   defp create(%{} = liker, %{} = liked) do
@@ -87,41 +103,16 @@ defmodule Bonfire.Social.Likes do
   end
 
   #doc "Delete likes where i am the liker"
-  defp delete_by_liker(%User{}=me), do: elem(repo().delete_all(by_liker_q(me)), 1)
+  defp delete_by_liker(%{}=subject), do: [subject: subject] |> query(skip_boundary_check: true) |> repo().delete_all() |> elem(1)
 
   #doc "Delete likes where i am the liked"
-  defp delete_by_liked(%User{}=me), do: elem(repo().delete_all(by_liked_q(me)), 1)
+  defp delete_by_liked(%{}=object), do: [object: object] |> query(skip_boundary_check: true) |> repo().delete_all() |> elem(1)
 
   #doc "Delete likes where i am the liker or the liked."
-  defp delete_by_any(%User{}=me), do: elem(repo().delete_all(by_any_q(me)), 1)
+  # defp delete_by_any(%{}=any), do: [subject: subject, object: object] |> query(skip_boundary_check: true) |> repo().delete_all() |> elem(1)
 
   #doc "Delete likes where i am the liker and someone else is the liked."
-  defp delete_by_both(%User{}=me, %{}=liked), do: elem(repo().delete_all(by_both_q(me, liked)), 1)
-
-  defp by_liker_q(%User{id: id}) do
-    from f in Like,
-      where: f.liker_id == ^id
-  end
-
-  defp by_liked_q(%User{id: id}) do
-    from f in Like,
-      where: f.liked_id == ^id
-  end
-
-  defp by_any_q(%User{id: id}) do
-    from f in Like,
-      where: f.liker_id == ^id or f.liked_id == ^id
-  end
-
-  defp by_both_q(liker, liked) when is_list(liked) do
-    from f in Like,
-      where: f.liker_id == ^ulid(liker) or f.liked_id in ^ulid(liked),
-      select: {f.liked_id, f}
-  end
-  defp by_both_q(liker, liked) do
-    from f in Like,
-      where: f.liker_id == ^ulid(liker) or f.liked_id == ^ulid(liked)
-  end
+  defp delete_by_both(%{}=subject, %{}=object), do: [subject: subject, object: object] |> query(skip_boundary_check: true) |> repo().delete_all() |> elem(1)
 
   defp by_type_q(q, type) do
     q
@@ -129,31 +120,6 @@ defmodule Bonfire.Social.Likes do
     |> join_preload([:liked])
   end
 
-  #doc "List likes created by the user and which are in their outbox, which are not replies"
-  def filter(:likes_by, user_id, query) do
-    verb_id = Verbs.verbs()[:like]
-
-      query
-      |> join_preload([:activity, :subject_character])
-      |> where(
-        [activity: activity, subject_character: liker],
-        activity.verb_id==^verb_id and liker.id == ^ulid(user_id)
-      )
-
-  end
-
-  #doc "List likes created by the user and which are in their outbox, which are not replies"
-  def filter(:likes_of, id, query) do
-    verb_id = Verbs.verbs()[:like]
-
-      query
-      |> join_preload([:activity])
-      |> where(
-        [activity: activity],
-        activity.verb_id==^verb_id and activity.object_id == ^ulid(id)
-      )
-
-  end
 
   def ap_publish_activity("create", like) do
     like = Bonfire.Repo.preload(like, :liked)
