@@ -19,9 +19,9 @@ defmodule Bonfire.Social.Follows do
 
   def following?(user, followed), do: not is_nil(get!(user, followed))
 
-  def get(user, followed), do: query([follower: user, followed: followed], user) |> repo().single()
-  def get!(%{}=user, followed) when is_list(followed), do: query([follower: user, followed: followed], user) |> repo().all()
-  def get!(user, followed), do: query([follower: user, followed: followed], user) |> repo().one()
+  def get(user, followed), do: [follower: user, followed: followed] |> query(current_user: user) |> repo().single()
+  def get!(%{}=user, followed) when is_list(followed), do: [follower: user, followed: followed] |> query(current_user: user) |> repo().all()
+  def get!(user, followed), do: [follower: user, followed: followed] |> query(current_user: user) |> repo().one()
 
   def by_follower(user), do: query([follower: user], user) |> repo().many()
   # def by_follower(user), do: repo().many(by_follower_q(user))
@@ -39,16 +39,16 @@ defmodule Bonfire.Social.Follows do
   end
 
   def query([my: :followed], opts) do
-    query([followed: current_user(opts)], opts)
+    [followed: current_user(opts)] |> query(opts)
   end
 
   def query([my: :followers], opts) do
-    query([followers: current_user(opts)], opts)
+    [followers: current_user(opts)] |> query(opts)
   end
 
-  def query([follower: follower, followed: followed], opts) when not is_list(followed), do: query([follower: [follower], followed: followed], opts)
+  def query([follower: follower, followed: followed], opts) when not is_list(follower), do: [follower: [follower], followed: followed] |> query(opts)
 
-  def query([follower: follower, followed: followed], opts) when not is_list(followed), do: query([follower: follower, followed: [followed]], opts)
+  def query([follower: follower, followed: followed], opts) when not is_list(followed), do: [follower: follower, followed: [followed]] |> query(opts)
 
   def query([follower: follower, followed: followed], opts) when is_list(follower) and is_list(followed) do
     query_base([], opts)
