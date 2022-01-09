@@ -120,7 +120,7 @@ defmodule Bonfire.Social.Activities do
 
   @default_activity_preloads [
     :verb, :boost_count, :like_count, :replied,
-    object: {"object_", [:message, :post, :post_content]}
+    object: {"object_", [:post_content]}
   ]
 
   def activity_preloads(query, current_user, :default) do
@@ -128,9 +128,6 @@ defmodule Bonfire.Social.Activities do
     query
     |> activity_preloads(current_user, :minimal)
     |> proload(activity: @default_activity_preloads)
-    |> maybe_my_like(current_user)
-    |> maybe_my_boost(current_user)
-    |> maybe_my_flag(current_user)
     # |> IO.inspect(label: "activity with preloads")
   end
 
@@ -144,27 +141,6 @@ defmodule Bonfire.Social.Activities do
     query
   end
 
-  def maybe_my_like(q, %{id: current_user_id} = _current_user) do
-    q
-    # |> join_preload([:activity, :my_like], ass.liked_id == via.object_id and ass.liker_id == ^current_user_id) # TODO: figure out how to use bindings in join_preload with ON
-    |> reusable_join(:left, [o, activity: activity], l in Like, as: :my_like, on: l.liked_id == activity.object_id and l.liker_id == ^current_user_id)
-    |> preload([l, activity: activity, my_like: my_like], activity: {activity, [my_like: my_like]})
-  end
-  def maybe_my_like(q, _), do: q
-
-  def maybe_my_boost(q, %{id: current_user_id} = _current_user) do
-    q
-    |> reusable_join(:left, [o, activity: activity], l in Boost, as: :my_boost, on: l.boosted_id == activity.object_id and l.booster_id == ^current_user_id)
-    |> preload([l, activity: activity, my_boost: my_boost], activity: {activity, [my_boost: my_boost]})
-  end
-  def maybe_my_boost(q, _), do: q
-
-  def maybe_my_flag(q, %{id: current_user_id} = _current_user) do
-    q
-    |> reusable_join(:left, [o, activity: activity], l in Flag, as: :my_flag, on: l.flagged_id == activity.object_id and l.flagger_id == ^current_user_id)
-    |> preload([l, activity: activity, my_flag: my_flag], activity: {activity, [my_flag: my_flag]})
-  end
-  def maybe_my_flag(q, _), do: q
 
   @doc """
   Get an activity by its ID
