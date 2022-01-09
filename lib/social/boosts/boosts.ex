@@ -5,6 +5,8 @@ defmodule Bonfire.Social.Boosts do
   alias Bonfire.Boundaries.Verbs
   # alias Bonfire.Data.Social.BoostCount
   alias Bonfire.Social.{Activities, FeedActivities}
+  alias Bonfire.Social.Edges
+
   use Bonfire.Repo,
     searchable_fields: [:booster_id, :boosted_id]
   # import Bonfire.Me.Integration
@@ -15,12 +17,15 @@ defmodule Bonfire.Social.Boosts do
   def context_module, do: Boost
   def federation_module, do: ["Announce", {"Create", "Announce"}, {"Undo", "Announce"}, {"Delete", "Announce"}]
 
-  def boosted?(%{}=user, boosted), do: not is_nil(get!(user, boosted))
-  def get(%{}=user, boosted), do: repo().single(by_both_q(user, boosted))
-  def get!(%{}=user, boosted), do: repo().one(by_both_q(user, boosted))
-  def by_booster(%{}=user), do: repo().many(by_booster_q(user))
-  def by_boosted(%{}=user), do: repo().many(by_boosted_q(user))
-  def by_any(%{}=user), do: repo().many(by_any_q(user))
+  def boosted?(%{}=user, object), do: not is_nil(get!(user, object))
+
+  def get(subject, object), do: [subject: subject, object: object] |> query(current_user: subject) |> repo().single()
+  def get!(subject, objects) when is_list(objects), do: [subject: subject, object: objects] |> query(current_user: subject) |> repo().all()
+  def get!(subject, object), do: [subject: subject, object: object] |> query(current_user: subject) |> repo().one()
+
+  # def by_booster(%{}=user), do: repo().many(by_booster_q(user))
+  # def by_boosted(%{}=user), do: repo().many(by_boosted_q(user))
+  # def by_any(%{}=user), do: repo().many(by_any_q(user))
 
   def boost(%{} = booster, %{} = boosted) do
     with {:ok, boost} <- create(booster, boosted),
@@ -52,33 +57,49 @@ defmodule Bonfire.Social.Boosts do
     end
   end
 
-  @doc "List current user's boosts, which are in their outbox"
-  def list_my(current_user, cursor_after \\ nil, preloads \\ :all) when is_binary(current_user) or is_map(current_user) do
-    list_by(current_user, current_user, cursor_after, preloads)
+  @doc "List current user's boosts"
+  def list_my(opts) do
+    list_by(current_user(opts), opts)
   end
 
-  @doc "List boosts by the user and which are in their outbox"
-  def list_by(by_user, current_user \\ nil, opts \\ [], preloads \\ :all) when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
+  @doc "List boosts by the user "
+  def list_by(by_user, opts \\ []) when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
 
     # query FeedPublish
-    [feed_id: ulid(by_user), boosts_by: {ulid(by_user), &filter/3} ]
-    |> FeedActivities.feed_paginated(current_user, opts, preloads)
+    [subject: by_user]
+    |> list_paginated(opts)
   end
 
-  @doc "List boost of an object and which are in a feed"
-  def list_of(id, current_user \\ nil, opts \\ [], preloads \\ :all) when is_binary(id) or is_list(id) or is_map(id) do
+  @doc "List boost of an object"
+  def list_of(id, opts \\ []) when is_binary(id) or is_list(id) or is_map(id) do
 
     # query FeedPublish
-    [boosts_of: {ulid(id), &filter/3} ]
-    |> FeedActivities.feed_paginated(current_user, opts, preloads)
+    [object: id]
+    |> list_paginated(opts)
   end
 
-  def query(filters \\ [], opts_or_current_user \\ nil)
-
-  def query(filters, opts_or_current_user) do
+  def list_paginated(filters, opts \\ []) do
     filters
-    |> FeedActivities.query(current_user(opts_or_current_user), opts_or_current_user)
+    |> query(opts)
+    |> Bonfire.Repo.many_paginated(opts)
+    # TODO: activity preloads
   end
+
+  defp query_base(filters, opts) do
+    Edges.query(Boost, filters, opts)
+    # |> proload(edge: [
+    #   # subject: {"booster_", [:profile, :character]},
+    #   # object: {"boosted_", [:profile, :character, :post_content]}
+    #   ])
+    # |> query_filter(filters)
+  end
+
+  def query([my: :boosts], opts), do: [subject: current_user(opts)] |> query(opts)
+
+  def query(filters, opts) do
+    query_base(filters, opts)
+  end
+
 
   defp create(booster, boosted) do
     changeset(booster, boosted) |> repo().insert()
@@ -89,68 +110,19 @@ defmodule Bonfire.Social.Boosts do
   end
 
   #doc "Delete boosts where i am the booster"
-  defp delete_by_booster(%{}=me), do: elem(repo().delete_all(by_booster_q(me)), 1)
+  defp delete_by_booster(%{}=subject), do: query([subject: subject], skip_boundary_check: true) |> do_delete()
 
   #doc "Delete boosts where i am the boosted"
-  defp delete_by_boosted(%{}=me), do: elem(repo().delete_all(by_boosted_q(me)), 1)
+  defp delete_by_boosted(%{}=object), do: query([object: object], skip_boundary_check: true) |> do_delete()
 
   #doc "Delete boosts where i am the booster or the boosted."
-  defp delete_by_any(%{}=me), do: elem(repo().delete_all(by_any_q(me)), 1)
+  # defp delete_by_any(%{}=me), do: elem(repo().delete_all(by_any_q(me)), 1)
 
   #doc "Delete boosts where i am the booster and someone else is the boosted."
-  defp delete_by_both(%{}=me, %{}=boosted), do: elem(repo().delete_all(by_both_q(me, boosted)), 1)
+  defp delete_by_both(me, object), do: [subject: me, object: object] |> query(skip_boundary_check: true) |> do_delete()
 
-  defp by_booster_q(%{id: id}) do
-    from f in Boost,
-      where: f.booster_id == ^id,
-      select: f.id
-  end
+  defp do_delete(q), do: Ecto.Query.exclude(q, :preload) |> repo().delete_all() |> elem(1)
 
-  defp by_boosted_q(%{id: id}) do
-    from f in Boost,
-      where: f.boosted_id == ^id,
-      select: f.id
-  end
-
-  defp by_any_q(%{id: id}) do
-    from f in Boost,
-      where: f.booster_id == ^id or f.boosted_id == ^id,
-      select: f.id
-  end
-
-  defp by_both_q(%{id: booster}, %{id: boosted}), do: by_both_q(booster, boosted)
-
-  defp by_both_q(booster, boosted) when is_binary(booster) and is_binary(boosted) do
-    from f in Boost,
-      where: f.booster_id == ^booster or f.boosted_id == ^boosted,
-      select: f.id
-  end
-
-
-  #doc "List boosts created by the user and which are in their outbox, which are not replies"
-  def filter(:boosts_of, id, query) do
-    verb_id = Verbs.verbs()[:boost]
-
-    query
-    |> join_preload([:activity])
-    |> where(
-      [activity: activity],
-      activity.verb_id==^verb_id and activity.object_id == ^ulid(id)
-    )
-  end
-
-
-  #doc "List boosts created by the user and which are in their outbox, which are not replies"
-  def filter(:boosts_by, user_id, query) do
-    verb_id = Verbs.verbs()[:boost]
-
-      query
-      |> join_preload([:activity, :subject_character])
-      |> where(
-        [activity: activity, subject_character: booster],
-        activity.verb_id==^verb_id and booster.id == ^ulid(user_id)
-      )
-  end
 
   def ap_publish_activity("create", boost) do
     boost = Bonfire.Repo.preload(boost, :boosted)

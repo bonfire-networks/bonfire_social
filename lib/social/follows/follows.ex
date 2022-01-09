@@ -5,6 +5,8 @@ defmodule Bonfire.Social.Follows do
   alias Bonfire.Social.APActivities
   alias Bonfire.Data.Identity.User
   alias Bonfire.Social.Integration
+  alias Bonfire.Social.Edges
+
   import Bonfire.Boundaries.Queries
   import Bonfire.Common.Utils
 
@@ -17,62 +19,31 @@ defmodule Bonfire.Social.Follows do
   def context_module, do: Follow
   def federation_module, do: ["Follow", {"Create", "Follow"}, {"Undo", "Follow"}, {"Delete", "Follow"}]
 
-  def following?(user, followed), do: not is_nil(get!(user, followed))
+  def following?(subject, object), do: not is_nil(get!(subject, object))
 
-  def get(user, followed), do: [follower: user, followed: followed] |> query(current_user: user) |> repo().single()
-  def get!(%{}=user, followed) when is_list(followed), do: [follower: user, followed: followed] |> query(current_user: user) |> repo().all()
-  def get!(user, followed), do: [follower: user, followed: followed] |> query(current_user: user) |> repo().one()
+  def get(subject, object), do: [subject: subject, object: object] |> query(current_user: subject) |> repo().single()
+  def get!(subject, objects) when is_list(objects), do: [subject: subject, object: objects] |> query(current_user: subject) |> repo().all()
+  def get!(subject, object), do: [subject: subject, object: object] |> query(current_user: subject) |> repo().one()
 
-  def by_follower(user), do: query([follower: user], user) |> repo().many()
-  # def by_follower(user), do: repo().many(by_follower_q(user))
-  def by_followed(user), do: query([follower: user], user) |> repo().many()
-
-  # def follower_by_followed(user), do: query([follower: user], user) |> repo().many(follower_by_followed_q(user))
-
-  # def by_any(user), do: repo().many(by_any_q(user))
+  # defp query_base(filters, opts) do
+  #   vis = filter_invisible(current_user(opts))
+  #   from(f in Follow, join: v in subquery(vis), on: f.id == v.object_id)
+  #   |> proload(:edge)
+  #   |> query_filter(filters)
+  # end
 
   defp query_base(filters, opts) do
-    vis = filter_invisible(current_user(opts))
-    from(f in Follow, join: v in subquery(vis), on: f.id == v.object_id)
-    |> proload(:edge)
-    |> query_filter(filters)
+    Edges.query(Follow, filters, opts)
+    |> proload(edge: [
+      subject: {"follower_", [:profile, :character]},
+      object: {"followed_", [:profile, :character]}
+      ])
+    # |> query_filter(filters)
   end
 
-  def query([my: :followed], opts) do
-    [followed: current_user(opts)] |> query(opts)
-  end
+  def query([my: :followed], opts), do: [subject: current_user(opts)] |> query(opts)
 
-  def query([my: :followers], opts) do
-    [followers: current_user(opts)] |> query(opts)
-  end
-
-  def query([follower: follower, followed: followed], opts) when not is_list(follower), do: [follower: [follower], followed: followed] |> query(opts)
-
-  def query([follower: follower, followed: followed], opts) when not is_list(followed), do: [follower: follower, followed: [followed]] |> query(opts)
-
-  def query([follower: follower, followed: followed], opts) when is_list(follower) and is_list(followed) do
-    query_base([], opts)
-    |> proload(edge: [subject: {"follower_", [:profile, :character]}])
-    |> where([edge: edge],
-      edge.subject_id in ^ulid(followed)
-      and edge.object_id in ^ulid(follower)
-    )
-  end
-
-  def query([followers: user], opts), do: query([follower: user], opts)
-  def query([follower: user], opts) do
-    user = ulid(user)
-    query_base([], opts)
-    |> proload(edge: [subject: {"follower_", [:profile, :character]}])
-    |> where([edge: edge], edge.object_id == ^user)
-  end
-
-  def query([followed: user], opts) do
-    user = ulid(user)
-    query_base([], opts)
-    |> proload(edge: [object: {"followed_", [:profile, :character]}])
-    |> where([edge: edge], edge.subject_id == ^user)
-  end
+  def query([my: :followers], opts), do: [object: current_user(opts)] |> query(opts)
 
   def query(filters, opts) do
     query_base(filters, opts)
@@ -82,16 +53,16 @@ defmodule Bonfire.Social.Follows do
     do: list_followed(current_user, current_user, with_profile_only)
 
   def list_followed(%{id: user_id} = _user, current_user \\ nil, paginate? \\ true, cursor_after \\ nil, with_profile_only \\ true) when is_binary(user_id) do
-    query([followed: user_id], current_user)
-    |> maybe_with_followed_profile_only(with_profile_only)
+    query([subject: user_id], current_user)
+    # |> maybe_with_followed_profile_only(with_profile_only)
     |> many(paginate?, cursor_after)
   end
 
   def list_my_followers(current_user, paginate? \\ true, cursor_after \\ nil, with_profile_only \\ true), do: list_followers(current_user, current_user, with_profile_only)
 
   def list_followers(%{id: user_id} = _user, current_user \\ nil, paginate? \\ true, cursor_after \\ nil, with_profile_only \\ true) when is_binary(user_id) do
-    query([followers: user_id], current_user)
-    |> maybe_with_follower_profile_only(with_profile_only)
+    query([object: user_id], current_user)
+    # |> maybe_with_follower_profile_only(with_profile_only)
     |> many(paginate?, cursor_after)
   end
 
@@ -160,9 +131,9 @@ defmodule Bonfire.Social.Follows do
   end
 
   def unfollow(follower, %{} = followed) do
-    with [id] <- delete_by_both(follower, followed) do
+    with [_id] <- delete_by_both(follower, followed) do
       # delete the like activity & feed entries
-    Activities.delete_by_subject_verb_object(follower, :follow, followed)
+      Activities.delete_by_subject_verb_object(follower, :follow, followed)
     end
   end
 
@@ -181,18 +152,18 @@ defmodule Bonfire.Social.Follows do
   end
 
   #doc "Delete Follows where i am the follower"
-  defp delete_by_follower(user), do: query([follower: user], skip_boundary_check: true) |> do_delete()
+  defp delete_by_follower(user), do: query([subject: user], skip_boundary_check: true) |> do_delete()
 
   #doc "Delete Follows where i am the followed"
-  defp delete_by_followed(user), do: query([followed: user], skip_boundary_check: true) |> do_delete()
+  defp delete_by_followed(user), do: query([object: user], skip_boundary_check: true) |> do_delete()
 
   #doc "Delete Follows where i am the follower or the followed."
   # defp delete_by_any(me), do: do_delete(by_any_q(me))
 
   #doc "Delete Follows where i am the follower and someone else is the followed."
-  defp delete_by_both(me, followed), do: query([follower: me, followed: followed], skip_boundary_check: true) |> do_delete()
+  defp delete_by_both(me, object), do: [subject: me, object: object] |> query(skip_boundary_check: true) |> do_delete()
 
-  defp do_delete(q), do: elem(repo().delete_all(q), 1)
+  defp do_delete(q), do: Ecto.Query.exclude(q, :preload) |> repo().delete_all() |> elem(1)
 
 
   ###

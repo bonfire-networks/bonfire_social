@@ -39,7 +39,7 @@ defmodule Bonfire.Social.Activities do
     attrs = %{subject_id: subject_id, verb_id: verb_id, object_id: object_id}
 
     with {:ok, activity} <- repo().put(changeset(attrs)) do
-       {:ok, %{activity | object: object, subject: subject, subject_profile: Map.get(subject, :profile), subject_character: Map.get(subject, :character)}}
+       {:ok, %{activity | object: object, subject: subject}}
     end
   end
 

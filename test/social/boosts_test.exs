@@ -13,10 +13,10 @@ defmodule Bonfire.Social.BoostsTest do
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
     assert {:ok, boosted} = Posts.publish(me, attrs)
 
-    assert {:ok, boost} = Boosts.boost(me, boosted)
-    #IO.inspect(boost)
-    assert boost.booster_id == me.id
-    assert boost.boosted_id == boosted.id
+    assert {:ok, %{activity: activity}} = Boosts.boost(me, boosted)
+    # IO.inspect(activity)
+    assert activity.subject.id == me.id
+    assert activity.object.id == boosted.id
   end
 
   test "can check if I boosted something" do

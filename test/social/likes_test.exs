@@ -11,13 +11,13 @@ defmodule Bonfire.Social.LikesTest do
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
     assert {:ok, post} = Posts.publish(me, attrs)
 
-    assert {:ok, like} = Likes.like(me, post)
-    #IO.inspect(like)
-    assert like.liker_id == me.id
-    assert like.liked_id == post.id
+    assert {:ok, %{activity: activity}} = Likes.like(me, post)
+    # IO.inspect(activity)
+    assert activity.subject.id == me.id
+    assert activity.object.id == post.id
   end
 
-  test "can check if I post something" do
+  test "can check if I like something" do
     me = Fake.fake_user!()
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
     assert {:ok, post} = Posts.publish(me, attrs)

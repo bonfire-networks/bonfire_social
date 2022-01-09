@@ -5,6 +5,8 @@ defmodule Bonfire.Social.Flags do
   alias Bonfire.Boundaries.Verbs
   # alias Bonfire.Data.Social.FlagCount
   alias Bonfire.Social.{Activities, FeedActivities}
+  alias Bonfire.Social.Edges
+
   use Bonfire.Repo,
     searchable_fields: [:flagger_id, :flagged_id]
   import Bonfire.Common.Utils
@@ -13,12 +15,15 @@ defmodule Bonfire.Social.Flags do
   def context_module, do: Flag
   def federation_module, do: ["Flag", {"Create", "Flag"}, {"Undo", "Flag"}, {"Delete", "Flag"}]
 
-  def flagged?(%User{}=user, flagged), do: not is_nil(get!(user, flagged))
-  def get(%User{}=user, flagged), do: repo().single(by_both_q(user, flagged))
-  def get!(%User{}=user, flagged), do: repo().one(by_both_q(user, flagged))
-  def by_flagger(%User{}=user), do: repo().many(by_flagger_q(user))
-  def by_flagged(%User{}=user), do: repo().many(by_flagged_q(user))
-  def by_any(%User{}=user), do: repo().many(by_any_q(user))
+  def flagged?(%User{}=user, object), do: not is_nil(get!(user, object))
+
+  def get(subject, object), do: [subject: subject, object: object] |> query(current_user: subject) |> repo().single()
+  def get!(subject, objects) when is_list(objects), do: [subject: subject, object: objects] |> query(current_user: subject) |> repo().all()
+  def get!(subject, object), do: [subject: subject, object: object] |> query(current_user: subject) |> repo().one()
+
+  def by_flagger(%{}=subject), do: [subject: subject] |> query(current_user: subject) |> repo().many()
+  def by_flagged(%{}=object), do: [object: object] |> query(current_user: object) |> repo().many()
+  # def by_any(%User{}=user), do: repo().many(by_any_q(user))
 
   def flag(%User{} = flagger, %{} = flagged) do
     with {:ok, flag} <- create(flagger, flagged) do
@@ -49,35 +54,49 @@ defmodule Bonfire.Social.Flags do
   end
 
 
-  @doc "List all flags (which are in a feed). Only for admins."
-  def list(current_user, opts \\ [], preloads \\ :all) when not is_nil(current_user) do
-    # TODO: double check that we're admin
-    # query FeedPublish
-    [flags: {:all, &filter/3} ]
-    |> FeedActivities.feed_paginated(current_user, opts, preloads)
+  def list_paginated(filters, opts \\ []) do
+    filters
+    |> query(opts)
+    |> Bonfire.Repo.many_paginated(opts)
+    # TODO: activity preloads
   end
 
   @doc "List current user's flags, which are in their outbox"
-  def list_my(current_user, opts \\ [], preloads \\ :all) when is_binary(current_user) or is_map(current_user) do
-    list_by(current_user, current_user, opts, preloads)
+  def list_my(opts) do
+    list_by(current_user(opts), opts)
   end
 
   @doc "List flags by the user and which are in their outbox"
-  def list_by(by_user, current_user \\ nil, opts \\ [], preloads \\ :all) when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
+  def list_by(by_user, opts \\ []) when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
 
     # query FeedPublish
-    [flags_by: {ulid(by_user), &filter/3} ]
-    |> FeedActivities.feed_paginated(current_user, opts, preloads)
+    [subject: by_user ]
+    |> list_paginated(opts)
   end
 
   @doc "List flag of an object and which are in a feed"
-  def list_of(id, current_user \\ nil, opts \\ [], preloads \\ :all) when is_binary(id) or is_list(id) or is_map(id) do
+  def list_of(id, opts \\ []) when is_binary(id) or is_list(id) or is_map(id) do
 
     # query FeedPublish
-    [flags_of: {ulid(id), &filter/3} ]
-    |> FeedActivities.feed_paginated(current_user, opts, preloads)
+    [object: id ]
+    |> list_paginated(opts)
   end
 
+  defp query_base(filters, opts) do
+    Edges.query(Flag, filters, opts)
+    # |> proload(edge: [
+    #   # subject: {"booster_", [:profile, :character]},
+    #   # object: {"boosted_", [:profile, :character, :post_content]}
+    #   ])
+    # |> query_filter(filters)
+  end
+
+  def query([:all], opts), do: [] |> query(opts)
+  def query([my: :flags], opts), do: [subject: current_user(opts)] |> query(opts)
+
+  def query(filters, opts) do
+    query_base(filters, opts)
+  end
 
   defp create(%{} = flagger, %{} = flagged) do
     changeset(flagger, flagged) |> repo().insert()
@@ -88,78 +107,19 @@ defmodule Bonfire.Social.Flags do
   end
 
   #doc "Delete flags where i am the flagger"
-  defp delete_by_flagger(%User{}=me), do: elem(repo().delete_all(by_flagger_q(me)), 1)
+  defp delete_by_flagger(%{}=subject), do: [subject: subject] |> query(skip_boundary_check: true) |> do_delete()
 
   #doc "Delete flags where i am the flagged"
-  defp delete_by_flagged(%User{}=me), do: elem(repo().delete_all(by_flagged_q(me)), 1)
+  defp delete_by_flagged(%{}=object), do: [object: object] |> query(skip_boundary_check: true) |> do_delete()
 
   #doc "Delete flags where i am the flagger or the flagged."
-  defp delete_by_any(%User{}=me), do: elem(repo().delete_all(by_any_q(me)), 1)
+  # defp delete_by_any(%User{}=me), do: elem(repo().delete_all(by_any_q(me)), 1)
 
   #doc "Delete flags where i am the flagger and someone else is the flagged."
-  defp delete_by_both(%User{}=me, %{}=flagged), do: elem(repo().delete_all(by_both_q(me, flagged)), 1)
+  defp delete_by_both(me, object), do: [subject: me, object: object] |> query(skip_boundary_check: true) |> do_delete()
 
-  defp by_flagger_q(%User{id: id}) do
-    from f in Flag,
-      where: f.flagger_id == ^id,
-      select: f.id
-  end
+  defp do_delete(q), do: Ecto.Query.exclude(q, :preload) |> repo().delete_all() |> elem(1)
 
-  defp by_flagged_q(%User{id: id}) do
-    from f in Flag,
-      where: f.flagged_id == ^id,
-      select: f.id
-  end
-
-  defp by_any_q(%User{id: id}) do
-    from f in Flag,
-      where: f.flagger_id == ^id or f.flagged_id == ^id,
-      select: f.id
-  end
-
-  defp by_both_q(%User{id: flagger}, %{id: flagged}), do: by_both_q(flagger, flagged)
-
-  defp by_both_q(flagger, flagged) when is_binary(flagger) and is_binary(flagged) do
-    from f in Flag,
-      where: f.flagger_id == ^flagger or f.flagged_id == ^flagged,
-      select: f.id
-  end
-
-  #doc "List flags which are in a feed"
-  def filter(:flags, :all, query) do
-    verb_id = Verbs.verbs()[:flag]
-
-    query
-    |> join_preload([:activity])
-    |> where(
-      [activity: activity],
-      activity.verb_id==^verb_id
-    )
-  end
-
-  #doc "List flags created by the user and which are in their outbox"
-  def filter(:flags_of, id, query) do
-    verb_id = Verbs.verbs()[:flag]
-
-    query
-    |> join_preload([:activity])
-    |> where(
-      [activity: activity],
-      activity.verb_id==^verb_id and activity.object_id == ^ulid(id)
-    )
-  end
-
-  #doc "List flags created by the user and which are in their outbox"
-  def filter(:flags_by, user_id, query) do
-    verb_id = Verbs.verbs()[:flag]
-
-      query
-      |> join_preload([:activity, :subject_character])
-      |> where(
-        [activity: activity, subject_character: flagger],
-        activity.verb_id==^verb_id and flagger.id == ^ulid(user_id)
-      )
-  end
 
   def ap_publish_activity("create", %Flag{} = flag) do
     flag = repo().preload(flag, flagged: [])
