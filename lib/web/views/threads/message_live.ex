@@ -50,8 +50,8 @@ defmodule Bonfire.Social.Web.MessageLive do
               # |> IO.inspect(label: "the message")
 
       # IO.inspect(activity)
-      other_user = if e(activity, :subject_character, :id, nil) != e(current_user, :id, nil) && e(activity, :subject_character, :id, nil) do
-        e(activity, :subject_character, nil)
+      other_user = if e(activity, :subject, :character, :id, nil) != e(current_user, :id, nil) && e(activity, :subject, :character, :id, nil) do
+        e(activity, :subject, :character, nil)
       else
         if e(activity, :replied, :reply_to_created, :creator_character, :id, nil) != e(current_user, :id, nil) && e(activity, :replied, :reply_to_created, :creator_character, nil), do: e(activity, :replied, :reply_to_created, :creator_character, nil)
       end
