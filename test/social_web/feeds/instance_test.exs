@@ -10,9 +10,10 @@ defmodule Bonfire.Social.Feeds.Instance.Test do
     test "not logged in" do
       conn = conn()
       conn = get(conn, "/local")
-      doc = floki_response(conn) #|> IO.inspect
+      doc = floki_response(conn)
+      main = Floki.find(doc, "main") # |> IO.inspect
       # assert redirected_to(conn) =~ "/login"
-      assert [_] = Floki.find(doc, "#feed:local")
+      assert [_] = Floki.find(doc, "[id='feed:instance']")
     end
 
     test "with account" do
@@ -21,7 +22,7 @@ defmodule Bonfire.Social.Feeds.Instance.Test do
       conn = conn(account: account)
       next = "/local"
       {view, doc} = floki_live(conn, next) #|> IO.inspect
-      assert [_] = Floki.find(doc, "#feed:local")
+      assert [_] = Floki.find(doc, "[id='feed:instance']")
     end
 
     test "with user" do
@@ -30,7 +31,7 @@ defmodule Bonfire.Social.Feeds.Instance.Test do
       conn = conn(user: user, account: account)
       next = "/local"
       {view, doc} = floki_live(conn, next) #|> IO.inspect
-      assert [_] = Floki.find(doc, "#feed:local")
+      assert [_] = Floki.find(doc, "[id='feed:instance']")
     end
 
 
@@ -45,7 +46,7 @@ defmodule Bonfire.Social.Feeds.Instance.Test do
       conn = conn(user: user, account: account)
       next = "/local"
       {view, doc} = floki_live(conn, next) #|> IO.inspect
-      assert [feed] = Floki.find(doc, "#feed:local")
+      assert [feed] = Floki.find(doc, "[id='feed:instance']")
       assert Floki.text(feed) =~ "test post name"
     end
 
@@ -61,7 +62,7 @@ defmodule Bonfire.Social.Feeds.Instance.Test do
       conn = conn(user: user, account: account)
       next = "/local"
       {view, doc} = floki_live(conn, next) #|> IO.inspect
-      assert [feed] = Floki.find(doc, "#feed:local")
+      assert [feed] = Floki.find(doc, "[id='feed:instance']")
       assert Floki.text(feed) =~ "test post name"
 
     end
@@ -86,7 +87,7 @@ defmodule Bonfire.Social.Feeds.Instance.Test do
       conn = conn(user: user2, account: account2)
       next = "/local"
       {view, doc} = floki_live(conn, next) #|> IO.inspect
-      assert [feed] = Floki.find(doc, "#feed:local")
+      assert [feed] = Floki.find(doc, "[id='feed:instance']")
       refute Floki.text(feed) =~ "test post name"
     end
   end
