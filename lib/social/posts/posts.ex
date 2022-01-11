@@ -152,11 +152,11 @@ defmodule Bonfire.Social.Posts do
     verb_id = Verbs.verbs()[:create]
 
     query
-      |> join_preload([:activity, :object_post])
-      |> join_preload([:activity, :object_created])
-      |> join_preload([:activity, :replied])
+      |> join_preload([:activity, :object, :post])
+      |> join_preload([:activity, :object, :created])
+      |> join_preload([:activity, :object, :replied])
       |> where(
-        [activity: activity, object_post: post, object_created: created, replied: replied],
+      [activity: activity, object: object, post: post, created: created, replied: replied],
         is_nil(replied.reply_to_id) and not is_nil(post.id) and activity.verb_id==^verb_id and created.creator_id == ^user_id
       )
   end

@@ -139,20 +139,19 @@ defmodule Bonfire.Social.Messages do
     verb_id = Verbs.verbs()[:create]
 
     query
-    |> join_preload([:activity, :object_message])
-    |> join_preload([:activity, :object_created])
-    |> join_preload([:activity, :replied])
-    |> join_preload([:activity, :tags])
+    |> join_preload([:activity, :object, :message])
+    |> join_preload([:activity, :object, :created])
+    |> join_preload([:activity, :object, :tags])
     |> where(
-      [activity: activity, object_message: message, object_created: created, replied: replied, tags: tags],
+      [activity: activity, message: message, created: object_created, tags: tags],
       not is_nil(message.id)
       and activity.verb_id==^verb_id
       and (
         (
-          created.creator_id == ^current_user_id
+          object_created.creator_id == ^current_user_id
           and tags.id == ^user_id
         ) or (
-          created.creator_id == ^user_id
+          object_created.creator_id == ^user_id
           # and tags.id == ^current_user_id
         )
       )
@@ -163,11 +162,9 @@ defmodule Bonfire.Social.Messages do
     verb_id = Verbs.verbs()[:create]
 
     query
-    |> join_preload([:activity, :object_message])
-    |> join_preload([:activity, :object_created])
-    |> join_preload([:activity, :replied])
+    |> join_preload([:activity, :object, :message])
     |> where(
-      [activity: activity, object_message: message, object_created: created, replied: replied],
+      [message: message],
       not is_nil(message.id) # and activity.verb_id==^verb_id
     )
   end
