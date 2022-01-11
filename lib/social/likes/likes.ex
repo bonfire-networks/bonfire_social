@@ -43,7 +43,7 @@ defmodule Bonfire.Social.Likes do
   end
 
   def unlike(%User{}=liker, %{}=liked) do
-    delete_by_both(liker, liked) # delete the Like
+    Edges.delete_by_both(liker, liked) # delete the Like
     Activities.delete_by_subject_verb_object(liker, :like, liked) # delete the like activity & feed entries
     # Note: the like count is automatically decremented by DB triggers
   end
@@ -55,7 +55,7 @@ defmodule Bonfire.Social.Likes do
   end
 
   defp query_base(filters, opts) do
-    Edges.query(Like, filters, opts)
+    Edges.query_parent(Like, filters, opts)
     # |> proload(edge: [
     #   # subject: {"liker_", [:profile, :character]},
     #   # object: {"liked_", [:profile, :character, :post_content]}
@@ -94,25 +94,10 @@ defmodule Bonfire.Social.Likes do
     list([object: id], current_user, cursor_after, preloads)
   end
 
-  defp create(%{} = liker, %{} = liked) do
-    changeset(liker, liked) |> repo().insert()
+  defp create(liker, liked) do
+    Edges.changeset(Like, liker, liked, "11KES11KET0BE11KEDY0VKN0WS") |> repo().insert()
   end
 
-  defp changeset(%{id: liker}, %{id: liked}) do
-    Like.changeset(%Like{}, %{liker_id: liker, liked_id: liked})
-  end
-
-  #doc "Delete likes where i am the liker"
-  defp delete_by_liker(%{}=subject), do: [subject: subject] |> query(skip_boundary_check: true) |> repo().delete_all() |> elem(1)
-
-  #doc "Delete likes where i am the liked"
-  defp delete_by_liked(%{}=object), do: [object: object] |> query(skip_boundary_check: true) |> repo().delete_all() |> elem(1)
-
-  #doc "Delete likes where i am the liker or the liked."
-  # defp delete_by_any(%{}=any), do: [subject: subject, object: object] |> query(skip_boundary_check: true) |> repo().delete_all() |> elem(1)
-
-  #doc "Delete likes where i am the liker and someone else is the liked."
-  defp delete_by_both(%{}=subject, %{}=object), do: [subject: subject, object: object] |> query(skip_boundary_check: true) |> repo().delete_all() |> elem(1)
 
   defp by_type_q(q, type) do
     q

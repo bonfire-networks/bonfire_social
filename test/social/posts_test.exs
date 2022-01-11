@@ -32,7 +32,7 @@ defmodule Bonfire.Social.PostsTest do
   test "get / read a post" do
     attrs_1 = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message 1</p>"}}
     user = Fake.fake_user!()
-    assert {:ok, post} = Posts.publish(user, attrs_1)
+    assert {:ok, post} = Posts.publish(user, attrs_1, "public")
     assert {:ok, read} = Posts.read(post.id, user)
     assert post.id == read.id
   end

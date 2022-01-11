@@ -43,7 +43,7 @@ defmodule Bonfire.Social.Flags do
   end
 
   def unflag(%User{}=flagger, %{}=flagged) do
-    delete_by_both(flagger, flagged) # delete the Flag
+    Edges.delete_by_both(flagger, flagged) # delete the Flag
     Activities.delete_by_subject_verb_object(flagger, :flag, flagged) # delete the flag activity & feed entries (not needed unless publishing flags to feeds)
     # TODO: decrement the flag count
   end
@@ -83,7 +83,7 @@ defmodule Bonfire.Social.Flags do
   end
 
   defp query_base(filters, opts) do
-    Edges.query(Flag, filters, opts)
+    Edges.query_parent(Flag, filters, opts)
     # |> proload(edge: [
     #   # subject: {"booster_", [:profile, :character]},
     #   # object: {"boosted_", [:profile, :character, :post_content]}
@@ -98,27 +98,9 @@ defmodule Bonfire.Social.Flags do
     query_base(filters, opts)
   end
 
-  defp create(%{} = flagger, %{} = flagged) do
-    changeset(flagger, flagged) |> repo().insert()
+  defp create(flagger, flagged) do
+    Edges.changeset(Flag, flagger, flagged, "71AGSPAM0RVNACCEPTAB1E1TEM") |> repo().insert()
   end
-
-  defp changeset(%{id: flagger}, %{id: flagged}) do
-    Flag.changeset(%Flag{}, %{flagger_id: flagger, flagged_id: flagged})
-  end
-
-  #doc "Delete flags where i am the flagger"
-  defp delete_by_flagger(%{}=subject), do: [subject: subject] |> query(skip_boundary_check: true) |> do_delete()
-
-  #doc "Delete flags where i am the flagged"
-  defp delete_by_flagged(%{}=object), do: [object: object] |> query(skip_boundary_check: true) |> do_delete()
-
-  #doc "Delete flags where i am the flagger or the flagged."
-  # defp delete_by_any(%User{}=me), do: elem(repo().delete_all(by_any_q(me)), 1)
-
-  #doc "Delete flags where i am the flagger and someone else is the flagged."
-  defp delete_by_both(me, object), do: [subject: me, object: object] |> query(skip_boundary_check: true) |> do_delete()
-
-  defp do_delete(q), do: Ecto.Query.exclude(q, :preload) |> repo().delete_all() |> elem(1)
 
 
   def ap_publish_activity("create", %Flag{} = flag) do

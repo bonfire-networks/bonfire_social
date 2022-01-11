@@ -46,7 +46,7 @@ defmodule Bonfire.Social.Boosts do
   end
 
   def unboost(%{}=booster, %{}=boosted) do
-    delete_by_both(booster, boosted) # delete the Boost
+    Edges.delete_by_both(booster, boosted) # delete the Boost
     Activities.delete_by_subject_verb_object(booster, :boost, boosted) # delete the boost activity & feed entries
     # TODO: decrement the boost count
   end
@@ -86,7 +86,7 @@ defmodule Bonfire.Social.Boosts do
   end
 
   defp query_base(filters, opts) do
-    Edges.query(Boost, filters, opts)
+    Edges.query_parent(Boost, filters, opts)
     # |> proload(edge: [
     #   # subject: {"booster_", [:profile, :character]},
     #   # object: {"boosted_", [:profile, :character, :post_content]}
@@ -102,26 +102,8 @@ defmodule Bonfire.Social.Boosts do
 
 
   defp create(booster, boosted) do
-    changeset(booster, boosted) |> repo().insert()
+    Edges.changeset(Boost, booster, boosted, "300STANN0VNCERESHARESH0VTS") |> repo().insert()
   end
-
-  defp changeset(booster, boosted) do
-    Boost.changeset(%Boost{}, %{booster_id: ulid(booster), boosted_id: ulid(boosted)})
-  end
-
-  #doc "Delete boosts where i am the booster"
-  defp delete_by_booster(%{}=subject), do: query([subject: subject], skip_boundary_check: true) |> do_delete()
-
-  #doc "Delete boosts where i am the boosted"
-  defp delete_by_boosted(%{}=object), do: query([object: object], skip_boundary_check: true) |> do_delete()
-
-  #doc "Delete boosts where i am the booster or the boosted."
-  # defp delete_by_any(%{}=me), do: elem(repo().delete_all(by_any_q(me)), 1)
-
-  #doc "Delete boosts where i am the booster and someone else is the boosted."
-  defp delete_by_both(me, object), do: [subject: me, object: object] |> query(skip_boundary_check: true) |> do_delete()
-
-  defp do_delete(q), do: Ecto.Query.exclude(q, :preload) |> repo().delete_all() |> elem(1)
 
 
   def ap_publish_activity("create", boost) do
