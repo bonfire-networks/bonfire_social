@@ -1,12 +1,20 @@
 defmodule Bonfire.Social.Edges do
 
+  alias Bonfire.Data.Edges.Edge
+
   import Bonfire.Boundaries.Queries
   import Bonfire.Common.Utils
-  import Ecto.Query
-  import EctoSparkles
-  require Logger
 
-  def query(schema, filters, opts) do
+  use Bonfire.Repo,
+      schema: Edge
+
+  def query(filters, opts) do
+    from(root in Edge, as: :edge)
+    |> boundarise(root.id, opts)
+    |> filter(filters, opts)
+  end
+
+  def query_parent(schema, filters, opts) do
     from(root in schema, as: :root)
     |> proload(:edge)
     |> boundarise(root.id, opts)
@@ -40,4 +48,35 @@ defmodule Bonfire.Social.Edges do
     Logger.warn("Edges: unrecognised filters: #{inspect filters} so just returning query as-is")
     query
   end
+
+  def changeset(schema, subject, object, table) do
+    # TODO get table_id based on schema
+    schema.changeset(%{edge: %{
+      subject_id: ulid(subject),
+      object_id: ulid(object),
+      table_id: table
+      }})
+    |> changeset_cast()
+  end
+
+  defp changeset_cast(cs) do
+    cs
+    |> Changeset.cast_assoc(:edge, [:required, with: &Edge.changeset/2])
+  end
+
+  #doc "Delete Follows where i am the subject"
+  def delete_by_subject(user), do: query([subject: user], skip_boundary_check: true) |> do_delete()
+
+  #doc "Delete Follows where i am the object"
+  def delete_by_object(user), do: query([object: user], skip_boundary_check: true) |> do_delete()
+
+  #doc "Delete Follows where i am the subject or the object."
+  # defp delete_by_any(me), do: do_delete(by_any_q(me))
+
+  #doc "Delete Follows where i am the subject and someone else is the object."
+  def delete_by_both(me, object), do: [subject: me, object: object] |> query(skip_boundary_check: true) |> do_delete()
+
+  defp do_delete(q), do: Ecto.Query.exclude(q, :preload) |> repo().delete_all() |> elem(1)
+
+
 end

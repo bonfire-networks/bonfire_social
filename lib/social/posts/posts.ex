@@ -103,10 +103,10 @@ defmodule Bonfire.Social.Posts do
   end
 
   @doc "List posts created by the user and which are in their outbox, which are not replies"
-  def list_by(by_user, opts_or_current_user \\ [], preloads \\ :all) when is_binary(by_user) or is_list(by_user) do
+  def list_by(by_user, opts_or_current_user \\ [], preloads \\ :all) do
 
     # query FeedPublish
-    [feed_id: by_user, posts_by: {by_user, &filter/3}]
+    [feed_id: by_user, posts_by: {ulid(by_user), &filter/3}]
     |> list_paginated(opts_or_current_user, preloads)
   end
 
@@ -152,11 +152,11 @@ defmodule Bonfire.Social.Posts do
     verb_id = Verbs.verbs()[:create]
 
     query
-      |> join_preload([:activity, :object, :post])
-      |> join_preload([:activity, :object, :created])
-      |> join_preload([:activity, :object, :replied])
+    |> proload(activity: [
+        object: {"object_", [:post, :created, :replied]}
+      ])
       |> where(
-      [activity: activity, object: object, post: post, created: created, replied: replied],
+      [activity: activity, object_post: post, object_created: created, object_replied: replied],
         is_nil(replied.reply_to_id) and not is_nil(post.id) and activity.verb_id==^verb_id and created.creator_id == ^user_id
       )
   end

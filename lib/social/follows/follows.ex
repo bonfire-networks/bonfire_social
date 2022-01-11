@@ -6,6 +6,7 @@ defmodule Bonfire.Social.Follows do
   alias Bonfire.Data.Identity.User
   alias Bonfire.Social.Integration
   alias Bonfire.Social.Edges
+  alias Ecto.Changeset
 
   import Bonfire.Boundaries.Queries
   import Bonfire.Common.Utils
@@ -14,6 +15,8 @@ defmodule Bonfire.Social.Follows do
     schema: Follow,
     searchable_fields: [:id, :follower_id, :followed_id],
     sortable_fields: [:id]
+
+  @follow_table "70110WTHE1EADER1EADER1EADE"
 
   def queries_module, do: Follow
   def context_module, do: Follow
@@ -33,12 +36,8 @@ defmodule Bonfire.Social.Follows do
   # end
 
   defp query_base(filters, opts) do
-    Edges.query(Follow, filters, opts)
-    |> proload(edge: [
-      subject: {"follower_", [:profile, :character]},
-      object: {"followed_", [:profile, :character]}
-      ])
-    # |> query_filter(filters)
+    Edges.query_parent(Follow, filters, opts)
+    |> query_filter(Keyword.drop(filters, [:object, :subject]))
   end
 
   def query([my: :followed], opts), do: [subject: current_user(opts)] |> query(opts)
@@ -47,6 +46,17 @@ defmodule Bonfire.Social.Follows do
 
   def query(filters, opts) do
     query_base(filters, opts)
+    |> maybe_preload(!is_list(opts) || opts[:skip_preload])
+  end
+
+  defp maybe_preload(query, _skip_preload? = true), do: query
+
+  defp maybe_preload(query, _) do
+    query
+    |> proload([edge: [
+      subject: {"follower_", [:profile, :character]},
+      object: {"followed_", [:profile, :character]}
+      ]])
   end
 
   def list_my_followed(current_user, paginate? \\ true, cursor_after \\ nil, with_profile_only \\ true),
@@ -131,7 +141,7 @@ defmodule Bonfire.Social.Follows do
   end
 
   def unfollow(follower, %{} = followed) do
-    with [_id] <- delete_by_both(follower, followed) do
+    with [_id] <- Edges.delete_by_both(follower, followed) do
       # delete the like activity & feed entries
       Activities.delete_by_subject_verb_object(follower, :follow, followed)
     end
@@ -144,26 +154,8 @@ defmodule Bonfire.Social.Follows do
   end
 
   defp create(follower, followed) do
-    changeset(follower, followed) |> repo().insert()
+    Edges.changeset(Follow, follower, followed, @follow_table) |> repo().insert()
   end
-
-  defp changeset(follower, followed) do
-    Follow.changeset(%Follow{}, %{follower_id: ulid(follower), followed_id: ulid(followed)})
-  end
-
-  #doc "Delete Follows where i am the follower"
-  defp delete_by_follower(user), do: query([subject: user], skip_boundary_check: true) |> do_delete()
-
-  #doc "Delete Follows where i am the followed"
-  defp delete_by_followed(user), do: query([object: user], skip_boundary_check: true) |> do_delete()
-
-  #doc "Delete Follows where i am the follower or the followed."
-  # defp delete_by_any(me), do: do_delete(by_any_q(me))
-
-  #doc "Delete Follows where i am the follower and someone else is the followed."
-  defp delete_by_both(me, object), do: [subject: me, object: object] |> query(skip_boundary_check: true) |> do_delete()
-
-  defp do_delete(q), do: Ecto.Query.exclude(q, :preload) |> repo().delete_all() |> elem(1)
 
 
   ###
