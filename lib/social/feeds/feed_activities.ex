@@ -49,7 +49,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed(feed_id_or_ids, current_user_or_socket, opts, preloads) when is_binary(feed_id_or_ids) or is_list(feed_id_or_ids) do
     # IO.inspect(feed_id_or_ids: feed_id_or_ids)
-    feed_id_or_ids = maybe_flatten(feed_id_or_ids)
+    feed_id_or_ids = ulid(feed_id_or_ids)
 
     pubsub_subscribe(feed_id_or_ids, current_user_or_socket) # subscribe to realtime feed updates
 
@@ -63,7 +63,7 @@ defmodule Bonfire.Social.FeedActivities do
     case Bonfire.Social.Feeds.my_inbox_feed_id(current_user_or_socket) do
       feeds when is_binary(feeds) or is_list(feeds) ->
 
-        feeds = maybe_flatten(feeds)
+        feeds = ulid(feeds)
         # IO.inspect(query_notifications_feed_ids: feeds)
 
         pubsub_subscribe(feeds, current_user_or_socket) # subscribe to realtime feed updates
@@ -136,7 +136,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   def query([feed_id: feed_id_or_ids], opts, preloads, query) when is_binary(feed_id_or_ids) or is_list(feed_id_or_ids) do
     # IO.inspect(feed_id_or_ids: feed_id_or_ids)
-    feed_id_or_ids = maybe_flatten(feed_id_or_ids)
+    feed_id_or_ids = ulid(feed_id_or_ids)
 
     # query FeedPublish, without messages
     [

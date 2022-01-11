@@ -33,7 +33,7 @@ defmodule Bonfire.Social.Feeds do
     else: extra_feeds ++ [my_outbox_id]
 
     with current_user when not is_nil(current_user) <- current_user,
-         following_ids when is_list(following_ids) <- Follows.list_followed(current_user) do
+         following_ids when is_list(following_ids) <- Follows.list_follows_by_subject(current_user) do
       #IO.inspect(subs: following_ids)
       extra_feeds ++ following_ids
     else
