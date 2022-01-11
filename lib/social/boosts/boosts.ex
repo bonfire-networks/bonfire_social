@@ -34,8 +34,7 @@ defmodule Bonfire.Social.Boosts do
 
       FeedActivities.maybe_notify_creator(booster, published, boosted) #|> IO.inspect
 
-      with_activity = Activities.activity_under_object(published, boost) #|> IO.inspect()
-      {:ok, with_activity}
+      {:ok, Activities.activity_under_object(published, boost)}
     end
   end
   def boost(%{} = booster, boosted) when is_binary(boosted) do
