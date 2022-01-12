@@ -24,7 +24,7 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
       next = "/home"
       {view, doc} = floki_live(conn, next)
       main = Floki.find(doc, "main") |> IO.inspect
-      assert [_] = Floki.find(doc, "[id='feed:my:#{user.id}']")
+      assert [] = Floki.find(doc, "[id='feed:my:#{user.id}']")
     end
 
     test "with user" do
@@ -39,7 +39,7 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
     test "my own posts in my feed" do
       account = fake_account!()
       user = fake_user!(account)
-      attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
+      attrs = %{to_circles: [:guest], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
       assert {:ok, post} = Posts.publish(user, attrs)
       assert post.post_content.name =~ "test post name"
@@ -70,7 +70,7 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
       next = "/home"
       {view, doc} = floki_live(conn, next) #|> IO.inspect
       IO.inspect(user: user2)
-      main = Floki.find(doc, "main") |> IO.inspect()
+      main = Floki.find(doc, "main") #|> IO.inspect()
       assert [feed] = Floki.find(doc, "[id='feed:my:#{user2.id}']")
       assert Floki.text(feed) =~ "test post name"
     end
