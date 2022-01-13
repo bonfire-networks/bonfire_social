@@ -36,7 +36,7 @@ defmodule Bonfire.Social.Integration do
       Bonfire.Federate.ActivityPub.APPublishWorker.enqueue(verb, %{
         "context_id" => thing_id,
         "user_id" => user_id
-      })
+      }, unique: [period: 5])
     end
 
     :ok

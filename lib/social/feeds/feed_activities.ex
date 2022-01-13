@@ -323,7 +323,6 @@ defmodule Bonfire.Social.FeedActivities do
   Creates a new local activity or takes an existing one and publishes to object's inbox (assuming object is treated as a character)
   """
   def notify_object(subject, verb_or_activity, object) do
-
     notify_characters(subject, verb_or_activity, object, object)
     # TODO: notify remote users via AP
   end
@@ -372,8 +371,18 @@ defmodule Bonfire.Social.FeedActivities do
   end
   defp create_and_put_in_feeds(subject, verb, object, %{feed_id: feed_id}), do: create_and_put_in_feeds(subject, verb, object, feed_id)
   defp create_and_put_in_feeds(subject, verb, object, _) when is_map(object) do
-    # for activities with no target feed, still create the activity
-    Activities.create(subject, verb, object)
+    # for activities with no target feed, still create the activity and push it to AP
+    ret = Activities.create(subject, verb, object)
+    try do
+      # FIXME only run if ActivityPub is a target circle/feed?
+      # TODO: only run for non-local activity
+        {:ok, activity} = ret
+        maybe_federate_activity(activity)
+
+        ret
+      rescue
+        _ -> ret
+      end
   end
 
   defp maybe_index_activity(subject, verb, object) do
