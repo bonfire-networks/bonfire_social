@@ -32,6 +32,9 @@ defmodule Bonfire.Social.Boosts do
     {:ok, published} <- FeedActivities.publish(booster, :boost, boosted) do
       # TODO: increment the boost count
 
+      # make the boost itself visible to both
+      Bonfire.Me.Users.Boundaries.maybe_make_visible_for(booster, boost, boosted)
+
       FeedActivities.maybe_notify_creator(booster, published, boosted) #|> IO.inspect
 
       {:ok, Activities.activity_under_object(published, boost)}

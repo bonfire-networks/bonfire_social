@@ -39,7 +39,7 @@ defmodule Bonfire.Social.Feeds.Fediverse.Test do
       user = fake_user!(account)
       attrs = %{to_circles: [:activity_pub], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
-      assert {:ok, post} = Posts.publish(user, attrs)
+      assert {:ok, post} = Posts.publish(user, attrs, "public")
       assert post.post_content.name =~ "test post name"
 
       conn = conn(user: user, account: account)
@@ -57,7 +57,7 @@ defmodule Bonfire.Social.Feeds.Fediverse.Test do
 
       attrs = %{to_circles: [:activity_pub, user2.id], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
-      assert {:ok, post} = Posts.publish(user, attrs)
+      assert {:ok, post} = Posts.publish(user, attrs, "public")
       assert post.post_content.name =~ "test post name"
 
       conn = conn(user: user2, account: account)
@@ -82,7 +82,7 @@ defmodule Bonfire.Social.Feeds.Fediverse.Test do
 
       attrs = %{to_circles: [:local], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
-      assert {:ok, post} = Posts.publish(user, attrs)
+      assert {:ok, post} = Posts.publish(user, attrs, "public")
       assert post.post_content.name =~ "test post name"
 
       conn = conn(user: user2, account: account2)

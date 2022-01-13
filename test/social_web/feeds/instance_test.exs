@@ -50,7 +50,7 @@ defmodule Bonfire.Social.Feeds.Instance.Test do
       assert Floki.text(feed) =~ "test post name"
     end
 
-    test "local posts from people I am not following in instance feed" do
+    test "local posts from people I am not following in instance feed (if local circles selected)" do
       user = fake_user!()
       attrs = %{to_circles: [:local], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 

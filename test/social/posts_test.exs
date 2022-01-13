@@ -7,7 +7,7 @@ defmodule Bonfire.Social.PostsTest do
   test "creation works" do
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
     user = Fake.fake_user!()
-    assert {:ok, post} = Posts.publish(user, attrs)
+    assert {:ok, post} = Posts.publish(user, attrs, "public")
     # activity = fp.activity
     # post = activity.object
     # IO.inspect(activity)
@@ -22,9 +22,9 @@ defmodule Bonfire.Social.PostsTest do
     attrs_2 = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message 2</p>"}}
     attrs_3 = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message 3</p>"}}
     user = Fake.fake_user!()
-    assert {:ok, _} = Posts.publish(user, attrs_1)
-    assert {:ok, _} = Posts.publish(user, attrs_2)
-    assert {:ok, _} = Posts.publish(user, attrs_3)
+    assert {:ok, _} = Posts.publish(user, attrs_1, "public")
+    assert {:ok, _} = Posts.publish(user, attrs_2, "public")
+    assert {:ok, _} = Posts.publish(user, attrs_3, "public")
     assert %{edges: posts} = Posts.list_by(user.id, user)
     assert length(posts) == 3
   end

@@ -26,17 +26,17 @@ defmodule Bonfire.Social.Feeds.Test do
       Follows.follow(bob, alice)
       attrs = %{to_circles: [:guest], post_content: %{summary: "summary", name: "test post name", html_body: "<p>first post/p>"}}
 
-      assert {:ok, post} = Posts.publish(alice, attrs)
+      assert {:ok, post} = Posts.publish(alice, attrs, "public")
 
       # Reply to the original post
       attrs_reply = %{post_content: %{summary: "summary", name: "name 2", html_body: "<p>reply to first post</p>"}, reply_to_id: post.id}
-      assert {:ok, post_reply} = Posts.publish(bob, attrs_reply)
+      assert {:ok, post_reply} = Posts.publish(bob, attrs_reply, "public")
 
       conn = conn(user: bob, account: account2)
       next = "/home"
       {view, doc} = floki_live(conn, next)
       assert doc
-        |> Floki.find("#feed_past  > article")
+        |> Floki.find("[data-id=feed]  > article")
         |> List.last
         |> Floki.text =~ "Replies (1)"
     end
@@ -52,14 +52,14 @@ defmodule Bonfire.Social.Feeds.Test do
       Follows.follow(bob, alice)
       attrs = %{to_circles: [:guest], post_content: %{summary: "summary", name: "test post name", html_body: "<p>first post/p>"}}
 
-      assert {:ok, post} = Posts.publish(alice, attrs)
+      assert {:ok, post} = Posts.publish(alice, attrs, "public")
       assert {:ok, boost} = Boosts.boost(bob, post)
 
       conn = conn(user: bob, account: account2)
       next = "/home"
       {view, doc} = floki_live(conn, next)
       assert doc
-        |> Floki.find("#feed_past  > article")
+        |> Floki.find("[data-id=feed]  > article")
         |> List.last
         |> Floki.text =~ "Boosted (1)"
     end
@@ -75,14 +75,14 @@ defmodule Bonfire.Social.Feeds.Test do
       Follows.follow(bob, alice)
       attrs = %{to_circles: [:guest], post_content: %{summary: "summary", name: "test post name", html_body: "<p>first post/p>"}}
 
-      assert {:ok, post} = Posts.publish(alice, attrs)
+      assert {:ok, post} = Posts.publish(alice, attrs, "public")
       assert {:ok, boost} = Likes.like(bob, post)
 
       conn = conn(user: bob, account: account2)
       next = "/home"
       {view, doc} = floki_live(conn, next)
       assert doc
-        |> Floki.find("#feed_past  > article")
+        |> Floki.find("[data-id=feed]  > article")
         |> List.last
         |> Floki.text =~ "Like (1)"
     end
