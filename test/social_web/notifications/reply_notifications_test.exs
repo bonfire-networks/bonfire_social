@@ -14,7 +14,7 @@ defmodule Bonfire.Social.Notifications.Threads.Test do
       someone = fake_user!(some_account)
 
       attrs = %{post_content: %{html_body: "<p>here is an epic html post</p>"}}
-      assert {:ok, post} = Posts.publish(someone, attrs)
+      assert {:ok, post} = Posts.publish(someone, attrs, "public")
 
       responder = fake_user!()
 

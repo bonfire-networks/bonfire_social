@@ -74,7 +74,7 @@ defmodule Bonfire.Social.MentionsTest do
     assert %{edges: []} = FeedActivities.feed(feed_id, mentioned)
   end
 
-  test "mentioning someone appears in my instance feed, if included in circles" do
+  test "mentioning someone appears in my instance feed, if they're part of included circles" do
     me = Fake.fake_user!()
     mentioned = Fake.fake_user!()
     attrs = %{to_circles: [Bonfire.Social.Feeds.named_feed_id(:local)], post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}

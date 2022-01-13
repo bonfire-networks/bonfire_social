@@ -12,7 +12,7 @@ defmodule Bonfire.Social.Activities.BoostPost.Test do
       poster = fake_user!()
       content = "here is an epic html post"
       attrs = %{to_circles: [:local], post_content: %{html_body: content}}
-      assert {:ok, post} = Posts.publish(poster, attrs)
+      assert {:ok, post} = Posts.publish(poster, attrs, "public")
 
       some_account = fake_account!()
       someone = fake_user!(some_account)
@@ -42,7 +42,7 @@ defmodule Bonfire.Social.Activities.BoostPost.Test do
       poster = fake_user!()
       content = "here is an epic html post"
       attrs = %{to_circles: [:local], post_content: %{html_body: content}}
-      assert {:ok, post} = Posts.publish(poster, attrs)
+      assert {:ok, post} = Posts.publish(poster, attrs, "public")
 
       some_account = fake_account!()
       someone = fake_user!(some_account)

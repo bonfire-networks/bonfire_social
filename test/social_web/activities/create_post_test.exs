@@ -21,7 +21,7 @@ defmodule Bonfire.Social.Activities.CreatePost.Test do
       {view, doc} = floki_live(conn, next) #|> IO.inspect
       assert view
       |> form(".create_activity form")
-      |> render_submit(%{"post" => %{"post_content" => %{"html_body" => content}}})
+      |> render_submit(%{"boundary_selected" => "public", "post" => %{"post_content" => %{"html_body" => content}}})
       |> Floki.text() =~ "Posted"
 
       # TODO: check if post appears instantly (websocket)

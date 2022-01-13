@@ -25,10 +25,13 @@ defmodule Bonfire.Social.Flags do
   def by_flagged(%{}=object), do: [object: object] |> query(current_user: object) |> repo().many()
   # def by_any(%User{}=user), do: repo().many(by_any_q(user))
 
-  def flag(%User{} = flagger, %{} = flagged) do
+  def flag(%{} = flagger, %{} = flagged) do
     with {:ok, flag} <- create(flagger, flagged) do
       # TODO: increment the flag count
       # TODO: put in admin(s) inbox feed?
+
+      # make the flag itself visible to the flagger ONLY
+      Bonfire.Me.Users.Boundaries.maybe_make_visible_for(flagger, flag, [])
 
       {:ok, activity} = FeedActivities.notify_admins(flagger, :flag, flagged)
 
@@ -36,7 +39,7 @@ defmodule Bonfire.Social.Flags do
       {:ok, with_activity}
     end
   end
-  def flag(%User{} = user, object) when is_binary(object) do
+  def flag(%{} = user, object) when is_binary(object) do
     with {:ok, object} <- Bonfire.Common.Pointers.get(object, current_user: user) do
       flag(user, object)
     end

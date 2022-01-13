@@ -19,17 +19,17 @@ defmodule Bonfire.Social.Threads.LoadMoreTest do
       Follows.follow(bob, alice)
       attrs = %{to_circles: [:guest], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
-      assert {:ok, op} = Posts.publish(alice, attrs)
+      assert {:ok, op} = Posts.publish(alice, attrs, "public")
       attrs = Map.merge(attrs, %{reply_to: op.id})
 
       for n <- 1..total_posts do
-        assert {:ok, post} = Posts.publish(alice, attrs)
+        assert {:ok, post} = Posts.publish(alice, attrs, "public")
       end
 
       conn = conn(user: bob, account: account2)
       next = "/discussion/#{op.id}"
       {view, doc} = floki_live(conn, next)
-      assert Floki.find(doc, "#load_more") == []
+      assert Floki.find(doc, "[data-id=load_more]") == []
       assert Enum.count(Floki.find(doc, "#replies  > .reply")) == total_posts
     end
 
@@ -45,17 +45,17 @@ defmodule Bonfire.Social.Threads.LoadMoreTest do
       Follows.follow(bob, alice)
       attrs = %{to_circles: [:guest], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
-      assert {:ok, op} = Posts.publish(alice, attrs)
+      assert {:ok, op} = Posts.publish(alice, attrs, "public")
       attrs = Map.merge(attrs, %{reply_to: op.id})
 
       for n <- 1..total_posts do
-        assert {:ok, post} = Posts.publish(alice, attrs)
+        assert {:ok, post} = Posts.publish(alice, attrs, "public")
       end
 
       conn = conn(user: bob, account: account2)
       next = "/discussion/#{op.id}"
       {view, doc} = floki_live(conn, next)
-      assert Floki.find(doc, "#load_more") != []
+      assert Floki.find(doc, "[data-id=load_more]") != []
     end
 
     test "As a user when I click on load more I want to see next replies below the others (using LiveView websocket)" do
@@ -70,11 +70,11 @@ defmodule Bonfire.Social.Threads.LoadMoreTest do
       Follows.follow(bob, alice)
       attrs = %{to_circles: [:guest], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
-      assert {:ok, op} = Posts.publish(alice, attrs)
+      assert {:ok, op} = Posts.publish(alice, attrs, "public")
       attrs = Map.merge(attrs, %{reply_to: op.id})
 
       for n <- 1..total_posts do
-        assert {:ok, post} = Posts.publish(alice, attrs)
+        assert {:ok, post} = Posts.publish(alice, attrs, "public")
       end
 
       conn = conn(user: bob, account: account2)
@@ -82,7 +82,7 @@ defmodule Bonfire.Social.Threads.LoadMoreTest do
       {view, doc} = floki_live(conn, next)
 
       more_doc = view
-      |> element("#load_more")
+      |> element("[data-id=load_more]")
       |> render_click()
       # |> IO.inspect()
 
@@ -104,17 +104,17 @@ defmodule Bonfire.Social.Threads.LoadMoreTest do
       Follows.follow(bob, alice)
 
       attrs = %{to_circles: [:guest], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
-      assert {:ok, op} = Posts.publish(alice, attrs)
+      assert {:ok, op} = Posts.publish(alice, attrs, "public")
       attrs = Map.merge(attrs, %{reply_to: op.id})
 
       for n <- 1..total_posts do
-        assert {:ok, post} = Posts.publish(alice, post_attrs(n, attrs))
+        assert {:ok, post} = Posts.publish(alice, post_attrs(n, attrs), "public")
       end
 
       conn = conn(user: bob, account: account2)
       next = "/discussion/#{op.id}"
       {view, doc} = floki_live(conn, next)
-      assert [load_more_query_string] = Floki.attribute(doc, "#load_more a", "href")
+      assert [load_more_query_string] = Floki.attribute(doc, "[data-id=load_more] a", "href")
 
       url = "/discussion/#{op.id}"<>load_more_query_string
       IO.inspect(url)

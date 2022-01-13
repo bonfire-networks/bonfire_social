@@ -9,7 +9,7 @@ defmodule Bonfire.Social.LikesTest do
     me = Fake.fake_user!()
 
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
-    assert {:ok, post} = Posts.publish(me, attrs)
+    assert {:ok, post} = Posts.publish(me, attrs, "public")
 
     assert {:ok, %{activity: activity}} = Likes.like(me, post)
     # IO.inspect(activity)
@@ -20,7 +20,7 @@ defmodule Bonfire.Social.LikesTest do
   test "can check if I like something" do
     me = Fake.fake_user!()
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
-    assert {:ok, post} = Posts.publish(me, attrs)
+    assert {:ok, post} = Posts.publish(me, attrs, "public")
     assert {:ok, like} = Likes.like(me, post)
 
     assert true == Likes.liked?(me, post)
@@ -29,7 +29,7 @@ defmodule Bonfire.Social.LikesTest do
   test "can check if I did not like something" do
     me = Fake.fake_user!()
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
-    assert {:ok, post} = Posts.publish(me, attrs)
+    assert {:ok, post} = Posts.publish(me, attrs, "public")
 
     assert false == Likes.liked?(me, post)
   end
@@ -37,7 +37,7 @@ defmodule Bonfire.Social.LikesTest do
   test "can unlike something" do
     me = Fake.fake_user!()
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
-    assert {:ok, post} = Posts.publish(me, attrs)
+    assert {:ok, post} = Posts.publish(me, attrs, "public")
     assert {:ok, like} = Likes.like(me, post)
 
     Likes.unlike(me, post)
@@ -47,7 +47,7 @@ defmodule Bonfire.Social.LikesTest do
   test "can list my likes" do
     me = Fake.fake_user!()
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
-    assert {:ok, post} = Posts.publish(me, attrs)
+    assert {:ok, post} = Posts.publish(me, attrs, "public")
     assert {:ok, like} = Likes.like(me, post)
 
     assert %{edges: [fetched_liked]} = Likes.list_my(me)
@@ -59,7 +59,7 @@ defmodule Bonfire.Social.LikesTest do
     me = Fake.fake_user!("me!")
     someone = Fake.fake_user!("someone")
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
-    assert {:ok, post} = Posts.publish(me, attrs)
+    assert {:ok, post} = Posts.publish(me, attrs, "public")
     assert {:ok, like} = Likes.like(me, post)
     assert {:ok, like2} = Likes.like(someone, post)
 
@@ -72,7 +72,7 @@ defmodule Bonfire.Social.LikesTest do
     me = Fake.fake_user!("me!")
     someone = Fake.fake_user!("someone")
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
-    assert {:ok, post} = Posts.publish(me, attrs)
+    assert {:ok, post} = Posts.publish(me, attrs, "public")
     assert {:ok, like} = Likes.like(someone, post)
     IO.inspect( Likes.list_by(someone, me))
     assert %{edges: [fetched_liked]} = Likes.list_by(someone, me)
@@ -85,7 +85,7 @@ defmodule Bonfire.Social.LikesTest do
     someone = Fake.fake_user!()
     attrs = %{post_content: %{html_body: "<p>hey you have an epic html post</p>"}}
 
-    assert {:ok, post} = Posts.publish(me, attrs)
+    assert {:ok, post} = Posts.publish(me, attrs, "public")
     assert {:ok, like} = Likes.like(someone, post)
 
     assert %{edges: [fetched_liked]} = FeedActivities.feed(:notifications, me)

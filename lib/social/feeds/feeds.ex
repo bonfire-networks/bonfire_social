@@ -94,7 +94,7 @@ defmodule Bonfire.Social.Feeds do
   def inbox_feed_ids(for_subject) do
     with %{feed_id: feed_id} = _inbox <- create_inbox(for_subject) do
       IO.inspect(for_subject)
-      Logger.info("created new inbox #{inspect feed_id} for #{inspect ulid(for_subject)}")
+      Logger.debug("created new inbox #{inspect feed_id} for #{inspect ulid(for_subject)}")
       feed_id
     else e ->
       #IO.inspect(inbox_feed_ids: e)

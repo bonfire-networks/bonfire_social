@@ -39,7 +39,7 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
     test "my own posts in my feed" do
       account = fake_account!()
       user = fake_user!(account)
-      attrs = %{to_circles: [:guest], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
+      attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
       assert {:ok, post} = Posts.publish(user, attrs)
       assert post.post_content.name =~ "test post name"
@@ -61,9 +61,9 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
       user2 = fake_user!(account2)
       Follows.follow(user2, user)
 
-      attrs = %{to_circles: [:guest], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
+      attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
-      assert {:ok, post} = Posts.publish(user, attrs)
+      assert {:ok, post} = Posts.publish(user, attrs, "public")
       assert post.post_content.name =~ "test post name"
 
       conn = conn(user: user2, account: account2)
@@ -81,9 +81,9 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
 
     test "posts from people I am not following in my feed" do
       user = fake_user!()
-      attrs = %{to_circles: [:guest], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
+      attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
-      assert {:ok, post} = Posts.publish(user, attrs)
+      assert {:ok, post} = Posts.publish(user, attrs, "public")
       assert post.post_content.name =~ "test post name"
 
       account = fake_account!()
@@ -106,7 +106,7 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
 
       attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
-      assert {:ok, post} = Posts.publish(user, attrs, "public")
+      assert {:ok, post} = Posts.publish(user, attrs)
       assert post.post_content.name =~ "test post name"
 
       conn = conn(user: user2, account: account2)
