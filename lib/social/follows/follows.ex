@@ -139,6 +139,9 @@ defmodule Bonfire.Social.Follows do
 
       with_activity = Activities.activity_under_object(activity, follow) #|> IO.inspect()
       {:ok, with_activity}
+    else _ ->
+      Logger.error("Follows - could not follow (possibly already following?)")
+      nil
     end
   end
 
@@ -156,7 +159,8 @@ defmodule Bonfire.Social.Follows do
   end
 
   defp create(follower, followed) do
-    Edges.changeset(Follow, follower, followed, @follow_table) |> repo().insert()
+    Edges.changeset(Follow, follower, followed, @follow_table)
+    |> repo().upsert()
   end
 
 
