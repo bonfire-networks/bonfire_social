@@ -38,7 +38,7 @@ defmodule Bonfire.Social.Feeds.Test do
       assert doc
         |> Floki.find("#feed_past  > article")
         |> List.last
-        |> Floki.text =~ "View thread (1)"
+        |> Floki.text =~ "Replies (1)"
     end
 
     test "As a user I want to see the activity total boosts" do
