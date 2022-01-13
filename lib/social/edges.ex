@@ -56,12 +56,13 @@ defmodule Bonfire.Social.Edges do
       object_id: ulid(object),
       table_id: table
       }})
-    |> changeset_cast()
+    |> changeset_edge()
   end
 
-  defp changeset_cast(cs) do
+  defp changeset_edge(cs) do
     cs
     |> Changeset.cast_assoc(:edge, [:required, with: &Edge.changeset/2])
+    # |> Ecto.Changeset.unique_constraint(:name)
   end
 
   #doc "Delete Follows where i am the subject"
