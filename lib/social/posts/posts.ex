@@ -289,7 +289,7 @@ defmodule Bonfire.Social.Posts do
         attrs
       end
 
-    with {:ok, post} <- publish(creator, attrs, false) do
+    with {:ok, post} <- publish(creator, attrs, "public") do
       # IO.inspect(remote_post: post)
       {:ok, post}
     end
