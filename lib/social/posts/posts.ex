@@ -193,12 +193,13 @@ defmodule Bonfire.Social.Posts do
     {:ok, actor} = ActivityPub.Adapter.get_actor_by_id(e(post, :activity, :subject_id, nil) || e(post, :created, :creator_id, nil))
 
     #FIXME only publish to public URI if in a public enough cirlce
+    #Everything is public atm
     to =
-      if Bonfire.Boundaries.Circles.circles[:guest] in Bonfire.Social.FeedActivities.feeds_for_activity(post.activity) do
+      # if Bonfire.Boundaries.Circles.circles[:guest] in Bonfire.Social.FeedActivities.feeds_for_activity(post.activity) do
         ["https://www.w3.org/ns/activitystreams#Public"]
-      else
+      # else
         []
-      end
+      # end
 
     # TODO: find a better way of deleting non actor entries from the list
     # (or represent them in AP)
@@ -215,6 +216,7 @@ defmodule Bonfire.Social.Posts do
     object = %{
       "type" => "Note",
       "actor" => actor.ap_id,
+      "attributedTo" => actor.ap_id,
       "name" => (e(post, :post_content, :name, nil)),
       "summary" => (e(post, :post_content, :summary, nil)),
       "content" => (e(post, :post_content, :html_body, nil)),
