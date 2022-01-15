@@ -188,7 +188,7 @@ defmodule Bonfire.Social.Posts do
       # if Bonfire.Boundaries.Circles.circles[:guest] in Bonfire.Social.FeedActivities.feeds_for_activity(post.activity) do
         ["https://www.w3.org/ns/activitystreams#Public"]
       # else
-        []
+      #  []
       # end
 
     # TODO: find a better way of deleting non actor entries from the list
