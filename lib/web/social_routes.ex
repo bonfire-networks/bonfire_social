@@ -12,11 +12,12 @@ defmodule Bonfire.Social.Web.Routes do
         live "/federation", Feeds.FederationLive, as: :federation
         # live "/browse/", Feeds.BrowseLive, as: :browse
         # live "/browse/:tab", Feeds.BrowseLive
+
+        live "/write", WriteLive, as: :write
+
         live "/post/:id", PostLive, as: Bonfire.Data.Social.Post
         live "/discussion/:id", DiscussionLive, as: Bonfire.Data.Social.PostContent
         live "/discussion/:id/reply/:reply_id", DiscussionLive
-        live "/message/:id", MessageLive, as: Bonfire.Data.Social.Message
-        live "/message/:id/reply/:reply_id", MessageLive
 
       end
 
@@ -33,7 +34,11 @@ defmodule Bonfire.Social.Web.Routes do
       scope "/", Bonfire.Social.Web do
         pipe_through :browser
         pipe_through :user_required
+
         live "/favourited/", Feeds.FavouritedLive, as: :favourited
+
+        live "/message/:id", MessageLive, as: Bonfire.Data.Social.Message
+        live "/message/:id/reply/:reply_id", MessageLive
 
       end
 
