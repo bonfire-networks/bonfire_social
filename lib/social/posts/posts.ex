@@ -213,6 +213,8 @@ defmodule Bonfire.Social.Posts do
       "to" => to ++ direct_recipients,
       "cc" => cc
     }
+      |> Enum.filter(fn {_, v} -> not is_nil(v) end)
+      |> Enum.into(%{})
 
     object =
       if e(post, :replied, :reply_to_id, nil) do
