@@ -4,7 +4,6 @@ defmodule Bonfire.Social.Posts do
   alias Bonfire.Social.{Activities, FeedActivities, Objects}
   alias Bonfire.Boundaries.{Circles, Verbs}
   alias Bonfire.Social.{Integration, PostContents, Tags, Threads}
-  alias Bonfire.Tag.TextContent
   alias Ecto.Changeset
 
   use Bonfire.Repo,
@@ -29,7 +28,7 @@ defmodule Bonfire.Social.Posts do
 
   def publish(%{} = creator, attrs, preset_boundary \\ nil) do
     # we attempt to avoid entering the transaction as long as possible.
-     changeset = create_changeset(creator, attrs, preset_boundary)
+    changeset = changeset(:create, attrs, creator, preset_boundary)
     repo().transact_with(fn ->
       with {:ok, post} <- repo().insert(changeset) do
         # {:ok, post_with_tags} <- Tags.cast_tags(maybe_tag(creator, post, mentions, mention_loudly?),
@@ -40,9 +39,7 @@ defmodule Bonfire.Social.Posts do
           {:ok, post}
         end
       end)
-    end
   end
-
 
 
   # def reply(creator, attrs) do
@@ -57,21 +54,28 @@ defmodule Bonfire.Social.Posts do
   #   end
   # end
 
-  def changeset(:create, attrs, user, preset) do
-    case TextContent.Process.process(creator, attrs, "text/markdown") do
+  def changeset(:create, attrs, creator \\ nil, preset \\ nil) do
+    case Tags.maybe_process(creator, attrs) do
       {text, mentions, hashtags} ->
-        attrs =
-          attrs
-          |> Map.put(:post_content, PostContents.prepare_content(attrs, text))
-          |> Map.put(:created, %{creator_id: creator_id})
-        Post.changeset(%Post{}, attrs)
-        |> Changeset.cast_assoc(:post_content, required: true, with: &PostContents.changeset/2)
-        |> Changeset.cast_assoc(:created)
-        |> Threads.cast(attrs, user, preset)
-        |> Tags.cast(attrs, user, mentions, hashtags, preset)
-      _ -> {:error, :text_content}
+        base_changeset(attrs, creator, preset, text)
+        |> Tags.cast(attrs, creator, mentions, hashtags, preset)
+      _ ->
+        base_changeset(attrs, creator, preset, nil)
     end
   end
+
+  defp base_changeset(attrs, creator \\ nil, preset \\ nil, text \\ nil) do
+    attrs =
+      attrs
+      |> Map.put(:post_content, PostContents.prepare_content(attrs, text))
+      |> Map.put(:created, %{creator_id: e(creator, :id, nil)})
+
+    Post.changeset(%Post{}, attrs)
+    |> Changeset.cast_assoc(:post_content, [required: true, with: &PostContents.changeset/2])
+    |> Changeset.cast_assoc(:created)
+    |> Threads.cast(attrs, creator, preset)
+  end
+
 
   def read(post_id, socket_or_current_user \\ nil, preloads \\ :all) when is_binary(post_id) do
     current_user = current_user(socket_or_current_user)
@@ -296,7 +300,7 @@ defmodule Bonfire.Social.Posts do
       # "url" => path(post),
       "post_content" => PostContents.indexing_object_format(post_content),
       "creator" => Bonfire.Me.Integration.indexing_format(subject_profile, subject_profile),
-      "tag_names" => Bonfire.Social.Integration.indexing_format_tags(activity)
+      "tag_names" => Tags.indexing_format_tags(activity)
     } #|> IO.inspect
   end
   def indexing_object_format(%{activity: %{object: object} = activity}, nil), do: indexing_object_format(activity, object)
