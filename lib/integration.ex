@@ -51,12 +51,5 @@ defmodule Bonfire.Social.Integration do
     end
   end
 
-  def indexing_format_tags(obj) do
-    if Config.module_enabled?(Bonfire.Tag.Tags) do
-      repo().maybe_preload(obj, tags: [:profile])
-      |> Map.get(:tags, [])
-      |> Enum.map(&Bonfire.Tag.Tags.indexing_object_format_name/1)
-    end
-  end
 
 end

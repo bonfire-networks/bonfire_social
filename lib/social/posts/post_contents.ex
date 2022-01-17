@@ -56,7 +56,7 @@ defmodule Bonfire.Social.PostContents do
 
   def indexing_object_format(_), do: nil
 
-  def changeset(%PostContent{} = cs \\ %PostContent{} , attrs) do
+  def changeset(%PostContent{} = cs \\ %PostContent{}, attrs) do
     PostContent.changeset(cs, attrs)
   end
 
