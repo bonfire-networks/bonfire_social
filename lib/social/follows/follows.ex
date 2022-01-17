@@ -239,7 +239,7 @@ defmodule Bonfire.Social.Follows do
   def ap_receive_activity(follower, %{data: %{"type" => "Follow"} = data} = _activity, %{pointer_id: followed} = object) when is_binary(follower) or is_struct(follower) do
     Logger.warn("Follows: recording an incoming follow")
     with {:error, _} <- get(follower, followed), # check if not already followed
-         {:ok, follow} <- do_follow(follower, followed) do
+         {:ok, follow} <- follow(follower, followed) do
       ActivityPub.accept(%{
         to: [data["actor"]],
         actor: object,
@@ -248,6 +248,7 @@ defmodule Bonfire.Social.Follows do
       })
       {:ok, follow}
     else
+      Logger.warn("Follows: federated follow already exists")
       # reaffirm that the follow has gone through
       {:ok, _} ->
         ActivityPub.accept(%{
