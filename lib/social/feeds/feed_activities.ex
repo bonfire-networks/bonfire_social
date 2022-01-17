@@ -57,7 +57,7 @@ defmodule Bonfire.Social.FeedActivities do
     |> feed_paginated(current_user(current_user_or_socket), opts, preloads)
   end
 
-  def feed(:notifications, current_user_or_socket, cursor_after, preloads) do
+  def feed(:notifications, current_user_or_socket, opts, preloads) do
     # current_user = current_user(current_user_or_socket)
 
     case Bonfire.Social.Feeds.my_inbox_feed_id(current_user_or_socket) do
@@ -69,7 +69,7 @@ defmodule Bonfire.Social.FeedActivities do
         pubsub_subscribe(feeds, current_user_or_socket) # subscribe to realtime feed updates
 
         [feed_id: feeds] # FIXME: for some reason preloading creator or reply_to when we have a boost in inbox breaks ecto
-        |> feed_paginated(current_user_or_socket, cursor_after, preloads)
+        |> feed_paginated(current_user_or_socket, opts, preloads)
 
         e ->
           Logger.error("no feed for :notifications - #{e}")
@@ -78,14 +78,18 @@ defmodule Bonfire.Social.FeedActivities do
 
   end
 
-  def feed(feed_name, current_user_or_socket, cursor_after, preloads) when is_atom(feed_name) do
-
-    feed(Feeds.named_feed_id(feed_name), current_user_or_socket, cursor_after, preloads)
+  def feed(:flags, current_user_or_socket, opts, preloads) do
+    Bonfire.Social.Flags.list(current_user_or_socket, opts, preloads)
   end
 
-  def feed(%{feed_name: feed_name}, current_user_or_socket, cursor_after, preloads) do
+  def feed(feed_name, current_user_or_socket, opts, preloads) when is_atom(feed_name) do
 
-    feed(Feeds.named_feed_id(feed_name), current_user_or_socket, cursor_after, preloads)
+    feed(Feeds.named_feed_id(feed_name), current_user_or_socket, opts, preloads)
+  end
+
+  def feed(%{feed_name: feed_name}, current_user_or_socket, opts, preloads) do
+
+    feed(Feeds.named_feed_id(feed_name), current_user_or_socket, opts, preloads)
   end
 
 
