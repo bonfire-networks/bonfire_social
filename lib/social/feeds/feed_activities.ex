@@ -2,8 +2,8 @@ defmodule Bonfire.Social.FeedActivities do
 
   require Logger
 
-  alias Bonfire.Data.Social.{Activity, FeedPublish, Feed, PostContent}
-  alias Bonfire.Data.Identity.User
+  alias Bonfire.Data.Social.{Activity, FeedPublish, Feed, Inbox, PostContent}
+  alias Bonfire.Data.Identity.{Character, User}
 
   alias Bonfire.Boundaries.Verbs
   alias Bonfire.Boundaries.Circles
@@ -143,6 +143,7 @@ defmodule Bonfire.Social.FeedActivities do
       feed_id: feed_id_or_ids,
       # exclude: {:messages, &filter/3},
       # exclude_messages: dynamic([object_message: message], is_nil(message.id))
+      # exclude private messages to avoid shoulder snoopers - access is controlled separately.
       exclude_messages: dynamic([object: object], object.table_id != ^("6R1VATEMESAGEC0MMVN1CAT10N"))
     ]
     |> query(opts, preloads, query)
@@ -164,7 +165,7 @@ defmodule Bonfire.Social.FeedActivities do
       # |> query_filter(filters, nil, nil)
       |> IO.inspect(label: "FeedActivities invalid feed query with filters #{inspect filters}")
   end
-
+  
   defp query_extras(query, opts, preloads) do
 
     query
@@ -185,28 +186,29 @@ defmodule Bonfire.Social.FeedActivities do
   @doc """
   Creates a new local activity and publishes to appropriate feeds
   """
-  def publish(subject, verb, object, circles \\ [], preset_boundary_OR_mentions_and_tags_are_private? \\ true, replies_are_private? \\ true)
-
-  def publish(subject, verb, object, circles, "mentions" = preset_boundary, _) do
-    mentions_are_private? = false
-    replies_are_private? = true
-    publish(subject, verb, object, circles, mentions_are_private?, replies_are_private?)
+  # def publish
+  def publish(subject, verb, object, preset) do
+    
   end
 
-  def publish(subject, verb, object, circles, "local" = preset_boundary, _) do
-    mentions_are_private? = true
-    replies_are_private? = true
+  def publish(subject, verb, object, circles, "mentions" = preset_boundary, _),
+    do: publish(subject, verb, object, circles, false, true)
+
+  def publish(subject, verb, object, circles, "local" = preset_boundary, _),
     # FIXME: we should still notify local members who are mentioned or replied to
-    publish(subject, verb, object, circles ++ [:local], mentions_are_private?, replies_are_private?)
-  end
+    do: publish(subject, verb, object, circles, true, true)
 
-  def publish(subject, verb, object, circles, "public" = preset_boundary, _) do
-    mentions_are_private? = false
-    replies_are_private? = false
-    publish(subject, verb, object, circles ++ [:guest], mentions_are_private?, replies_are_private?)
-  end
+  def publish(subject, verb, object, circles, "public" = preset_boundary, _),
+    do: publish(subject, verb, object, circles, false, false)
 
-  def publish(subject, verb, %{replied: %{reply_to_id: reply_to_id}} = object, circles, _, false = replies_are_private?) when is_atom(verb) and is_list(circles) and is_binary(reply_to_id) do
+  def publish(
+    subject,
+    verb,
+    %{replied: %{reply_to_id: reply_to_id}} = object,
+    circles,
+    _,
+    false = replies_are_private?
+  ) when is_atom(verb) and is_list(circles) and is_binary(reply_to_id) do
     # publishing a reply to something, and notifying the character we're replying to
     # TODO share some logic with maybe_notify_creator?
     # TODO enable by default only if OP is included in audience?
@@ -224,13 +226,11 @@ defmodule Bonfire.Social.FeedActivities do
 
     circles = circles ++ [creator_id]
 
-    Bonfire.Me.Users.Boundaries.maybe_make_visible_for(subject, object, circles) # |> IO.inspect(label: "grant")
+    # Bonfire.Me.Users.Boundaries.maybe_make_visible_for(subject, object, circles) # |> IO.inspect(label: "grant")
 
     with {:ok, activity} <- do_publish(subject, verb, object, circles) do
       Logger.debug("FeedActivities published to: #{inspect circles}")
-
       Threads.maybe_push_thread(subject, activity, object)
-
       # IO.inspect(notify_reply: reply_to_creator)
       Logger.debug("FeedActivities with replies_are_private?==false -> notifying the user being replied to: #{inspect creator_id}")
       if creator_id != subject.id, do: notify_characters(subject, activity, object, reply_to_creator), else: {:ok, activity}
@@ -239,16 +239,12 @@ defmodule Bonfire.Social.FeedActivities do
 
   def publish(subject, verb, %{tags: tags} = object, circles, false = mentions_and_tags_are_private?, _) when is_atom(verb) and is_list(tags) and length(tags) > 0 do
     # publishing and notifying anyone @ mentionned (and/or other tagged characters)
-
     # IO.inspect(publish_to_tagged: tags)
     mentioned_notifications_inboxes = Feeds.tags_inbox_feeds(tags) #|> IO.inspect(label: "publish tag / mention")
-
     tag_ids = circles ++ Bonfire.Tag.Tags.tag_ids(tags) # TODO? don't re-fetch tags
     Logger.debug("FeedActivities with mentions_and_tags_are_private?==false -> making visible for: #{inspect tag_ids}")
-    Bonfire.Me.Users.Boundaries.maybe_make_visible_for(subject, object, tag_ids) # |> IO.inspect(label: "grant")
-
+    # Bonfire.Me.Users.Boundaries.maybe_make_visible_for(subject, object, tag_ids) # |> IO.inspect(label: "grant")
     feeds = circles ++ mentioned_notifications_inboxes
-
     with {:ok, activity} <- do_publish(subject, verb, object, feeds) do
       Logger.debug("FeedActivities with mentions_and_tags_are_private?==false -> putting in feed + notifications of @ mentioned / tagged characters: #{inspect feeds}")
       notify_inboxes(subject, activity, object, mentioned_notifications_inboxes)
@@ -261,9 +257,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   def publish(subject, verb, object, circles, _, _) when is_atom(verb) do
     Logger.debug("FeedActivities: just making visible for and putting in these circles/feeds: #{inspect circles}")
-
-    Bonfire.Me.Users.Boundaries.maybe_make_visible_for(subject, object, circles) # |> IO.inspect(label: "grant")
-
+    # Bonfire.Me.Users.Boundaries.maybe_make_visible_for(subject, object, circles) # |> IO.inspect(label: "grant")
     do_publish(subject, verb, object, circles)
   end
 
@@ -272,12 +266,10 @@ defmodule Bonfire.Social.FeedActivities do
     publish(subject, :create, object, circles, tags_are_private?, replies_are_private?)
   end
 
-
   defp do_publish(subject, verb, object, feeds \\ nil)
   defp do_publish(subject, verb, object, feeds) when is_list(feeds), do: maybe_feed_publish(subject, verb, object, feeds ++ [subject]) # also put in subject's outbox
   defp do_publish(subject, verb, object, feed_id) when not is_nil(feed_id), do: maybe_feed_publish(subject, verb, object, [feed_id, subject])
   defp do_publish(subject, verb, object, _), do: maybe_feed_publish(subject, verb, object, subject) # just publish to subject's outbox
-
 
   @doc """
   Records a remote activity and puts in appropriate feeds
@@ -378,9 +370,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp maybe_index_activity(subject, verb, object) do
     with {:ok, activity} <- Activities.create(subject, verb, object) do
-
         # maybe_index(activity) # TODO, indexing here?
-
         {:ok, activity}
     end
   end
@@ -390,12 +380,10 @@ defmodule Bonfire.Social.FeedActivities do
     # federation hook fails
     ret = put_in_feeds(feeds, activity)
     # TODO: add ActivityPub feed for remote activities
-
     try do
     # FIXME only run if ActivityPub is a target circle/feed?
     # TODO: only run for non-local activity
       maybe_federate_activity(activity)
-
       ret
     rescue
       _ -> ret
@@ -436,8 +424,7 @@ defmodule Bonfire.Social.FeedActivities do
 
 
   def maybe_federate_activity(activity) do
-    verb = Bonfire.Data.AccessControl.Verbs.verb!(activity.verb_id).verb
-
+    verb = Verbs.get!(activity.verb_id).verb
     Bonfire.Social.Integration.activity_ap_publish(activity.subject_id, verb, activity)
   end
 
