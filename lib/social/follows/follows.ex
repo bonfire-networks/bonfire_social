@@ -193,9 +193,9 @@ defmodule Bonfire.Social.Follows do
       })
       {:ok, follow}
     else
-      Logger.warn("Follows: federated follow already exists")
       # reaffirm that the follow has gone through
       {:ok, _} ->
+        Logger.warn("Follows: federated follow already exists")
         ActivityPub.accept(%{
           to: [data["actor"]],
           actor: object,
