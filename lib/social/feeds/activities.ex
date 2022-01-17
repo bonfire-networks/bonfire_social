@@ -1,6 +1,7 @@
 defmodule Bonfire.Social.Activities do
 
   alias Bonfire.Data.Social.{Activity, Like, Boost, Flag, PostContent}
+  alias Bonfire.Data.Identity.User
   alias Bonfire.Boundaries.Verbs
   import Bonfire.Common.Utils
   alias Bonfire.Social.FeedActivities
@@ -16,15 +17,12 @@ defmodule Bonfire.Social.Activities do
   def queries_module, do: Activity
   def context_module, do: Activity
 
-  def as_permitted_for(q, opts \\ nil) do
+  def as_permitted_for(q, opts \\ []) do
     if is_list(opts) and opts[:skip_boundary_check] do
       q
     else
       agent = current_user(opts) || current_account(opts)
-      vis = filter_invisible(agent)
-      join q, :inner, [activity: activity],
-        v in subquery(vis),
-        on: activity.object_id == v.object_id
+      boundarise(q, activity.object_id, current_user: agent)
     end
   end
 
@@ -33,11 +31,8 @@ defmodule Bonfire.Social.Activities do
   NOTE: you will usually want to use `FeedActivities.publish/3` instead
   """
   def create(%{id: subject_id}=subject, verb, %{id: object_id}=object) when is_atom(verb) do
-
-    verb_id = Verbs.verbs()[verb] || Verbs.verbs()[:create]
-
+    verb_id = Verbs.get_id(verb) || Verbs.get_id!(:create)
     attrs = %{subject_id: subject_id, verb_id: verb_id, object_id: object_id}
-
     with {:ok, activity} <- repo().put(changeset(attrs)) do
        {:ok, %{activity | object: object, subject: subject}}
     end
@@ -80,8 +75,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   def query_object_preload_activity(q, verb \\ :create, object_id_field \\ :id, current_user \\ nil, preloads \\ :default) do
-    verb_id = Verbs.verbs()[verb]
-
+    verb_id = Verbs.get_id!(verb)
     q
     |> reusable_join(:left, [o], activity in Activity, as: :activity, on: activity.object_id == field(o, ^object_id_field) and activity.verb_id == ^verb_id)
     |> activity_preloads(current_user, preloads)
@@ -161,15 +155,16 @@ defmodule Bonfire.Social.Activities do
     read([object_id: object_id], opts)
   end
 
+  def read(%Ecto.Query{} = query, %User{}=user), do: read(query, current_user: user)
   def read(%Ecto.Query{} = query, opts) do
 
-    IO.inspect(query: query)
+    IO.inspect(query: query, opts: opts)
 
     current_user = current_user(opts)
 
     with {:ok, object} <- query
       |> query_object_preload_create_activity(current_user, [:default, :with_parents])
-      # |> IO.inspect
+      |> IO.inspect
       |> as_permitted_for(opts)
       # |> IO.inspect
       |> repo().single() do
@@ -202,7 +197,7 @@ defmodule Bonfire.Social.Activities do
     IO.inspect(filters: filters)
     # IO.inspect(opts_or_current_user: opts_or_current_user)
 
-    FeedActivities.query(filters, opts_or_current_user, :all, (from a in Activity, as: :main_object) )
+    FeedActivities.query(filters, opts_or_current_user, :all, from(a in Activity, as: :main_object) )
   end
 
   def activity_under_object(%{activity: %{object: _activity_object} = activity} = _top_object) do

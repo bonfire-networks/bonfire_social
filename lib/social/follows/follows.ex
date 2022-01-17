@@ -103,6 +103,7 @@ defmodule Bonfire.Social.Follows do
   end
 
   defp do_follow(subject, object) when is_binary(object) do
+    
     # TODO: once we expose boundaries for profile visibility and follow-ability, enforce that here
     if is_ulid?(object) do
       with {:ok, object} <- Bonfire.Common.Pointers.get(object, skip_boundary_check: true, current_user: subject) do

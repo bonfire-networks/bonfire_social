@@ -5,6 +5,8 @@ defmodule Bonfire.Social.Threads do
   alias Bonfire.Data.Social.Replied
   alias Bonfire.Social.{Activities, FeedActivities}
   alias Bonfire.Boundaries.Verbs
+  alias Pointers.ULID
+  import Bonfire.Boundaries.Queries
   import Bonfire.Common.Utils
 
   use Bonfire.Repo,
@@ -28,44 +30,65 @@ defmodule Bonfire.Social.Threads do
 
   def maybe_push_thread(_, _, _), do: nil
 
+  @doc """
+  Handles casting related to the reply and threading, if there was one and the post was set to public.
+  If there is no reply or the user is not permitted to reply to the thing, a new thread will be created.
+  """
+  def cast(changeset, attrs, user, "public"), do: cast_replied(changeset, attrs, user)
+  def cast(changeset, attrs, user, _), do: start_new_thread(changeset)
 
-  def maybe_reply(%{reply_to: reply_attrs}) when is_map(reply_attrs), do: maybe_reply(reply_attrs)
-  def maybe_reply(%{reply_to: reply_to_id}) when is_binary(reply_to_id), do: maybe_reply(%{reply_to_id: reply_to_id})
-  def maybe_reply(%{reply_to_id: reply_to_id} = reply_attrs) when is_binary(reply_to_id) and reply_to_id !="" do
-    with {:ok, reply_to_replied} <- get_replied(reply_to_id) do
-      Logger.debug("Threads.maybe_reply: object we are replying to already has replied mixin")
-      reply_obj(reply_attrs, reply_to_replied, reply_to_id)
-     else _ ->
-      with {:ok, reply_to_replied} <- create(%{id: reply_to_id, thread_id: Map.get(reply_attrs, :thread_id, reply_to_id)}) do
-        Logger.debug("Threads.maybe_reply: created replied mixin for reply_to object")
-        reply_obj(reply_attrs, reply_to_replied, reply_to_id)
-      else _ ->
-        Logger.debug("Threads.maybe_reply: not a reply")
-        Map.drop(reply_attrs, [:reply_to_id])
-        |> maybe_reply()
-      end
-     end
-  end
-  def maybe_reply(%{} = reply_attrs), do: Map.merge(reply_attrs, maybe_reply(nil))
-  def maybe_reply(_), do: %{set: true} # makes sure a Replied entry is inserted even for first posts
-
-  defp reply_obj(reply_attrs, reply_to_replied, reply_to_id) do
-    Map.merge(reply_attrs, %{
-      reply_to: reply_to_replied,
-      # reply_to_id: e(reply_to_replied, :reply_to_id, reply_to_id),
-      thread_id: e(reply_attrs, :thread_id,
-                    e(reply_to_replied, :thread_id, reply_to_id))
-      })
-      # |> IO.inspect(label: "reply_obj")
-  end
-
-  def get_replied(id) do
-    repo().single(from p in Replied, where: p.id == ^id)
+  defp cast_replied(changeset, attrs, user) do
+    case find_reply_id(attrs) do
+      reply_to when is_binary(reply_to) ->
+        case load_reply(user, reply_to) do
+          %{replied: %{thread_id: id}}=reply_to when is_binary(id) ->
+            Logger.debug("[Threads.cast_replied/3] copying thread from responded to")
+            cast_replied(changeset, %{thread_id: id, reply_to_id: reply_to.id})
+            |> put_in([:changes, :replied, :data, :reply_to], reply_to)
+          %{}=reply_to ->
+            Logger.debug("[Threads.cast_replied/3] parent has no reply, creating one")
+            repo().insert_all(Replied, %{id: reply_to.id, thread_id: reply_to.id}, on_conflict: :nothing)
+            cast_replied(changeset, %{thread_id: nil, reply_to_id: reply_to.id})
+            |> put_in([:changes, :replied, :data, :reply_to], %Replied{id: reply_to.id, thread_id: reply_to.id})
+          _ ->
+            Logger.debug("[Threads.cast_replied/3] not permitted to reply to this, starting new thread")
+            start_new_thread(changeset)
+        end
+      _ ->
+        Logger.debug("[Threads.cast_replied/3] does not reply to anything, starting new thread")
+        start_new_thread(changeset)
+    end
   end
 
-  # def create_for_object(%{id: id}=_thing) do
-  #   create(%{id: id})
-  # end
+  defp cast_replied(changeset, attrs) do
+    changeset
+    |> Changeset.cast(%{replied: attrs}, [])
+    |> Changeset.cast_assoc(:replied)
+  end
+
+  defp find_reply_id(%{reply_to: %{reply_to_id: id}})
+  when is_binary(id) and id != "", do: id
+  defp find_reply_id(_), do: nil
+  
+  # loads a reply, but only if you can see, read and reply to it.
+  defp load_reply(user, id) do
+    from(p in Pointers, as: :root, where: p.id == ^id)
+    |> proload([:replied])
+    |> boundarise(root.id, verbs: [:see, :read, :reply], current_user: user)
+    |> repo().one()
+  end
+
+  @doc false
+  def start_new_thread(changeset) do
+    changeset = force_to_have_id(changeset)
+    id = Changeset.get_field(changeset, :id)
+    cast_replied(changeset, %{reply_to_id: nil, thread_id: id})
+  end    
+
+  defp force_to_have_id(changeset) do
+    if Changeset.get_field(changeset, :id), do: changeset,
+      else: Changeset.put_change(changeset, :id, ULID.generate())
+  end
 
   defp create(attrs) do
     repo().put(changeset(attrs))
@@ -76,9 +99,7 @@ defmodule Bonfire.Social.Threads do
   end
 
   def read(object_id, socket_or_current_user) when is_binary(object_id) do
-
     current_user = current_user(socket_or_current_user)
-
     with {:ok, object} <- Replied |> query_filter(id: object_id)
       |> Activities.read(socket_or_current_user) do
 
@@ -86,11 +107,10 @@ defmodule Bonfire.Social.Threads do
       end
   end
 
-
   @doc "List participants in a thread (depending on user's boundaries)"
   def list_participants(thread_id, current_user \\ nil, opts \\ [], preloads \\ :minimal) when is_binary(thread_id) or is_list(thread_id) do
 
-     FeedActivities.feed_paginated(
+    FeedActivities.feed_paginated(
       [participants_in: {thread_id, &filter/3}],
       current_user, opts, preloads, Replied, false)
   end
@@ -210,5 +230,7 @@ defmodule Bonfire.Social.Threads do
 
   #   end)
   # end
+
+  # def get_feed_id(%
 
 end

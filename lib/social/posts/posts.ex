@@ -2,19 +2,19 @@ defmodule Bonfire.Social.Posts do
 
   alias Bonfire.Data.Social.{Post, PostContent, Replied, Activity}
   alias Bonfire.Social.{Activities, FeedActivities, Objects}
+  alias Bonfire.Boundaries.{Circles, Verbs}
+  alias Bonfire.Social.{Integration, PostContents, Tags, Threads}
+  alias Bonfire.Tag.TextContent
   alias Ecto.Changeset
-  # import Bonfire.Boundaries.Queries
-  alias Bonfire.Social.Threads
-  alias Bonfire.Social.PostContents
-  alias Bonfire.Boundaries.Verbs
-  alias Bonfire.Social.Integration
-
-  import Bonfire.Common.Utils
 
   use Bonfire.Repo,
       schema: Post,
       searchable_fields: [:id],
       sortable_fields: [:id]
+
+  import Bonfire.Common.Utils
+
+  # import Bonfire.Boundaries.Queries
 
   def queries_module, do: Post
   def context_module, do: Post
@@ -22,32 +22,25 @@ defmodule Bonfire.Social.Posts do
 
   def draft(creator, attrs) do
     # TODO: create as private
-    with {:ok, post} <- create(creator, attrs) do
-      {:ok, post}
-    end
+    # with {:ok, post} <- create(creator, attrs) do
+    #   {:ok, post}
+    # end
   end
 
   def publish(%{} = creator, attrs, preset_boundary \\ nil) do
-    # TODO: make mentions_are_private? and replies_are_private? defaults configurable
-    # IO.inspect(attrs: attrs)
-    to_circles = e(attrs, :to_circles, [])
-
-    tag_characters_should_boost_mentions? = preset_boundary == "public" or :guest in to_circles or Bonfire.Boundaries.Circles.circles()[:guest] in to_circles
-
+    # we attempt to avoid entering the transaction as long as possible.
+     changeset = create_changeset(creator, attrs, preset_boundary)
     repo().transact_with(fn ->
-      with  {text, mentions, hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs, "text/markdown"),
-        {:ok, post} <- create(creator, attrs, text),
-        {:ok, post_with_tags} <- Bonfire.Social.Tags.maybe_tag(creator, post, mentions, tag_characters_should_boost_mentions?),
-        {:ok, activity} <- FeedActivities.publish(creator, :create, post_with_tags, to_circles, preset_boundary) do
-
-          post_with_activity = Activities.activity_under_object(activity)
-
-          maybe_index(activity)
-
-          {:ok, post_with_activity}
-
-      end
-    end)
+      with {:ok, post} <- repo().insert(changeset) do
+        # {:ok, post_with_tags} <- Tags.cast_tags(maybe_tag(creator, post, mentions, mention_loudly?),
+        # {:ok, activity} <- FeedActivities.publish(creator, :create, post, preset_boundary) do
+          # post_with_activity = Activities.activity_under_object(activity)
+          # maybe_index(activity)
+          # {:ok, post_with_activity}
+          {:ok, post}
+        end
+      end)
+    end
   end
 
 
@@ -55,7 +48,6 @@ defmodule Bonfire.Social.Posts do
   # def reply(creator, attrs) do
   #   with  {:ok, published} <- publish(creator, attrs),
   #         {:ok, r} <- get_replied(published.post.id) do
-
   #     reply = Map.merge(r, published)
   #     # |> IO.inspect
 
@@ -65,33 +57,27 @@ defmodule Bonfire.Social.Posts do
   #   end
   # end
 
-  defp create(%{id: creator_id}, attrs, text \\ nil) do
-    attrs = attrs
-      |> Map.put(:post_content, PostContents.prepare_content(attrs, text))
-      |> Map.put(:created, %{creator_id: creator_id})
-      |> Map.put(:replied, Threads.maybe_reply(attrs))
-      # |> IO.inspect(label: "Posts.create attrs")
-
-    repo().put(changeset(:create, attrs))
-  end
-
-
-  def changeset(:create, attrs) do
-    Post.changeset(%Post{}, attrs)
-    |> Changeset.cast_assoc(:post_content, [:required, with: &PostContents.changeset/2])
-    |> Changeset.cast_assoc(:created)
-    |> Changeset.cast_assoc(:replied, [:required, with: &Replied.changeset/2])
+  def changeset(:create, attrs, user, preset) do
+    case TextContent.Process.process(creator, attrs, "text/markdown") do
+      {text, mentions, hashtags} ->
+        attrs =
+          attrs
+          |> Map.put(:post_content, PostContents.prepare_content(attrs, text))
+          |> Map.put(:created, %{creator_id: creator_id})
+        Post.changeset(%Post{}, attrs)
+        |> Changeset.cast_assoc(:post_content, required: true, with: &PostContents.changeset/2)
+        |> Changeset.cast_assoc(:created)
+        |> Threads.cast(attrs, user, preset)
+        |> Tags.cast(attrs, user, mentions, hashtags, preset)
+      _ -> {:error, :text_content}
+    end
   end
 
   def read(post_id, socket_or_current_user \\ nil, preloads \\ :all) when is_binary(post_id) do
-
     current_user = current_user(socket_or_current_user)
-
     with {:ok, post} <- base_query([id: post_id], current_user, preloads)
       |> Activities.read(socket_or_current_user) do
-
         {:ok, Activities.activity_under_object(post) }
-
       end
   end
 
@@ -149,8 +135,7 @@ defmodule Bonfire.Social.Posts do
 
   #doc "List posts created by the user and which are in their outbox, which are not replies"
   def filter(:posts_by, user_id, query) when is_binary(user_id) do
-    verb_id = Verbs.verbs()[:create]
-
+    verb_id = Verbs.get_id!(:create)
     query
     |> proload(activity: [
         object: {"object_", [:post, :created, :replied]}
