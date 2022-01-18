@@ -26,17 +26,18 @@ defmodule Bonfire.Social.Posts do
     # end
   end
 
-  def publish(%{} = creator, attrs, preset_boundary \\ nil) do
+  def publish(%{id: _} = creator, attrs, preset_boundary \\ nil) do
+    # IO.inspect(creator: creator)
     # we attempt to avoid entering the transaction as long as possible.
     changeset = changeset(:create, attrs, creator, preset_boundary)
     repo().transact_with(fn ->
-      with {:ok, post} <- repo().insert(changeset) do
-        # {:ok, post_with_tags} <- Tags.cast_tags(maybe_tag(creator, post, mentions, mention_loudly?),
-        # {:ok, activity} <- FeedActivities.publish(creator, :create, post, preset_boundary) do
-          # post_with_activity = Activities.activity_under_object(activity)
-          # maybe_index(activity)
-          # {:ok, post_with_activity}
-          {:ok, post}
+      with {:ok, post} <- repo().insert(changeset),
+        # {:ok, post_with_tags} <- Tags.cast(maybe_tag(creator, post, mentions, mention_loudly?),
+        {:ok, activity} <- FeedActivities.publish(creator, :create, post, preset_boundary) do
+          post_with_activity = Activities.activity_under_object(activity)
+          maybe_index(activity)
+          {:ok, post_with_activity}
+          # {:ok, post}
         end
       end)
   end
@@ -60,19 +61,20 @@ defmodule Bonfire.Social.Posts do
         base_changeset(attrs, creator, preset, text)
         |> Tags.cast(attrs, creator, mentions, hashtags, preset)
       _ ->
-        base_changeset(attrs, creator, preset, nil)
+        base_changeset(attrs, creator, preset)
     end
   end
 
-  defp base_changeset(attrs, creator \\ nil, preset \\ nil, text \\ nil) do
+  defp base_changeset(attrs, creator, preset, text \\ nil) do
     attrs =
       attrs
+      |> Map.put(:created, %{creator_id: e(creator, :id, nil) |> IO.inspect()})
       |> Map.put(:post_content, PostContents.prepare_content(attrs, text))
-      |> Map.put(:created, %{creator_id: e(creator, :id, nil)})
+      # |> IO.inspect()
 
     Post.changeset(%Post{}, attrs)
-    |> Changeset.cast_assoc(:post_content, [required: true, with: &PostContents.changeset/2])
     |> Changeset.cast_assoc(:created)
+    |> Changeset.cast_assoc(:post_content, [required: true, with: &PostContents.changeset/2])
     |> Threads.cast(attrs, creator, preset)
   end
 

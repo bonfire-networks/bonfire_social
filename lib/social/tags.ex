@@ -1,5 +1,6 @@
 defmodule Bonfire.Social.Tags do
   alias Bonfire.Common.Utils
+  alias Bonfire.Common.Config
   alias Bonfire.Tag.Tags
   alias Bonfire.Tag.TextContent
   use Bonfire.Repo

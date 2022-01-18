@@ -165,7 +165,7 @@ defmodule Bonfire.Social.FeedActivities do
       # |> query_filter(filters, nil, nil)
       |> IO.inspect(label: "FeedActivities invalid feed query with filters #{inspect filters}")
   end
-  
+
   defp query_extras(query, opts, preloads) do
 
     query
@@ -186,13 +186,12 @@ defmodule Bonfire.Social.FeedActivities do
   @doc """
   Creates a new local activity and publishes to appropriate feeds
   """
-  # def publish
-  def publish(subject, verb, object, preset) do
-    
-  end
+  def publish(subject, verb, object, preset), do: publish(subject, verb, object, [], preset)
 
-  def publish(subject, verb, object, circles, "mentions" = preset_boundary, _),
-    do: publish(subject, verb, object, circles, false, true)
+  def publish(subject, verb, object, circles, preset_boundary, mentions_and_tags_are_private? \\ true)
+
+  def publish(subject, verb, object, circles, "mentions" = preset_boundary, mentions_and_tags_are_private?),
+    do: publish(subject, verb, object, circles, mentions_and_tags_are_private?, true)
 
   def publish(subject, verb, object, circles, "local" = preset_boundary, _),
     # FIXME: we should still notify local members who are mentioned or replied to

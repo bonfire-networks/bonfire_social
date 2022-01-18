@@ -40,8 +40,10 @@ defmodule Bonfire.Social.Posts.LiveHandler do
     |> input_to_atoms()
     # |> IO.inspect(label: "handle_event: post attrs")
 
-    with %{valid?: true} <- post_changeset(attrs),
-         {:ok, _published} <- Bonfire.Social.Posts.publish(current_user(socket), attrs, params["boundary_selected"]) do
+    current_user = current_user(socket)
+
+    with %{valid?: true} <- post_changeset(attrs, current_user),
+         {:ok, _published} <- Bonfire.Social.Posts.publish(current_user, attrs, params["boundary_selected"]) do
       # IO.inspect("published!")
       {:noreply,
         socket
@@ -124,10 +126,10 @@ defmodule Bonfire.Social.Posts.LiveHandler do
   end
 
 
-  def post_changeset(attrs \\ %{}) do
+  def post_changeset(attrs \\ %{}, creator) do
     # IO.inspect(attrs, label: "ATTRS")
-    Posts.changeset(:create, attrs)
-    |> IO.inspect
+    Posts.changeset(:create, attrs, creator)
+    # |> IO.inspect(label: "pc")
   end
 
 
