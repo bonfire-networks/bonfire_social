@@ -70,35 +70,35 @@ defmodule Bonfire.Social.Activities do
   end
 
 
-  def query_object_preload_create_activity(q, current_user, preloads \\ :default) do
-    query_object_preload_activity(q, :create, :id, current_user, preloads)
+  def query_object_preload_create_activity(q, opts \\ [], preloads \\ :default) do
+    query_object_preload_activity(q, :create, :id, opts, preloads)
   end
 
-  def query_object_preload_activity(q, verb \\ :create, object_id_field \\ :id, current_user \\ nil, preloads \\ :default) do
+  def query_object_preload_activity(q, verb \\ :create, object_id_field \\ :id, opts \\ [], preloads \\ :default) do
     verb_id = Verbs.get_id!(verb)
     q
     |> reusable_join(:left, [o], activity in Activity, as: :activity, on: activity.object_id == field(o, ^object_id_field) and activity.verb_id == ^verb_id)
-    |> activity_preloads(current_user, preloads)
+    |> activity_preloads(opts, preloads)
   end
 
 
-  def activity_preloads(query, current_user, preloads) when is_list(preloads) do
+  def activity_preloads(query, opts, preloads) when is_list(preloads) do
     #IO.inspect(preloads)
     Enum.reduce(preloads, query, fn preload, query ->
       query
-      |> activity_preloads(current_user, preload)
+      |> activity_preloads(opts, preload)
     end)
   end
 
-  def activity_preloads(query, current_user, :all) do
+  def activity_preloads(query, opts, :all) do
     query
-      |> activity_preloads(current_user, :with_parents)
-      |> activity_preloads(current_user, :with_creator)
-      |> activity_preloads(current_user, :default)
+      |> activity_preloads(opts, :with_parents)
+      |> activity_preloads(opts, :with_creator)
+      |> activity_preloads(opts, :default)
       # |> IO.inspect
   end
 
-  def activity_preloads(query, _current_user, :with_parents) do
+  def activity_preloads(query, _opts, :with_parents) do
     proload query,
       activity: [replied:
                  [reply_to:
@@ -107,7 +107,7 @@ defmodule Bonfire.Social.Activities do
                     created: [creator: {"creator_", [:profile, :character]}]]}]]
   end
 
-  def activity_preloads(query, _current_user, :with_creator) do
+  def activity_preloads(query, _opts, :with_creator) do
     proload query,
       activity: [object: {"object_", [created: [creator: [:profile, :character]]]}]
   end
@@ -117,21 +117,20 @@ defmodule Bonfire.Social.Activities do
     object: {"object_", [:post_content]}
   ]
 
-  def activity_preloads(query, current_user, :default) do
-    current_user = current_user(current_user)
+  def activity_preloads(query, opts, :default) do
     query
-    |> activity_preloads(current_user, :minimal)
+    |> activity_preloads(opts, :minimal)
     |> proload(activity: @default_activity_preloads)
     # |> IO.inspect(label: "activity with preloads")
   end
 
-  def activity_preloads(query, _current_user, :minimal) do
+  def activity_preloads(query, _opts, :minimal) do
     proload query,
       activity: [subject: {"subject_", [:character, profile: :icon]}]
   end
 
 
-  def activity_preloads(query, _current_user, _) do
+  def activity_preloads(query, _opts, _) do
     query
   end
 
@@ -158,18 +157,16 @@ defmodule Bonfire.Social.Activities do
   def read(%Ecto.Query{} = query, %User{}=user), do: read(query, current_user: user)
   def read(%Ecto.Query{} = query, opts) do
 
-    IO.inspect(query: query, opts: opts)
-
-    current_user = current_user(opts)
+    # IO.inspect(query: query, opts: opts)
 
     with {:ok, object} <- query
-      |> query_object_preload_create_activity(current_user, [:default, :with_parents])
-      |> IO.inspect
-      |> as_permitted_for(opts)
+      |> query_object_preload_create_activity(opts, [:default, :with_parents])
       # |> IO.inspect
+      |> as_permitted_for(opts)
+      |> IO.inspect(label: "Activities.read query")
       |> repo().single() do
 
-        # pubsub_subscribe(e(object, :activity, :replied, :thread_id, nil) || object.id, socket_or_current_user) # subscribe to realtime feed updates
+        # pubsub_subscribe(e(object, :activity, :replied, :thread_id, nil) || object.id, opts) # subscribe to realtime feed updates
 
         {:ok, object} #|> repo().maybe_preload(controlled: [acl: [grants: [access: [:interacts]]]]) |> IO.inspect
       end

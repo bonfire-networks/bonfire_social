@@ -61,19 +61,19 @@ defmodule Bonfire.Social.Follows do
       ]])
   end
 
-  def list_my_followed(current_user, paginate? \\ true, cursor_after \\ nil, with_profile_only \\ true),
-    do: list_followed(current_user, current_user, with_profile_only)
+  def list_my_followed(opts, paginate? \\ true, cursor_after \\ nil, with_profile_only \\ true),
+    do: list_followed(current_user(opts), opts, with_profile_only)
 
-  def list_followed(%{id: user_id} = _user, current_user \\ nil, paginate? \\ true, cursor_after \\ nil, with_profile_only \\ true) when is_binary(user_id) do
-    query([subject: user_id], current_user)
+  def list_followed(%{id: user_id} = _user, opts \\ [], paginate? \\ true, cursor_after \\ nil, with_profile_only \\ true) when is_binary(user_id) do
+    query([subject: user_id], opts)
     # |> maybe_with_followed_profile_only(with_profile_only)
     |> many(paginate?, cursor_after)
   end
 
-  def list_my_followers(current_user, paginate? \\ true, cursor_after \\ nil, with_profile_only \\ true), do: list_followers(current_user, current_user, with_profile_only)
+  def list_my_followers(opts, paginate? \\ true, cursor_after \\ nil, with_profile_only \\ true), do: list_followers(current_user(opts), opts, with_profile_only)
 
-  def list_followers(%{id: user_id} = _user, current_user \\ nil, paginate? \\ true, cursor_after \\ nil, with_profile_only \\ true) when is_binary(user_id) do
-    query([object: user_id], current_user)
+  def list_followers(%{id: user_id} = _user, opts \\ [], paginate? \\ true, cursor_after \\ nil, with_profile_only \\ true) when is_binary(user_id) do
+    query([object: user_id], opts)
     # |> maybe_with_follower_profile_only(with_profile_only)
     |> many(paginate?, cursor_after)
   end
@@ -103,7 +103,7 @@ defmodule Bonfire.Social.Follows do
   end
 
   defp do_follow(subject, object) when is_binary(object) do
-    
+
     # TODO: once we expose boundaries for profile visibility and follow-ability, enforce that here
     if is_ulid?(object) do
       with {:ok, object} <- Bonfire.Common.Pointers.get(object, skip_boundary_check: true, current_user: subject) do
