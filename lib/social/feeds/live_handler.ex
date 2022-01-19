@@ -5,12 +5,12 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
 
   def handle_params(%{"after" => _cursor_after} = opts, _, %{assigns: %{feed_id: feed_id}} = socket) do
     Logger.log(@log_level, "Feeds - paginate with params - if a feed_id has been assigned in the view, load that")
-    Bonfire.Social.FeedActivities.feed(feed_id, socket, [paginate: opts], nil) |> assign_feed(socket)
+    Bonfire.Social.FeedActivities.feed(feed_id, [socket: socket, paginate: opts]) |> assign_feed(socket)
   end
 
   def handle_params(%{"after" => _cursor_after} = opts, _, socket) do
     Logger.log(@log_level, "Feeds - paginate with params - if there's no feed_id but we have a current_user, load My Feed")
-    Bonfire.Social.FeedActivities.my_feed(socket, paginate: opts) |> assign_feed(socket)
+    Bonfire.Social.FeedActivities.my_feed([socket: socket, paginate: opts]) |> assign_feed(socket)
   end
 
   def handle_params(_attrs, _, socket) do
@@ -19,12 +19,12 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
 
   def handle_event("load_more", opts, %{assigns: %{feed_id: feed_id}} = socket) do
     Logger.log(@log_level, "Feeds - paginate with live event - if a feed_id has been assigned in the view, load that")
-    Bonfire.Social.FeedActivities.feed(feed_id, socket, paginate: opts) |> live_more(socket)
+    Bonfire.Social.FeedActivities.feed(feed_id, [socket: socket, paginate: opts]) |> live_more(socket)
   end
 
   def handle_event("load_more", opts, socket) do
     Logger.log(@log_level, "Feeds - paginate with live event - if there's no feed_id but we have a current_user, load My Feed")
-    Bonfire.Social.FeedActivities.my_feed(socket, paginate: opts) |> live_more(socket)
+    Bonfire.Social.FeedActivities.my_feed([socket: socket, paginate: opts]) |> live_more(socket)
   end
 
 
