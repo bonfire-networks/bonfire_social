@@ -28,10 +28,12 @@ defmodule Bonfire.Social.Posts do
   end
 
   def publish(%{id: _} = creator, attrs, preset_boundary \\ nil) do
-    # IO.inspect(creator: creator)
     # we attempt to avoid entering the transaction as long as possible.
     changeset = changeset(:create, attrs, creator, preset_boundary)
-    repo().transact_with(fn -> repo().insert(changeset) ~> maybe_index() end)
+    repo().transact_with(fn -> repo().insert(changeset) ~>
+      FeedActivities.publish(creator, :create, ..., preset_boundary) ~> # TODO: move to changeset? at least for DB publishing
+      maybe_index()
+    end)
   end
 
 
@@ -49,18 +51,18 @@ defmodule Bonfire.Social.Posts do
 
   def changeset(:create, attrs, creator \\ nil, preset \\ nil) do
     creator_id = e(creator, :id, nil)
-    # |> IO.inspect(label: "Posts.changeset:creator_id")
+
     attrs
     |> if(is_nil(creator_id), do: ..., else: Map.put(..., :created, %{creator_id: creator_id}))
     # |> IO.inspect(label: "Posts.changeset:attrs")
     |> Post.changeset(%Post{}, ...)
     |> if(is_nil(creator_id), do: ..., else: Changeset.cast_assoc(..., :created))
-    |> Changeset.cast_assoc(:post_content, [required: true, with: &PostContents.changeset/2])
+    |> Changeset.cast_assoc(:post_content, [with: &PostContents.changeset/2])
     |> Threads.cast(attrs, creator, preset)
     |> Tags.cast(attrs, creator, preset)
-    |> Acls.cast(creator, preset)
-    # |> Activities.cast(creator, :create, preset)
-    # |> FeedActivities.cast(creator, :create, preset)
+    |> Bonfire.Me.Acls.cast(creator, preset)
+    # |> Activities.cast(creator, :create, preset) # TODO
+    # |> FeedActivities.cast(creator, :create, preset) # TODO
   end
 
   def read(post_id, opts_or_socket_or_current_user \\ [], preloads \\ :all) when is_binary(post_id) do
@@ -103,7 +105,7 @@ defmodule Bonfire.Social.Posts do
   def query_paginated({a,b}, opts_or_current_user, preloads), do: query_paginated([{a,b}], opts_or_current_user, preloads)
 
   def query(filters \\ [], opts_or_current_user \\ nil, preloads \\ :all)
-  
+
   def query(filters, opts_or_current_user, preloads) when is_list(filters) or is_tuple(filters) do
 
     q = base_query(filters, opts_or_current_user, preloads)

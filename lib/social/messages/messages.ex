@@ -35,7 +35,7 @@ defmodule Bonfire.Social.Messages do
         {text, mentions, _hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs),
         {:ok, message} <- create(creator, attrs, text),
         {:ok, tagged} <- Bonfire.Social.Tags.maybe_tag(creator, message, circles ++ mentions, true),
-        {:ok, _} <- Bonfire.Me.Users.Boundaries.maybe_make_visible_for(creator, message, circles) do
+        {:ok, _} <- Bonfire.Me.Boundaries.maybe_make_visible_for(creator, message, circles) do
 
           # IO.inspect(circles: circles)
           # IO.inspect(mentions: mentions)

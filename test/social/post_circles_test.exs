@@ -4,7 +4,7 @@ defmodule Bonfire.Social.PostCirclesTest do
   alias Bonfire.Me.Fake
   alias Bonfire.Social.Posts
   alias Bonfire.Social.FeedActivities
-  alias Bonfire.Me.Users.Boundaries
+  alias Bonfire.Me.Boundaries
   alias Bonfire.Repo
 
 

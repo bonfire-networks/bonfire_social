@@ -1,13 +1,13 @@
 defmodule Bonfire.Social.Tags do
-
-  use Arrows
   use Bonfire.Repo
+  use Arrows
 
   alias Bonfire.Common.Utils
   alias Bonfire.Common.Config
   alias Bonfire.Tag.{Tags, TextContent}
   alias Bonfire.Social.PostContents
   alias Bonfire.Data.Social.PostContent
+  alias Ecto.Changeset
 
   def cast(changeset, attrs, creator, preset) do
     with true <- Utils.module_enabled?(Bonfire.Tag.Tags),
@@ -26,10 +26,10 @@ defmodule Bonfire.Social.Tags do
   end
 
   defp preload_mentions(mentions, preset) do
-    preload? = preset in ["public", "mentions"]
+    preload? = true # preset in ["public", "mentions"] # we want to metion local characters too if using the "local" preset
     mentions
     |> Keyword.values()
-    |> if(preload?, do: Repo.preload(..., [character: :inbox]), else: ...) 
+    |> if(preload?, do: repo().maybe_preload(..., [character: :inbox]), else: ...)
   end
 
   def maybe_tag(creator, post, tags, mentions_are_private? \\ true) do

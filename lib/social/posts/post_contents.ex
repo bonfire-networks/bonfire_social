@@ -2,6 +2,7 @@ defmodule Bonfire.Social.PostContents do
   alias Bonfire.Data.Social.PostContent
   alias Bonfire.Common.Extend
   alias Bonfire.Common.Utils
+  alias Ecto.Changeset
 
   def prepare_content(attrs, text \\ nil)
   def prepare_content(%{post_content: %{} = attrs}, text), do: prepare_content(attrs, text)

@@ -33,7 +33,7 @@ defmodule Bonfire.Social.Boosts do
       # TODO: increment the boost count
 
       # make the boost itself visible to both
-      Bonfire.Me.Users.Boundaries.maybe_make_visible_for(booster, boost, boosted)
+      Bonfire.Me.Boundaries.maybe_make_visible_for(booster, boost, boosted)
 
       FeedActivities.maybe_notify_creator(booster, published, boosted) #|> IO.inspect
 
