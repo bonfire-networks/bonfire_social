@@ -68,7 +68,7 @@ defmodule Bonfire.Social.Posts do
   defp base_changeset(attrs, creator, preset, text \\ nil) do
     attrs =
       attrs
-      |> Map.put(:created, %{creator_id: e(creator, :id, nil) |> IO.inspect()})
+      |> Map.put(:created, %{creator_id: e(creator, :id, nil)})
       |> Map.put(:post_content, PostContents.prepare_content(attrs, text))
       # |> IO.inspect()
 
@@ -79,10 +79,9 @@ defmodule Bonfire.Social.Posts do
   end
 
 
-  def read(post_id, socket_or_current_user \\ nil, preloads \\ :all) when is_binary(post_id) do
-    current_user = current_user(socket_or_current_user)
-    with {:ok, post} <- base_query([id: post_id], current_user, preloads)
-      |> Activities.read(socket_or_current_user) do
+  def read(post_id, opts_or_socket_or_current_user \\ [], preloads \\ :all) when is_binary(post_id) do
+    with {:ok, post} <- base_query([id: post_id], opts_or_socket_or_current_user, preloads)
+      |> Activities.read(opts_or_socket_or_current_user) do
         {:ok, Activities.activity_under_object(post) }
       end
   end

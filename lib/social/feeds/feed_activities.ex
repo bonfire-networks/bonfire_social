@@ -225,7 +225,7 @@ defmodule Bonfire.Social.FeedActivities do
 
     circles = circles ++ [creator_id]
 
-    # Bonfire.Me.Users.Boundaries.maybe_make_visible_for(subject, object, circles) # |> IO.inspect(label: "grant")
+    Bonfire.Me.Users.Boundaries.maybe_make_visible_for(subject, object, circles) # |> IO.inspect(label: "grant")
 
     with {:ok, activity} <- do_publish(subject, verb, object, circles) do
       Logger.debug("FeedActivities published to: #{inspect circles}")
@@ -242,7 +242,7 @@ defmodule Bonfire.Social.FeedActivities do
     mentioned_notifications_inboxes = Feeds.tags_inbox_feeds(tags) #|> IO.inspect(label: "publish tag / mention")
     tag_ids = circles ++ Bonfire.Tag.Tags.tag_ids(tags) # TODO? don't re-fetch tags
     Logger.debug("FeedActivities with mentions_and_tags_are_private?==false -> making visible for: #{inspect tag_ids}")
-    # Bonfire.Me.Users.Boundaries.maybe_make_visible_for(subject, object, tag_ids) # |> IO.inspect(label: "grant")
+    Bonfire.Me.Users.Boundaries.maybe_make_visible_for(subject, object, tag_ids) # |> IO.inspect(label: "grant")
     feeds = circles ++ mentioned_notifications_inboxes
     with {:ok, activity} <- do_publish(subject, verb, object, feeds) do
       Logger.debug("FeedActivities with mentions_and_tags_are_private?==false -> putting in feed + notifications of @ mentioned / tagged characters: #{inspect feeds}")
@@ -256,7 +256,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   def publish(subject, verb, object, circles, _, _) when is_atom(verb) do
     Logger.debug("FeedActivities: just making visible for and putting in these circles/feeds: #{inspect circles}")
-    # Bonfire.Me.Users.Boundaries.maybe_make_visible_for(subject, object, circles) # |> IO.inspect(label: "grant")
+    Bonfire.Me.Users.Boundaries.maybe_make_visible_for(subject, object, circles) # |> IO.inspect(label: "grant")
     do_publish(subject, verb, object, circles)
   end
 

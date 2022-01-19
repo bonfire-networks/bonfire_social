@@ -57,7 +57,7 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
 
   def handle_info({:new_activity, data}, socket) do
     Logger.log(:debug, "Feeds - handle_info :new_activity")
-    IO.inspect(data: data)
+    # IO.inspect(data: data)
 
     current_user_id = e(current_user(socket), :id, nil)
 
