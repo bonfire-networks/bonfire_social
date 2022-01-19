@@ -73,7 +73,7 @@ defmodule Bonfire.Social.Threads do
   # loads a reply, but only if you can see, read and reply to it.
   defp load_reply(user, id) do
     from(p in Pointers, as: :root, where: p.id == ^id)
-    |> proload([:replied])
+    |> proload([:replied, created: [character: [:inbox]]])
     |> boundarise(root.id, verbs: [:see, :read, :reply], current_user: user)
     |> repo().one()
   end
@@ -123,7 +123,7 @@ defmodule Bonfire.Social.Threads do
       |> distinct([fp, subject_character: subject_character], [desc: subject_character.id])
       |> where(
         [replied, activity: activity, subject_character: subject_character],
-          (replied.thread_id == ^thread_id  or replied.id == ^thread_id or replied.reply_to_id == ^thread_id) and activity.verb_id==^verb_id
+        (replied.thread_id == ^thread_id  or replied.id == ^thread_id or replied.reply_to_id == ^thread_id) and activity.verb_id==^verb_id
       )
   end
 

@@ -1,22 +1,41 @@
 defmodule Bonfire.Social.Tags do
-  alias Bonfire.Common.Utils
-  alias Bonfire.Common.Config
-  alias Bonfire.Tag.Tags
-  alias Bonfire.Tag.TextContent
+
+  use Arrows
   use Bonfire.Repo
 
-  def maybe_process(creator, attrs) do
-    if Utils.module_enabled?(Bonfire.Tag.Tags), do: TextContent.Process.process(creator, attrs, "text/markdown")
+  alias Bonfire.Common.Utils
+  alias Bonfire.Common.Config
+  alias Bonfire.Tag.{Tags, TextContent}
+  alias Bonfire.Social.PostContents
+  alias Bonfire.Data.Social.PostContent
+
+  def cast(changeset, attrs, creator, preset) do
+    with true <- Utils.module_enabled?(Bonfire.Tag.Tags),
+         {text, mentions, hashtags} <- TextContent.Process.process(creator, attrs, "text/markdown") do
+      %{mentions: preload_mentions(mentions, preset),
+        hashtags: Keyword.values(hashtags)}
+      |> Map.merge(PostContents.prepare_content(attrs, text))
+      # |> IO.inspect(label: "Social.Tags.cast:attrs")
+      |> Changeset.cast(changeset, %{post_content: ...}, [])
+    else
+      _ -> Changeset.cast(changeset, %{post_content: PostContents.prepare_content(attrs)}, [])
+    end
+    |> Changeset.cast_assoc(:post_content, required: true, with: &PostContents.changeset/2)
+    # |> IO.inspect(label: "changeset")
+    # TODO: cast the tags themselves
+  end
+
+  defp preload_mentions(mentions, preset) do
+    preload? = preset in ["public", "mentions"]
+    mentions
+    |> Keyword.values()
+    |> if(preload?, do: Repo.preload(..., [character: :inbox]), else: ...) 
   end
 
   def maybe_tag(creator, post, tags, mentions_are_private? \\ true) do
-    if Utils.module_enabled?(Bonfire.Tag.Tags), do: Bonfire.Tag.Tags.maybe_tag(creator, post, tags, mentions_are_private?),
+    if Utils.module_enabled?(Bonfire.Tag.Tags),
+      do: Bonfire.Tag.Tags.maybe_tag(creator, post, tags, mentions_are_private?),
     else: {:ok, post}
-  end
-
-  def cast(changeset, attrs, creator, mentions, _hashtags, preset) do
-    # TODO
-    changeset
   end
 
   def indexing_format_tags(obj) do

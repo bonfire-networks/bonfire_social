@@ -187,6 +187,12 @@ defmodule Bonfire.Social.FeedActivities do
   #   repo().maybe_preload(feed_for, [feed_publishes: [activity: [:verb, :object, subject_user: [:profile, :character]]]]) |> Map.get(:feed_publishes)
   # end
 
+  # def publish(subject, verb, object, preset) do
+  #   if preset == "public" do
+  #   else
+  #   end
+  # end
+
   @doc """
   Creates a new local activity and publishes to appropriate feeds
   """

@@ -5,6 +5,8 @@ defmodule Bonfire.Social.Objects do
     searchable_fields: [:id],
     sortable_fields: [:id]
 
+  alias Bonfire.Data.Identity.Character
+  alias Bonfire.Data.Social.Inbox
   alias Bonfire.Social.Activities
   alias Bonfire.{Common, Common.Utils}
 
@@ -50,49 +52,33 @@ defmodule Bonfire.Social.Objects do
 
   defp tag_ids(tags), do: Enum.map(tags, &(&1.id))
 
-  # when the user picks a preset, this maps to a set of base acls
-  defp preset_acls("public"), do: Enum.map([:guests_may_see, :locals_may_reply], &Acls.get_id!/1)
-  defp preset_acls("mentions"), do: []
-  defp preset_acls("local"), do: Enum.map([:locals_may_reply], &Acls.get_id!/1)
 
-  # def doing(attrs, preset) do
-    # we need to handle: replies (threads), tags, mentions
-    # if we see an attempted reply, we load it and verify whether you are permitted to do that.
-    # if we see tags, we load them and verify you are permitted to use them
-    
-  #   acls = preset_acls(preset)
-  #   tags = maybe_load_tags(object, preset)
-  #   feeds = reply_to_inboxes(object, subject, preset) ++ tag_inboxes(tags)
-  #   tag_ids = Enum.map(tags, &(&1.id))
-  #   with {:ok, activity} <- do_pub(subject, verb, object, circles) do
-  #     # maybe_make_visible_for(subject, object, circles ++ tag_ids(tags))
-  #     Threads.maybe_push_thread(subject, activity, object)
-  #     notify_inboxes(subject, activity, object, feeds)
-  #   end
-
-  # end
-          
-  # # TODO: modernise tags so we can do this in one query
-  # def maybe_load_tags(%{tags: tags=[_|_]}, yes)
-  # when yes in ["public", "mentions"], do: Repo.preload(Bonfire.Tags.Tags.many(), [character: [:inbox]])
-  # def maybe_load_tags(_, _), do: []
 
   # # used for public and mentions presets. returns a list of feed ids
-  # defp tag_inboxes(tags) when is_list(tags), do: Enum.flat_map(tags, &tag_inboxes/1)
-  # defp tag_inboxes(%{character: %Character{inbox: %Inbox{feed_id: id}}})
+  # defp inboxes(tags) when is_list(tags), do: Enum.flat_map(tags, &inboxes/1)
+  # defp inboxes(%{character: %Character{inbox: %Inbox{feed_id: id}}})
   # when not is_nil(id), do: [id]
-  # defp tag_inboxes(_), do: []
+  # defp inboxes(_), do: []
 
   # # used for public preset. if the creator is me, the empty list, else a list of one feed id
-  # defp reply_to_inboxes(object, %{id: me}, "public") do
-  #   case object do
-  #     %{created: %{creator_id: creator}
-  #       replied: %{reply_to: %{character: %{inbox: %{feed_id: feed}}}}}
-  #     when not is_nil(feed) and not is_nil(creator) and creator == me  -> [feed]
+  # defp reply_to_inboxes(changeset, %{id: me}, "public") do
+  #   case get_in(changeset, [:changes, :replied, :data, :reply_to]) do
+  #     %{created: %{creator_id: creator}, character: %{inbox: %{feed_id: feed}}}
+  #     when not is_nil(feed) and not is_nil(creator) and not creator == me -> [feed]
   #     _ -> []
   #   end
   # end
   # defp reply_to_inboxes(_, _, _), do: []
+
+
+    # if we see tags, we load them and will one day verify you are permitted to use them
+    # feeds = reply_to_inboxes(changeset, creator, preset) ++ inboxes(mentions)
+    # with {:ok, activity} <- do_pub(subject, verb, object, circles) do
+    #   # maybe_make_visible_for(subject, object, circles ++ tag_ids(tags))
+    #   Threads.maybe_push_thread(subject, activity, object)
+    #   notify_inboxes(subject, activity, object, feeds)
+    # end
+    
 
   
 end
