@@ -30,8 +30,8 @@ defmodule Bonfire.Social.Flags do
       # TODO: increment the flag count
       # TODO: put in admin(s) inbox feed?
 
-      # make the flag itself visible to the flagger ONLY
-      Bonfire.Me.Users.Boundaries.maybe_make_visible_for(flagger, flag, [])
+      # make the flag itself visible to the flagger ONLY (admins are included anyway)
+      Bonfire.Me.Users.Boundaries.maybe_make_visible_for(flagger, flag)
 
       {:ok, activity} = FeedActivities.notify_admins(flagger, :flag, flagged)
 
@@ -40,7 +40,8 @@ defmodule Bonfire.Social.Flags do
     end
   end
   def flag(%{} = user, object) when is_binary(object) do
-    with {:ok, object} <- Bonfire.Common.Pointers.get(object, current_user: user) do
+    # TODO: decide if we can flag something we can't see
+    with {:ok, object} <- Bonfire.Common.Pointers.get(object, current_user: user, skip_boundary_check: true) do
       flag(user, object)
     end
   end
