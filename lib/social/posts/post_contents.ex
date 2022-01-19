@@ -58,6 +58,7 @@ defmodule Bonfire.Social.PostContents do
 
   def changeset(%PostContent{} = cs \\ %PostContent{}, attrs) do
     PostContent.changeset(cs, attrs)
+    |> Changeset.cast(attrs, [:hashtags, :mentions])
   end
 
 end

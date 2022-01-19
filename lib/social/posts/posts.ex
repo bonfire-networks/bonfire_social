@@ -1,5 +1,6 @@
 defmodule Bonfire.Social.Posts do
 
+  use Arrows
   alias Bonfire.Data.Social.{Post, PostContent, Replied, Activity}
   alias Bonfire.Social.{Activities, FeedActivities, Objects}
   alias Bonfire.Boundaries.{Circles, Verbs}
@@ -30,16 +31,7 @@ defmodule Bonfire.Social.Posts do
     # IO.inspect(creator: creator)
     # we attempt to avoid entering the transaction as long as possible.
     changeset = changeset(:create, attrs, creator, preset_boundary)
-    repo().transact_with(fn ->
-      with {:ok, post} <- repo().insert(changeset),
-        # {:ok, post_with_tags} <- Tags.cast(maybe_tag(creator, post, mentions, mention_loudly?),
-        {:ok, activity} <- FeedActivities.publish(creator, :create, post, preset_boundary) do
-          post_with_activity = Activities.activity_under_object(activity)
-          maybe_index(activity)
-          {:ok, post_with_activity}
-          # {:ok, post}
-        end
-      end)
+    repo().transact_with(fn -> repo().insert(changeset) ~> maybe_index() end)
   end
 
 
@@ -56,28 +48,20 @@ defmodule Bonfire.Social.Posts do
   # end
 
   def changeset(:create, attrs, creator \\ nil, preset \\ nil) do
-    case Tags.maybe_process(creator, attrs) do
-      {text, mentions, hashtags} ->
-        base_changeset(attrs, creator, preset, text)
-        |> Tags.cast(attrs, creator, mentions, hashtags, preset)
-      _ ->
-        base_changeset(attrs, creator, preset)
-    end
-  end
-
-  defp base_changeset(attrs, creator, preset, text \\ nil) do
-    attrs =
-      attrs
-      |> Map.put(:created, %{creator_id: e(creator, :id, nil)})
-      |> Map.put(:post_content, PostContents.prepare_content(attrs, text))
-      # |> IO.inspect()
-
-    Post.changeset(%Post{}, attrs)
-    |> Changeset.cast_assoc(:created)
+    creator_id = e(creator, :id, nil)
+    # |> IO.inspect(label: "Posts.changeset:creator_id")
+    attrs
+    |> if(is_nil(creator_id), do: ..., else: Map.put(..., :created, %{creator_id: creator_id}))
+    # |> IO.inspect(label: "Posts.changeset:attrs")
+    |> Post.changeset(%Post{}, ...)
+    |> if(is_nil(creator_id), do: ..., else: Changeset.cast_assoc(..., :created))
     |> Changeset.cast_assoc(:post_content, [required: true, with: &PostContents.changeset/2])
     |> Threads.cast(attrs, creator, preset)
+    |> Tags.cast(attrs, creator, preset)
+    |> Acls.cast(creator, preset)
+    # |> Activities.cast(creator, :create, preset)
+    # |> FeedActivities.cast(creator, :create, preset)
   end
-
 
   def read(post_id, opts_or_socket_or_current_user \\ [], preloads \\ :all) when is_binary(post_id) do
     with {:ok, post} <- base_query([id: post_id], opts_or_socket_or_current_user, preloads)
@@ -89,9 +73,7 @@ defmodule Bonfire.Social.Posts do
   @doc """
   For internal use only (doesn't check permissions). Use `read` instead.
   """
-  def get(id) when is_binary(id) do
-    repo().single(get_query(id))
-  end
+  def get(id) when is_binary(id), do: repo().single(get_query(id))
 
   @doc "List posts created by the user and which are in their outbox, which are not replies"
   def list_by(by_user, opts_or_current_user \\ [], preloads \\ :all) do
@@ -104,9 +86,8 @@ defmodule Bonfire.Social.Posts do
   @doc "List posts with pagination"
   def list_paginated(filters, opts_or_current_user \\ [], preloads \\ :all)
   def list_paginated(filters, opts_or_current_user, preloads) when is_list(filters) do
-
     filters
-    # |> IO.inspect()
+    # |> IO.inspect(label: "Posts.list_paginated:filters")
     |> query_paginated(opts_or_current_user, preloads)
     |> FeedActivities.feed_paginated(opts_or_current_user, filters, preloads)
   end
@@ -114,16 +95,15 @@ defmodule Bonfire.Social.Posts do
   @doc "Query posts with pagination"
   def query_paginated(filters, opts_or_current_user \\ [], preloads \\ :all)
   def query_paginated(filters, opts_or_current_user, preloads) when is_list(filters) do
-
     filters
-    # |> IO.inspect()
+    # |> IO.inspect(label: "Posts.query_paginated:filters")
     |> Keyword.drop([:paginate])
     |> FeedActivities.query_paginated(opts_or_current_user, filters, preloads)
   end
   def query_paginated({a,b}, opts_or_current_user, preloads), do: query_paginated([{a,b}], opts_or_current_user, preloads)
 
   def query(filters \\ [], opts_or_current_user \\ nil, preloads \\ :all)
-
+  
   def query(filters, opts_or_current_user, preloads) when is_list(filters) or is_tuple(filters) do
 
     q = base_query(filters, opts_or_current_user, preloads)
@@ -133,7 +113,6 @@ defmodule Bonfire.Social.Posts do
   end
 
   defp base_query(filters, opts_or_current_user, preloads) when is_list(filters) or is_tuple(filters) do
-
     (from p in Post, as: :main_object)
     |> query_filter(filters, nil, nil)
   end
@@ -142,13 +121,12 @@ defmodule Bonfire.Social.Posts do
   def filter(:posts_by, user_id, query) when is_binary(user_id) do
     verb_id = Verbs.get_id!(:create)
     query
-    |> proload(activity: [
-        object: {"object_", [:post, :created, :replied]}
-      ])
-      |> where(
+    |> proload(activity: [object: {"object_", [:post, :created, :replied]}])
+    |> where(
       [activity: activity, object_post: post, object_created: created, object_replied: replied],
-        is_nil(replied.reply_to_id) and not is_nil(post.id) and activity.verb_id==^verb_id and created.creator_id == ^user_id
-      )
+      is_nil(replied.reply_to_id) and not is_nil(post.id)
+      and activity.verb_id==^verb_id and created.creator_id == ^user_id
+    )
   end
 
   def get_query(id) do
@@ -161,9 +139,7 @@ defmodule Bonfire.Social.Posts do
      preload: [post_content: pc, created: cr, replied: {re, [reply_to: rt]}]
   end
 
-  defp by_user(user_id) do
-    repo().many(by_user_query(user_id))
-  end
+  defp by_user(user_id), do: repo().many(by_user_query(user_id))
 
   defp by_user_query(user_id) do
     from p in Post,
@@ -313,7 +289,10 @@ defmodule Bonfire.Social.Posts do
     nil
   end
 
-  def maybe_index(object), do: indexing_object_format(object) |> Bonfire.Social.Integration.maybe_index()
+  def maybe_index(object) do
+    indexing_object_format(object) |> Bonfire.Social.Integration.maybe_index()
+    {:ok, object}
+  end
 
 
 end
