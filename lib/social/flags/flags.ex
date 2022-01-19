@@ -31,7 +31,7 @@ defmodule Bonfire.Social.Flags do
       # TODO: put in admin(s) inbox feed?
 
       # make the flag itself visible to the flagger ONLY (admins are included anyway)
-      Bonfire.Me.Users.Boundaries.maybe_make_visible_for(flagger, flag)
+      Bonfire.Me.Boundaries.maybe_make_visible_for(flagger, flag)
 
       {:ok, activity} = FeedActivities.notify_admins(flagger, :flag, flagged)
 
