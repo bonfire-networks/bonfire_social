@@ -13,8 +13,8 @@ defmodule Bonfire.Social.Tags do
     with true <- Utils.module_enabled?(Bonfire.Tag.Tags),
          mentions when not is_nil(mentions) <- Utils.e(changeset, :changes, :post_content, :changes, :mentions, nil) do
       changeset
-      |> Changeset.cast(%{tags: tags_preloads(mentions, preset)} |> IO.inspect, [])
-      |> Changeset.cast_assoc(:tags, with: &Bonfire.Tag.Tagged.changeset/2)
+      |> Changeset.cast(%{tagged: tags_preloads(mentions, preset)}, []) # |> IO.inspect, [])
+      |> Changeset.cast_assoc(:tagged, with: &Bonfire.Tag.Tagged.changeset/2)
     else
       _ -> changeset
     end
@@ -26,7 +26,7 @@ defmodule Bonfire.Social.Tags do
   def maybe_process(creator, attrs) do
     with true <- Utils.module_enabled?(Bonfire.Tag.Tags),
          {text, mentions, hashtags} <- TextContent.Process.process(creator, attrs, "text/markdown") do
-            {:ok, %{text: text, mentions: mentions, hashtags: hashtags}}
+      {:ok, %{text: text, mentions: mentions, hashtags: hashtags}}
     end
   end
 
