@@ -31,7 +31,7 @@ defmodule Bonfire.Social.Posts do
     # we attempt to avoid entering the transaction as long as possible.
     changeset = changeset(:create, attrs, creator, preset_boundary)
     repo().transact_with(fn -> repo().insert(changeset) ~>
-      FeedActivities.publish(creator, :create, ..., preset_boundary) ~> # TODO: move to changeset? at least for DB publishing
+      FeedActivities.publish(creator, :create, ..., preset_boundary) ~> # TODO: move to changeset, at least for DB publishing
       maybe_index()
     end)
   end
@@ -57,7 +57,7 @@ defmodule Bonfire.Social.Posts do
     # |> IO.inspect(label: "Posts.changeset:attrs")
     |> Post.changeset(%Post{}, ...)
     |> if(is_nil(creator_id), do: ..., else: Changeset.cast_assoc(..., :created))
-    |> Changeset.cast_assoc(:post_content, [with: &PostContents.changeset/2])
+    |> PostContents.cast(attrs, creator, preset)
     |> Threads.cast(attrs, creator, preset)
     |> Tags.cast(attrs, creator, preset)
     |> Bonfire.Me.Acls.cast(creator, preset)

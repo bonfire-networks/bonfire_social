@@ -11,25 +11,30 @@ defmodule Bonfire.Social.Tags do
 
   def cast(changeset, attrs, creator, preset) do
     with true <- Utils.module_enabled?(Bonfire.Tag.Tags),
-         {text, mentions, hashtags} <- TextContent.Process.process(creator, attrs, "text/markdown") do
-      %{mentions: preload_mentions(mentions, preset),
-        hashtags: Keyword.values(hashtags)}
-      |> Map.merge(PostContents.prepare_content(attrs, text))
-      # |> IO.inspect(label: "Social.Tags.cast:attrs")
-      |> Changeset.cast(changeset, %{post_content: ...}, [])
+         mentions when not is_nil(mentions) <- Utils.e(changeset, :changes, :post_content, :changes, :mentions, nil) do
+      changeset
+      |> Changeset.cast(%{tags: tags_preloads(mentions, preset)} |> IO.inspect, [])
+      |> Changeset.cast_assoc(:tags, with: &Bonfire.Tag.Tagged.changeset/2)
     else
-      _ -> Changeset.cast(changeset, %{post_content: PostContents.prepare_content(attrs)}, [])
+      _ -> changeset
     end
-    |> Changeset.cast_assoc(:post_content, required: true, with: &PostContents.changeset/2)
-    # |> IO.inspect(label: "changeset")
+    |> IO.inspect(label: "Social.Tags.cast: changeset")
     # TODO: cast the tags themselves
+    #
   end
 
-  defp preload_mentions(mentions, preset) do
+  def maybe_process(creator, attrs) do
+    with true <- Utils.module_enabled?(Bonfire.Tag.Tags),
+         {text, mentions, hashtags} <- TextContent.Process.process(creator, attrs, "text/markdown") do
+            {:ok, %{text: text, mentions: mentions, hashtags: hashtags}}
+    end
+  end
+
+  defp tags_preloads(mentions, preset) do
     preload? = true # preset in ["public", "mentions"] # we want to metion local characters too if using the "local" preset
     mentions
     |> Keyword.values()
-    |> if(preload?, do: repo().maybe_preload(..., [character: :inbox]), else: ...)
+    |> if(preload?, do: repo().maybe_preload(..., [character: :inbox]) |> repo().maybe_preload(:inbox), else: ...)
   end
 
   def maybe_tag(creator, post, tags, mentions_are_private? \\ true) do
