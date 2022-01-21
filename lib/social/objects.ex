@@ -13,15 +13,15 @@ defmodule Bonfire.Social.Objects do
   alias Bonfire.Social.{Activities, Tags, Threads}
 
   def cast(changeset, attrs, creator, preset) do
-    debug(creator, "creator")
+    # debug(creator, "creator")
     changeset
     |> cast_creator(creator)
-    # record replies & threads. preloads data that will be checked by acls
-    |> Threads.cast(attrs, creator, preset) 
-    # record tags & mentions. preloads data that will be checked by acls
+    # record replies & threads. preloads data that will be checked by `Acls`
+    |> Threads.cast(attrs, creator, preset)
+    # record tags & mentions. uses data preloaded by `PostContents`
     |> Tags.cast(attrs, creator, preset)
-    # apply boundaries on all objects, uses data preloaded in threads and tags
-    |> Acls.cast(creator, preset) 
+    # apply boundaries on all objects, uses data preloaded by `Threads` and `PostContents`
+    |> Acls.cast(creator, preset)
     |> Activities.cast(:create, creator, preset)
   end
 

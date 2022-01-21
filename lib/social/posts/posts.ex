@@ -52,7 +52,7 @@ defmodule Bonfire.Social.Posts do
     # |> IO.inspect(label: "Posts.changeset:attrs")
     |> Post.changeset(%Post{}, ...)
     |> PostContents.cast(attrs, creator, preset) # process text (must be done before Objects.cast)
-    |> Objects.cast(attrs, creator, preset) # deal with threading, tagging, boundaries etc.
+    |> Objects.cast(attrs, creator, preset) # deal with threading, tagging, boundaries, activities, etc.
   end
 
   def read(post_id, opts_or_socket_or_current_user \\ [], preloads \\ :all) when is_binary(post_id) do

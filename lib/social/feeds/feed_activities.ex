@@ -13,7 +13,7 @@ defmodule Bonfire.Social.FeedActivities do
   alias Bonfire.Social.Objects
   alias Bonfire.Social.Threads
 
-  import Bonfire.Common.Utils
+  use Bonfire.Common.Utils
 
   use Bonfire.Repo,
       schema: FeedPublish,
@@ -22,6 +22,11 @@ defmodule Bonfire.Social.FeedActivities do
 
   def queries_module, do: FeedPublish
   def context_module, do: FeedPublish
+
+  def cast_data(_changeset, activity, creator, preset) do
+    Feeds.target_feeds(_changeset, creator, preset)
+    |> Enum.map(&(%{feed_id: &1, activity_id: activity.id}))
+  end
 
   def feeds_for_activity(%{id: id}), do: feeds_for_activity(id)
 
@@ -329,7 +334,7 @@ defmodule Bonfire.Social.FeedActivities do
   Creates a new local activity or takes an existing one and publishes to creator's inbox
   """
   def notify_admins(subject, verb_or_activity, object) do
-    inboxes = Feeds.admins_inbox()
+    inboxes = Feeds.admins_inboxes()
     Logger.debug("notify_admins: #{inspect inboxes}")
     maybe_feed_publish(subject, verb_or_activity, object, inboxes)
     # TODO: notify remote users via AP
