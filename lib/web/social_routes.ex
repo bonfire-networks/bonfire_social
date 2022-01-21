@@ -8,11 +8,10 @@ defmodule Bonfire.Social.Web.Routes do
         pipe_through :browser
 
         live "/home", HomeLive, as: :home
+        live "/home/:tab", HomeLive, as: :home
         live "/local", Feeds.LocalLive, as: :local
         live "/federation", Feeds.FederationLive, as: :federation
-        # live "/browse/", Feeds.BrowseLive, as: :browse
-        # live "/browse/:tab", Feeds.BrowseLive
-
+      
         live "/write", WriteLive, as: :write
 
         live "/post/:id", PostLive, as: Bonfire.Data.Social.Post

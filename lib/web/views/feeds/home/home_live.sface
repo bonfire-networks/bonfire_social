@@ -4,4 +4,10 @@
   feed={@feed}
   feed_id={"feed:my:"<>e(@current_user, :id, "")}
   page_info={@page_info}
-/>
+>
+  <Bonfire.UI.Social.TimelineOptionsLive
+    current_user={@current_user}
+    selected_tab={@selected_tab}
+  />
+</Bonfire.UI.Social.FeedViewLive>
+
