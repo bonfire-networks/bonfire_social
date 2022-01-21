@@ -20,7 +20,6 @@ defmodule Bonfire.Social.Migrations do
       require Bonfire.Data.Social.Replied.Migration
       require Bonfire.Data.Social.Boost.Migration
       require Bonfire.Data.Social.Flag.Migration
-      require Bonfire.Data.Social.Inbox.Migration
       require Bonfire.Data.Social.Message.Migration
 
       # Bonfire.Data.Social.Article.Migration.migrate_article()
@@ -39,7 +38,6 @@ defmodule Bonfire.Social.Migrations do
       Bonfire.Data.Social.Replied.Migration.migrate_replied()
       Bonfire.Data.Social.Boost.Migration.migrate_boost()
       Bonfire.Data.Social.Flag.Migration.migrate_flag()
-      Bonfire.Data.Social.Inbox.Migration.migrate_inbox()
       Bonfire.Data.Social.Message.Migration.migrate_message()
     end
   end
@@ -62,7 +60,6 @@ defmodule Bonfire.Social.Migrations do
       require Bonfire.Data.Social.Replied.Migration
       require Bonfire.Data.Social.Boost.Migration
       require Bonfire.Data.Social.Flag.Migration
-      require Bonfire.Data.Social.Inbox.Migration
       require Bonfire.Data.Social.Message.Migration
 
       Bonfire.Data.Social.Message.Migration.migrate_message()
@@ -70,7 +67,6 @@ defmodule Bonfire.Social.Migrations do
       Bonfire.Data.Social.Replied.Migration.migrate_replied()
       Bonfire.Data.Social.Boost.Migration.migrate_boost()
       Bonfire.Data.Social.Flag.Migration.migrate_flag()
-      Bonfire.Data.Social.Inbox.Migration.migrate_inbox()
       Bonfire.Data.Social.Profile.Migration.migrate_profile()
       Bonfire.Data.Social.PostContent.Migration.migrate_post_content()
       Bonfire.Data.Social.Post.Migration.migrate_post()

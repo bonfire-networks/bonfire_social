@@ -89,7 +89,7 @@ defmodule Bonfire.Social.Threads do
   # loads a reply, but only if you are allowed to reply to it.
   defp load_reply(user, id) do
     from(p in Pointer, as: :root, where: p.id == ^id)
-    |> proload([:replied, created: [creator: [character: [:inbox]]]])
+    |> proload([:replied, created: [creator: [:character]]])
     |> boundarise(root.id, verbs: [:reply], current_user: user)
     |> repo().one()
   end

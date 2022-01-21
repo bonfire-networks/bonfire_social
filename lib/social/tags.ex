@@ -29,15 +29,14 @@ defmodule Bonfire.Social.Tags do
   def maybe_process(creator, attrs) do
     with true <- Utils.module_enabled?(Bonfire.Tag),
          {text, mentions, hashtags} <- TextContent.Process.process(creator, attrs, "text/markdown") do
-      {:ok, %{text: text, mentions: mentions, hashtags: hashtags}}
+      {:ok, %{text: text, mentions: Keyword.values(mentions), hashtags: hashtags}}
     end
   end
 
   defp tags_preloads(mentions, preset) do
     preload? = true # preset in ["public", "mentions"] # we want to metion local characters too if using the "local" preset
     mentions
-    |> Keyword.values()
-    |> if(preload?, do: repo().maybe_preload(..., [character: :inbox]) |> repo().maybe_preload(:inbox), else: ...)
+    |> if(preload?, do: repo().maybe_preload(..., [:character]), else: ...)
   end
 
   def maybe_tag(creator, post, tags, mentions_are_private? \\ true) do
