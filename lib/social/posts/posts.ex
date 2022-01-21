@@ -53,14 +53,10 @@ defmodule Bonfire.Social.Posts do
     creator_id = e(creator, :id, nil)
 
     attrs
-    |> if(is_nil(creator_id), do: ..., else: Map.put(..., :created, %{creator_id: creator_id}))
     # |> IO.inspect(label: "Posts.changeset:attrs")
     |> Post.changeset(%Post{}, ...)
-    |> if(is_nil(creator_id), do: ..., else: Changeset.cast_assoc(..., :created))
-    |> PostContents.cast(attrs, creator, preset)
-    |> Threads.cast(attrs, creator, preset)
-    |> Tags.cast(attrs, creator, preset)
-    |> Bonfire.Me.Acls.cast(creator, preset)
+    |> PostContents.cast(attrs, creator, preset) # process text (must be done before Objects.cast)
+    |> Objects.cast(attrs, creator, preset) # add creator & boundaries
     # |> Activities.cast(creator, :create, preset) # TODO
     # |> FeedActivities.cast(creator, :create, preset) # TODO
   end

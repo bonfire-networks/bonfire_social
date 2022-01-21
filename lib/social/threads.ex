@@ -2,17 +2,19 @@ defmodule Bonfire.Social.Threads do
 
   @default_max_depth 3 # TODO: configurable
 
-  alias Bonfire.Data.Social.Replied
-  alias Bonfire.Social.{Activities, FeedActivities}
-  alias Bonfire.Boundaries.Verbs
-  alias Pointers.ULID
-  import Bonfire.Boundaries.Queries
-  import Bonfire.Common.Utils
-
+  use Arrows
+  use Bonfire.Common.Utils
   use Bonfire.Repo,
     schema: Replied,
     searchable_fields: [:id, :thread_id, :reply_to_id],
     sortable_fields: [:id]
+
+  import Bonfire.Boundaries.Queries
+
+  alias Bonfire.Data.Social.Replied
+  alias Bonfire.Social.{Activities, FeedActivities}
+  alias Bonfire.Boundaries.Verbs
+  alias Pointers.{Pointer, ULID}
 
   def context_module, do: Replied
   def queries_module, do: Replied
@@ -41,15 +43,24 @@ defmodule Bonfire.Social.Threads do
     case find_reply_id(attrs) do
       reply_to when is_binary(reply_to) ->
         case load_reply(user, reply_to) do
+
           %{replied: %{thread_id: id}}=reply_to when is_binary(id) ->
             Logger.debug("[Threads.cast_replied/3] copying thread from responded to")
-            cast_replied(changeset, %{thread_id: id, reply_to_id: reply_to.id})
-            |> put_in([:changes, :replied, :data, :reply_to], reply_to)
+            replied = %{thread_id: id, reply_to_id: reply_to.id, replying_to: reply_to} |> debug()
+
+            changeset
+              |> do_cast_replied(replied)
+              # |> Changeset.change(%{replied: replied})
+              |> debug("cs with replied")
+
           %{}=reply_to ->
-            Logger.debug("[Threads.cast_replied/3] parent has no reply, creating one")
+            Logger.debug("[Threads.cast_replied/3] parent has no thread, creating one")
+
             repo().insert_all(Replied, %{id: reply_to.id, thread_id: reply_to.id}, on_conflict: :nothing)
-            cast_replied(changeset, %{thread_id: nil, reply_to_id: reply_to.id})
-            |> put_in([:changes, :replied, :data, :reply_to], %Replied{id: reply_to.id, thread_id: reply_to.id})
+
+            do_cast_replied(changeset, %{thread_id: nil, reply_to_id: reply_to.id})
+              |> put_in([:changes, :replied, :data, :reply_to, :replied], %Replied{id: reply_to.id, thread_id: reply_to.id})
+
           _ ->
             Logger.debug("[Threads.cast_replied/3] not permitted to reply to this, starting new thread")
             start_new_thread(changeset)
@@ -60,21 +71,26 @@ defmodule Bonfire.Social.Threads do
     end
   end
 
-  defp cast_replied(changeset, attrs) do
+  defp do_cast_replied(changeset, attrs) do
     changeset
     |> Changeset.cast(%{replied: attrs}, [])
-    |> Changeset.cast_assoc(:replied)
+    |> Changeset.cast_assoc(:replied, with: &casted_changeset/2)
+  end
+
+  def casted_changeset(cs \\ %Replied{}, attrs) do
+    changeset(cs, attrs)
+    |> Changeset.cast(attrs, [:replying_to, :reply_to_id, :thread_id])
   end
 
   defp find_reply_id(%{reply_to: %{reply_to_id: id}})
   when is_binary(id) and id != "", do: id
   defp find_reply_id(_), do: nil
-  
-  # loads a reply, but only if you can see, read and reply to it.
+
+  # loads a reply, but only if you are allowed to reply to it.
   defp load_reply(user, id) do
-    from(p in Pointers, as: :root, where: p.id == ^id)
-    |> proload([:replied, created: [character: [:inbox]]])
-    |> boundarise(root.id, verbs: [:see, :read, :reply], current_user: user)
+    from(p in Pointer, as: :root, where: p.id == ^id)
+    |> proload([:replied, created: [creator: [character: [:inbox]]]])
+    |> boundarise(root.id, verbs: [:reply], current_user: user)
     |> repo().one()
   end
 
@@ -82,8 +98,8 @@ defmodule Bonfire.Social.Threads do
   def start_new_thread(changeset) do
     changeset = force_to_have_id(changeset)
     id = Changeset.get_field(changeset, :id)
-    cast_replied(changeset, %{reply_to_id: nil, thread_id: id})
-  end    
+    do_cast_replied(changeset, %{reply_to_id: nil, thread_id: id})
+  end
 
   defp force_to_have_id(changeset) do
     if Changeset.get_field(changeset, :id), do: changeset,
