@@ -7,8 +7,24 @@ defmodule Bonfire.Social.Objects do
 
   alias Bonfire.Data.Identity.Character
   alias Bonfire.Data.Social.Inbox
-  alias Bonfire.Social.Activities
-  alias Bonfire.{Common, Common.Utils}
+  alias Bonfire.Social.{Activities, Tags, Threads}
+  alias Bonfire.Common.Utils
+
+  def cast(changeset, attrs, creator, preset) do
+    creator_id = Utils.e(creator, :id, nil)
+
+    if is_nil(creator_id) do
+      changeset
+    else # set creator
+      changeset
+      |> Changeset.cast(%{created: %{creator_id: creator_id}}, [])
+      |> Changeset.cast_assoc(:created)
+    end
+    |> Threads.cast(attrs, creator, preset) # record replies & threads
+    |> Tags.cast(attrs, creator, preset) # set tags & mentions
+    |> Bonfire.Me.Acls.cast(creator, preset) # apply boundaries on all objects, should be last since it uses data set in threads & mentions
+  end
+
 
   def read(object_id, socket_or_current_user) when is_binary(object_id) do
 
@@ -28,6 +44,7 @@ defmodule Bonfire.Social.Objects do
         }
       end
   end
+
 
   def maybe_preload_activity_object(%{activity: %{object: _}} = pointer, current_user) do
     Preload.maybe_preload_nested_pointers pointer, [activity: [:object]],
@@ -78,7 +95,7 @@ defmodule Bonfire.Social.Objects do
     #   Threads.maybe_push_thread(subject, activity, object)
     #   notify_inboxes(subject, activity, object, feeds)
     # end
-    
 
-  
+
+
 end
