@@ -30,10 +30,7 @@ defmodule Bonfire.Social.Posts do
   def publish(%{id: _} = creator, attrs, preset_boundary \\ nil) do
     # we attempt to avoid entering the transaction as long as possible.
     changeset = changeset(:create, attrs, creator, preset_boundary)
-    repo().transact_with(fn -> repo().insert(changeset) ~>
-      FeedActivities.publish(creator, :create, ..., preset_boundary) ~> # TODO: move to changeset, at least for DB publishing
-      maybe_index()
-    end)
+    repo().transact_with(fn -> repo().insert(changeset) ~> maybe_index() end)
   end
 
 
@@ -51,14 +48,11 @@ defmodule Bonfire.Social.Posts do
 
   def changeset(:create, attrs, creator \\ nil, preset \\ nil) do
     creator_id = e(creator, :id, nil)
-
     attrs
     # |> IO.inspect(label: "Posts.changeset:attrs")
     |> Post.changeset(%Post{}, ...)
     |> PostContents.cast(attrs, creator, preset) # process text (must be done before Objects.cast)
     |> Objects.cast(attrs, creator, preset) # add creator & boundaries
-    # |> Activities.cast(creator, :create, preset) # TODO
-    # |> FeedActivities.cast(creator, :create, preset) # TODO
   end
 
   def read(post_id, opts_or_socket_or_current_user \\ [], preloads \\ :all) when is_binary(post_id) do
@@ -75,7 +69,6 @@ defmodule Bonfire.Social.Posts do
 
   @doc "List posts created by the user and which are in their outbox, which are not replies"
   def list_by(by_user, opts_or_current_user \\ [], preloads \\ :all) do
-
     # query FeedPublish
     [feed_id: by_user, posts_by: {ulid(by_user), &filter/3}]
     |> list_paginated(opts_or_current_user, preloads)
@@ -86,8 +79,8 @@ defmodule Bonfire.Social.Posts do
   def list_paginated(filters, opts_or_current_user, preloads) when is_list(filters) do
     filters
     # |> IO.inspect(label: "Posts.list_paginated:filters")
-    |> query_paginated(opts_or_current_user, preloads)
-    |> FeedActivities.feed_paginated(opts_or_current_user, filters, preloads)
+    # |> query_paginated(opts_or_current_user, preloads)
+    |> FeedActivities.feed_paginated(filters, opts_or_current_user, preloads)
   end
 
   @doc "Query posts with pagination"
@@ -96,7 +89,7 @@ defmodule Bonfire.Social.Posts do
     filters
     # |> IO.inspect(label: "Posts.query_paginated:filters")
     |> Keyword.drop([:paginate])
-    |> FeedActivities.query_paginated(opts_or_current_user, filters, preloads)
+    |> FeedActivities.query_paginated(opts_or_current_user, preloads)
   end
   def query_paginated({a,b}, opts_or_current_user, preloads), do: query_paginated([{a,b}], opts_or_current_user, preloads)
 
@@ -279,6 +272,7 @@ defmodule Bonfire.Social.Posts do
     } #|> IO.inspect
   end
   def indexing_object_format(%{activity: %{object: object} = activity}, nil), do: indexing_object_format(activity, object)
+  def indexing_object_format(%{activity: activity} = object, nil), do: indexing_object_format(activity, object)
   def indexing_object_format(%Activity{object: object} = activity, nil), do: indexing_object_format(activity, object)
   def indexing_object_format(a, b) do
     Logger.error("Posts: could not indexing_object_format")
