@@ -1,33 +1,38 @@
 defmodule Bonfire.Social.Feeds do
-
+  use Bonfire.Common.Utils
+  use Arrows
   require Logger
-  alias Bonfire.Data.Social.{Feed, Inbox}
-  alias Bonfire.Social.Follows
-  alias Bonfire.Social.Objects
   import Ecto.Query
   import Bonfire.Me.Integration
-  use Bonfire.Common.Utils
+
+  alias Bonfire.Data.Identity.Character
+  alias Bonfire.Data.Social.Feed
+  alias Bonfire.Social.Follows
+  alias Bonfire.Social.Objects
+
 
   # def queries_module, do: Feed
   def context_module, do: Feed
 
   def target_feeds(changeset, creator, preset) do
-    [creator.id]
+
+    mentioned_inboxes = Utils.e(changeset, :changes, :post_content, :changes, :mentions, []) |> feed_ids(:inbox, ...)
+
+    reply_to_inbox = Utils.e(changeset, :changes, :replied, :replying_to, []) |> feed_id(:inbox, ...)
+
+    [my_feed_id(:outbox, creator)]
     ++ case preset do
+      "public" -> # put in all reply_to creators and mentions inboxes + guest/local feeds
+        mentioned_inboxes ++ [reply_to_inbox, named_feed_id(:guest), named_feed_id(:local)]
 
-      "public" ->
-        debug(Utils.e(changeset, :changes, :replied, :replying_to, []), "TODO: creators of reply_to should be included in feeds")
-        [named_feed_id(:guest), named_feed_id(:local)] # TODO: put in all reply_to creators and mentions inboxes
+      "local" -> # TODO: put in reply_to creators and mentions inboxes, if they are local + local feed
+        [named_feed_id(:local)]
 
-      "local" ->
-        [named_feed_id(:local)] # TODO: put in reply_to creators and mentions inboxes, if they are local
-
-      "activity_pub" ->
-        [named_feed_id(:activity_pub)] # TODO: put in all reply_to creators and mentions inboxes (for now)
+      "activity_pub" -> # TODO: put in all reply_to creators and mentions inboxes (for now) + AP feed
+        [named_feed_id(:activity_pub)]
 
       "mentions" ->
-        debug(Utils.e(changeset, :changes, :post_content, :changes, :mentions, []), "TODO: mentions/tags should be included in feeds")
-        [] # TODO: put in mentioned inboxes only
+        mentioned_inboxes
 
       "admins" ->
         admins_inboxes()
@@ -47,17 +52,21 @@ defmodule Bonfire.Social.Feeds do
     end
   end
 
-  def my_feed_ids(socket, include_notifications? \\ true, extra_feeds \\ [])
+  def my_home_feed_ids(socket, include_notifications? \\ true, extra_feeds \\ [])
 
-  def my_feed_ids(socket, include_notifications?, extra_feeds) do
-    # IO.inspect(my_feed_ids_user: user)
+  def my_home_feed_ids(socket, include_notifications?, extra_feeds) do
+    # IO.inspect(my_home_feed_ids_user: user)
 
     current_user = current_user(socket)
-    my_outbox_id = ulid(current_user) || ulid(current_account(socket))
 
-    extra_feeds = if include_notifications?, do: extra_feeds ++ [my_outbox_id, my_inbox_feed_id(socket)],
-    else: extra_feeds ++ [my_outbox_id]
+    # include my outbox
+    my_outbox_id = my_feed_id(:outbox, socket)
 
+    # include my notifications?
+    extra_feeds = extra_feeds ++ [my_outbox_id] ++
+      if include_notifications?, do: [my_feed_id(:inbox, socket)], else: []
+
+    # include outboxes of everyone I follow
     with current_user when not is_nil(current_user) <- current_user,
          following_ids when is_list(following_ids) <- Follows.list_follows_by_subject(current_user) do
       #IO.inspect(subs: following_ids)
@@ -69,125 +78,117 @@ defmodule Bonfire.Social.Feeds do
     end
   end
 
-  def my_feed_ids(_, _, extra_feeds), do: extra_feeds
+  def my_home_feed_ids(_, _, extra_feeds), do: extra_feeds
 
-  def my_inbox_feed_id(%{current_user: user, current_account: account} = _assigns) when not is_nil(user) and not is_nil(account) do
-    [my_inbox_feed_id(user), my_inbox_feed_id(account)]
+  def my_feed_id(type, %{character: character}) do
+    my_feed_id(type, character)
   end
-  def my_inbox_feed_id(%{character: %{inbox: %{feed_id: feed_id}}}) when is_binary(feed_id) do
-    feed_id
+  def my_feed_id(type, %{id: id} = user_etc) when is_binary(id) do
+    if is_ulid?(id), do: feed_id(type, user_etc)
   end
-  def my_inbox_feed_id(%{inbox: %{feed_id: feed_id}}) when is_binary(feed_id) do
-    feed_id
-  end
-  def my_inbox_feed_id(%{current_user: user} = _assigns) when not is_nil(user) do
-    my_inbox_feed_id(user)
-  end
-  def my_inbox_feed_id(%{current_account: account} = _assigns) when not is_nil(account) do
-    my_inbox_feed_id(account)
-  end
-  def my_inbox_feed_id(%{__context__: context}) do
-    my_inbox_feed_id(context)
-  end
-  def my_inbox_feed_id(%{assigns: assigns}) do
-    my_inbox_feed_id(assigns)
-  end
-  def my_inbox_feed_id(%{id: id} = user) when is_binary(id) do
-    if is_ulid?(id), do: inbox_feed_id(user)
-  end
-  def my_inbox_feed_id(other) do
+  def my_feed_id(type, other) do
     case current_user(other) do
-      nil -> Logger.error("my_inbox_feed_id: no function matched for #{inspect other}")
-            nil
-      current_user -> inbox_feed_id(current_user)
+      nil ->
+        Logger.error("my_feed_id: no function matched for #{inspect other}")
+        nil
+
+      current_user ->
+        feed_id(type, current_user)
     end
-
   end
 
-  def inbox_feed_ids(for_subjects) when is_list(for_subjects) do
+  def feed_ids(type, for_subjects) when is_list(for_subjects) do
     for_subjects
-    |> Enum.map(&inbox_feed_id/1)
+    |> Enum.map(&feed_id(type, &1))
   end
 
-  def inbox_feed_id(%{character: _} = for_subject) do
+  def feed_id(type, %{character: _} = for_subject) do
     for_subject
-    |> Bonfire.Repo.maybe_preload(character: [:inbox])
+    |> Bonfire.Repo.maybe_preload(:character)
     #|> IO.inspect(label: "inbox_feed_id")
     |> e(:character, nil)
-    |> inbox_feed_id()
+    |> feed_id(type, ...)
   end
-  def inbox_feed_id(%Bonfire.Data.Social.Inbox{feed_id: feed_id}), do: feed_id
-  def inbox_feed_id(%{inbox: %{feed_id: feed_id}}), do: feed_id
-  def inbox_feed_id(for_subject) do
-    with %{feed_id: feed_id} = _inbox <- create_inbox(for_subject) do
-      IO.inspect(for_subject)
-      Logger.debug("created new inbox #{inspect feed_id} for #{inspect ulid(for_subject)}")
-      feed_id
+
+  def feed_id(:outbox, %{outbox_id: feed_id}), do: feed_id
+  def feed_id(:outbox, %{outbox: %{id: feed_id}}), do: feed_id
+
+  def feed_id(:inbox, %{inbox_id: feed_id}), do: feed_id
+  def feed_id(:inbox, %{inbox: %{id: feed_id}}), do: feed_id
+
+  def feed_id(type, for_subject) do
+    with %{id: id} = character <- create_box(type, for_subject) do
+      # IO.inspect(for_subject)
+      Logger.debug("Feeds: created new inbox for #{inspect ulid(for_subject)}")
+      feed_id(type, character)
     else e ->
-      #IO.inspect(inbox_feed_ids: e)
+      Logger.error("Feeds.feed_id: could not create feed: #{inspect e}")
       nil
     end
   end
 
   def inbox_of_obj_creator(object) do
-    Objects.preload_creator(object) |> Objects.object_creator() |> inbox_feed_id() #|> IO.inspect
+    Objects.preload_creator(object) |> Objects.object_creator() |> feed_id(:inbox, ...) #|> IO.inspect
   end
-
-  def tags_inbox_feeds(tags) when is_list(tags), do: Enum.map(tags, fn x -> tags_inbox_feed(x) end)
-  def tags_inbox_feeds(_), do: []
-
-  def tags_inbox_feed(%{} = tag) do
-    # Logger.warn("tags_inbox_feeds: #{inspect tag}")
-    inbox_feed_id(tag)
-  end
-  def tags_inbox_feed(_), do: nil
 
   def admins_inboxes(), do: Bonfire.Me.Users.list_admins() |> admins_inboxes()
   def admins_inboxes(admins) when is_list(admins), do: Enum.map(admins, fn x -> admin_inbox(x) end)
   def admin_inbox(admin) do
-    admin = admin |> Bonfire.Repo.maybe_preload([character: [:inbox]]) # |> IO.inspect
+    admin = admin |> Bonfire.Repo.maybe_preload([:character]) # |> IO.inspect
     # Logger.warn("admins_inbox: #{inspect admin}")
     e(admin, :character, :inbox, :feed_id, nil)
-      || inbox_feed_id(admin)
-  end
-
-
-  @doc """
-  Create a OUTBOX feed for an existing Pointable (eg. User)
-  """
-  def create(%{id: id}=_thing) do
-    do_create(%{id: id})
+      || feed_id(:inbox, admin)
   end
 
   @doc """
-  Create a INBOX feed for an existing Pointable (eg. User)
+  Create an inbox or outbox for an existing Pointable (eg. User)
   """
-  def create_inbox(%{id: id}=_thing), do: create_inbox(id)
-  def create_inbox(id) when is_binary(id) do
+  def create_box(type, %{id: id}=_thing), do: create_box(type, id)
+  def create_box(type, id) when is_binary(id) do
+    # TODO: optimise using cast_assoc
     with {:ok, %{id: feed_id} = _feed} <- create() do
-      #IO.inspect(feed: feed)
-      save_inbox_feed(%{id: id, feed_id: feed_id})
+      save_box_feed(type, id, feed_id)
     end
   end
+  def create_box(type, other) do
+    Logger.error("Feeds: Could not create_box for #{inspect other}")
+    nil
+  end
+
+  defp save_box_feed(:outbox, id, feed_id) do
+    update_character(%{id: id, outbox_id: feed_id})
+  end
+  defp save_box_feed(:inbox, id, feed_id) do
+    update_character(%{id: id, inbox_id: feed_id})
+  end
+  defp update_character(attrs) do
+    repo().update(Character.changeset(attrs))
+  end
+
 
   @doc """
   Create a new generic feed
   """
-  def create() do
+  defp create() do
     do_create(%{})
+  end
+
+  @doc """
+  Create a new feed with a specific ID
+  """
+  defp create(%{id: id}) do
+    do_create(%{id: id})
   end
 
   defp do_create(attrs) do
     repo().put(changeset(attrs))
   end
 
-  def changeset(activity \\ %Feed{}, %{} = attrs) do
+  defp changeset(activity \\ %Feed{}, %{} = attrs) do
     Feed.changeset(activity, attrs)
   end
 
-  defp save_inbox_feed(attrs) do
-    repo().upsert(Inbox.changeset(attrs))
-  end
+
 
   @doc """
   Get or create feed for something

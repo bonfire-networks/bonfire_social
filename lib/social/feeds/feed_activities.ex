@@ -2,7 +2,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   require Logger
 
-  alias Bonfire.Data.Social.{Activity, FeedPublish, Feed, Inbox, PostContent}
+  alias Bonfire.Data.Social.{Activity, FeedPublish, Feed, PostContent}
   alias Bonfire.Data.Identity.{Character, User}
 
   alias Bonfire.Boundaries.Verbs
@@ -42,8 +42,8 @@ defmodule Bonfire.Social.FeedActivities do
   def my_feed(socket, cursor_after \\ nil, include_notifications? \\ true) do
 
     # feeds the user is following
-    feed_ids = Feeds.my_feed_ids(socket, include_notifications?)
-    # IO.inspect(my_feed_ids: feed_ids)
+    feed_ids = Feeds.my_home_feed_ids(socket, include_notifications?)
+    # IO.inspect(my_home_feed_ids: feed_ids)
 
     feed(feed_ids, socket, cursor_after)
   end
@@ -65,7 +65,7 @@ defmodule Bonfire.Social.FeedActivities do
   def feed(:notifications, current_user_or_socket_or_opts, preloads) do
     # current_user = current_user(current_user_or_socket)
 
-    case Bonfire.Social.Feeds.my_inbox_feed_id(current_user_or_socket_or_opts) do
+    case Bonfire.Social.Feeds.my_feed_id(:inbox, current_user_or_socket_or_opts) do
       feeds when is_binary(feeds) or is_list(feeds) ->
 
         feeds = ulid(feeds)
@@ -251,7 +251,7 @@ defmodule Bonfire.Social.FeedActivities do
   def publish(subject, verb, %{tags: tags} = object, circles, false = mentions_and_tags_are_private?, _) when is_atom(verb) and is_list(tags) and length(tags) > 0 do
     # publishing and notifying anyone @ mentionned (and/or other tagged characters)
     # IO.inspect(publish_to_tagged: tags)
-    mentioned_notifications_inboxes = Feeds.tags_inbox_feeds(tags) #|> IO.inspect(label: "publish tag / mention")
+    mentioned_notifications_inboxes = Feeds.feed_ids(:inbox, tags) #|> IO.inspect(label: "publish tag / mention")
     tag_ids = circles ++ Bonfire.Tag.Tags.tag_ids(tags) # TODO? don't re-fetch tags
     Logger.debug("FeedActivities with mentions_and_tags_are_private?==false -> making visible for: #{inspect tag_ids}")
     # Bonfire.Me.Boundaries.maybe_make_visible_for(subject, object, tag_ids) # |> IO.inspect(label: "grant")
@@ -312,7 +312,7 @@ defmodule Bonfire.Social.FeedActivities do
   Creates a new local activity or takes an existing one and publishes to object's inbox (if object is an actor)
   """
   def notify_characters(subject, verb_or_activity, object, characters) do
-    notify_inboxes(subject, verb_or_activity, object, Feeds.inbox_feed_ids(characters))
+    notify_inboxes(subject, verb_or_activity, object, Feeds.feed_ids(:inbox, characters))
   end
 
   def notify_inboxes(subject, verb_or_activity, object, inbox_ids) do

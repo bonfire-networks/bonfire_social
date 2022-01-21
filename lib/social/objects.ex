@@ -8,7 +8,6 @@ defmodule Bonfire.Social.Objects do
   import Bonfire.Common.Utils, only: [debug: 2]
   alias Bonfire.Common.Utils
   alias Bonfire.Data.Identity.Character
-  alias Bonfire.Data.Social.Inbox
   alias Bonfire.Me.Acls
   alias Bonfire.Social.{Activities, Tags, Threads}
 
@@ -52,14 +51,14 @@ defmodule Bonfire.Social.Objects do
 
   def preload_reply_creator(object) do
     object
-    |> Bonfire.Repo.maybe_preload([replied: [reply_to: [created: [creator: [character: [:inbox]]]]]]) #|> IO.inspect
+    |> Bonfire.Repo.maybe_preload([replied: [reply_to: [created: [creator: [:character]]]]]) #|> IO.inspect
     # |> Bonfire.Repo.maybe_preload([replied: [:reply_to]]) #|> IO.inspect
-    |> Bonfire.Repo.maybe_preload([replied: [reply_to: [creator: [character: [:inbox]]]]]) #|> IO.inspect
+    |> Bonfire.Repo.maybe_preload([replied: [reply_to: [creator: [:character]]]]) #|> IO.inspect
   end
 
   # TODO: does not take permissions into consideration
   def preload_creator(object),
-    do: Bonfire.Repo.preload(object, [created: [creator: [character: [:inbox]]]])
+    do: Bonfire.Repo.preload(object, [created: [creator: [:character]]])
 
   def object_creator(object) do
     Utils.e(object, :created, :creator, :character, Utils.e(object, :creator, nil))
