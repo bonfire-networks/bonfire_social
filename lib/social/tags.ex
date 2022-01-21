@@ -10,7 +10,7 @@ defmodule Bonfire.Social.Tags do
   alias Ecto.Changeset
 
   def cast(changeset, attrs, creator, preset, extra_tags \\ []) do
-    with true <- Utils.module_enabled?(Bonfire.Tag.Tags),
+    with true <- Utils.module_enabled?(Bonfire.Tag),
          tags when is_list(tags) and length(tags)>0 <-
           Utils.e(changeset, :changes, :post_content, :changes, :mentions, []) # use any mentions that were found in the text and injected into the changeset by PostContents
           ++ Utils.e(attrs, :tags, [])
@@ -27,7 +27,7 @@ defmodule Bonfire.Social.Tags do
   end
 
   def maybe_process(creator, attrs) do
-    with true <- Utils.module_enabled?(Bonfire.Tag.Tags),
+    with true <- Utils.module_enabled?(Bonfire.Tag),
          {text, mentions, hashtags} <- TextContent.Process.process(creator, attrs, "text/markdown") do
       {:ok, %{text: text, mentions: mentions, hashtags: hashtags}}
     end
