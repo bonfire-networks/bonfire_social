@@ -52,7 +52,7 @@ defmodule Bonfire.Social.Posts do
     # |> IO.inspect(label: "Posts.changeset:attrs")
     |> Post.changeset(%Post{}, ...)
     |> PostContents.cast(attrs, creator, preset) # process text (must be done before Objects.cast)
-    |> Objects.cast(attrs, creator, preset) # add creator & boundaries
+    |> Objects.cast(attrs, creator, preset) # deal with threading, tagging, boundaries etc.
   end
 
   def read(post_id, opts_or_socket_or_current_user \\ [], preloads \\ :all) when is_binary(post_id) do
@@ -70,17 +70,19 @@ defmodule Bonfire.Social.Posts do
   @doc "List posts created by the user and which are in their outbox, which are not replies"
   def list_by(by_user, opts_or_current_user \\ [], preloads \\ :all) do
     # query FeedPublish
-    [feed_id: by_user, posts_by: {ulid(by_user), &filter/3}]
+    [posts_by: {ulid(by_user), &filter/3}]
     |> list_paginated(opts_or_current_user, preloads)
   end
 
   @doc "List posts with pagination"
   def list_paginated(filters, opts_or_current_user \\ [], preloads \\ :all)
   def list_paginated(filters, opts_or_current_user, preloads) when is_list(filters) do
+    paginate = e(opts_or_current_user, :paginate, opts_or_current_user)
     filters
     # |> IO.inspect(label: "Posts.list_paginated:filters")
-    # |> query_paginated(opts_or_current_user, preloads)
-    |> FeedActivities.feed_paginated(filters, opts_or_current_user, preloads)
+    |> query_paginated(opts_or_current_user, preloads)
+    |> Bonfire.Repo.many_paginated(paginate)
+    # |> FeedActivities.feed_paginated(filters, opts_or_current_user, preloads)
   end
 
   @doc "Query posts with pagination"
@@ -256,7 +258,7 @@ defmodule Bonfire.Social.Posts do
     end
   end
 
-
+  # TODO: rewrite to take a post instead of an activity
   def indexing_object_format(feed_activity_or_activity, object \\ nil)
   def indexing_object_format(%{subject: %{profile: subject_profile, character: subject_character}} = activity, %{id: id, post_content: post_content} = post) do
 
