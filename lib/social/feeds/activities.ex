@@ -26,6 +26,26 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
+  def cast(changeset, verb, creator, preset) do
+    verb_id = Verbs.get_id(verb) || Verbs.get_id!(:create)
+    activity = %{
+      subject_id: creator.id,
+      verb_id: verb_id,
+      feed_publishes: feed_publishes(changeset, creator, preset),
+    }
+    changeset
+    |> put_in([:data, :activities], []) # force an insert
+    |> Changeset.cast(%{activities: [activity]}, [])
+    |> Changeset.cast_assoc(:activities)
+  end
+
+  defp feed_publishes(_activity, creator, preset) do
+    creator = repo().preload(creator, character: :inbox)
+    # TODO: let other people see it
+    [creator.character.inbox.feed_id]
+    |> Enum.map(&(%{feed_id: &1}))
+  end
+
   @doc """
   Create an Activity
   NOTE: you will usually want to use `FeedActivities.publish/3` instead

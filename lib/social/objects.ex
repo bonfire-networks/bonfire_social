@@ -1,50 +1,47 @@
 defmodule Bonfire.Social.Objects do
 
+  use Arrows
   use Bonfire.Repo,
     schema: Pointers.Pointer,
     searchable_fields: [:id],
     sortable_fields: [:id]
 
+  alias Bonfire.Common.Utils
   alias Bonfire.Data.Identity.Character
   alias Bonfire.Data.Social.Inbox
+  alias Bonfire.Me.Acls
   alias Bonfire.Social.{Activities, Tags, Threads}
-  alias Bonfire.Common.Utils
 
   def cast(changeset, attrs, creator, preset) do
-    creator_id = Utils.e(creator, :id, nil)
-
-    if is_nil(creator_id) do
-      changeset
-    else # set creator
-      changeset
-      |> Changeset.cast(%{created: %{creator_id: creator_id}}, [])
-      |> Changeset.cast_assoc(:created)
-    end
-    |> Threads.cast(attrs, creator, preset) # record replies & threads
-    |> Tags.cast(attrs, creator, preset) # set tags & mentions
-    |> Bonfire.Me.Acls.cast(creator, preset) # apply boundaries on all objects, should be last since it uses data set in threads & mentions
+    changeset
+    |> cast_creator(creator)
+    # record replies & threads. preloads data that will be checked by acls
+    |> Threads.cast(attrs, creator, preset) 
+    # record tags & mentions. preloads data that will be checked by acls
+    |> Tags.cast(attrs, creator, preset)
+    # apply boundaries on all objects, uses data preloaded in threads and tags
+    |> Acls.cast(creator, preset) 
+    # |> Activities.cast(creator, preset)
   end
 
+  defp cast_creator(changeset, creator),
+    do: cast_creator(changeset, creator, Utils.e(creator, :id, nil))
+
+  defp cast_creator(changeset, _creator, nil), do: changeset
+  defp cast_creator(changeset, _creator, creator_id) do
+    changeset
+    |> Changeset.cast(%{created: %{creator_id: creator_id}}, [])
+    |> Changeset.cast_assoc(:created)
+  end
 
   def read(object_id, socket_or_current_user) when is_binary(object_id) do
-
     current_user = Utils.current_user(socket_or_current_user) #|> IO.inspect
-
-    with {:ok, pointer} <- Pointers.pointer_query([id: object_id], socket_or_current_user)
-                          |> Activities.read(socket: socket_or_current_user, skip_boundary_check: true) #|> IO.inspect,
-        #  {:ok, object} <- Bonfire.Common.Pointers.get(pointer, current_user: user)
-        do
-
-        # IO.inspect(read_object: pointer)
-
-        {:ok,
-          pointer
-          |> maybe_preload_activity_object(current_user)
-          |> Activities.activity_under_object()
-        }
-      end
+    Pointers.pointer_query([id: object_id], socket_or_current_user)
+    |> Activities.read(socket: socket_or_current_user, skip_boundary_check: true)
+    # |> Utils.debug("activities")
+    ~> maybe_preload_activity_object(current_user)
+    |> ok(Activities.activity_under_object(...))
   end
-
 
   def maybe_preload_activity_object(%{activity: %{object: _}} = pointer, current_user) do
     Preload.maybe_preload_nested_pointers pointer, [activity: [:object]],
@@ -68,8 +65,6 @@ defmodule Bonfire.Social.Objects do
   end
 
   defp tag_ids(tags), do: Enum.map(tags, &(&1.id))
-
-
 
   # # used for public and mentions presets. returns a list of feed ids
   # defp inboxes(tags) when is_list(tags), do: Enum.flat_map(tags, &inboxes/1)

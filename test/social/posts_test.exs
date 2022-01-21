@@ -3,14 +3,12 @@ defmodule Bonfire.Social.PostsTest do
 
   alias Bonfire.Social.Posts
   alias Bonfire.Me.Fake
+  use Bonfire.Common.Utils, only: [debug: 2]
 
   test "creation works" do
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
     user = Fake.fake_user!()
     assert {:ok, post} = Posts.publish(user, attrs, "public")
-    # activity = fp.activity
-    # post = activity.object
-    # IO.inspect(activity)
     assert String.contains?(post.post_content.html_body, "epic html message")
     assert post.post_content.name =~ "name"
     assert post.post_content.summary =~ "summary"
@@ -21,6 +19,7 @@ defmodule Bonfire.Social.PostsTest do
     attrs_1 = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message 1</p>"}}
     user = Fake.fake_user!()
     assert {:ok, post} = Posts.publish(user, attrs_1, "public")
+    debug(post, "post")
     assert {:ok, read} = Posts.read(post.id, skip_boundary_check: true)
     assert post.id == read.id
   end
