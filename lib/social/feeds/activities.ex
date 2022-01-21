@@ -30,25 +30,23 @@ defmodule Bonfire.Social.Activities do
 
   def cast(changeset, verb, creator, preset) do
     verb_id = Verbs.get_id(verb) || Verbs.get_id!(:create)
-    creator = repo().preload(creator, character: :inbox)
+    creator = repo().maybe_preload(creator, character: :inbox)
     # debug(creator, "creator")
     id = ULID.generate() # le sigh, it's just easier this way
     activity = %{
       id: id,
       subject_id: creator.id,
       verb_id: verb_id,
-    } |> Map.put(..., :feed_publishes, feed_publishes(changeset, ..., creator, preset))
+    } # publish in appropriate feeds
+    |> Map.put(..., :feed_publishes, FeedActivities.cast_data(changeset, ..., creator, preset))
+
     changeset
     |> Map.update(:data, nil, &Map.put(&1, :activities, [])) # force an insert
     |> Changeset.cast(%{activities: [activity]}, [])
     |> Changeset.cast_assoc(:activities, with: &Activity.changeset/2)
   end
 
-  defp feed_publishes(_changeset, activity, creator, preset) do
-    # TODO: let other people see it depending on preset
-    [creator.character.inbox.feed_id]
-    |> Enum.map(&(%{feed_id: &1, activity_id: activity.id}))
-  end
+
 
   @doc """
   Create an Activity
