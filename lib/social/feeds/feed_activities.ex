@@ -384,10 +384,8 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   defp maybe_index_activity(subject, verb, object) do
-    with {:ok, activity} <- Activities.create(subject, verb, object) do
-        # maybe_index(activity) # TODO, indexing here?
-        {:ok, activity}
-    end
+    Activities.create(subject, verb, object)
+    # ~> maybe_index(activity) # TODO, indexing here?
   end
 
   defp put_in_feeds_and_maybe_federate(feeds, activity) do

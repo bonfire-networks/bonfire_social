@@ -5,7 +5,7 @@ defmodule Bonfire.Social.Objects do
     schema: Pointers.Pointer,
     searchable_fields: [:id],
     sortable_fields: [:id]
-
+  import Bonfire.Common.Utils, only: [debug: 2]
   alias Bonfire.Common.Utils
   alias Bonfire.Data.Identity.Character
   alias Bonfire.Data.Social.Inbox
@@ -13,6 +13,7 @@ defmodule Bonfire.Social.Objects do
   alias Bonfire.Social.{Activities, Tags, Threads}
 
   def cast(changeset, attrs, creator, preset) do
+    debug(creator, "creator")
     changeset
     |> cast_creator(creator)
     # record replies & threads. preloads data that will be checked by acls
@@ -21,7 +22,7 @@ defmodule Bonfire.Social.Objects do
     |> Tags.cast(attrs, creator, preset)
     # apply boundaries on all objects, uses data preloaded in threads and tags
     |> Acls.cast(creator, preset) 
-    # |> Activities.cast(creator, preset)
+    |> Activities.cast(:create, creator, preset)
   end
 
   defp cast_creator(changeset, creator),

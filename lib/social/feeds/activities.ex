@@ -1,18 +1,20 @@
 defmodule Bonfire.Social.Activities do
 
-  alias Bonfire.Data.Social.{Activity, Like, Boost, Flag, PostContent}
-  alias Bonfire.Data.Identity.User
-  alias Bonfire.Boundaries.Verbs
-  import Bonfire.Common.Utils
-  alias Bonfire.Social.FeedActivities
-  import Ecto.Query
-  require Logger
-  import Bonfire.Boundaries.Queries
-
+  use Arrows
   use Bonfire.Repo,
     schema: Activity,
     searchable_fields: [:id, :subject_id, :verb_id, :object_id],
     sortable_fields: [:id, :subject_id, :verb_id, :object_id]
+
+  require Logger
+  import Bonfire.Common.Utils
+  import Bonfire.Boundaries.Queries
+  import Ecto.Query
+  alias Bonfire.Data.Social.{Activity, Like, Boost, Flag, PostContent}
+  alias Bonfire.Data.Identity.User
+  alias Bonfire.Boundaries.Verbs
+  alias Bonfire.Social.FeedActivities
+  alias Pointers.ULID
 
   def queries_module, do: Activity
   def context_module, do: Activity
@@ -28,27 +30,29 @@ defmodule Bonfire.Social.Activities do
 
   def cast(changeset, verb, creator, preset) do
     verb_id = Verbs.get_id(verb) || Verbs.get_id!(:create)
+    creator = repo().preload(creator, character: :inbox)
+    # debug(creator, "creator")
+    id = ULID.generate() # le sigh, it's just easier this way
     activity = %{
+      id: id,
       subject_id: creator.id,
       verb_id: verb_id,
-      feed_publishes: feed_publishes(changeset, creator, preset),
-    }
+    } |> Map.put(..., :feed_publishes, feed_publishes(changeset, ..., creator, preset))
     changeset
-    |> put_in([:data, :activities], []) # force an insert
+    |> Map.update(:data, nil, &Map.put(&1, :activities, [])) # force an insert
     |> Changeset.cast(%{activities: [activity]}, [])
-    |> Changeset.cast_assoc(:activities)
+    |> Changeset.cast_assoc(:activities, with: &Activity.changeset/2)
   end
 
-  defp feed_publishes(_activity, creator, preset) do
-    creator = repo().preload(creator, character: :inbox)
-    # TODO: let other people see it
+  defp feed_publishes(_changeset, activity, creator, preset) do
+    # TODO: let other people see it depending on preset
     [creator.character.inbox.feed_id]
-    |> Enum.map(&(%{feed_id: &1}))
+    |> Enum.map(&(%{feed_id: &1, activity_id: activity.id}))
   end
 
   @doc """
   Create an Activity
-  NOTE: you will usually want to use `FeedActivities.publish/3` instead
+  NOTE: you will usually want to use `cast/3` instead
   """
   def create(%{id: subject_id}=subject, verb, %{id: object_id}=object) when is_atom(verb) do
     verb_id = Verbs.get_id(verb) || Verbs.get_id!(:create)
@@ -178,18 +182,15 @@ defmodule Bonfire.Social.Activities do
   def read(%Ecto.Query{} = query, opts) do
 
     # IO.inspect(query: query, opts: opts)
-
-    with {:ok, object} <- query
-      |> query_object_preload_create_activity(opts, [:default, :with_parents])
-      # |> IO.inspect
-      |> as_permitted_for(opts)
-      |> IO.inspect(label: "Activities.read query")
-      |> repo().single() do
-
-        # pubsub_subscribe(e(object, :activity, :replied, :thread_id, nil) || object.id, opts) # subscribe to realtime feed updates
-
-        {:ok, object} #|> repo().maybe_preload(controlled: [acl: [grants: [access: [:interacts]]]]) |> IO.inspect
-      end
+    query
+    # |> debug("base query")
+    |> query_object_preload_create_activity(opts, [:default, :with_parents])
+    # |> debug("activity query")
+    |> as_permitted_for(opts)
+    |> debug("permitted query")
+    |> repo().single()
+    # # pubsub_subscribe(e(object, :activity, :replied, :thread_id, nil) || object.id, opts) # subscribe to realtime feed updates
+    #  #|> repo().maybe_preload(controlled: [acl: [grants: [access: [:interacts]]]]) |> IO.inspect
   end
 
   def read(filters, opts) when is_map(filters) or is_list(filters) do
