@@ -14,11 +14,12 @@ defmodule Bonfire.Social.Web.HomeLive do
   end
 
   defp mounted(params, _session, socket) do
-    feed_assigns = Bonfire.Social.Web.Feeds.BrowseLive.default_feed(socket)
+    feed_assigns = default_feed(socket)
 
     {:ok, socket
     |> assign(
       feed_assigns ++ [
+      selected_tab: "home",
       page: "home",
       page_title: "Home",
       smart_input_placeholder: "Write something..."
@@ -28,21 +29,117 @@ defmodule Bonfire.Social.Web.HomeLive do
   end
 
 
-  # def handle_params(%{"tab" => tab} = _params, _url, socket) do
-  #   {:noreply,
-  #    assign(socket,
-  #      selected_tab: tab
-  #    )}
+  def do_handle_params(%{"tab" => "federation" = tab} = params, _url, socket) do
+    IO.inspect(tab)
+    current_user = current_user(socket)
+
+    assigns = if current_user || current_account(socket) do
+
+      fediverse_feed(socket)
+    else
+      []
+    end
+
+    {:noreply, assign(socket, assigns)}
+  end
+
+  def do_handle_params(%{"tab" => "local" = tab} = params, _url, socket) do
+    current_user = current_user(socket)
+
+    {:noreply, assign(socket, instance_feed(socket)) }
+  end
+
+  def do_handle_params(_params, _url, socket) do
+
+    {:noreply, assign(socket, default_feed(socket))}
+  end
+
+  def default_feed(socket) do
+    current_user = current_user(socket)
+    current_account = current_account(socket)
+
+    current = current_user || current_account
+
+    if current do
+      my_feed(current, socket) # my feed
+    else
+      instance_feed(socket) # fallback to showing instance feed
+    end
+  end
+
+  def fediverse_feed(socket) do
+    feed_id = Bonfire.Social.Feeds.named_feed_id(:activity_pub)
+    feed = Bonfire.Social.FeedActivities.feed(feed_id, socket)
+    to_circles = [Bonfire.Boundaries.Circles.get_tuple(:activity_pub)]
+
+    [
+      current_user: current_user(socket),
+      selected_tab: "federation",
+      to_circles: to_circles,
+      page_title: "Federation",
+      feed_title: "Activities from around the fediverse",
+      feed_id: feed_id,
+      feed: e(feed, :edges, []),
+      page_info: e(feed, :page_info, []),
+    ]
+    #|> assign_global(to_circles: to_circles)
+  end
+
+  def instance_feed(socket) do
+    feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
+    feed = Bonfire.Social.FeedActivities.feed(feed_id, socket)
+    to_circles = [Bonfire.Boundaries.Circles.get_tuple(:local)]
+
+    [
+      current_user: current_user(socket),
+      selected_tab: "local",
+      page_title: "Local",
+      feed_title: "Activities on this instance",
+      to_circles: to_circles,
+      feed_id: feed_id,
+      feed: e(feed, :edges, []),
+      page_info: e(feed, :page_info, []) #|> IO.inspect
+    ]
+    #|> assign_global(to_circles: to_circles)
+  end
+
+  def my_feed(current_user, socket) do
+    # IO.inspect(myfeed: feed)
+    feed = Bonfire.Social.FeedActivities.my_feed(socket)
+    to_circles = Bonfire.Me.Users.Circles.list_my_defaults(current_user)
+    [
+      current_user: current_user,
+      selected_tab: "home",
+      page_title: "Home",
+      feed_title: "My Feed",
+      to_circles: to_circles,
+      feed_id: "my:"<>e(current_user, :id, ""),
+      feed: e(feed, :edges, []),
+      page_info: e(feed, :page_info, [])
+    ]
+    #|> assign_global(to_circles: to_circles)
+  end
+
+
+  # def handle_params(params, uri, socket) do
+  #   # poor man's hook I guess
+  #   with {_, socket} <- Bonfire.Common.LiveHandlers.handle_params(params, uri, socket) do
+  #     undead_params(socket, fn ->
+  #       do_handle_params(params, uri, socket)
+  #     end)
+  #   end
   # end
 
-  # def handle_params(%{} = _params, _url, socket) do
-  #   {:noreply,
-  #    assign(socket,
-  #      current_user: Fake.user_live()
-  #    )}
-  # end
 
-  defdelegate handle_params(params, attrs, socket), to: Bonfire.Common.LiveHandlers
+  # defdelegate handle_params(params, attrs, socket), to: Bonfire.Common.LiveHandlers
+  def handle_params(params, uri, socket) do
+    # poor man's hook I guess
+    with {_, socket} <- Bonfire.Common.LiveHandlers.handle_params(params, uri, socket) do
+      undead_params(socket, fn ->
+        do_handle_params(params, uri, socket)
+      end)
+    end
+  end
   def handle_event(action, attrs, socket), do: Bonfire.Common.LiveHandlers.handle_event(action, attrs, socket, __MODULE__)
   def handle_info(info, socket), do: Bonfire.Common.LiveHandlers.handle_info(info, socket, __MODULE__)
 
