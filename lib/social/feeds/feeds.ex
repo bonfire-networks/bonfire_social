@@ -18,7 +18,7 @@ defmodule Bonfire.Social.Feeds do
 
     mentioned_inboxes = Utils.e(changeset, :changes, :post_content, :changes, :mentions, []) |> feed_ids(:inbox, ...)
 
-    reply_to_inbox = Utils.e(changeset, :changes, :replied, :replying_to, []) |> feed_id(:inbox, ...)
+    reply_to_inbox = Utils.e(changeset, :changes, :replied, :replying_to, nil) |> feed_id(:inbox, ...)
 
     [my_feed_id(:outbox, creator)]
     ++ case preset do
@@ -105,6 +105,8 @@ defmodule Bonfire.Social.Feeds do
   end
   def feed_ids(type, for_subject), do: feed_id(type, for_subject)
 
+  def feed_id(type, for_subjects) when is_list(for_subjects), do: feed_ids(type, for_subjects)
+
   def feed_id(type, %{character: _} = for_subject) do
     for_subject
     |> Bonfire.Repo.maybe_preload(:character)
@@ -120,6 +122,7 @@ defmodule Bonfire.Social.Feeds do
   def feed_id(:inbox, %{inbox: %{id: feed_id}}), do: feed_id
 
   def feed_id(type, for_subject) do
+    Logger.debug("Feeds: no feed found on #{inspect for_subject}")
     with %{id: id} = character <- create_box(type, for_subject) do
       # IO.inspect(for_subject)
       Logger.debug("Feeds: created new inbox for #{inspect ulid(for_subject)}")
