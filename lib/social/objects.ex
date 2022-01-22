@@ -34,6 +34,18 @@ defmodule Bonfire.Social.Objects do
     |> Changeset.cast_assoc(:created)
   end
 
+  defp cast_creator_caretaker(changeset, creator),
+    do: cast_creator_caretaker(changeset, creator, Utils.e(creator, :id, nil))
+
+  defp cast_creator_caretaker(changeset, _creator, nil), do: changeset
+  defp cast_creator_caretaker(changeset, _creator, creator_id) do
+    changeset
+    |> Changeset.cast(%{created: %{creator_id: creator_id}}, [])
+    |> Changeset.cast_assoc(:created)
+    |> Changeset.cast(%{caretaker: %{caretaker_id: creator_id}}, [])
+    |> Changeset.cast_assoc(:caretaker)
+  end
+
   def read(object_id, socket_or_current_user) when is_binary(object_id) do
     current_user = Utils.current_user(socket_or_current_user) #|> IO.inspect
     Pointers.pointer_query([id: object_id], socket_or_current_user)

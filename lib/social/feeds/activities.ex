@@ -39,11 +39,12 @@ defmodule Bonfire.Social.Activities do
       verb_id: verb_id,
     } # publish in appropriate feeds
     |> Map.put(..., :feed_publishes, FeedActivities.cast_data(changeset, ..., creator, preset))
-
+    # |> debug("activity attrs")
     changeset
     |> Map.update(:data, nil, &Map.put(&1, :activities, [])) # force an insert
     |> Changeset.cast(%{activities: [activity]}, [])
     |> Changeset.cast_assoc(:activities, with: &Activity.changeset/2)
+    |> debug("changeset")
   end
 
 
@@ -171,15 +172,10 @@ defmodule Bonfire.Social.Activities do
   """
   def read(query, opts \\ [])
 
-  def read(object_id, opts) when is_binary(object_id) do
-
-    read([object_id: object_id], opts)
-  end
-
+  def read(object_id, opts) when is_binary(object_id), do: read([object_id: object_id], opts)
   def read(%Ecto.Query{} = query, %User{}=user), do: read(query, current_user: user)
   def read(%Ecto.Query{} = query, opts) do
-
-    # IO.inspect(query: query, opts: opts)
+    # debug(opts, "opts")
     query
     # |> debug("base query")
     |> query_object_preload_create_activity(opts, [:default, :with_parents])
@@ -192,9 +188,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   def read(filters, opts) when is_map(filters) or is_list(filters) do
-
     current_user = current_user(opts)
-
     Activity
     |> query_filter(filters)
     |> read(opts)
@@ -203,16 +197,13 @@ defmodule Bonfire.Social.Activities do
   def query(filters \\ [], opts_or_current_user \\ [])
 
   def query([my: :feed], opts_or_current_user) do
-    # IO.inspect(filters: filters)
     current_user = current_user(opts_or_current_user)
-
     query([feed_id: ulid(current_user)], opts_or_current_user)
   end
 
   def query(filters, opts_or_current_user) do
-    IO.inspect(filters: filters)
-    # IO.inspect(opts_or_current_user: opts_or_current_user)
-
+    # debug(filters, "filters")
+    # debug(opts_or_current_user, "opts or user")
     FeedActivities.query(filters, opts_or_current_user, :all, from(a in Activity, as: :main_object) )
   end
 

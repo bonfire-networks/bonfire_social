@@ -40,6 +40,7 @@ defmodule Bonfire.Social.Feeds do
       _ -> [] # default to nothing
     end
     |> Enum.filter(& &1)
+    |> Enum.uniq()
     |> debug("target feeds")
   end
 
