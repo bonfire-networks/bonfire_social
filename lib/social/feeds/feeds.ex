@@ -69,9 +69,9 @@ defmodule Bonfire.Social.Feeds do
 
     # include outboxes of everyone I follow
     with current_user when not is_nil(current_user) <- current_user,
-         following_ids when is_list(following_ids) <- Follows.list_follows_by_subject(current_user) do
-      #IO.inspect(subs: following_ids)
-      extra_feeds ++ following_ids
+         followings when is_list(followings) <- Follows.list_follows_by_subject(current_user, skip_boundary_check: true) do
+      debug(followings, "followings")
+      extra_feeds ++ followings
     else
       _e ->
         #IO.inspect(e: e)
@@ -102,6 +102,7 @@ defmodule Bonfire.Social.Feeds do
     for_subjects
     |> Enum.map(&feed_id(type, &1))
   end
+  def feed_ids(type, for_subject), do: feed_id(type, for_subject)
 
   def feed_id(type, %{character: _} = for_subject) do
     for_subject

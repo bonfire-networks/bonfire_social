@@ -28,7 +28,7 @@ defmodule Bonfire.Social.Follows do
   def get!(subject, objects) when is_list(objects), do: [subject: subject, object: objects] |> query(current_user: subject) |> repo().all()
   def get!(subject, object), do: [subject: subject, object: object] |> query(current_user: subject) |> repo().one()
 
-  def list_follows_by_subject(user), do: query_base([subject: user], user) |> repo().many()
+  def list_follows_by_subject(user, opts \\ []), do: query_base([subject: user], opts |> Keyword.put_new(:current_user, user)) |> repo().many()
 
   # defp query_base(filters, opts) do
   #   vis = filter_invisible(current_user(opts))
