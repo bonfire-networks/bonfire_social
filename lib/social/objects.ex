@@ -70,7 +70,7 @@ defmodule Bonfire.Social.Objects do
 
   # TODO: does not take permissions into consideration
   def preload_creator(object),
-    do: Bonfire.Repo.preload(object, [created: [creator: [:character]]])
+    do: Bonfire.Repo.maybe_preload(object, [created: [creator: [:character]]])
 
   def object_creator(object) do
     Utils.e(object, :created, :creator, :character, Utils.e(object, :creator, nil))

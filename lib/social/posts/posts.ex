@@ -46,10 +46,18 @@ defmodule Bonfire.Social.Posts do
   #   end
   # end
 
-  def changeset(:create, attrs, creator \\ nil, preset \\ nil) do
+  def changeset(action, attrs, creator \\ nil, preset \\ nil)
+
+  def changeset(:create, attrs, _creator, _preset) when attrs == %{} do
+    # for forms
+
+    Post.changeset(%Post{}, attrs)
+  end
+
+  def changeset(:create, attrs, creator, preset) do
     creator_id = e(creator, :id, nil)
     attrs
-    # |> IO.inspect(label: "Posts.changeset:attrs")
+    |> IO.inspect(label: "Posts.changeset:attrs")
     |> Post.changeset(%Post{}, ...)
     |> PostContents.cast(attrs, creator, preset) # process text (must be done before Objects.cast)
     |> Objects.cast(attrs, creator, preset) # deal with threading, tagging, boundaries, activities, etc.
@@ -62,15 +70,10 @@ defmodule Bonfire.Social.Posts do
       end
   end
 
-  @doc """
-  For internal use only (doesn't check permissions). Use `read` instead.
-  """
-  def get(id) when is_binary(id), do: repo().single(get_query(id))
-
   @doc "List posts created by the user and which are in their outbox, which are not replies"
   def list_by(by_user, opts_or_current_user \\ [], preloads \\ :all) do
     # query FeedPublish
-    [posts_by: {by_user), &filter/3}]
+    [posts_by: {by_user, &filter/3}]
     |> list_paginated(opts_or_current_user, preloads)
   end
 
@@ -91,8 +94,10 @@ defmodule Bonfire.Social.Posts do
     filters
     # |> IO.inspect(label: "Posts.query_paginated:filters")
     |> Keyword.drop([:paginate])
-    |> FeedActivities.query_paginated(opts_or_current_user, preloads)
+    |> FeedActivities.query_paginated(opts_or_current_user, preloads, Post)
+    |> debug("after FeedActivities.query_paginated")
   end
+  # query_paginated(filters \\ [], current_user_or_socket_or_opts \\ [], preloads \\ :all, query \\ FeedPublish)
   def query_paginated({a,b}, opts_or_current_user, preloads), do: query_paginated([{a,b}], opts_or_current_user, preloads)
 
   def query(filters \\ [], opts_or_current_user \\ nil, preloads \\ :all)
@@ -111,37 +116,19 @@ defmodule Bonfire.Social.Posts do
   end
 
   #doc "List posts created by the user and which are in their outbox, which are not replies"
-  def filter(:posts_by, %User{}=user, query) do
-    user = repo().preload(user, [:character])
+  def filter(:posts_by, user, query) do
+    # user = repo().maybe_preload(user, [:character])
     verb_id = Verbs.get_id!(:create)
     query
-    |> proload(activity: [object: {"object_", [:post, :created, :replied]}])
+    |> proload(activity: [object: {"object_", [:replied]}])
     |> where(
-      [activity: activity, object_post: post, object_created: created, object_replied: replied],
-      is_nil(replied.reply_to_id) and not is_nil(post.id)
-      and activity.verb_id==^verb_id and created.creator_id == ^user.id
+      [activity: activity, object_replied: replied],
+      is_nil(replied.reply_to_id)
+      and activity.verb_id==^verb_id
+      and activity.subject_id == ^ulid(user)
     )
   end
 
-  def get_query(id) do
-    from p in Post,
-     left_join: pc in assoc(p, :post_content),
-     left_join: cr in assoc(p, :created),
-     left_join: re in assoc(p, :replied),
-     left_join: rt in assoc(re, :reply_to),
-     where: p.id == ^id,
-     preload: [post_content: pc, created: cr, replied: {re, [reply_to: rt]}]
-  end
-
-  defp by_user(user_id), do: repo().many(by_user_query(user_id))
-
-  defp by_user_query(user_id) do
-    from p in Post,
-     left_join: pc in assoc(p, :post_content),
-     left_join: cr in assoc(p, :created),
-     where: cr.creator_id == ^user_id,
-     preload: [post_content: pc, created: cr]
-  end
 
   def ap_publish_activity("create", post) do
 

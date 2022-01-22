@@ -29,8 +29,8 @@ defmodule Bonfire.Social.Boosts do
 
   def boost(%{} = booster, %{} = boosted) do
     with {:ok, boost} <- create(booster, boosted),
-    {:ok, published} <- FeedActivities.publish(booster, :boost, boosted) do
-      # TODO: increment the boost count
+    {:ok, published} <- FeedActivities.publish(booster, :boost, boosted, "public") do
+      # TODO: get the preset for boosting from config and/or user's settings
 
       # make the boost itself visible to both
       Bonfire.Me.Boundaries.maybe_make_visible_for(booster, boost, boosted)
