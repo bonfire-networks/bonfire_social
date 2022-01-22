@@ -11,8 +11,8 @@ defmodule Bonfire.Social.Activities.BoostPost.Test do
     test "and it appears on my feed" do
       poster = fake_user!()
       content = "here is an epic html post"
-      attrs = %{to_circles: [:local], post_content: %{html_body: content}}
-      assert {:ok, post} = Posts.publish(poster, attrs, "public")
+      attrs = %{post_content: %{html_body: content}}
+      assert {:ok, post} = Posts.publish(poster, attrs, "local")
 
       some_account = fake_account!()
       someone = fake_user!(some_account)
@@ -41,8 +41,8 @@ defmodule Bonfire.Social.Activities.BoostPost.Test do
     test "works" do
       poster = fake_user!()
       content = "here is an epic html post"
-      attrs = %{to_circles: [:local], post_content: %{html_body: content}}
-      assert {:ok, post} = Posts.publish(poster, attrs, "public")
+      attrs = %{post_content: %{html_body: content}}
+      assert {:ok, post} = Posts.publish(poster, attrs, "local")
 
       some_account = fake_account!()
       someone = fake_user!(some_account)

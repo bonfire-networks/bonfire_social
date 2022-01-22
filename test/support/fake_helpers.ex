@@ -8,6 +8,6 @@ defmodule Bonfire.Social.Test.FakeHelpers do
   import Bonfire.Social.Integration
   import Bonfire.Me.Fake
 
-  def post_attrs(n, attrs \\ %{}), do: Map.merge(%{to_circles: [:guest], post_content: %{summary: "summary", name: "#{n}", html_body: "<p>epic html message</p>"}}, attrs)
+  def post_attrs(n, attrs \\ %{}), do: Map.merge(%{post_content: %{summary: "summary", name: "#{n}", html_body: "<p>epic html message</p>"}}, attrs)
 
 end

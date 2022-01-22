@@ -17,7 +17,7 @@ defmodule Bonfire.Social.Threads.LoadMoreTest do
       bob = fake_user!(account2)
       # bob follows alice
       Follows.follow(bob, alice)
-      attrs = %{to_circles: [:guest], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
+      attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
       assert {:ok, op} = Posts.publish(alice, attrs, "public")
       attrs = Map.merge(attrs, %{reply_to: op.id})
@@ -43,7 +43,7 @@ defmodule Bonfire.Social.Threads.LoadMoreTest do
       bob = fake_user!(account2)
       # bob follows alice
       Follows.follow(bob, alice)
-      attrs = %{to_circles: [:guest], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
+      attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
       assert {:ok, op} = Posts.publish(alice, attrs, "public")
       attrs = Map.merge(attrs, %{reply_to: op.id})
@@ -68,7 +68,7 @@ defmodule Bonfire.Social.Threads.LoadMoreTest do
       bob = fake_user!(account2)
       # bob follows alice
       Follows.follow(bob, alice)
-      attrs = %{to_circles: [:guest], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
+      attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
       assert {:ok, op} = Posts.publish(alice, attrs, "public")
       attrs = Map.merge(attrs, %{reply_to: op.id})
@@ -103,7 +103,7 @@ defmodule Bonfire.Social.Threads.LoadMoreTest do
       # bob follows alice
       Follows.follow(bob, alice)
 
-      attrs = %{to_circles: [:guest], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
+      attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
       assert {:ok, op} = Posts.publish(alice, attrs, "public")
       attrs = Map.merge(attrs, %{reply_to: op.id})
 
