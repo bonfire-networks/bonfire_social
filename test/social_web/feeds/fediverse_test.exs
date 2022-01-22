@@ -34,39 +34,39 @@ defmodule Bonfire.Social.Feeds.Fediverse.Test do
     end
 
 
-    test "my own posts in fediverse feed (if activity_pub circle selected)" do
-      account = fake_account!()
-      user = fake_user!(account)
-      attrs = %{to_circles: [:activity_pub], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
+    # test "remote posts in fediverse feed" do
+    #   account = fake_account!()
+    #   user = fake_user!(account) # TODO use remote actor
+    #   attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
-      assert {:ok, post} = Posts.publish(user, attrs, "public")
-      assert post.post_content.name =~ "test post name"
+    #   assert {:ok, post} = Posts.publish(user, attrs, "public")
+    #   assert post.post_content.name =~ "test post name"
 
-      conn = conn(user: user, account: account)
-      next = "/federation"
-      {view, doc} = floki_live(conn, next) #|> IO.inspect
-      assert [feed] = Floki.find(doc, "#feed:federation")
-      assert Floki.text(feed) =~ "test post name"
-    end
+    #   conn = conn(user: user, account: account)
+    #   next = "/federation"
+    #   {view, doc} = floki_live(conn, next) #|> IO.inspect
+    #   assert [feed] = Floki.find(doc, "#feed:federation")
+    #   assert Floki.text(feed) =~ "test post name"
+    # end
 
-    test "federated posts (which I am allowed to see) from people I am not following in fediverse feed" do
-      user = fake_user!()
+    # test "federated posts (which I am allowed to see) from people I am not following in fediverse feed" do
+    #   user = fake_user!() # TODO with remote actor
 
-      account = fake_account!()
-      user2 = fake_user!(account)
+    #   account = fake_account!()
+    #   user2 = fake_user!(account)
 
-      attrs = %{to_circles: [:activity_pub, user2.id], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
+    #   attrs = %{to_circles: [user2.id], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
-      assert {:ok, post} = Posts.publish(user, attrs, "public")
-      assert post.post_content.name =~ "test post name"
+    #   assert {:ok, post} = Posts.publish(user, attrs, "activity_pub")
+    #   assert post.post_content.name =~ "test post name"
 
-      conn = conn(user: user2, account: account)
-      next = "/federation"
-      {view, doc} = floki_live(conn, next) #|> IO.inspect
-      assert [feed] = Floki.find(doc, "#feed:federation")
-      assert Floki.text(feed) =~ "test post name"
+    #   conn = conn(user: user2, account: account)
+    #   next = "/federation"
+    #   {view, doc} = floki_live(conn, next) #|> IO.inspect
+    #   assert [feed] = Floki.find(doc, "#feed:federation")
+    #   assert Floki.text(feed) =~ "test post name"
 
-    end
+    # end
 
   end
 
@@ -80,9 +80,9 @@ defmodule Bonfire.Social.Feeds.Fediverse.Test do
       user2 = fake_user!(account2)
       Follows.follow(user2, user)
 
-      attrs = %{to_circles: [:local], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
+      attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
-      assert {:ok, post} = Posts.publish(user, attrs, "public")
+      assert {:ok, post} = Posts.publish(user, attrs, "local")
       assert post.post_content.name =~ "test post name"
 
       conn = conn(user: user2, account: account2)

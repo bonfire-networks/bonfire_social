@@ -35,12 +35,12 @@ defmodule Bonfire.Social.Feeds.Instance.Test do
     end
 
 
-    test "my own posts in instance feed (if local circles selected)" do
+    test "my own posts in instance feed (with local preset selected)" do
       account = fake_account!()
       user = fake_user!(account)
-      attrs = %{to_circles: [:local], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
+      attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
-      assert {:ok, post} = Posts.publish(user, attrs)
+      assert {:ok, post} = Posts.publish(user, attrs, "local")
       assert post.post_content.name =~ "test post name"
 
       conn = conn(user: user, account: account)
@@ -50,11 +50,11 @@ defmodule Bonfire.Social.Feeds.Instance.Test do
       assert Floki.text(feed) =~ "test post name"
     end
 
-    test "local posts from people I am not following in instance feed (if local circles selected)" do
+    test "local posts from people I am not following in instance feed (if local preset selected)" do
       user = fake_user!()
-      attrs = %{to_circles: [:local], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
+      attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
-      assert {:ok, post} = Posts.publish(user, attrs)
+      assert {:ok, post} = Posts.publish(user, attrs, "local")
       assert post.post_content.name =~ "test post name"
 
       account = fake_account!()
