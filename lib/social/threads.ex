@@ -133,7 +133,7 @@ defmodule Bonfire.Social.Threads do
   end
 
   def filter(:participants_in, thread_id, query) do
-    verb_id = Verbs.verbs()[:create]
+    verb_id = Verbs.get_id!(:create)
 
     query
       |> join_preload([:activity, :subject_character])
@@ -178,7 +178,7 @@ defmodule Bonfire.Social.Threads do
       |> Replied.descendants()
       |> Replied.where_depth(is_smaller_than_or_equal_to: (max_depth || @default_max_depth))
       |> Activities.query_object_preload_create_activity(current_user)
-      |> Activities.as_permitted_for(current_user)
+      |> Activities.as_permitted_for(current_user_or_socket)
       # |> IO.inspect(label: "Thread nested query")
   end
 
@@ -190,7 +190,7 @@ defmodule Bonfire.Social.Threads do
     Replied
       |> query_filter(filter)
       |> Activities.query_object_preload_create_activity(current_user)
-      |> Activities.as_permitted_for(current_user)
+      |> Activities.as_permitted_for(current_user_or_socket)
       # |> IO.inspect(label: "Thread filtered query")
   end
 

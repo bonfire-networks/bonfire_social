@@ -17,11 +17,22 @@ defmodule Bonfire.Social.Boosts do
   def context_module, do: Boost
   def federation_module, do: ["Announce", {"Create", "Announce"}, {"Undo", "Announce"}, {"Delete", "Announce"}]
 
-  def boosted?(%{}=user, object), do: not is_nil(get!(user, object))
+  def boosted?(%{}=user, object), do: not is_nil(get!(user, object, skip_boundary_check: true))
 
-  def get(subject, object), do: [subject: subject, object: object] |> query(current_user: subject) |> repo().single()
-  def get!(subject, objects) when is_list(objects), do: [subject: subject, object: objects] |> query(current_user: subject) |> repo().all()
-  def get!(subject, object), do: [subject: subject, object: object] |> query(current_user: subject) |> repo().one()
+  def get(subject, object, opts \\ []), do:
+    [subject: subject, object: object]
+    |> query(opts |> Keyword.put_new(:current_user, subject))
+    |> repo().single()
+
+  def get!(subject, objects, opts \\ [])
+  def get!(subject, objects, opts) when is_list(objects), do:
+    [subject: subject, object: objects]
+    |> query(opts |> Keyword.put_new(:current_user, subject))
+    |> repo().all()
+  def get!(subject, object, opts), do:
+    [subject: subject, object: object]
+    |> query(opts |> Keyword.put_new(:current_user, subject))
+    |> repo().one()
 
   # def by_booster(%{}=user), do: repo().many(by_booster_q(user))
   # def by_boosted(%{}=user), do: repo().many(by_boosted_q(user))
@@ -33,7 +44,7 @@ defmodule Bonfire.Social.Boosts do
       # TODO: get the preset for boosting from config and/or user's settings
 
       # make the boost itself visible to both
-      Bonfire.Me.Boundaries.maybe_make_visible_for(booster, boost, boosted)
+      Bonfire.Me.Boundaries.maybe_make_visible_for(booster, boost, e(boosted, :created, :creator_id, nil))
 
       FeedActivities.maybe_notify_creator(booster, published, boosted) #|> IO.inspect
 
@@ -105,7 +116,7 @@ defmodule Bonfire.Social.Boosts do
 
   defp create(booster, boosted) do
     # TODO: get table_id from Boost module or Tables service
-    Edges.changeset(Boost, booster, boosted, "300STANN0VNCERESHARESH0VTS") |> repo().insert()
+    Edges.changeset(Boost, booster, boosted) |> repo().insert()
   end
 
 

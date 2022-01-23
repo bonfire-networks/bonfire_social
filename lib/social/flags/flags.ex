@@ -102,7 +102,7 @@ defmodule Bonfire.Social.Flags do
   end
 
   defp create(flagger, flagged) do
-    Edges.changeset(Flag, flagger, flagged, "71AGSPAM0RVNACCEPTAB1E1TEM") |> repo().insert()
+    Edges.changeset(Flag, flagger, flagged) |> repo().insert()
   end
 
 

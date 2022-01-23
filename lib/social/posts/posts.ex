@@ -30,7 +30,7 @@ defmodule Bonfire.Social.Posts do
   def publish(%{id: _} = creator, attrs, preset_boundary \\ nil) do
     # we attempt to avoid entering the transaction as long as possible.
     changeset = changeset(:create, attrs, creator, preset_boundary)
-    repo().transact_with(fn -> repo().insert(changeset) ~> maybe_index() end)
+    repo().transact_with(fn -> repo().insert(changeset) ~> Activities.activity_under_object() |> maybe_index() end)
   end
 
 
@@ -55,7 +55,6 @@ defmodule Bonfire.Social.Posts do
   end
 
   def changeset(:create, attrs, creator, preset) do
-    creator_id = e(creator, :id, nil)
     attrs
     # |> debug("attrs")
     |> Post.changeset(%Post{}, ...)

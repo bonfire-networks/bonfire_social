@@ -31,7 +31,7 @@ defmodule Bonfire.Social.Likes do
     with {:ok, like} <- create(liker, liked) do
 
       # make the like itself visible to both
-      Bonfire.Me.Boundaries.maybe_make_visible_for(liker, like, liked)
+      Bonfire.Me.Boundaries.maybe_make_visible_for(liker, like, e(liked, :created, :creator_id, nil))
 
       {:ok, activity} = FeedActivities.maybe_notify_creator(liker, :like, liked) #|> IO.inspect
       with_activity = Activities.activity_under_object(activity, like) #|> IO.inspect()
@@ -99,7 +99,7 @@ defmodule Bonfire.Social.Likes do
   end
 
   defp create(liker, liked) do
-    Edges.changeset(Like, liker, liked, "11KES11KET0BE11KEDY0VKN0WS") |> repo().insert()
+    Edges.changeset(Like, liker, liked) |> repo().insert()
   end
 
 

@@ -16,8 +16,6 @@ defmodule Bonfire.Social.Follows do
     searchable_fields: [:id, :follower_id, :followed_id],
     sortable_fields: [:id]
 
-  @follow_table "70110WTHE1EADER1EADER1EADE"
-
   def queries_module, do: Follow
   def context_module, do: Follow
   def federation_module, do: ["Follow", {"Create", "Follow"}, {"Undo", "Follow"}, {"Delete", "Follow"}]
@@ -161,7 +159,7 @@ defmodule Bonfire.Social.Follows do
   end
 
   defp create(follower, followed) do
-    Edges.changeset(Follow, follower, followed, @follow_table)
+    Edges.changeset(Follow, follower, followed)
     |> repo().upsert()
   end
 
