@@ -9,8 +9,8 @@ defmodule Bonfire.Social.Boosts do
 
   use Bonfire.Repo,
     searchable_fields: [:booster_id, :boosted_id]
-  # import Bonfire.Me.Integration
-  import Bonfire.Common.Utils
+  # import Bonfire.Social.Integration
+  use Bonfire.Common.Utils
 
 
   def queries_module, do: Boost
@@ -82,6 +82,7 @@ defmodule Bonfire.Social.Boosts do
   def list_paginated(filters, opts \\ []) do
     filters
     |> query(opts)
+    |> debug()
     |> Bonfire.Repo.many_paginated(opts)
     # TODO: activity preloads
   end
@@ -103,6 +104,7 @@ defmodule Bonfire.Social.Boosts do
 
 
   defp create(booster, boosted) do
+    # TODO: get table_id from Boost module or Tables service
     Edges.changeset(Boost, booster, boosted, "300STANN0VNCERESHARESH0VTS") |> repo().insert()
   end
 

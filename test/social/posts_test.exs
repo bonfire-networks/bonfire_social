@@ -3,7 +3,7 @@ defmodule Bonfire.Social.PostsTest do
 
   alias Bonfire.Social.Posts
   alias Bonfire.Me.Fake
-  import Bonfire.Common.Utils
+  use Bonfire.Common.Utils
 
   test "creation works" do
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
@@ -19,7 +19,7 @@ defmodule Bonfire.Social.PostsTest do
     attrs_1 = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message 1</p>"}}
     user = Fake.fake_user!()
     assert {:ok, post} = Posts.publish(user, attrs_1, "public")
-    debug(post, "post")
+    # debug(post, "post")
     assert {:ok, read} = Posts.read(post.id, skip_boundary_check: true)
     assert post.id == read.id
   end
@@ -28,10 +28,10 @@ defmodule Bonfire.Social.PostsTest do
     attrs_1 = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message 1</p>"}}
     user = Fake.fake_user!()
     assert {:ok, post} = Posts.publish(user, attrs_1, "public")
-    post = Bonfire.Repo.preload(post, [:caretaker, controlled: [acl: [:named, :caretaker]]])
-    user = Bonfire.Repo.preload(user, encircles: [circle: [:named]])
-    debug(post, "post")
-    debug(user, "user")
+    # post = Bonfire.Repo.preload(post, [:caretaker, controlled: [acl: [:named, :caretaker]]])
+    # user = Bonfire.Repo.preload(user, encircles: [circle: [:named]])
+    # debug(post, "post")
+    # debug(user, "user")
     assert {:ok, read} = Posts.read(post.id, current_user: user)
     # assert post.id == read.id
   end
@@ -45,7 +45,7 @@ defmodule Bonfire.Social.PostsTest do
     assert {:ok, _} = Posts.publish(user, attrs_2, "public")
     assert {:ok, _} = Posts.publish(user, attrs_3, "public")
     assert %{edges: posts} = Posts.list_by(user, skip_boundary_check: true)
-    debug(posts, "posts")
+    # debug(posts, "posts")
     assert length(posts) == 3
   end
 

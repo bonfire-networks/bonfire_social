@@ -1,4 +1,4 @@
-defmodule Bonfire.Social.PostCirclesTest do
+defmodule Bonfire.Social.PostBoundariesTest do
 
   use Bonfire.DataCase, async: true
   alias Bonfire.Me.Fake
@@ -16,7 +16,7 @@ defmodule Bonfire.Social.PostCirclesTest do
     assert String.contains?(post.post_content.html_body, "epic html message")
     assert post.post_content.name =~ "name"
 
-    assert {:ok, post} = Posts.read(post.id, user)
+    assert {:ok, post} = Posts.read(post.id, current_user: user)
     assert post.post_content.name =~ "name"
 
   end
@@ -41,7 +41,7 @@ defmodule Bonfire.Social.PostCirclesTest do
     assert {:ok, post} = Posts.publish(user, attrs)
     assert post.post_content.name =~ "name"
 
-    feed_id = user.id
+    feed_id = Bonfire.Social.Feeds.feed_id(:outbox, user)
 
     assert %Paginator.Page{edges: activities} = FeedActivities.feed(feed_id, user)
     assert feed_entry = List.first(activities)

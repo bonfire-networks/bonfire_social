@@ -4,7 +4,7 @@ defmodule Bonfire.Social.APActivities do
 
   require Logger
 
-  import Bonfire.Common.Utils
+  use Bonfire.Common.Utils
   import Bonfire.Common.Config, only: [repo: 0]
 
   def create(activity, object, nil) do

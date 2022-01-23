@@ -5,7 +5,7 @@ defmodule Bonfire.Social.Objects do
     schema: Pointers.Pointer,
     searchable_fields: [:id],
     sortable_fields: [:id]
-  import Bonfire.Common.Utils, only: [debug: 2]
+  use Bonfire.Common.Utils, only: [debug: 2]
   alias Bonfire.Common.Utils
   alias Bonfire.Data.Identity.Character
   alias Bonfire.Me.Acls

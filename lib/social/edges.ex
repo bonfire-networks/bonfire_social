@@ -3,7 +3,7 @@ defmodule Bonfire.Social.Edges do
   alias Bonfire.Data.Edges.Edge
 
   import Bonfire.Boundaries.Queries
-  import Bonfire.Common.Utils
+  use Bonfire.Common.Utils
 
   use Bonfire.Repo,
       schema: Edge

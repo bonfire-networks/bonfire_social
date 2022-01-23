@@ -12,7 +12,7 @@ defmodule Bonfire.Social.Posts do
       searchable_fields: [:id],
       sortable_fields: [:id]
 
-  import Bonfire.Common.Utils
+  use Bonfire.Common.Utils
 
   # import Bonfire.Boundaries.Queries
 
@@ -57,7 +57,7 @@ defmodule Bonfire.Social.Posts do
   def changeset(:create, attrs, creator, preset) do
     creator_id = e(creator, :id, nil)
     attrs
-    |> IO.inspect(label: "Posts.changeset:attrs")
+    # |> debug("attrs")
     |> Post.changeset(%Post{}, ...)
     |> PostContents.cast(attrs, creator, preset) # process text (must be done before Objects.cast)
     |> Objects.cast(attrs, creator, preset) # deal with threading, tagging, boundaries, activities, etc.
@@ -95,7 +95,7 @@ defmodule Bonfire.Social.Posts do
     # |> IO.inspect(label: "Posts.query_paginated:filters")
     |> Keyword.drop([:paginate])
     |> FeedActivities.query_paginated(opts_or_current_user, preloads, Post)
-    |> debug("after FeedActivities.query_paginated")
+    # |> debug("after FeedActivities.query_paginated")
   end
   # query_paginated(filters \\ [], current_user_or_socket_or_opts \\ [], preloads \\ :all, query \\ FeedPublish)
   def query_paginated({a,b}, opts_or_current_user, preloads), do: query_paginated([{a,b}], opts_or_current_user, preloads)
@@ -265,9 +265,9 @@ defmodule Bonfire.Social.Posts do
   def indexing_object_format(%{activity: activity} = object, nil), do: indexing_object_format(activity, object)
   def indexing_object_format(%Activity{object: object} = activity, nil), do: indexing_object_format(activity, object)
   def indexing_object_format(a, b) do
-    Logger.error("Posts: could not indexing_object_format")
-    IO.inspect(a)
-    IO.inspect(b)
+    Logger.error("Posts: no clause match for function indexing_object_format/2")
+    # debug(a, "activity")
+    # debug(b, "object")
     nil
   end
 

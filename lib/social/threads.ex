@@ -33,11 +33,12 @@ defmodule Bonfire.Social.Threads do
   def maybe_push_thread(_, _, _), do: nil
 
   @doc """
-  Handles casting related to the reply and threading, if there was one and the post was set to public.
-  If there is no reply or the user is not permitted to reply to the thing, a new thread will be created.
+  Handles casting related to the reply and threading.
+  If it's not a reply or the user is not permitted to reply to the thing, a new thread will be created.
   """
-  def cast(changeset, attrs, user, "public"), do: cast_replied(changeset, attrs, user)
-  def cast(changeset, attrs, user, _), do: start_new_thread(changeset)
+  # def cast(changeset, attrs, user, "public"), do: cast_replied(changeset, attrs, user)
+  # def cast(changeset, attrs, user, _), do: start_new_thread(changeset)
+  def cast(changeset, attrs, user, _), do: cast_replied(changeset, attrs, user)
 
   defp cast_replied(changeset, attrs, user) do
     case find_reply_id(attrs) do

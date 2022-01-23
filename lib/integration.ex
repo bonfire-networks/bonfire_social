@@ -42,6 +42,11 @@ defmodule Bonfire.Social.Integration do
     :ok
   end
 
+  def check_local(thing) do
+    if Bonfire.Common.Utils.module_enabled?(Bonfire.Federate.ActivityPub.Utils) do
+      Bonfire.Federate.ActivityPub.Utils.check_local(thing)
+    end
+  end
 
   def maybe_index(object) do
     if Config.module_enabled?(Bonfire.Search.Indexer) do

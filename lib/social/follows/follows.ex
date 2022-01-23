@@ -9,7 +9,7 @@ defmodule Bonfire.Social.Follows do
   alias Ecto.Changeset
 
   import Bonfire.Boundaries.Queries
-  import Bonfire.Common.Utils
+  use Bonfire.Common.Utils
 
   use Bonfire.Repo,
     schema: Follow,
@@ -40,6 +40,7 @@ defmodule Bonfire.Social.Follows do
   defp query_base(filters, opts) do
     Edges.query_parent(Follow, filters, opts)
     |> query_filter(Keyword.drop(filters, [:object, :subject]))
+    |> debug("follows query")
   end
 
   def query([my: :followed], opts), do: [subject: current_user(opts)] |> query(opts)
