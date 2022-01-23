@@ -10,6 +10,7 @@ defmodule Bonfire.Social.Feeds do
   alias Bonfire.Social.Follows
   alias Bonfire.Social.Objects
   alias Bonfire.Me.Characters
+  alias Bonfire.Me.Boundaries
 
 
   # def queries_module, do: Feed
@@ -17,18 +18,30 @@ defmodule Bonfire.Social.Feeds do
 
   def target_feeds(changeset, creator, preset_or_custom_boundary) do
 
+    # maybe include people, tags or other characters that were mentioned/tagged
     mentions = Utils.e(changeset, :changes, :post_content, :changes, :mentions, []) #|> debug("mentions")
     mentioned_inboxes = mentions |> feed_ids(:inbox, ...)
 
+    # maybe include the creator of what we're replying to
     reply_to_creator = Utils.e(changeset, :changes, :replied, :changes, :replying_to, :created, :creator, nil) #|> debug("reply_to")
     reply_to_inbox = reply_to_creator |> feed_id(:inbox, ...)
 
-    [my_feed_id(:outbox, creator)]
-    ++ case preset_or_custom_boundary do
+    # include the thread as feed, so it can be followed
+    thread_id = Utils.e(changeset, :changes, :replied, :changes, :thread_id, nil) || Utils.e(changeset, :changes, :replied, :changes, :replying_to, :thread_id, nil) |> debug("thread_id")
+
+    # include any extra feeds specified in opts
+    extra_feeds = Boundaries.maybe_custom_feeds(preset_or_custom_boundary)
+
+    []
+    ++ extra_feeds
+    ++ case Boundaries.preset(preset_or_custom_boundary) do
       "public" -> # put in all reply_to creators and mentions inboxes + guest/local feeds
         [ named_feed_id(:guest),
           named_feed_id(:local),
-          reply_to_inbox]
+          reply_to_inbox,
+          thread_id,
+          my_feed_id(:outbox, creator)
+        ]
         ++ mentioned_inboxes
 
       "local" ->
@@ -36,13 +49,14 @@ defmodule Bonfire.Social.Feeds do
         [named_feed_id(:local)] # put in local instance feed
         ++
         ( # put in inboxes (notifications) of any local reply_to creators and mentions
-          (mentions ++ [reply_to_creator])
+          ([reply_to_creator]
+           ++ mentions)
           |> Enum.filter(&check_local/1)
           |> feed_id(:inbox, ...)
-        )
-
-      "activity_pub" -> # TODO: put in all reply_to creators and mentions inboxes (for now?) + AP feed + guest feed (for public activities)
-        [named_feed_id(:activity_pub)]
+        ) ++ [
+          thread_id,
+          my_feed_id(:outbox, creator)
+        ]
 
       "mentions" ->
         mentioned_inboxes
@@ -50,14 +64,9 @@ defmodule Bonfire.Social.Feeds do
       "admins" ->
         admins_inboxes()
 
-      custom when is_list(custom) ->
-
-        Logger.error("TODO: push to custom users/circles/feeds: #{inspect custom}")
-        []
-
-      _ -> [] # default to nothing
+      _ -> [] # default to none except creator, thread, and any custom ones
     end
-    |> Utils.filter_empty()
+    |> Utils.filter_empty([])
     |> Enum.uniq()
     |> debug("target feeds")
   end

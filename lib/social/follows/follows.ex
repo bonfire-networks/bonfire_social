@@ -124,7 +124,7 @@ defmodule Bonfire.Social.Follows do
   defp do_follow(%{} = follower, %{} = followed) do
     with {:ok, follow} <- create(follower, followed) do
 
-      # FeedActivities.publish(follower, :follow, followed) # TODO: make configurable where the follow gets published
+      # FeedActivities.publish(follower, :follow, followed) # TODO: make configurable whether to publish the follow
 
       # TEMPORARY: make my profile visible to people I follow
       Bonfire.Me.Boundaries.maybe_make_visible_for(follower, follower, followed)
