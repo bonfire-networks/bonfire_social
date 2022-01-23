@@ -8,6 +8,21 @@ defmodule Bonfire.Social.Edges do
   use Bonfire.Repo,
       schema: Edge
 
+  def get(schema, subject, object, opts \\ []), do:
+    [subject: subject, object: object]
+    |> schema.query(opts |> Keyword.put_new(:current_user, subject))
+    |> repo().single()
+
+  def get!(schema, subject, objects, opts \\ [])
+  def get!(schema, subject, objects, opts) when is_list(objects), do:
+    [subject: subject, object: objects]
+    |> schema.query(opts |> Keyword.put_new(:current_user, subject))
+    |> repo().all()
+  def get!(schema, subject, object, opts), do:
+    [subject: subject, object: object]
+    |> schema.query(opts |> Keyword.put_new(:current_user, subject))
+    |> repo().one()
+
   def query(filters, opts) do
     from(root in Edge, as: :edge)
     |> boundarise(root.id, opts)
@@ -50,7 +65,6 @@ defmodule Bonfire.Social.Edges do
   end
 
   def changeset(schema, subject, object) do
-    # TODO get table_id based on schema
     schema.changeset(%{edge: %{
       subject_id: ulid(subject),
       object_id: ulid(object)

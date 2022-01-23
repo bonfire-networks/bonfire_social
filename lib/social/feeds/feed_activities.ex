@@ -315,7 +315,7 @@ defmodule Bonfire.Social.FeedActivities do
   """
   def notify_characters(subject, verb_or_activity, object, characters) do
     debug(characters)
-    notify_inboxes(subject, verb_or_activity, object, Feeds.feed_ids(:inbox, characters) |> Enum.filter(& &1))
+    notify_inboxes(subject, verb_or_activity, object, Feeds.feed_ids(:inbox, characters) |> Utils.filter_empty())
   end
 
   def notify_inboxes(subject, verb_or_activity, object, inbox_ids) do
@@ -400,7 +400,7 @@ defmodule Bonfire.Social.FeedActivities do
   defp put_in_feeds_and_maybe_federate(feeds, activity) do
     # This makes sure it gets put in feed even if the
     # federation hook fails
-    feeds = feeds |> Enum.filter(& &1)
+    feeds = feeds |> Utils.filter_empty()
     ret = put_in_feeds(feeds, activity)
     # TODO: add ActivityPub feed for remote activities
     try do

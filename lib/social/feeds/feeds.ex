@@ -52,7 +52,7 @@ defmodule Bonfire.Social.Feeds do
 
       _ -> [] # default to nothing
     end
-    |> Enum.filter(& &1)
+    |> Utils.filter_empty()
     |> Enum.uniq()
     |> debug("target feeds")
   end
@@ -91,7 +91,7 @@ defmodule Bonfire.Social.Feeds do
         #IO.inspect(e: e)
         extra_feeds
     end
-    |> Enum.filter(& &1)
+    |> Utils.filter_empty()
     |> Enum.uniq()
     |> debug("all")
   end

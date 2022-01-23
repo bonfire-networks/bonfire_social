@@ -17,9 +17,8 @@ defmodule Bonfire.Social.Flags do
 
   def flagged?(%User{}=user, object), do: not is_nil(get!(user, object))
 
-  def get(subject, object), do: [subject: subject, object: object] |> query(current_user: subject) |> repo().single()
-  def get!(subject, objects) when is_list(objects), do: [subject: subject, object: objects] |> query(current_user: subject) |> repo().all()
-  def get!(subject, object), do: [subject: subject, object: object] |> query(current_user: subject) |> repo().one()
+  def get(subject, object, opts \\ []), do: Edges.get(__MODULE__, subject, object)
+  def get!(subject, object, opts \\ []), do: Edges.get!(__MODULE__, subject, object)
 
   def by_flagger(%{}=subject), do: [subject: subject] |> query(current_user: subject) |> repo().many()
   def by_flagged(%{}=object), do: [object: object] |> query(current_user: object) |> repo().many()

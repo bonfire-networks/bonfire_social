@@ -67,7 +67,7 @@ defmodule Bonfire.Social.MessagesTest do
     assert %{edges: []} = Messages.list(other, sender)
   end
 
-  test "messages addressed to sender appear in my notifications" do
+  test "messages addressed to me appear in my notifications" do
     sender = Fake.fake_user!()
     receiver = Fake.fake_user!()
     attrs = %{to_circles: [receiver.id], post_content: %{html_body: "<p>hey receiver, you have an epic html message</p>"}}

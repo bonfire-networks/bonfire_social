@@ -19,24 +19,8 @@ defmodule Bonfire.Social.Boosts do
 
   def boosted?(%{}=user, object), do: not is_nil(get!(user, object, skip_boundary_check: true))
 
-  def get(subject, object, opts \\ []), do:
-    [subject: subject, object: object]
-    |> query(opts |> Keyword.put_new(:current_user, subject))
-    |> repo().single()
-
-  def get!(subject, objects, opts \\ [])
-  def get!(subject, objects, opts) when is_list(objects), do:
-    [subject: subject, object: objects]
-    |> query(opts |> Keyword.put_new(:current_user, subject))
-    |> repo().all()
-  def get!(subject, object, opts), do:
-    [subject: subject, object: object]
-    |> query(opts |> Keyword.put_new(:current_user, subject))
-    |> repo().one()
-
-  # def by_booster(%{}=user), do: repo().many(by_booster_q(user))
-  # def by_boosted(%{}=user), do: repo().many(by_boosted_q(user))
-  # def by_any(%{}=user), do: repo().many(by_any_q(user))
+  def get(subject, object, opts \\ []), do: Edges.get(__MODULE__, subject, object)
+  def get!(subject, object, opts \\ []), do: Edges.get!(__MODULE__, subject, object)
 
   def boost(%{} = booster, %{} = boosted) do
     with {:ok, boost} <- create(booster, boosted),

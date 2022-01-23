@@ -34,7 +34,7 @@ defmodule Bonfire.Social.Tags do
   end
 
   defp tags_preloads(mentions, preset) do
-    preload? = true # preset in ["public", "mentions"] # we want to metion local characters too if using the "local" preset
+    preload? = true # preset in ["public", "mentions"] # we want to mention local characters too if using the "local" preset
     mentions
     |> if(preload?, do: repo().maybe_preload(..., [:character]), else: ...)
   end
