@@ -23,7 +23,7 @@ defmodule Bonfire.Social.Activities do
     boundarise(q, activity.object_id, opts)
   end
 
-  def cast(changeset, verb, creator, preset) do
+  def cast(changeset, verb, creator, preset_or_custom_boundary) do
     verb_id = Verbs.get_id(verb) || Verbs.get_id!(:create)
     creator = repo().maybe_preload(creator, :character)
     # debug(creator, "creator")
@@ -33,7 +33,7 @@ defmodule Bonfire.Social.Activities do
       subject_id: creator.id,
       verb_id: verb_id,
     } # publish in appropriate feeds
-    |> Map.put(..., :feed_publishes, FeedActivities.cast_data(changeset, ..., creator, preset))
+    |> Map.put(..., :feed_publishes, FeedActivities.cast_data(changeset, ..., creator, preset_or_custom_boundary))
     # |> debug("activity attrs")
     changeset
     |> Map.update(:data, nil, &Map.put(&1, :activities, [])) # force an insert

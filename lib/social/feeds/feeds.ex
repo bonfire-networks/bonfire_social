@@ -15,7 +15,7 @@ defmodule Bonfire.Social.Feeds do
   # def queries_module, do: Feed
   def context_module, do: Feed
 
-  def target_feeds(changeset, creator, preset) do
+  def target_feeds(changeset, creator, preset_or_custom_boundary) do
 
     mentions = Utils.e(changeset, :changes, :post_content, :changes, :mentions, []) #|> debug("mentions")
     mentioned_inboxes = mentions |> feed_ids(:inbox, ...)
@@ -24,7 +24,7 @@ defmodule Bonfire.Social.Feeds do
     reply_to_inbox = reply_to_creator |> feed_id(:inbox, ...)
 
     [my_feed_id(:outbox, creator)]
-    ++ case preset do
+    ++ case preset_or_custom_boundary do
       "public" -> # put in all reply_to creators and mentions inboxes + guest/local feeds
         [ named_feed_id(:guest),
           named_feed_id(:local),
@@ -49,6 +49,11 @@ defmodule Bonfire.Social.Feeds do
 
       "admins" ->
         admins_inboxes()
+
+      custom when is_list(custom) ->
+
+        Logger.error("TODO: push to custom users/circles/feeds: #{inspect custom}")
+        []
 
       _ -> [] # default to nothing
     end

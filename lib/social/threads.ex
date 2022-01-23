@@ -38,7 +38,7 @@ defmodule Bonfire.Social.Threads do
   """
   # def cast(changeset, attrs, user, "public"), do: cast_replied(changeset, attrs, user)
   # def cast(changeset, attrs, user, _), do: start_new_thread(changeset)
-  def cast(changeset, attrs, user, _), do: cast_replied(changeset, attrs, user)
+  def cast(changeset, attrs, user, _preset_or_custom_boundary), do: cast_replied(changeset, attrs, user)
 
   defp cast_replied(changeset, attrs, user) do
     case find_reply_id(attrs) do

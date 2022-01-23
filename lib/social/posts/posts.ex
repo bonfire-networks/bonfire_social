@@ -27,9 +27,9 @@ defmodule Bonfire.Social.Posts do
     # end
   end
 
-  def publish(%{id: _} = creator, attrs, preset_boundary \\ nil) do
+  def publish(%{id: _} = creator, attrs, preset_or_custom_boundary \\ nil) do
     # we attempt to avoid entering the transaction as long as possible.
-    changeset = changeset(:create, attrs, creator, preset_boundary)
+    changeset = changeset(:create, attrs, creator, preset_or_custom_boundary)
     repo().transact_with(fn -> repo().insert(changeset) ~> Activities.activity_under_object() |> maybe_index() end)
   end
 
@@ -54,12 +54,12 @@ defmodule Bonfire.Social.Posts do
     Post.changeset(%Post{}, attrs)
   end
 
-  def changeset(:create, attrs, creator, preset) do
+  def changeset(:create, attrs, creator, preset_or_custom_boundary) do
     attrs
     # |> debug("attrs")
     |> Post.changeset(%Post{}, ...)
-    |> PostContents.cast(attrs, creator, preset) # process text (must be done before Objects.cast)
-    |> Objects.cast(attrs, creator, preset) # deal with threading, tagging, boundaries, activities, etc.
+    |> PostContents.cast(attrs, creator, preset_or_custom_boundary) # process text (must be done before Objects.cast)
+    |> Objects.cast(attrs, creator, preset_or_custom_boundary) # deal with threading, tagging, boundaries, activities, etc.
   end
 
   def read(post_id, opts_or_socket_or_current_user \\ [], preloads \\ :all) when is_binary(post_id) do
