@@ -25,14 +25,15 @@ defmodule Bonfire.Social.Messages do
     end
   end
 
-  def send(%{id: _} = creator, attrs) do
+  def send(%{id: _} = creator, attrs, to \\ nil) do
     #IO.inspect(attrs)
 
     repo().transact_with(fn ->
-      with circles when is_list(circles) and length(circles)>0 <- Utils.e(attrs, :to_circles, []),
-        {:ok, message} <- create(creator, attrs) do
+      with to when is_list(to) and length(to)>0 <- to
+            || Utils.e(attrs, :to_circles, []),
+        {:ok, message} <- create(creator, attrs, to) do
 
-          with {:ok, activity} <- FeedActivities.notify_characters(creator, :create, message, circles) do
+          with {:ok, activity} <- FeedActivities.notify_characters(creator, :create, message, to) do
 
             {:ok, Activities.activity_under_object(activity)}
 
@@ -50,19 +51,18 @@ defmodule Bonfire.Social.Messages do
   end
 
 
-  defp create(%{id: creator_id} = creator, attrs) do
+  defp create(%{id: creator_id} = creator, attrs, to \\ nil) do
     # we attempt to avoid entering the transaction as long as possible.
-    changeset = changeset(:create, attrs, creator)
+    changeset = changeset(:create, attrs, creator, to)
     repo().transact_with(fn -> repo().insert(changeset) end)
   end
 
-  def changeset(:create, attrs, creator) do
-    preset = "message"
+  def changeset(:create, attrs, creator, to) do
     attrs
     # |> debug("attrs")
     |> Message.changeset(%Message{}, ...)
-    |> PostContents.cast(attrs, creator, preset) # process text (must be done before Objects.cast)
-    |> Objects.cast(attrs, creator, preset) # deal with threading, tagging, boundaries, activities, etc.
+    |> PostContents.cast(attrs, creator, to) # process text (must be done before Objects.cast)
+    |> Objects.cast(attrs, creator, to) # deal with threading, tagging, boundaries, activities, etc.
   end
 
   def read(message_id, socket_or_current_user) when is_binary(message_id) do

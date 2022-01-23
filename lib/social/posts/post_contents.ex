@@ -6,7 +6,7 @@ defmodule Bonfire.Social.PostContents do
   alias Bonfire.Common.Utils
   alias Ecto.Changeset
 
-  def cast(changeset, attrs, creator, preset) do
+  def cast(changeset, attrs, creator, _preset_or_custom_boundary) do
     # TODO: process tags within the prepare_text function instead (so tags can be used in all three fields at once)
     with {:ok, tags} <- Bonfire.Social.Tags.maybe_process(creator, attrs) do
       tags
