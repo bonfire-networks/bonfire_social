@@ -20,11 +20,10 @@ defmodule Bonfire.Social.Follows do
   def context_module, do: Follow
   def federation_module, do: ["Follow", {"Create", "Follow"}, {"Undo", "Follow"}, {"Delete", "Follow"}]
 
-  def following?(subject, object), do: not is_nil(get!(subject, object))
+  def following?(subject, object), do: not is_nil(get!(subject, object, skip_boundary_check: true))
 
-  def get(subject, object), do: [subject: subject, object: object] |> query(current_user: subject) |> repo().single()
-  def get!(subject, objects) when is_list(objects), do: [subject: subject, object: objects] |> query(current_user: subject) |> repo().all()
-  def get!(subject, object), do: [subject: subject, object: object] |> query(current_user: subject) |> repo().one()
+  def get(subject, object, opts \\ []), do: Edges.get(__MODULE__, subject, object)
+  def get!(subject, object, opts \\ []), do: Edges.get!(__MODULE__, subject, object)
 
   def list_follows_by_subject(user, opts \\ []), do: query_base([subject: user], opts |> Keyword.put_new(:current_user, user)) |> repo().many()
 

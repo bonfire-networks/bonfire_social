@@ -16,12 +16,10 @@ defmodule Bonfire.Social.Likes do
   def context_module, do: Like
   def federation_module, do: ["Like", {"Create", "Like"}, {"Undo", "Like"}, {"Delete", "Like"}]
 
-  def liked?(%{}=user, object), do: not is_nil(get!(user, object))
+  def liked?(%{}=user, object), do: not is_nil(get!(user, object, skip_boundary_check: true))
 
-  def get(%{}=subject, object), do: [subject: subject, object: object] |> query(current_user: subject) |> repo().single()
-
-  def get!(%{}=subject, object) when is_list(object), do: [subject: subject, object: object] |> query(current_user: subject) |> repo().all()
-  def get!(%{}=subject, object), do: [subject: subject, object: object] |> query(current_user: subject) |> repo().one()
+  def get(subject, object, opts \\ []), do: Edges.get(__MODULE__, subject, object)
+  def get!(subject, object, opts \\ []), do: Edges.get!(__MODULE__, subject, object)
 
   def by_liker(%{}=subject), do: [subject: subject] |> query(current_user: subject) |> repo().many()
   def by_liker(%{}=subject, type), do: [subject: subject] |> query(current_user: subject) |>  by_type_q(type) |> repo().many()
@@ -33,15 +31,14 @@ defmodule Bonfire.Social.Likes do
       # make the like itself visible to both
       Bonfire.Me.Boundaries.maybe_make_visible_for(liker, like, e(liked, :created, :creator_id, nil))
 
-      {:ok, activity} = FeedActivities.maybe_notify_creator(liker, :like, liked) #|> IO.inspect
-      with_activity = Activities.activity_under_object(activity, like) #|> IO.inspect()
-      {:ok, with_activity}
+      {:ok, activity} = FeedActivities.maybe_notify_creator(liker, :like, liked) #|> debug()
+      {:ok, Activities.activity_under_object(activity, like)}
     end
   end
 
   def like(%User{} = liker, liked) when is_binary(liked) do
     with {:ok, liked} <- Bonfire.Common.Pointers.get(liked, current_user: liker) do
-      #IO.inspect(liked)
+      #debug(liked)
       like(liker, liked)
     end
   end
