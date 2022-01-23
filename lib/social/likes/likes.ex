@@ -8,8 +8,8 @@ defmodule Bonfire.Social.Likes do
   alias Bonfire.Social.Edges
 
   # import Ecto.Query
-  # import Bonfire.Me.Integration
-  import Bonfire.Common.Utils
+  # import Bonfire.Social.Integration
+  use Bonfire.Common.Utils
   use Bonfire.Repo
 
   def queries_module, do: Like

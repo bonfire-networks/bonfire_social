@@ -3,7 +3,7 @@ defmodule Bonfire.Social.Feeds do
   use Arrows
   require Logger
   import Ecto.Query
-  import Bonfire.Me.Integration
+  import Bonfire.Social.Integration
 
   alias Bonfire.Data.Identity.Character
   alias Bonfire.Data.Social.Feed
@@ -16,19 +16,31 @@ defmodule Bonfire.Social.Feeds do
 
   def target_feeds(changeset, creator, preset) do
 
-    mentioned_inboxes = Utils.e(changeset, :changes, :post_content, :changes, :mentions, []) |> feed_ids(:inbox, ...)
+    mentions = Utils.e(changeset, :changes, :post_content, :changes, :mentions, []) #|> debug("mentions")
+    mentioned_inboxes = mentions |> feed_ids(:inbox, ...)
 
-    reply_to_inbox = Utils.e(changeset, :changes, :replied, :replying_to, nil) |> feed_id(:inbox, ...)
+    reply_to_creator = Utils.e(changeset, :changes, :replied, :changes, :replying_to, :created, :creator, nil) #|> debug("reply_to")
+    reply_to_inbox = reply_to_creator |> feed_id(:inbox, ...)
 
     [my_feed_id(:outbox, creator)]
     ++ case preset do
       "public" -> # put in all reply_to creators and mentions inboxes + guest/local feeds
-        mentioned_inboxes ++ [reply_to_inbox, named_feed_id(:guest), named_feed_id(:local)]
+        [ named_feed_id(:guest),
+          named_feed_id(:local),
+          reply_to_inbox]
+        ++ mentioned_inboxes
 
-      "local" -> # TODO: put in reply_to creators and mentions inboxes, if they are local + local feed
-        [named_feed_id(:local)]
+      "local" ->
 
-      "activity_pub" -> # TODO: put in all reply_to creators and mentions inboxes (for now) + AP feed
+        [named_feed_id(:local)] # put in local instance feed
+        ++
+        ( # put in inboxes (notifications) of any local reply_to creators and mentions
+          (mentions ++ [reply_to_creator])
+          |> Enum.filter(&check_local/1)
+          |> feed_id(:inbox, ...)
+        )
+
+      "activity_pub" -> # TODO: put in all reply_to creators and mentions inboxes (for now?) + AP feed + guest feed (for public activities)
         [named_feed_id(:activity_pub)]
 
       "mentions" ->
@@ -62,11 +74,11 @@ defmodule Bonfire.Social.Feeds do
     current_user = current_user(socket)
 
     # include my outbox
-    my_outbox_id = my_feed_id(:outbox, socket)
+    my_outbox_id = my_feed_id(:outbox, socket) |> debug("my_outbox_id")
 
     # include my notifications?
     extra_feeds = extra_feeds ++ [my_outbox_id] ++
-      if include_notifications?, do: [my_feed_id(:inbox, socket)], else: []
+      if include_notifications?, do: [my_feed_id(:inbox, socket) |> debug("my_inbox_id")], else: []
 
     # include outboxes of everyone I follow
     with current_user when not is_nil(current_user) <- current_user,
@@ -78,15 +90,15 @@ defmodule Bonfire.Social.Feeds do
         #IO.inspect(e: e)
         extra_feeds
     end
+    |> Enum.filter(& &1)
+    |> Enum.uniq()
+    |> debug("all")
   end
 
   def my_home_feed_ids(_, _, extra_feeds), do: extra_feeds
 
-  def my_feed_id(type, %{character: character}) do
+  def my_feed_id(type, %{character: %{id: _} = character}) do
     my_feed_id(type, character)
-  end
-  def my_feed_id(type, %{id: id} = user_etc) when is_binary(id) do
-    if is_ulid?(id), do: feed_id(type, user_etc)
   end
   def my_feed_id(type, other) do
     case current_user(other) do
@@ -95,6 +107,7 @@ defmodule Bonfire.Social.Feeds do
         nil
 
       current_user ->
+        # debug(current_user, "looking up feed for user")
         feed_id(type, current_user)
     end
   end
@@ -122,13 +135,12 @@ defmodule Bonfire.Social.Feeds do
   def feed_id(:inbox, %{inbox: %{id: feed_id}}), do: feed_id
 
   def feed_id(type, for_subject) do
-    Logger.debug("Feeds: no feed found on #{inspect for_subject}")
     with %{id: id} = character <- create_box(type, for_subject) do
       # IO.inspect(for_subject)
-      Logger.debug("Feeds: created new inbox for #{inspect ulid(for_subject)}")
+      Logger.debug("Feeds: created new #{inspect type} for #{inspect ulid(for_subject)}")
       feed_id(type, character)
     else e ->
-      Logger.error("Feeds.feed_id: could not create feed: #{inspect e}")
+      Logger.error("Feeds.feed_id: could not find or create feed (#{inspect e}) for #{inspect ulid(for_subject)}")
       nil
     end
   end
@@ -149,15 +161,15 @@ defmodule Bonfire.Social.Feeds do
   @doc """
   Create an inbox or outbox for an existing Pointable (eg. User)
   """
-  def create_box(type, %{id: id}=_thing), do: create_box(type, id)
-  def create_box(type, id) when is_binary(id) do
+  defp create_box(type, %{id: id}=_thing), do: create_box(type, id)
+  defp create_box(type, id) when is_binary(id) do
     # TODO: optimise using cast_assoc
     with {:ok, %{id: feed_id} = _feed} <- create() do
       save_box_feed(type, id, feed_id)
     end
   end
-  def create_box(type, other) do
-    Logger.error("Feeds: Could not create_box for #{inspect other}")
+  defp create_box(type, other) do
+    Logger.debug("Feeds: no matching function create_box for #{inspect other}")
     nil
   end
 

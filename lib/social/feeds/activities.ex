@@ -7,7 +7,7 @@ defmodule Bonfire.Social.Activities do
     sortable_fields: [:id, :subject_id, :verb_id, :object_id]
 
   require Logger
-  import Bonfire.Common.Utils
+  use Bonfire.Common.Utils
   import Bonfire.Boundaries.Queries
   import Ecto.Query
   alias Bonfire.Data.Social.{Activity, Like, Boost, Flag, PostContent}
@@ -44,7 +44,7 @@ defmodule Bonfire.Social.Activities do
     |> Map.update(:data, nil, &Map.put(&1, :activities, [])) # force an insert
     |> Changeset.cast(%{activities: [activity]}, [])
     |> Changeset.cast_assoc(:activities, with: &Activity.changeset/2)
-    |> debug("changeset")
+    # |> debug("changeset")
   end
 
 
@@ -181,7 +181,7 @@ defmodule Bonfire.Social.Activities do
     |> query_object_preload_create_activity(opts, [:default, :with_parents])
     # |> debug("activity query")
     |> as_permitted_for(opts)
-    |> debug("permitted query")
+    # |> debug("permitted query")
     |> repo().single()
     # # pubsub_subscribe(e(object, :activity, :replied, :thread_id, nil) || object.id, opts) # subscribe to realtime feed updates
     #  #|> repo().maybe_preload(controlled: [acl: [grants: [access: [:interacts]]]]) |> IO.inspect

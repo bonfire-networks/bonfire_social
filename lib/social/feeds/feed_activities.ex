@@ -25,9 +25,9 @@ defmodule Bonfire.Social.FeedActivities do
 
   def cast_data(_changeset, activity, creator, preset) do
     Feeds.target_feeds(_changeset, creator, preset)
-    |> debug("feeds")
+    # |> debug("feeds")
     |> Enum.map(&(%{feed_id: &1, activity_id: activity.id}))
-    |> debug("result")
+    # |> debug("result")
   end
 
   def feeds_for_activity(%{id: id}), do: feeds_for_activity(id)

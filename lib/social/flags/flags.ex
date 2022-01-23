@@ -9,7 +9,7 @@ defmodule Bonfire.Social.Flags do
 
   use Bonfire.Repo,
     searchable_fields: [:flagger_id, :flagged_id]
-  import Bonfire.Common.Utils
+  use Bonfire.Common.Utils
 
   # def queries_module, do: Flag
   def context_module, do: Flag
