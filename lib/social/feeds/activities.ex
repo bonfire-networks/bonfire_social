@@ -26,7 +26,7 @@ defmodule Bonfire.Social.Activities do
   def cast(changeset, verb, creator, preset_or_custom_boundary) do
     verb_id = Verbs.get_id(verb) || Verbs.get_id!(:create)
     creator = repo().maybe_preload(creator, :character)
-    # debug(creator, "creator")
+    #|> debug("creator")
     id = ULID.generate() # le sigh, it's just easier this way
     activity = %{
       id: id,

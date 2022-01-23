@@ -102,7 +102,7 @@ defmodule Bonfire.Social.Objects do
     # with {:ok, activity} <- do_pub(subject, verb, object, circles) do
     #   # maybe_make_visible_for(subject, object, circles ++ tag_ids(tags))
     #   Threads.maybe_push_thread(subject, activity, object)
-    #   notify_inboxes(subject, activity, object, feeds)
+    #   notify(subject, activity, object, feeds)
     # end
 
 
