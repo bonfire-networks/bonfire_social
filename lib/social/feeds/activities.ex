@@ -20,12 +20,7 @@ defmodule Bonfire.Social.Activities do
   def context_module, do: Activity
 
   def as_permitted_for(q, opts \\ []) do
-    if is_list(opts) and opts[:skip_boundary_check] do
-      q
-    else
-      agent = current_user(opts) || current_account(opts)
-      boundarise(q, activity.object_id, current_user: agent)
-    end
+    boundarise(q, activity.object_id, opts)
   end
 
   def cast(changeset, verb, creator, preset) do
@@ -67,7 +62,7 @@ defmodule Bonfire.Social.Activities do
 
   @doc "Delete an activity (usage by things like unlike)"
   def delete_by_subject_verb_object(%{}=subject, verb, %{}=object) do
-    q = by_subject_verb_object_q(subject, Verbs.verbs()[verb], object)
+    q = by_subject_verb_object_q(subject, Verbs.get_id!(verb), object)
     Bonfire.Social.FeedActivities.delete_for_object(repo().many(q)) # TODO: see why cascading delete doesn't take care of this
     elem(repo().delete_all(q), 1)
   end
@@ -86,7 +81,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   def object_preload_activity(object, verb \\ :create, object_id_field \\ :id) do
-    verb_id = Verbs.verbs()[verb]
+    verb_id = Verbs.get_id(verb)
 
     query = from activity in Activity, as: :activity, where: activity.verb_id == ^verb_id
     repo().preload(object, [activity: query])
@@ -98,7 +93,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   def query_object_preload_activity(q, verb \\ :create, object_id_field \\ :id, opts \\ [], preloads \\ :default) do
-    verb_id = Verbs.get_id!(verb)
+    verb_id = Verbs.get_id(verb)
     q
     |> reusable_join(:left, [o], activity in Activity, as: :activity, on: activity.object_id == field(o, ^object_id_field) and activity.verb_id == ^verb_id)
     |> activity_preloads(opts, preloads)
@@ -207,8 +202,14 @@ defmodule Bonfire.Social.Activities do
     FeedActivities.query(filters, opts_or_current_user, :all, from(a in Activity, as: :main_object) )
   end
 
-  def activity_under_object(%{activity: %{object: _activity_object} = activity} = _top_object) do
-    activity_under_object(activity) # TODO: merge top_object ?
+  def activity_under_object(%{activity: %{object: %{id: _} = object} = activity} = top_object) do
+    activity_under_object(activity, Map.merge(top_object, object))
+  end
+  def activity_under_object(%{activity: %{id: _} = activity} = top_object) do
+    activity_under_object(activity, top_object)
+  end
+  def activity_under_object(%{activities: [%{id: _} = activity]} = top_object) do
+    activity_under_object(activity, top_object)
   end
   def activity_under_object(%Activity{object: activity_object} = activity) do
     Map.put(activity_object, :activity, Map.drop(activity, [:object])) # ugly, but heh

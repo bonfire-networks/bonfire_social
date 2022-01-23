@@ -6,7 +6,8 @@ defmodule Bonfire.Social.Objects do
     searchable_fields: [:id],
     sortable_fields: [:id]
   use Bonfire.Common.Utils, only: [debug: 2]
-  alias Bonfire.Common.Utils
+
+  alias Bonfire.Common.Pointers
   alias Bonfire.Data.Identity.Character
   alias Bonfire.Me.Acls
   alias Bonfire.Social.{Activities, Tags, Threads}

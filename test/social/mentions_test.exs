@@ -1,5 +1,6 @@
 defmodule Bonfire.Social.MentionsTest do
   use Bonfire.DataCase
+  use Bonfire.Common.Utils
 
   alias Bonfire.Social.{Posts, Feeds, FeedActivities}
   alias Bonfire.Me.Fake
@@ -10,11 +11,25 @@ defmodule Bonfire.Social.MentionsTest do
     msg = "hey @#{mentioned.character.username} you have an epic text message"
     attrs = %{post_content: %{html_body: msg}}
     assert {:ok, post} = Posts.publish(me, attrs, "mentions")
-
+    debug(post)
     assert String.contains?(post.post_content.html_body, "epic text message")
   end
 
-  test "can see post mentioning me in my notifications (using the preset 'mentions' boundary)" do
+  test "can see post mentioning me in my notifications (using the 'mentions' preset), ignoring boundaries" do
+    poster = Fake.fake_user!()
+    me = Fake.fake_user!()
+    attrs = %{post_content: %{html_body: "<p>hey @#{me.character.username} you have an epic html message</p>"}}
+
+    assert {:ok, mention} = Posts.publish(poster, attrs, "mentions")
+
+    assert %{edges: feed} = FeedActivities.feed(:notifications, current_user: me, skip_boundary_checks: true)
+    # debug(feed)
+    assert %{} = fp = List.first(feed)
+
+    assert fp.activity.id == mention.activity.id
+  end
+
+  test "can see post mentioning me in my notifications (using the 'mentions' preset), with boundaries enforced" do
     poster = Fake.fake_user!()
     me = Fake.fake_user!()
     attrs = %{post_content: %{html_body: "<p>hey @#{me.character.username} you have an epic html message</p>"}}
@@ -22,7 +37,7 @@ defmodule Bonfire.Social.MentionsTest do
     assert {:ok, mention} = Posts.publish(poster, attrs, "mentions")
 
     assert %{edges: feed} = FeedActivities.feed(:notifications, me)
-    assert %{id: _} = fp = List.first(feed)
+    assert %{} = fp = List.first(feed)
 
     assert fp.activity.id == mention.activity.id
   end
@@ -49,7 +64,7 @@ defmodule Bonfire.Social.MentionsTest do
     assert %{edges: []} = FeedActivities.feed(:notifications, third)
   end
 
-  test "mentioning someone appears in their feed, if using the preset 'mentions' boundary" do
+  test "mentioning someone appears in their feed, if using the 'mentions' preset" do
     me = Fake.fake_user!()
     mentioned = Fake.fake_user!()
     attrs = %{post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
@@ -74,17 +89,18 @@ defmodule Bonfire.Social.MentionsTest do
     assert %{edges: []} = FeedActivities.feed(feed_id, mentioned)
   end
 
-  test "mentioning someone appears in my instance feed, if they're part of included circles" do
+  test "mentioning someone appears in my instance feed (if using 'local' preset)" do
     me = Fake.fake_user!()
     mentioned = Fake.fake_user!()
-    attrs = %{to_circles: [Bonfire.Social.Feeds.named_feed_id(:local)], post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
+    attrs = %{post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
 
-    assert {:ok, mention} = Posts.publish(me, attrs)
+    assert {:ok, mention} = Posts.publish(me, attrs, "local")
+    debug(mention)
 
     feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
 
     assert %{edges: feed} = FeedActivities.feed(feed_id, me)
-    fp = List.first(feed)
+    assert %{} = fp = List.first(feed)
 
     assert fp.activity.id == mention.activity.id
   end
@@ -103,12 +119,12 @@ defmodule Bonfire.Social.MentionsTest do
     assert %{edges: []} = FeedActivities.feed(feed_id, third)
   end
 
-  test "mentioning someone does not appear in the public instance feed" do
+  test "mentioning someone with 'local' preset does not appear *publicly* in the instance feed" do
     me = Fake.fake_user!()
     mentioned = Fake.fake_user!()
-    attrs = %{to_circles: [Bonfire.Social.Feeds.named_feed_id(:local)], post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
+    attrs = %{post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
 
-    assert {:ok, mention} = Posts.publish(me, attrs)
+    assert {:ok, mention} = Posts.publish(me, attrs, "local")
 
     feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
 

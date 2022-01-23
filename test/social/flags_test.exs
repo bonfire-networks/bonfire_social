@@ -50,7 +50,7 @@ defmodule Bonfire.Social.FlagsTest do
   test "can list my flags" do
     me = Fake.fake_user!()
     someone = Fake.fake_user!()
-    attrs = %{to_circles: [me], post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
+    attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
     assert {:ok, flagged} = Posts.publish(someone, attrs, "public")
     assert {:ok, _} = Flags.flag(me, flagged)
 

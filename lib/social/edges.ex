@@ -49,21 +49,15 @@ defmodule Bonfire.Social.Edges do
     query
   end
 
-  def changeset(schema, subject, object, table) do
+  def changeset(schema, subject, object) do
     # TODO get table_id based on schema
     schema.changeset(%{edge: %{
       subject_id: ulid(subject),
-      object_id: ulid(object),
-      table_id: table
+      object_id: ulid(object)
       }})
-    |> changeset_edge()
+    |> Changeset.cast_assoc(:edge, [:required, with: &Edge.changeset/2])
   end
 
-  defp changeset_edge(cs) do
-    cs
-    |> Changeset.cast_assoc(:edge, [:required, with: &Edge.changeset/2])
-    # |> Ecto.Changeset.unique_constraint(:name)
-  end
 
   #doc "Delete Follows where i am the subject"
   def delete_by_subject(user), do: query([subject: user], skip_boundary_check: true) |> do_delete()

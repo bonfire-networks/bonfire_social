@@ -68,14 +68,14 @@ defmodule Bonfire.Social.FeedActivities do
     # current_user = current_user(current_user_or_socket)
 
     case Bonfire.Social.Feeds.my_feed_id(:inbox, current_user_or_socket_or_opts) do
-      feeds when is_binary(feeds) or is_list(feeds) ->
+      inbox when is_binary(inbox) or is_list(inbox) ->
 
-        feeds = ulid(feeds)
+        # inbox = ulid(inbox)
         # IO.inspect(query_notifications_feed_ids: feeds)
 
-        pubsub_subscribe(feeds, current_user_or_socket_or_opts) # subscribe to realtime feed updates
+        pubsub_subscribe(inbox, current_user_or_socket_or_opts) # subscribe to realtime feed updates
 
-        [feed_id: feeds] # FIXME: for some reason preloading creator or reply_to when we have a boost in inbox breaks ecto
+        [feed_id: inbox] # FIXME: for some reason preloading creator or reply_to when we have a boost in inbox breaks ecto
         |> feed_paginated(current_user_or_socket_or_opts, preloads)
 
         e ->
@@ -314,10 +314,12 @@ defmodule Bonfire.Social.FeedActivities do
   Creates a new local activity or takes an existing one and publishes to object's inbox (if object is an actor)
   """
   def notify_characters(subject, verb_or_activity, object, characters) do
-    notify_inboxes(subject, verb_or_activity, object, Feeds.feed_ids(:inbox, characters))
+    debug(characters)
+    notify_inboxes(subject, verb_or_activity, object, Feeds.feed_ids(:inbox, characters) |> Enum.filter(& &1))
   end
 
   def notify_inboxes(subject, verb_or_activity, object, inbox_ids) do
+    debug(inbox_ids)
     Bonfire.Notifications.notify_users(inbox_ids, e(subject, :profile, :name, e(subject, :character, :username, nil)), e(object, :post_content, :name, e(object, :post_content, :html_body, nil)))
 
     maybe_feed_publish(subject, verb_or_activity, object, inbox_ids) #|> IO.inspect(label: "notify_feeds")
@@ -398,6 +400,7 @@ defmodule Bonfire.Social.FeedActivities do
   defp put_in_feeds_and_maybe_federate(feeds, activity) do
     # This makes sure it gets put in feed even if the
     # federation hook fails
+    feeds = feeds |> Enum.filter(& &1)
     ret = put_in_feeds(feeds, activity)
     # TODO: add ActivityPub feed for remote activities
     try do
@@ -413,7 +416,7 @@ defmodule Bonfire.Social.FeedActivities do
   defp put_in_feeds(feeds, activity) when is_list(feeds), do: feeds |> Circles.circle_ids() |> Enum.map(fn x -> put_in_feeds(x, activity) end) # TODO: optimise?
 
   defp put_in_feeds(feed_or_subject, activity) when is_map(feed_or_subject) or (is_binary(feed_or_subject) and feed_or_subject !="") do
-    with %Feed{id: feed_id} = feed <- Feeds.feed_for(feed_or_subject),
+    with feed_id <- ulid(feed_or_subject),
     {:ok, published} <- do_put_in_feeds(feed_id, ulid(activity)) do
 
       published = %{published | activity: activity}

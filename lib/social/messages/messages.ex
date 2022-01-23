@@ -1,19 +1,17 @@
 defmodule Bonfire.Social.Messages do
+  use Arrows
+  use Bonfire.Repo
+  use Bonfire.Common.Utils
 
   alias Bonfire.Data.Social.{Message, PostContent, Replied}
-  alias Bonfire.Social.{Activities, FeedActivities}
+  alias Bonfire.Social.{Activities, FeedActivities, Objects}
   # alias Bonfire.Boundaries.Verbs
-  alias Bonfire.Common.Utils
   alias Ecto.Changeset
   # import Bonfire.Boundaries.Queries
   alias Bonfire.Social.Threads
   alias Bonfire.Social.PostContents
   alias Bonfire.Boundaries.Verbs
 
-  use Bonfire.Repo,
-      schema: Message,
-      searchable_fields: [:id],
-      sortable_fields: [:id]
 
   # def queries_module, do: Message
   def context_module, do: Message
@@ -32,13 +30,7 @@ defmodule Bonfire.Social.Messages do
 
     repo().transact_with(fn ->
       with circles when is_list(circles) and length(circles)>0 <- Utils.e(attrs, :to_circles, []),
-        {text, mentions, _hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, attrs),
-        {:ok, message} <- create(creator, attrs, text),
-        {:ok, tagged} <- Bonfire.Social.Tags.maybe_tag(creator, message, circles ++ mentions, true),
-        {:ok, _} <- Bonfire.Me.Boundaries.maybe_make_visible_for(creator, message, circles) do
-
-          # IO.inspect(circles: circles)
-          # IO.inspect(mentions: mentions)
+        {:ok, message} <- create(creator, attrs) do
 
           with {:ok, activity} <- FeedActivities.notify_characters(creator, :create, message, circles) do
 
@@ -49,29 +41,28 @@ defmodule Bonfire.Social.Messages do
 
             {:ok, message}
           end
-        else _ ->
-          {:error, "Did not send the message as the app did not know who to send it to."}
+
+        else e ->
+          debug(e)
+          {:error, "Did not send the message. Make sure you indicate who to send it to."}
       end
     end)
   end
 
 
-  defp create(%{id: creator_id}, attrs, text \\ nil) do
-    attrs = attrs
-      |> Map.put(:post_content, PostContents.prepare_content(attrs, text))
-      |> Map.put(:created, %{creator_id: creator_id})
-      |> Map.put(:replied, Threads.maybe_reply(attrs))
-      # |> IO.inspect
-
-    repo().put(changeset(:create, attrs))
+  defp create(%{id: creator_id} = creator, attrs) do
+    # we attempt to avoid entering the transaction as long as possible.
+    changeset = changeset(:create, attrs, creator)
+    repo().transact_with(fn -> repo().insert(changeset) end)
   end
 
-
-  defp changeset(:create, attrs) do
-    Message.changeset(%Message{}, attrs)
-    |> Changeset.cast_assoc(:post_content, [:required, with: &PostContent.changeset/2])
-    |> Changeset.cast_assoc(:created)
-    |> Changeset.cast_assoc(:replied, [:required, with: &Replied.changeset/2])
+  def changeset(:create, attrs, creator) do
+    preset = "message"
+    attrs
+    # |> debug("attrs")
+    |> Message.changeset(%Message{}, ...)
+    |> PostContents.cast(attrs, creator, preset) # process text (must be done before Objects.cast)
+    |> Objects.cast(attrs, creator, preset) # deal with threading, tagging, boundaries, activities, etc.
   end
 
   def read(message_id, socket_or_current_user) when is_binary(message_id) do
@@ -136,30 +127,29 @@ defmodule Bonfire.Social.Messages do
 
     #doc "List messages "
   def filter(:messages_involving, {user_id, current_user_id}, query) when is_binary(user_id) and is_binary(current_user_id) do
-    verb_id = Verbs.verbs()[:create]
+    verb_id = Verbs.get_id!(:create)
 
     query
     |> join_preload([:activity, :object, :message])
-    |> join_preload([:activity, :object, :created])
     |> join_preload([:activity, :object, :tags])
     |> where(
-      [activity: activity, message: message, created: object_created, tags: tags],
+      [activity: activity, message: message, tags: tags],
       not is_nil(message.id)
       and activity.verb_id==^verb_id
       and (
         (
-          object_created.creator_id == ^current_user_id
-          and tags.id == ^user_id
+          tags.id == ^user_id
+          # and activity.subject_id == ^current_user_id # shouldn't be needed if boundaries does the filtering
         ) or (
-          object_created.creator_id == ^user_id
-          # and tags.id == ^current_user_id
+          activity.subject_id == ^user_id
+          # and tags.id == ^current_user_id # shouldn't be needed if boundaries does the filtering
         )
       )
     )
   end
 
   def filter(:messages_involving, _user_id, query) do # replies on boundaries to filter which messages to show
-    verb_id = Verbs.verbs()[:create]
+    verb_id = Verbs.get_id!(:create)
 
     query
     |> join_preload([:activity, :object, :message])

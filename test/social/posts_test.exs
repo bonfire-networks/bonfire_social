@@ -1,9 +1,9 @@
 defmodule Bonfire.Social.PostsTest do
   use Bonfire.DataCase
+  use Bonfire.Common.Utils
 
   alias Bonfire.Social.Posts
   alias Bonfire.Me.Fake
-  use Bonfire.Common.Utils
 
   test "creation works" do
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}

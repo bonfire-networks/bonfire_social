@@ -9,6 +9,7 @@ defmodule Bonfire.Social.Feeds do
   alias Bonfire.Data.Social.Feed
   alias Bonfire.Social.Follows
   alias Bonfire.Social.Objects
+  alias Bonfire.Me.Characters
 
 
   # def queries_module, do: Feed
@@ -161,11 +162,11 @@ defmodule Bonfire.Social.Feeds do
   @doc """
   Create an inbox or outbox for an existing Pointable (eg. User)
   """
-  defp create_box(type, %{id: id}=_thing), do: create_box(type, id)
-  defp create_box(type, id) when is_binary(id) do
-    # TODO: optimise using cast_assoc
+  defp create_box(type, id) when is_binary(id), do: create_box(type, Characters.get(id))
+  defp create_box(type, %{id: _}=character) do
+    # TODO: optimise using cast_assoc?
     with {:ok, %{id: feed_id} = _feed} <- create() do
-      save_box_feed(type, id, feed_id)
+      save_box_feed(type, character, feed_id)
     end
   end
   defp create_box(type, other) do
@@ -173,14 +174,14 @@ defmodule Bonfire.Social.Feeds do
     nil
   end
 
-  defp save_box_feed(:outbox, id, feed_id) do
-    update_character(%{id: id, outbox_id: feed_id})
+  defp save_box_feed(:outbox, character, feed_id) do
+    update_character(character, %{outbox_id: feed_id})
   end
-  defp save_box_feed(:inbox, id, feed_id) do
-    update_character(%{id: id, inbox_id: feed_id})
+  defp save_box_feed(:inbox, character, feed_id) do
+    update_character(character, %{inbox_id: feed_id})
   end
-  defp update_character(attrs) do
-    repo().update(Character.changeset(attrs))
+  defp update_character(character, attrs) do
+    repo().update(Character.changeset(character, attrs, :update))
   end
 
 
@@ -205,41 +206,5 @@ defmodule Bonfire.Social.Feeds do
   defp changeset(activity \\ %Feed{}, %{} = attrs) do
     Feed.changeset(activity, attrs)
   end
-
-
-
-  @doc """
-  Get or create feed for something
-  """
-  def feed_for(subject) do
-    case maybe_feed_for(subject) do
-      %Feed{} = feed -> feed
-      _ ->
-        with {:ok, feed} <- create(%{id: ulid(subject)}) do
-          feed
-        end
-    end
-  end
-
-
-  @doc """
-  Get a feed for something if any exists
-  """
-  def maybe_feed_for(%Feed{id: _} = feed), do: feed
-  def maybe_feed_for(%{id: subject_id}), do: maybe_feed_for(subject_id)
-  def maybe_feed_for(subject_id) when is_binary(subject_id) do
-    with {:ok, feed} <- repo().single(feed_for_id_query(subject_id)) do
-      feed
-    else _ -> nil
-    end
-  end
-  def maybe_feed_for(_), do: nil
-
-
-  def feed_for_id_query(subject_id) do
-    from f in Feed,
-     where: f.id == ^subject_id
-  end
-
 
 end
