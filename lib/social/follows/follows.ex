@@ -1,5 +1,14 @@
 defmodule Bonfire.Social.Follows do
+
+  use Arrows
+  use Bonfire.Common.Utils
+  use Bonfire.Repo,
+    schema: Follow,
+    searchable_fields: [:id, :follower_id, :followed_id],
+    sortable_fields: [:id]
+  import Bonfire.Boundaries.Queries
   alias Bonfire.Data.Social.Follow
+  alias Bonfire.Me.Users
   alias Bonfire.Social.FeedActivities
   alias Bonfire.Social.Activities
   alias Bonfire.Social.APActivities
@@ -7,14 +16,6 @@ defmodule Bonfire.Social.Follows do
   alias Bonfire.Social.Integration
   alias Bonfire.Social.Edges
   alias Ecto.Changeset
-
-  import Bonfire.Boundaries.Queries
-  use Bonfire.Common.Utils
-
-  use Bonfire.Repo,
-    schema: Follow,
-    searchable_fields: [:id, :follower_id, :followed_id],
-    sortable_fields: [:id]
 
   def queries_module, do: Follow
   def context_module, do: Follow
@@ -25,7 +26,12 @@ defmodule Bonfire.Social.Follows do
   def get(subject, object, opts \\ []), do: Edges.get(__MODULE__, subject, object)
   def get!(subject, object, opts \\ []), do: Edges.get!(__MODULE__, subject, object)
 
-  def list_follows_by_subject(user, opts \\ []), do: query_base([subject: user], opts |> Keyword.put_new(:current_user, user)) |> repo().many()
+  def list_follows_by_subject(user, opts \\ []) do
+    opts
+    |> Keyword.put_new(:current_user, user)
+    |> query_base([subject: user], ...)
+    |> repo().many()
+  end
 
   # defp query_base(filters, opts) do
   #   vis = filter_invisible(current_user(opts))
@@ -68,7 +74,8 @@ defmodule Bonfire.Social.Follows do
     |> many(paginate?, cursor_after)
   end
 
-  def list_my_followers(opts, paginate? \\ true, cursor_after \\ nil, with_profile_only \\ true), do: list_followers(current_user(opts), opts, with_profile_only)
+  def list_my_followers(opts, paginate? \\ true, cursor_after \\ nil, with_profile_only \\ true),
+    do: list_followers(current_user(opts), opts, with_profile_only)
 
   def list_followers(%{id: user_id} = _user, opts \\ [], paginate? \\ true, cursor_after \\ nil, with_profile_only \\ true) when is_binary(user_id) do
     query([object: user_id], opts)
@@ -78,9 +85,8 @@ defmodule Bonfire.Social.Follows do
 
   defp many(query, paginate?, cursor_after \\ nil)
 
-  defp many(query, true, cursor_after) do
-    query
-    |> Bonfire.Repo.many_paginated(before: cursor_after)
+  defp many(query, true, cursor_after),
+    do: Bonfire.Repo.many_paginated(query, before: cursor_after)
   end
 
   defp many(query, _, _) do
@@ -93,29 +99,42 @@ defmodule Bonfire.Social.Follows do
   defp maybe_with_followed_profile_only(q, true), do: q |> where([followed_profile: p], not is_nil(p.id))
   defp maybe_with_followed_profile_only(q, _), do: q
 
+  defp get_for_follow(id) do
+    
+  end
+
   @doc """
   Follow someone/something, and federate it
   """
-  def follow(follower, followed) do
-    do_follow(follower, followed)
+  def follow(user, object, opts \\ [])
+  def follow(%User{}=follower, followed, opts) do
+    check_follow(follower, followed, opts)
+    ~> do_follow(follower, ..., opts)
+    # TODO: once we expose boundaries for profile visibility and follow-ability, enforce that here
+    # if is_ulid?(object) do
+    #   with {:ok, object} <- Bonfire.Common.Pointers.get(object, skip_boundary_check: true, current_user: subject) do
+    #     do_follow(subject, object)
+    #   end
+    # else
+    #   # try by username
+    #   with {:ok, object} <- maybe_apply(Bonfire.Me.Characters, :by_username, object) do
+    #     do_follow(subject, object)
+    #   end
+    # end
   end
 
-  defp do_follow(subject, object) when is_binary(object) do
-
-    # TODO: once we expose boundaries for profile visibility and follow-ability, enforce that here
-    if is_ulid?(object) do
-      with {:ok, object} <- Bonfire.Common.Pointers.get(object, skip_boundary_check: true, current_user: subject) do
-        do_follow(subject, object)
-      end
-    else
-      # try by username
-      with {:ok, object} <- maybe_apply(Bonfire.Me.Characters, :by_username, object) do
-        do_follow(subject, object)
-      end
+  defp check_follow(follower, followed, opts) do
+    case followed do
+      %{id: id} ->
+        if :admins == skip_boundary_check?(opts) && Users.is_admin(follower),
+          do: {:ok, followed},
+          else: Pointers.one(id, Keyword.put(opts, :verbs, [:see, :follow]))
+      _ when is_binary(followed) -> Pointers.one(id, opts)
     end
   end
 
-  defp do_follow(subject, object) when is_binary(subject) do
+  defp do_follow(subject, object, opts) do
+    
     with {:ok, subject} <- Bonfire.Common.Pointers.get(subject, skip_boundary_check: true) do
       do_follow(subject, object)
     end
@@ -162,6 +181,11 @@ defmodule Bonfire.Social.Follows do
     |> repo().upsert()
   end
 
+  def changeset(:create, follow \\ %Follow{}, creator, attrs, preset) do
+    follow
+    |> Follow.changeset(attrs)
+    # |> 
+  end
 
   ###
 
