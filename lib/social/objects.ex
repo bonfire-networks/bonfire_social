@@ -12,10 +12,20 @@ defmodule Bonfire.Social.Objects do
   alias Bonfire.Me.Acls
   alias Bonfire.Social.{Activities, Tags, Threads}
 
+  @doc """
+  Handles casting:
+  * Creator
+  * Caretaker
+  * Threaded replies (when present)
+  * Tags/Mentions (when present)
+  * Acls
+  * Activity
+  * Feed Publishes
+  """
   def cast(changeset, attrs, creator, preset_or_custom_boundary) do
     # debug(creator, "creator")
     changeset
-    |> cast_creator(creator)
+    |> cast_creator_caretaker(creator)
     # record replies & threads. preloads data that will be checked by `Acls`
     |> Threads.cast(attrs, creator, preset_or_custom_boundary)
     # record tags & mentions. uses data preloaded by `PostContents`
@@ -26,17 +36,32 @@ defmodule Bonfire.Social.Objects do
     # |> debug()
   end
 
-  defp cast_creator(changeset, creator),
+  @doc """
+  Handles casting:
+  * Creator
+  * Caretaker
+  * Acls
+  """
+  def cast_lite(changeset, attrs, creator, preset_or_custom_boundary) do
+    # debug(creator, "creator")
+    changeset
+    |> cast_creator_caretaker(creator)
+    # apply boundaries on all objects, uses data preloaded by `Threads` and `PostContents`
+    |> Acls.cast(creator, preset_or_custom_boundary)
+    # |> debug()
+  end
+
+  def cast_creator(changeset, creator),
     do: cast_creator(changeset, creator, Utils.e(creator, :id, nil))
 
-  defp cast_creator(changeset, _creator, nil), do: changeset
-  defp cast_creator(changeset, _creator, creator_id) do
+  def cast_creator(changeset, _creator, nil), do: changeset
+  def cast_creator(changeset, _creator, creator_id) do
     changeset
     |> Changeset.cast(%{created: %{creator_id: creator_id}}, [])
     |> Changeset.cast_assoc(:created)
   end
 
-  defp cast_creator_caretaker(changeset, creator),
+  def cast_creator_caretaker(changeset, creator),
     do: cast_creator_caretaker(changeset, creator, Utils.e(creator, :id, nil))
 
   defp cast_creator_caretaker(changeset, _creator, nil), do: changeset
@@ -104,7 +129,5 @@ defmodule Bonfire.Social.Objects do
     #   Threads.maybe_push_thread(subject, activity, object)
     #   notify(subject, activity, object, feeds)
     # end
-
-
 
 end

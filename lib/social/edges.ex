@@ -1,27 +1,33 @@
 defmodule Bonfire.Social.Edges do
 
+  use Bonfire.Common.Utils
+  use Bonfire.Repo, schema: Edge
+  import Bonfire.Boundaries.Queries
   alias Bonfire.Data.Edges.Edge
 
-  import Bonfire.Boundaries.Queries
-  use Bonfire.Common.Utils
+  def cast(changeset, creator, attrs, opts) do
+    changeset
+    |> Objects.cast_creator_caretaker(creator)
+    |> Acls.cast
+  end
 
-  use Bonfire.Repo,
-      schema: Edge
-
-  def get(schema, subject, object, opts \\ []), do:
+  def get(schema, subject, object, opts \\ []) do
     [subject: subject, object: object]
-    |> schema.query(opts |> Keyword.put_new(:current_user, subject))
+    |> schema.query(Keyword.put_new(opts, :current_user, subject))
     |> repo().single()
+  end
 
   def get!(schema, subject, objects, opts \\ [])
-  def get!(schema, subject, objects, opts) when is_list(objects), do:
+  def get!(schema, subject, objects, opts) when is_list(objects) do
     [subject: subject, object: objects]
-    |> schema.query(opts |> Keyword.put_new(:current_user, subject))
+    |> schema.query(Keyword.put_new(opts, :current_user, subject))
     |> repo().all()
-  def get!(schema, subject, object, opts), do:
+  end
+  def get!(schema, subject, object, opts) do
     [subject: subject, object: object]
-    |> schema.query(opts |> Keyword.put_new(:current_user, subject))
+    |> schema.query(Keyword.put_new(opts, :current_user, subject))
     |> repo().one()
+  end
 
   def query(filters, opts) do
     from(root in Edge, as: :edge)
@@ -65,10 +71,7 @@ defmodule Bonfire.Social.Edges do
   end
 
   def changeset(schema, subject, object) do
-    schema.changeset(%{edge: %{
-      subject_id: ulid(subject),
-      object_id: ulid(object)
-      }})
+    schema.changeset(%{edge: %{subject_id: ulid(subject), object_id: ulid(object)}})
     |> Changeset.cast_assoc(:edge, [:required, with: &Edge.changeset/2])
   end
 
@@ -86,6 +89,5 @@ defmodule Bonfire.Social.Edges do
   def delete_by_both(me, object), do: [subject: me, object: object] |> query(skip_boundary_check: true) |> do_delete()
 
   defp do_delete(q), do: Ecto.Query.exclude(q, :preload) |> repo().delete_all() |> elem(1)
-
 
 end
