@@ -1,18 +1,17 @@
 defmodule Bonfire.Social.Follows do
 
+  alias Bonfire.Data.Social.Follow
+  alias Bonfire.Me.{Boundaries, Characters, Users}
+  alias Bonfire.Social.{Activities, APActivities, Edges, FeedActivities, Feeds, Integration}
+  alias Bonfire.Data.Identity.User
+  alias Ecto.Changeset
+  import Bonfire.Boundaries.Queries
   use Arrows
   use Bonfire.Common.Utils
   use Bonfire.Repo,
     schema: Follow,
     searchable_fields: [:id, :follower_id, :followed_id],
     sortable_fields: [:id]
-  import Bonfire.Boundaries.Queries
-
-  alias Bonfire.Data.Social.Follow
-  alias Bonfire.Me.{Boundaries, Characters, Users}
-  alias Bonfire.Social.{Activities, APActivities, Edges, FeedActivities, Feeds, Integration}
-  alias Bonfire.Data.Identity.User
-  alias Ecto.Changeset
 
   def queries_module, do: Follow
   def context_module, do: Follow
@@ -91,10 +90,6 @@ defmodule Bonfire.Social.Follows do
   defp maybe_with_followed_profile_only(q, true), do: q |> where([followed_profile: p], not is_nil(p.id))
   defp maybe_with_followed_profile_only(q, _), do: q
 
-  defp get_for_follow(id) do
-
-  end
-
   @doc """
   Follow someone/something, and federate it
   """
@@ -107,7 +102,8 @@ defmodule Bonfire.Social.Follows do
   end
 
   defp check_follow(follower, followed, opts) do
-    skip? = (:admins == skip_boundary_check?(opts) && Users.is_admin(follower))
+    skip? = skip_boundary_check?(opts)
+    skip? = (:admins == skip? && Users.is_admin(follower)) || (skip? == true)
     opts = Keyword.put_new(opts, :verbs, [:see, :follow])
 
     case followed do
@@ -125,8 +121,7 @@ defmodule Bonfire.Social.Follows do
     end
   end
 
-  defp do_follow(%{} = follower, %{} = followed, opts \\ []) do
-
+  defp do_follow(follower, followed, opts) do
     preset_or_custom_boundary = [
       preset: "local", # TODO: make configurable
       to_circles: [ulid(followed)],

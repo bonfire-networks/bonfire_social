@@ -74,7 +74,8 @@ defmodule Bonfire.Social.FollowsTest do
     follower = Fake.fake_user!()
     assert {:ok, follow} = Follows.follow(follower, me)
 
-    assert %{edges: [fetched_follow]} = Follows.list_my_followers(current_user: me, skip_boundary_check: true)
+    assert %{edges: [fetched_follow]} =
+      Follows.list_my_followers(current_user: me, skip_boundary_check: true)
 
     assert fetched_follow.id == follow.id
   end

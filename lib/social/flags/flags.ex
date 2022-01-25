@@ -3,16 +3,20 @@ defmodule Bonfire.Social.Flags do
   alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Flag
   alias Bonfire.Boundaries.Verbs
+  alias Bonfire.Common
+  alias Bonfire.Me.Users
   # alias Bonfire.Data.Social.FlagCount
   alias Bonfire.Social.{Activities, FeedActivities}
   alias Bonfire.Social.Edges
   alias Bonfire.Social.Objects
-
-  use Bonfire.Repo,
-    searchable_fields: [:flagger_id, :flagged_id]
+  use Arrows
   use Bonfire.Common.Utils
+  use Bonfire.Repo,
+    schema: Flag,
+    searchable_fields: [:flagger_id, :flagged_id]
+  import Bonfire.Boundaries.Queries
 
-  # def queries_module, do: Flag
+  def queries_module, do: Flag
   def context_module, do: Flag
   def federation_module, do: ["Flag", {"Create", "Flag"}, {"Undo", "Flag"}, {"Delete", "Flag"}]
 
@@ -28,30 +32,34 @@ defmodule Bonfire.Social.Flags do
   def flag(flagger, flagged, opts \\ [])
   def flag(%{} = flagger, %{} = flagged, opts) do
     opts = Keyword.put_new(opts, :current_user, flagger)
-    with {:ok, flag} <- create(flagger, flagged, "admins") do
-      # make the flag itself visible to the flagger ONLY (admins are included anyway)
-      # Bonfire.Me.Boundaries.maybe_make_visible_for(flagger, flag)
-
-      {:ok, activity} = FeedActivities.notify_admins(flagger, :flag, flagged)
-
-      {:ok, Activities.activity_under_object(activity, flag)}
-    end
-  end
-  def flag(%{} = user, object, opts) when is_binary(object) do
-    # TODO: decide if we can flag something we can't see
-    with {:ok, object} <- Bonfire.Common.Pointers.get(object, current_user: user) do
-      flag(user, object)
-    end
+    check_flag(flagger, flagged, opts)
+    ~> do_flag(flagger, ..., opts)
   end
 
   defp check_flag(flagger, flagged, opts) do
+    skip? = skip_boundary_check?(opts)
+    skip? = (:admins == skip? && Users.is_admin(flagger)) || (skip? == true)
+    case flagged do
+      %{id: id} ->
+        if skip?, do: {:ok, flagged},
+        else: Common.Pointers.one(id, opts)
+
+      _ when is_binary(flagged) ->
+        if is_ulid?(flagged) do
+          Common.Pointers.one(flagged, opts)
+        else
+          # try by username
+          maybe_apply(Characters, :by_username, [flagged, opts])
+        end
+    end
   end
 
   defp do_flag(flagger, flagged, opts) do
-    preset_or_custom_boundary = [
-      to_circles: [ulid(flagger)],
-    ]
-    with {:ok, follow} <- create(flagger, flagged, preset_or_custom_boundary) do
+    with {:ok, flag} <- create(flagger, flagged, opts),
+         {:ok, activity} <- FeedActivities.notify_admins(flagger, :flag, flagged) do
+      IO.inspect(activity: activity)
+      FeedActivities.publish(flagger, activity, flagged)
+      {:ok, Activities.activity_under_object(activity, flag)}
     end
   end
 
@@ -60,7 +68,7 @@ defmodule Bonfire.Social.Flags do
     Activities.delete_by_subject_verb_object(flagger, :flag, flagged) # delete the flag activity & feed entries (not needed unless publishing flags to feeds)
   end
   def unflag(%User{} = user, object) when is_binary(object) do
-    with {:ok, object} <- Bonfire.Common.Pointers.get(object, current_user: user) do
+    with {:ok, object} <- Common.Pointers.get(object, current_user: user) do
       unflag(user, object)
     end
   end
@@ -78,9 +86,8 @@ defmodule Bonfire.Social.Flags do
 
   @doc "List flags by the user and which are in their outbox"
   def list_by(by_user, opts \\ []) when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
-
     # query FeedPublish
-    [subject: by_user ]
+    [subject: by_user]
     |> list_paginated(opts)
   end
 
@@ -100,11 +107,11 @@ defmodule Bonfire.Social.Flags do
         object: {"object_", [:profile, :character, :post_content]}
       ]
     ])
-    |> query_filter(filters)
+    |> query_filter(Keyword.drop(filters, [:object, :subject]))
   end
 
-  def query([:all], opts), do: [] |> query(opts)
-  def query([my: :flags], opts), do: [subject: current_user(opts)] |> query(opts)
+  def query([:all], opts), do: query([], opts)
+  def query([my: :flags], opts), do: query([subject: current_user(opts)], opts)
 
   def query(filters, opts) do
     query_base(filters, opts)
@@ -120,7 +127,7 @@ defmodule Bonfire.Social.Flags do
     flag = repo().preload(flag, flagged: [])
 
     with {:ok, flagger} <- ActivityPub.Actor.get_cached_by_local_id(flag.flagger_id) do
-      flagged = Bonfire.Common.Pointers.follow!(flag.context)
+      flagged = Common.Pointers.follow!(flag.context)
 
       #FIXME: only works for flagged posts and users
       params =

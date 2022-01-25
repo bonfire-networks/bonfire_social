@@ -10,7 +10,7 @@ defmodule Bonfire.Social.Edges do
     %{edge: %{subject_id: ulid(subject), object_id: ulid(object)}}
     |> schema.changeset()
     |> Changeset.cast_assoc(:edge, [:required, with: &Edge.changeset/2])
-    |> Objects.cast_mini(%{verb: verb}, subject, preset_or_custom_boundary)
+    |> Objects.cast_basic(%{verb: verb}, subject, preset_or_custom_boundary)
     # |> Changeset.cast_assoc(:controlled)
   end
 

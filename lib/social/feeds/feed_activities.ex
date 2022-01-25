@@ -263,9 +263,9 @@ defmodule Bonfire.Social.FeedActivities do
   defp inboxes_notify(subject, verb_or_activity, object, inbox_ids) do
     # debug(inbox_ids)
 
+    ret = publish(subject, verb_or_activity, object, to_feeds: inbox_ids) #|> IO.inspect(label: "notify_feeds")
     Bonfire.Social.LivePush.notify(subject, verb(verb_or_activity), object, inbox_ids)
-
-    publish(subject, verb_or_activity, object, to_feeds: inbox_ids) #|> IO.inspect(label: "notify_feeds")
+    ret
   end
 
 
@@ -342,7 +342,6 @@ defmodule Bonfire.Social.FeedActivities do
   defp put_in_feeds(feed_or_subject, activity) when is_map(feed_or_subject) or (is_binary(feed_or_subject) and feed_or_subject !="") do
     with feed_id <- ulid(feed_or_subject),
     {:ok, published} <- do_put_in_feeds(feed_id, ulid(activity)) do
-
       published = %{published | activity: activity}
 
       Bonfire.Social.LivePush.push_activity(feed_id, activity) # push to feeds of online users
