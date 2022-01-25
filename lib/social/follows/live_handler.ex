@@ -5,7 +5,7 @@ defmodule Bonfire.Social.Follows.LiveHandler do
     # IO.inspect(socket)
 
       set = [
-       following: e(socket, :assigns, :following, []) ++ [id]
+        my_follow: true
       ]
 
     with {:ok, _follow} <- Bonfire.Social.Follows.follow(current_user(socket), id) do
@@ -13,16 +13,15 @@ defmodule Bonfire.Social.Follows.LiveHandler do
       ComponentID.send_assigns(e(params, "component", Bonfire.UI.Social.FollowButtonLive), id, set, socket)
 
     else e ->
-      Logger.debug("Follows.LiveHandler: maybe it was already followed, but UI didn't know: #{inspect e}")
-      ComponentID.send_assigns(e(params, "component", Bonfire.UI.Social.FollowButtonLive), id, set, socket)
-
+      debug(e)
+      {:error, "Maybe you had already followed"}
     end
   end
 
   def handle_event("unfollow", %{"id"=> id}=params, socket) do
     with _ <- Bonfire.Social.Follows.unfollow(current_user(socket), id) do
       set = [
-       following: Enum.reject(e(socket, :assigns, :following, []), fn x -> x == id end)
+        my_follow: false
       ]
      ComponentID.send_assigns(e(params, "component", Bonfire.UI.Social.FollowButtonLive), id, set, socket)
      #TODO: handle errors

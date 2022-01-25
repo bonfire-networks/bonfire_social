@@ -30,7 +30,7 @@ defmodule Bonfire.Social.Feeds do
     do_target_feeds(creator, preset_or_custom_boundary, mentions, reply_to_creator, thread_id)
   end
 
-  def target_feeds(object, creator, preset_or_custom_boundary) when is_struct(object) do
+  def target_feeds(%{} = object, creator, preset_or_custom_boundary) do
 
     # FIXME: maybe include people, tags or other characters that were mentioned/tagged
     # mentions = Utils.e(object, :post_content, :mentions, []) #|> debug("mentions")

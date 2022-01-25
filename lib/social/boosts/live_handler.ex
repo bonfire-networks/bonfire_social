@@ -5,7 +5,7 @@ defmodule Bonfire.Social.Boosts.LiveHandler do
     #IO.inspect(socket)
     with {:ok, boost} <- Bonfire.Social.Boosts.boost(current_user(socket), id) do
 
-      set = [my_boost: boost, boosted: Map.get(socket.assigns, :boosted, []) ++ [id]]
+      set = [my_boost: true]
 
       ComponentID.send_assigns(e(params, "component", Bonfire.UI.Social.Activity.BoostActionLive), id, set, socket)
 
@@ -15,7 +15,7 @@ defmodule Bonfire.Social.Boosts.LiveHandler do
   def handle_event("undo", %{"id"=> id} = params, socket) do # unboost in LV
     with _ <- Bonfire.Social.Boosts.unboost(current_user(socket), id) do
 
-      set = [my_boost: nil, boosted: Map.get(socket.assigns, :boosted, []) |> List.delete(id)]
+      set = [my_boost: false]
 
       ComponentID.send_assigns(e(params, "component", Bonfire.UI.Social.Activity.BoostActionLive), id, set, socket)
 

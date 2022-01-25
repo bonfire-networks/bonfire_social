@@ -20,7 +20,7 @@ defmodule Bonfire.Social.Likes.LiveHandler do
 
   def set_liked(id, like, params, socket) do
     set = [
-        my_like: like,
+        my_like: true,
         # like_count: liker_count(params)+1,
       ]
 
@@ -32,7 +32,7 @@ defmodule Bonfire.Social.Likes.LiveHandler do
   def handle_event("like", %{"direction"=>"down", "id"=> id} = params, socket) do # unlike in LV
     with _ <- Bonfire.Social.Likes.unlike(current_user(socket), id) do
       set = [
-      my_like: nil,
+      my_like: false,
       # like_count: liker_count(params)-1
       ]
 
