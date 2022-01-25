@@ -133,7 +133,8 @@ defmodule Bonfire.Social.Activities do
   end
 
   @default_activity_preloads [
-    :verb, :boost_count, :like_count, :replied,
+    :verb, :replied,
+    # :boost_count, :like_count, # preload these in the view instead
     object: {"object_", [:post_content]}
   ]
 

@@ -23,11 +23,21 @@ defmodule Bonfire.Social.Follows do
   def get(subject, object, opts \\ []), do: Edges.get(__MODULE__, subject, object, opts)
   def get!(subject, object, opts \\ []), do: Edges.get!(__MODULE__, subject, object, opts)
 
-  def list_follows_by_subject(user, opts \\ []) do
+  def all_follows_by_subject(user, opts \\ []) do
     opts
     |> Keyword.put_new(:current_user, user)
-    |> query_base([subject: user], ...)
+    |> query([subject: user], ...)
     |> repo().many()
+  end
+
+  def all_followed(user, opts \\ []) do
+    all_follows_by_subject(user, opts)
+    |> Enum.map(& e(&1, :edge, :object, nil))
+  end
+
+  def all_followed_outboxes(user, opts \\ []) do
+    all_followed(user, opts)
+    |> Enum.map(& e(&1, :character, :outbox_id, nil))
   end
 
   # defp query_base(filters, opts) do
@@ -49,17 +59,29 @@ defmodule Bonfire.Social.Follows do
 
   def query(filters, opts) do
     query_base(filters, opts)
-    |> maybe_proload(!is_list(opts) || opts[:skip_preload])
+    |> maybe_proload(!is_list(opts) || opts[:preload])
   end
 
-  defp maybe_proload(query, _skip_preload? = true), do: query
+  defp maybe_proload(query, _skip_preload? = false), do: query
+
+  defp maybe_proload(query, :subject) do
+    query
+    |> proload([edge: [
+      object: {"followed_", [:profile, :character]}
+      ]])
+  end
+
+  defp maybe_proload(query, :object) do
+    query
+    |> proload([edge: [
+      object: {"followed_", [:profile, :character]}
+      ]])
+  end
 
   defp maybe_proload(query, _) do
     query
-    |> proload([edge: [
-      subject: {"follower_", [:profile, :character]},
-      object: {"followed_", [:profile, :character]}
-      ]])
+    |> maybe_proload(:object)
+    |> maybe_proload(:subject)
   end
 
   def list_my_followed(opts, paginate? \\ true, cursor_after \\ nil, with_profile_only \\ true),
