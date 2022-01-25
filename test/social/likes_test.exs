@@ -11,10 +11,10 @@ defmodule Bonfire.Social.LikesTest do
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
     assert {:ok, post} = Posts.publish(me, attrs, "public")
 
-    assert {:ok, %{activity: activity}} = Likes.like(me, post)
+    assert {:ok, %{edge: edge}} = Likes.like(me, post)
     # IO.inspect(activity)
-    assert activity.subject.id == me.id
-    assert activity.object.id == post.id
+    assert edge.subject_id == me.id
+    assert edge.object_id == post.id
   end
 
   test "can check if I like something" do
@@ -51,8 +51,9 @@ defmodule Bonfire.Social.LikesTest do
     assert {:ok, like} = Likes.like(me, post)
 
     assert %{edges: [fetched_liked]} = Likes.list_my(me)
+    debug(fetched_liked)
 
-    assert fetched_liked.activity.object_id == post.id
+    assert fetched_liked.edge.object_id == post.id
   end
 
   test "can list something's likers" do
@@ -65,7 +66,7 @@ defmodule Bonfire.Social.LikesTest do
 
     assert %{edges: fetched_liked} = Likes.list_of(post, me)
 
-    assert Enum.count(fetched_liked, &(&1.activity.object_id == post.id)) == 2
+    assert Enum.count(fetched_liked, &(&1.edge.object_id == post.id)) == 2
   end
 
   test "can list someone else's likes" do
@@ -77,7 +78,7 @@ defmodule Bonfire.Social.LikesTest do
     IO.inspect( Likes.list_by(someone, me))
     assert %{edges: [fetched_liked]} = Likes.list_by(someone, me)
 
-    assert fetched_liked.activity.object_id == post.id
+    assert fetched_liked.edge.object_id == post.id
   end
 
   test "see a like of something I posted in my notifications" do

@@ -13,10 +13,10 @@ defmodule Bonfire.Social.BoostsTest do
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
     assert {:ok, boosted} = Posts.publish(me, attrs, "public")
 
-    assert {:ok, %{activity: activity}} = Boosts.boost(me, boosted)
+    assert {:ok, %{edge: edge}} = Boosts.boost(me, boosted)
     # IO.inspect(activity)
-    assert activity.subject.id == me.id
-    assert activity.object.id == boosted.id
+    assert edge.subject_id == me.id
+    assert edge.object_id == boosted.id
   end
 
   test "can check if I boosted something" do
@@ -54,7 +54,7 @@ defmodule Bonfire.Social.BoostsTest do
 
     assert %{edges: [fetched_boost]} = Boosts.list_my(me)
 
-    assert fetched_boost.activity.object_id == boosted.id
+    assert fetched_boost.edge.object_id == boosted.id
   end
 
   test "can list something's boosters" do
@@ -67,7 +67,7 @@ defmodule Bonfire.Social.BoostsTest do
 
     assert %{edges: fetched_boosted} = Boosts.list_of(boosted, me)
 
-    assert Enum.count(fetched_boosted, &(&1.activity.object_id == boosted.id)) == 2
+    assert Enum.count(fetched_boosted, &(&1.edge.object_id == boosted.id)) == 2
   end
 
   test "can list someone else's boosts" do
@@ -79,7 +79,7 @@ defmodule Bonfire.Social.BoostsTest do
 
     assert %{edges: [fetched_boost]} = Boosts.list_by(someone, me)
 
-    assert fetched_boost.activity.object_id == boosted.id
+    assert fetched_boost.edge.object_id == boosted.id
   end
 
   test "see a boost of something I posted in my notifications" do
@@ -90,7 +90,7 @@ defmodule Bonfire.Social.BoostsTest do
     assert {:ok, post} = Posts.publish(me, attrs, "public")
     assert {:ok, boost} = Boosts.boost(someone, post)
 
-    assert %{edges: [fetched_boost]} = FeedActivities.feed(:notifications, me)
+    assert %{edges: [fetched_boost, _]} = FeedActivities.feed(:notifications, me)
 
     assert fetched_boost.activity.object_id == post.id
   end

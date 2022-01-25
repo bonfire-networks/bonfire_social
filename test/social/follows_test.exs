@@ -8,11 +8,11 @@ defmodule Bonfire.Social.FollowsTest do
 
     me = Fake.fake_user!()
     followed = Fake.fake_user!()
-    assert {:ok, %{activity: activity} = follow} = Follows.follow(me, followed)
+    assert {:ok, %{edge: edge} = follow} = Follows.follow(me, followed)
     # debug(follow)
     # debug(activity)
-    assert activity.subject_id == me.id
-    assert activity.object_id == followed.id
+    assert edge.subject_id == me.id
+    assert edge.object_id == followed.id
   end
 
   test "can get my follow, ignoring boundary checks" do
@@ -22,7 +22,7 @@ defmodule Bonfire.Social.FollowsTest do
 
     assert {:ok, fetched_follow} = Follows.get(me, followed, skip_boundary_check: true)
 
-    assert fetched_follow == follow.id
+    assert fetched_follow.id == follow.id
   end
 
   test "can get my follow" do
@@ -32,7 +32,7 @@ defmodule Bonfire.Social.FollowsTest do
 
     assert {:ok, fetched_follow} = Follows.get(me, followed)
 
-    assert fetched_follow == follow.id
+    assert fetched_follow.id == follow.id
   end
 
   test "can check if I am following someone" do
