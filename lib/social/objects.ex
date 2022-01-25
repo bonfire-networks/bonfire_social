@@ -30,9 +30,9 @@ defmodule Bonfire.Social.Objects do
     |> Threads.cast(attrs, creator, preset_or_custom_boundary)
     # record tags & mentions. uses data preloaded by `PostContents`
     |> Tags.cast(attrs, creator, preset_or_custom_boundary)
-    # apply boundaries on all objects, uses data preloaded by `Threads` and `PostContents`
-    |> Acls.cast(creator, preset_or_custom_boundary)
-    |> Activities.cast(:create, creator, preset_or_custom_boundary)
+    # apply boundaries on all objects, note that ORDER MATTERS, as it uses data preloaded by `Threads` and `PostContents`
+    |> cast_acl(attrs, creator, preset_or_custom_boundary)
+    |> cast_activity(attrs, creator, preset_or_custom_boundary)
     # |> debug()
   end
 
@@ -42,26 +42,62 @@ defmodule Bonfire.Social.Objects do
   * Caretaker
   * Acls
   """
-  def cast_lite(changeset, attrs, creator, preset_or_custom_boundary) do
-    # debug(creator, "creator")
+  def cast_basic(changeset, attrs, creator, preset_or_custom_boundary) do
     changeset
     |> cast_creator_caretaker(creator)
     # apply boundaries on all objects, uses data preloaded by `Threads` and `PostContents`
-    |> Acls.cast(creator, preset_or_custom_boundary)
+    |> cast_acl(attrs, creator, preset_or_custom_boundary)
     # |> debug()
   end
 
-  def cast_creator(changeset, creator),
+  @doc """
+  Handles casting:
+  * Acls
+  """
+  def cast_mini(changeset, attrs, creator, preset_or_custom_boundary) do
+    changeset
+    # apply boundaries on all objects, uses data preloaded by `Threads` and `PostContents`
+    |> cast_acl(attrs, creator, preset_or_custom_boundary)
+    # |> debug()
+  end
+
+  @doc """
+  Handles casting:
+  * Acls
+  * Activity
+  * Feed Publishes
+  """
+  def cast_publish(changeset, attrs, creator, preset_or_custom_boundary) do
+    # debug(creator, "creator")
+    changeset
+    |> cast_mini(attrs, creator, preset_or_custom_boundary)
+    |> cast_activity(attrs, creator, preset_or_custom_boundary)
+    # |> debug()
+  end
+
+  defp cast_acl(changeset, _attrs, creator, preset_or_custom_boundary) do
+    changeset
+    # apply boundaries on all objects, uses data preloaded by `Threads` and `PostContents`
+    |> Acls.cast(creator, preset_or_custom_boundary)
+  end
+
+  defp cast_activity(changeset, attrs, creator, preset_or_custom_boundary) do
+    Map.get(attrs, :verb, :create)
+    # create activity & put in feeds
+    |> Activities.cast(changeset, ..., creator, preset_or_custom_boundary)
+  end
+
+  defp cast_creator(changeset, creator),
     do: cast_creator(changeset, creator, Utils.e(creator, :id, nil))
 
-  def cast_creator(changeset, _creator, nil), do: changeset
-  def cast_creator(changeset, _creator, creator_id) do
+  defp cast_creator(changeset, _creator, nil), do: changeset
+  defp cast_creator(changeset, _creator, creator_id) do
     changeset
     |> Changeset.cast(%{created: %{creator_id: creator_id}}, [])
     |> Changeset.cast_assoc(:created)
   end
 
-  def cast_creator_caretaker(changeset, creator),
+  defp cast_creator_caretaker(changeset, creator),
     do: cast_creator_caretaker(changeset, creator, Utils.e(creator, :id, nil))
 
   defp cast_creator_caretaker(changeset, _creator, nil), do: changeset

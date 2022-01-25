@@ -6,6 +6,7 @@ defmodule Bonfire.Social.Flags do
   # alias Bonfire.Data.Social.FlagCount
   alias Bonfire.Social.{Activities, FeedActivities}
   alias Bonfire.Social.Edges
+  alias Bonfire.Social.Objects
 
   use Bonfire.Repo,
     searchable_fields: [:flagger_id, :flagged_id]
@@ -17,25 +18,24 @@ defmodule Bonfire.Social.Flags do
 
   def flagged?(%User{}=user, object), do: not is_nil(get!(user, object))
 
-  def get(subject, object, opts \\ []), do: Edges.get(__MODULE__, subject, object)
-  def get!(subject, object, opts \\ []), do: Edges.get!(__MODULE__, subject, object)
+  def get(subject, object, opts \\ []), do: Edges.get(__MODULE__, subject, object, opts)
+  def get!(subject, object, opts \\ []), do: Edges.get!(__MODULE__, subject, object, opts)
 
   def by_flagger(%{}=subject), do: [subject: subject] |> query(current_user: subject) |> repo().many()
   def by_flagged(%{}=object), do: [object: object] |> query(current_user: object) |> repo().many()
   # def by_any(%User{}=user), do: repo().many(by_any_q(user))
 
   def flag(%{} = flagger, %{} = flagged) do
-    with {:ok, flag} <- create(flagger, flagged) do
+    with {:ok, flag} <- create(flagger, flagged, "admins") do
       # TODO: increment the flag count
       # TODO: put in admin(s) inbox feed?
 
       # make the flag itself visible to the flagger ONLY (admins are included anyway)
-      Bonfire.Me.Boundaries.maybe_make_visible_for(flagger, flag)
+      # Bonfire.Me.Boundaries.maybe_make_visible_for(flagger, flag)
 
       {:ok, activity} = FeedActivities.notify_admins(flagger, :flag, flagged)
 
-      with_activity = Activities.activity_under_object(activity, flag) #|> IO.inspect()
-      {:ok, with_activity}
+      {:ok, Activities.activity_under_object(activity, flag)}
     end
   end
   def flag(%{} = user, object) when is_binary(object) do
@@ -100,8 +100,9 @@ defmodule Bonfire.Social.Flags do
     query_base(filters, opts)
   end
 
-  defp create(flagger, flagged) do
-    Edges.changeset(Flag, flagger, flagged) |> repo().insert()
+  defp create(flagger, flagged, preset_or_custom_boundary) do
+    Edges.changeset(Flag, flagger, :flag, flagged, preset_or_custom_boundary)
+    |> repo().insert()
   end
 
 

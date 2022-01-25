@@ -23,7 +23,7 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
       conn = conn(account: account)
       next = "/home"
       {view, doc} = floki_live(conn, next)
-      main = Floki.find(doc, "main") |> IO.inspect
+      main = Floki.find(doc, "main") # |> IO.inspect
       assert [] = Floki.find(doc, "[id='feed:my:#{user.id}']")
     end
 

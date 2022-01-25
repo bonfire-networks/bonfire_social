@@ -11,9 +11,10 @@ defmodule Bonfire.Social.Web.Routes do
         live "/home/:tab", HomeLive, as: :home
         live "/local", Feeds.LocalLive, as: :local
         live "/federation", Feeds.FederationLive, as: :federation
-      
+
         live "/write", WriteLive, as: :write
 
+        live "/post", PostLive, as: Bonfire.Data.Social.Post
         live "/post/:id", PostLive, as: Bonfire.Data.Social.Post
         live "/discussion/:id", DiscussionLive, as: Bonfire.Data.Social.PostContent
         live "/discussion/:id/reply/:reply_id", DiscussionLive

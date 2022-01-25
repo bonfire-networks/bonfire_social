@@ -1,32 +1,38 @@
 defmodule Bonfire.Social.Edges do
-
+  use Arrows
   use Bonfire.Common.Utils
-  use Bonfire.Repo, schema: Edge
+  use Bonfire.Repo
   import Bonfire.Boundaries.Queries
   alias Bonfire.Data.Edges.Edge
+  alias Bonfire.Social.Objects
 
-  def cast(changeset, creator, attrs, opts) do
-    changeset
-    |> Objects.cast_creator_caretaker(creator)
-    |> Acls.cast
+  def changeset(schema, subject, verb, object, preset_or_custom_boundary) do
+    %{edge: %{subject_id: ulid(subject), object_id: ulid(object)}}
+    |> schema.changeset()
+    |> Changeset.cast_assoc(:edge, [:required, with: &Edge.changeset/2])
+    |> Objects.cast_mini(%{verb: verb}, subject, preset_or_custom_boundary)
+    # |> Changeset.cast_assoc(:controlled)
   end
 
   def get(schema, subject, object, opts \\ []) do
-    [subject: subject, object: object]
-    |> schema.query(Keyword.put_new(opts, :current_user, subject))
+    do_query(schema, subject, object, opts)
     |> repo().single()
   end
 
   def get!(schema, subject, objects, opts \\ [])
   def get!(schema, subject, objects, opts) when is_list(objects) do
-    [subject: subject, object: objects]
-    |> schema.query(Keyword.put_new(opts, :current_user, subject))
+    do_query(schema, subject, objects, opts)
     |> repo().all()
   end
   def get!(schema, subject, object, opts) do
+    do_query(schema, subject, object, opts)
+    |> repo().one()
+  end
+
+  defp do_query(schema, subject, object, opts \\ []) do
     [subject: subject, object: object]
     |> schema.query(Keyword.put_new(opts, :current_user, subject))
-    |> repo().one()
+    # |> debug()
   end
 
   def query(filters, opts) do
@@ -36,6 +42,7 @@ defmodule Bonfire.Social.Edges do
   end
 
   def query_parent(schema, filters, opts) do
+    # debug(opts)
     from(root in schema, as: :root)
     |> proload(:edge)
     |> boundarise(root.id, opts)
@@ -69,12 +76,6 @@ defmodule Bonfire.Social.Edges do
     Logger.warn("Edges: unrecognised filters: #{inspect filters} so just returning query as-is")
     query
   end
-
-  def changeset(schema, subject, object) do
-    schema.changeset(%{edge: %{subject_id: ulid(subject), object_id: ulid(object)}})
-    |> Changeset.cast_assoc(:edge, [:required, with: &Edge.changeset/2])
-  end
-
 
   #doc "Delete Follows where i am the subject"
   def delete_by_subject(user), do: query([subject: user], skip_boundary_check: true) |> do_delete()

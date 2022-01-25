@@ -4,14 +4,25 @@ defmodule Bonfire.Social.FollowsTest do
   alias Bonfire.Social.{Follows, FeedActivities}
   alias Bonfire.Me.Fake
 
-  test "follow works" do
+  test "can follow" do
 
     me = Fake.fake_user!()
     followed = Fake.fake_user!()
-    assert {:ok, %{activity: activity}} = Follows.follow(me, followed)
-    # IO.inspect(activity)
-    assert activity.subject.id == me.id
-    assert activity.object.id == followed.id
+    assert {:ok, %{activity: activity} = follow} = Follows.follow(me, followed)
+    # debug(follow)
+    # debug(activity)
+    assert activity.subject_id == me.id
+    assert activity.object_id == followed.id
+  end
+
+  test "can get my follow, ignoring boundary checks" do
+    me = Fake.fake_user!()
+    followed = Fake.fake_user!()
+    assert {:ok, follow} = Follows.follow(me, followed)
+
+    assert {:ok, fetched_follow} = Follows.get(me, followed, skip_boundary_check: true)
+
+    assert fetched_follow == follow.id
   end
 
   test "can get my follow" do

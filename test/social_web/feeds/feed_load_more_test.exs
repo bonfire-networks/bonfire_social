@@ -24,7 +24,7 @@ defmodule Bonfire.Social.Feeds.LoadMoreTest do
       end
 
       conn = conn(user: bob, account: account2)
-      next = "/home"
+      next = "/local"
       {view, doc} = floki_live(conn, next)
       assert Floki.find(doc, "[data-id=load_more]") == []
       assert Enum.count(Floki.find(doc, "[data-id=feed]  > article")) == total_posts
@@ -47,7 +47,7 @@ defmodule Bonfire.Social.Feeds.LoadMoreTest do
       end
 
       conn = conn(user: bob, account: account2)
-      next = "/home"
+      next = "/local"
       {view, doc} = floki_live(conn, next)
       assert Floki.find(doc, "[data-id=load_more]") != []
     end
@@ -69,7 +69,7 @@ defmodule Bonfire.Social.Feeds.LoadMoreTest do
       end
 
       conn = conn(user: bob, account: account2)
-      next = "/home"
+      next = "/local"
       {view, doc} = floki_live(conn, next)
 
       more_doc = view
@@ -100,12 +100,12 @@ defmodule Bonfire.Social.Feeds.LoadMoreTest do
       end
 
       conn = conn(user: bob, account: account2)
-      next = "/home"
+      next = "/local"
       {view, doc} = floki_live(conn, next)
-      assert [load_more_query_string] = Floki.attribute(doc, "[data-id=load_more] a", "href")
+      assert [load_more_query_string] = Floki.attribute(doc, "[data-id=load_more] a a", "href")
 
-      url = "/home"<>load_more_query_string
-      # IO.inspect(url)
+      url = "/local"<>load_more_query_string
+      debug(url, "pagination URL")
       conn = get(conn, url)
       more_doc = floki_response(conn) #|> IO.inspect
       assert Enum.count(Floki.find(more_doc, "[data-id=feed]  > article")) == 5

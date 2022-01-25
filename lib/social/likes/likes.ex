@@ -6,6 +6,8 @@ defmodule Bonfire.Social.Likes do
   alias Bonfire.Boundaries.Verbs
   alias Bonfire.Social.{Activities, FeedActivities}
   alias Bonfire.Social.Edges
+  alias Bonfire.Social.Objects
+  alias Bonfire.Social.Feeds
 
   # import Ecto.Query
   # import Bonfire.Social.Integration
@@ -18,18 +20,29 @@ defmodule Bonfire.Social.Likes do
 
   def liked?(%{}=user, object), do: not is_nil(get!(user, object, skip_boundary_check: true))
 
-  def get(subject, object, opts \\ []), do: Edges.get(__MODULE__, subject, object)
-  def get!(subject, object, opts \\ []), do: Edges.get!(__MODULE__, subject, object)
+  def get(subject, object, opts \\ []), do: Edges.get(__MODULE__, subject, object, opts)
+  def get!(subject, object, opts \\ []), do: Edges.get!(__MODULE__, subject, object, opts)
 
   def by_liker(%{}=subject), do: [subject: subject] |> query(current_user: subject) |> repo().many()
   def by_liker(%{}=subject, type), do: [subject: subject] |> query(current_user: subject) |>  by_type_q(type) |> repo().many()
   def by_liked(%{}=subject), do: [subject: subject] |> query(current_user: subject) |> repo().many()
 
   def like(%User{} = liker, %{} = liked) do
-    with {:ok, like} <- create(liker, liked) do
+
+    liked = Objects.preload_creator(liked)
+    liked_creator = Objects.object_creator(liked)
+
+    preset_or_custom_boundary = [
+      preset: "mentions", # TODO: make configurable
+      to_circles: [ulid(liked_creator)],
+      to_feeds: [Feeds.feed_id(:inbox, liked_creator)]
+    ]
+
+    with {:ok, like} <- create(liker, liked, preset_or_custom_boundary) do
+      # debug(like)
 
       # make the like itself visible to both
-      Bonfire.Me.Boundaries.maybe_make_visible_for(liker, like, e(liked, :created, :creator_id, nil))
+      # Bonfire.Me.Boundaries.maybe_make_visible_for(liker, like, e(liked, :created, :creator_id, nil))
 
       {:ok, activity} = FeedActivities.maybe_notify_creator(liker, :like, liked) #|> debug()
       {:ok, Activities.activity_under_object(activity, like)}
@@ -95,8 +108,9 @@ defmodule Bonfire.Social.Likes do
     list([object: id], current_user, cursor_after, preloads)
   end
 
-  defp create(liker, liked) do
-    Edges.changeset(Like, liker, liked) |> repo().insert()
+  defp create(liker, liked, preset_or_custom_boundary) do
+    Edges.changeset(Like, liker, :like, liked, preset_or_custom_boundary)
+    |> repo().insert()
   end
 
 

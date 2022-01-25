@@ -58,6 +58,12 @@ defmodule Bonfire.Social.Web.PostLive do
 
   end
 
+  def do_handle_params(_params, _url, socket) do
+    {:noreply,
+      socket
+      |> push_redirect(to: path(:write))
+    }
+  end
 
   def handle_params(params, uri, socket) do
     # poor man's hook I guess
