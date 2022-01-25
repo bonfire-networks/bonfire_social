@@ -16,7 +16,7 @@ defmodule Bonfire.Social.Flags do
   def context_module, do: Flag
   def federation_module, do: ["Flag", {"Create", "Flag"}, {"Undo", "Flag"}, {"Delete", "Flag"}]
 
-  def flagged?(%User{}=user, object), do: not is_nil(get!(user, object))
+  def flagged?(%User{}=user, object), do: not is_nil(get!(user, object, skip_boundary_check: true))
 
   def get(subject, object, opts \\ []), do: Edges.get(__MODULE__, subject, object, opts)
   def get!(subject, object, opts \\ []), do: Edges.get!(__MODULE__, subject, object, opts)
@@ -25,11 +25,10 @@ defmodule Bonfire.Social.Flags do
   def by_flagged(%{}=object), do: [object: object] |> query(current_user: object) |> repo().many()
   # def by_any(%User{}=user), do: repo().many(by_any_q(user))
 
-  def flag(%{} = flagger, %{} = flagged) do
+  def flag(flagger, flagged, opts \\ [])
+  def flag(%{} = flagger, %{} = flagged, opts) do
+    opts = Keyword.put_new(opts, :current_user, flagger)
     with {:ok, flag} <- create(flagger, flagged, "admins") do
-      # TODO: increment the flag count
-      # TODO: put in admin(s) inbox feed?
-
       # make the flag itself visible to the flagger ONLY (admins are included anyway)
       # Bonfire.Me.Boundaries.maybe_make_visible_for(flagger, flag)
 
@@ -38,17 +37,27 @@ defmodule Bonfire.Social.Flags do
       {:ok, Activities.activity_under_object(activity, flag)}
     end
   end
-  def flag(%{} = user, object) when is_binary(object) do
+  def flag(%{} = user, object, opts) when is_binary(object) do
     # TODO: decide if we can flag something we can't see
-    with {:ok, object} <- Bonfire.Common.Pointers.get(object, current_user: user, skip_boundary_check: true) do
+    with {:ok, object} <- Bonfire.Common.Pointers.get(object, current_user: user) do
       flag(user, object)
+    end
+  end
+
+  defp check_flag(flagger, flagged, opts) do
+  end
+
+  defp do_flag(flagger, flagged, opts) do
+    preset_or_custom_boundary = [
+      to_circles: [ulid(flagger)],
+    ]
+    with {:ok, follow} <- create(flagger, flagged, preset_or_custom_boundary) do
     end
   end
 
   def unflag(%User{}=flagger, %{}=flagged) do
     Edges.delete_by_both(flagger, flagged) # delete the Flag
     Activities.delete_by_subject_verb_object(flagger, :flag, flagged) # delete the flag activity & feed entries (not needed unless publishing flags to feeds)
-    # TODO: decrement the flag count
   end
   def unflag(%User{} = user, object) when is_binary(object) do
     with {:ok, object} <- Bonfire.Common.Pointers.get(object, current_user: user) do
@@ -59,14 +68,13 @@ defmodule Bonfire.Social.Flags do
   def list_paginated(filters, opts \\ []) do
     filters
     |> query(opts)
+    |> proload(:activity)
     |> Bonfire.Repo.many_paginated(opts)
     # TODO: activity preloads
   end
 
   @doc "List current user's flags, which are in their outbox"
-  def list_my(opts) do
-    list_by(current_user(opts), opts)
-  end
+  def list_my(opts), do: list_by(current_user(opts), opts)
 
   @doc "List flags by the user and which are in their outbox"
   def list_by(by_user, opts \\ []) when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
@@ -86,11 +94,13 @@ defmodule Bonfire.Social.Flags do
 
   defp query_base(filters, opts) do
     Edges.query_parent(Flag, filters, opts)
-    # |> proload(edge: [
-    #   # subject: {"booster_", [:profile, :character]},
-    #   # object: {"boosted_", [:profile, :character, :post_content]}
-    #   ])
-    # |> query_filter(filters)
+    |> proload([
+      edge: [
+        subject: {"subject_", [:profile, :character]},
+        object: {"object_", [:profile, :character, :post_content]}
+      ]
+    ])
+    |> query_filter(filters)
   end
 
   def query([:all], opts), do: [] |> query(opts)
@@ -109,8 +119,7 @@ defmodule Bonfire.Social.Flags do
   def ap_publish_activity("create", %Flag{} = flag) do
     flag = repo().preload(flag, flagged: [])
 
-    with {:ok, flagger} <-
-          ActivityPub.Actor.get_cached_by_local_id(flag.flagger_id) do
+    with {:ok, flagger} <- ActivityPub.Actor.get_cached_by_local_id(flag.flagger_id) do
       flagged = Bonfire.Common.Pointers.follow!(flag.context)
 
       #FIXME: only works for flagged posts and users
