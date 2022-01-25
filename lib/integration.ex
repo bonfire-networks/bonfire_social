@@ -14,7 +14,7 @@ defmodule Bonfire.Social.Integration do
 
   def activity_ap_publish(subject_id, :follow, activity) do
     follow = Bonfire.Social.Follows.get!(subject_id, activity.object_id)
-    ap_publish("create", follow, subject_id)
+    ap_publish("create", follow.id, subject_id)
   end
 
   def activity_ap_publish(subject_id, :like, activity) do
@@ -24,7 +24,7 @@ defmodule Bonfire.Social.Integration do
 
   def activity_ap_publish(subject_id, :boost, activity) do
     boost = Bonfire.Social.Boosts.get!(activity.subject, activity.object)
-    ap_publish("create", boost, subject_id)
+    ap_publish("create", boost.id, subject_id)
   end
 
   def activity_ap_publish(_, verb, _) do

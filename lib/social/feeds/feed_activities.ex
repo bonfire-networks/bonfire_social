@@ -370,9 +370,7 @@ defmodule Bonfire.Social.FeedActivities do
 
 
   defp maybe_federate_activity(activity) do
-    verb = Verbs.get!(activity.verb_id).verb
+    verb = activity.verb.verb
     Bonfire.Social.Integration.activity_ap_publish(activity.subject_id, verb, activity)
   end
-
-
 end
