@@ -47,6 +47,29 @@ defmodule Bonfire.Social.Edges do
     |> proload(:edge)
     |> boundarise(root.id, opts)
     |> filter(filters, opts)
+    |> maybe_proload(!is_list(opts) || opts[:preload])
+  end
+
+  defp maybe_proload(query, _skip_preload? = false), do: query
+
+  defp maybe_proload(query, :subject) do
+    query
+    |> proload([edge: [
+      subject: {"subject_", [:profile, :character]}
+      ]])
+  end
+
+  defp maybe_proload(query, :object) do
+    query
+    |> proload([edge: [
+      object: {"object_", [:profile, :character]}
+      ]])
+  end
+
+  defp maybe_proload(query, _) do
+    query
+    |> maybe_proload(:object)
+    |> maybe_proload(:subject)
   end
 
   defp filter(query, filters, opts) when is_list(filters),

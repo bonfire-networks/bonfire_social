@@ -59,29 +59,6 @@ defmodule Bonfire.Social.Follows do
 
   def query(filters, opts) do
     query_base(filters, opts)
-    |> maybe_proload(!is_list(opts) || opts[:preload])
-  end
-
-  defp maybe_proload(query, _skip_preload? = false), do: query
-
-  defp maybe_proload(query, :subject) do
-    query
-    |> proload([edge: [
-      object: {"followed_", [:profile, :character]}
-      ]])
-  end
-
-  defp maybe_proload(query, :object) do
-    query
-    |> proload([edge: [
-      object: {"followed_", [:profile, :character]}
-      ]])
-  end
-
-  defp maybe_proload(query, _) do
-    query
-    |> maybe_proload(:object)
-    |> maybe_proload(:subject)
   end
 
   def list_my_followed(opts, paginate? \\ true, cursor_after \\ nil, with_profile_only \\ true),
