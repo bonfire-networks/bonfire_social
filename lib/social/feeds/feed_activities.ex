@@ -17,8 +17,8 @@ defmodule Bonfire.Social.FeedActivities do
   def queries_module, do: FeedPublish
   def context_module, do: FeedPublish
 
-  def cast_data(_changeset, activity, creator, preset_or_custom_boundary) do
-    Feeds.target_feeds(_changeset, creator, preset_or_custom_boundary)
+  def cast_data(changeset, activity, creator, preset_or_custom_boundary) do
+    Feeds.target_feeds(changeset, creator, preset_or_custom_boundary)
     # |> debug("feeds")
     |> Enum.map(&(%{feed_id: &1, activity_id: activity.id}))
     # |> debug("result")
@@ -189,13 +189,13 @@ defmodule Bonfire.Social.FeedActivities do
   Creates a new local activity and publishes to appropriate feeds
   """
 
-  def publish(subject, verb, object, preset_or_custom_boundary \\ nil) when is_atom(verb) do
+  def publish(subject, verb_or_activity, object, preset_or_custom_boundary \\ nil) when is_atom(verb_or_activity) or is_struct(verb_or_activity) do
     # Logger.debug("FeedActivities: just making visible for and putting in these circles/feeds: #{inspect circles}")
     # Bonfire.Me.Boundaries.maybe_make_visible_for(subject, object, circles) # |> IO.inspect(label: "grant")
 
     Feeds.target_feeds(object, subject, preset_or_custom_boundary)
     |>
-    maybe_feed_publish(subject, verb, object, ...)
+    maybe_feed_publish(subject, verb_or_activity, object, ...)
   end
 
   def publish(subject, verb, object, circles) do
@@ -209,20 +209,20 @@ defmodule Bonfire.Social.FeedActivities do
   """
   def save_fediverse_incoming_activity(subject, verb, object) when is_atom(verb) do
     # TODO: us the appropriate preset, eg "public" for public activities
-    publish(subject, verb, object, preset: "local", to_feeds: Feeds.named_feed_id(:activity_pub))
+    publish(subject, verb, object, preset: "local", to_feeds: [Feeds.named_feed_id(:activity_pub)])
   end
 
   @doc """
   Takes or creates an activity and publishes to object creator's inbox
   """
-  def maybe_notify_creator(subject, %{activity: activity}, object), do: maybe_notify_creator(subject, activity, object)
+  def maybe_notify_creator(subject, %{activity: %{id: _} = activity}, object), do: maybe_notify_creator(subject, activity, object)
   def maybe_notify_creator(subject, verb_or_activity, %{} = object) do
     object = Objects.preload_creator(object)
     object_creator = Objects.object_creator(object)
     if ulid(object_creator) && ulid(subject) != ulid(object_creator) do
-      notify_characters(subject, verb_or_activity, object, object_creator)
+      notify_characters(subject, verb_or_activity, object, [object_creator])
     else
-      Logger.debug("maybe_notify_creator: just create an activity")
+      Logger.debug("maybe_notify_creator: no creator found, so just create an activity")
       publish(subject, verb_or_activity, object)
     end
     # TODO: notify remote users via AP
@@ -236,15 +236,15 @@ defmodule Bonfire.Social.FeedActivities do
     # TODO: notify remote users via AP?
     Logger.debug("notify_characters: #{inspect ulid(characters)}")
     Feeds.feed_ids(:inbox, characters)
-    |> Utils.filter_empty()
+    |> Utils.filter_empty([])
     |> inboxes_notify(subject, verb_or_activity, object, ...)
   end
 
   @doc """
-  Creates a new local activity or takes an existing one and publishes to object's inbox (assuming object is treated as a character)
+  Creates a new local activity or takes an existing one and publishes to object's inbox (assuming object is a character)
   """
   def notify_object(subject, verb_or_activity, object) do
-    notify_characters(subject, verb_or_activity, object, object)
+    notify_characters(subject, verb_or_activity, object, [object])
   end
 
   @doc """
@@ -256,13 +256,17 @@ defmodule Bonfire.Social.FeedActivities do
     inboxes_notify(subject, verb_or_activity, object, inboxes)
   end
 
+  defp verb(verb) when is_atom(verb), do: verb
+  defp verb(%{verb: %{verb: verb}}), do: verb
+  defp verb(%{verb_id: id}), do: Bonfire.Boundaries.Verbs.get_slug(id)
+
   defp inboxes_notify(subject, verb_or_activity, object, inbox_ids) do
     # debug(inbox_ids)
-    Bonfire.Notifications.notify_users(inbox_ids, e(subject, :profile, :name, e(subject, :character, :username, nil)), e(object, :post_content, :name, e(object, :post_content, :html_body, nil)))
+
+    Bonfire.Social.LivePush.notify(subject, verb(verb_or_activity), object, inbox_ids)
 
     publish(subject, verb_or_activity, object, to_feeds: inbox_ids) #|> IO.inspect(label: "notify_feeds")
   end
-
 
 
   @doc """
@@ -341,7 +345,7 @@ defmodule Bonfire.Social.FeedActivities do
 
       published = %{published | activity: activity}
 
-      pubsub_broadcast(feed_id, {{Bonfire.Social.Feeds, :new_activity}, activity}) # push to online users
+      Bonfire.Social.LivePush.push_activity(feed_id, activity) # push to feeds of online users
 
       {:ok, published}
     else e ->

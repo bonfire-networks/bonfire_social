@@ -2,7 +2,7 @@ defmodule Bonfire.Social.Posts do
 
   use Arrows
   alias Bonfire.Data.Social.{Post, PostContent, Replied, Activity}
-  alias Bonfire.Social.{Activities, FeedActivities, Objects}
+  alias Bonfire.Social.{Activities, FeedActivities, Feeds, Objects}
   alias Bonfire.Boundaries.{Circles, Verbs}
   alias Bonfire.Social.{Integration, PostContents, Tags, Threads}
   alias Ecto.Changeset
@@ -30,7 +30,12 @@ defmodule Bonfire.Social.Posts do
   def publish(%{id: _} = creator, attrs, preset_or_custom_boundary \\ nil) do
     # we attempt to avoid entering the transaction as long as possible.
     changeset = changeset(:create, attrs, creator, preset_or_custom_boundary)
-    repo().transact_with(fn -> repo().insert(changeset) ~> Activities.activity_under_object() |> maybe_index() end)
+    repo().transact_with(fn ->
+      repo().insert(changeset) ~>
+        Activities.activity_under_object()
+        |> Bonfire.Social.LivePush.push_activity(Feeds.target_feeds(changeset, creator, preset_or_custom_boundary), ...) # TODO: avoid calculating target_feeds twice
+        |> maybe_index()
+    end)
   end
 
 
@@ -261,7 +266,7 @@ defmodule Bonfire.Social.Posts do
     } #|> IO.inspect
   end
   def indexing_object_format(%{activity: %{object: object} = activity}, nil), do: indexing_object_format(activity, object)
-  def indexing_object_format(%{activity: activity} = object, nil), do: indexing_object_format(activity, object)
+  def indexing_object_format(%{activity: %{id: _} = activity} = object, nil), do: indexing_object_format(activity, object)
   def indexing_object_format(%Activity{object: object} = activity, nil), do: indexing_object_format(activity, object)
   def indexing_object_format(a, b) do
     Logger.error("Posts: no clause match for function indexing_object_format/2")

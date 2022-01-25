@@ -6,6 +6,9 @@ defmodule Bonfire.Social.Boosts do
   # alias Bonfire.Data.Social.BoostCount
   alias Bonfire.Social.{Activities, FeedActivities}
   alias Bonfire.Social.Edges
+  alias Bonfire.Social.Objects
+  alias Bonfire.Social.Feeds
+  alias Bonfire.Data.Edges.Edge
 
   use Bonfire.Repo,
     searchable_fields: [:booster_id, :boosted_id]
@@ -19,16 +22,26 @@ defmodule Bonfire.Social.Boosts do
 
   def boosted?(%{}=user, object), do: not is_nil(get!(user, object, skip_boundary_check: true))
 
-  def get(subject, object, opts \\ []), do: Edges.get(__MODULE__, subject, object)
-  def get!(subject, object, opts \\ []), do: Edges.get!(__MODULE__, subject, object)
+  def get(subject, object, opts \\ []), do: Edges.get(__MODULE__, subject, object, opts)
+  def get!(subject, object, opts \\ []), do: Edges.get!(__MODULE__, subject, object, opts)
 
   def boost(%{} = booster, %{} = boosted) do
-    with {:ok, boost} <- create(booster, boosted),
-    {:ok, published} <- FeedActivities.publish(booster, :boost, boosted, "public") do
-      # TODO: get the preset for boosting from config and/or user's settings
 
+    boosted = Objects.preload_creator(boosted)
+    boosted_creator = Objects.object_creator(boosted)
+
+    preset_or_custom_boundary = [
+      preset: "public", # TODO: get the preset for boosting from config and/or user's settings
+      to_circles: [ulid(boosted_creator)],
+      to_feeds: [Feeds.feed_id(:inbox, boosted_creator), Feeds.feed_id(:outbox, booster)]
+    ]
+
+    with {:ok, boost} <- create(booster, boosted, preset_or_custom_boundary),
+    {:ok, published} <- FeedActivities.publish(booster, :boost, boosted, preset_or_custom_boundary) do
+
+      # debug(published)
       # make the boost itself visible to both
-      Bonfire.Me.Boundaries.maybe_make_visible_for(booster, boost, e(boosted, :created, :creator_id, nil))
+      # Bonfire.Me.Boundaries.maybe_make_visible_for(booster, boost, e(boosted, :created, :creator_id, nil))
 
       FeedActivities.maybe_notify_creator(booster, published, boosted) #|> IO.inspect
 
@@ -97,12 +110,10 @@ defmodule Bonfire.Social.Boosts do
     query_base(filters, opts)
   end
 
-
-  defp create(booster, boosted) do
-    # TODO: get table_id from Boost module or Tables service
-    Edges.changeset(Boost, booster, boosted) |> repo().insert()
+  defp create(booster, boosted, preset_or_custom_boundary) do
+    Edges.changeset(Boost, booster, :boost, boosted, preset_or_custom_boundary)
+    |> repo().insert()
   end
-
 
   def ap_publish_activity("create", boost) do
     boost = Bonfire.Repo.preload(boost, :boosted)

@@ -11,8 +11,9 @@ defmodule Bonfire.Social.Activities do
   import Bonfire.Boundaries.Queries
   import Ecto.Query
   alias Bonfire.Data.Social.{Activity, Like, Boost, Flag, PostContent}
+  alias Bonfire.Data.AccessControl.Verb
   alias Bonfire.Data.Identity.User
-  alias Bonfire.Boundaries.Verbs
+  alias Bonfire.Boundaries
   alias Bonfire.Social.FeedActivities
   alias Pointers.ULID
 
@@ -24,14 +25,14 @@ defmodule Bonfire.Social.Activities do
   end
 
   def cast(changeset, verb, creator, preset_or_custom_boundary) do
-    verb_id = Verbs.get_id(verb) || Verbs.get_id!(:create)
+    verb_id = Boundaries.Verbs.get_id(verb) || Boundaries.Verbs.get_id!(:create)
     creator = repo().maybe_preload(creator, :character)
     #|> debug("creator")
     id = ULID.generate() # le sigh, it's just easier this way
     activity = %{
       id: id,
       subject_id: creator.id,
-      verb_id: verb_id,
+      verb_id: verb_id
     } # publish in appropriate feeds
     |> Map.put(..., :feed_publishes, FeedActivities.cast_data(changeset, ..., creator, preset_or_custom_boundary))
     # |> debug("activity attrs")
@@ -39,6 +40,7 @@ defmodule Bonfire.Social.Activities do
     |> Map.update(:data, nil, &Map.put(&1, :activities, [])) # force an insert
     |> Changeset.cast(%{activities: [activity]}, [])
     |> Changeset.cast_assoc(:activities, with: &Activity.changeset/2)
+    # |> Map.update(:data, nil, &Map.put(&1, :activity, activity)) # force an insert
     # |> debug("changeset")
   end
 
@@ -49,10 +51,10 @@ defmodule Bonfire.Social.Activities do
   NOTE: you will usually want to use `cast/3` instead
   """
   def create(%{id: subject_id}=subject, verb, %{id: object_id}=object) when is_atom(verb) do
-    verb_id = Verbs.get_id(verb) || Verbs.get_id!(:create)
+    verb_id = Boundaries.Verbs.get_id(verb) || Boundaries.Verbs.get_id!(:create)
     attrs = %{subject_id: subject_id, verb_id: verb_id, object_id: object_id}
     with {:ok, activity} <- repo().put(changeset(attrs)) do
-       {:ok, %{activity | object: object, subject: subject}}
+       {:ok, %{activity | object: object, subject: subject, verb: %Verb{verb: verb}}}
     end
   end
 
@@ -62,7 +64,7 @@ defmodule Bonfire.Social.Activities do
 
   @doc "Delete an activity (usage by things like unlike)"
   def delete_by_subject_verb_object(%{}=subject, verb, %{}=object) do
-    q = by_subject_verb_object_q(subject, Verbs.get_id!(verb), object)
+    q = by_subject_verb_object_q(subject, Boundaries.Verbs.get_id!(verb), object)
     Bonfire.Social.FeedActivities.delete_for_object(repo().many(q)) # TODO: see why cascading delete doesn't take care of this
     elem(repo().delete_all(q), 1)
   end
@@ -81,7 +83,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   def object_preload_activity(object, verb \\ :create, object_id_field \\ :id) do
-    verb_id = Verbs.get_id(verb)
+    verb_id = Boundaries.Verbs.get_id(verb)
 
     query = from activity in Activity, as: :activity, where: activity.verb_id == ^verb_id
     repo().preload(object, [activity: query])
@@ -93,7 +95,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   def query_object_preload_activity(q, verb \\ :create, object_id_field \\ :id, opts \\ [], preloads \\ :default) do
-    verb_id = Verbs.get_id(verb)
+    verb_id = Boundaries.Verbs.get_id(verb)
     q
     |> reusable_join(:left, [o], activity in Activity, as: :activity, on: activity.object_id == field(o, ^object_id_field) and activity.verb_id == ^verb_id)
     |> activity_preloads(opts, preloads)
@@ -209,7 +211,7 @@ defmodule Bonfire.Social.Activities do
     activity_under_object(activity, top_object)
   end
   def activity_under_object(%{activities: [%{id: _} = activity]} = top_object) do
-    activity_under_object(activity, top_object)
+    activity_under_object(activity, Map.drop(top_object, [:activities]))
   end
   def activity_under_object(%Activity{object: activity_object} = activity) do
     Map.put(activity_object, :activity, Map.drop(activity, [:object])) # ugly, but heh
@@ -239,5 +241,25 @@ defmodule Bonfire.Social.Activities do
         # {:ok, obj} -> obj
         _ -> nil
       end
+  end
+
+  def verb_maybe_modify("create", %{replied: %{reply_to_post_content: %{id: _} = _reply_to}}), do: "reply"
+  def verb_maybe_modify("create", %{replied: %{reply_to: %{id: _} = _reply_to}}), do: "respond"
+  def verb_maybe_modify("create", %{replied: %{reply_to_id: reply_to_id}}) when is_binary(reply_to_id), do: "respond"
+  # def verb_maybe_modify("created", %{reply_to: %{id: _} = reply_to, object: %Bonfire.Data.Social.Post{}}), do: reply_to_display(reply_to)
+  # def verb_maybe_modify("created", %{reply_to: %{id: _} = reply_to}), do: reply_to_display(reply_to)
+  def verb_maybe_modify("create", %{object: %Bonfire.Data.Social.PostContent{name: name} = post}), do: "write" #<> object_link(name, post)
+  def verb_maybe_modify("create", %{object: %Bonfire.Data.Social.PostContent{} = _post}), do: "write"
+  def verb_maybe_modify("create", %{object: %Bonfire.Data.Social.Post{} = _post}), do: "write"
+  def verb_maybe_modify("create", %{object: %{action: %{label: label}} = _economic_event}), do: label
+  def verb_maybe_modify("create", %{object: %{action: %{id: id}} = _economic_event}), do: id
+  def verb_maybe_modify("create", %{object: %{action_id: label} = _economic_event}) when is_binary(label), do: label
+  def verb_maybe_modify("create", %{object: %{action: label} = _economic_event}) when is_binary(label), do: label
+  def verb_maybe_modify(verb, _), do: verb
+
+  def verb_display(verb) when is_atom(verb), do: Atom.to_string(verb) |> verb_display()
+  def verb_display(verb) do
+    verb
+      |> Verbs.conjugate(tense: "past", person: "third", plurality: "plural")
   end
 end

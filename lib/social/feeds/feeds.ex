@@ -16,21 +16,40 @@ defmodule Bonfire.Social.Feeds do
   # def queries_module, do: Feed
   def context_module, do: Feed
 
-  def target_feeds(changeset, creator, preset_or_custom_boundary) do
+  def target_feeds(%Ecto.Changeset{} = changeset, creator, preset_or_custom_boundary) do
 
     # maybe include people, tags or other characters that were mentioned/tagged
     mentions = Utils.e(changeset, :changes, :post_content, :changes, :mentions, []) #|> debug("mentions")
-    mentioned_inboxes = mentions |> feed_ids(:inbox, ...)
 
     # maybe include the creator of what we're replying to
     reply_to_creator = Utils.e(changeset, :changes, :replied, :changes, :replying_to, :created, :creator, nil) #|> debug("reply_to")
-    reply_to_inbox = reply_to_creator |> feed_id(:inbox, ...)
 
     # include the thread as feed, so it can be followed
     thread_id = Utils.e(changeset, :changes, :replied, :changes, :thread_id, nil) || Utils.e(changeset, :changes, :replied, :changes, :replying_to, :thread_id, nil) |> debug("thread_id")
 
+    do_target_feeds(creator, preset_or_custom_boundary, mentions, reply_to_creator, thread_id)
+  end
+
+  def target_feeds(object, creator, preset_or_custom_boundary) when is_struct(object) do
+
+    # FIXME: maybe include people, tags or other characters that were mentioned/tagged
+    # mentions = Utils.e(object, :post_content, :mentions, []) #|> debug("mentions")
+
+    # maybe include the creator of what we're replying to
+    reply_to_creator = Utils.e(object, :replied, :reply_to, :created, :creator, nil) #|> debug("reply_to")
+
+    # include the thread as feed, so it can be followed
+    thread_id = Utils.e(object, :replied, :thread_id, nil) || Utils.e(object, :replied, :reply_to, :thread_id, nil) |> debug("thread_id")
+
+    do_target_feeds(creator, preset_or_custom_boundary, [], reply_to_creator, thread_id)
+  end
+
+  def do_target_feeds(creator, preset_or_custom_boundary, mentions \\ [], reply_to_creator \\ nil, thread_id \\ nil) do
+    mentioned_inboxes = (mentions |> feed_ids(:inbox, ...)) || []
+    reply_to_inbox = reply_to_creator |> feed_id(:inbox, ...)
+
     # include any extra feeds specified in opts
-    extra_feeds = Boundaries.maybe_custom_feeds(preset_or_custom_boundary)
+    extra_feeds = Boundaries.maybe_custom_feeds(preset_or_custom_boundary) || []
 
     []
     ++ extra_feeds
@@ -105,7 +124,7 @@ defmodule Bonfire.Social.Feeds do
         #IO.inspect(e: e)
         extra_feeds
     end
-    |> Utils.filter_empty()
+    |> Utils.filter_empty([])
     |> Enum.uniq()
     |> debug("all")
   end
@@ -194,7 +213,7 @@ defmodule Bonfire.Social.Feeds do
   defp save_box_feed(:inbox, character, feed_id) do
     update_character(character, %{inbox_id: feed_id})
   end
-  defp update_character(character, attrs) do
+  defp update_character(%Character{} = character, attrs) do
     repo().update(Character.changeset(character, attrs, :update))
   end
 

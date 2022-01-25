@@ -11,7 +11,7 @@ defmodule Bonfire.Social.MentionsTest do
     msg = "hey @#{mentioned.character.username} you have an epic text message"
     attrs = %{post_content: %{html_body: msg}}
     assert {:ok, post} = Posts.publish(me, attrs, "mentions")
-    debug(post)
+    # debug(post)
     assert String.contains?(post.post_content.html_body, "epic text message")
   end
 
@@ -22,7 +22,7 @@ defmodule Bonfire.Social.MentionsTest do
 
     assert {:ok, mention} = Posts.publish(poster, attrs, "mentions")
 
-    assert %{edges: feed} = FeedActivities.feed(:notifications, current_user: me, skip_boundary_checks: true)
+    assert %{edges: feed} = FeedActivities.feed(:notifications, current_user: me, skip_boundary_check: true)
     # debug(feed)
     assert %{} = fp = List.first(feed)
 
@@ -95,7 +95,7 @@ defmodule Bonfire.Social.MentionsTest do
     attrs = %{post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
 
     assert {:ok, mention} = Posts.publish(me, attrs, "local")
-    debug(mention)
+    # debug(mention)
 
     feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
 
