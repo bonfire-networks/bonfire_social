@@ -20,8 +20,7 @@ defmodule Bonfire.Social.Likes.LiveHandler do
   def set_liked(id, like, params, socket) do
     set = [
         my_like: like,
-        like_count: liker_count(params)+1,
-        # liked: Map.get(socket.assigns, :liked, []) ++ [id]
+        # like_count: liker_count(params)+1,
       ]
 
       ComponentID.send_assigns(e(params, "component", Bonfire.UI.Social.LikeActionLive), id, set, socket)
@@ -33,8 +32,7 @@ defmodule Bonfire.Social.Likes.LiveHandler do
     with _ <- Bonfire.Social.Likes.unlike(current_user(socket), id) do
       set = [
       my_like: nil,
-      like_count: liker_count(params)-1
-      # liked: Enum.reject(Map.get(socket.assigns, :liked, []), &Enum.member?(&1, id))
+      # like_count: liker_count(params)-1
       ]
 
     ComponentID.send_assigns(e(params, "component", Bonfire.UI.Social.LikeActionLive), id, set, socket)
@@ -52,18 +50,37 @@ defmodule Bonfire.Social.Likes.LiveHandler do
   def liker_count(_), do: 0
 
   def preload(list_of_assigns) do
-    list_of_ids = Enum.map(list_of_assigns, & e(&1, :object_id, nil)) |> Enum.reject(&is_nil/1) |> debug("list_of_ids")
-
     current_user = current_user(List.first(list_of_assigns))
-    |> debug("current_user")
+    # |> debug("current_user")
 
-    my_likes = if current_user, do: Bonfire.Social.Likes.get!(current_user, list_of_ids) |> Map.new(), else: %{}
+    list_of_objects = list_of_assigns
+    |> Enum.map(& e(&1, :object, nil))
+    |> repo().maybe_preload(:like_count)
+    # |> debug("list_of_objects")
+
+    list_of_ids = list_of_objects
+    |> Enum.map(& e(&1, :id, nil))
+    |> filter_empty([])
+    |> debug("list_of_ids")
+
+    my_likes = if current_user, do: Bonfire.Social.Likes.get!(current_user, list_of_ids, preload: false) |> Map.new(fn l -> {e(l, :edge, :object_id, nil), true} end), else: %{}
     debug(my_likes, "my_likes")
 
-    Enum.map(list_of_assigns, fn assigns ->
-      Map.put(assigns,
+    objects_counts = list_of_objects |> Map.new(fn o -> {e(o, :id, nil), e(o, :like_count, :object_count, nil)} end)
+    |> debug("objects_counts")
+
+    list_of_assigns
+    |> Enum.map(fn assigns ->
+      object_id = e(assigns, :object, :id, nil)
+
+      assigns
+      |> Map.put(
         :my_like,
-        Map.get(my_likes, e(assigns, :object_id, nil))
+        Map.get(my_likes, object_id)
+      )
+      |> Map.put(
+        :like_count,
+        Map.get(objects_counts, object_id)
       )
     end)
   end
