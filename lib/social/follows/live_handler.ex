@@ -29,18 +29,40 @@ defmodule Bonfire.Social.Follows.LiveHandler do
     end
   end
 
-
   def preload(list_of_assigns) do
-    list_of_ids = Enum.map(list_of_assigns, & e(&1, :object_id, nil)) |> Enum.reject(&is_nil/1)
-    # IO.inspect(id: list_of_assigns)
     current_user = current_user(List.first(list_of_assigns))
-    # IO.inspect(id: current_user)
-    my_follows = if current_user, do: Bonfire.Social.Follows.get!(current_user, list_of_ids) |> Map.new(), else: %{}
-    # IO.inspect(my_follows: my_follows)
-    Enum.map(list_of_assigns, fn assigns ->
-      # IO.inspect(id: assigns.object_id)
-      Map.put(assigns, :my_follow, Map.get(my_follows, e(assigns, :object_id, nil) || e(assigns, :my_follow, nil)))
-    end) #|> IO.inspect
-  end
+    # |> debug("current_user")
 
+    list_of_objects = list_of_assigns
+    |> Enum.map(& e(&1, :object, nil))
+    # |> repo().maybe_preload(:like_count)
+    # |> debug("list_of_objects")
+
+    list_of_ids = list_of_objects
+    |> Enum.map(& e(&1, :id, nil))
+    |> filter_empty([])
+    |> debug("list_of_ids")
+
+    my_states = if current_user, do: Bonfire.Social.Follows.get!(current_user, list_of_ids, preload: false) |> Map.new(fn l -> {e(l, :edge, :object_id, nil), true} end), else: %{}
+
+    debug(my_states, "my_follows")
+
+    # objects_counts = list_of_objects |> Map.new(fn o -> {e(o, :id, nil), e(o, :like_count, :object_count, nil)} end)
+    # |> debug("follow_counts")
+
+    list_of_assigns
+    |> Enum.map(fn assigns ->
+      object_id = e(assigns, :object, :id, nil)
+
+      assigns
+      |> Map.put(
+        :my_follow,
+        Map.get(my_states, object_id)
+      )
+      # |> Map.put(
+      #   :like_count,
+      #   Map.get(objects_counts, object_id)
+      # )
+    end)
+  end
 end

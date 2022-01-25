@@ -5,7 +5,8 @@ defmodule Bonfire.Social.Likes.LiveHandler do
   def handle_event("like", %{"direction"=>"up", "id"=> id} = params, socket) do # like in LV
     #IO.inspect(socket)
 
-    with {:ok, like} <- Bonfire.Social.Likes.like(current_user(socket), id) do
+    with %{id: _} = current_user <- current_user(socket),
+         {:ok, like} <- Bonfire.Social.Likes.like(current_user, id) do
       set_liked(id, like, params, socket)
 
     else {:error, %Ecto.Changeset{errors: [
@@ -63,11 +64,11 @@ defmodule Bonfire.Social.Likes.LiveHandler do
     |> filter_empty([])
     |> debug("list_of_ids")
 
-    my_likes = if current_user, do: Bonfire.Social.Likes.get!(current_user, list_of_ids, preload: false) |> Map.new(fn l -> {e(l, :edge, :object_id, nil), true} end), else: %{}
-    debug(my_likes, "my_likes")
+    my_states = if current_user, do: Bonfire.Social.Likes.get!(current_user, list_of_ids, preload: false) |> Map.new(fn l -> {e(l, :edge, :object_id, nil), true} end), else: %{}
+    debug(my_states, "my_likes")
 
     objects_counts = list_of_objects |> Map.new(fn o -> {e(o, :id, nil), e(o, :like_count, :object_count, nil)} end)
-    |> debug("objects_counts")
+    |> debug("like_counts")
 
     list_of_assigns
     |> Enum.map(fn assigns ->
@@ -76,7 +77,7 @@ defmodule Bonfire.Social.Likes.LiveHandler do
       assigns
       |> Map.put(
         :my_like,
-        Map.get(my_likes, object_id)
+        Map.get(my_states, object_id)
       )
       |> Map.put(
         :like_count,
