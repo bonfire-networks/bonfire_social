@@ -51,7 +51,7 @@ defmodule Bonfire.Social.Activities.LikePost.Test do
       |> element("[data-id='like_action']")
       |> render()
       # |> IO.inspect
-      |> Floki.text() =~ "Liked (2)"
+      |> Floki.text() =~ "Like (2)"
 
       assert view
       |> element("[data-id='like_action']")
@@ -94,17 +94,20 @@ defmodule Bonfire.Social.Activities.LikePost.Test do
 
   test "As a user I want to see the activity total likes" do
     # Create alice user
-    account = fake_account!()
-    alice = fake_user!(account)
+    alice = fake_account!()
+    |> fake_user!()
     # Create bob user
     account2 = fake_account!()
     bob = fake_user!(account2)
+    # Create charlie user
+    charlie = fake_account!()
+    |> fake_user!()
     # bob follows alice
     Follows.follow(bob, alice)
     attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>first post/p>"}}
 
     assert {:ok, post} = Posts.publish(alice, attrs, "public")
-    assert {:ok, boost} = Likes.like(bob, post)
+    assert {:ok, like} = Likes.like(charlie, post)
 
     conn = conn(user: bob, account: account2)
     next = "/home"
