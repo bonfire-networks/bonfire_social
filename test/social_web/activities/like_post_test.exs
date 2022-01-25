@@ -22,7 +22,7 @@ defmodule Bonfire.Social.Activities.LikePost.Test do
       next = "/local"
       {view, doc} = floki_live(conn, next) #|> IO.inspect
       assert view
-      |> element(".feed button.like")
+      |> element("[data-id='like_action']")
       # |> IO.inspect
       |> render_click()
       |> Floki.text() =~ "Liked (1)"
@@ -48,13 +48,13 @@ defmodule Bonfire.Social.Activities.LikePost.Test do
       {view, doc} = floki_live(conn, next) #|> IO.inspect
 
       assert view
-      |> element(".feed button.like")
+      |> element("[data-id='like_action']")
       |> render()
       # |> IO.inspect
       |> Floki.text() =~ "Liked (2)"
 
       assert view
-      |> element(".feed button.like")
+      |> element("[data-id='like_action']")
       |> render_click()
       |> Floki.text() =~ "Liked (3)"
 

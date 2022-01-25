@@ -10,8 +10,10 @@ defmodule Bonfire.Social.Notifications.Flag.Test do
 
     test "flags on a post (which admin has permission to see) in admin's notifications" do
 
-      some_account = fake_account!() # first account is admin
-      someone = fake_user!(some_account) #|> IO.inspect()
+      some_account = fake_account!()
+      someone = fake_user!(some_account)
+      |> Bonfire.Me.Users.make_admin()
+      #|> IO.inspect()
 
       poster = fake_user!()
       attrs = %{post_content: %{html_body: "<p>here is an epic html post</p>"}}
@@ -32,8 +34,9 @@ defmodule Bonfire.Social.Notifications.Flag.Test do
 
     test "flags on a post (which admin does not have permission to see) in admin's notifications" do
 
-      some_account = fake_account!() # first account is admin
+      some_account = fake_account!()
       someone = fake_user!(some_account) #|> IO.inspect()
+      |> Bonfire.Me.Users.make_admin()
 
       poster = fake_user!()
       attrs = %{post_content: %{html_body: "<p>here is an epic html post</p>"}}

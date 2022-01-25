@@ -17,15 +17,6 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
       assert [_] = Floki.find(doc, "[id='feed:my:']")
     end
 
-    test "with account" do
-      account = fake_account!()
-      user = fake_user!(account)
-      conn = conn(account: account)
-      next = "/home"
-      {view, doc} = floki_live(conn, next)
-      main = Floki.find(doc, "main") # |> IO.inspect
-      assert [] = Floki.find(doc, "[id='feed:my:#{user.id}']")
-    end
 
     test "with user" do
       account = fake_account!()
@@ -47,8 +38,8 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
       conn = conn(user: user, account: account)
       next = "/home"
       {view, doc} = floki_live(conn, next) #|> IO.inspect
-      IO.inspect(user: user)
-      main = Floki.find(doc, "main") |> IO.inspect()
+      # IO.inspect(user: user)
+      main = Floki.find(doc, "main") #|> IO.inspect()
       assert [feed] = Floki.find(doc, "[id='feed:my:#{user.id}']")
       assert Floki.text(feed) =~ "test post name"
     end
@@ -78,6 +69,16 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
   end
 
   describe "DO NOT show" do
+
+    test "with account only" do
+      account = fake_account!()
+      user = fake_user!(account)
+      conn = conn(account: account)
+      next = "/home"
+      {view, doc} = floki_live(conn, next)
+      main = Floki.find(doc, "main") #|> IO.inspect
+      assert [] = Floki.find(doc, "article")
+    end
 
     test "posts from people I am not following in my feed" do
       user = fake_user!()

@@ -116,7 +116,7 @@ defmodule Bonfire.Social.Feeds do
 
     # include outboxes of everyone I follow
     with current_user when not is_nil(current_user) <- current_user,
-         followings when is_list(followings) <- Follows.list_follows_by_subject(current_user, skip_boundary_check: true) do
+         followings when is_list(followings) <- Follows.all_followed_outboxes(current_user, skip_boundary_check: true) do
       debug(followings, "followings")
       extra_feeds ++ followings
     else
@@ -196,7 +196,8 @@ defmodule Bonfire.Social.Feeds do
   Create an inbox or outbox for an existing Pointable (eg. User)
   """
   defp create_box(type, id) when is_binary(id), do: create_box(type, Characters.get(id))
-  defp create_box(type, %{id: _}=character) do
+  defp create_box(type, %{character: _} = object), do: repo().maybe_preload(object, :character) |> e(:character, nil) |> create_box(type, ...)
+  defp create_box(type, %Character{id: _}=character) do
     # TODO: optimise using cast_assoc?
     with {:ok, %{id: feed_id} = _feed} <- create() do
       save_box_feed(type, character, feed_id)

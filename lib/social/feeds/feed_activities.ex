@@ -39,7 +39,7 @@ defmodule Bonfire.Social.FeedActivities do
 
     # feeds the user is following
     feed_ids = Feeds.my_home_feed_ids(socket, include_notifications?)
-    # IO.inspect(my_home_feed_ids: feed_ids)
+    |> debug()
 
     feed(feed_ids, socket, cursor_after)
   end
@@ -48,7 +48,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed(%{id: feed_id}, current_user_or_socket_or_opts, preloads), do: feed(feed_id, current_user_or_socket_or_opts, preloads)
 
-  def feed(feed_id_or_ids, current_user_or_socket_or_opts, preloads) when is_binary(feed_id_or_ids) or is_list(feed_id_or_ids) do
+  def feed(feed_id_or_ids, current_user_or_socket_or_opts, preloads) when is_binary(feed_id_or_ids) or ( is_list(feed_id_or_ids) and length(feed_id_or_ids)>0) do
     # IO.inspect(feed_id_or_ids: feed_id_or_ids)
     feed_id_or_ids = ulid(feed_id_or_ids)
 
@@ -94,7 +94,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
 
-  def feed(_, _, _, _), do: []
+  def feed(_, _, _), do: []
 
 
   @doc """

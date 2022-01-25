@@ -52,14 +52,19 @@ defmodule Bonfire.Social.Likes.LiveHandler do
   def liker_count(_), do: 0
 
   def preload(list_of_assigns) do
-    list_of_ids = Enum.map(list_of_assigns, & e(&1, :object_id, nil)) |> Enum.reject(&is_nil/1)
-    # IO.inspect(id: list_of_assigns)
+    list_of_ids = Enum.map(list_of_assigns, & e(&1, :object_id, nil)) |> Enum.reject(&is_nil/1) |> debug("list_of_ids")
+
     current_user = current_user(List.first(list_of_assigns))
-    IO.inspect(current_user: current_user)
+    |> debug("current_user")
+
     my_likes = if current_user, do: Bonfire.Social.Likes.get!(current_user, list_of_ids) |> Map.new(), else: %{}
-    IO.inspect(my_likes: my_likes)
+    debug(my_likes, "my_likes")
+
     Enum.map(list_of_assigns, fn assigns ->
-      Map.put(assigns, :my_like, Map.get(my_likes, e(assigns, :object_id, nil) || e(assigns, :my_like, nil)))
+      Map.put(assigns,
+        :my_like,
+        Map.get(my_likes, e(assigns, :object_id, nil))
+      )
     end)
   end
 

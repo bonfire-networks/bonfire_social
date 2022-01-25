@@ -87,10 +87,11 @@ defmodule Bonfire.Social.Activities.BoostPost.Test do
     conn = conn(user: bob, account: account2)
     next = "/home"
     {view, doc} = floki_live(conn, next)
-    assert doc
+    activity =  doc
       |> Floki.find("[data-id=feed]  > article")
       |> List.last
-      |> Floki.text =~ "Boosted (1)"
+    assert activity |> Floki.text =~ "Boosted"
+    assert activity |> Floki.text =~ "Boosted (1)"
   end
 
 end
