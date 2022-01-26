@@ -74,7 +74,10 @@ defmodule Bonfire.Social.Flags do
     end
   end
 
-  def list_paginated(filters, opts \\ []) do
+  def list_paginated(filters, current_user_or_socket_or_opts \\ []) do
+    opts =
+      to_options(current_user_or_socket_or_opts)
+      |> Keyword.put_new(:skip_boundary_check, :admins)
     filters
     |> query(opts)
     |> proload(:activity)
