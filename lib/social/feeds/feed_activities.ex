@@ -256,6 +256,35 @@ defmodule Bonfire.Social.FeedActivities do
     inboxes_notify(subject, verb_or_activity, object, inboxes)
   end
 
+  # if the user has provided a non-nil value for `notify_admins`, query them.
+  defp maybe_fetch_admins([]), do: []
+  defp maybe_fetch_admins(nil), do: []
+  defp maybe_fetch_admins(_), do: Users.admins()
+
+  def notificate(subject, verb_or_activity, object, opts) do
+    # the user may directly provide feed ids if they wish. we may add to them.
+    feeds = Keyword.get(opts, :feeds, [])
+    # if the user provided :admins, it should be a feed name or names for them
+    admins = get_feed_ids(maybe_fetch_admins(opts[:admins]), opts[:admins])
+    # for each of the supported feed names, get the relevant box ids
+    inboxes = get_feed_ids(Keyword.get(opts, :inboxes, []), :inbox)
+    outboxes = get_feed_ids(Keyword.get(opts, :outboxes, []), :outbox)
+    notifications = get_feed_ids(Keyword.get(opts, :inboxes, []), :notification)
+    # first, we must publish to all of these feeds
+    all = List.flatten([feeds, admins, inboxes, outboxes, notifications])
+    ret = publish(subject, verb_or_activity, object, all)
+    # Now post some notifications to the pubsub for live data updates.
+    Bonfire.Social.LivePush.notify(subject, verb(verb_or_activity), object, inboxes)
+  end
+
+  defp get_feed_ids(users, feed_name) do
+    users
+    |> repo().maybe_preload([:character])
+    |> Enum.map(&Users.feed_id!(&1, feed_name))
+    |> Enum.reject(&is_nil/1)
+    |> List.flatten()
+  end
+
   defp verb(verb) when is_atom(verb), do: verb
   defp verb(%{verb: %{verb: verb}}), do: verb
   defp verb(%{verb_id: id}), do: Bonfire.Boundaries.Verbs.get_slug(id)

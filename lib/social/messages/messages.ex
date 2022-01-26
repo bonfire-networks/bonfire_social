@@ -27,24 +27,18 @@ defmodule Bonfire.Social.Messages do
 
   def send(%{id: _} = creator, attrs, to \\ nil) do
     #IO.inspect(attrs)
-
     repo().transact_with(fn ->
-      with to when is_list(to) and length(to) >0 <- to || Utils.e(attrs, :to_circles, nil),
-        {:ok, message} <- create(creator, attrs, to) do
-
-          with {:ok, activity} <- FeedActivities.notify_characters(creator, :create, message, to) do
-
-            {:ok, Activities.activity_under_object(activity)}
-
-          else e ->
-            IO.inspect(could_not_notify: e)
-
-            {:ok, message}
-          end
-
+      with to when is_list(to) and length(to) > 0 <- to || Utils.e(attrs, :to_circles, nil),
+           {:ok, message} <- create(creator, attrs, to) do
+        with {:ok, activity} <- FeedActivities.notificate(creator, :create, message, [cur) do
+          {:ok, Activities.activity_under_object(activity)}
         else e ->
-          debug(e)
-          {:error, "Did not send the message. Make sure you indicate who to send it to."}
+          IO.inspect(could_not_notify: e)
+          {:ok, message}
+        end
+      else e ->
+        debug(e)
+        {:error, "Did not send the message. Make sure you indicate who to send it to."}
       end
     end)
   end

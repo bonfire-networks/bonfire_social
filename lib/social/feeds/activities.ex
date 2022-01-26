@@ -112,10 +112,10 @@ defmodule Bonfire.Social.Activities do
 
   def activity_preloads(query, opts, :all) do
     query
-      |> activity_preloads(opts, :with_parents)
-      |> activity_preloads(opts, :with_creator)
-      |> activity_preloads(opts, :default)
-      # |> IO.inspect
+    |> activity_preloads(opts, :with_parents)
+    |> activity_preloads(opts, :with_creator)
+    |> activity_preloads(opts, :default)
+    # |> IO.inspect
   end
 
   def activity_preloads(query, _opts, :with_parents) do

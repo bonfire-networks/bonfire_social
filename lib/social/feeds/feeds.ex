@@ -201,6 +201,15 @@ defmodule Bonfire.Social.Feeds do
       || feed_id(:inbox, admin)
   end
 
+  def admins_notifications(), do: Bonfire.Me.Users.list_admins() |> admins_inboxes()
+  def admins_notifications(admins) when is_list(admins), do: Enum.map(admins, fn x -> admin_inbox(x) end)
+  def admin_notifications(admin) do
+    admin = admin |> Bonfire.Repo.maybe_preload([:character]) # |> IO.inspect
+    # Logger.warn("admins_inbox: #{inspect admin}")
+    e(admin, :character, :inbox, :feed_id, nil)
+      || feed_id(:inbox, admin)
+  end
+
   @doc """
   Create an inbox or outbox for an existing Pointable (eg. User)
   """

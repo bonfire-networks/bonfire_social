@@ -79,16 +79,11 @@ defmodule Bonfire.Social.Follows do
   end
 
   defp many(query, paginate?, cursor_after \\ nil)
-
-  defp many(query, true, cursor_after),
-    do: Repo.many_paginated(query, before: cursor_after)
-
+  defp many(query, true, cursor_after), do: Repo.many_paginated(query, before: cursor_after)
   defp many(query, _, _), do: repo().many(query)
 
   defp maybe_with_follower_profile_only(q, true), do: q |> where([follower_profile: p], not is_nil(p.id))
   defp maybe_with_follower_profile_only(q, _), do: q
-  defp maybe_with_followed_profile_only(q, true), do: q |> where([followed_profile: p], not is_nil(p.id))
-  defp maybe_with_followed_profile_only(q, _), do: q
 
   @doc """
   Follow someone/something, and federate it
