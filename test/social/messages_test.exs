@@ -75,7 +75,7 @@ defmodule Bonfire.Social.MessagesTest do
     assert {:ok, m} = Messages.send(sender, attrs)
 
     assert %{edges: feed} = FeedActivities.feed(:notifications, receiver)
-    fp = List.first(feed)
+    fp = List.first(feed, :empty)
     assert %{id: _} = fp
 
     assert fp.activity.id == m.activity.id

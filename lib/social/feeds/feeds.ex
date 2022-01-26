@@ -49,11 +49,13 @@ defmodule Bonfire.Social.Feeds do
     reply_to_inbox = reply_to_creator |> feed_id(:inbox, ...)
 
     # include any extra feeds specified in opts
-    extra_feeds = Boundaries.maybe_custom_feeds(preset_or_custom_boundary) || []
+    to_feeds_extra = maybe_custom_feeds(preset_or_custom_boundary) || []
+    |> debug("to_feeds_extra")
 
     []
-    ++ extra_feeds
+    ++ to_feeds_extra
     ++ case Boundaries.preset(preset_or_custom_boundary) do
+
       "public" -> # put in all reply_to creators and mentions inboxes + guest/local feeds
         [ named_feed_id(:guest),
           named_feed_id(:local),
@@ -83,12 +85,14 @@ defmodule Bonfire.Social.Feeds do
       "admins" ->
         admins_inboxes()
 
-      _ -> [] # default to none except creator, thread, and any custom ones
+      _ -> [] # default to none except any custom ones
     end
     |> Utils.filter_empty([])
     |> Enum.uniq()
     |> debug("target feeds")
   end
+
+   def maybe_custom_feeds(preset_and_custom_boundary), do: Boundaries.maybe_from_opts(preset_and_custom_boundary, :to_feeds)
 
   def named_feed_id(name) when is_atom(name), do: Bonfire.Boundaries.Circles.get_id(name)
   def named_feed_id(name) when is_binary(name) do
@@ -137,7 +141,7 @@ defmodule Bonfire.Social.Feeds do
   def my_feed_id(type, other) do
     case current_user(other) do
       nil ->
-        Logger.error("my_feed_id: no function matched for #{inspect other}")
+        Logger.error("Social.Feeds: no match for function my_feed_id #{inspect other}")
         nil
 
       current_user ->
@@ -149,6 +153,7 @@ defmodule Bonfire.Social.Feeds do
   def feed_ids(type, for_subjects) when is_list(for_subjects) do
     for_subjects
     |> Enum.map(&feed_id(type, &1))
+    |> filter_empty([])
   end
   def feed_ids(type, for_subject), do: feed_id(type, for_subject)
 
@@ -168,15 +173,19 @@ defmodule Bonfire.Social.Feeds do
   def feed_id(:inbox, %{inbox_id: feed_id}), do: feed_id
   def feed_id(:inbox, %{inbox: %{id: feed_id}}), do: feed_id
 
-  def feed_id(type, for_subject) do
-    with %{id: id} = character <- create_box(type, for_subject) do
+  def feed_id(type, for_subject) when not is_nil(for_subject) do
+    with feed_id when is_binary(feed_id) <- create_box(type, for_subject) do
       # IO.inspect(for_subject)
-      Logger.debug("Feeds: created new #{inspect type} for #{inspect ulid(for_subject)}")
-      feed_id(type, character)
+      Logger.debug("Feeds: created new #{inspect type} with id #{inspect feed_id} for #{inspect ulid(for_subject)}")
+      feed_id
     else e ->
       Logger.error("Feeds.feed_id: could not find or create feed (#{inspect e}) for #{inspect ulid(for_subject)}")
       nil
     end
+  end
+  def feed_id(_type, for_subject) do
+    Logger.info("Social.Feeds: no clause match for function feed_id with #{inspect for_subject}")
+    nil
   end
 
   def inbox_of_obj_creator(object) do
@@ -195,16 +204,24 @@ defmodule Bonfire.Social.Feeds do
   @doc """
   Create an inbox or outbox for an existing Pointable (eg. User)
   """
-  defp create_box(type, id) when is_binary(id), do: create_box(type, Characters.get(id))
+  defp create_box(type, id) when is_binary(id) do
+    with {:ok, character} <- Characters.get(id) do
+      create_box(type, character)
+    end
+  end
   defp create_box(type, %{character: _} = object), do: repo().maybe_preload(object, :character) |> e(:character, nil) |> create_box(type, ...)
   defp create_box(type, %Character{id: _}=character) do
     # TODO: optimise using cast_assoc?
-    with {:ok, %{id: feed_id} = _feed} <- create() do
-      save_box_feed(type, character, feed_id)
+    with {:ok, %{id: feed_id} = _feed} <- create(),
+         {:ok, character} <- save_box_feed(type, character, feed_id) do
+      feed_id
+    else e ->
+      Logger.debug("Social.Feeds: could not create_box for #{inspect character}")
+      nil
     end
   end
-  defp create_box(type, other) do
-    Logger.debug("Feeds: no matching function create_box for #{inspect other}")
+  defp create_box(_type, other) do
+    Logger.debug("Social.Feeds: no clause match for function create_box with #{inspect other}")
     nil
   end
 

@@ -4,7 +4,7 @@ defmodule Bonfire.Social.Messages do
   use Bonfire.Common.Utils
 
   alias Bonfire.Data.Social.{Message, PostContent, Replied}
-  alias Bonfire.Social.{Activities, FeedActivities, Objects}
+  alias Bonfire.Social.{Activities, FeedActivities, Feeds, Objects}
   # alias Bonfire.Boundaries.Verbs
   alias Ecto.Changeset
   # import Bonfire.Boundaries.Queries
@@ -29,8 +29,7 @@ defmodule Bonfire.Social.Messages do
     #IO.inspect(attrs)
 
     repo().transact_with(fn ->
-      with to when is_list(to) and length(to)>0 <- to
-            || Utils.e(attrs, :to_circles, []),
+      with to when is_list(to) and length(to) >0 <- to || Utils.e(attrs, :to_circles, nil),
         {:ok, message} <- create(creator, attrs, to) do
 
           with {:ok, activity} <- FeedActivities.notify_characters(creator, :create, message, to) do
@@ -51,13 +50,20 @@ defmodule Bonfire.Social.Messages do
   end
 
 
-  defp create(%{id: creator_id} = creator, attrs, to \\ nil) do
+  defp create(%{id: creator_id} = creator, attrs, to \\ []) do
     # we attempt to avoid entering the transaction as long as possible.
     changeset = changeset(:create, attrs, creator, to)
     repo().transact_with(fn -> repo().insert(changeset) end)
   end
 
   def changeset(:create, attrs, creator, to) do
+
+    preset_or_custom_boundary = [
+      preset: "message",
+      to_circles: ulid(to),
+      to_feeds: Feeds.feed_ids(:inbox, to) |> debug()
+    ]
+
     attrs
     # |> debug("attrs")
     |> Message.changeset(%Message{}, ...)
