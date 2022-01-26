@@ -1,5 +1,6 @@
 defmodule Bonfire.Social.Flags do
 
+  use Arrows
   alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Flag
   alias Bonfire.Boundaries.Verbs
@@ -86,20 +87,22 @@ defmodule Bonfire.Social.Flags do
 
   @doc "List flags by the user and which are in their outbox"
   def list_by(by_user, opts \\ []) when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
-    # query FeedPublish
     [subject: by_user]
     |> list_paginated(opts)
   end
 
   @doc "List flag of an object and which are in a feed"
-  def list_of(id, opts \\ []) when is_binary(id) or is_list(id) or is_map(id) do
-
-    # query FeedPublish
-    [object: id ]
+  def list_of(object, opts \\ []) when is_binary(object) or is_list(object) or is_map(object) do
+    [object: object]
     |> list_paginated(opts)
   end
 
   defp query_base(filters, opts) do
+    # these keys are for us, not query_filter
+    next =
+      filters
+      |> :proplists.delete(:object, ...)
+      |> :proplists.delete(:subject, ...)
     Edges.query_parent(Flag, filters, opts)
     |> proload([
       edge: [
@@ -107,7 +110,7 @@ defmodule Bonfire.Social.Flags do
         object: {"object_", [:profile, :character, :post_content]}
       ]
     ])
-    |> query_filter(Keyword.drop(filters, [:object, :subject]))
+    |> query_filter(next)
   end
 
   def query([:all], opts), do: query([], opts)
