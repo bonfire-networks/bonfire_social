@@ -19,15 +19,6 @@ defmodule Bonfire.Social.Threads do
   def context_module, do: Replied
   def queries_module, do: Replied
 
-  def maybe_push_thread(%{} = creator, %{} = activity, %{replied: %{thread_id: thread_id, reply_to_id: reply_to_id}} = _reply) when is_binary(thread_id) and is_binary(reply_to_id) do
-    Logger.debug("Threads: put in thread feed for anyone following the thread: #{inspect thread_id}")
-    # IO.inspect(activity: activity)
-    Logger.debug("Threads: broadcasting to anyone currently viewing the thread")
-    pubsub_broadcast(thread_id, {{Bonfire.Social.Posts, :new_reply}, {thread_id, activity}})
-  end
-
-  def maybe_push_thread(_, _, _), do: nil
-
   @doc """
   Handles casting related to the reply and threading.
   If it's not a reply or the user is not permitted to reply to the thing, a new thread will be created.

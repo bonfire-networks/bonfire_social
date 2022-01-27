@@ -3,6 +3,7 @@ defmodule Bonfire.Social.LivePush do
 
   def push_activity(feed_ids, activity) do
     pubsub_broadcast(feed_ids, {{Bonfire.Social.Feeds, :new_activity}, activity})
+    maybe_push_thread(activity)
     activity
   end
 
@@ -31,4 +32,12 @@ defmodule Bonfire.Social.LivePush do
     )
   end
 
+  defp maybe_push_thread(%{replied: %{thread_id: thread_id, reply_to_id: reply_to_id}} = activity) when is_binary(thread_id) and is_binary(reply_to_id) do
+    Logger.debug("Threads: put in thread feed for anyone following the thread: #{inspect thread_id}")
+    # IO.inspect(activity: activity)
+    Logger.debug("Threads: broadcasting to anyone currently viewing the thread")
+    pubsub_broadcast(thread_id, {{Bonfire.Social.Posts, :new_reply}, {thread_id, activity}})
+    # pubsub_broadcast(reply_to_id, {{Bonfire.Social.Posts, :new_reply}, {reply_to_id, activity}})
+  end
+  defp maybe_push_thread(_), do: nil
 end

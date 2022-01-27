@@ -7,7 +7,7 @@ defmodule Bonfire.Social.Objects do
     sortable_fields: [:id]
   use Bonfire.Common.Utils, only: [debug: 1, debug: 2]
 
-  alias Bonfire.Common.Pointers
+  alias Bonfire.Common
   alias Bonfire.Data.Identity.Character
   alias Bonfire.Me.Acls
   alias Bonfire.Social.{Activities, Tags, Threads}
@@ -111,7 +111,7 @@ defmodule Bonfire.Social.Objects do
 
   def read(object_id, socket_or_current_user) when is_binary(object_id) do
     current_user = Utils.current_user(socket_or_current_user) #|> IO.inspect
-    Pointers.pointer_query([id: object_id], socket_or_current_user)
+    Common.Pointers.pointer_query([id: object_id], socket_or_current_user)
     |> Activities.read(socket: socket_or_current_user, skip_boundary_check: true)
     # |> Utils.debug("activities")
     ~> maybe_preload_activity_object(current_user)
@@ -119,7 +119,7 @@ defmodule Bonfire.Social.Objects do
   end
 
   def maybe_preload_activity_object(%{activity: %{object: _}} = pointer, current_user) do
-    Preload.maybe_preload_nested_pointers pointer, [activity: [:object]],
+    Common.Pointers.Preload.maybe_preload_nested_pointers pointer, [activity: [:object]],
       current_user: current_user, skip_boundary_check: true
   end
   def maybe_preload_activity_object(pointer, _current_user), do: pointer
