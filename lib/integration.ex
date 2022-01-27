@@ -16,7 +16,6 @@ defmodule Bonfire.Social.Integration do
   end
 
   def activity_ap_publish(subject_id, :create, activity) do
-    IO.inspect(activity)
     ap_publish("create", activity.object_id, subject_id)
   end
 
