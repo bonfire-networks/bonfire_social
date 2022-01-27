@@ -249,14 +249,15 @@ defmodule Bonfire.Social.Activities do
   def verb(%{verb: %{verb: verb}}), do: verb
   def verb(%{verb_id: id}), do: Bonfire.Boundaries.Verbs.get_slug(id)
 
-  def verb_maybe_modify("create", %{replied: %{reply_to_post_content: %{id: _} = _reply_to}}), do: "reply"
+  def verb_maybe_modify("create", %{replied: %{reply_to: %{post_content: %{id: _}} = _reply_to}}), do: "reply"
   def verb_maybe_modify("create", %{replied: %{reply_to: %{id: _} = _reply_to}}), do: "respond"
   def verb_maybe_modify("create", %{replied: %{reply_to_id: reply_to_id}}) when is_binary(reply_to_id), do: "respond"
   # def verb_maybe_modify("created", %{reply_to: %{id: _} = reply_to, object: %Bonfire.Data.Social.Post{}}), do: reply_to_display(reply_to)
   # def verb_maybe_modify("created", %{reply_to: %{id: _} = reply_to}), do: reply_to_display(reply_to)
-  def verb_maybe_modify("create", %{object: %Bonfire.Data.Social.PostContent{name: name} = post}), do: "write" #<> object_link(name, post)
-  def verb_maybe_modify("create", %{object: %Bonfire.Data.Social.PostContent{} = _post}), do: "write"
+  def verb_maybe_modify("create", %{object: %{post_content: %{id: _}}}), do: "write"
+  def verb_maybe_modify("create", %{object: %Bonfire.Data.Social.PostContent{}}), do: "write"
   def verb_maybe_modify("create", %{object: %Bonfire.Data.Social.Post{} = _post}), do: "write"
+  def verb_maybe_modify("create", %{object: %Bonfire.Data.Social.Message{}}), do: "send"
   def verb_maybe_modify("create", %{object: %{action: %{label: label}} = _economic_event}), do: label
   def verb_maybe_modify("create", %{object: %{action: %{id: id}} = _economic_event}), do: id
   def verb_maybe_modify("create", %{object: %{action_id: label} = _economic_event}) when is_binary(label), do: label

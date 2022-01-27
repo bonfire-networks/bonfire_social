@@ -62,10 +62,10 @@ defmodule Bonfire.Social.FeedActivities do
     Bonfire.Social.Flags.list_paginated([], current_user_or_socket_or_opts)
   end
 
-  def feed(feed_name, current_user_or_socket_or_opts, preloads) when is_atom(feed_name) do
+  def feed(feed_name, current_user_or_socket_or_opts, preloads) when is_atom(feed_name) and not is_nil(feed_name) do
     # current_user = current_user(current_user_or_socket)
     # debug(current_user_or_socket_or_opts)
-    case Bonfire.Social.Feeds.my_feed_id(feed_name, current_user_or_socket_or_opts) || Feeds.named_feed_id(feed_name) do
+    case Feeds.named_feed_id(feed_name) || Bonfire.Social.Feeds.my_feed_id(feed_name, current_user_or_socket_or_opts) do
       feed when is_binary(feed) or is_list(feed) ->
         debug(ulid(current_user(current_user_or_socket_or_opts)), "current_user")
         debug(feed_name, "feed_name")
@@ -77,11 +77,15 @@ defmodule Bonfire.Social.FeedActivities do
 
         e ->
           Logger.error("FeedActivities.feed: no known feed #{inspect feed_name} - #{inspect e}")
+          debug(current_user_or_socket_or_opts)
           nil
     end
   end
 
-  def feed(_, _, _), do: []
+  def feed(other, _, _) do
+    Logger.error("FeedActivities.feed: not a recognised feed query format - got #{inspect other}")
+    []
+  end
 
 
   @doc """
