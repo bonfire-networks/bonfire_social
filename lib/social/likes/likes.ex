@@ -24,7 +24,7 @@ defmodule Bonfire.Social.Likes do
   def get!(subject, object, opts \\ []), do: Edges.get!(__MODULE__, subject, object, opts)
 
   def by_liker(%{}=subject), do: [subject: subject] |> query(current_user: subject) |> repo().many()
-  def by_liker(%{}=subject, type), do: [subject: subject] |> query(current_user: subject) |>  by_type_q(type) |> repo().many()
+  # def by_liker(%{}=subject, type), do: [subject: subject] |> query(current_user: subject) |>  by_type_q(type) |> repo().many()
   def by_liked(%{}=subject), do: [subject: subject] |> query(current_user: subject) |> repo().many()
 
   def like(%User{} = liker, %{} = liked) do
@@ -114,28 +114,28 @@ defmodule Bonfire.Social.Likes do
   end
 
 
-  defp by_type_q(q, type) do
-    q
-    |> join(:inner, [l], ot in ^type, as: :liked, on: ot.id == l.liked_id)
-    |> join_preload([:liked])
-  end
+  # defp by_type_q(q, type) do
+  #   q
+  #   |> join(:inner, [l], ot in ^type, as: :liked, on: ot.id == l.liked_id)
+  #   |> join_preload([:liked])
+  # end
 
 
   def ap_publish_activity("create", like) do
-    like = Bonfire.Repo.preload(like, :liked)
+    like = Bonfire.Repo.maybe_preload(like, edge: :object)
 
-    with {:ok, liker} <- ActivityPub.Actor.get_cached_by_local_id(like.liker_id),
-         liked when not is_nil(liked) <- Bonfire.Common.Pointers.follow!(like.liked),
+    with {:ok, liker} <- ActivityPub.Actor.get_cached_by_local_id(like.edge.subject_id),
+         liked when not is_nil(liked) <- Bonfire.Common.Pointers.follow!(like.edge.object),
          object when not is_nil(liked) <- Bonfire.Federate.ActivityPub.Utils.get_object(liked) do
             ActivityPub.like(liker, object)
     end
   end
 
   def ap_publish_activity("delete", like) do
-    like = Bonfire.Repo.preload(like, :liked)
+    like = Bonfire.Repo.maybe_preload(like, edge: :object)
 
-    with {:ok, liker} <- ActivityPub.Actor.get_cached_by_local_id(like.liker_id),
-         liked when not is_nil(liked) <- Bonfire.Common.Pointers.follow!(like.liked),
+    with {:ok, liker} <- ActivityPub.Actor.get_cached_by_local_id(like.edge.subject_id),
+         liked when not is_nil(liked) <- Bonfire.Common.Pointers.follow!(like.edge.object),
          object when not is_nil(liked) <- Bonfire.Federate.ActivityPub.Utils.get_object(liked) do
             ActivityPub.unlike(liker, object)
     end
