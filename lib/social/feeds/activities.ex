@@ -244,6 +244,11 @@ defmodule Bonfire.Social.Activities do
       end
   end
 
+
+  def verb(verb) when is_atom(verb), do: verb
+  def verb(%{verb: %{verb: verb}}), do: verb
+  def verb(%{verb_id: id}), do: Bonfire.Boundaries.Verbs.get_slug(id)
+
   def verb_maybe_modify("create", %{replied: %{reply_to_post_content: %{id: _} = _reply_to}}), do: "reply"
   def verb_maybe_modify("create", %{replied: %{reply_to: %{id: _} = _reply_to}}), do: "respond"
   def verb_maybe_modify("create", %{replied: %{reply_to_id: reply_to_id}}) when is_binary(reply_to_id), do: "respond"

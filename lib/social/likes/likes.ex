@@ -35,7 +35,7 @@ defmodule Bonfire.Social.Likes do
     preset_or_custom_boundary = [
       preset: "mentions", # TODO: make configurable
       to_circles: [ulid(liked_creator)],
-      to_feeds: [Feeds.feed_id(:inbox, liked_creator)]
+      to_feeds: [Feeds.feed_id(:notifications, liked_creator)]
     ]
 
     with {:ok, like} <- create(liker, liked, preset_or_custom_boundary) do

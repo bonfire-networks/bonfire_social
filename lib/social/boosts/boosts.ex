@@ -33,7 +33,7 @@ defmodule Bonfire.Social.Boosts do
     preset_or_custom_boundary = [
       preset: "public", # TODO: get the preset for boosting from config and/or user's settings
       to_circles: [ulid(boosted_creator)],
-      to_feeds: [Feeds.feed_id(:inbox, boosted_creator), Feeds.feed_id(:outbox, booster)]
+      to_feeds: [Feeds.feed_id(:notifications, boosted_creator), Feeds.feed_id(:outbox, booster)]
     ]
 
     with {:ok, boost} <- create(booster, boosted, preset_or_custom_boundary),
@@ -90,7 +90,7 @@ defmodule Bonfire.Social.Boosts do
   def list_paginated(filters, opts \\ []) do
     filters
     |> query(opts)
-    |> debug()
+    # |> debug()
     |> Bonfire.Repo.many_paginated(opts)
     # TODO: activity preloads
   end

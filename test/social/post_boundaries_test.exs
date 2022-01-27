@@ -38,15 +38,13 @@ defmodule Bonfire.Social.PostBoundariesTest do
     user = fake_user!()
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
 
-    assert {:ok, post} = Posts.publish(user, attrs)
+    assert {:ok, post} = Posts.publish(user, attrs, "local")
     assert post.post_content.name =~ "name"
 
     feed_id = Bonfire.Social.Feeds.feed_id(:outbox, user)
 
-    assert %Paginator.Page{edges: activities} = FeedActivities.feed(feed_id, user)
-    assert feed_entry = List.first(activities)
+    assert %{edges: [feed_entry]} = FeedActivities.feed(feed_id, user)
     assert feed_entry.activity.object.post_content.name =~ "name"
-
   end
 
   test "cannot see posts I'm not allowed to see in instance feed" do

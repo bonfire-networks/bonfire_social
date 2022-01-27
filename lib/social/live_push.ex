@@ -6,14 +6,14 @@ defmodule Bonfire.Social.LivePush do
     activity
   end
 
-  def notify(activity, inbox_ids) do
-    notify(activity.subject, activity.verb, activity.object, inbox_ids)
+  def notify(activity, feed_ids) do
+    notify(activity.subject, activity.verb, activity.object, feed_ids)
   end
 
-  def notify(subject, verb, object, inbox_ids) do
-    # debug(inbox_ids)
+  def notify(subject, verb, object, feed_ids) do
+    # debug(feed_ids)
     Bonfire.Notifications.notify_users(
-      inbox_ids,
+      feed_ids,
       e(subject, :profile, :name,
         e(subject, :character, :username, "")
       )

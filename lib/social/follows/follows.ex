@@ -120,7 +120,7 @@ defmodule Bonfire.Social.Follows do
     preset_or_custom_boundary = [
       preset: "local", # TODO: make configurable
       to_circles: [ulid(followed)],
-      to_feeds: [Feeds.feed_id(:inbox, followed), Feeds.feed_id(:outbox, follower)]
+      to_feeds: [Feeds.feed_id(:notifications, followed), Feeds.feed_id(:outbox, follower)]
     ]
 
     with {:ok, follow} <- create(follower, followed, preset_or_custom_boundary) do

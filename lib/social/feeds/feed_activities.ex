@@ -39,7 +39,7 @@ defmodule Bonfire.Social.FeedActivities do
 
     # feeds the user is following
     feed_ids = Feeds.my_home_feed_ids(socket, include_notifications?)
-    |> debug()
+    # |> debug()
 
     feed(feed_ids, socket, cursor_after)
   end
@@ -58,41 +58,28 @@ defmodule Bonfire.Social.FeedActivities do
     |> feed_paginated(current_user(current_user_or_socket_or_opts), current_user_or_socket_or_opts, preloads)
   end
 
-  def feed(:notifications, current_user_or_socket_or_opts, preloads) do
-    # current_user = current_user(current_user_or_socket)
-
-    case Bonfire.Social.Feeds.my_feed_id(:inbox, current_user_or_socket_or_opts) do
-      inbox when is_binary(inbox) or is_list(inbox) ->
-
-        # inbox = ulid(inbox)
-        # IO.inspect(query_notifications_feed_ids: feeds)
-
-        pubsub_subscribe(inbox, current_user_or_socket_or_opts) # subscribe to realtime feed updates
-
-        [feed_id: inbox] # FIXME: for some reason preloading creator or reply_to when we have a boost in inbox breaks ecto
-        |> feed_paginated(current_user_or_socket_or_opts, preloads)
-
-        e ->
-          Logger.error("no feed for :notifications - #{e}")
-          nil
-    end
-
-  end
-
   def feed(:flags, current_user_or_socket_or_opts, _preloads) do
     Bonfire.Social.Flags.list_paginated([], current_user_or_socket_or_opts)
   end
 
   def feed(feed_name, current_user_or_socket_or_opts, preloads) when is_atom(feed_name) do
+    # current_user = current_user(current_user_or_socket)
+    # debug(current_user_or_socket_or_opts)
+    case Bonfire.Social.Feeds.my_feed_id(feed_name, current_user_or_socket_or_opts) || Feeds.named_feed_id(feed_name) do
+      feed when is_binary(feed) or is_list(feed) ->
+        debug(ulid(current_user(current_user_or_socket_or_opts)), "current_user")
+        debug(feed_name, "feed_name")
+        debug(feed, "feed_id")
+        pubsub_subscribe(feed, current_user_or_socket_or_opts) # subscribe to realtime feed updates
 
-    feed(Feeds.named_feed_id(feed_name), current_user_or_socket_or_opts, preloads)
+        [feed_id: ulid(feed)]
+        |> feed_paginated(current_user_or_socket_or_opts, preloads)
+
+        e ->
+          Logger.error("FeedActivities.feed: no known feed #{inspect feed_name} - #{inspect e}")
+          nil
+    end
   end
-
-  def feed(%{feed_name: feed_name}, current_user_or_socket_or_opts, preloads) do
-
-    feed(Feeds.named_feed_id(feed_name), current_user_or_socket_or_opts, preloads)
-  end
-
 
   def feed(_, _, _), do: []
 
@@ -106,6 +93,7 @@ defmodule Bonfire.Social.FeedActivities do
     paginate = e(current_user_or_socket_or_opts, :paginate, current_user_or_socket_or_opts)
     Logger.debug("feed_paginated with: #{inspect paginate}")
     query_paginated(filters, current_user_or_socket_or_opts, preloads, query)
+      # |> debug()
       |> Bonfire.Repo.many_paginated(paginate)
   end
 
@@ -234,10 +222,10 @@ defmodule Bonfire.Social.FeedActivities do
   """
   def notify_characters(subject, verb_or_activity, object, characters) do
     # TODO: notify remote users via AP?
-    Logger.debug("notify_characters: #{inspect ulid(characters)}")
-    Feeds.feed_ids(:inbox, characters)
+    # debug(characters)
+    Feeds.feed_ids(:notifications, characters)
     |> Utils.filter_empty([])
-    |> inboxes_notify(subject, verb_or_activity, object, ...)
+    |> notify_feeds(subject, verb_or_activity, object, ...)
   end
 
   @doc """
@@ -251,49 +239,38 @@ defmodule Bonfire.Social.FeedActivities do
   Creates a new local activity or takes an existing one and publishes to creator's inbox
   """
   def notify_admins(subject, verb_or_activity, object) do
-    inboxes = Feeds.admins_inboxes()
-    Logger.debug("notify_admins: #{inspect inboxes}")
-    inboxes_notify(subject, verb_or_activity, object, inboxes)
+    inboxes = Feeds.admins_notifications()
+    # |> debug()
+    notify_feeds(subject, verb_or_activity, object, inboxes)
   end
 
   # if the user has provided a non-nil value for `notify_admins`, query them.
-  defp maybe_fetch_admins([]), do: []
-  defp maybe_fetch_admins(nil), do: []
-  defp maybe_fetch_admins(_), do: Users.admins()
+  # defp maybe_fetch_admins([]), do: []
+  # defp maybe_fetch_admins(nil), do: []
+  # defp maybe_fetch_admins(_), do: Users.admins()
+  #
+  # def notificate(subject, verb_or_activity, object, opts) do
+  #   # the user may directly provide feed ids if they wish. we may add to them.
+  #   feeds = Keyword.get(opts, :to_feeds, [])
+  #   # if the user provided :admins, it should be a feed name or names for them
+  #   admins = Feeds.feed_ids(opts[:admins], maybe_fetch_admins(opts[:admins]))
+  #   # for each of the supported feed names, get the relevant box ids
+  #   inboxes = Feeds.feed_ids(:inbox, Keyword.get(opts, :inboxes, []))
+  #   outboxes = Feeds.feed_ids(:outbox, Keyword.get(opts, :outboxes, []))
+  #   notifications = Feeds.feed_ids(:notifications, Keyword.get(opts, :inboxes, []))
+  #   # first, we must publish to all of these feeds
+  #   all = List.flatten([feeds, admins, inboxes, outboxes, notifications])
+  #   ret = publish(subject, verb_or_activity, object, all)
+  #   # Now post some notifications to the pubsub for live data updates.
+  #   Bonfire.Social.LivePush.notify(subject, Activities.verb(verb_or_activity), object, inboxes)
+  # end
 
-  def notificate(subject, verb_or_activity, object, opts) do
-    # the user may directly provide feed ids if they wish. we may add to them.
-    feeds = Keyword.get(opts, :feeds, [])
-    # if the user provided :admins, it should be a feed name or names for them
-    admins = get_feed_ids(maybe_fetch_admins(opts[:admins]), opts[:admins])
-    # for each of the supported feed names, get the relevant box ids
-    inboxes = get_feed_ids(Keyword.get(opts, :inboxes, []), :inbox)
-    outboxes = get_feed_ids(Keyword.get(opts, :outboxes, []), :outbox)
-    notifications = get_feed_ids(Keyword.get(opts, :inboxes, []), :notification)
-    # first, we must publish to all of these feeds
-    all = List.flatten([feeds, admins, inboxes, outboxes, notifications])
-    ret = publish(subject, verb_or_activity, object, all)
-    # Now post some notifications to the pubsub for live data updates.
-    Bonfire.Social.LivePush.notify(subject, verb(verb_or_activity), object, inboxes)
-  end
 
-  defp get_feed_ids(users, feed_name) do
-    users
-    |> repo().maybe_preload([:character])
-    |> Enum.map(&Users.feed_id!(&1, feed_name))
-    |> Enum.reject(&is_nil/1)
-    |> List.flatten()
-  end
+  def notify_feeds(subject, verb_or_activity, object, feed_ids) do
+    # debug(feed_ids)
 
-  defp verb(verb) when is_atom(verb), do: verb
-  defp verb(%{verb: %{verb: verb}}), do: verb
-  defp verb(%{verb_id: id}), do: Bonfire.Boundaries.Verbs.get_slug(id)
-
-  defp inboxes_notify(subject, verb_or_activity, object, inbox_ids) do
-    # debug(inbox_ids)
-
-    ret = publish(subject, verb_or_activity, object, to_feeds: inbox_ids) #|> IO.inspect(label: "notify_feeds")
-    Bonfire.Social.LivePush.notify(subject, verb(verb_or_activity), object, inbox_ids)
+    ret = publish(subject, verb_or_activity, object, to_feeds: feed_ids) #|> IO.inspect(label: "notify_feeds")
+    Bonfire.Social.LivePush.notify(subject, Activities.verb(verb_or_activity), object, feed_ids)
     ret
   end
 

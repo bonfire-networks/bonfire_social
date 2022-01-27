@@ -58,7 +58,7 @@ defmodule Bonfire.Social.Flags do
   defp do_flag(flagger, flagged, opts) do
     with {:ok, flag} <- create(flagger, flagged, opts),
          {:ok, activity} <- FeedActivities.notify_admins(flagger, :flag, flagged) do
-      IO.inspect(activity: activity)
+      # IO.inspect(activity: activity)
       FeedActivities.publish(flagger, activity, flagged)
       {:ok, Activities.activity_under_object(activity, flag)}
     end
