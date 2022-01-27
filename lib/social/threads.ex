@@ -1,7 +1,5 @@
 defmodule Bonfire.Social.Threads do
 
-  @default_max_depth 3 # TODO: configurable
-
   use Arrows
   use Bonfire.Common.Utils
   use Bonfire.Repo,
@@ -166,50 +164,49 @@ defmodule Bonfire.Social.Threads do
   end
 
 
-  def list_replies(thread, current_user, cursor \\ nil, max_depth \\ @default_max_depth, limit \\ 500)
-  def list_replies(%{thread_id: thread_id}, current_user, cursor, max_depth, limit), do: list_replies(thread_id, current_user, cursor, max_depth, limit)
-  def list_replies(%{id: thread_id}, current_user, cursor, max_depth, limit), do: list_replies(thread_id, current_user, cursor, max_depth, limit)
-  def list_replies(thread_id, current_user, cursor, max_depth, limit) when is_binary(thread_id), do: do_list_replies(thread_id, current_user, cursor, max_depth, limit)
+  def list_replies(thread, opts \\ [])
+  def list_replies(%{thread_id: thread_id}, opts), do: list_replies(thread_id, opts)
+  def list_replies(%{id: thread_id}, opts), do: list_replies(thread_id, opts)
+  def list_replies(thread_id, opts) when is_binary(thread_id) do
+    opts =
+      to_options(opts)
+      |> Keyword.put_new(:limit, Config.get(:thread_default_pagination_limit, 500))
 
-  defp do_list_replies(thread_id, current_user_or_socket, cursor, max_depth, limit) do
-
-    pubsub_subscribe(thread_id, current_user_or_socket) # subscribe to realtime thread updates
+    pubsub_subscribe(thread_id, opts) # subscribe to realtime thread updates
 
     query(
       [thread_id: thread_id], # note this won't query by thread_id but rather by path
-      current_user_or_socket,
-      max_depth
+      opts
     )
       # |> debug()
-      |> Bonfire.Repo.many_paginated(limit: limit, before: e(cursor, :before, nil), after: e(cursor, :after, nil)) # return a page of items + pagination metadata
+      |> Bonfire.Repo.many_paginated(opts) # return a page of items + pagination metadata
       # |> repo().many # without pagination
       # |> debug("thread")
   end
 
-  def query(filter, current_user_or_socket, max_depth \\ @default_max_depth)
+  def query([thread_id: thread_id], opts) do
+    opts =
+      to_options(opts)
+      |> Keyword.put_new(:max_depth, Config.get(:thread_default_max_depth, 3))
 
-  def query([thread_id: thread_id], current_user_or_socket, max_depth) do
-
-    current_user = current_user(current_user_or_socket)
-    # IO.inspect(current_user: current_user)
+    current_user = current_user(opts)
 
     %Replied{id: Bonfire.Common.Pointers.id_binary(thread_id)}
       |> Replied.descendants()
-      |> Replied.where_depth(is_smaller_than_or_equal_to: (max_depth || @default_max_depth))
+      |> Replied.where_depth(is_smaller_than_or_equal_to: opts[:max_depth])
       |> Activities.query_object_preload_create_activity(current_user)
-      |> Activities.as_permitted_for(current_user_or_socket)
+      |> Activities.as_permitted_for(current_user)
       # |> IO.inspect(label: "Thread nested query")
   end
 
-  def query(filter, current_user_or_socket, max_depth) do
+  def query(filter, opts) do
 
-    current_user = current_user(current_user_or_socket)
-    # IO.inspect(current_user: current_user)
+    current_user = current_user(opts)
 
     Replied
       |> query_filter(filter)
       |> Activities.query_object_preload_create_activity(current_user)
-      |> Activities.as_permitted_for(current_user_or_socket)
+      |> Activities.as_permitted_for(current_user)
       # |> IO.inspect(label: "Thread filtered query")
   end
 

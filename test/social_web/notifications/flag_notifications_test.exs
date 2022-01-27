@@ -32,7 +32,7 @@ defmodule Bonfire.Social.Notifications.Flag.Test do
       assert text =~ "flagged"
     end
 
-    test "flags on a post (which admin does not have permission to see) in admin's notifications" do
+    test "flags on a post (which admin does not explicitly have permission to see) in admin's notifications" do
 
       some_account = fake_account!()
       someone = fake_user!(some_account) #|> IO.inspect()

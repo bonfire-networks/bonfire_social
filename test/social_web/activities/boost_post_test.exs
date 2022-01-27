@@ -22,7 +22,7 @@ defmodule Bonfire.Social.Activities.BoostPost.Test do
       next = "/local"
       {view, doc} = floki_live(conn, next) #|> IO.inspect
       assert view
-      |> element(".feed .boost")
+      |> element(".feed [data-id='boost_action]")
       |> render_click()
       |> Floki.text() =~ "Boosted"
 
@@ -55,7 +55,7 @@ defmodule Bonfire.Social.Activities.BoostPost.Test do
       next = "/local"
       {view, doc} = floki_live(conn, next) #|> IO.inspect
       assert view
-      |> element(".feed .boost")
+      |> element(".feed article:first-child() [data-id='boost_action]")
       |> render_click()
       |> Floki.text() =~ "Boost"
 
@@ -88,7 +88,7 @@ defmodule Bonfire.Social.Activities.BoostPost.Test do
     next = "/home"
     {view, doc} = floki_live(conn, next)
     activity =  doc
-      |> Floki.find("[data-id=feed]  > article")
+      |> Floki.find("[data-id=feed]  > article [data-id='boost_action]")
       |> List.last
     assert activity |> Floki.text =~ "Boosted"
     assert activity |> Floki.text =~ "Boosted (1)"

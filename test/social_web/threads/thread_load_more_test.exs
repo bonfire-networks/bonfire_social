@@ -20,7 +20,7 @@ defmodule Bonfire.Social.Threads.LoadMoreTest do
       attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
       assert {:ok, op} = Posts.publish(alice, attrs, "public")
-      attrs = Map.merge(attrs, %{reply_to: op.id})
+      attrs = Map.merge(attrs, %{reply_to_id: op.id})
 
       for n <- 1..total_posts do
         assert {:ok, post} = Posts.publish(alice, attrs, "public")
@@ -30,7 +30,8 @@ defmodule Bonfire.Social.Threads.LoadMoreTest do
       next = "/discussion/#{op.id}"
       {view, doc} = floki_live(conn, next)
       assert Floki.find(doc, "[data-id=load_more]") == []
-      assert Enum.count(Floki.find(doc, "#replies  > .reply")) == total_posts
+      replies = Floki.find(doc, "[data-id='replies'] > [data-id='comment']") # |> debug()
+      assert Enum.count(replies) == total_posts
     end
 
     test "As a user I want to see the load more button if there are more than 11 replies" do
@@ -46,7 +47,7 @@ defmodule Bonfire.Social.Threads.LoadMoreTest do
       attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
       assert {:ok, op} = Posts.publish(alice, attrs, "public")
-      attrs = Map.merge(attrs, %{reply_to: op.id})
+      attrs = Map.merge(attrs, %{reply_to_id: op.id})
 
       for n <- 1..total_posts do
         assert {:ok, post} = Posts.publish(alice, attrs, "public")
@@ -71,7 +72,7 @@ defmodule Bonfire.Social.Threads.LoadMoreTest do
       attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
       assert {:ok, op} = Posts.publish(alice, attrs, "public")
-      attrs = Map.merge(attrs, %{reply_to: op.id})
+      attrs = Map.merge(attrs, %{reply_to_id: op.id})
 
       for n <- 1..total_posts do
         assert {:ok, post} = Posts.publish(alice, attrs, "public")
@@ -88,8 +89,8 @@ defmodule Bonfire.Social.Threads.LoadMoreTest do
 
       # FIXME: the extra activities are being sent via pubsub, need to figure out how to test that
 
-      assert Enum.count(Floki.find(more_doc, "#replies  > .reply")) == total_posts
-
+      replies = Floki.find(more_doc, "[data-id='replies'] > [data-id='comment']") # |> debug()
+      assert Enum.count(replies) == total_posts
     end
 
     test "As a user when I click on load more I want to see next replies even without JavaScript (using HTTP)" do
@@ -105,7 +106,7 @@ defmodule Bonfire.Social.Threads.LoadMoreTest do
 
       attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
       assert {:ok, op} = Posts.publish(alice, attrs, "public")
-      attrs = Map.merge(attrs, %{reply_to: op.id})
+      attrs = Map.merge(attrs, %{reply_to_id: op.id})
 
       for n <- 1..total_posts do
         assert {:ok, post} = Posts.publish(alice, post_attrs(n, attrs), "public")
@@ -114,14 +115,15 @@ defmodule Bonfire.Social.Threads.LoadMoreTest do
       conn = conn(user: bob, account: account2)
       next = "/discussion/#{op.id}"
       {view, doc} = floki_live(conn, next)
-      assert [load_more_query_string] = Floki.attribute(doc, "[data-id=load_more] a", "href")
+      assert [load_more_query_string] = Floki.attribute(doc, "[data-id=load_more] a a", "href")
 
       url = "/discussion/#{op.id}"<>load_more_query_string
       IO.inspect(url)
       conn = get(conn, url)
       more_doc = floki_response(conn) #|> IO.inspect
-      assert Enum.count(Floki.find(more_doc, "#replies  > .reply")) == total_posts
 
+      replies = Floki.find(more_doc, "[data-id='replies'] > [data-id='comment']") # |> debug()
+      assert Enum.count(replies) == total_posts
     end
 
 

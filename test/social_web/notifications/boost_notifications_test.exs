@@ -26,7 +26,7 @@ defmodule Bonfire.Social.Notifications.Boosts.Test do
       assert [feed] = Floki.find(doc, ".feed")
       assert Floki.text(feed) =~ "epic html post"
       assert Floki.text(feed) =~ booster.profile.name
-      assert Floki.text(feed) =~ "Boosted"
+      assert Floki.text(feed) =~ "boosted"
     end
 
   end

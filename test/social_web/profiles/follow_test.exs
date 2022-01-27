@@ -45,7 +45,6 @@ defmodule Bonfire.Social.Follows.Test do
       {view, doc} = floki_live(conn, next) #|> IO.inspect
 
       assert unfollow = view |> element("[data-id='unfollow']") |> render_click()
-      # FIXME
       assert false == Follows.following?(me, someone)
 
       assert Floki.text(unfollow) =~ "Follow"

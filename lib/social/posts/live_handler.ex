@@ -8,8 +8,6 @@ defmodule Bonfire.Social.Posts.LiveHandler do
   alias Bonfire.Data.Social.Post
   alias Ecto.Changeset
 
-  @thread_max_depth 3 # TODO: put in config
-
   def merge_child(%{} = map, key) do
     map
     |> Map.merge(
@@ -17,12 +15,16 @@ defmodule Bonfire.Social.Posts.LiveHandler do
     )
   end
 
-  def handle_params(%{"after" => cursor} = _attrs, _, %{assigns: %{thread_id: thread_id}} = socket) do
-    live_more(thread_id, cursor, socket)
+  def handle_params(%{"after" => cursor} = attrs, _, %{assigns: %{thread_id: thread_id}} = socket) do
+    live_more(thread_id, input_to_atoms(attrs), socket)
   end
 
-  def handle_event("load_more", %{"after" => cursor} = _attrs, %{assigns: %{thread_id: thread_id}} = socket) do
-    live_more(thread_id, cursor, socket)
+  def handle_params(%{"after" => cursor, "context" => thread_id} = attrs, _, socket) do
+    live_more(thread_id, input_to_atoms(attrs), socket)
+  end
+
+  def handle_event("load_more", %{"after" => cursor} = attrs, %{assigns: %{thread_id: thread_id}} = socket) do
+    live_more(thread_id, input_to_atoms(attrs), socket)
   end
 
   def handle_event("post", %{"create_activity_type"=>"message"}=params, socket) do
@@ -58,7 +60,7 @@ defmodule Bonfire.Social.Posts.LiveHandler do
 
   def handle_event("load_replies", %{"id" => id, "level" => level}, socket) do
     {level, _} = Integer.parse(level)
-    %{edges: replies} = Bonfire.Social.Threads.list_replies(id, socket, level + 1)
+    %{edges: replies} = Bonfire.Social.Threads.list_replies(id, socket: socket, max_depth: level + 1)
     replies = replies ++ Utils.e(socket.assigns, :replies, [])
     {:noreply,
         assign(socket,
@@ -107,7 +109,7 @@ defmodule Bonfire.Social.Posts.LiveHandler do
   def live_more(thread_id, cursor, socket) do
     # IO.inspect(pagination: cursor)
 
-    with %{edges: replies, page_info: page_info} <- Bonfire.Social.Threads.list_replies(thread_id, socket, cursor, @thread_max_depth) do
+    with %{edges: replies, page_info: page_info} <- Bonfire.Social.Threads.list_replies(thread_id, socket: socket, pagination: cursor) do
 
       replies = ( e(socket.assigns, :replies, []) ++ (replies || []) ) |> Enum.uniq()
       # IO.inspect(replies, label: "REPLIES:")
