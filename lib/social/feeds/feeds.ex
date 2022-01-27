@@ -17,7 +17,7 @@ defmodule Bonfire.Social.Feeds do
   def context_module, do: Feed
 
   def target_feeds(%Ecto.Changeset{} = changeset, creator, preset_or_custom_boundary) do
-    debug(changeset)
+    # debug(changeset)
 
     # maybe include people, tags or other characters that were mentioned/tagged
     mentions = Utils.e(changeset, :changes, :post_content, :changes, :mentions, []) #|> debug("mentions")
