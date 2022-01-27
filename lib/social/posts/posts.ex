@@ -34,6 +34,7 @@ defmodule Bonfire.Social.Posts do
       repo().insert(changeset) ~>
         Activities.activity_under_object()
         |> Bonfire.Social.LivePush.push_activity(Feeds.target_feeds(changeset, creator, preset_or_custom_boundary), ...) # TODO: avoid calculating target_feeds twice
+        |> Bonfire.Social.Integration.ap_push_activity(creator.id, ...)
         |> maybe_index()
     end)
   end

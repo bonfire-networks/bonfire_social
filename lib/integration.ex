@@ -7,13 +7,21 @@ defmodule Bonfire.Social.Integration do
 
   def mailer, do: Config.get!(:mailer_module)
 
+  def ap_push_activity(subject_id, activity) do
+    #FIXME bad
+    activity = repo().preload(activity, activity: :verb)
+    verb = String.to_atom(String.downcase(activity.activity.verb.verb))
+    activity_ap_publish(subject_id, verb, activity.activity)
+    activity
+  end
 
   def activity_ap_publish(subject_id, :create, activity) do
+    IO.inspect(activity)
     ap_publish("create", activity.object_id, subject_id)
   end
 
   def activity_ap_publish(subject_id, :follow, activity) do
-    follow = Bonfire.Social.Follows.get!(subject_id, activity.object_id)
+    follow = Bonfire.Social.Follows.get!(subject_id, activity.object_id, skip_boundary_check: true)
     ap_publish("create", follow.id, subject_id)
   end
 
