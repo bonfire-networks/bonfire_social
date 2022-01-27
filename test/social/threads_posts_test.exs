@@ -16,7 +16,7 @@ defmodule Bonfire.Social.ThreadsPostsTest do
     attrs_reply = %{post_content: %{summary: "summary", name: "name 2", html_body: "<p>epic html message</p>"}, reply_to_id: post.id}
     assert {:ok, post_reply} = Posts.publish(user, attrs_reply, "public")
 
-    # IO.inspect(post_reply)
+    # debug(post_reply)
     assert post_reply.replied.reply_to_id == post.id
     assert post_reply.replied.thread_id == post.id
   end
@@ -75,13 +75,15 @@ defmodule Bonfire.Social.ThreadsPostsTest do
 
     attrs_reply = %{post_content: %{summary: "summary", name: "name 2", html_body: "<p>epic html message</p>"}, reply_to_id: post.id}
     assert {:ok, post_reply} = Posts.publish(user, attrs_reply, "public")
+    # debug(post_reply, "first reply")
 
     attrs_reply3 = %{post_content: %{summary: "summary", name: "name 3", html_body: "<p>epic html message</p>"}, reply_to_id: post_reply.id}
     assert {:ok, post_reply3} = Posts.publish(user, attrs_reply3, "public")
+    # debug(post_reply3, "nested reply")
 
     assert %{edges: replies} = Threads.list_replies(post.id, user)
 
-    # IO.inspect(replies)
+    # debug(replies)
     assert length(replies) == 2
     reply = List.last(replies)
     reply3 = List.first(replies)

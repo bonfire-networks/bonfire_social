@@ -17,6 +17,7 @@ defmodule Bonfire.Social.Feeds do
   def context_module, do: Feed
 
   def target_feeds(%Ecto.Changeset{} = changeset, creator, preset_or_custom_boundary) do
+    debug(changeset)
 
     # maybe include people, tags or other characters that were mentioned/tagged
     mentions = Utils.e(changeset, :changes, :post_content, :changes, :mentions, []) #|> debug("mentions")
@@ -25,7 +26,7 @@ defmodule Bonfire.Social.Feeds do
     reply_to_creator = Utils.e(changeset, :changes, :replied, :changes, :replying_to, :created, :creator, nil) #|> debug("reply_to")
 
     # include the thread as feed, so it can be followed
-    thread_id = Utils.e(changeset, :changes, :replied, :changes, :thread_id, nil) || Utils.e(changeset, :changes, :replied, :changes, :replying_to, :thread_id, nil) |> debug("thread_id")
+    thread_id = Utils.e(changeset, :changes, :replied, :changes, :thread_id, nil) || Utils.e(changeset, :changes, :replied, :changes, :replying_to, :thread_id, nil) #|> debug("thread_id")
 
     do_target_feeds(creator, preset_or_custom_boundary, mentions, reply_to_creator, thread_id)
   end
