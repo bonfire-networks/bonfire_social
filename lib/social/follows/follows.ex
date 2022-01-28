@@ -168,23 +168,24 @@ defmodule Bonfire.Social.Follows do
   ###
 
   def ap_publish_activity("create", follow) do
-    with {:ok, follower} <- ActivityPub.Adapter.get_actor_by_id(follow.follower_id),
-         {:ok, followed} <- ActivityPub.Adapter.get_actor_by_id(follow.followed_id) do
+    with {:ok, follower} <- ActivityPub.Adapter.get_actor_by_id(follow.activity.subject_id),
+         {:ok, followed} <- ActivityPub.Adapter.get_actor_by_id(follow.activity.object_id) do
       ActivityPub.follow(follower, followed, nil, true)
     end
   end
 
   def ap_publish_activity("delete", follow) do
-    with {:ok, follower} <- ActivityPub.Adapter.get_actor_by_id(follow.follower_id),
-         {:ok, followed} <- ActivityPub.Adapter.get_actor_by_id(follow.followed_id) do
+    with {:ok, follower} <- ActivityPub.Adapter.get_actor_by_id(follow.activity.subject.id),
+         {:ok, followed} <- ActivityPub.Adapter.get_actor_by_id(follow.activity.object_id) do
       ActivityPub.unfollow(follower, followed, nil, true)
     end
   end
 
-  def ap_receive_activity(follower, %{data: %{"type" => "Follow"} = data} = _activity, %{pointer_id: followed} = object) when is_binary(follower) or is_struct(follower) do
+  def ap_receive_activity(follower, %{data: %{"type" => "Follow"} = data} = _activity, %{pointer_id: followed_id} = object) when is_binary(follower) or is_struct(follower) do
     Logger.warn("Follows: recording an incoming follow")
-    with {:error, _} <- get(follower, followed), # check if not already followed
-         {:ok, follow} <- follow(follower, followed) do
+    with {:ok, followed} <- Bonfire.Me.Users.by_id(followed_id),
+          false <- following?(follower, followed), # check if not already followed
+         {:ok, follow} <- do_follow(follower, followed, current_user: follower) do
       ActivityPub.accept(%{
         to: [data["actor"]],
         actor: object,
@@ -194,7 +195,7 @@ defmodule Bonfire.Social.Follows do
       {:ok, follow}
     else
       # reaffirm that the follow has gone through
-      {:ok, _} ->
+      true ->
         Logger.warn("Follows: federated follow already exists")
         ActivityPub.accept(%{
           to: [data["actor"]],

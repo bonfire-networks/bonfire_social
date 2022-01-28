@@ -122,21 +122,15 @@ defmodule Bonfire.Social.Likes do
 
 
   def ap_publish_activity("create", like) do
-    like = Bonfire.Repo.maybe_preload(like, edge: :object)
-
-    with {:ok, liker} <- ActivityPub.Actor.get_cached_by_local_id(like.edge.subject_id),
-         liked when not is_nil(liked) <- Bonfire.Common.Pointers.follow!(like.edge.object),
-         object when not is_nil(liked) <- Bonfire.Federate.ActivityPub.Utils.get_object(liked) do
+    with {:ok, liker} <- ActivityPub.Actor.get_cached_by_local_id(like.activity.subject_id),
+         object when not is_nil(object) <- Bonfire.Federate.ActivityPub.Utils.get_object(like.activity.object) do
             ActivityPub.like(liker, object)
     end
   end
 
   def ap_publish_activity("delete", like) do
-    like = Bonfire.Repo.maybe_preload(like, edge: :object)
-
-    with {:ok, liker} <- ActivityPub.Actor.get_cached_by_local_id(like.edge.subject_id),
-         liked when not is_nil(liked) <- Bonfire.Common.Pointers.follow!(like.edge.object),
-         object when not is_nil(liked) <- Bonfire.Federate.ActivityPub.Utils.get_object(liked) do
+    with {:ok, liker} <- ActivityPub.Actor.get_cached_by_local_id(like.activity.subject_id),
+         object when not is_nil(object) <- Bonfire.Federate.ActivityPub.Utils.get_object(like.activity.object) do
             ActivityPub.unlike(liker, object)
     end
   end
