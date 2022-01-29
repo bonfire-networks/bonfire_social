@@ -22,20 +22,35 @@ defmodule Bonfire.Social.Follows do
   def get(subject, object, opts \\ []), do: Edges.get(__MODULE__, subject, object, opts)
   def get!(subject, object, opts \\ []), do: Edges.get!(__MODULE__, subject, object, opts)
 
-  def all_follows_by_subject(user, opts \\ []) do
+  # TODO: abstract the next few functions into Edges
+  def all_by_subject(user, opts \\ []) do
     opts
     |> Keyword.put_new(:current_user, user)
+    |> Keyword.put_new(:preload, :object)
     |> query([subject: user], ...)
     |> repo().many()
   end
 
-  def all_followed(user, opts \\ []) do
-    all_follows_by_subject(user, opts)
+  def all_objects_by_subject(user, opts \\ []) do
+    all_by_subject(user, opts)
     |> Enum.map(& e(&1, :edge, :object, nil))
   end
 
+  def all_by_object(user, opts \\ []) do
+    opts
+    |> Keyword.put_new(:current_user, user)
+    |> Keyword.put_new(:preload, :subject)
+    |> query([object: user], ...)
+    |> repo().many()
+  end
+
+  def all_subjects_by_object(user, opts \\ []) do
+    all_by_object(user, opts)
+    |> Enum.map(& e(&1, :edge, :subject, nil))
+  end
+
   def all_followed_outboxes(user, opts \\ []) do
-    all_followed(user, opts)
+    all_objects_by_subject(user, opts)
     |> Enum.map(& e(&1, :character, :outbox_id, nil))
   end
 

@@ -1,19 +1,21 @@
 defmodule Bonfire.Social.Integration do
-
+  use Arrows
   alias Bonfire.Common.Config
+  alias Bonfire.Common.Utils
   require Logger
 
   def repo, do: Config.get!(:repo_module)
 
   def mailer, do: Config.get!(:mailer_module)
 
-  def ap_push_activity(subject_id, activity) do
-    #FIXME bad
-    activity = repo().preload(activity, activity: :verb)
-    verb = String.to_atom(String.downcase(activity.activity.verb.verb))
-    activity_ap_publish(subject_id, verb, activity.activity)
+  def ap_push_activity(subject_id, activity, verb \\ nil)
+  def ap_push_activity(subject_id, %{activity: %{id: _} = activity} = _object, verb), do: ap_push_activity(subject_id, activity, verb)
+  def ap_push_activity(subject_id, %Bonfire.Data.Social.Activity{} = activity, verb) do
+    verb = verb || repo().maybe_preload(activity, :verb) |> Utils.e(:verb, :verb, "Create") |> String.downcase |> String.to_existing_atom
+    activity_ap_publish(subject_id, verb, activity)
     activity
   end
+  def ap_push_activity(subject_id, %{activity: %{}} = object, verb), do: repo().maybe_preload(object, activity: [:verb]) |> ap_push_activity(subject_id, ..., verb)
 
   def activity_ap_publish(subject_id, :create, activity) do
     ap_publish("create", activity.object_id, subject_id)
