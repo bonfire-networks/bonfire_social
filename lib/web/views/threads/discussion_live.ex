@@ -22,13 +22,14 @@ defmodule Bonfire.Social.Web.DiscussionLive do
       page: "Discussion",
       has_private_tab: false,
       search_placeholder: "Search this discussion",
-      smart_input_placeholder: "Reply to this discussion",
+      smart_input_prompt: "Reply to this discussion",
     )}
   end
 
   def do_handle_params(%{"id" => id} = params, _url, socket) do
+    # FIXME: consolidate common code with PostLive and MessageLive
 
-    # current_user = current_user(socket)
+    current_user = current_user(socket)
 
     # IO.inspect(params, label: "PARAMS")
 
@@ -46,6 +47,12 @@ defmodule Bonfire.Social.Web.DiscussionLive do
 
       reply_to_id = e(params, "reply_to_id", id)
 
+      other_characters = if e(activity, :subject, :character, nil) && e(activity, :subject, :id, nil) != e(current_user, :id, nil) do
+        [e(activity, :subject, :character, nil)]
+      end
+
+      mentions = if other_characters, do: Enum.map_join(other_characters, " ", & "@"<>e(&1, :username, ""))<>" "
+
       {:noreply,
       socket
       |> assign(
@@ -53,7 +60,8 @@ defmodule Bonfire.Social.Web.DiscussionLive do
         activity: activity,
         object: Map.merge(object, preloaded_object || %{}),
         thread_id: e(object, :id, nil),
-        smart_input_placeholder: "Reply to #{reply_to_id}",
+        smart_input_prompt: "Reply to #{reply_to_id}",
+        smart_input_text: mentions || "",
       )}
 
     else _e ->

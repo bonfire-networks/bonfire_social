@@ -20,7 +20,7 @@ defmodule Bonfire.Social.Web.PostLive do
     |> assign(
       page_title: "Post",
       page: "Discussion",
-      smart_input_placeholder: "Reply to this post",
+      smart_input_prompt: "Reply to this post",
       has_private_tab: false,
       activity: nil,
       post: nil,
@@ -42,7 +42,13 @@ defmodule Bonfire.Social.Web.PostLive do
       {activity, post} = Map.pop(post, :activity)
       # following = if current_user && module_enabled?(Bonfire.Social.Follows) && Bonfire.Social.Follows.following?(current_user, post), do: [post.id]
 
-      reply_to_id = e(params, "reply_to_id", id) |> debug("reply_to_id")
+      reply_to_id = e(params, "reply_to_id", id) #|> debug("reply_to_id")
+
+      other_characters = if e(activity, :subject, :character, nil) && e(activity, :subject, :id, nil) != e(current_user, :id, nil) do
+        [e(activity, :subject, :character, nil)]
+      end
+
+      mentions = if other_characters, do: Enum.map_join(other_characters, " ", & "@"<>e(&1, :username, ""))<>" " |> debug()
 
       {:noreply,
       socket
@@ -53,8 +59,9 @@ defmodule Bonfire.Social.Web.PostLive do
       )
       |> assign_global(
         thread_id: e(post, :id, nil),
-        smart_input_placeholder: "Reply to post #{reply_to_id}",
+        smart_input_prompt: "Reply to post #{reply_to_id}",
         reply_to_id: reply_to_id,
+        smart_input_text: mentions || "",
       )
       }
 

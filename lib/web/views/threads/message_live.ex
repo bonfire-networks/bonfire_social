@@ -30,7 +30,7 @@ defmodule Bonfire.Social.Web.MessageLive do
       |> assign_global(
         search_placeholder: "Search this discussion",
         create_activity_type: :message,
-        smart_input_placeholder: "Reply to this message",
+        smart_input_prompt: "Reply to this message",
       )
     }
   end
@@ -49,7 +49,7 @@ defmodule Bonfire.Social.Web.MessageLive do
               |> Integration.repo().maybe_preload(tags: [:character])
               |> debug("the message")
 
-      debug(activity, "activity")
+      # debug(activity, "activity")
 
       other_characters = if e(activity, :subject, :character, nil) && e(activity, :subject, :id, nil) != e(current_user, :id, nil) do
         [e(activity, :subject, :character, nil)]
@@ -70,7 +70,7 @@ defmodule Bonfire.Social.Web.MessageLive do
         page: "Private Message",
         has_private_tab: false,
         reply_to_id: reply_to_id,
-        smart_input_placeholder: "Reply to message #{reply_to_id}",
+        smart_input_prompt: "Reply to message #{reply_to_id}",
         activity: activity,
         object: object,
         thread_id: e(object, :id, nil),
