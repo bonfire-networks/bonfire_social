@@ -22,8 +22,7 @@ defmodule Bonfire.Social.Web.DiscussionLive do
       page: "Discussion",
       has_private_tab: false,
       search_placeholder: "Search this discussion",
-      smart_input_placeholder: "Reply to the discussion",
-
+      smart_input_placeholder: "Reply to this discussion",
     )}
   end
 
@@ -45,13 +44,16 @@ defmodule Bonfire.Social.Web.DiscussionLive do
       #   [a, b]
       # end
 
+      reply_to_id = e(params, "reply_to_id", id)
+
       {:noreply,
       socket
       |> assign(
-        reply_id: Map.get(params, "reply_id"),
+        reply_to_id: reply_to_id,
         activity: activity,
         object: Map.merge(object, preloaded_object || %{}),
         thread_id: e(object, :id, nil),
+        smart_input_placeholder: "Reply to #{reply_to_id}",
       )}
 
     else _e ->

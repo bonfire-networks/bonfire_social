@@ -94,7 +94,8 @@ defmodule Bonfire.Social.FeedActivities do
   def feed_paginated(filters \\ [], current_user_or_socket_or_opts \\ [], preloads \\ :all, query \\ FeedPublish)
 
   def feed_paginated(filters, current_user_or_socket_or_opts, preloads, query) do
-    paginate = e(current_user_or_socket_or_opts, :paginate, current_user_or_socket_or_opts)
+    paginate = e(current_user_or_socket_or_opts, :paginate, nil) || e(current_user_or_socket_or_opts, :after, nil)
+
     Logger.debug("feed_paginated with: #{inspect paginate}")
     query_paginated(filters, current_user_or_socket_or_opts, preloads, query)
       # |> debug()

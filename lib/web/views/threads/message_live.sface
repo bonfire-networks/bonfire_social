@@ -3,7 +3,7 @@
   page={@page}
   page_title={@page_title}
   has_private_tab={@has_private_tab}
-  reply_id={@reply_id}
+  reply_to_id={@reply_to_id}
   activity={@activity}
   object={@object}
   thread_id={@thread_id}

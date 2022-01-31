@@ -20,17 +20,18 @@ defmodule Bonfire.Social.Web.PostLive do
     |> assign(
       page_title: "Post",
       page: "Discussion",
-      smart_input_placeholder: "Reply to the discussion",
+      smart_input_placeholder: "Reply to this post",
       has_private_tab: false,
-      reply_id: nil,
+      reply_to_id: nil,
       activity: nil,
       post: nil,
       thread_id: nil,
       replies: []
-    )}
+    )
+  }
   end
 
-  def do_handle_params(%{"id" => id} = _params, _url, socket) do
+  def do_handle_params(%{"id" => id} = params, _url, socket) do
 
     current_user = current_user(socket)
 
@@ -42,15 +43,21 @@ defmodule Bonfire.Social.Web.PostLive do
       {activity, post} = Map.pop(post, :activity)
       # following = if current_user && module_enabled?(Bonfire.Social.Follows) && Bonfire.Social.Follows.following?(current_user, post), do: [post.id]
 
+      reply_to_id = e(params, "reply_to_id", id)
+
       {:noreply,
       socket
       |> assign(
-        reply_id: id,
         activity: activity,
         post: post,
-        thread_id: e(post, :id, nil),
         # following: following || []
-      )}
+      )
+      |> assign_global(
+        thread_id: e(post, :id, nil),
+        smart_input_placeholder: "Reply to post #{reply_to_id}",
+        reply_to_id: reply_to_id,
+      )
+      }
 
     else _e ->
       {:error, "Not found"}

@@ -113,7 +113,7 @@ defmodule Bonfire.Social.Follows do
 
   defp check_follow(follower, followed, opts) do
     skip? = skip_boundary_check?(opts)
-    skip? = (:admins == skip? && Users.is_admin(follower)) || (skip? == true)
+    skip? = (:admins == skip? && Users.is_admin?(follower)) || (skip? == true)
     opts = Keyword.put_new(opts, :verbs, [:see, :follow])
 
     case followed do

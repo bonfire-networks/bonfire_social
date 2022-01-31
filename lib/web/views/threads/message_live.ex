@@ -22,7 +22,7 @@ defmodule Bonfire.Social.Web.MessageLive do
         page_title: "Private Message",
         page: "Private Message",
         has_private_tab: false,
-        reply_id: nil,
+        reply_to_id: nil,
         activity: nil,
         object: nil,
         thread_id: nil,
@@ -30,7 +30,7 @@ defmodule Bonfire.Social.Web.MessageLive do
       |> assign_global(
         search_placeholder: "Search this discussion",
         create_activity_type: "message",
-        smart_input_placeholder: "Reply privately",
+        smart_input_placeholder: "Reply to this message",
       )
     }
   end
@@ -58,13 +58,16 @@ defmodule Bonfire.Social.Web.MessageLive do
 
       mention = if other_user, do: "@"<>e(other_user, :username, "")<>" "
 
+      reply_to_id = e(params, "reply_to_id", id)
+
       {:noreply,
       socket
       |> assign(
         page_title: "Private Message",
         page: "Private Message",
         has_private_tab: false,
-        reply_id: Map.get(params, "reply_id"),
+        reply_to_id: reply_to_id,
+        smart_input_placeholder: "Reply to message #{reply_to_id}",
         activity: activity,
         object: object,
         thread_id: e(object, :id, nil),

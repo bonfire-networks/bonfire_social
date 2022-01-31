@@ -17,7 +17,7 @@ defmodule Bonfire.Social.Web.Routes do
         live "/post", PostLive, as: Bonfire.Data.Social.Post
         live "/post/:id", PostLive, as: Bonfire.Data.Social.Post
         live "/discussion/:id", DiscussionLive, as: Bonfire.Data.Social.PostContent
-        live "/discussion/:id/reply/:reply_id", DiscussionLive
+        live "/discussion/:id/reply/:reply_to_id", DiscussionLive
 
       end
 
@@ -39,7 +39,7 @@ defmodule Bonfire.Social.Web.Routes do
         live "/favourited/", Feeds.FavouritedLive, as: :favourited
 
         live "/message/:id", MessageLive, as: Bonfire.Data.Social.Message
-        live "/message/:id/reply/:reply_id", MessageLive
+        live "/message/:id/reply/:reply_to_id", MessageLive
 
       end
 

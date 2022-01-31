@@ -22,7 +22,7 @@ defmodule Bonfire.Social.Web.WriteLive do
       page: "Write",
       smart_input_placeholder: "Write something",
       has_private_tab: false,
-      reply_id: nil,
+      reply_to_id: nil,
       thread_id: nil,
     )}
   end

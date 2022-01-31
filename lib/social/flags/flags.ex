@@ -39,7 +39,7 @@ defmodule Bonfire.Social.Flags do
 
   defp check_flag(flagger, flagged, opts) do
     skip? = skip_boundary_check?(opts)
-    skip? = (:admins == skip? && Users.is_admin(flagger)) || (skip? == true)
+    skip? = (:admins == skip? && Users.is_admin?(flagger)) || (skip? == true)
     case flagged do
       %{id: id} ->
         if skip?, do: {:ok, flagged},
