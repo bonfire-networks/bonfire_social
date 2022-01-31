@@ -28,7 +28,7 @@ defmodule Bonfire.Social.Messages do
 
   def send(%{id: _} = creator, attrs, to \\ nil) do
 
-    #IO.inspect(attrs)
+    # debug(attrs)
     repo().transact_with(fn ->
       with to when is_list(to) and length(to) > 0 <- to || Utils.e(attrs, :to_circles, nil),
            {:ok, to_characters} <- Characters.get(to),
@@ -47,7 +47,7 @@ defmodule Bonfire.Social.Messages do
         end
       else e ->
         debug(e)
-        {:error, "Did not send the message. Make sure you indicate who to send it to."}
+        {:error, "Oops, could not send the message."}
       end
     end)
   end
@@ -159,9 +159,9 @@ defmodule Bonfire.Social.Messages do
 
     {:ok, actor} = ActivityPub.Adapter.get_actor_by_id(Utils.e(message, :created, :creator_id, nil))
 
-
+    # debug(message.activity.tags)
     recipients =
-      Enum.filter(message.activity.tags, fn tag -> tag.facet == "User" end)
+      Enum.filter(message.activity.tags, fn tag -> tag.table_id == "5EVSER1S0STENS1B1YHVMAN01D" end)
       |> Enum.map(fn tag -> ActivityPub.Actor.get_by_local_id!(tag.id) end)
       |> Enum.map(fn actor -> actor.ap_id end)
 

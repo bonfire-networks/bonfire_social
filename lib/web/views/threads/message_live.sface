@@ -3,8 +3,10 @@
   page={@page}
   page_title={@page_title}
   has_private_tab={@has_private_tab}
+  create_activity_type={e(assigns, :create_activity_type, nil)}
+  to_circles={e(assigns, :to_circles, [])}
+  thread_id={@thread_id}
   reply_to_id={@reply_to_id}
   activity={@activity}
   object={@object}
-  thread_id={@thread_id}
 />

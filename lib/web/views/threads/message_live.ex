@@ -29,7 +29,7 @@ defmodule Bonfire.Social.Web.MessageLive do
       ) #|> IO.inspect
       |> assign_global(
         search_placeholder: "Search this discussion",
-        create_activity_type: "message",
+        create_activity_type: :message,
         smart_input_placeholder: "Reply to this message",
       )
     }
@@ -46,17 +46,20 @@ defmodule Bonfire.Social.Web.MessageLive do
       {preloaded_object, activity} = Map.pop(activity, :object)
 
       object = Map.merge(object, preloaded_object)
-              |> Integration.repo().maybe_preload(:tags)
-              # |> IO.inspect(label: "the message")
+              |> Integration.repo().maybe_preload(tags: [:character])
+              |> debug("the message")
 
-      # IO.inspect(activity)
-      other_user = if e(activity, :subject, :character, :id, nil) != e(current_user, :id, nil) && e(activity, :subject, :character, :id, nil) do
-        e(activity, :subject, :character, nil)
+      debug(activity, "activity")
+
+      other_characters = if e(activity, :subject, :character, nil) && e(activity, :subject, :id, nil) != e(current_user, :id, nil) do
+        [e(activity, :subject, :character, nil)]
       else
-        if e(activity, :replied, :reply_to_created, :creator_character, :id, nil) != e(current_user, :id, nil) && e(activity, :replied, :reply_to_created, :creator_character, nil), do: e(activity, :replied, :reply_to_created, :creator_character, nil)
+        if e(object, :tags, nil), do: Enum.map(e(object, :tags, []), &e(&1, :character, nil))
       end
 
-      mention = if other_user, do: "@"<>e(other_user, :username, "")<>" "
+      mentions = if other_characters, do: Enum.map_join(other_characters, " ", & "@"<>e(&1, :username, ""))<>" "
+
+      to_circles = if other_characters, do: Enum.map(other_characters, & {e(&1, :username, l "someone"), e(&1, :id, nil)})
 
       reply_to_id = e(params, "reply_to_id", id)
 
@@ -73,11 +76,8 @@ defmodule Bonfire.Social.Web.MessageLive do
         thread_id: e(object, :id, nil),
       ) #|> IO.inspect
       |> assign_global(
-        search_placeholder: "Search this discussion",
-        create_activity_type: "message",
-        smart_input_placeholder: "Reply privately",
-        smart_input_text: mention || "",
-        to_circles: [{e(other_user, :username, l "someone"), e(other_user, :id, nil)}]
+        smart_input_text: mentions || "",
+        to_circles: to_circles || []
       )
     }
 

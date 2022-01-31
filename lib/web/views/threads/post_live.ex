@@ -22,7 +22,6 @@ defmodule Bonfire.Social.Web.PostLive do
       page: "Discussion",
       smart_input_placeholder: "Reply to this post",
       has_private_tab: false,
-      reply_to_id: nil,
       activity: nil,
       post: nil,
       thread_id: nil,
@@ -43,7 +42,7 @@ defmodule Bonfire.Social.Web.PostLive do
       {activity, post} = Map.pop(post, :activity)
       # following = if current_user && module_enabled?(Bonfire.Social.Follows) && Bonfire.Social.Follows.following?(current_user, post), do: [post.id]
 
-      reply_to_id = e(params, "reply_to_id", id)
+      reply_to_id = e(params, "reply_to_id", id) |> debug("reply_to_id")
 
       {:noreply,
       socket
