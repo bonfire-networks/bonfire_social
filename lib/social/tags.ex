@@ -14,7 +14,7 @@ defmodule Bonfire.Social.Tags do
          tags when is_list(tags) and length(tags)>0 <-
           (Utils.e(changeset, :changes, :post_content, :changes, :mentions, []) # use any mentions that were found in the text and injected into the changeset by PostContents
           ++ Utils.e(attrs, :tags, []))
-          |> filter_empty()
+          |> filter_empty([])
           |> Enum.uniq()
     do
       changeset

@@ -220,9 +220,14 @@ defmodule Bonfire.Social.Activities do
   def activity_under_object(%{} = object_without_activity) do
     Map.put(object_without_activity, :activity, %{})
   end
+  def activity_under_object({:ok, %{} = object}) do
+    {:ok, activity_under_object(object)}
+  end
+
   def activity_under_object(%Activity{} = activity, %{}=object) do
     Map.put(object, :activity, activity)
   end
+
 
   def object_from_activity(%{object: %{post_content: %{id: _} = _content} = object}), do: object # no need to load Post object
   def object_from_activity(%{object: %Pointers.Pointer{id: _} = object}), do: load_object(object) # get other pointable objects (only as fallback, should normally already be preloaded)

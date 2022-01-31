@@ -88,7 +88,7 @@ defmodule Bonfire.Social.Objects do
   end
 
   defp cast_creator(changeset, creator),
-    do: cast_creator(changeset, creator, Utils.e(creator, :id, nil))
+    do: cast_creator(changeset, creator, e(creator, :id, nil))
 
   defp cast_creator(changeset, _creator, nil), do: changeset
   defp cast_creator(changeset, _creator, creator_id) do
@@ -98,7 +98,7 @@ defmodule Bonfire.Social.Objects do
   end
 
   defp cast_creator_caretaker(changeset, creator),
-    do: cast_creator_caretaker(changeset, creator, Utils.e(creator, :id, nil))
+    do: cast_creator_caretaker(changeset, creator, e(creator, :id, nil))
 
   defp cast_creator_caretaker(changeset, _creator, nil), do: changeset
   defp cast_creator_caretaker(changeset, _creator, creator_id) do
@@ -110,17 +110,19 @@ defmodule Bonfire.Social.Objects do
   end
 
   def read(object_id, socket_or_current_user) when is_binary(object_id) do
-    current_user = Utils.current_user(socket_or_current_user) #|> IO.inspect
+    current_user = current_user(socket_or_current_user) #|> debug
     Common.Pointers.pointer_query([id: object_id], socket_or_current_user)
     |> Activities.read(socket: socket_or_current_user, skip_boundary_check: true)
-    # |> Utils.debug("activities")
+    # |> debug("object with activity")
     ~> maybe_preload_activity_object(current_user)
     ~> Activities.activity_under_object(...)
+    ~> to_ok()
+    |> debug("final object")
   end
 
   def maybe_preload_activity_object(%{activity: %{object: _}} = pointer, current_user) do
-    Common.Pointers.Preload.maybe_preload_nested_pointers pointer, [activity: [:object]],
-      current_user: current_user, skip_boundary_check: true
+    Common.Pointers.Preload.maybe_preload_nested_pointers(pointer, [activity: [:object]],
+      current_user: current_user, skip_boundary_check: true)
   end
   def maybe_preload_activity_object(pointer, _current_user), do: pointer
 
@@ -136,7 +138,7 @@ defmodule Bonfire.Social.Objects do
     do: Bonfire.Repo.maybe_preload(object, [created: [creator: [:character]]])
 
   def object_creator(object) do
-    Utils.e(object, :created, :creator, :character, Utils.e(object, :creator, nil))
+    e(object, :created, :creator, :character, e(object, :creator, nil))
   end
 
   defp tag_ids(tags), do: Enum.map(tags, &(&1.id))

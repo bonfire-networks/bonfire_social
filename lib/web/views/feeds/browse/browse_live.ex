@@ -78,51 +78,42 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
   def fediverse_feed(socket) do
     feed_id = Bonfire.Social.Feeds.named_feed_id(:activity_pub)
     feed = Bonfire.Social.FeedActivities.feed(feed_id, socket)
-    to_circles = [Bonfire.Boundaries.Circles.get_tuple(:activity_pub)]
 
     [
       current_user: current_user(socket),
       selected_tab: "fediverse",
-      to_circles: to_circles,
       feed_title: "Activities from around the fediverse",
       feed_id: feed_id,
       feed: e(feed, :edges, []),
       page_info: e(feed, :page_info, []),
     ]
-    #|> assign_global(to_circles: to_circles)
   end
 
   def instance_feed(socket) do
     feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
     feed = Bonfire.Social.FeedActivities.feed(feed_id, socket)
-    to_circles = [Bonfire.Boundaries.Circles.get_tuple(:local)]
 
     [
       current_user: current_user(socket),
       selected_tab: "instance",
       feed_title: "Activities on this instance",
-      to_circles: to_circles,
       feed_id: feed_id,
       feed: e(feed, :edges, []),
       page_info: e(feed, :page_info, []) #|> IO.inspect
     ]
-    #|> assign_global(to_circles: to_circles)
   end
 
   def my_feed(current_user, socket) do
     # IO.inspect(myfeed: feed)
     feed = Bonfire.Social.FeedActivities.my_feed(socket)
-    to_circles = Bonfire.Me.Users.Circles.list_my_defaults(current_user)
     [
       current_user: current_user,
       selected_tab: "feed",
       feed_title: "My Feed",
-      to_circles: to_circles,
       feed_id: "my:"<>e(current_user, :id, ""),
       feed: e(feed, :edges, []),
       page_info: e(feed, :page_info, [])
     ]
-    #|> assign_global(to_circles: to_circles)
   end
 
 
