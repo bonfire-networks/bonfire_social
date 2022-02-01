@@ -116,15 +116,15 @@ defmodule Bonfire.Social.Boosts do
   end
 
   def ap_publish_activity("create", boost) do
-    with {:ok, booster} <- ActivityPub.Actor.get_cached_by_local_id(boost.activity.subject_id),
-         object when not is_nil(object) <- Bonfire.Federate.ActivityPub.Utils.get_object(boost.activity.object) do
+    with {:ok, booster} <- ActivityPub.Actor.get_cached_by_local_id(boost.edge.subject_id),
+         object when not is_nil(object) <- Bonfire.Federate.ActivityPub.Utils.get_object(boost.edge.object) do
             ActivityPub.announce(booster, object)
     end
   end
 
   def ap_publish_activity("delete", boost) do
-    with {:ok, booster} <- ActivityPub.Actor.get_cached_by_local_id(boost.activity.subject_id),
-         object when not is_nil(object) <- Bonfire.Federate.ActivityPub.Utils.get_object(boost.activity.object) do
+    with {:ok, booster} <- ActivityPub.Actor.get_cached_by_local_id(boost.edge.subject_id),
+         object when not is_nil(object) <- Bonfire.Federate.ActivityPub.Utils.get_object(boost.edge.object) do
             ActivityPub.unannounce(booster, object)
     end
   end

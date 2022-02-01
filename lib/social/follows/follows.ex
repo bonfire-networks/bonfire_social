@@ -183,15 +183,15 @@ defmodule Bonfire.Social.Follows do
   ###
 
   def ap_publish_activity("create", follow) do
-    with {:ok, follower} <- ActivityPub.Adapter.get_actor_by_id(follow.activity.subject_id),
-         {:ok, followed} <- ActivityPub.Adapter.get_actor_by_id(follow.activity.object_id) do
+    with {:ok, follower} <- ActivityPub.Adapter.get_actor_by_id(follow.edge.subject_id),
+         {:ok, followed} <- ActivityPub.Adapter.get_actor_by_id(follow.edge.object_id) do
       ActivityPub.follow(follower, followed, nil, true)
     end
   end
 
   def ap_publish_activity("delete", follow) do
-    with {:ok, follower} <- ActivityPub.Adapter.get_actor_by_id(follow.activity.subject.id),
-         {:ok, followed} <- ActivityPub.Adapter.get_actor_by_id(follow.activity.object_id) do
+    with {:ok, follower} <- ActivityPub.Adapter.get_actor_by_id(follow.edge.subject.id),
+         {:ok, followed} <- ActivityPub.Adapter.get_actor_by_id(follow.edge.object_id) do
       ActivityPub.unfollow(follower, followed, nil, true)
     end
   end
