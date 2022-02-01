@@ -8,14 +8,21 @@ defmodule Bonfire.Social.Integration do
 
   def mailer, do: Config.get!(:mailer_module)
 
+  # This should return the same type it accepts
   def ap_push_activity(subject_id, activity, verb \\ nil)
-  def ap_push_activity(subject_id, %{activity: %{id: _} = activity} = _object, verb), do: ap_push_activity(subject_id, activity, verb)
+  def ap_push_activity(subject_id, %{activity: %{id: _} = activity} = object, verb), do: ap_push_activity_with_object(subject_id, activity, verb, object)
   def ap_push_activity(subject_id, %Bonfire.Data.Social.Activity{} = activity, verb) do
     verb = verb || repo().maybe_preload(activity, :verb) |> Utils.e(:verb, :verb, "Create") |> String.downcase |> String.to_existing_atom
     activity_ap_publish(subject_id, verb, activity)
     activity
   end
   def ap_push_activity(subject_id, %{activity: %{}} = object, verb), do: repo().maybe_preload(object, activity: [:verb]) |> ap_push_activity(subject_id, ..., verb)
+
+  def ap_push_activity_with_object(subject_id, %Bonfire.Data.Social.Activity{} = activity, verb, object) do
+    verb = verb || repo().maybe_preload(activity, :verb) |> Utils.e(:verb, :verb, "Create") |> String.downcase |> String.to_existing_atom
+    activity_ap_publish(subject_id, verb, activity)
+    object
+  end
 
   def activity_ap_publish(subject_id, :create, activity) do
     ap_publish("create", activity.object_id, subject_id)
