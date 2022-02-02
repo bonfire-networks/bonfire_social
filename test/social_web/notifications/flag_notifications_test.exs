@@ -1,6 +1,7 @@
 defmodule Bonfire.Social.Notifications.Flag.Test do
 
   use Bonfire.Social.ConnCase
+  alias Bonfire.Me.Users
   alias Bonfire.Social.Fake
   alias Bonfire.Social.Flags
   alias Bonfire.Social.Posts
@@ -11,8 +12,7 @@ defmodule Bonfire.Social.Notifications.Flag.Test do
     test "flags on a post (which admin has permission to see) in admin's notifications" do
 
       some_account = fake_account!()
-      someone = fake_user!(some_account)
-      |> Bonfire.Me.Users.make_admin()
+      {:ok, someone} = Users.make_admin(fake_user!(some_account))
       #|> IO.inspect()
 
       poster = fake_user!()
@@ -35,9 +35,8 @@ defmodule Bonfire.Social.Notifications.Flag.Test do
     test "flags on a post (which admin does not explicitly have permission to see) in admin's notifications" do
 
       some_account = fake_account!()
-      someone = fake_user!(some_account) #|> IO.inspect()
-      |> Bonfire.Me.Users.make_admin()
-
+      {:ok, someone} = Users.make_admin(fake_user!(some_account))
+ 
       poster = fake_user!()
       attrs = %{post_content: %{html_body: "<p>here is an epic html post</p>"}}
       assert {:ok, post} = Posts.publish(current_user: poster, post_attrs: attrs, boundary: "mentions")
