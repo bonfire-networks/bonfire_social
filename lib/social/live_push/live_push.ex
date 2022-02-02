@@ -1,6 +1,9 @@
 defmodule Bonfire.Social.LivePush do
   use Bonfire.Common.Utils
 
+  def push_activity(feed_ids, %{activity: %{}=activity}),
+    do: push_activity(feed_ids, activity)
+
   def push_activity(feed_ids, activity) do
     pubsub_broadcast(feed_ids, {{Bonfire.Social.Feeds, :new_activity}, activity})
     maybe_push_thread(activity)

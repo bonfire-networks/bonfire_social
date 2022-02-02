@@ -39,7 +39,7 @@ defmodule Bonfire.Social.Feeds.Fediverse.Test do
     #   user = fake_user!(account) # TODO use remote actor
     #   attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
-    #   assert {:ok, post} = Posts.publish(user, attrs, "public")
+    #   assert {:ok, post} = Posts.publish(current_user: user, post_attrs: attrs, boundary: "public")
     #   assert post.post_content.name =~ "test post name"
 
     #   conn = conn(user: user, account: account)
@@ -57,7 +57,7 @@ defmodule Bonfire.Social.Feeds.Fediverse.Test do
 
     #   attrs = %{to_circles: [user2.id], post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
-    #   assert {:ok, post} = Posts.publish(user, attrs, "activity_pub")
+    #   assert {:ok, post} = Posts.publish(current_user: user, post_attrs: attrs, boundary: activity_pub")
     #   assert post.post_content.name =~ "test post name"
 
     #   conn = conn(user: user2, account: account)
@@ -90,7 +90,7 @@ defmodule Bonfire.Social.Feeds.Fediverse.Test do
 
       attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
-      assert {:ok, post} = Posts.publish(user, attrs, "local")
+      assert {:ok, post} = Posts.publish(current_user: user, post_attrs: attrs, boundary: "local")
       assert post.post_content.name =~ "test post name"
 
       conn = conn(user: user2, account: account2)

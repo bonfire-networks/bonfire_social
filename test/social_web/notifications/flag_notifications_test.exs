@@ -17,7 +17,7 @@ defmodule Bonfire.Social.Notifications.Flag.Test do
 
       poster = fake_user!()
       attrs = %{post_content: %{html_body: "<p>here is an epic html post</p>"}}
-      assert {:ok, post} = Posts.publish(poster, attrs, "public")
+      assert {:ok, post} = Posts.publish(current_user: poster, post_attrs: attrs, boundary: "public")
 
       flagger = fake_user!()
       Flags.flag(flagger, post)
@@ -40,7 +40,7 @@ defmodule Bonfire.Social.Notifications.Flag.Test do
 
       poster = fake_user!()
       attrs = %{post_content: %{html_body: "<p>here is an epic html post</p>"}}
-      assert {:ok, post} = Posts.publish(poster, attrs, "mentions")
+      assert {:ok, post} = Posts.publish(current_user: poster, post_attrs: attrs, boundary: "mentions")
 
       flagger = fake_user!()
       Flags.flag(flagger, post)

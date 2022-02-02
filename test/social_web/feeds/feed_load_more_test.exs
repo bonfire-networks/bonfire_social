@@ -20,7 +20,7 @@ defmodule Bonfire.Social.Feeds.LoadMoreTest do
       attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
       for n <- 1..total_posts do
-        assert {:ok, post} = Posts.publish(alice, attrs, "public")
+        assert {:ok, post} = Posts.publish(current_user: alice, post_attrs: attrs, boundary: "public")
       end
 
       conn = conn(user: bob, account: account2)
@@ -43,7 +43,7 @@ defmodule Bonfire.Social.Feeds.LoadMoreTest do
       attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
       for n <- 1..total_posts do
-        assert {:ok, post} = Posts.publish(alice, attrs, "public")
+        assert {:ok, post} = Posts.publish(current_user: alice, post_attrs: attrs, boundary: "public")
       end
 
       conn = conn(user: bob, account: account2)
@@ -65,7 +65,7 @@ defmodule Bonfire.Social.Feeds.LoadMoreTest do
       attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
       for n <- 1..total_posts do
-        assert {:ok, post} = Posts.publish(alice, attrs, "public")
+        assert {:ok, post} = Posts.publish(current_user: alice, post_attrs: attrs, boundary: "public")
       end
 
       conn = conn(user: bob, account: account2)
@@ -96,7 +96,7 @@ defmodule Bonfire.Social.Feeds.LoadMoreTest do
       Follows.follow(bob, alice)
 
       for n <- 1..total_posts do
-        assert {:ok, post} = Posts.publish(alice, post_attrs(n), "public")
+        assert {:ok, post} = Posts.publish(current_user: alice, post_attrs: post_attrs(n), boundary: "public")
       end
 
       conn = conn(user: bob, account: account2)

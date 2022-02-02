@@ -19,11 +19,11 @@ defmodule Bonfire.Social.Threads.LoadMoreTest do
       Follows.follow(bob, alice)
       attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
-      assert {:ok, op} = Posts.publish(alice, attrs, "public")
+      assert {:ok, op} = Posts.publish(current_user: alice, post_attrs: attrs, boundary: "public")
       attrs = Map.merge(attrs, %{reply_to_id: op.id})
 
       for n <- 1..total_posts do
-        assert {:ok, post} = Posts.publish(alice, attrs, "public")
+        assert {:ok, post} = Posts.publish(current_user: alice, post_attrs: attrs, boundary: "public")
       end
 
       conn = conn(user: bob, account: account2)
@@ -46,11 +46,11 @@ defmodule Bonfire.Social.Threads.LoadMoreTest do
       Follows.follow(bob, alice)
       attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
-      assert {:ok, op} = Posts.publish(alice, attrs, "public")
+      assert {:ok, op} = Posts.publish(current_user: alice, post_attrs: attrs, boundary: "public")
       attrs = Map.merge(attrs, %{reply_to_id: op.id})
 
       for n <- 1..total_posts do
-        assert {:ok, post} = Posts.publish(alice, attrs, "public")
+        assert {:ok, post} = Posts.publish(current_user: alice, post_attrs: attrs, boundary: "public")
       end
 
       conn = conn(user: bob, account: account2)
@@ -71,11 +71,11 @@ defmodule Bonfire.Social.Threads.LoadMoreTest do
       Follows.follow(bob, alice)
       attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
-      assert {:ok, op} = Posts.publish(alice, attrs, "public")
+      assert {:ok, op} = Posts.publish(current_user: alice, post_attrs: attrs, boundary: "public")
       attrs = Map.merge(attrs, %{reply_to_id: op.id})
 
       for n <- 1..total_posts do
-        assert {:ok, post} = Posts.publish(alice, attrs, "public")
+        assert {:ok, post} = Posts.publish(current_user: alice, post_attrs: attrs, boundary: "public")
       end
 
       conn = conn(user: bob, account: account2)
@@ -105,11 +105,11 @@ defmodule Bonfire.Social.Threads.LoadMoreTest do
       Follows.follow(bob, alice)
 
       attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
-      assert {:ok, op} = Posts.publish(alice, attrs, "public")
+      assert {:ok, op} = Posts.publish(current_user: alice, post_attrs: attrs, boundary: "public")
       attrs = Map.merge(attrs, %{reply_to_id: op.id})
 
       for n <- 1..total_posts do
-        assert {:ok, post} = Posts.publish(alice, post_attrs(n, attrs), "public")
+        assert {:ok, post} = Posts.publish(current_user: alice, post_attrs: post_attrs(n, attrs), boundary: "public")
       end
 
       conn = conn(user: bob, account: account2)

@@ -10,6 +10,7 @@ defmodule Bonfire.Social.Integration do
 
   # This should return the same type it accepts
   def ap_push_activity(subject_id, activity, verb \\ nil)
+  def ap_push_activity(%{id: subject_id}, activity, verb), do: ap_push_activity(subject_id, activity, verb)
   def ap_push_activity(subject_id, %{activity: %{id: _} = activity} = object, verb), do: ap_push_activity_with_object(subject_id, activity, verb, object)
   def ap_push_activity(subject_id, %Bonfire.Data.Social.Activity{} = activity, verb) do
     verb = verb || repo().maybe_preload(activity, :verb) |> Utils.e(:verb, :verb, "Create") |> String.downcase |> String.to_existing_atom

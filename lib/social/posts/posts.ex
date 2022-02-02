@@ -4,13 +4,14 @@ defmodule Bonfire.Social.Posts do
   alias Bonfire.Data.Social.{Post, PostContent, Replied, Activity}
   alias Bonfire.Social.{Activities, FeedActivities, Feeds, Objects}
   alias Bonfire.Boundaries.{Circles, Verbs}
+  alias Bonfire.{Epics, Epics.Epic}
   alias Bonfire.Social.{Integration, PostContents, Tags, Threads}
   alias Ecto.Changeset
 
   use Bonfire.Repo,
-      schema: Post,
-      searchable_fields: [:id],
-      sortable_fields: [:id]
+    schema: Post,
+    searchable_fields: [:id],
+    sortable_fields: [:id]
 
   use Bonfire.Common.Utils
 
@@ -18,7 +19,12 @@ defmodule Bonfire.Social.Posts do
 
   def queries_module, do: Post
   def context_module, do: Post
-  def federation_module, do: [{"Create", "Note"}, {"Update", "Note"}, {"Create", "Article"}, {"Update", "Article"}]
+  def federation_module, do: [
+    {"Create", "Note"},
+    {"Update", "Note"},
+    {"Create", "Article"},
+    {"Update", "Article"}
+  ]
 
   def draft(creator, attrs) do
     # TODO: create as private
@@ -27,16 +33,12 @@ defmodule Bonfire.Social.Posts do
     # end
   end
 
-  def publish(%{id: _} = creator, attrs, preset_or_custom_boundary \\ nil) do
-    # we attempt to avoid entering the transaction as long as possible.
-    changeset = changeset(:create, attrs, creator, preset_or_custom_boundary)
-    repo().transact_with(fn ->
-      repo().insert(changeset) ~>
-        Activities.activity_under_object()
-        |> Bonfire.Social.LivePush.push_activity(Feeds.target_feeds(changeset, creator, preset_or_custom_boundary), ...) # TODO: avoid calculating target_feeds twice
-        |> Bonfire.Social.Integration.ap_push_activity(creator.id, ...)
-        |> maybe_index()
-    end)
+  def publish(options \\ []) do
+    epic =
+      Epics.from_config!(__MODULE__, :publish)
+      |> Epic.assign(:options, options)
+      |> Epic.run()
+    if epic.errors == [], do: {:ok, epic.assigns.post}, else: {:error, epic}
   end
 
 
@@ -245,7 +247,7 @@ defmodule Bonfire.Social.Posts do
         attrs
       end
 
-    with {:ok, post} <- publish(creator, attrs, "public") do
+    with {:ok, post} <- publish(current_user: creator, post_attrs: attrs, boundary: "public") do
       # IO.inspect(remote_post: post)
       {:ok, post}
     end

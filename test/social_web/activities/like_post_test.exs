@@ -13,7 +13,7 @@ defmodule Bonfire.Social.Activities.LikePost.Test do
       poster = fake_user!()
       content = "here is an epic html post"
       attrs = %{post_content: %{html_body: content}}
-      assert {:ok, post} = Posts.publish(poster, attrs, "local")
+      assert {:ok, post} = Posts.publish(current_user: poster, post_attrs: attrs, boundary: "local")
 
       some_account = fake_account!()
       someone = fake_user!(some_account)
@@ -35,7 +35,7 @@ defmodule Bonfire.Social.Activities.LikePost.Test do
       poster = fake_user!()
       content = "here is an epic html post"
       attrs = %{post_content: %{html_body: content}}
-      assert {:ok, post} = Posts.publish(poster, attrs, "local")
+      assert {:ok, post} = Posts.publish(current_user: poster, post_attrs: attrs, boundary: "local")
 
       assert {:ok, like} = Likes.like(fake_user!(), post)
       assert {:ok, like} = Likes.like(fake_user!(), post)
@@ -70,7 +70,7 @@ defmodule Bonfire.Social.Activities.LikePost.Test do
       poster = fake_user!()
       content = "here is an epic html post"
       attrs = %{post_content: %{html_body: content}}
-      assert {:ok, post} = Posts.publish(poster, attrs, "local")
+      assert {:ok, post} = Posts.publish(current_user: poster, post_attrs: attrs, boundary: "local")
 
       some_account = fake_account!()
       someone = fake_user!(some_account)
@@ -106,7 +106,7 @@ defmodule Bonfire.Social.Activities.LikePost.Test do
     Follows.follow(bob, alice)
     attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>first post/p>"}}
 
-    assert {:ok, post} = Posts.publish(alice, attrs, "public")
+    assert {:ok, post} = Posts.publish(current_user: alice, post_attrs: attrs, boundary: "public")
     assert {:ok, like} = Likes.like(charlie, post)
 
     conn = conn(user: bob, account: account2)

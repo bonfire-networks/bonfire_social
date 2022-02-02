@@ -11,7 +11,7 @@ defmodule Bonfire.Social.BoostsTest do
     me = Fake.fake_user!()
 
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
-    assert {:ok, boosted} = Posts.publish(me, attrs, "public")
+    assert {:ok, boosted} = Posts.publish(current_user: me, post_attrs: attrs, boundary: "public")
 
     assert {:ok, %{edge: edge}} = Boosts.boost(me, boosted)
     # IO.inspect(activity)
@@ -22,7 +22,7 @@ defmodule Bonfire.Social.BoostsTest do
   test "can check if I boosted something" do
     me = Fake.fake_user!()
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
-    assert {:ok, boosted} = Posts.publish(me, attrs, "public")
+    assert {:ok, boosted} = Posts.publish(current_user: me, post_attrs: attrs, boundary: "public")
     assert {:ok, boost} = Boosts.boost(me, boosted)
 
     assert true == Boosts.boosted?(me, boosted)
@@ -31,7 +31,7 @@ defmodule Bonfire.Social.BoostsTest do
   test "can check if I did not boost something" do
     me = Fake.fake_user!()
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
-    assert {:ok, boosted} = Posts.publish(me, attrs, "public")
+    assert {:ok, boosted} = Posts.publish(current_user: me, post_attrs: attrs, boundary: "public")
 
     assert false == Boosts.boosted?(me, boosted)
   end
@@ -39,7 +39,7 @@ defmodule Bonfire.Social.BoostsTest do
   test "can unboost something" do
     me = Fake.fake_user!()
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
-    assert {:ok, boosted} = Posts.publish(me, attrs, "public")
+    assert {:ok, boosted} = Posts.publish(current_user: me, post_attrs: attrs, boundary: "public")
     assert {:ok, boost} = Boosts.boost(me, boosted)
 
     Boosts.unboost(me, boosted)
@@ -49,7 +49,7 @@ defmodule Bonfire.Social.BoostsTest do
   test "can list my boosts" do
     me = Fake.fake_user!()
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
-    assert {:ok, boosted} = Posts.publish(me, attrs, "public")
+    assert {:ok, boosted} = Posts.publish(current_user: me, post_attrs: attrs, boundary: "public")
     assert {:ok, boost} = Boosts.boost(me, boosted)
 
     assert %{edges: [fetched_boost]} = Boosts.list_my(me)
@@ -61,7 +61,7 @@ defmodule Bonfire.Social.BoostsTest do
     me = Fake.fake_user!()
     someone = Fake.fake_user!()
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
-    assert {:ok, boosted} = Posts.publish(me, attrs, "public")
+    assert {:ok, boosted} = Posts.publish(current_user: me, post_attrs: attrs, boundary: "public")
     assert {:ok, boost} = Boosts.boost(me, boosted)
     assert {:ok, boost2} = Boosts.boost(someone, boosted)
 
@@ -74,7 +74,7 @@ defmodule Bonfire.Social.BoostsTest do
     me = Fake.fake_user!()
     someone = Fake.fake_user!()
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
-    assert {:ok, boosted} = Posts.publish(me, attrs, "public")
+    assert {:ok, boosted} = Posts.publish(current_user: me, post_attrs: attrs, boundary: "public")
     assert {:ok, boost} = Boosts.boost(someone, boosted)
 
     assert %{edges: [fetched_boost]} = Boosts.list_by(someone, me)
@@ -87,7 +87,7 @@ defmodule Bonfire.Social.BoostsTest do
     someone = Fake.fake_user!()
     attrs = %{post_content: %{html_body: "<p>hey you have an epic html post</p>"}}
 
-    assert {:ok, post} = Posts.publish(me, attrs, "public")
+    assert {:ok, post} = Posts.publish(current_user: me, post_attrs: attrs, boundary: "public")
     assert {:ok, boost} = Boosts.boost(someone, post)
 
     assert %{edges: [fetched_boost, _]} = FeedActivities.feed(:notifications, me)

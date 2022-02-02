@@ -14,12 +14,12 @@ defmodule Bonfire.Social.Notifications.Threads.Test do
       someone = fake_user!(some_account)
 
       attrs = %{post_content: %{html_body: "<p>here is an epic html post</p>"}}
-      assert {:ok, post} = Posts.publish(someone, attrs, "public")
+      assert {:ok, post} = Posts.publish(current_user: someone, post_attrs: attrs, boundary: "public")
 
       responder = fake_user!()
 
       attrs_reply = %{post_content: %{summary: "summary", name: "name 2", html_body: "<p>epic html reply</p>"}, reply_to_id: post.id}
-      assert {:ok, post_reply} = Posts.publish(responder, attrs_reply, "public")
+      assert {:ok, post_reply} = Posts.publish(current_user: responder, post_attrs: attrs_reply, boundary: "public")
 
       conn = conn(user: someone, account: some_account)
       next = "/notifications"
@@ -38,13 +38,13 @@ defmodule Bonfire.Social.Notifications.Threads.Test do
       # IO.inspect(someone.id)
 
       attrs = %{post_content: %{html_body: "<p>here is an epic html post</p>"}}
-      assert {:ok, post} = Posts.publish(someone, attrs)
+      assert {:ok, post} = Posts.publish(current_user: someone, post_attrs: attrs)
 
       responder = fake_user!()
       # IO.inspect(responder.id)
 
       attrs_reply = %{post_content: %{summary: "summary", name: "name 2", html_body: "<p>epic html reply</p>"}, reply_to_id: post.id}
-      assert {:ok, post_reply} = Posts.publish(responder, attrs_reply)
+      assert {:ok, post_reply} = Posts.publish(current_user: responder, post_attrs: attrs_reply)
 
       conn = conn(user: someone, account: some_account)
       next = "/notifications"

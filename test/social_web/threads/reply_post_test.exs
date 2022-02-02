@@ -16,11 +16,11 @@ defmodule Bonfire.Social.Threads.RepliesTest do
     Follows.follow(bob, alice)
 
     attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>first post</p>"}}
-    assert {:ok, op} = Posts.publish(alice, attrs, "public")
+    assert {:ok, op} = Posts.publish(current_user: alice, post_attrs: attrs, boundary: "public")
 
     # Reply to the original post
     attrs_reply = %{post_content: %{summary: "summary", name: "name 2", html_body: "<p>reply to first post</p>"}, reply_to_id: op.id}
-    assert {:ok, post_reply} = Posts.publish(bob, attrs_reply, "public")
+    assert {:ok, post_reply} = Posts.publish(current_user: bob, post_attrs: attrs_reply, boundary: "public")
 
     conn = conn(user: bob, account: account2)
     next = "/home"

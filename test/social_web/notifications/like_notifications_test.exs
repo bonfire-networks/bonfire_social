@@ -14,7 +14,7 @@ defmodule Bonfire.Social.Notifications.Likes.Test do
       someone = fake_user!(some_account)
 
       attrs = %{post_content: %{html_body: "<p>here is an epic html post</p>"}}
-      assert {:ok, post} = Posts.publish(someone, attrs, "public")
+      assert {:ok, post} = Posts.publish(current_user: someone, post_attrs: attrs, boundary: "public")
 
       liker = fake_user!()
 
