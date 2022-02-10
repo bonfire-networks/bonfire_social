@@ -49,13 +49,12 @@ defmodule Bonfire.Social.FeedActivities do
   def feed(%{id: feed_id}, current_user_or_socket_or_opts, preloads), do: feed(feed_id, current_user_or_socket_or_opts, preloads)
 
   def feed(feed_id_or_ids, current_user_or_socket_or_opts, preloads) when is_binary(feed_id_or_ids) or ( is_list(feed_id_or_ids) and length(feed_id_or_ids)>0) do
-    # IO.inspect(feed_id_or_ids: feed_id_or_ids)
     feed_id_or_ids = ulid(feed_id_or_ids)
 
     pubsub_subscribe(feed_id_or_ids, current_user_or_socket_or_opts) # subscribe to realtime feed updates
 
     query([feed_id: feed_id_or_ids], current_user_or_socket_or_opts)
-    |> feed_paginated(current_user(current_user_or_socket_or_opts), current_user_or_socket_or_opts, preloads)
+    |> feed_paginated(current_user_or_socket_or_opts, preloads)
   end
 
   def feed(:flags, current_user_or_socket_or_opts, _preloads) do
@@ -95,11 +94,10 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed_paginated(filters, current_user_or_socket_or_opts, preloads, query) do
     paginate = e(current_user_or_socket_or_opts, :paginate, nil) || e(current_user_or_socket_or_opts, :after, nil)
-
     Logger.debug("feed_paginated with: #{inspect paginate}")
     query_paginated(filters, current_user_or_socket_or_opts, preloads, query)
-      # |> debug()
-      |> Bonfire.Repo.many_paginated(paginate)
+    |> Bonfire.Repo.many_paginated(paginate)
+    |> debug()
   end
 
 

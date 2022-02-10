@@ -34,7 +34,7 @@ defmodule Bonfire.Social.Web.PostLive do
 
     current_user = current_user(socket)
 
-    # IO.inspect(params, label: "PARAMS")
+    IO.inspect(params, label: "PARAMS")
 
     with {:ok, post} <- Bonfire.Social.Posts.read(id, socket) do
       # IO.inspect(post, label: "the post:")

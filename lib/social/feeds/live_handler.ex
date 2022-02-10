@@ -23,14 +23,14 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
   end
 
   def handle_event("load_more", opts, socket) do
+
     Logger.log(@log_level, "Feeds - paginate with live event - if there's no feed_id but we have a current_user, load My Feed")
-    Bonfire.Social.FeedActivities.my_feed([socket: socket, paginate: opts]) |> live_more(socket)
+    Bonfire.Social.FeedActivities.my_feed([socket: socket, paginate: opts]) 
+      |> live_more(socket)
   end
 
 
   def assign_feed(%{} = feed, socket) do
-    # IO.inspect(feed_pagination: feed)
-
     new = [
       feed: e(feed, :edges, []),
       page_info: e(feed, :page_info, []),
