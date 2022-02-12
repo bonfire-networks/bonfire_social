@@ -17,7 +17,7 @@ defmodule Bonfire.Social.API.GraphQL do
     field :verb_display, :string do
       resolve fn
         %{verb: verb}, _, _ ->
-          {:ok, Bonfire.UI.Social.ActivityLive.verb_display(verb)}
+          {:ok, Bonfire.Social.Activities.verb_display(verb)}
       end
     end
   end
