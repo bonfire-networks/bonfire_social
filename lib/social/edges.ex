@@ -20,6 +20,9 @@ defmodule Bonfire.Social.Edges do
   end
 
   def get!(schema, subject, objects, opts \\ [])
+  def get!(schema, subject, [], opts) do
+    []
+  end
   def get!(schema, subject, objects, opts) when is_list(objects) do
     do_query(schema, subject, objects, opts)
     |> repo().all()
