@@ -247,8 +247,8 @@ defmodule Bonfire.Social.Posts do
         attrs
       end
 
-    with {:ok, post} <- publish(current_user: creator, post_attrs: attrs, boundary: "public") do
-      # IO.inspect(remote_post: post)
+    with {:ok, post} <- publish(current_user: creator, post_attrs: attrs, boundary: "federated") do
+      IO.inspect(remote_post: post)
       {:ok, post}
     end
   end

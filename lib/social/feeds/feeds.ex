@@ -64,6 +64,15 @@ defmodule Bonfire.Social.Feeds do
         ]
         ++ feed_ids(:notifications, mentions)
 
+      "federated" -> # like public but put in federated instead of local (is this what we want?)
+      [ named_feed_id(:guest),
+        named_feed_id(:activity_pub),
+        feed_id(:notifications, reply_to_creator),
+        thread_id,
+        my_feed_id(:outbox, creator)
+      ]
+      ++ feed_ids(:notifications, mentions)
+
       "local" ->
 
         [named_feed_id(:local)] # put in local instance feed
