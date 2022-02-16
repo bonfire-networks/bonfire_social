@@ -28,6 +28,7 @@ defmodule Bonfire.Social.PostBoundariesTest do
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
     assert {:ok, post} = Posts.publish(current_user: user, post_attrs: attrs)
     assert post.post_content.name =~ "name"
+    debug_object_acls(post)
 
     me = fake_user!()
     assert {:error, :not_found} = Posts.read(post.id, me)

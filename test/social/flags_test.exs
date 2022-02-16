@@ -111,7 +111,7 @@ defmodule Bonfire.Social.FlagsTest do
 
     assert {:ok, post} = Posts.publish(current_user: me, post_attrs: attrs, boundary: "public")
     assert {:ok, flag} = Flags.flag(someone, post)
-    debug_object_acls(flag)
+    # debug_object_acls(flag)
     assert %{edges: [feed_publish]} =
       FeedActivities.feed(:notifications, current_user: me)
     assert activity = feed_publish.activity
