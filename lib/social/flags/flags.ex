@@ -31,26 +31,26 @@ defmodule Bonfire.Social.Flags do
   # def by_any(%User{}=user), do: repo().many(by_any_q(user))
 
   def flag(flagger, flagged, opts \\ [])
-  def flag(%{} = flagger, %{} = flagged, opts) do
+  def flag(%{} = flagger, object, opts) do
     opts = Keyword.put_new(opts, :current_user, flagger)
-    check_flag(flagger, flagged, opts)
+    check_flag(flagger, object, opts)
     ~> do_flag(flagger, ..., opts)
   end
 
-  defp check_flag(flagger, flagged, opts) do
+  defp check_flag(flagger, object, opts) do
     skip? = skip_boundary_check?(opts)
     skip? = (:admins == skip? && Users.is_admin?(flagger)) || (skip? == true)
-    case flagged do
+    case object do
       %{id: id} ->
-        if skip?, do: {:ok, flagged},
+        if skip?, do: {:ok, object},
         else: Common.Pointers.one(id, opts)
 
-      _ when is_binary(flagged) ->
-        if is_ulid?(flagged) do
-          Common.Pointers.one(flagged, opts)
+      _ when is_binary(object) ->
+        if is_ulid?(object) do
+          Common.Pointers.one(object, opts)
         else
           # try by username
-          maybe_apply(Characters, :by_username, [flagged, opts])
+          maybe_apply(Characters, :by_username, [object, opts])
         end
     end
   end

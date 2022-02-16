@@ -97,7 +97,7 @@ defmodule Bonfire.Social.FeedActivities do
     Logger.debug("feed_paginated with: #{inspect paginate}")
     query_paginated(filters, current_user_or_socket_or_opts, preloads, query)
     |> Bonfire.Repo.many_paginated(paginate)
-    |> debug()
+    # |> debug()
   end
 
 

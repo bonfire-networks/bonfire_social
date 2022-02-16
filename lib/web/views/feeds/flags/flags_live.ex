@@ -16,6 +16,7 @@ defmodule Bonfire.Social.Web.FlagsLive do
   defp mounted(params, _session, socket) do
 
     feed = Bonfire.Social.FeedActivities.feed(:flags, socket)
+    edges = for %{edge: %{} = edge} <- e(feed, :edges, []), do: %{activity: edge |> Map.put(:verb, %{verb: "flag"})} #|> debug
 
     {:ok, socket
     |> assign(
@@ -24,7 +25,7 @@ defmodule Bonfire.Social.Web.FlagsLive do
       page_title: "Flags",
       current_user: current_user(socket),
       feed_id: :flags,
-      feed: e(feed, :edges, []),
+      feed: edges,
       page_info: e(feed, :page_info, [])
       )}
 
