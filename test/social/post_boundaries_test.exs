@@ -1,6 +1,7 @@
 defmodule Bonfire.Social.PostBoundariesTest do
 
   use Bonfire.DataCase, async: true
+  import Bonfire.Social.Utils
   alias Bonfire.Me.Fake
   alias Bonfire.Social.Posts
   alias Bonfire.Social.FeedActivities

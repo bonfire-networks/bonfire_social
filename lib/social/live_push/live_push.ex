@@ -6,7 +6,7 @@ defmodule Bonfire.Social.LivePush do
 
   def push_activity(feed_ids, activity) do
     pubsub_broadcast(feed_ids, {{Bonfire.Social.Feeds, :new_activity}, activity})
-    debug(activity)
+    # debug(activity)
     maybe_push_thread(activity)
     activity
   end
@@ -55,7 +55,7 @@ defmodule Bonfire.Social.LivePush do
     # pubsub_broadcast(reply_to_id, {{Bonfire.Social.Posts, :new_reply}, {reply_to_id, activity}})
   end
   defp maybe_push_thread(replied, activity) do
-    debug(replied, "maybe_push_thread: no reply_to info found}")
+    # debug(replied, "maybe_push_thread: no reply_to info found}")
     nil
   end
 end
