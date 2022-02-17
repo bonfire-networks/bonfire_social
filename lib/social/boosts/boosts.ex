@@ -31,7 +31,7 @@ defmodule Bonfire.Social.Boosts do
     boosted_creator = Objects.object_creator(boosted)
 
     preset_or_custom_boundary = [
-      preset: "public", # TODO: get the preset for boosting from config and/or user's settings
+      boundary: "public", # TODO: get the preset for boosting from config and/or user's settings
       to_circles: [ulid(boosted_creator)],
       to_feeds: [Feeds.feed_id(:notifications, boosted_creator), Feeds.feed_id(:outbox, booster)]
     ]

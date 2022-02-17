@@ -98,7 +98,7 @@ defmodule Bonfire.Social.Feeds do
     |> List.flatten()
     |> Utils.filter_empty([])
     |> Enum.uniq()
-    # |> debug("target feeds")
+    |> debug("target feeds")
   end
 
    def maybe_custom_feeds(preset_and_custom_boundary), do: Boundaries.maybe_from_opts(preset_and_custom_boundary, :to_feeds)

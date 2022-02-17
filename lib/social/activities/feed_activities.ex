@@ -200,7 +200,7 @@ defmodule Bonfire.Social.FeedActivities do
   """
   def save_fediverse_incoming_activity(subject, verb, object) when is_atom(verb) do
     # TODO: us the appropriate preset, eg "public" for public activities
-    publish(subject, verb, object, preset: "local", to_feeds: [Feeds.named_feed_id(:activity_pub)])
+    publish(subject, verb, object, boundary: "local", to_feeds: [Feeds.named_feed_id(:activity_pub)])
   end
 
   @doc """

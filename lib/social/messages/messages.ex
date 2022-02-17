@@ -33,7 +33,7 @@ defmodule Bonfire.Social.Messages do
       with to when is_list(to) and length(to) > 0 <- to || Utils.e(attrs, :to_circles, nil),
            {:ok, to_characters} <- Characters.get(to),
            preset_or_custom_boundary <- [
-              preset: "message",
+              boundary: "message",
               to_circles: to_characters,
               to_feeds: Feeds.feed_ids(:inbox, to) #|> debug()
             ],

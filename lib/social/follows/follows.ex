@@ -133,7 +133,7 @@ defmodule Bonfire.Social.Follows do
 
   defp do_follow(follower, followed, opts) do
     preset_or_custom_boundary = [
-      preset: "local", # TODO: make configurable
+      boundary: "local", # TODO: make configurable
       to_circles: [ulid(followed)],
       to_feeds: [Feeds.feed_id(:notifications, followed), Feeds.feed_id(:outbox, follower)]
     ]

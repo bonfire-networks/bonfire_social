@@ -133,9 +133,10 @@ defmodule Bonfire.Social.Activities do
   end
 
   @default_activity_preloads [
-    :verb, :replied,
+    :verb,
+    :replied,
     # :boost_count, :like_count, # preload these in the view instead
-    object: {"object_", [:post_content]}
+    object: {"object_", [:post_content, :peered]}
   ]
 
   def activity_preloads(query, opts, :default) do
