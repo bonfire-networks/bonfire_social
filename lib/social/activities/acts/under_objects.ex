@@ -32,6 +32,7 @@ defmodule Bonfire.Social.Activities.UnderObjects do
         epic
       other ->
         Act.debug(act, "Rewriting #{source_key} to #{dest_key}")
+        # Act.debug(act, other)
         Epic.assign(epic, dest_key, Activities.activity_under_object(other))
     end
   end
