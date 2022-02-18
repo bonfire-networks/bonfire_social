@@ -43,7 +43,7 @@ defmodule Bonfire.Social.LivePush do
     maybe_push_thread(replied, activity)
   end
   defp maybe_push_thread(activity) do
-    debug(activity, "maybe_push_thread: no replied info found}")
+    # debug(activity, "maybe_push_thread: no replied info found}")
     nil
   end
 
