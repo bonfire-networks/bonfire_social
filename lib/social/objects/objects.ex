@@ -117,7 +117,7 @@ defmodule Bonfire.Social.Objects do
     ~> maybe_preload_activity_object(current_user)
     ~> Activities.activity_under_object(...)
     ~> to_ok()
-    |> debug("final object")
+    # |> debug("final object")
   end
 
   def maybe_preload_activity_object(%{activity: %{object: _}} = pointer, current_user) do
