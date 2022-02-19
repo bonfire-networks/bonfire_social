@@ -13,7 +13,7 @@ defmodule Bonfire.Social.Notifications.Flag.Test do
 
       some_account = fake_account!()
       {:ok, someone} = Users.make_admin(fake_user!(some_account))
-      #|> IO.inspect()
+      #|> debug()
 
       poster = fake_user!()
       attrs = %{post_content: %{html_body: "<p>here is an epic html post</p>"}}
@@ -36,7 +36,7 @@ defmodule Bonfire.Social.Notifications.Flag.Test do
 
       some_account = fake_account!()
       {:ok, someone} = Users.make_admin(fake_user!(some_account))
- 
+
       poster = fake_user!()
       attrs = %{post_content: %{html_body: "<p>here is an epic html post</p>"}}
       assert {:ok, post} = Posts.publish(current_user: poster, post_attrs: attrs, boundary: "mentions")

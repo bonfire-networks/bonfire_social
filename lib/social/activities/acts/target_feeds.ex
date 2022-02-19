@@ -14,7 +14,7 @@ defmodule Bonfire.Social.Feeds.TargetFeeds do
   alias Bonfire.Social.Feeds
   alias Ecto.Changeset
   require Act
-  require Logger
+  import Where
 
   def run(epic, act) do
     if epic.errors == [] do
@@ -31,7 +31,7 @@ defmodule Bonfire.Social.Feeds.TargetFeeds do
           Act.debug(act, changeset, "invalid changeset")
           epic
         other ->
-          Logger.error(other, "Expected changeset, got: #{inspect(other)}")
+          error(other, "Expected changeset, got: #{inspect(other)}")
           Epic.add_error(epic, act, {:expected_changeset, other})
        end
     else

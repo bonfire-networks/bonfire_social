@@ -85,7 +85,7 @@ defmodule Bonfire.Social.Threads.LoadMoreTest do
       more_doc = view
       |> element("[data-id=load_more]")
       |> render_click()
-      # |> IO.inspect()
+      # |> debug()
 
       # FIXME: the extra activities are being sent via pubsub, need to figure out how to test that
 
@@ -118,7 +118,7 @@ defmodule Bonfire.Social.Threads.LoadMoreTest do
       assert [load_more_query_string] = Floki.attribute(doc, "[data-id=load_more] a a", "href")
 
       url = "/discussion/#{op.id}"<>load_more_query_string
-      IO.inspect(url)
+      debug(url)
       conn = get(conn, url)
       more_doc = floki_response(conn) #|> IO.inspect
 

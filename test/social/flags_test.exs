@@ -13,7 +13,7 @@ defmodule Bonfire.Social.FlagsTest do
     assert {:ok, flagged} = Posts.publish(current_user: me, post_attrs: attrs, boundary: "public")
 
     assert {:ok, %{activity: activity}} = Flags.flag(me, flagged)
-    # IO.inspect(activity)
+    # debug(activity)
     assert activity.subject.id == me.id
     assert activity.object.id == flagged.id
 

@@ -45,7 +45,7 @@ defmodule Bonfire.Social.Threads do
               # |> debug("cs with replied")
 
           %{}=reply_to ->
-            Logger.debug("[Threads.cast_replied/3] parent has no thread, creating one")
+            debug("[Threads.cast_replied/3] parent has no thread, creating one")
 
             repo().insert_all(Replied, %{id: reply_to.id, thread_id: reply_to.id}, on_conflict: :nothing)
 
@@ -59,11 +59,11 @@ defmodule Bonfire.Social.Threads do
               )
 
           _ ->
-            Logger.debug("[Threads.cast_replied/3] not permitted to reply to this, starting new thread")
+            debug("[Threads.cast_replied/3] not permitted to reply to this, starting new thread")
             start_new_thread(changeset)
         end
       _ ->
-        Logger.debug("[Threads.cast_replied/3] does not reply to anything, starting new thread")
+        debug("[Threads.cast_replied/3] does not reply to anything, starting new thread")
         start_new_thread(changeset)
     end
   end
@@ -196,7 +196,7 @@ defmodule Bonfire.Social.Threads do
       |> Replied.where_depth(is_smaller_than_or_equal_to: opts[:max_depth])
       |> Activities.query_object_preload_create_activity(current_user)
       |> Activities.as_permitted_for(current_user)
-      # |> IO.inspect(label: "Thread nested query")
+      # |> debug(label: "Thread nested query")
   end
 
   def query(filter, opts) do
@@ -207,7 +207,7 @@ defmodule Bonfire.Social.Threads do
       |> query_filter(filter)
       |> Activities.query_object_preload_create_activity(current_user)
       |> Activities.as_permitted_for(current_user)
-      # |> IO.inspect(label: "Thread filtered query")
+      # |> debug(label: "Thread filtered query")
   end
 
   def arrange_replies_tree(replies), do: replies |> Replied.arrange() # uses https://github.com/bonfire-networks/ecto_materialized_path
@@ -224,9 +224,9 @@ defmodule Bonfire.Social.Threads do
   #     {_id, %{reply_to_id: reply_to_id, thread_id: thread_id} =_reply} = reply_with_id,
   #     acc
   #     when is_binary(reply_to_id) and reply_to_id != thread_id ->
-  #       #IO.inspect(acc: acc)
-  #       #IO.inspect(reply_ok: reply)
-  #       #IO.inspect(reply_to_id: reply_to_id)
+  #       #debug(acc: acc)
+  #       #debug(reply_ok: reply)
+  #       #debug(reply_to_id: reply_to_id)
 
   #       if Map.get(acc, reply_to_id) do
 
@@ -243,7 +243,7 @@ defmodule Bonfire.Social.Threads do
   #       end
 
   #     reply, acc ->
-  #       #IO.inspect(reply_skip: reply)
+  #       #debug(reply_skip: reply)
 
   #       acc
   #   end

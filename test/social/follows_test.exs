@@ -120,11 +120,11 @@ defmodule Bonfire.Social.FollowsTest do
     assert fetched_follow.id == follow.id
 
     assert %{edges: fetched} = p = FeedActivities.feed(:notifications, followed)
-    # IO.inspect(notifications: p)
+    # debug(notifications: p)
     assert %{} = notification = List.first(fetched)
     assert activity = notification.activity |> Bonfire.Repo.maybe_preload([object: [:profile]])
-    # IO.inspect(followed: followed)
-    # IO.inspect(notifications: activity)
+    # debug(followed: followed)
+    # debug(notifications: activity)
 
     assert activity.object_id == followed.id
   end

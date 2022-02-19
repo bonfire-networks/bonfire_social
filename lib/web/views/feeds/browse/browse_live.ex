@@ -34,7 +34,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
 
   # WIP: Commented this as it was call anytime the user clicked on a different tab, preventing to load the right feed
   # def handle_params(_attrs, _, %{assigns: %{feed: feed, page_info: pi}} = socket) when is_list(feed) and pi !=[] do
-  #   Logger.log(@log_level, "we already have a feed loaded")
+  #   debug("we already have a feed loaded")
   #   {:noreply, socket}
   # end
 
@@ -104,7 +104,7 @@ defmodule Bonfire.Social.Web.Feeds.BrowseLive do
   end
 
   def my_feed(current_user, socket) do
-    # IO.inspect(myfeed: feed)
+    # debug(myfeed: feed)
     feed = Bonfire.Social.FeedActivities.my_feed(socket)
     [
       current_user: current_user,

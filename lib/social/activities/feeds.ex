@@ -1,7 +1,7 @@
 defmodule Bonfire.Social.Feeds do
   use Bonfire.Common.Utils
   use Arrows
-  require Logger
+  import Where
   import Ecto.Query
   import Bonfire.Social.Integration
 
@@ -108,7 +108,7 @@ defmodule Bonfire.Social.Feeds do
     case maybe_str_to_atom(name) do
       named when is_atom(named) -> named_feed_id(named)
       _ ->
-        Logger.warn("Feed: doesn't seem to be a named feed: #{inspect name}")
+        warn("Feed: doesn't seem to be a named feed: #{inspect name}")
         nil
     end
   end
@@ -117,7 +117,7 @@ defmodule Bonfire.Social.Feeds do
   # TODO: make configurable if user wants notifications included in home feed
 
   def my_home_feed_ids(socket, include_notifications?, extra_feeds) do
-    # IO.inspect(my_home_feed_ids_user: user)
+    # debug(my_home_feed_ids_user: user)
 
     current_user = current_user(socket)
 
@@ -135,7 +135,7 @@ defmodule Bonfire.Social.Feeds do
       extra_feeds ++ followings
     else
       _e ->
-        #IO.inspect(e: e)
+        #debug(e: e)
         extra_feeds
     end
     |> Utils.filter_empty([])
@@ -148,7 +148,7 @@ defmodule Bonfire.Social.Feeds do
   def my_feed_id(type, other) do
     case current_user(other) do
       nil ->
-        Logger.error("Social.Feeds.my_feed_id: no user found in #{inspect other}")
+        error("Social.Feeds.my_feed_id: no user found in #{inspect other}")
         nil
 
       current_user ->
@@ -231,11 +231,11 @@ defmodule Bonfire.Social.Feeds do
 
   def maybe_create_feed(type, for_subject) do
     with feed_id when is_binary(feed_id) <- create_box(type, for_subject) do
-      # IO.inspect(for_subject)
+      # debug(for_subject)
       Logger.notice("Feeds: created new #{inspect type} with id #{inspect feed_id} for #{inspect ulid(for_subject)}")
       feed_id
     else e ->
-      Logger.error("Feeds.feed_id: could not find or create feed (#{inspect e}) for #{inspect ulid(for_subject)}")
+      error("Feeds.feed_id: could not find or create feed (#{inspect e}) for #{inspect ulid(for_subject)}")
       nil
     end
   end
@@ -249,12 +249,12 @@ defmodule Bonfire.Social.Feeds do
          {:ok, character} <- save_box_feed(type, character, feed_id) do
       feed_id
     else e ->
-      Logger.debug("Social.Feeds: could not create_box for #{inspect character}")
+      debug("Social.Feeds: could not create_box for #{inspect character}")
       nil
     end
   end
   defp create_box(_type, other) do
-    Logger.debug("Social.Feeds: no clause match for function create_box with #{inspect other}")
+    debug("Social.Feeds: no clause match for function create_box with #{inspect other}")
     nil
   end
 

@@ -35,13 +35,13 @@ defmodule Bonfire.Social.Notifications.Threads.Test do
     test "replies I'm NOT allowed to see in my notifications" do
       some_account = fake_account!()
       someone = fake_user!(some_account)
-      # IO.inspect(someone.id)
+      # debug(someone.id)
 
       attrs = %{post_content: %{html_body: "<p>here is an epic html post</p>"}}
       assert {:ok, post} = Posts.publish(current_user: someone, post_attrs: attrs)
 
       responder = fake_user!()
-      # IO.inspect(responder.id)
+      # debug(responder.id)
 
       attrs_reply = %{post_content: %{summary: "summary", name: "name 2", html_body: "<p>epic html reply</p>"}, reply_to_id: post.id}
       assert {:ok, post_reply} = Posts.publish(current_user: responder, post_attrs: attrs_reply)

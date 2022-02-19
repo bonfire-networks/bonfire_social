@@ -1,6 +1,6 @@
 defmodule Bonfire.Social.Posts.LiveHandler do
   use Bonfire.Web, :live_handler
-  require Logger
+  import Where
 
   alias Bonfire.Social.Posts
   alias Bonfire.Social.PostContents
@@ -38,15 +38,15 @@ defmodule Bonfire.Social.Posts.LiveHandler do
 
   def handle_event("post", params, socket) do # if not a message, it's a post by default
     attrs = params
-    # |> IO.inspect(label: "handle_event: post inputs")
+    # |> debug(label: "handle_event: post inputs")
     |> input_to_atoms()
-    # |> IO.inspect(label: "handle_event: post attrs")
+    # |> debug(label: "handle_event: post attrs")
 
     current_user = current_user(socket)
 
     with %{valid?: true} <- post_changeset(attrs, current_user),
          {:ok, _published} <- Bonfire.Social.Posts.publish(current_user: current_user, post_attrs: attrs, boundary: params["boundary_selected"]) do
-      # IO.inspect("published!")
+      # debug("published!")
       {:noreply,
         socket
         |> put_flash(:info, "Posted!")
@@ -95,8 +95,8 @@ defmodule Bonfire.Social.Posts.LiveHandler do
 
   def handle_info({:new_reply, {thread_id, data}}, socket) do
 
-    Logger.info("Bonfire.Social.Posts handle_info received :new_reply")
-    # IO.inspect(replies: Utils.e(socket.assigns, :replies, []))
+    debug("Bonfire.Social.Posts handle_info received :new_reply")
+    # debug(replies: Utils.e(socket.assigns, :replies, []))
 
     # replies = [data] ++ Utils.e(socket.assigns, :replies, [])
 
@@ -107,15 +107,15 @@ defmodule Bonfire.Social.Posts.LiveHandler do
 
 
   def live_more(thread_id, cursor, socket) do
-    # IO.inspect(pagination: cursor)
+    # debug(pagination: cursor)
 
     with %{edges: replies, page_info: page_info} <- Bonfire.Social.Threads.list_replies(thread_id, socket: socket, pagination: cursor) do
 
       replies = ( e(socket.assigns, :replies, []) ++ (replies || []) ) |> Enum.uniq()
-      # IO.inspect(replies, label: "REPLIES:")
+      # debug(replies, label: "REPLIES:")
 
       threaded_replies = if is_list(replies) and length(replies)>0, do: Bonfire.Social.Threads.arrange_replies_tree(replies), else: []
-      # IO.inspect(threaded_replies, label: "REPLIES threaded")
+      # debug(threaded_replies, label: "REPLIES threaded")
 
       new = [
         replies: replies || [],
@@ -129,9 +129,9 @@ defmodule Bonfire.Social.Posts.LiveHandler do
 
 
   def post_changeset(attrs \\ %{}, creator) do
-    # IO.inspect(attrs, label: "ATTRS")
+    # debug(attrs, label: "ATTRS")
     Posts.changeset(:create, attrs, creator)
-    # |> IO.inspect(label: "pc")
+    # |> debug(label: "pc")
   end
 
 

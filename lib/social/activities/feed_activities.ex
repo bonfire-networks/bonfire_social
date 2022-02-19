@@ -31,7 +31,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feeds_for_activity(activity) do
-    Logger.error("feeds_for_activity: dunno how to get feeds for #{inspect activity}")
+    error("feeds_for_activity: dunno how to get feeds for #{inspect activity}")
     []
   end
 
@@ -75,14 +75,14 @@ defmodule Bonfire.Social.FeedActivities do
         |> feed_paginated(current_user_or_socket_or_opts, preloads)
 
         e ->
-          Logger.error("FeedActivities.feed: no known feed #{inspect feed_name} - #{inspect e}")
+          error("FeedActivities.feed: no known feed #{inspect feed_name} - #{inspect e}")
           debug(current_user_or_socket_or_opts)
           nil
     end
   end
 
   def feed(other, _, _) do
-    Logger.error("FeedActivities.feed: not a recognised feed query format - got #{inspect other}")
+    error("FeedActivities.feed: not a recognised feed query format - got #{inspect other}")
     []
   end
 
@@ -94,7 +94,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed_paginated(filters, current_user_or_socket_or_opts, preloads, query) do
     paginate = e(current_user_or_socket_or_opts, :paginate, nil) || e(current_user_or_socket_or_opts, :after, nil)
-    Logger.debug("feed_paginated with: #{inspect paginate}")
+    debug("feed_paginated with: #{inspect paginate}")
     query_paginated(filters, current_user_or_socket_or_opts, preloads, query)
     |> Bonfire.Repo.many_paginated(paginate)
     # |> debug()
@@ -128,7 +128,7 @@ defmodule Bonfire.Social.FeedActivities do
   # end
 
   def query([feed_id: feed_id_or_ids], current_user_or_socket_or_opts, preloads, query) when is_binary(feed_id_or_ids) or is_list(feed_id_or_ids) do
-    # IO.inspect(feed_id_or_ids: feed_id_or_ids)
+    # debug(feed_id_or_ids: feed_id_or_ids)
     feed_id_or_ids = ulid(feed_id_or_ids)
 
     # query FeedPublish, without messages
@@ -144,30 +144,30 @@ defmodule Bonfire.Social.FeedActivities do
 
   def query(filters, current_user_or_socket_or_opts, preloads, query) when is_list(filters) do
 
-    Logger.debug("FeedActivities - query with filters: #{inspect filters}")
+    debug("FeedActivities - query with filters: #{inspect filters}")
 
     query
       |> query_extras(current_user_or_socket_or_opts, preloads)
       |> query_filter(filters, nil, nil)
-      # |> IO.inspect(label: "FeedActivities - query")
+      # |> debug(label: "FeedActivities - query")
   end
 
   def query(filters, current_user_or_socket_or_opts, preloads, query) do
     query
       # |> query_extras(current_user, preloads)
       # |> query_filter(filters, nil, nil)
-      |> IO.inspect(label: "FeedActivities invalid feed query with filters #{inspect filters}")
+      |> debug(label: "FeedActivities invalid feed query with filters #{inspect filters}")
   end
 
   defp query_extras(query, current_user_or_socket_or_opts, preloads) do
 
     query
-      # |> IO.inspect(label: "feed_paginated pre-preloads")
+      # |> debug(label: "feed_paginated pre-preloads")
       # add assocs needed in timelines/feeds
       |> Activities.activity_preloads(current_user_or_socket_or_opts, preloads)
-      # |> IO.inspect(label: "feed_paginated post-preloads")
+      # |> debug(label: "feed_paginated post-preloads")
       |> Activities.as_permitted_for(current_user_or_socket_or_opts)
-      # |> IO.inspect(label: "feed_paginated post-boundaries")
+      # |> debug(label: "feed_paginated post-boundaries")
       |> order_by([activity: activity], [desc: activity.id])
   end
 
@@ -181,8 +181,8 @@ defmodule Bonfire.Social.FeedActivities do
   """
 
   def publish(subject, verb_or_activity, object, preset_or_custom_boundary \\ nil) when is_atom(verb_or_activity) or is_struct(verb_or_activity) do
-    # Logger.debug("FeedActivities: just making visible for and putting in these circles/feeds: #{inspect circles}")
-    # Bonfire.Me.Boundaries.maybe_make_visible_for(subject, object, circles) # |> IO.inspect(label: "grant")
+    # debug("FeedActivities: just making visible for and putting in these circles/feeds: #{inspect circles}")
+    # Bonfire.Me.Boundaries.maybe_make_visible_for(subject, object, circles) # |> debug(label: "grant")
 
     Feeds.target_feeds(object, subject, preset_or_custom_boundary)
     |>
@@ -190,7 +190,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def publish(subject, verb, object, circles) do
-    Logger.debug("FeedActivities: defaulting to a :create activity, because this verb is not defined: #{inspect verb} ")
+    debug("FeedActivities: defaulting to a :create activity, because this verb is not defined: #{inspect verb} ")
     publish(subject, :create, object, circles)
   end
 
@@ -213,7 +213,7 @@ defmodule Bonfire.Social.FeedActivities do
     if ulid(object_creator) && ulid(subject) != ulid(object_creator) do
       notify_characters(subject, verb_or_activity, object, [object_creator])
     else
-      Logger.debug("maybe_notify_creator: no creator found, so just create an activity")
+      debug("maybe_notify_creator: no creator found, so just create an activity")
       publish(subject, verb_or_activity, object)
     end
     # TODO: notify remote users via AP
@@ -272,7 +272,7 @@ defmodule Bonfire.Social.FeedActivities do
   def notify_feeds(subject, verb_or_activity, object, feed_ids) do
     # debug(feed_ids)
 
-    ret = publish(subject, verb_or_activity, object, to_feeds: feed_ids) #|> IO.inspect(label: "notify_feeds")
+    ret = publish(subject, verb_or_activity, object, to_feeds: feed_ids) #|> debug(label: "notify_feeds")
     Bonfire.Social.LivePush.notify(subject, Activities.verb(verb_or_activity), object, feed_ids)
     ret
   end
@@ -291,7 +291,7 @@ defmodule Bonfire.Social.FeedActivities do
   defp maybe_feed_publish(subject, %{activity: %{id: _} = activity}, _, feeds), do: maybe_feed_publish(subject, activity, feeds)
   defp maybe_feed_publish(subject, %{activity: _activity_not_loaded} = parent, _, feeds), do: maybe_feed_publish(subject, parent |> repo().maybe_preload(:activity) |> e(:activity, nil), feeds)
   defp maybe_feed_publish(_, activity, _, _) do
-    Logger.error("maybe_feed_publish: did not put in feeds or federate, expected an Activity or a Verb+Object, got #{inspect activity}")
+    error("maybe_feed_publish: did not put in feeds or federate, expected an Activity or a Verb+Object, got #{inspect activity}")
     {:ok, activity}
   end
 
@@ -299,12 +299,12 @@ defmodule Bonfire.Social.FeedActivities do
   defp create_and_put_in_feeds(subject, verb, object, feed_id) when is_map(object) and is_binary(feed_id) or is_list(feed_id) do
     with {:ok, activity} <- Activities.create(subject, verb, object) do
       with {:ok, published} <- put_in_feeds_and_maybe_federate(feed_id, activity) do # publish in specified feed
-        # IO.inspect(published, label: "create_and_put_in_feeds")
+        # debug(published, label: "create_and_put_in_feeds")
         {:ok, activity}
       else # meh
         publishes when is_list(publishes) and length(publishes)>0 -> {:ok, activity}
         _ ->
-          Logger.warn("did not create_and_put_in_feeds: #{inspect feed_id}")
+          warn("did not create_and_put_in_feeds: #{inspect feed_id}")
           {:ok, activity}
       end
     end
@@ -357,12 +357,12 @@ defmodule Bonfire.Social.FeedActivities do
 
       {:ok, published}
     else e ->
-      Logger.error("FeedActivities.put_in_feeds: error when trying with feed_or_subject: #{inspect e}")
+      error("FeedActivities.put_in_feeds: error when trying with feed_or_subject: #{inspect e}")
       {:ok, nil}
     end
   end
   defp put_in_feeds(_, _) do
-    Logger.error("FeedActivities: did not put_in_feeds")
+    error("FeedActivities: did not put_in_feeds")
     {:ok, nil}
   end
 

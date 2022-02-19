@@ -30,7 +30,7 @@ defmodule Bonfire.Social.Web.HomeLive do
 
 
   def do_handle_params(%{"tab" => "federation" = tab} = params, _url, socket) do
-    IO.inspect(tab)
+    debug(tab)
     current_user = current_user(socket)
 
     assigns = if current_user || current_account(socket) do
@@ -98,7 +98,7 @@ defmodule Bonfire.Social.Web.HomeLive do
   end
 
   def my_feed(current_user, socket) do
-    # IO.inspect(myfeed: feed)
+    # debug(myfeed: feed)
     feed = Bonfire.Social.FeedActivities.my_feed(socket)
     [
       current_user: current_user,

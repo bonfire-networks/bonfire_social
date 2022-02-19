@@ -40,7 +40,7 @@ defmodule Bonfire.Social.Web.MessageLive do
 
     # FIXME?
     with {:ok, post} <- Bonfire.Social.Messages.read(id, socket) do
-      #IO.inspect(post, label: "the post:")
+      #debug(post, label: "the post:")
 
       {activity, object} = Map.pop(post, :activity)
       {preloaded_object, activity} = Map.pop(activity, :object)
@@ -88,8 +88,8 @@ defmodule Bonfire.Social.Web.MessageLive do
 
 
   def handle_event("create_reply", %{"id"=> id}, socket) do # boost in LV
-    IO.inspect(id: id)
-    IO.inspect("create reply")
+    debug(id: id)
+    debug("create reply")
     # with {:ok, _boost} <- Bonfire.Social.Boosts.boost(current_user(socket), id) do
     #   {:noreply, Phoenix.LiveView.assign(socket,
     #   boosted: Map.get(socket.assigns, :boosted, []) ++ [{id, true}]

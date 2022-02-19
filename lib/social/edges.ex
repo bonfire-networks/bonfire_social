@@ -99,7 +99,7 @@ defmodule Bonfire.Social.Edges do
   end
 
   defp filter(query, filters, _opts) do
-    Logger.warn("Edges: unrecognised filters: #{inspect filters} so just returning query as-is")
+    warn("Edges: unrecognised filters: #{inspect filters} so just returning query as-is")
     query
   end
 

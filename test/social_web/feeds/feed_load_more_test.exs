@@ -76,7 +76,7 @@ defmodule Bonfire.Social.Feeds.LoadMoreTest do
       |> element("[data-id=load_more]")
       |> render_click()
       # |> Floki.find(".feed")
-      # |> IO.inspect()
+      # |> debug()
 
       # FIXME: the extra activities are being sent via pubsub, need to figure out how to test that
 

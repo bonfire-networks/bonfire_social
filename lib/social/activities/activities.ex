@@ -6,7 +6,7 @@ defmodule Bonfire.Social.Activities do
     searchable_fields: [:id, :subject_id, :verb_id, :object_id],
     sortable_fields: [:id, :subject_id, :verb_id, :object_id]
 
-  require Logger
+  import Where
   use Bonfire.Common.Utils
   import Bonfire.Boundaries.Queries
   import Ecto.Query
@@ -103,7 +103,7 @@ defmodule Bonfire.Social.Activities do
 
 
   def activity_preloads(query, opts, preloads) when is_list(preloads) do
-    #IO.inspect(preloads)
+    #debug(preloads)
     Enum.reduce(preloads, query, fn preload, query ->
       query
       |> activity_preloads(opts, preload)
@@ -143,7 +143,7 @@ defmodule Bonfire.Social.Activities do
     query
     |> activity_preloads(opts, :minimal)
     |> proload(activity: @default_activity_preloads)
-    # |> IO.inspect(label: "activity with preloads")
+    # |> debug(label: "activity with preloads")
   end
 
   def activity_preloads(query, _opts, :minimal) do

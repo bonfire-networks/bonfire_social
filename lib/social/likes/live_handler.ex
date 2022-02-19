@@ -1,9 +1,9 @@
 defmodule Bonfire.Social.Likes.LiveHandler do
   use Bonfire.Web, :live_handler
-  require Logger
+  import Where
 
   def handle_event("like", %{"direction"=>"up", "id"=> id} = params, socket) do # like in LV
-    #IO.inspect(socket)
+    #debug(socket)
 
     with %{id: _} = current_user <- current_user(socket),
          {:ok, like} <- Bonfire.Social.Likes.like(current_user, id) do
@@ -13,7 +13,7 @@ defmodule Bonfire.Social.Likes.LiveHandler do
        liker_id: {"has already been taken",
         _}
      ]}} ->
-      Logger.info("previously liked, but UI didn't know")
+      debug("previously liked, but UI didn't know")
       set_liked(id, %{id: true}, params, socket)
     end
   end

@@ -2,7 +2,7 @@ defmodule Bonfire.Social.Boosts.LiveHandler do
   use Bonfire.Web, :live_handler
 
   def handle_event("boost", %{"id"=> id} = params, socket) do # boost in LV
-    #IO.inspect(socket)
+    #debug(socket)
     with {:ok, boost} <- Bonfire.Social.Boosts.boost(current_user(socket), id) do
 
       set = [my_boost: true]

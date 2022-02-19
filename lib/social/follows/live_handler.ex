@@ -2,7 +2,7 @@ defmodule Bonfire.Social.Follows.LiveHandler do
   use Bonfire.Web, :live_handler
 
   def handle_event("follow", %{"id"=> id}=params, socket) do
-    # IO.inspect(socket)
+    # debug(socket)
 
       set = [
         my_follow: true

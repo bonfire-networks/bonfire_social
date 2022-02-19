@@ -89,7 +89,7 @@ defmodule Bonfire.Social.Posts do
   def list_paginated(filters, opts_or_current_user, preloads) when is_list(filters) do
     paginate = e(opts_or_current_user, :paginate, opts_or_current_user)
     filters
-    # |> IO.inspect(label: "Posts.list_paginated:filters")
+    # |> debug(label: "Posts.list_paginated:filters")
     |> query_paginated(opts_or_current_user, preloads)
     |> Bonfire.Repo.many_paginated(paginate)
     # |> FeedActivities.feed_paginated(filters, opts_or_current_user, preloads)
@@ -99,7 +99,7 @@ defmodule Bonfire.Social.Posts do
   def query_paginated(filters, opts_or_current_user \\ [], preloads \\ :all)
   def query_paginated(filters, opts_or_current_user, preloads) when is_list(filters) do
     filters
-    # |> IO.inspect(label: "Posts.query_paginated:filters")
+    # |> debug(label: "Posts.query_paginated:filters")
     |> Keyword.drop([:paginate])
     |> FeedActivities.query_paginated(opts_or_current_user, preloads, Post)
     # |> debug("after FeedActivities.query_paginated")
@@ -142,7 +142,7 @@ defmodule Bonfire.Social.Posts do
     post = post
     |> repo().maybe_preload([:created, :replied, :post_content])
     |> Activities.object_preload_create_activity()
-    # |> IO.inspect(label: "ap_publish_activity post")
+    # |> debug(label: "ap_publish_activity post")
 
     {:ok, actor} = ActivityPub.Adapter.get_actor_by_id(e(post, :activity, :subject_id, nil) || e(post, :created, :creator_id, nil))
 
@@ -211,9 +211,9 @@ defmodule Bonfire.Social.Posts do
   end
 
   def ap_receive_activity(creator, %{data: _activity_data} = _activity, %{data: post_data} = _object, circles) do # record an incoming post
-    # IO.inspect(activity: activity)
-    # IO.inspect(creator: creator)
-    # IO.inspect(object: object)
+    # debug(activity: activity)
+    # debug(creator: creator)
+    # debug(object: object)
 
     direct_recipients = post_data["to"] || []
 
@@ -248,7 +248,7 @@ defmodule Bonfire.Social.Posts do
       end
 
     with {:ok, post} <- publish(current_user: creator, post_attrs: attrs, boundary: "federated") do
-      # IO.inspect(remote_post: post)
+      # debug(remote_post: post)
       {:ok, post}
     end
   end
@@ -257,7 +257,7 @@ defmodule Bonfire.Social.Posts do
   def indexing_object_format(feed_activity_or_activity, object \\ nil)
   def indexing_object_format(%{subject: %{profile: subject_profile, character: subject_character}} = activity, %{id: id, post_content: post_content} = post) do
 
-    # IO.inspect(obj)
+    # debug(obj)
 
     %{
       "id" => id,
@@ -272,7 +272,7 @@ defmodule Bonfire.Social.Posts do
   def indexing_object_format(%{activity: %{id: _} = activity} = object, nil), do: indexing_object_format(activity, object)
   def indexing_object_format(%Activity{object: object} = activity, nil), do: indexing_object_format(activity, object)
   def indexing_object_format(a, b) do
-    Logger.error("Posts: no clause match for function indexing_object_format/2")
+    error("Posts: no clause match for function indexing_object_format/2")
     # debug(a, "activity")
     # debug(b, "object")
     nil

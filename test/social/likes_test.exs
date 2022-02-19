@@ -12,7 +12,7 @@ defmodule Bonfire.Social.LikesTest do
     assert {:ok, post} = Posts.publish(current_user: me, post_attrs: attrs, boundary: "public")
 
     assert {:ok, %{edge: edge}} = Likes.like(me, post)
-    # IO.inspect(activity)
+    # debug(activity)
     assert edge.subject_id == me.id
     assert edge.object_id == post.id
   end

@@ -2,7 +2,7 @@ defmodule Bonfire.Social.Integration do
   use Arrows
   alias Bonfire.Common.Config
   alias Bonfire.Common.Utils
-  require Logger
+  import Where
 
   def repo, do: Config.get!(:repo_module)
 
@@ -45,7 +45,7 @@ defmodule Bonfire.Social.Integration do
   end
 
   def activity_ap_publish(_, verb, _) do
-    Logger.warn("unhandled outgoing federation verb: #{verb}")
+    warn("unhandled outgoing federation verb: #{verb}")
   end
 
   def ap_publish(verb, thing_id, user_id) do

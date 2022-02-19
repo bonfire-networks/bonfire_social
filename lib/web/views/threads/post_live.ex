@@ -34,10 +34,10 @@ defmodule Bonfire.Social.Web.PostLive do
 
     current_user = current_user(socket)
 
-    IO.inspect(params, label: "PARAMS")
+    debug(params, label: "PARAMS")
 
     with {:ok, post} <- Bonfire.Social.Posts.read(id, socket) do
-      # IO.inspect(post, label: "the post:")
+      # debug(post, label: "the post:")
 
       {activity, post} = Map.pop(post, :activity)
       # following = if current_user && module_enabled?(Bonfire.Social.Follows) && Bonfire.Social.Follows.following?(current_user, post), do: [post.id]

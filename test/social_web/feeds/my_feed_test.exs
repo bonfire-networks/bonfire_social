@@ -38,8 +38,8 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
       conn = conn(user: user, account: account)
       next = "/home"
       {view, doc} = floki_live(conn, next) #|> IO.inspect
-      # IO.inspect(user: user)
-      main = Floki.find(doc, "main") #|> IO.inspect()
+      # debug(user: user)
+      main = Floki.find(doc, "main") #|> debug()
       assert [feed] = Floki.find(doc, "[id='feed:my:#{user.id}']")
       assert Floki.text(feed) =~ "test post name"
     end
@@ -60,8 +60,8 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
       conn = conn(user: user2, account: account2)
       next = "/home"
       {view, doc} = floki_live(conn, next) #|> IO.inspect
-      IO.inspect(user: user2)
-      main = Floki.find(doc, "main") #|> IO.inspect()
+      debug(user: user2)
+      main = Floki.find(doc, "main") #|> debug()
       assert [feed] = Floki.find(doc, "[id='feed:my:#{user2.id}']")
       assert Floki.text(feed) =~ "test post name"
     end

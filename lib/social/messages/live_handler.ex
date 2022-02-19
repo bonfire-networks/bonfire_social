@@ -8,13 +8,13 @@ defmodule Bonfire.Social.Messages.LiveHandler do
     # |> IO.inspect
 
     with {:ok, _sent} <- Bonfire.Social.Messages.send(current_user(socket), attrs) do
-      # IO.inspect("sent!")
+      # debug("sent!")
       {:noreply,
         socket
         |> put_flash(:info, "Sent!")
       }
     else e ->
-      IO.inspect(message_error: e)
+      debug(message_error: e)
       {:noreply,
         socket
         |> put_flash(:error, "Could not send...")

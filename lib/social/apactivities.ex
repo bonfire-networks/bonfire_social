@@ -2,7 +2,7 @@ defmodule Bonfire.Social.APActivities do
   alias Bonfire.Data.Social.APActivity
   alias Bonfire.Social.FeedActivities
 
-  require Logger
+  import Where
 
   use Bonfire.Common.Utils
   import Bonfire.Common.Config, only: [repo: 0]
@@ -15,7 +15,7 @@ defmodule Bonfire.Social.APActivities do
 
       else _ ->
         error = "AP - cannot create a fallback activity with no actor"
-        Logger.error(error)
+        error(error)
         {:error, error}
     end
   end

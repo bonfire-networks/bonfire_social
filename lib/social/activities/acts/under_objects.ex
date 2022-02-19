@@ -1,6 +1,6 @@
 defmodule Bonfire.Social.Activities.UnderObjects do
 
-  require Logger
+  import Where
   alias Bonfire.Social.Activities
   alias Bonfire.Epics.{Act, Epic}
   require Act

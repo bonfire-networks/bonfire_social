@@ -46,7 +46,7 @@ defmodule Bonfire.Social.ThreadsPostsTest do
 
     assert {:ok, read} = Posts.read(post_reply.id, user)
 
-    # IO.inspect(read)
+    # debug(read)
     assert read.activity.replied.reply_to_id == post.id
     assert read.activity.replied.thread_id == post.id
   end
@@ -61,7 +61,7 @@ defmodule Bonfire.Social.ThreadsPostsTest do
 
     assert %{edges: replies} = Threads.list_replies(post.id, user)
 
-    # IO.inspect(replies)
+    # debug(replies)
     reply = List.first(replies)
     assert reply.activity.replied.reply_to_id == post.id
     assert reply.activity.replied.thread_id == post.id
@@ -110,7 +110,7 @@ defmodule Bonfire.Social.ThreadsPostsTest do
 
     assert %{edges: replies} = Threads.list_replies(post.id, user)
 
-    # IO.inspect(replies)
+    # debug(replies)
     assert length(replies) == 2
     reply = List.last(replies)
     reply3 = List.first(replies)
@@ -139,7 +139,7 @@ defmodule Bonfire.Social.ThreadsPostsTest do
 
     threaded_replies = Bonfire.Social.Threads.arrange_replies_tree(replies)
 
-    # IO.inspect(threaded_replies)
+    # debug(threaded_replies)
     assert [{
       %{} = reply,
       [{
