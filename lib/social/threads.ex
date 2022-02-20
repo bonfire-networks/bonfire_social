@@ -34,7 +34,7 @@ defmodule Bonfire.Social.Threads do
         case load_reply_to(user, reply_to) do
 
           %{replied: %{thread_id: thread_id}}=reply_to when is_binary(thread_id) ->
-            Logger.notice("[Threads.cast_replied/3] copying thread from reply_to")
+            debug("[Threads.cast_replied/3] copying thread from reply_to")
 
             # reply to the thread if we're allowed to (or a custom one if specified)
             thread_id = custom_thread_id || load_thread_id(user, thread_id) || reply_to.id
