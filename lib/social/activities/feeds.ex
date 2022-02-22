@@ -4,7 +4,7 @@ defmodule Bonfire.Social.Feeds do
   import Where
   import Ecto.Query
   import Bonfire.Social.Integration
-
+  import Where
   alias Bonfire.Data.Identity.Character
   alias Bonfire.Data.Social.Feed
   alias Bonfire.Social.Follows

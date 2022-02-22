@@ -73,5 +73,12 @@ defmodule Bonfire.Social.Integration do
     end
   end
 
+  def maybe_unindex(object) do
+    if Config.module_enabled?(Bonfire.Search.Indexer) do
+      Bonfire.Search.Indexer.maybe_delete_object(object)
+    else
+      :ok
+    end
+  end
 
 end

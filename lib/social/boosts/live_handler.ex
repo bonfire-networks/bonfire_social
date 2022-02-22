@@ -1,5 +1,6 @@
 defmodule Bonfire.Social.Boosts.LiveHandler do
   use Bonfire.Web, :live_handler
+  import Where
 
   def handle_event("boost", %{"id"=> id} = params, socket) do # boost in LV
     #debug(socket)

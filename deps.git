@@ -6,3 +6,4 @@ bonfire_data_social = "https://github.com/bonfire-networks/bonfire_data_social#m
 pointers = "https://github.com/bonfire-networks/pointers#main"
 ecto_sparkles = "https://github.com/bonfire-networks/ecto_sparkles#main"
 verbs = "https://github.com/shannonwells/verbs_ex"
+where = "~> 0.1"

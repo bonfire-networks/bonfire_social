@@ -1,4 +1,4 @@
-defmodule Bonfire.Social.Feeds.TargetFeeds do
+defmodule Bonfire.Social.Acts.Feeds do
   @moduledoc """
   Finds a list of appropriate feeds into which to post.
 
@@ -18,24 +18,24 @@ defmodule Bonfire.Social.Feeds.TargetFeeds do
 
   def run(epic, act) do
     if epic.errors == [] do
-      changeset_key = Keyword.fetch!(act.options, :changeset)
-      changeset = Map.fetch!(epic.assigns, changeset_key)
+      on = Keyword.fetch!(act.options, :on)
+      changeset = epic.assigns[on]
       current_user = Keyword.fetch!(epic.assigns.options, :current_user)
       boundary = epic.assigns.options[:boundary]
       case changeset do
         %Changeset{valid?: true}=changeset ->
-          Act.debug(act, changeset, "valid changeset")
+          Act.smart(epic, act, changeset, "valid changeset")
           ids = Feeds.target_feeds(changeset, current_user, boundary)
           %{ epic | assigns: Map.update(epic.assigns, :feed_ids, ids, &(ids ++ &1)) }
         %Changeset{valid?: false}=changeset ->
-          Act.debug(act, changeset, "invalid changeset")
+          Act.debug(epic, act, changeset, "invalid changeset")
           epic
         other ->
           error(other, "Expected changeset, got: #{inspect(other)}")
           Epic.add_error(epic, act, {:expected_changeset, other})
        end
     else
-      Act.debug(act, length(epic.errors), "Skipping due to errors")
+      Act.smart(epic, act, epic.errors, "Skipping due to epic errors")
       epic
     end
   end

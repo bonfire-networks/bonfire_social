@@ -6,6 +6,7 @@ defmodule Bonfire.Social.Objects do
     searchable_fields: [:id],
     sortable_fields: [:id]
   use Bonfire.Common.Utils
+  import Where
 
   alias Bonfire.Common
   alias Bonfire.Data.Identity.Character
@@ -87,17 +88,17 @@ defmodule Bonfire.Social.Objects do
     |> Activities.cast(changeset, ..., creator, preset_or_custom_boundary)
   end
 
-  defp cast_creator(changeset, creator),
+  def cast_creator(changeset, creator),
     do: cast_creator(changeset, creator, e(creator, :id, nil))
 
-  defp cast_creator(changeset, _creator, nil), do: changeset
-  defp cast_creator(changeset, _creator, creator_id) do
+  def cast_creator(changeset, _creator, nil), do: changeset
+  def cast_creator(changeset, _creator, creator_id) do
     changeset
     |> Changeset.cast(%{created: %{creator_id: creator_id}}, [])
     |> Changeset.cast_assoc(:created)
   end
 
-  defp cast_creator_caretaker(changeset, creator),
+  def cast_creator_caretaker(changeset, creator),
     do: cast_creator_caretaker(changeset, creator, e(creator, :id, nil))
 
   defp cast_creator_caretaker(changeset, _creator, nil), do: changeset

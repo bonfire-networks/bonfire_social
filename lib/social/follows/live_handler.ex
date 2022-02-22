@@ -1,5 +1,6 @@
 defmodule Bonfire.Social.Follows.LiveHandler do
   use Bonfire.Web, :live_handler
+  import Where
 
   def handle_event("follow", %{"id"=> id}=params, socket) do
     # debug(socket)

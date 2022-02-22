@@ -1,4 +1,4 @@
-defmodule Bonfire.Social.Activities.UnderObjects do
+defmodule Bonfire.Social.Acts.Activities.UnderObjects do
 
   import Where
   alias Bonfire.Social.Activities
@@ -7,10 +7,10 @@ defmodule Bonfire.Social.Activities.UnderObjects do
 
   def run(epic, act) do
     if epic.errors == [] do
-      Act.debug(act, "No errors, transforming.")
+      Act.debug(epic, act, "No errors, transforming.")
       do_run(epic, act)
     else
-      Act.debug(act, length(epic.errors), "Skipping because of epic errors")
+      Act.debug(epic, act, length(epic.errors), "Skipping because of epic errors")
       epic
     end
   end
@@ -28,11 +28,10 @@ defmodule Bonfire.Social.Activities.UnderObjects do
   defp do_key(epic, act, source_key, dest_key) do
     case epic.assigns[source_key] do
       nil ->
-        Act.debug(act, "Skipping #{dest_key} as Assigns key #{source_key} is nil")
+        Act.debug(epic, act, "Skipping #{dest_key} as Assigns key #{source_key} is nil")
         epic
       other ->
-        Act.debug(act, "Rewriting #{source_key} to #{dest_key}")
-        # Act.debug(act, other)
+        Act.debug(epic, act, "Rewriting #{source_key} to #{dest_key}")
         Epic.assign(epic, dest_key, Activities.activity_under_object(other))
     end
   end

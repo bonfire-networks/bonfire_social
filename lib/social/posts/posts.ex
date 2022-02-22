@@ -1,6 +1,7 @@
 defmodule Bonfire.Social.Posts do
 
   use Arrows
+  import Where
   alias Bonfire.Data.Social.{Post, PostContent, Replied, Activity}
   alias Bonfire.Social.{Activities, FeedActivities, Feeds, Objects}
   alias Bonfire.Boundaries.{Circles, Verbs}
@@ -34,6 +35,7 @@ defmodule Bonfire.Social.Posts do
   end
 
   def publish(options \\ []) do
+    options = Keyword.merge(options, crash: true, debug: true, verbose: true)
     epic =
       Epics.from_config!(__MODULE__, :publish)
       |> Epic.assign(:options, options)
@@ -138,7 +140,12 @@ defmodule Bonfire.Social.Posts do
 
 
   def ap_publish_activity("create", post) do
+    attrs = ap_publish_activity_object("create", post)
+    ActivityPub.create(attrs, post.id)
+  end
 
+  # in an ideal world this would be able to work off the changeset, but for now, fuck it.
+  def ap_publish_activity_object("create", post) do
     post = post
     |> repo().maybe_preload([:created, :replied, :post_content])
     |> Activities.object_preload_create_activity()
@@ -188,7 +195,7 @@ defmodule Bonfire.Social.Posts do
         object
       end
 
-    attrs = %{
+    %{
       actor: actor,
       context: ActivityPub.Utils.generate_context_id(),
       object: object,
@@ -197,8 +204,6 @@ defmodule Bonfire.Social.Posts do
         "cc" => cc
       }
     }
-
-    ActivityPub.create(attrs, post.id)
   end
 
   @doc """
@@ -254,34 +259,60 @@ defmodule Bonfire.Social.Posts do
   end
 
   # TODO: rewrite to take a post instead of an activity
-  def indexing_object_format(feed_activity_or_activity, object \\ nil)
-  def indexing_object_format(%{subject: %{profile: subject_profile, character: subject_character}} = activity, %{id: id, post_content: post_content} = post) do
-
-    # debug(obj)
-
-    %{
-      "id" => id,
-      "index_type" => "Bonfire.Data.Social.Post",
-      # "url" => path(post),
-      "post_content" => PostContents.indexing_object_format(post_content),
-      "creator" => Bonfire.Me.Integration.indexing_format(subject_profile, subject_profile),
-      "tag_names" => Tags.indexing_format_tags(activity)
-    } #|> IO.inspect
+  def indexing_object_format(feed_activity_or_activity_or_changeset, options \\ [])
+  def indexing_object_format(thing, options) do
+    case thing do
+      %{activity: %{object: object}} -> indexing_object_format(thing.activity, object, options)
+      %{activity: %{id: _}} -> indexing_object_format(thing.activity, thing, options)
+      %Activity{object: object} -> indexing_object_format(thing, object, options)
+      %Changeset{} ->
+        case Changeset.apply_action(thing, :insert) do
+          {:ok, thing} -> indexing_object_format(thing, options)
+          {:error, error} -> index_changeset_error(thing, error, options)
+        end
+      _ ->
+        error("Posts: no clause match for function indexing_object_format/2")
+        verbose?(thing, "thing", options)
+        nil
+    end
   end
-  def indexing_object_format(%{activity: %{object: object} = activity}, nil), do: indexing_object_format(activity, object)
-  def indexing_object_format(%{activity: %{id: _} = activity} = object, nil), do: indexing_object_format(activity, object)
-  def indexing_object_format(%Activity{object: object} = activity, nil), do: indexing_object_format(activity, object)
-  def indexing_object_format(a, b) do
-    error("Posts: no clause match for function indexing_object_format/2")
-    # debug(a, "activity")
-    # debug(b, "object")
+  def indexing_object_format(activity, object, opts) do
+    case {activity, object} do
+      # The indexer is written in terms of the inserted object, so changesets need fake inserting
+      {%{subject: %{profile: profile, character: _}}, %{id: id, post_content: content}} ->
+        %{ "id" => id,
+           "index_type" => "Bonfire.Data.Social.Post",
+           # "url" => path(post),
+           "post_content" => PostContents.indexing_object_format(content),
+           "creator" => Bonfire.Me.Integration.indexing_format(profile, profile), # this looks suspicious
+           "tag_names" => Tags.indexing_format_tags(activity)
+         } #|> IO.inspect
+      _ ->
+        error("Posts: no clause match for function indexing_object_format/2")
+        verbose?(activity, "activity", opts)
+        verbose?(object, "object", opts)
+        nil
+    end
+  end
+
+  defp index_changeset_error(changeset, error, opts) do
+    smart(error, "Got error applying an action to changeset", opts)
     nil
   end
 
-  def maybe_index(object) do
-    indexing_object_format(object) |> Bonfire.Social.Integration.maybe_index()
-    {:ok, object}
+  def to_indexable(object, options) do
+    case indexing_object_format(object) do
+      %{}=object ->
+        smart(object, "indexed object")
+        object
+      _ -> nil
+    end
   end
 
+  def maybe_index(object, options \\ []) do
+    indexing_object_format(object, nil, options)
+    |> Bonfire.Social.Integration.maybe_index()
+    {:ok, object}
+  end
 
 end

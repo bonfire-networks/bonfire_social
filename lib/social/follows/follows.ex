@@ -6,6 +6,7 @@ defmodule Bonfire.Social.Follows do
   alias Bonfire.Data.Identity.User
   alias Ecto.Changeset
   import Bonfire.Boundaries.Queries
+  import Where
   use Arrows
   use Bonfire.Common.Utils
   use Bonfire.Repo,

@@ -2,6 +2,7 @@ defmodule Bonfire.Social.Web.MessageLive do
   use Bonfire.Web, :surface_view
   alias Bonfire.Web.LivePlugs
   alias Bonfire.Social.Integration
+  import Where
 
   def mount(params, session, socket) do
     LivePlugs.live_plug(params, session, socket, [

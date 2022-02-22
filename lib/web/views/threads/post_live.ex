@@ -1,6 +1,7 @@
 defmodule Bonfire.Social.Web.PostLive do
   use Bonfire.Web, :surface_view
   alias Bonfire.Web.LivePlugs
+  import Where
 
   def mount(params, session, socket) do
     LivePlugs.live_plug(params, session, socket, [

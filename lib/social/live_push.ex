@@ -1,5 +1,6 @@
 defmodule Bonfire.Social.LivePush do
   use Bonfire.Common.Utils
+  import Where
 
   def push_activity(feed_ids, %{id: _, activity: %{id: _}=activity} = object),
     do: push_activity(feed_ids, activity |> Map.put(:object, object))

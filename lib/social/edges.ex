@@ -3,6 +3,7 @@ defmodule Bonfire.Social.Edges do
   use Bonfire.Common.Utils
   use Bonfire.Repo
   import Bonfire.Boundaries.Queries
+  import Where
   alias Bonfire.Data.Edges.Edge
   alias Bonfire.Social.Objects
 
