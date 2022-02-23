@@ -11,31 +11,32 @@ defmodule Bonfire.Social.Acts.Posts.Publish do
     * `:attrs` - epic options key to find the attributes at, default: `:post_attrs`.
   """
 
+  alias Bonfire.Epics
   alias Bonfire.Social.Posts
   alias Bonfire.Epics.{Act, Epic}
   alias Bonfire.Ecto.Acts.Work
   use Arrows
-  require Act
+  import Epics
   import Where
 
   @doc false # see module documentation
   def run(epic, act) do
-    current_user = epic.assigns.options[:current_user]
+    current_user = epic.assigns[:options][:current_user]
     cond do
       epic.errors != [] ->
-        Act.debug(epic, act, length(epic.errors), "Skipping due to epic errors")
+        maybe_debug(epic, act, length(epic.errors), "Skipping due to epic errors")
         epic
       not (is_struct(current_user) or is_binary(current_user)) ->
-        Act.debug(epic, act, current_user, "Skipping due to current_user")
+        maybe_debug(epic, act, current_user, "Skipping due to missing current_user")
         epic
       true ->
         as = Keyword.get(act.options, :as, :post)
         attrs_key = Keyword.get(act.options, :attrs, :post_attrs)
-        attrs = Keyword.get(epic.assigns.options, attrs_key, %{})
-        boundary = epic.assigns.options[:boundary]
-        Act.debug(epic, act, "Assigning changeset to :#{as} using attrs :#{attrs_key}")
-        Act.verbose(epic, act, attrs, "Post attrs")
-        if attrs == %{}, do: Act.debug(act, attrs, "empty attrs")
+        attrs = Keyword.get(epic.assigns[:options], attrs_key, %{})
+        boundary = epic.assigns[:options][:boundary]
+        maybe_debug(epic, act, attrs_key, "Assigning changeset to :#{as} using attrs")
+        # maybe_debug(epic, act, attrs, "Post attrs")
+        if attrs == %{}, do: maybe_debug(act, attrs, "empty attrs")
         Posts.changeset(:create, attrs, current_user, boundary)
         |> Map.put(:action, :insert)
         |> Epic.assign(epic, as, ...)

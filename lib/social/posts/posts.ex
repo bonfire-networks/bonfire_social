@@ -5,7 +5,7 @@ defmodule Bonfire.Social.Posts do
   alias Bonfire.Data.Social.{Post, PostContent, Replied, Activity}
   alias Bonfire.Social.{Activities, FeedActivities, Feeds, Objects}
   alias Bonfire.Boundaries.{Circles, Verbs}
-  alias Bonfire.{Epics, Epics.Epic}
+  alias Bonfire.Epics.Epic
   alias Bonfire.Social.{Integration, PostContents, Tags, Threads}
   alias Ecto.Changeset
 
@@ -37,7 +37,7 @@ defmodule Bonfire.Social.Posts do
   def publish(options \\ []) do
     options = Keyword.merge(options, crash: true, debug: true, verbose: true)
     epic =
-      Epics.from_config!(__MODULE__, :publish)
+      Epic.from_config!(__MODULE__, :publish)
       |> Epic.assign(:options, options)
       |> Epic.run()
     if epic.errors == [], do: {:ok, epic.assigns.post}, else: {:error, epic}
