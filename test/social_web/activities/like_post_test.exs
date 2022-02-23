@@ -25,42 +25,42 @@ defmodule Bonfire.Social.Activities.LikePost.Test do
       |> element("[data-id='like_action']")
       # |> IO.inspect
       |> render_click()
-      |> Floki.text() =~ "Liked (1)"
+      |> Floki.text() =~ "Liked"
 
       assert true == Likes.liked?(someone, post)
 
     end
 
-    test "shows the right number of likes" do
-      poster = fake_user!()
-      content = "here is an epic html post"
-      attrs = %{post_content: %{html_body: content}}
-      assert {:ok, post} = Posts.publish(current_user: poster, post_attrs: attrs, boundary: "local")
+    # test "shows the right number of likes" do
+    #   poster = fake_user!()
+    #   content = "here is an epic html post"
+    #   attrs = %{post_content: %{html_body: content}}
+    #   assert {:ok, post} = Posts.publish(current_user: poster, post_attrs: attrs, boundary: "local")
 
-      assert {:ok, like} = Likes.like(fake_user!(), post)
-      assert {:ok, like} = Likes.like(fake_user!(), post)
+    #   assert {:ok, like} = Likes.like(fake_user!(), post)
+    #   assert {:ok, like} = Likes.like(fake_user!(), post)
 
-      some_account = fake_account!()
-      someone = fake_user!(some_account)
-      conn = conn(user: someone, account: some_account)
+    #   some_account = fake_account!()
+    #   someone = fake_user!(some_account)
+    #   conn = conn(user: someone, account: some_account)
 
-      next = "/local"
-      {view, doc} = floki_live(conn, next) #|> IO.inspect
+    #   next = "/local"
+    #   {view, doc} = floki_live(conn, next) #|> IO.inspect
 
-      assert view
-      |> element("[data-id='like_action']")
-      |> render()
-      # |> IO.inspect
-      |> Floki.text() =~ "Like (2)"
+    #   assert view
+    #   |> element("[data-id='like_action']")
+    #   |> render()
+    #   # |> IO.inspect
+    #   |> Floki.text() =~ "Like (2)"
 
-      assert view
-      |> element("[data-id='like_action']")
-      |> render_click()
-      |> Floki.text() =~ "Liked (3)"
+    #   assert view
+    #   |> element("[data-id='like_action']")
+    #   |> render_click()
+    #   |> Floki.text() =~ "Liked (3)"
 
-      assert true == Likes.liked?(someone, post)
+    #   assert true == Likes.liked?(someone, post)
 
-    end
+    # end
 
   end
 
@@ -92,30 +92,30 @@ defmodule Bonfire.Social.Activities.LikePost.Test do
 
   end
 
-  test "As a user I want to see the activity total likes" do
-    # Create alice user
-    alice = fake_account!()
-    |> fake_user!()
-    # Create bob user
-    account2 = fake_account!()
-    bob = fake_user!(account2)
-    # Create charlie user
-    charlie = fake_account!()
-    |> fake_user!()
-    # bob follows alice
-    Follows.follow(bob, alice)
-    attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>first post/p>"}}
+  # test "As a user I want to see the activity total likes" do
+  #   # Create alice user
+  #   alice = fake_account!()
+  #   |> fake_user!()
+  #   # Create bob user
+  #   account2 = fake_account!()
+  #   bob = fake_user!(account2)
+  #   # Create charlie user
+  #   charlie = fake_account!()
+  #   |> fake_user!()
+  #   # bob follows alice
+  #   Follows.follow(bob, alice)
+  #   attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>first post/p>"}}
 
-    assert {:ok, post} = Posts.publish(current_user: alice, post_attrs: attrs, boundary: "public")
-    assert {:ok, like} = Likes.like(charlie, post)
+  #   assert {:ok, post} = Posts.publish(current_user: alice, post_attrs: attrs, boundary: "public")
+  #   assert {:ok, like} = Likes.like(charlie, post)
 
-    conn = conn(user: bob, account: account2)
-    next = "/home"
-    {view, doc} = floki_live(conn, next)
-    assert doc
-      |> Floki.find("[data-id=feed]  > article")
-      |> List.last
-      |> Floki.text =~ "Like (1)"
-  end
+  #   conn = conn(user: bob, account: account2)
+  #   next = "/home"
+  #   {view, doc} = floki_live(conn, next)
+  #   assert doc
+  #     |> Floki.find("[data-id=feed]  > article")
+  #     |> List.last
+  #     |> Floki.text =~ "Like (1)"
+  # end
 
 end

@@ -28,6 +28,6 @@ defmodule Bonfire.Social.Threads.RepliesTest do
     assert doc
       |> Floki.find("[data-id=feed]  > article")
       |> List.last
-      |> Floki.text =~ "Replies (1)"
+      |> Floki.text =~ "Reply"
   end
 end

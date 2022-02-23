@@ -49,7 +49,7 @@ defmodule Bonfire.Social.Activities.BoostPost.Test do
       someone = fake_user!(some_account)
       conn = conn(user: someone, account: some_account)
 
-      assert {:ok, like} = Boosts.boost(someone, post)
+      assert {:ok, boost} = Boosts.boost(someone, post)
       assert true == Boosts.boosted?(someone, post)
 
       next = "/local"
@@ -70,28 +70,29 @@ defmodule Bonfire.Social.Activities.BoostPost.Test do
 
   end
 
-  test "As a user I want to see the activity total boosts" do
-    # Create alice user
-    account = fake_account!()
-    alice = fake_user!(account)
-    # Create bob user
-    account2 = fake_account!()
-    bob = fake_user!(account2)
-    # bob follows alice
-    Follows.follow(bob, alice)
-    attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>first post/p>"}}
+  # Not relevant for alpha
+  # test "As a user I want to see the activity total boosts" do
+  #   # Create alice user
+  #   account = fake_account!()
+  #   alice = fake_user!(account)
+  #   # Create bob user
+  #   account2 = fake_account!()
+  #   bob = fake_user!(account2)
+  #   # bob follows alice
+  #   Follows.follow(bob, alice)
+  #   attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>first post/p>"}}
 
-    assert {:ok, post} = Posts.publish(current_user: alice, post_attrs: attrs, boundary: "public")
-    assert {:ok, boost} = Boosts.boost(bob, post)
+  #   assert {:ok, post} = Posts.publish(current_user: alice, post_attrs: attrs, boundary: "public")
+  #   assert {:ok, boost} = Boosts.boost(bob, post)
 
-    conn = conn(user: bob, account: account2)
-    next = "/home"
-    {view, doc} = floki_live(conn, next)
-    activity =  doc
-      |> Floki.find("[data-id=feed]  > article [data-id='boost_action]")
-      |> List.last
-    assert activity |> Floki.text =~ "Boosted"
-    assert activity |> Floki.text =~ "Boosted (1)"
-  end
+  #   conn = conn(user: bob, account: account2)
+  #   next = "/home"
+  #   {view, doc} = floki_live(conn, next)
+  #   activity =  doc
+  #     |> Floki.find("[data-id=feed]  > article [data-id='boost_action]")
+  #     |> List.last
+  #   assert activity |> Floki.text =~ "Boosted"
+  #   assert activity |> Floki.text =~ "Boosted (1)"
+  # end
 
 end
