@@ -32,7 +32,7 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
       user = fake_user!(account)
       attrs = %{post_content: %{summary: "summary", name: "test post name", html_body: "<p>epic html message</p>"}}
 
-      assert {:ok, post} = Posts.publish(current_user: user, post_attrs: attrs)
+      assert {:ok, post} = Posts.publish(current_user: user, post_attrs: attrs, boundary: "public")
       assert post.post_content.name =~ "test post name"
 
       conn = conn(user: user, account: account)
