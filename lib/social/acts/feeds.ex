@@ -25,7 +25,7 @@ defmodule Bonfire.Social.Acts.Feeds do
       boundary = epic.assigns[:options][:boundary]
       case changeset do
         %Changeset{valid?: true}=changeset ->
-          Epic.smart(epic, act, changeset, "valid changeset")
+          Epics.smart(epic, act, changeset, "valid changeset")
           ids = Feeds.target_feeds(changeset, current_user, boundary)
           %{ epic | assigns: Map.update(epic.assigns, :feed_ids, ids, &(ids ++ &1)) }
         %Changeset{valid?: false}=changeset ->
@@ -36,7 +36,7 @@ defmodule Bonfire.Social.Acts.Feeds do
           Epic.add_error(epic, act, {:expected_changeset, other})
        end
     else
-      Epic.smart(epic, act, epic.errors, "Skipping due to epic errors")
+      Epics.smart(epic, act, epic.errors, "Skipping due to epic errors")
       epic
     end
   end

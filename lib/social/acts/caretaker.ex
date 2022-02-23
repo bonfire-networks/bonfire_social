@@ -48,13 +48,13 @@ defmodule Bonfire.Social.Acts.Caretaker do
           nil ->
             case current_user do
               %{id: id} ->
-                Epic.smart(epic, act, current_user, "Casting current user as caretaker #{id}")
+                Epics.smart(epic, act, current_user, "Casting current user as caretaker #{id}")
                 cast(epic, act, changeset, on, id)
               id when is_binary(id) ->
                 maybe_debug(epic, act, id, "Casting current user as caretaker")
                 cast(epic, act, changeset, on, id)
               other ->
-                Epic.smart(epic, act, current_user, "Skipping because of current user")
+                Epics.smart(epic, act, current_user, "Skipping because of current user")
                 epic
             end
           other ->
