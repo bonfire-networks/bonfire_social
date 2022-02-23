@@ -296,7 +296,7 @@ defmodule Bonfire.Social.FeedActivities do
   defp create_and_put_in_feeds(subject, verb, object, feed_id) when is_map(object) and is_binary(feed_id) or is_list(feed_id) do
     with {:ok, activity} <- Activities.create(subject, verb, object) do
       with {:ok, published} <- put_in_feeds_and_maybe_federate(feed_id, activity) do # publish in specified feed
-        # debug(published, label: "create_and_put_in_feeds")
+        # debug(published, "create_and_put_in_feeds")
         {:ok, activity}
       else # meh
         publishes when is_list(publishes) and length(publishes)>0 -> {:ok, activity}

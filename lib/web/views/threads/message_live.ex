@@ -41,7 +41,7 @@ defmodule Bonfire.Social.Web.MessageLive do
 
     # FIXME?
     with {:ok, post} <- Bonfire.Social.Messages.read(id, socket) do
-      #debug(post, label: "the post:")
+      #debug(post, "the post:")
 
       {activity, object} = Map.pop(post, :activity)
       {preloaded_object, activity} = Map.pop(activity, :object)

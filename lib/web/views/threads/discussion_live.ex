@@ -31,7 +31,7 @@ defmodule Bonfire.Social.Web.DiscussionLive do
 
     current_user = current_user(socket)
 
-    # debug(params, label: "PARAMS")
+    # debug(params, "PARAMS")
 
     with {:ok, object} <- Bonfire.Social.Objects.read(id, socket) do
 

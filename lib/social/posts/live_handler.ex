@@ -112,10 +112,10 @@ defmodule Bonfire.Social.Posts.LiveHandler do
     with %{edges: replies, page_info: page_info} <- Bonfire.Social.Threads.list_replies(thread_id, socket: socket, pagination: cursor) do
 
       replies = ( e(socket.assigns, :replies, []) ++ (replies || []) ) |> Enum.uniq()
-      # debug(replies, label: "REPLIES:")
+      # debug(replies, "REPLIES:")
 
       threaded_replies = if is_list(replies) and length(replies)>0, do: Bonfire.Social.Threads.arrange_replies_tree(replies), else: []
-      # debug(threaded_replies, label: "REPLIES threaded")
+      # debug(threaded_replies, "REPLIES threaded")
 
       new = [
         replies: replies || [],
@@ -129,7 +129,7 @@ defmodule Bonfire.Social.Posts.LiveHandler do
 
 
   def post_changeset(attrs \\ %{}, creator) do
-    # debug(attrs, label: "ATTRS")
+    # debug(attrs, "ATTRS")
     Posts.changeset(:create, attrs, creator)
     # |> debug(label: "pc")
   end
