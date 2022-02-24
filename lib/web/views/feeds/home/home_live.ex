@@ -19,15 +19,13 @@ defmodule Bonfire.Social.Web.HomeLive do
     {:ok, socket
     |> assign(
       feed_assigns ++ [
-      selected_tab: "home",
-      page: "home",
-      page_title: "Home",
-      smart_input_prompt: "Write something..."
+        selected_tab: "home",
+        page: "home",
+        page_title: "Home",
+        smart_input_prompt: "Write something..."
       ])
-      }
-
+    }
   end
-
 
   def do_handle_params(%{"tab" => "federation" = tab} = params, _url, socket) do
     debug(tab)

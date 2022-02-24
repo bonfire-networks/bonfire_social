@@ -7,6 +7,7 @@
 >
   <Bonfire.UI.Social.TimelineOptionsLive
     current_user={@current_user}
+    page_title={@page_title}
     selected_tab={@selected_tab}
   />
 </Bonfire.UI.Social.FeedViewLive>
