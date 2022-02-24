@@ -5,7 +5,7 @@ defmodule Bonfire.Social.PostBoundariesTest do
   alias Bonfire.Me.Fake
   alias Bonfire.Social.Posts
   alias Bonfire.Social.FeedActivities
-  alias Bonfire.Me.Boundaries
+  alias Bonfire.Boundaries
   alias Bonfire.Repo
 
 

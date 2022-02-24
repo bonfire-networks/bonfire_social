@@ -10,7 +10,7 @@ defmodule Bonfire.Social.Feeds do
   alias Bonfire.Social.Follows
   alias Bonfire.Social.Objects
   alias Bonfire.Me.Characters
-  alias Bonfire.Me.Boundaries
+  alias Bonfire.Boundaries
 
 
   # def queries_module, do: Feed
@@ -105,7 +105,7 @@ defmodule Bonfire.Social.Feeds do
 
   def named_feed_id(name) when is_atom(name), do: Bonfire.Boundaries.Circles.get_id(name)
   def named_feed_id(name) when is_binary(name) do
-    case maybe_str_to_atom(name) do
+    case maybe_to_atom(name) do
       named when is_atom(named) -> named_feed_id(named)
       _ ->
         warn("Feed: doesn't seem to be a named feed: #{inspect name}")

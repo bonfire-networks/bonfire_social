@@ -180,7 +180,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   def publish(subject, verb_or_activity, object, preset_or_custom_boundary \\ nil) when is_atom(verb_or_activity) or is_struct(verb_or_activity) do
     # debug("FeedActivities: just making visible for and putting in these circles/feeds: #{inspect circles}")
-    # Bonfire.Me.Boundaries.maybe_make_visible_for(subject, object, circles) # |> debug(label: "grant")
+    # Bonfire.Boundaries.maybe_make_visible_for(subject, object, circles) # |> debug(label: "grant")
     Feeds.target_feeds(object, subject, preset_or_custom_boundary)
     |>
     maybe_feed_publish(subject, verb_or_activity, object, ...)

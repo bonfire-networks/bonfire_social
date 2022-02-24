@@ -41,7 +41,7 @@ defmodule Bonfire.Social.Boosts do
 
       # debug(published)
       # make the boost itself visible to both
-      # Bonfire.Me.Boundaries.maybe_make_visible_for(booster, boost, e(boosted, :created, :creator_id, nil))
+      # Bonfire.Boundaries.maybe_make_visible_for(booster, boost, e(boosted, :created, :creator_id, nil))
 
       FeedActivities.maybe_notify_creator(booster, published, boosted) #|> IO.inspect
 

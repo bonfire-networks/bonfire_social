@@ -42,7 +42,7 @@ defmodule Bonfire.Social.Likes do
       # debug(like)
 
       # make the like itself visible to both
-      # Bonfire.Me.Boundaries.maybe_make_visible_for(liker, like, e(liked, :created, :creator_id, nil))
+      # Bonfire.Boundaries.maybe_make_visible_for(liker, like, e(liked, :created, :creator_id, nil))
 
       {:ok, activity} = FeedActivities.maybe_notify_creator(liker, :like, liked) #|> debug()
       {:ok, Activities.activity_under_object(activity, like)}

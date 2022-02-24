@@ -10,7 +10,7 @@ defmodule Bonfire.Social.Objects do
 
   alias Bonfire.Common
   alias Bonfire.Data.Identity.Character
-  alias Bonfire.Me.Acls
+  alias Bonfire.Boundaries.Acls
   alias Bonfire.Social.{Activities, Tags, Threads}
 
   @doc """

@@ -2,7 +2,7 @@ defmodule Bonfire.Social.Acts.Boundaries do
 
   alias Bonfire.Epics
   alias Bonfire.Epics.{Act, Epic}
-  alias Bonfire.Me.Acls
+  alias Bonfire.Boundaries.Acls
   alias Ecto.Changeset
   import Epics
   use Arrows
