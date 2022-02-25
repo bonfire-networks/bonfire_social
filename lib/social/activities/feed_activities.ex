@@ -330,7 +330,7 @@ defmodule Bonfire.Social.FeedActivities do
   defp put_in_feeds_and_maybe_federate(feeds, activity) do
     # This makes sure it gets put in feed even if the
     # federation hook fails
-    feeds = feeds |> Utils.filter_empty()
+    feeds = feeds |> Utils.filter_empty([])
     ret = put_in_feeds(feeds, activity)
     # TODO: add ActivityPub feed for remote activities
     try do
