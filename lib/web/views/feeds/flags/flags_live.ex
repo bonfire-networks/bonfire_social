@@ -1,34 +1,28 @@
 defmodule Bonfire.Social.Web.FlagsLive do
-  use Bonfire.Web, :surface_view
+  use Bonfire.Web, :stateful_component
   alias Bonfire.Web.LivePlugs
 
-  def mount(params, session, socket) do
-    LivePlugs.live_plug params, session, socket, [
-      LivePlugs.LoadCurrentAccount,
-      LivePlugs.LoadCurrentUser,
-      # LivePlugs.LoadCurrentAccountUsers,
-      LivePlugs.StaticChanged,
-      LivePlugs.Csrf, LivePlugs.Locale,
-      &mounted/3,
-    ]
-  end
 
-  defp mounted(params, _session, socket) do
+  prop page_title, :string, default: "Flags"
+  prop feed, :list, default: []
+  prop page_info, :list, default: []
+  prop test, :string
 
-    feed = Bonfire.Social.FeedActivities.feed(:flags, socket)
+  def update(assigns, socket) do
+    # current_user = current_user(assigns)
+    feed = Bonfire.Social.FeedActivities.feed(:flags, current_user(assigns))
     edges = for %{edge: %{} = edge} <- e(feed, :edges, []), do: %{activity: edge |> Map.put(:verb, %{verb: "flag"})} #|> debug
 
     {:ok, socket
     |> assign(
       page: "flags",
-      selected_tab: "flags",
+      # selected_tab: "flags",
       page_title: "Flags",
-      current_user: current_user(socket),
+      current_user: current_user(assigns),
       feed_id: :flags,
       feed: edges,
       page_info: e(feed, :page_info, [])
       )}
-
   end
 
 

@@ -22,7 +22,7 @@ defmodule Bonfire.Social.Web.HomeLive do
         selected_tab: "home",
         page: "home",
         page_title: "Home",
-        smart_input_prompt: "Write something..."
+        smart_input_prompt: ""
       ])
     }
   end
