@@ -53,7 +53,7 @@ defmodule Bonfire.Social.Likes.LiveHandler do
   def preload(list_of_assigns) do
     current_user = current_user(List.first(list_of_assigns))
     # |> debug("current_user")
-
+    debug(list_of_assigns, "list of assign:")
     list_of_objects = list_of_assigns
     |> Enum.map(& e(&1, :object, nil))
     |> repo().maybe_preload(:like_count)
@@ -73,11 +73,12 @@ defmodule Bonfire.Social.Likes.LiveHandler do
     list_of_assigns
     |> Enum.map(fn assigns ->
       object_id = e(assigns, :object, :id, nil)
+      value = if current_user, do: Map.get(my_states, object_id), else: Map.get(List.first(list_of_assigns), :my_like)
 
       assigns
       |> Map.put(
         :my_like,
-        Map.get(my_states, object_id)
+        value
       )
       |> Map.put(
         :like_count,
