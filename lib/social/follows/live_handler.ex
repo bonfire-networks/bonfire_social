@@ -36,16 +36,16 @@ defmodule Bonfire.Social.Follows.LiveHandler do
     list_of_objects = list_of_assigns
     |> Enum.map(& e(&1, :object, nil))
     # |> repo().maybe_preload(:like_count)
-    |> debug("list_of_objects")
+    # |> debug("list_of_objects")
 
     list_of_ids = list_of_objects
     |> Enum.map(& e(&1, :id, nil))
     |> filter_empty([])
-    |> debug("list_of_ids")
+    # |> debug("list_of_ids")
 
-    my_states = if current_user, do: Bonfire.Social.Follows.get!(current_user, list_of_ids, preload: false) |> Map.new(fn l -> {e(l, :edge, :object_id, nil), true} end), else: %{Map.get(List.first(list_of_assigns), :id) =>  Map.get(List.first(list_of_assigns), :my_follow)}
+    my_states = if current_user, do: Bonfire.Social.Follows.get!(current_user, list_of_ids, preload: false) |> Map.new(fn l -> {e(l, :edge, :object_id, nil), true} end), else: %{}
 
-    debug(my_states, "my_follows")
+    # debug(my_states, "my_follows")
 
     # objects_counts = list_of_objects |> Map.new(fn o -> {e(o, :id, nil), e(o, :like_count, :object_count, nil)} end)
     # |> debug("follow_counts")
@@ -53,11 +53,12 @@ defmodule Bonfire.Social.Follows.LiveHandler do
     list_of_assigns
     |> Enum.map(fn assigns ->
       object_id = e(assigns, :object, :id, nil)
-
+      # debug(object_id, "object_id")
+      value = if current_user, do: Map.get(my_states, object_id), else: Map.get(List.first(list_of_assigns), :my_follow)
       assigns
       |> Map.put(
         :my_follow,
-        Map.get(my_states, object_id)
+        value
       )
       # |> Map.put(
       #   :like_count,
