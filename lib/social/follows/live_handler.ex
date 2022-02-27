@@ -12,7 +12,7 @@ defmodule Bonfire.Social.Follows.LiveHandler do
     with {:ok, _follow} <- Bonfire.Social.Follows.follow(current_user(socket), id) do
 
       ComponentID.send_assigns(e(params, "component", Bonfire.UI.Social.FollowButtonLive), id, set, socket)
-
+      # IO.inspect(socket, label: "SOOOOCKET:")
     else e ->
       debug(e)
       {:error, "Maybe you had already followed"}
@@ -36,14 +36,14 @@ defmodule Bonfire.Social.Follows.LiveHandler do
     list_of_objects = list_of_assigns
     |> Enum.map(& e(&1, :object, nil))
     # |> repo().maybe_preload(:like_count)
-    # |> debug("list_of_objects")
+    |> debug("list_of_objects")
 
     list_of_ids = list_of_objects
     |> Enum.map(& e(&1, :id, nil))
     |> filter_empty([])
     |> debug("list_of_ids")
 
-    my_states = if current_user, do: Bonfire.Social.Follows.get!(current_user, list_of_ids, preload: false) |> Map.new(fn l -> {e(l, :edge, :object_id, nil), true} end), else: %{}
+    my_states = if current_user, do: Bonfire.Social.Follows.get!(current_user, list_of_ids, preload: false) |> Map.new(fn l -> {e(l, :edge, :object_id, nil), true} end), else: %{Map.get(List.first(list_of_assigns), :id) =>  Map.get(List.first(list_of_assigns), :my_follow)}
 
     debug(my_states, "my_follows")
 
