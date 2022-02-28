@@ -20,7 +20,8 @@ defmodule Bonfire.Social.Activities do
   def queries_module, do: Activity
   def context_module, do: Activity
 
-  def as_permitted_for(q, opts \\ []) do
+  def as_permitted_for(q, opts \\ [], verbs \\ [:see, :read]) do
+    opts = to_options(opts) ++ [verbs: verbs]
     boundarise(q, activity.object_id, opts)
   end
 
@@ -179,7 +180,7 @@ defmodule Bonfire.Social.Activities do
     # |> debug("base query")
     |> query_object_preload_create_activity(opts, [:default, :with_parents])
     # |> debug("activity query")
-    |> as_permitted_for(opts)
+    |> as_permitted_for(opts, [:read])
     # |> debug("permitted query")
     |> repo().single()
     # # pubsub_subscribe(e(object, :activity, :replied, :thread_id, nil) || object.id, opts) # subscribe to realtime feed updates

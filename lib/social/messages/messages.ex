@@ -120,7 +120,7 @@ defmodule Bonfire.Social.Messages do
       |> Activities.activity_preloads(current_user, preloads)
       |> query_filter(filters)
       # |> debug(label: "message_paginated_post-preloads")
-      |> Activities.as_permitted_for(current_user)
+      |> Activities.as_permitted_for(current_user, [:see])
       # |> distinct([fp], [desc: fp.id, desc: fp.activity_id]) # not sure if/why needed... but possible fix for found duplicate ID for component Bonfire.UI.Social.ActivityLive in UI
       # |> order_by([fp], desc: fp.id)
       # |> debug(label: "post-permissions")

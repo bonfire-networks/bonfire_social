@@ -94,6 +94,7 @@ defmodule Bonfire.Social.FeedActivities do
     paginate = e(current_user_or_socket_or_opts, :paginate, nil) || e(current_user_or_socket_or_opts, :after, nil)
     debug("feed_paginated with: #{inspect paginate}")
     query_paginated(filters, current_user_or_socket_or_opts, preloads, query)
+    |> dump
     |> Bonfire.Repo.many_paginated(paginate)
     # |> debug()
   end
@@ -164,7 +165,7 @@ defmodule Bonfire.Social.FeedActivities do
       # add assocs needed in timelines/feeds
       |> Activities.activity_preloads(current_user_or_socket_or_opts, preloads)
       # |> debug(label: "feed_paginated post-preloads")
-      |> Activities.as_permitted_for(current_user_or_socket_or_opts)
+      |> Activities.as_permitted_for(current_user_or_socket_or_opts, [:see])
       # |> debug(label: "feed_paginated post-boundaries")
       |> order_by([activity: activity], [desc: activity.id])
   end

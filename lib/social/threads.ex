@@ -195,7 +195,7 @@ defmodule Bonfire.Social.Threads do
       |> Replied.descendants()
       |> Replied.where_depth(is_smaller_than_or_equal_to: opts[:max_depth])
       |> Activities.query_object_preload_create_activity(current_user)
-      |> Activities.as_permitted_for(current_user)
+      |> Activities.as_permitted_for(current_user, [:see])
       # |> debug(label: "Thread nested query")
   end
 
@@ -206,7 +206,7 @@ defmodule Bonfire.Social.Threads do
     Replied
       |> query_filter(filter)
       |> Activities.query_object_preload_create_activity(current_user)
-      |> Activities.as_permitted_for(current_user)
+      |> Activities.as_permitted_for(current_user, [:see])
       # |> debug(label: "Thread filtered query")
   end
 

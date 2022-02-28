@@ -87,7 +87,7 @@ defmodule Bonfire.Social.Likes do
   defp list(filters, opts, cursor_after \\ nil, preloads \\ nil) do
     query(filters, opts)
     # |> Activities.query_object_preload_activity(:like, :liked_id, opts, preloads)
-    # |> Activities.as_permitted_for(opts)
+    # |> Activities.as_permitted_for(opts, [:see])
     |> Bonfire.Repo.many_paginated(before: cursor_after)
   end
 

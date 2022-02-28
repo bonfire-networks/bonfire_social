@@ -2,7 +2,7 @@ defmodule Bonfire.Social.FlagsTest do
 
   alias Bonfire.Social.{Flags, Posts, FeedActivities}
   alias Bonfire.Me.{Fake, Users}
-  import Bonfire.Social.Utils
+  import Bonfire.Boundaries.Debug
   use Bonfire.DataCase
 
   test "flag works" do
