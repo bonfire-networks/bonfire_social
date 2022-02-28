@@ -165,7 +165,7 @@ defmodule Bonfire.Social.FeedActivities do
       # add assocs needed in timelines/feeds
       |> Activities.activity_preloads(current_user_or_socket_or_opts, preloads)
       # |> debug(label: "feed_paginated post-preloads")
-      |> Activities.as_permitted_for(current_user_or_socket_or_opts, [:see])
+      |> Activities.as_permitted_for(current_user_or_socket_or_opts)
       # |> debug(label: "feed_paginated post-boundaries")
       |> order_by([activity: activity], [desc: activity.id])
   end
