@@ -31,7 +31,7 @@ defmodule Bonfire.Social.Web.PostLive do
   }
   end
 
-  def do_handle_params(%{"id" => id} = params, _url, socket) do
+  def do_handle_params(%{"id" => id} = params, url, socket) do
 
     current_user = current_user(socket)
 
@@ -56,6 +56,7 @@ defmodule Bonfire.Social.Web.PostLive do
       |> assign(
         activity: activity,
         post: post,
+        url: url,
         # following: following || []
       )
       |> assign_global(

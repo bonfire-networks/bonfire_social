@@ -36,7 +36,7 @@ defmodule Bonfire.Social.Web.MessageLive do
     }
   end
 
-  def do_handle_params(%{"id" => id} = params, _url, socket) do
+  def do_handle_params(%{"id" => id} = params, url, socket) do
    current_user = current_user(socket)
 
     # FIXME?
@@ -73,6 +73,7 @@ defmodule Bonfire.Social.Web.MessageLive do
         reply_to_id: reply_to_id,
         smart_input_prompt: "Reply to message #{reply_to_id}",
         activity: activity,
+        url: url,
         object: object,
         thread_id: e(object, :id, nil),
       ) #|> IO.inspect

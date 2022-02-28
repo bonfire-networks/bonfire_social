@@ -12,7 +12,6 @@ defmodule Bonfire.Social.Follows.LiveHandler do
     with {:ok, _follow} <- Bonfire.Social.Follows.follow(current_user(socket), id) do
 
       ComponentID.send_assigns(e(params, "component", Bonfire.UI.Social.FollowButtonLive), id, set, socket)
-      # IO.inspect(socket, label: "SOOOOCKET:")
     else e ->
       debug(e)
       {:error, "Maybe you had already followed"}

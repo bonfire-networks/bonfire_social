@@ -26,11 +26,10 @@ defmodule Bonfire.Social.Web.DiscussionLive do
     )}
   end
 
-  def do_handle_params(%{"id" => id} = params, _url, socket) do
+  def do_handle_params(%{"id" => id} = params, url, socket) do
     # FIXME: consolidate common code with PostLive and MessageLive
 
     current_user = current_user(socket)
-
     # debug(params, "PARAMS")
 
     with {:ok, object} <- Bonfire.Social.Objects.read(id, socket) do
@@ -58,6 +57,7 @@ defmodule Bonfire.Social.Web.DiscussionLive do
       |> assign(
         reply_to_id: reply_to_id,
         activity: activity,
+        url: url,
         object: Map.merge(object, preloaded_object || %{}),
         thread_id: e(object, :id, nil),
         smart_input_prompt: "Reply to #{reply_to_id}",
