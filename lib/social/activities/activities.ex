@@ -29,7 +29,11 @@ defmodule Bonfire.Social.Activities do
     verb_id = Boundaries.Verbs.get_id(verb) || Boundaries.Verbs.get_id!(:create)
     creator = repo().maybe_preload(creator, :character)
     #|> debug("creator")
+    # debug(changeset)
+    id = # e(changeset, :changes, :id, nil) || # TODO: activity should have the sane ID as the object (after Activity becomes a mixin)
+          ULID.generate()
     activity = %{
+      id: id,
       subject_id: creator.id,
       verb_id: verb_id
     } # publish in appropriate feeds
