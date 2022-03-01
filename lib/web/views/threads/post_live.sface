@@ -8,4 +8,5 @@
   activity={@activity}
   object={@post}
   thread_id={@thread_id}
+  url={@url}
 />

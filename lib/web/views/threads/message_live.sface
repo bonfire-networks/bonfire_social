@@ -10,4 +10,5 @@
   reply_to_id={@reply_to_id}
   activity={@activity}
   object={@object}
+  url={@url}
 />
