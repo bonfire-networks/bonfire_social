@@ -33,7 +33,7 @@ defmodule Bonfire.Social.FeedActivities do
     []
   end
 
-  def my_feed(socket, cursor_after \\ nil, include_notifications? \\ true) do
+  def my_feed(socket, cursor_after \\ nil, include_notifications? \\ false) do
 
     # feeds the user is following
     feed_ids = Feeds.my_home_feed_ids(socket, include_notifications?)
