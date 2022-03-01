@@ -3,6 +3,7 @@ defmodule Bonfire.Social.MessagesTest do
 
   alias Bonfire.Social.{Messages, Feeds, FeedActivities}
   alias Bonfire.Me.Fake
+  import Where
 
   test "can message a user" do
     sender = Fake.fake_user!()
@@ -22,8 +23,7 @@ defmodule Bonfire.Social.MessagesTest do
     assert {:ok, message} = Messages.send(sender, attrs)
 
     assert %{edges: [fp]} = Messages.list(sender)
-
-    assert fp.activity.id == message.activity.id
+    assert fp.id == message.id
   end
 
 
@@ -36,7 +36,7 @@ defmodule Bonfire.Social.MessagesTest do
     assert {:ok, message} = Messages.send(sender, attrs)
 
     assert %{edges: feed} = Messages.list(sender, receiver)
-    assert List.first(feed).activity.id == message.activity.id
+    assert List.first(feed).id == message.id
   end
 
   test "can list messages sent to me" do
@@ -48,7 +48,7 @@ defmodule Bonfire.Social.MessagesTest do
     assert {:ok, message} = Messages.send(sender, attrs)
 
     assert %{edges: feed} = Messages.list(receiver)
-    assert List.first(feed).activity.id == message.activity.id
+    assert List.first(feed).id == message.id
   end
 
   test "can list messages sent to me by a specific person" do
@@ -60,7 +60,7 @@ defmodule Bonfire.Social.MessagesTest do
     assert {:ok, message} = Messages.send(sender, attrs)
 
     assert %{edges: feed} = Messages.list(receiver, sender)
-    assert List.first(feed).activity.id == message.activity.id
+    assert List.first(feed).id == message.id
   end
 
   test "random person CANNOT list messages I sent to another person" do
