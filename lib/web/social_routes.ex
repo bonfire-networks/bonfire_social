@@ -6,9 +6,6 @@ defmodule Bonfire.Social.Web.Routes do
       # pages anyone can view
       scope "/", Bonfire.Social.Web do
         pipe_through :browser
-
-        live "/home", HomeLive, as: :home
-        live "/home/:tab", HomeLive, as: :home
         live "/local", Feeds.LocalLive, as: :local
         live "/federation", Feeds.FederationLive, as: :federation
 
@@ -25,7 +22,8 @@ defmodule Bonfire.Social.Web.Routes do
       scope "/", Bonfire.Social.Web do
         pipe_through :browser
         pipe_through :account_required
-
+        live "/home", HomeLive, as: :home
+        live "/home/:tab", HomeLive, as: :home
         live "/notifications", Feeds.NotificationsLive, as: :notifications
         # live "/flags", FlagsLive, as: :flags
 
