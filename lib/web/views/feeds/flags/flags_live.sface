@@ -1,8 +1,0 @@
-<Bonfire.UI.Social.FeedViewLive 
-  page_title={@page_title}
-  current_user={(@current_user)}
-  feed={@feed}
-  feed_id={"feed:flags:"<>e(@current_user, :id, "")}
-  page_info={@page_info}
-  showing_within={:flags}
-/>
