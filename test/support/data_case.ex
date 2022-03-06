@@ -25,6 +25,7 @@ defmodule Bonfire.Social.DataCase do
       import Ecto.Query
       import Bonfire.Social.DataCase
       use Bonfire.Common.Utils
+      import Bonfire.Me.Fake
     end
   end
 
