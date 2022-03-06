@@ -81,7 +81,7 @@ defmodule Bonfire.Social.Threads.LoadMoreTest do
       conn = conn(user: bob, account: account2)
       next = "/discussion/#{op.id}"
       {view, doc} = floki_live(conn, next)
-
+      assert {:ok, more_doc} = Floki.parse_document(render(view))
       more_doc = view
       |> element("[data-id=load_more]")
       |> render_click()

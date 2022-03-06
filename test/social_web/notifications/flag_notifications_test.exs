@@ -34,17 +34,17 @@ defmodule Bonfire.Social.Notifications.Flag.Test do
 
     test "flags on a post (which admin does not explicitly have permission to see) in admin's notifications" do
 
-      some_account = fake_account!()
-      {:ok, someone} = Users.make_admin(fake_user!(some_account))
+      alice_account = fake_account!()
+      {:ok, alice} = Users.make_admin(fake_user!(alice_account))
 
-      poster = fake_user!()
+      bob = fake_user!()
       attrs = %{post_content: %{html_body: "<p>here is an epic html post</p>"}}
-      assert {:ok, post} = Posts.publish(current_user: poster, post_attrs: attrs, boundary: "mentions")
+      assert {:ok, post} = Posts.publish(current_user: bob, post_attrs: attrs, boundary: "mentions")
 
       flagger = fake_user!()
       Flags.flag(flagger, post)
 
-      conn = conn(user: someone, account: some_account)
+      conn = conn(user: alice, account: alice_account)
       next = "/notifications"
       {view, doc} = floki_live(conn, next) #|> IO.inspect
       assert [feed] = Floki.find(doc, ".feed")
@@ -57,3 +57,4 @@ defmodule Bonfire.Social.Notifications.Flag.Test do
   end
 
 end
+ 

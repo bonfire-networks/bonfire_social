@@ -4,6 +4,7 @@ defmodule Bonfire.Social.MentionsTest do
 
   alias Bonfire.Social.{Posts, Feeds, FeedActivities}
   alias Bonfire.Me.Fake
+  import Bonfire.Boundaries.Debug
 
   test "can post with a mention" do
     me = Fake.fake_user!()
@@ -64,24 +65,33 @@ defmodule Bonfire.Social.MentionsTest do
     assert %{edges: []} = FeedActivities.feed(:notifications, third)
   end
 
-  test "mentioning someone appears in their feed, if using the 'mentions' preset" do
+  test "mentioning someone appears in their notifications feed, if using the 'mentions' preset" do
     me = Fake.fake_user!()
     mentioned = Fake.fake_user!()
     attrs = %{post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
 
     assert {:ok, mention} = Posts.publish(current_user: me, post_attrs: attrs, boundary: "mentions")
+    debug_my_grants_on(mentioned, mention)
 
-    assert %{edges: feed} = FeedActivities.my_feed(mentioned)
+    assert %{edges: feed} = FeedActivities.feed(:notifications, mentioned)
     assert %{} = fp = List.first(feed)
 
     assert fp.activity.object_id == mention.id
+  end
+
+  test "mentioning someone does not appear in their feed, if using the 'mentions' preset" do
+    me = Fake.fake_user!()
+    mentioned = Fake.fake_user!()
+    attrs = %{post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
+
+    assert {:ok, mention} = Posts.publish(current_user: me, post_attrs: attrs, boundary: "mentions")
+    assert %{edges: []} = FeedActivities.my_feed(mentioned)
   end
 
   test "mentioning someone DOES NOT appear (if NOT using the preset 'mentions' boundary) in their instance feed" do
     me = Fake.fake_user!()
     mentioned = Fake.fake_user!()
     attrs = %{post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
-
     assert {:ok, mention} = Posts.publish(current_user: me, post_attrs: attrs)
 
     feed_id = Bonfire.Social.Feeds.named_feed_id(:local)

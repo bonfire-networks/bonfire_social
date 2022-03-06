@@ -7,12 +7,25 @@ defmodule Bonfire.Social.Test.ConnHelpers do
   # alias CommonsPub.Accounts
   alias Bonfire.Data.Identity.Account
   alias Bonfire.Data.Identity.User
+  import Bonfire.Me.Fake
 
   @endpoint Bonfire.Common.Config.get!(:endpoint_module)
 
   ### conn
 
   def session_conn(conn \\ build_conn()), do: Plug.Test.init_test_session(conn, %{})
+
+  def fake_user_and_conn!(account \\ fake_account!()) do
+    user = fake_user!(account)
+    conn = conn(account: account, user: user)
+    {user, conn}
+  end
+
+  def fake_admin_and_conn!(account \\ fake_account!()) do
+    {user, conn} = fake_user_and_conn!(account)
+    {:ok, user} = Users.make_admin(user)
+    {user, conn}
+  end
 
   def conn(), do: conn(session_conn(), [])
   def conn(%Plug.Conn{}=conn), do: conn(conn, [])

@@ -29,9 +29,8 @@ defmodule Bonfire.Social.Activities do
     verb_id = Boundaries.Verbs.get_id(verb) || Boundaries.Verbs.get_id!(:create)
     creator = repo().maybe_preload(creator, :character)
     #|> debug("creator")
-    # dump(changeset, "activity cs")
-    id = e(changeset, :changes, :id, nil) || ULID.generate() # TODO: activity should have the same ID as the created object
-
+    # debug(changeset)
+    id = Changeset.get_change(changeset, :id)
     activity = %{
       id: id,
       subject_id: creator.id,
@@ -47,7 +46,6 @@ defmodule Bonfire.Social.Activities do
     # |> Map.update(:data, nil, &Map.put(&1, :activity, activity)) # force an insert
     # |> debug("changeset")
   end
-
 
   @doc """
   Create an Activity

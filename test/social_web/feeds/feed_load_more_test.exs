@@ -3,6 +3,7 @@ defmodule Bonfire.Social.Feeds.LoadMoreTest do
   use Bonfire.Social.ConnCase
   alias Bonfire.Social.Fake
   alias Bonfire.Social.{Boosts, Likes, Follows, Posts}
+  import Where
 
 
   describe "Load More in Feeds" do
@@ -79,8 +80,9 @@ defmodule Bonfire.Social.Feeds.LoadMoreTest do
       # |> debug()
 
       # FIXME: the extra activities are being sent via pubsub, need to figure out how to test that
-
-      assert Enum.count(Floki.find(more_doc, "[data-id=feed]  > article")) == total_posts
+      articles = Floki.find(more_doc, "[data-id=feed]  > article")
+      # dump(articles, "articles")
+      assert Enum.count(articles) == total_posts
 
     end
 

@@ -6,10 +6,19 @@ defmodule Bonfire.Social.Edges do
   import Where
   alias Bonfire.Data.Edges.Edge
   alias Bonfire.Social.Objects
+  alias Pointers.ULID
 
   def changeset(schema, subject, verb, object, preset_or_custom_boundary) do
-    %{edge: %{subject_id: ulid(subject), object_id: ulid(object)}}
-    |> schema.changeset()
+    id = ULID.generate()
+    table_id = schema.__pointers__(:table_id)
+    %{id: id,
+      edge: %{
+        id: id,
+        subject_id: ulid(subject),
+        object_id:  ulid(object),
+        table_id:   table_id,
+      }}
+    |> Changeset.cast(struct(schema), ..., [:id])
     |> Changeset.cast_assoc(:edge, [:required, with: &Edge.changeset/2])
     |> Objects.cast_basic(%{verb: verb}, subject, preset_or_custom_boundary)
     # |> Changeset.cast_assoc(:controlled)
