@@ -29,9 +29,9 @@ defmodule Bonfire.Social.Activities do
     verb_id = Boundaries.Verbs.get_id(verb) || Boundaries.Verbs.get_id!(:create)
     creator = repo().maybe_preload(creator, :character)
     #|> debug("creator")
-    # debug(changeset)
-    id = # e(changeset, :changes, :id, nil) || # TODO: activity should have the sane ID as the object (after Activity becomes a mixin)
-          ULID.generate()
+    # dump(changeset, "activity cs")
+    id = e(changeset, :changes, :id, nil) || ULID.generate() # TODO: activity should have the same ID as the created object
+
     activity = %{
       id: id,
       subject_id: creator.id,
@@ -39,6 +39,7 @@ defmodule Bonfire.Social.Activities do
     } # publish in appropriate feeds
     |> Map.put(..., :feed_publishes, FeedActivities.cast_data(changeset, ..., creator, preset_or_custom_boundary))
     # |> debug("activity attrs")
+
     changeset
     |> Map.update(:data, nil, &Map.put(&1, :activities, [])) # force an insert
     |> Changeset.cast(%{activities: [activity]}, [])
@@ -48,17 +49,25 @@ defmodule Bonfire.Social.Activities do
   end
 
 
-
   @doc """
   Create an Activity
   NOTE: you will usually want to use `cast/3` instead
   """
-  def create(%{id: subject_id}=subject, verb, %{id: object_id}=object) when is_atom(verb) do
+  def create(subject, verb, object, id \\ nil)
+  def create(%{id: subject_id}=subject, verb, %{id: object_id}=object, id) when is_binary(id) and is_atom(verb) do
     verb_id = Boundaries.Verbs.get_id(verb) || Boundaries.Verbs.get_id!(:create)
-    attrs = %{subject_id: subject_id, verb_id: verb_id, object_id: object_id}
+    attrs = %{id: id, subject_id: subject_id, verb_id: verb_id, object_id: object_id}
     with {:ok, activity} <- repo().put(changeset(attrs)) do
        {:ok, %{activity | object: object, subject: subject, verb: %Verb{verb: verb}}}
     end
+  end
+  def create(subject, verb, {object, %{id: id} = mixin_object}, _) do
+    # dump(mixin_object, "mixin_object")
+    create(subject, verb, object, id)
+  end
+  def create(subject, verb, %{id: id} = object, _) do
+    # dump(object, "create_object")
+    create(subject, verb, object, id)
   end
 
   def changeset(activity \\ %Activity{}, %{} = attrs) do

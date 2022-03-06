@@ -35,7 +35,7 @@ defmodule Bonfire.Social.Posts do
   end
 
   def publish(options \\ []) do
-    options = Keyword.merge(options, crash: true, debug: true, verbose: true)
+    options = Keyword.merge(options, crash: true, debug: false, verbose: false)
     epic =
       Epic.from_config!(__MODULE__, :publish)
       |> Epic.assign(:options, options)
@@ -68,7 +68,6 @@ defmodule Bonfire.Social.Posts do
     attrs
     # |> debug("attrs")
     |> Post.changeset(%Post{}, ...)
-    |> Changeset.cast(attrs, [:id]) # allows manually setting the ULID for remote objects
     |> PostContents.cast(attrs, creator, preset_or_custom_boundary) # process text (must be done before Objects.cast)
     |> Objects.cast(attrs, creator, preset_or_custom_boundary) # deal with threading, tagging, boundaries, activities, etc.
   end

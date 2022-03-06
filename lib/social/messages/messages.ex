@@ -13,7 +13,7 @@ defmodule Bonfire.Social.Messages do
   alias Bonfire.Social.Threads
   alias Bonfire.Social.PostContents
   alias Bonfire.Boundaries.Verbs
-
+  alias Bonfire.Social.LivePush
 
   # def queries_module, do: Message
   def context_module, do: Message
@@ -32,20 +32,19 @@ defmodule Bonfire.Social.Messages do
     # debug(attrs)
     repo().transact_with(fn ->
       with to when is_list(to) and length(to) > 0 <- to || Utils.e(attrs, :to_circles, nil),
-           {:ok, to_characters} <- Characters.get(to),
+        {:ok, to_characters} <- Characters.get(to),
            preset_or_custom_boundary <- [
               boundary: "message",
               to_circles: to_characters,
               to_feeds: Feeds.feed_ids(:inbox, to) #|> debug()
             ],
-          {:ok, message} <- create(creator, Map.put(attrs, :tags, to_characters), preset_or_custom_boundary) do
-        # with {:ok, activity} <- FeedActivities.notificate(creator, :create, message, preset_or_custom_boundary) do
-        with {:ok, activity} <- FeedActivities.notify_feeds(creator, :create, message, preset_or_custom_boundary[:to_feeds]) do
-          {:ok, Activities.activity_under_object(activity)}
-        else e ->
-          debug(e, "Could not notify")
+        {:ok, message} <- create(creator, Map.put(attrs, :tags, to_characters), preset_or_custom_boundary) |> Activities.activity_under_object() do
+
+          LivePush.notify(creator, "message", message, preset_or_custom_boundary[:to_feeds])
+          Bonfire.Social.Integration.ap_push_activity(creator.id, message)
+
           {:ok, message}
-        end
+
       else e ->
         debug(e)
         {:error, "Oops, could not send the message."}
@@ -67,6 +66,7 @@ defmodule Bonfire.Social.Messages do
     |> Message.changeset(%Message{}, ...)
     |> PostContents.cast(attrs, creator, preset_or_custom_boundary) # process text (must be done before Objects.cast)
     |> Objects.cast(attrs, creator, preset_or_custom_boundary) # deal with threading, tagging, boundaries, activities, etc.
+    # |> dump
   end
 
   def read(message_id, socket_or_current_user) when is_binary(message_id) do

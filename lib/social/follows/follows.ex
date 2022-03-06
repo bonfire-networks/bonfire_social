@@ -152,7 +152,7 @@ defmodule Bonfire.Social.Follows do
       # make the follow itself visible to both
       # Boundaries.maybe_make_visible_for(follower, follow, followed)
 
-      {:ok, activity} = FeedActivities.notify_object(follower, :follow, followed)
+      {:ok, activity} = FeedActivities.notify_object(follower, :follow, {followed, follow})
       FeedActivities.publish(follower, activity, followed) # TODO: make configurable whether to publish the follow
 
       {:ok, Activities.activity_under_object(activity, follow)}

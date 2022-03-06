@@ -182,7 +182,7 @@ defmodule Bonfire.Social.FeedActivities do
   def publish(subject, verb_or_activity, object, preset_or_custom_boundary \\ nil) when is_atom(verb_or_activity) or is_struct(verb_or_activity) do
     # debug("FeedActivities: just making visible for and putting in these circles/feeds: #{inspect circles}")
     # Bonfire.Boundaries.maybe_make_visible_for(subject, object, circles) # |> debug(label: "grant")
-    Feeds.target_feeds(object, subject, preset_or_custom_boundary)
+    Feeds.target_feeds(the_object(object), subject, preset_or_custom_boundary)
     |>
     maybe_feed_publish(subject, verb_or_activity, object, ...)
   end
@@ -205,9 +205,9 @@ defmodule Bonfire.Social.FeedActivities do
   Takes or creates an activity and publishes to object creator's inbox
   """
   def maybe_notify_creator(subject, %{activity: %{id: _} = activity}, object), do: maybe_notify_creator(subject, activity, object)
-  def maybe_notify_creator(subject, verb_or_activity, %{} = object) do
-    object = Objects.preload_creator(object)
-    object_creator = Objects.object_creator(object)
+  def maybe_notify_creator(subject, verb_or_activity, object) do
+    the_object = Objects.preload_creator(the_object(object))
+    object_creator = Objects.object_creator(the_object)
     if ulid(object_creator) && ulid(subject) != ulid(object_creator) do
       notify_characters(subject, verb_or_activity, object, [object_creator])
     else
@@ -233,7 +233,7 @@ defmodule Bonfire.Social.FeedActivities do
   Creates a new local activity or takes an existing one and publishes to object's inbox (assuming object is a character)
   """
   def notify_object(subject, verb_or_activity, object) do
-    notify_characters(subject, verb_or_activity, object, [object])
+    notify_characters(subject, verb_or_activity, object, [the_object(object)])
   end
 
   @doc """
@@ -323,11 +323,6 @@ defmodule Bonfire.Social.FeedActivities do
       end
   end
 
-  defp maybe_index_activity(subject, verb, object) do
-    Activities.create(subject, verb, object)
-    # ~> maybe_index(activity) # TODO, indexing here?
-  end
-
   defp put_in_feeds_and_maybe_federate(feeds, activity) do
     # This makes sure it gets put in feed even if the
     # federation hook fails
@@ -368,6 +363,9 @@ defmodule Bonfire.Social.FeedActivities do
     attrs = %{feed_id: (feed), activity_id: (activity)}
     repo().put(FeedPublish.changeset(attrs))
   end
+
+  def the_object({%{} = object, _mixin_object}), do: object
+  def the_object(%{} = object), do: object
 
   @doc "Delete an activity (usage by things like unlike)"
   def delete_for_object(%{id: id}), do: delete_for_object(id)

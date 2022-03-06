@@ -37,13 +37,13 @@ defmodule Bonfire.Social.Boosts do
     ]
 
     with {:ok, boost} <- create(booster, boosted, preset_or_custom_boundary),
-    {:ok, published} <- FeedActivities.publish(booster, :boost, boosted, preset_or_custom_boundary) do
+    {:ok, published} <- FeedActivities.publish(booster, :boost, {boosted, boost}, preset_or_custom_boundary) do
 
       # debug(published)
       # make the boost itself visible to both
       # Bonfire.Boundaries.maybe_make_visible_for(booster, boost, e(boosted, :created, :creator_id, nil))
 
-      FeedActivities.maybe_notify_creator(booster, published, boosted) #|> IO.inspect
+      FeedActivities.maybe_notify_creator(booster, published, {boosted, boost}) #|> IO.inspect
 
       {:ok, Activities.activity_under_object(published, boost)}
     end

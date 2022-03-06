@@ -113,7 +113,7 @@ defmodule Bonfire.Social.Threads do
 
   @doc false
   def start_new_thread(changeset) do
-    changeset = force_to_have_id(changeset)
+    # changeset = force_to_have_id(changeset) # FIXME?
     id = Changeset.get_field(changeset, :id)
     do_cast_replied(changeset, %{reply_to_id: nil, thread_id: id})
   end

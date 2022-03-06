@@ -82,10 +82,15 @@ defmodule Bonfire.Social.Objects do
     |> Acls.cast(creator, preset_or_custom_boundary)
   end
 
-  defp cast_activity(changeset, attrs, creator, preset_or_custom_boundary) do
-    Map.get(attrs, :verb, :create)
+  defp cast_activity(changeset, %{id: id} = attrs, creator, preset_or_custom_boundary) when is_binary(id) do
+    changeset
+    |> Changeset.cast(attrs, [:id]) # manually set the ULID of the object (which will be the same as the Activity ID)
     # create activity & put in feeds
-    |> Activities.cast(changeset, ..., creator, preset_or_custom_boundary)
+    |> Activities.cast(Map.get(attrs, :verb, :create), creator, preset_or_custom_boundary)
+  end
+  defp cast_activity(changeset, attrs, creator, preset_or_custom_boundary) do
+    Map.put(attrs, :id, Pointers.ULID.generate())
+    |> cast_activity(changeset, ..., creator, preset_or_custom_boundary)
   end
 
   def cast_creator(changeset, creator),
