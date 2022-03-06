@@ -6,7 +6,7 @@ defmodule Bonfire.Social.Acts.Posts.ActivityPub do
 
   Act Options:
     * `on` - key in assigns to find the post, default: `:post`
-    * `as` - key in assigns to assign indexable object, default: `:post_index
+    * `as` - key in assigns to assign indexable object, default: `:post_index`
   """
 
   alias Bonfire.Epics
