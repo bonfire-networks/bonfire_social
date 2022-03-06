@@ -59,7 +59,7 @@ defmodule Bonfire.Social.Posts do
   def changeset(action, attrs, creator \\ nil, preset \\ nil)
 
   def changeset(:create, attrs, _creator, _preset) when attrs == %{} do
-    # for forms
+    # keep it simple for forms
 
     Post.changeset(%Post{}, attrs)
   end
@@ -68,6 +68,7 @@ defmodule Bonfire.Social.Posts do
     attrs
     # |> debug("attrs")
     |> Post.changeset(%Post{}, ...)
+    |> Changeset.cast(attrs, [:id]) # allows manually setting the ULID for remote objects
     |> PostContents.cast(attrs, creator, preset_or_custom_boundary) # process text (must be done before Objects.cast)
     |> Objects.cast(attrs, creator, preset_or_custom_boundary) # deal with threading, tagging, boundaries, activities, etc.
   end
@@ -233,7 +234,7 @@ defmodule Bonfire.Social.Posts do
       |> Enum.map(fn user -> user.id end)
 
     attrs = %{
-      # id: id,
+      id: id,
       local: false, # FIXME?
       canonical_url: nil, # TODO, in a mixin?
       to_circles: circles ++ direct_recipients,
