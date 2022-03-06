@@ -1,31 +1,39 @@
-# Maybe in future we will seperate this so it's the only AP act
-# that needs running in the transaction, but that requires teasing apart
-# the old translator first
+defmodule Bonfire.Social.Acts.ActivityPub do
+  @moduledoc """
 
-# defmodule Bonfire.Social.Acts.ActivityPub do
+  An Act that translates a post or changeset into some jobs for the
+  AP publish worker. Handles creation, update and delete
 
-#   alias Bonfire.Epics.{Act, Epic}
-#   alias Bonfire.Social.Integration
-  # import Epics
+  Act Options:
+    * `on` - key in assigns to find the post, default: `:post`
+    * `as` - key in assigns to assign indexable object, default: `:post_index`
+  """
 
-#   def run(epic, act) do
-#     cond do
-#       epic.errors != [] ->
-#         maybe_debug(epic, act, length(epic.errors), "Skipping due to epic errors")
-#         epic
-#         maybe_debug(epic, act, length(epic.errors), "Skipping publish due to epic errors")
-#       true ->
-#         current_user = Keyword.fetch!(epic.assigns[:options], :current_user)
-#         key = Keyword.fetch!(act.options, :activity)
-#         case epic.assigns[key] do
-#           nil ->
-#             maybe_debug(epic, act, "Not publishing to ActivityPub, assign #{key} not found.")
-#           activity ->
-#             maybe_debug(epic, act, "Enqueueing ActivityPub Worker task for assign #{key}")
-#             Integration.ap_push_activity(current_user, activity)
-#         end
-#     end
-#     epic
-#   end
+  alias Bonfire.Epics
+  alias Bonfire.Epics.{Act, Epic}
+  alias Bonfire.Data.Social.Post
+  alias Bonfire.Social.Integration
+  alias Ecto.Changeset
+  import Epics
+  import Where
 
-# end
+  def run(epic, act) do
+    on = Keyword.get(act.options, :on, :post)
+    object = epic.assigns[on]
+    current_user = epic.assigns[:options][:current_user]
+    cond do
+      epic.errors != [] ->
+        maybe_debug(epic, act, length(epic.errors), "Skipping due to epic errors")
+      is_nil(on) or not is_atom(on) ->
+        maybe_debug(epic, act, on, "Skipping due to `on` option")
+      not (is_struct(current_user) or is_binary(current_user)) ->
+        warn(current_user, "Skipping due to missing current_user")
+      true ->
+        case object do
+          %{id: _} -> Bonfire.Social.Integration.ap_push_activity(current_user.id, object)
+          _ -> warn(object, "Skipping, not sure what to do with this")
+        end
+    end
+    epic
+  end
+end

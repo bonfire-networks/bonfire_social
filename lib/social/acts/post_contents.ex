@@ -1,4 +1,4 @@
-defmodule Bonfire.Social.Acts.Posts.Body do
+defmodule Bonfire.Social.Acts.PostContents do
 
   alias Bonfire.Social.PostContents
   alias Bonfire.Epics

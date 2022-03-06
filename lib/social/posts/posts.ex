@@ -147,30 +147,33 @@ defmodule Bonfire.Social.Posts do
   # in an ideal world this would be able to work off the changeset, but for now, fuck it.
   def ap_publish_activity_object("create", post) do
     post = post
-    |> repo().maybe_preload([:created, :replied, :post_content])
+    |> repo().maybe_preload([:created, :replied, :post_content, tags: [:character]])
     |> Activities.object_preload_create_activity()
-    # |> debug(label: "ap_publish_activity post")
+    # |> dump("ap_publish_activity post")
 
     {:ok, actor} = ActivityPub.Adapter.get_actor_by_id(e(post, :activity, :subject_id, nil) || e(post, :created, :creator_id, nil))
+
+    published_in_feeds = Bonfire.Social.FeedActivities.feeds_for_activity(post.activity) |> debug("published_in_feeds")
 
     #FIXME only publish to public URI if in a public enough cirlce
     #Everything is public atm
     to =
-      # if Bonfire.Boundaries.Circles.circles[:guest] in Bonfire.Social.FeedActivities.feeds_for_activity(post.activity) do
+      if Bonfire.Boundaries.Circles.get_id!(:guest) in published_in_feeds do
         ["https://www.w3.org/ns/activitystreams#Public"]
-      # else
-      #  []
-      # end
+      else
+       []
+      end
 
     # TODO: find a better way of deleting non actor entries from the list
     # (or represent them in AP)
     direct_recipients =
-      Bonfire.Social.FeedActivities.feeds_for_activity(post.activity)
-      |> List.delete(e(post, :activity, :subject_id, nil) || e(post, :created, :creator_id, nil))
-      |> List.delete(Bonfire.Boundaries.Circles.circles[:guest])
-      |> Enum.map(fn id -> ActivityPub.Actor.get_by_local_id!(id) end)
-      |> Enum.filter(fn x -> not is_nil(x) end)
+      e(post, :tags, [])
+      |> Enum.reject(fn tag -> is_nil(e(tag, :character, :id, nil)) or tag.id == e(post, :activity, :subject_id, nil) or tag.id == e(post, :created, :creator_id, nil) end)
+      # |> debug("mentions")
+      |> Enum.map(fn tag -> ActivityPub.Actor.get_by_local_id!(tag.id) end)
+      |> filter_empty([])
       |> Enum.map(fn actor -> actor.ap_id end)
+      |> debug("direct_recipients")
 
     cc = [actor.data["followers"]]
 
@@ -207,7 +210,7 @@ defmodule Bonfire.Social.Posts do
   end
 
   @doc """
-  record an incoming post
+  record an incoming ActivityPub post
   """
   def ap_receive_activity(creator, activity, object, circles \\ [])
 
@@ -215,7 +218,7 @@ defmodule Bonfire.Social.Posts do
     ap_receive_activity(creator, activity, object, [:guest])
   end
 
-  def ap_receive_activity(creator, %{data: _activity_data} = _activity, %{data: post_data} = _object, circles) do # record an incoming post
+  def ap_receive_activity(creator, %{data: _activity_data} = _activity, %{data: post_data, pointer_id: id} = _object, circles) do # record an incoming post
     # debug(activity: activity)
     # debug(creator: creator)
     # debug(object: object)
@@ -230,6 +233,7 @@ defmodule Bonfire.Social.Posts do
       |> Enum.map(fn user -> user.id end)
 
     attrs = %{
+      # id: id,
       local: false, # FIXME?
       canonical_url: nil, # TODO, in a mixin?
       to_circles: circles ++ direct_recipients,
@@ -252,67 +256,32 @@ defmodule Bonfire.Social.Posts do
         attrs
       end
 
-    with {:ok, post} <- publish(current_user: creator, post_attrs: attrs, boundary: "federated") do
-      # debug(remote_post: post)
-      {:ok, post}
-    end
+    publish(current_user: creator, post_attrs: attrs, boundary: "federated")
   end
 
   # TODO: rewrite to take a post instead of an activity
-  def indexing_object_format(feed_activity_or_activity_or_changeset, options \\ [])
-  def indexing_object_format(thing, options) do
-    case thing do
-      %{activity: %{object: object}} -> indexing_object_format(thing.activity, object, options)
-      %{activity: %{id: _}} -> indexing_object_format(thing.activity, thing, options)
-      %Activity{object: object} -> indexing_object_format(thing, object, options)
-      %Changeset{} ->
-        case Changeset.apply_action(thing, :insert) do
-          {:ok, thing} -> indexing_object_format(thing, options)
-          {:error, error} -> index_changeset_error(thing, error, options)
-        end
-      _ ->
-        error("Posts: no clause match for function indexing_object_format/2")
-        verbose?(thing, "thing", options)
-        nil
-    end
-  end
-  def indexing_object_format(activity, object, opts) do
-    case {activity, object} do
+  def indexing_object_format(post, opts \\ []) do
+    case post do
       # The indexer is written in terms of the inserted object, so changesets need fake inserting
-      {%{subject: %{profile: profile, character: _}}, %{id: id, post_content: content}} ->
+      %{id: id, post_content: content, activity: %{subject: %{profile: profile, character: character} = activity}} ->
         %{ "id" => id,
            "index_type" => "Bonfire.Data.Social.Post",
            # "url" => path(post),
            "post_content" => PostContents.indexing_object_format(content),
-           "creator" => Bonfire.Me.Integration.indexing_format(profile, profile), # this looks suspicious
+           "creator" => Bonfire.Me.Integration.indexing_format(profile, character), # this looks suspicious
            "tag_names" => Tags.indexing_format_tags(activity)
          } #|> IO.inspect
       _ ->
-        error("Posts: no clause match for function indexing_object_format/2")
-        verbose?(activity, "activity", opts)
-        verbose?(object, "object", opts)
+        error("Posts: no clause match for function indexing_object_format/3")
+        error(post, "post")
         nil
     end
   end
 
-  defp index_changeset_error(changeset, error, opts) do
-    smart(error, "Got error applying an action to changeset", opts)
-    nil
-  end
-
-  def to_indexable(object, options) do
-    case indexing_object_format(object) do
-      %{}=object ->
-        smart(object, "indexed object")
-        object
-      _ -> nil
-    end
-  end
-
-  def maybe_index(object, options \\ []) do
-    indexing_object_format(object, nil, options)
+  def maybe_index(post, options \\ []) do
+    indexing_object_format(post, options)
     |> Bonfire.Social.Integration.maybe_index()
-    {:ok, object}
+    {:ok, post}
   end
 
 end

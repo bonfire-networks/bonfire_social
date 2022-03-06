@@ -1,4 +1,4 @@
-defmodule Bonfire.Social.Acts.Activities.UnderObjects do
+defmodule Bonfire.Social.Acts.Activity.UnderObject do
 
   import Where
   alias Bonfire.Social.Activities

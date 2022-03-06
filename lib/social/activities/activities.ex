@@ -81,11 +81,11 @@ defmodule Bonfire.Social.Activities do
   end
 
 
-  def object_preload_create_activity(object, object_id_field \\ :id) do
-    object_preload_activity(object, :create, object_id_field)
+  def object_preload_create_activity(object) do
+    object_preload_activity(object, :create)
   end
 
-  def object_preload_activity(object, verb \\ :create, object_id_field \\ :id) do
+  def object_preload_activity(object, verb \\ :create) do
     verb_id = Boundaries.Verbs.get_id(verb)
 
     query = from activity in Activity, as: :activity, where: activity.verb_id == ^verb_id
