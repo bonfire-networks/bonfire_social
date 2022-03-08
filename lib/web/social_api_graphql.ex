@@ -1,4 +1,4 @@
-if Bonfire.Common.Utils.module_enabled?(Absinthe.Schema.Notation) do
+if Bonfire.Common.Utils.module_enabled?(Bonfire.API.GraphQL) do
 defmodule Bonfire.Social.API.GraphQL do
   use Absinthe.Schema.Notation
   import Absinthe.Resolution.Helpers
