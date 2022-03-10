@@ -72,54 +72,54 @@ defmodule Bonfire.Social.Posts do
     |> Objects.cast(attrs, creator, preset_or_custom_boundary) # deal with threading, tagging, boundaries, activities, etc.
   end
 
-  def read(post_id, opts_or_socket_or_current_user \\ [], preloads \\ :all) when is_binary(post_id) do
-    with {:ok, post} <- base_query([id: post_id], opts_or_socket_or_current_user, preloads)
+  def read(post_id, opts_or_socket_or_current_user \\ []) when is_binary(post_id) do
+    with {:ok, post} <- base_query([id: post_id], opts_or_socket_or_current_user)
       |> Activities.read(opts_or_socket_or_current_user) do
         {:ok, Activities.activity_under_object(post) }
       end
   end
 
   @doc "List posts created by the user and which are in their outbox, which are not replies"
-  def list_by(by_user, opts_or_current_user \\ [], preloads \\ :all) do
+  def list_by(by_user, opts_or_current_user \\ []) do
     # query FeedPublish
     [posts_by: {by_user, &filter/3}]
-    |> list_paginated(opts_or_current_user, preloads)
+    |> list_paginated(opts_or_current_user)
   end
 
   @doc "List posts with pagination"
-  def list_paginated(filters, opts_or_current_user \\ [], preloads \\ :all)
-  def list_paginated(filters, opts_or_current_user, preloads) when is_list(filters) do
+  def list_paginated(filters, opts_or_current_user \\ [])
+  def list_paginated(filters, opts_or_current_user) when is_list(filters) do
     paginate = e(opts_or_current_user, :paginate, opts_or_current_user)
     filters
     # |> debug(label: "Posts.list_paginated:filters")
-    |> query_paginated(opts_or_current_user, preloads)
+    |> query_paginated(opts_or_current_user)
     |> Bonfire.Repo.many_paginated(paginate)
-    # |> FeedActivities.feed_paginated(filters, opts_or_current_user, preloads)
+    # |> FeedActivities.feed_paginated(filters, opts_or_current_user)
   end
 
   @doc "Query posts with pagination"
-  def query_paginated(filters, opts_or_current_user \\ [], preloads \\ :all)
-  def query_paginated(filters, opts_or_current_user, preloads) when is_list(filters) do
+  def query_paginated(filters, opts_or_current_user \\ [])
+  def query_paginated(filters, opts_or_current_user) when is_list(filters) do
     filters
     # |> debug(label: "Posts.query_paginated:filters")
     |> Keyword.drop([:paginate])
-    |> FeedActivities.query_paginated(opts_or_current_user, preloads, Post)
+    |> FeedActivities.query_paginated(opts_or_current_user, Post)
     # |> debug("after FeedActivities.query_paginated")
   end
-  # query_paginated(filters \\ [], current_user_or_socket_or_opts \\ [], preloads \\ :all, query \\ FeedPublish)
-  def query_paginated({a,b}, opts_or_current_user, preloads), do: query_paginated([{a,b}], opts_or_current_user, preloads)
+  # query_paginated(filters \\ [], current_user_or_socket_or_opts \\ [],  query \\ FeedPublish)
+  def query_paginated({a,b}, opts_or_current_user), do: query_paginated([{a,b}], opts_or_current_user)
 
-  def query(filters \\ [], opts_or_current_user \\ nil, preloads \\ :all)
+  def query(filters \\ [], opts_or_current_user \\ nil)
 
-  def query(filters, opts_or_current_user, preloads) when is_list(filters) or is_tuple(filters) do
+  def query(filters, opts_or_current_user) when is_list(filters) or is_tuple(filters) do
 
-    q = base_query(filters, opts_or_current_user, preloads)
+    q = base_query(filters, opts_or_current_user)
         |> join_preload([:post_content])
 
     maybe_apply(Bonfire.Boundaries.Queries, :object_only_visible_for, [q, opts_or_current_user], q)
   end
 
-  defp base_query(filters, opts_or_current_user, preloads) when is_list(filters) or is_tuple(filters) do
+  defp base_query(filters, opts_or_current_user) when is_list(filters) or is_tuple(filters) do
     (from p in Post, as: :main_object)
     |> query_filter(filters, nil, nil)
   end

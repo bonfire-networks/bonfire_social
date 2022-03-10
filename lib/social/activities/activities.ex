@@ -161,6 +161,11 @@ defmodule Bonfire.Social.Activities do
       activity: [subject: {"subject_", [:character, profile: :icon]}]
   end
 
+  def activity_preloads(query, _opts, :minimum) do
+    proload query,
+      # :activity
+      activity: [:object]
+  end
 
   def activity_preloads(query, _opts, _) do
     query

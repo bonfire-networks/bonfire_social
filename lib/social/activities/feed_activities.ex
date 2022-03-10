@@ -42,24 +42,24 @@ defmodule Bonfire.Social.FeedActivities do
     feed(feed_ids, socket, cursor_after)
   end
 
-  def feed(feed, current_user_or_socket_or_opts \\ [], preloads \\ :all)
+  def feed(feed, current_user_or_socket_or_opts \\ [])
 
-  def feed(%{id: feed_id}, current_user_or_socket_or_opts, preloads), do: feed(feed_id, current_user_or_socket_or_opts, preloads)
+  def feed(%{id: feed_id}, current_user_or_socket_or_opts), do: feed(feed_id, current_user_or_socket_or_opts)
 
-  def feed(feed_id_or_ids, current_user_or_socket_or_opts, preloads) when is_binary(feed_id_or_ids) or ( is_list(feed_id_or_ids) and length(feed_id_or_ids)>0) do
+  def feed(feed_id_or_ids, current_user_or_socket_or_opts) when is_binary(feed_id_or_ids) or ( is_list(feed_id_or_ids) and length(feed_id_or_ids)>0) do
     feed_id_or_ids = ulid(feed_id_or_ids)
 
     pubsub_subscribe(feed_id_or_ids, current_user_or_socket_or_opts) # subscribe to realtime feed updates
 
     query([feed_id: feed_id_or_ids], current_user_or_socket_or_opts)
-    |> feed_paginated(current_user_or_socket_or_opts, preloads)
+    |> feed_paginated(current_user_or_socket_or_opts)
   end
 
-  def feed(:flags, current_user_or_socket_or_opts, _preloads) do
+  def feed(:flags, current_user_or_socket_or_opts) do
     Bonfire.Social.Flags.list_paginated([], current_user_or_socket_or_opts)
   end
 
-  def feed(feed_name, current_user_or_socket_or_opts, preloads) when is_atom(feed_name) and not is_nil(feed_name) do
+  def feed(feed_name, current_user_or_socket_or_opts) when is_atom(feed_name) and not is_nil(feed_name) do
     # current_user = current_user(current_user_or_socket)
     # debug(current_user_or_socket_or_opts)
     case Feeds.named_feed_id(feed_name) || Bonfire.Social.Feeds.my_feed_id(feed_name, current_user_or_socket_or_opts) do
@@ -70,7 +70,7 @@ defmodule Bonfire.Social.FeedActivities do
         pubsub_subscribe(feed, current_user_or_socket_or_opts) # subscribe to realtime feed updates
 
         [feed_id: ulid(feed)]
-        |> feed_paginated(current_user_or_socket_or_opts, preloads)
+        |> feed_paginated(current_user_or_socket_or_opts)
 
         e ->
           error("FeedActivities.feed: no known feed #{inspect feed_name} - #{inspect e}")
@@ -88,29 +88,29 @@ defmodule Bonfire.Social.FeedActivities do
   @doc """
   Return a page of Feed Activities (reverse chronological) + pagination metadata
   """
-  def feed_paginated(filters \\ [], current_user_or_socket_or_opts \\ [], preloads \\ :all, query \\ FeedPublish)
+  def feed_paginated(filters \\ [], current_user_or_socket_or_opts \\ [], query \\ FeedPublish)
 
-  def feed_paginated(filters, current_user_or_socket_or_opts, preloads, query) do
+  def feed_paginated(filters, current_user_or_socket_or_opts, query) do
     paginate = e(current_user_or_socket_or_opts, :paginate, nil) || e(current_user_or_socket_or_opts, :after, nil)
     debug("feed_paginated filters: #{inspect filters} paginate: #{inspect paginate}")
-    query_paginated(filters, current_user_or_socket_or_opts, preloads, query)
+    query_paginated(filters, current_user_or_socket_or_opts, query)
     |> dump
     |> Bonfire.Repo.many_paginated(paginate)
     # |> debug()
   end
 
 
-  def query_paginated(filters \\ [], current_user_or_socket_or_opts \\ [], preloads \\ :all, query \\ FeedPublish)
+  def query_paginated(filters \\ [], current_user_or_socket_or_opts \\ [], query \\ FeedPublish)
 
-  def query_paginated(filters, current_user_or_socket_or_opts, preloads, query) when is_list(filters) do
+  def query_paginated(filters, current_user_or_socket_or_opts, query) when is_list(filters) do
 
     paginate = e(current_user_or_socket_or_opts, :paginate, current_user_or_socket_or_opts)
 
     # TODO: actually return a query with pagination filters
-    query(filters, current_user_or_socket_or_opts, preloads, query)
+    query(filters, current_user_or_socket_or_opts, query)
   end
 
-  def query_paginated(query, current_user_or_socket_or_opts, preloads, _query) do
+  def query_paginated(query, current_user_or_socket_or_opts, _query) do
 
     paginate = e(current_user_or_socket_or_opts, :paginate, current_user_or_socket_or_opts)
 
@@ -118,15 +118,15 @@ defmodule Bonfire.Social.FeedActivities do
     query
   end
 
-  def query(filters \\ [], current_user_or_socket_or_opts \\ [], preloads \\ :all, query \\ FeedPublish)
+  def query(filters \\ [], current_user_or_socket_or_opts \\ [], query \\ FeedPublish)
 
-  # def query(filters, opts, preloads, query, true = _distinct)  do
+  # def query(filters, opts, query, true = _distinct)  do
 
-  #   query(filters, opts, preloads, query, false)
+  #   query(filters, opts, query, false)
   #     |> distinct([activity: activity], [desc: activity.id])
   # end
 
-  def query([feed_id: feed_id_or_ids], current_user_or_socket_or_opts, preloads, query) when is_binary(feed_id_or_ids) or is_list(feed_id_or_ids) do
+  def query([feed_id: feed_id_or_ids], current_user_or_socket_or_opts, query) when is_binary(feed_id_or_ids) or is_list(feed_id_or_ids) do
     # debug(feed_id_or_ids: feed_id_or_ids)
     feed_id_or_ids = ulid(feed_id_or_ids)
 
@@ -138,32 +138,32 @@ defmodule Bonfire.Social.FeedActivities do
       # exclude private messages to avoid shoulder snoopers - access is controlled separately.
       exclude_messages: dynamic([object: object], object.table_id != ^("6R1VATEMESAGEC0MMVN1CAT10N"))
     ]
-    |> query(current_user_or_socket_or_opts, preloads, query)
+    |> query(current_user_or_socket_or_opts, query)
   end
 
-  def query(filters, current_user_or_socket_or_opts, preloads, query) when is_list(filters) do
+  def query(filters, current_user_or_socket_or_opts, query) when is_list(filters) do
 
     debug("FeedActivities - query with filters: #{inspect filters}")
 
     query
-      |> query_extras(current_user_or_socket_or_opts, preloads)
+      |> query_extras(current_user_or_socket_or_opts)
       |> query_filter(filters, nil, nil)
       # |> debug(label: "FeedActivities - query")
   end
 
-  def query(filters, current_user_or_socket_or_opts, preloads, query) do
+  def query(filters, current_user_or_socket_or_opts, query) do
     query
-      # |> query_extras(current_user, preloads)
+      # |> query_extras(current_user)
       # |> query_filter(filters, nil, nil)
       |> debug(label: "FeedActivities invalid feed query with filters #{inspect filters}")
   end
 
-  defp query_extras(query, current_user_or_socket_or_opts, preloads) do
+  defp query_extras(query, current_user_or_socket_or_opts) do
 
     query
       # |> debug(label: "feed_paginated pre-preloads")
       # add assocs needed in timelines/feeds
-      |> Activities.activity_preloads(current_user_or_socket_or_opts, preloads)
+      |> Activities.activity_preloads(current_user_or_socket_or_opts, e(current_user_or_socket_or_opts, :preloads, :all))
       # |> debug(label: "feed_paginated post-preloads")
       |> Activities.as_permitted_for(current_user_or_socket_or_opts)
       # |> debug(label: "feed_paginated post-boundaries")
