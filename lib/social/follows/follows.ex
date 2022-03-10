@@ -26,7 +26,7 @@ defmodule Bonfire.Social.Follows do
   # TODO: abstract the next few functions into Edges
   def all_by_subject(user, opts \\ []) do
     opts
-    |> Keyword.put_new(:current_user, user)
+    # |> Keyword.put_new(:current_user, user)
     |> Keyword.put_new(:preload, :object)
     |> query([subject: user], ...)
     |> repo().many()
@@ -39,7 +39,7 @@ defmodule Bonfire.Social.Follows do
 
   def all_by_object(user, opts \\ []) do
     opts
-    |> Keyword.put_new(:current_user, user)
+    # |> Keyword.put_new(:current_user, user)
     |> Keyword.put_new(:preload, :subject)
     |> query([object: user], ...)
     |> repo().many()
