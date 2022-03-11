@@ -1,0 +1,16 @@
+<section class="flex-grow bg-base-100 w-full h-full mx-auto shrink-0 md:mx-3 md:mr-0 lg:mr-3 w-center max-w-[580px]">
+  <Bonfire.UI.Social.PageHeaderLive
+    page_title={"Compose"}
+    before
+  />
+    <Bonfire.UI.Social.SmartInputLive
+      :if={current_user(assigns)}
+      current_user={current_user(assigns)}
+      reply_to_id={@reply_to_id}
+      thread_id={@thread_id}
+      create_activity_type={e(assigns, :create_activity_type, nil)}
+      to_circles={e(assigns, :to_circles, [])}
+      smart_input_prompt={@smart_input_prompt}
+      smart_input_text={@smart_input_text}
+    />
+</section>

@@ -20,7 +20,8 @@ defmodule Bonfire.Social.Web.WriteLive do
     |> assign(
       page_title: "Post",
       page: "Write",
-      smart_input_prompt: "Write something",
+      smart_input_text: "",
+      smart_input_prompt: "",
       has_private_tab: false,
       reply_to_id: nil,
       thread_id: nil,
