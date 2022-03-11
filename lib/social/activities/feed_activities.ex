@@ -33,18 +33,19 @@ defmodule Bonfire.Social.FeedActivities do
     []
   end
 
-  def my_feed(socket, cursor_after \\ nil, include_notifications? \\ false) do
+  def my_feed(socket_and_or_opts) do
 
     # feeds the user is following
-    feed_ids = Feeds.my_home_feed_ids(socket, include_notifications?)
+    feed_ids = Feeds.my_home_feed_ids(socket_and_or_opts)
     # |> debug()
-
-    feed(feed_ids, socket, cursor_after)
+    |> feed(socket_and_or_opts)
   end
 
   def feed(feed, current_user_or_socket_or_opts \\ [])
 
   def feed(%{id: feed_id}, current_user_or_socket_or_opts), do: feed(feed_id, current_user_or_socket_or_opts)
+
+  def feed([feed_id], current_user_or_socket_or_opts), do: feed(feed_id, current_user_or_socket_or_opts)
 
   def feed(feed_id_or_ids, current_user_or_socket_or_opts) when is_binary(feed_id_or_ids) or ( is_list(feed_id_or_ids) and length(feed_id_or_ids)>0) do
     feed_id_or_ids = ulid(feed_id_or_ids)
@@ -79,7 +80,7 @@ defmodule Bonfire.Social.FeedActivities do
     end
   end
 
-  def feed(other, _, _) do
+  def feed(other, _) do
     error("FeedActivities.feed: not a recognised feed query format - got #{inspect other}")
     []
   end

@@ -113,23 +113,23 @@ defmodule Bonfire.Social.Feeds do
     end
   end
 
-  def my_home_feed_ids(socket, include_notifications? \\ true, extra_feeds \\ [])
+  def my_home_feed_ids(socket, extra_feeds \\ [])
   # TODO: make configurable if user wants notifications included in home feed
 
-  def my_home_feed_ids(socket, include_notifications?, extra_feeds) do
+  def my_home_feed_ids(socket_or_opts, extra_feeds) do
     # debug(my_home_feed_ids_user: user)
 
-    current_user = current_user(socket)
+    current_user = current_user(socket_or_opts)
 
     # include my outbox
-    my_outbox_id = my_feed_id(:outbox, socket) #|> debug("my_outbox_id")
+    my_outbox_id = my_feed_id(:outbox, current_user) #|> debug("my_outbox_id")
 
     # include my notifications?
     extra_feeds = extra_feeds ++ [my_outbox_id] ++
-      if include_notifications?, do: [my_feed_id(:notifications, socket)], else: []
+      if e(socket_or_opts, :include_notifications?, false), do: [my_feed_id(:notifications, current_user)], else: []
 
     # include outboxes of everyone I follow
-    with current_user when not is_nil(current_user) <- current_user,
+    with _ when not is_nil(current_user) <- current_user,
          followings when is_list(followings) <- Follows.all_followed_outboxes(current_user, skip_boundary_check: true) do
       # debug(followings, "followings")
       extra_feeds ++ followings
@@ -143,7 +143,7 @@ defmodule Bonfire.Social.Feeds do
     # |> debug("all")
   end
 
-  def my_home_feed_ids(_, _, extra_feeds), do: extra_feeds
+  def my_home_feed_ids(_, extra_feeds), do: extra_feeds
 
   def my_feed_id(type, other) do
     case current_user(other) do
