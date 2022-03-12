@@ -1,24 +1,68 @@
 defmodule Bonfire.Social.Follows do
 
-  alias Bonfire.Data.Social.Follow
+  alias Bonfire.Data.Social.{Follow, Request}
   alias Bonfire.Me.{Boundaries, Characters, Users}
-  alias Bonfire.Social.{Activities, APActivities, Edges, FeedActivities, Feeds, Integration}
+  alias Bonfire.Social.{Activities, APActivities, Edges, FeedActivities, Feeds, Integration, Requests}
   alias Bonfire.Data.Identity.User
   alias Ecto.Changeset
   import Bonfire.Boundaries.Queries
   import Where
   use Arrows
   use Bonfire.Common.Utils
-  use Bonfire.Repo,
-    schema: Follow,
-    searchable_fields: [:id, :follower_id, :followed_id],
-    sortable_fields: [:id]
+  use Bonfire.Repo
 
   def queries_module, do: Follow
   def context_module, do: Follow
-  def federation_module, do: ["Follow", {"Create", "Follow"}, {"Undo", "Follow"}, {"Delete", "Follow"}]
+  def federation_module, do: ["Follow", {"Create", "Follow"}, {"Undo", "Follow"}, {"Delete", "Follow"}, {"Accept", "Follow"}, {"Reject", "Follow"}]
 
-  def following?(subject, object), do: not is_nil(get!(subject, object, skip_boundary_check: true))
+  def following?(subject, object), do: not is_nil(get!(subject, object, skip_boundary_check: true)) # TODO: privacy
+  def requested?(subject, object), do: Requests.requested?(subject, Follow, object)
+
+  @doc """
+  Follow someone/something, and federate it
+  """
+  def follow(user, object, opts \\ [])
+  def follow(%{}=follower, object, opts) do
+    opts = Keyword.put_new(opts, :current_user, follower)
+
+    with {:ok, object} <- check_follow(follower, object, opts),
+         true <- Integration.is_local?(object) do
+      do_follow(follower, object, opts)
+    else _ ->
+      error("remote actor OR not allowed to follow, let's make a request instead")
+      Requests.request(follower, Follow, object, opts)
+    end
+  end
+
+  def accept(request, opts) do
+    with {:ok, request} <- Requests.accept(request, opts) |> repo().maybe_preload(edge: [:subject, :object]),
+         _ <- Edges.delete_by_both(request.edge.subject, Follow, request.edge.object), # remove the Edge so we can recreate one linked to the Follow, because of the unique key on subject/object/table_id
+         {:ok, follow} <- do_follow(request.edge.subject, request.edge.object, opts) do
+
+      maybe_publish_accept(request, follow)
+
+      {:ok, follow}
+    end
+  end
+
+  def maybe_publish_accept(request, follow) do
+    with true <- Integration.is_local?(follow.edge.subject),
+    {:ok, object_actor} <- ActivityPub.Adapter.get_actor_by_id(follow.edge.object_id) ,
+         {:ok, subject_actor} <- ActivityPub.Adapter.get_actor_by_id(follow.edge.subject_id),
+        %ActivityPub.Object{} = follow_ap_object <- ActivityPub.Object.get_by_pointer_id(request.id),
+         {:ok, _} <- ActivityPub.accept(%{
+            actor: object_actor,
+            to: [subject_actor.data],
+            object: follow_ap_object.data,
+            local: true
+          } ) do
+      :ok
+    end
+  end
+
+  def ignore(request, opts) do
+    Requests.ignore(request, opts)
+  end
 
   def get(subject, object, opts \\ []), do: Edges.get(__MODULE__, subject, object, opts)
   def get!(subject, object, opts \\ []), do: Edges.get!(__MODULE__, subject, object, opts)
@@ -68,7 +112,7 @@ defmodule Bonfire.Social.Follows do
     # |> debug("follows query")
   end
 
-  def query([my: :followed], opts), do: [subject: current_user(opts)] |> query(opts)
+  def query([my: :object], opts), do: [subject: current_user(opts)] |> query(opts)
 
   def query([my: :followers], opts), do: [object: current_user(opts)] |> query(opts)
 
@@ -101,72 +145,67 @@ defmodule Bonfire.Social.Follows do
   defp maybe_with_follower_profile_only(q, true), do: q |> where([follower_profile: p], not is_nil(p.id))
   defp maybe_with_follower_profile_only(q, _), do: q
 
-  @doc """
-  Follow someone/something, and federate it
-  """
-  def follow(user, object, opts \\ [])
-  def follow(%{}=follower, followed, opts) do
-    opts = Keyword.put_new(opts, :current_user, follower)
 
-    check_follow(follower, followed, opts)
-    ~> do_follow(follower, ..., opts)
-  end
-
-  defp check_follow(follower, followed, opts) do
+  defp check_follow(follower, object, opts) do
     skip? = skip_boundary_check?(opts)
     skip? = (:admins == skip? && Users.is_admin?(follower)) || (skip? == true)
-    opts = Keyword.put_new(opts, :verbs, [:see, :follow])
+    opts = Keyword.put_new(opts, :verbs, [:follow])
 
-    case followed do
-      %{id: id} ->
-        if skip?, do: {:ok, followed},
-        else: Common.Pointers.one(id, opts)
-
-      _ when is_binary(followed) ->
-        if is_ulid?(followed) do
-          Common.Pointers.one(followed, opts)
-        else
-          # try by username
-          maybe_apply(Characters, :by_username, [followed, opts])
-        end
+    if skip? do
+      debug("skip boundary check")
+      {:ok, object}
+    else
+      case ulid(object) do
+        id when is_binary(id) ->
+          Common.Pointers.one(id, opts ++ [log_query: true])
+          |> dump("allowed to follow ?")
+        _ ->
+          error(object, "no object ID, try with username")
+          maybe_apply(Characters, :by_username, [object, opts])
+      end
     end
+    |> repo().maybe_preload([:peered, character: [:peered], created: [:peered]])
   end
 
-  defp do_follow(follower, followed, opts) do
+  defp do_follow(follower, object, opts) do
     preset_or_custom_boundary = [
       boundary: "local", # TODO: make configurable
-      to_circles: [ulid(followed)],
-      to_feeds: [Feeds.feed_id(:notifications, followed), Feeds.feed_id(:outbox, follower)]
+      to_circles: [ulid(object)],
+      to_feeds: [Feeds.feed_id(:notifications, object), Feeds.feed_id(:outbox, follower)]
     ]
 
-    with {:ok, follow} <- create(follower, followed, preset_or_custom_boundary) do
+    with {:ok, follow} <- create(follower, object, preset_or_custom_boundary) do
 
       # debug(follow)
 
       # TEMPORARY: make my profile visible to people I follow
-      # Boundaries.maybe_make_visible_for(follower, follower, followed)
+      # Boundaries.maybe_make_visible_for(follower, follower, object)
 
       # TEMPORARY: make sure the profile of someone I follow is visible to me
-      # Boundaries.maybe_make_visible_for(followed, followed, follower)
+      # Boundaries.maybe_make_visible_for(object, object, follower)
 
       # make the follow itself visible to both
-      # Boundaries.maybe_make_visible_for(follower, follow, followed)
+      # Boundaries.maybe_make_visible_for(follower, follow, object)
 
-      {:ok, activity} = FeedActivities.notify_object(follower, :follow, {followed, follow})
-      FeedActivities.publish(follower, activity, followed) # TODO: make configurable whether to publish the follow
+      {:ok, activity} = FeedActivities.notify_object(follower, :follow, {object, follow})
+      FeedActivities.publish(follower, activity, object) # TODO: make configurable whether to publish the follow
 
       {:ok, Activities.activity_under_object(activity, follow)}
     else e ->
-      msg = l "Could not follow (possibly already following?)"
-      debug(e)
-      {:error, msg}
+      with {ok, follow} <- get(follower, object) do
+        debug("was already following")
+        {:ok, follow}
+      else _ ->
+        error(e)
+        {:error, e}
+      end
     end
   end
 
-  def unfollow(follower, %{} = followed) do
-    with [_id] <- Edges.delete_by_both(follower, followed) do
+  def unfollow(follower, %{} = object) do
+    with [_id] <- Edges.delete_by_both(follower, Follow, object) do
       # delete the like activity & feed entries
-      Activities.delete_by_subject_verb_object(follower, :follow, followed)
+      Activities.delete_by_subject_verb_object(follower, :follow, object)
     end
   end
 
@@ -176,8 +215,8 @@ defmodule Bonfire.Social.Follows do
     end
   end
 
-  defp create(follower, followed, preset_or_custom_boundary) do
-    Edges.changeset(Follow, follower, :follow, followed, preset_or_custom_boundary)
+  defp create(follower, object, preset_or_custom_boundary) do
+    Edges.changeset(Follow, follower, :follow, object, preset_or_custom_boundary)
     |> repo().upsert()
   end
 
@@ -185,48 +224,68 @@ defmodule Bonfire.Social.Follows do
 
   def ap_publish_activity("create", follow) do
     with {:ok, follower} <- ActivityPub.Adapter.get_actor_by_id(follow.edge.subject_id),
-         {:ok, followed} <- ActivityPub.Adapter.get_actor_by_id(follow.edge.object_id) do
-      ActivityPub.follow(follower, followed, nil, true)
+         {:ok, object} <- ActivityPub.Adapter.get_actor_by_id(follow.edge.object_id) do
+      ActivityPub.follow(follower, object, nil, true)
     end
   end
 
   def ap_publish_activity("delete", follow) do
     with {:ok, follower} <- ActivityPub.Adapter.get_actor_by_id(follow.edge.subject.id),
-         {:ok, followed} <- ActivityPub.Adapter.get_actor_by_id(follow.edge.object_id) do
-      ActivityPub.unfollow(follower, followed, nil, true)
+         {:ok, object} <- ActivityPub.Adapter.get_actor_by_id(follow.edge.object_id) do
+      ActivityPub.unfollow(follower, object, nil, true)
     end
   end
 
-  def ap_receive_activity(follower, %{data: %{"type" => "Follow"} = data} = _activity, %{pointer_id: followed_id} = object) when is_binary(follower) or is_struct(follower) do
+  def ap_receive_activity(follower, %{data: %{"type" => "Follow"} = data} = _activity, %{pointer_id: _followed_id} = object) when is_binary(follower) or is_struct(follower) do
     warn("Follows: recording an incoming follow")
-    with {:ok, followed} <- Bonfire.Me.Users.by_id(followed_id),
-          false <- following?(follower, followed), # check if not already followed
-         {:ok, follow} <- do_follow(follower, followed, current_user: follower) do
+    with false <- following?(follower, object), # check if not already following
+         {:ok, %Follow{} = follow} <- follow(follower, object, current_user: follower) do
       ActivityPub.accept(%{
-        to: [data["actor"]],
         actor: object,
+        to: [data["actor"]],
         object: data,
         local: true
       })
       {:ok, follow}
     else
-      # reaffirm that the follow has gone through
       true ->
+      # reaffirm that the follow has gone through when following? was already == true
         warn("Follows: federated follow already exists")
         ActivityPub.accept(%{
-          to: [data["actor"]],
           actor: object,
+          to: [data["actor"]],
           object: data,
           local: true
         })
 
-      e -> e
+      {:ok, %Request{} = request} ->
+        dump("Follow was requested and remains pending")
+        {:ok, request}
+      e ->
+        error(e, "Could not follow")
+        {:ignore, "Could not follow"}
+    end
+  end
+
+  def ap_receive_activity(followed, %{data: %{"type" => "Accept"} = _data} = _activity, %{data: %{"actor" => follower}} = _object) do
+    with {:ok, follower} <- Bonfire.Federate.ActivityPub.Utils.get_character_by_ap_id(follower),
+         {:ok, request} <- Requests.get(follower, Follow, followed, skip_boundary_check: true),
+         {:ok, request} <- accept(request, current_user: followed) do
+          {:ok, request}
+    end
+  end
+
+  def ap_receive_activity(followed, %{data: %{"type" => "Reject"} = _data} = _activity, %{data: %{"actor" => follower}} = _object) do
+    with {:ok, follower} <- Bonfire.Federate.ActivityPub.Utils.get_character_by_ap_id(follower),
+         {:ok, request} <- Requests.get(follower, Follow, followed, skip_boundary_check: true),
+         {:ok, request} <- ignore(request, current_user: followed) do
+          {:ok, request}
     end
   end
 
   def ap_receive_activity(follower, %{data: %{"type" => "Undo"} = _data} = _activity, %{data: %{"object" => followed_ap_id}} = _object) do
-    with {:ok, followed} <- Bonfire.Federate.ActivityPub.Utils.get_character_by_ap_id(followed_ap_id),
-         [id] <- unfollow(follower, followed) do
+    with {:ok, object} <- Bonfire.Federate.ActivityPub.Utils.get_character_by_ap_id(followed_ap_id),
+         [id] <- unfollow(follower, object) do
           {:ok, id}
     end
   end

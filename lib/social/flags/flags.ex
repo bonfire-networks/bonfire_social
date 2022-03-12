@@ -65,7 +65,7 @@ defmodule Bonfire.Social.Flags do
   end
 
   def unflag(%User{}=flagger, %{}=flagged) do
-    Edges.delete_by_both(flagger, flagged) # delete the Flag
+    Edges.delete_by_both(flagger, Flag, flagged) # delete the Flag
     Activities.delete_by_subject_verb_object(flagger, :flag, flagged) # delete the flag activity & feed entries (not needed unless publishing flags to feeds)
   end
   def unflag(%User{} = user, object) when is_binary(object) do

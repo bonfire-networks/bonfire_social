@@ -57,7 +57,7 @@ defmodule Bonfire.Social.Likes do
   end
 
   def unlike(%User{}=liker, %{}=liked) do
-    Edges.delete_by_both(liker, liked) # delete the Like
+    Edges.delete_by_both(liker, Like, liked) # delete the Like
     Activities.delete_by_subject_verb_object(liker, :like, liked) # delete the like activity & feed entries
     # Note: the like count is automatically decremented by DB triggers
   end

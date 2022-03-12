@@ -2,6 +2,7 @@ defmodule Bonfire.Social.Posts do
 
   use Arrows
   import Where
+  import Bonfire.Boundaries.Queries
   alias Bonfire.Data.Social.{Post, PostContent, Replied, Activity}
   alias Bonfire.Social.{Activities, FeedActivities, Feeds, Objects}
   alias Bonfire.Boundaries.{Circles, Verbs}
@@ -112,11 +113,9 @@ defmodule Bonfire.Social.Posts do
   def query(filters \\ [], opts_or_current_user \\ nil)
 
   def query(filters, opts_or_current_user) when is_list(filters) or is_tuple(filters) do
-
     q = base_query(filters, opts_or_current_user)
         |> join_preload([:post_content])
-
-    maybe_apply(Bonfire.Boundaries.Queries, :object_only_visible_for, [q, opts_or_current_user], q)
+        |> boundarise(main_object.id, opts_or_current_user)
   end
 
   defp base_query(filters, opts_or_current_user) when is_list(filters) or is_tuple(filters) do

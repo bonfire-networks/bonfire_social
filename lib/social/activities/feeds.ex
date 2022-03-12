@@ -80,7 +80,7 @@ defmodule Bonfire.Social.Feeds do
         [( # put in inboxes (notifications) of any local reply_to creators and mentions
           ([reply_to_creator]
            ++ mentions)
-          |> Enum.filter(&check_local/1)
+          |> Enum.filter(&is_local?/1)
           |> feed_id(:notifications, ...)
         )] ++ [
           thread_id,

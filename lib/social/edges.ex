@@ -8,43 +8,65 @@ defmodule Bonfire.Social.Edges do
   alias Bonfire.Social.Objects
   alias Pointers.ULID
 
-  def changeset(schema, subject, verb, object, preset_or_custom_boundary) do
+  def changeset(schema, subject, verb, object, preset_or_custom_boundary) when is_atom(schema), do: changeset({schema, schema}, subject, verb, object, preset_or_custom_boundary)
+  def changeset({insert_schema, type_schema}, subject, verb, object, preset_or_custom_boundary) do
     id = ULID.generate()
-    table_id = schema.__pointers__(:table_id)
     %{id: id,
       edge: %{
         id: id,
         subject_id: ulid(subject),
         object_id:  ulid(object),
-        table_id:   table_id,
+        table_id:   type_schema.__pointers__(:table_id),
       }}
-    |> Changeset.cast(struct(schema), ..., [:id])
+    |> Changeset.cast(struct(insert_schema), ..., [:id])
     |> Changeset.cast_assoc(:edge, [:required, with: &Edge.changeset/2])
     |> Objects.cast_basic(%{verb: verb}, subject, preset_or_custom_boundary)
     # |> Changeset.cast_assoc(:controlled)
   end
 
-  def get(schema, subject, object, opts \\ []) do
-    do_query(schema, subject, object, opts)
+  def get(type, subject, object, opts \\ [])
+
+  def get(type, filters, opts, []) when is_list(filters) and is_list(opts) do
+    do_query(type, filters, opts)
+    |> dump
     |> repo().single()
   end
 
-  def get!(schema, subject, objects, opts \\ [])
-  def get!(schema, subject, [], opts) do
+  def get(type, subject, object, opts) do
+    do_query(type, subject, object, opts)
+    |> repo().single()
+  end
+
+  def get!(type, subject, objects, opts \\ [])
+  def get!(type, subject, [], opts) do
     []
   end
-  def get!(schema, subject, objects, opts) when is_list(objects) do
-    do_query(schema, subject, objects, opts)
+  def get!(type, subject, objects, opts) when is_list(objects) do
+    do_query(type, subject, objects, opts)
     |> repo().all()
   end
-  def get!(schema, subject, object, opts) do
-    do_query(schema, subject, object, opts)
+  def get!(type, subject, object, opts) do
+    do_query(type, subject, object, opts)
     |> repo().one()
   end
 
-  defp do_query(schema, subject, object, opts \\ []) do
+  # defp do_query(type, subject, object, opts \\ [])
+
+  defp do_query(type_context, filters, opts) when is_list(filters) and is_list(opts) do
+    filters
+    |> type_context.query(opts)
+    # |> debug()
+  end
+
+  defp do_query({type_context, type}, subject, object, opts) do
     [subject: subject, object: object]
-    |> schema.query(Keyword.put_new(opts, :current_user, subject))
+    |> type_context.query(type, Keyword.put_new(opts, :current_user, subject))
+    # |> debug()
+  end
+
+  defp do_query(type_context, subject, object, opts) do
+    [subject: subject, object: object]
+    |> type_context.query(Keyword.put_new(opts, :current_user, subject))
     # |> debug()
   end
 
@@ -54,9 +76,9 @@ defmodule Bonfire.Social.Edges do
     |> filter(filters, opts)
   end
 
-  def query_parent(schema, filters, opts) do
+  def query_parent(query_schema, filters, opts) do
     # debug(opts)
-    from(root in schema, as: :root)
+    from(root in query_schema, as: :root)
     |> proload(:edge)
     |> boundarise(root.id, opts)
     |> filter(filters, opts)
@@ -87,6 +109,7 @@ defmodule Bonfire.Social.Edges do
 
   defp filter(query, filters, opts) when is_list(filters),
     do: Enum.reduce(filters, query, &filter(&2, &1, opts))
+        |> query_filter(Keyword.drop(filters, [:object, :subject, :type]))
 
   defp filter(query, {:subject, subject}, opts) do
     case subject do
@@ -108,8 +131,16 @@ defmodule Bonfire.Social.Edges do
     end
   end
 
+  defp filter(query, {:type, type}, opts) do
+    case type do
+      _ when is_list(type) ->
+        where(query, [edge: edge], edge.table_id in ^ulid(type))
+      _ when is_map(type) or is_binary(type) ->
+        where(query, [edge: edge], edge.table_id == ^ulid(type))
+    end
+  end
+
   defp filter(query, filters, _opts) do
-    warn("Edges: unrecognised filters: #{inspect filters} so just returning query as-is")
     query
   end
 
@@ -123,8 +154,8 @@ defmodule Bonfire.Social.Edges do
   # defp delete_by_any(me), do: do_delete(by_any_q(me))
 
   #doc "Delete Follows where i am the subject and someone else is the object."
-  def delete_by_both(me, object), do: [subject: me, object: object] |> query(skip_boundary_check: true) |> do_delete()
+  def delete_by_both(me, schema, object), do: [subject: me, object: object, table_id: schema.__pointers__(:table_id)] |> query(skip_boundary_check: true) |> do_delete()
 
-  defp do_delete(q), do: Ecto.Query.exclude(q, :preload) |> repo().delete_all() |> elem(1)
+  defp do_delete(q), do: q |> Ecto.Query.exclude(:preload) |> Ecto.Query.exclude(:order_by) |> repo().delete_all() |> elem(1)
 
 end

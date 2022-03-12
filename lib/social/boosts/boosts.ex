@@ -56,7 +56,7 @@ defmodule Bonfire.Social.Boosts do
   end
 
   def unboost(%{}=booster, %{}=boosted) do
-    Edges.delete_by_both(booster, boosted) # delete the Boost
+    Edges.delete_by_both(booster, Boost, boosted) # delete the Boost
     Activities.delete_by_subject_verb_object(booster, :boost, boosted) # delete the boost activity & feed entries
   end
   def unboost(%{} = booster, boosted) when is_binary(boosted) do

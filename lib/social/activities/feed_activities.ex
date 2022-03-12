@@ -282,8 +282,8 @@ defmodule Bonfire.Social.FeedActivities do
   """
   defp maybe_feed_publish(subject, verb_or_activity, object \\ nil, feeds)
   defp maybe_feed_publish(subject, verb, object, feeds) when is_atom(verb), do: create_and_put_in_feeds(subject, verb, object, feeds)
-  defp maybe_feed_publish(_subject, %Bonfire.Data.Social.Activity{} = activity, _, feeds) do
-    put_in_feeds_and_maybe_federate(feeds, activity)
+  defp maybe_feed_publish(subject, %Bonfire.Data.Social.Activity{} = activity, object, feeds) do
+    put_in_feeds_and_maybe_federate(feeds, subject, activity.verb.verb, object, activity)
     {:ok, activity}
     # TODO: notify remote users via AP
   end
@@ -297,7 +297,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp create_and_put_in_feeds(subject, verb, object, feed_id) when is_map(object) and is_binary(feed_id) or is_list(feed_id) do
     with {:ok, activity} <- Activities.create(subject, verb, object) do
-      with {:ok, published} <- put_in_feeds_and_maybe_federate(feed_id, activity) do # publish in specified feed
+      with {:ok, published} <- put_in_feeds_and_maybe_federate(feed_id, subject, verb, object, activity) do # publish in specified feed
         # debug(published, "create_and_put_in_feeds")
         {:ok, activity}
       else # meh
@@ -316,7 +316,7 @@ defmodule Bonfire.Social.FeedActivities do
       # FIXME only run if ActivityPub is a target circle/feed?
       # TODO: only run for non-local activity
         {:ok, activity} = ret
-        maybe_federate_activity(activity)
+        maybe_federate_activity(verb, object, activity)
 
         ret
       rescue
@@ -324,7 +324,7 @@ defmodule Bonfire.Social.FeedActivities do
       end
   end
 
-  defp put_in_feeds_and_maybe_federate(feeds, activity) do
+  defp put_in_feeds_and_maybe_federate(feeds, _subject, verb, object, activity) do
     # This makes sure it gets put in feed even if the
     # federation hook fails
     feeds = feeds |> Utils.filter_empty([])
@@ -333,7 +333,7 @@ defmodule Bonfire.Social.FeedActivities do
     try do
     # FIXME only run if ActivityPub is a target circle/feed?
     # TODO: only run for non-local activity
-      maybe_federate_activity(activity)
+        maybe_federate_activity(verb, object, activity)
       ret
     rescue
       _ -> ret
@@ -375,8 +375,7 @@ defmodule Bonfire.Social.FeedActivities do
   def delete_for_object(_), do: nil
 
 
-  defp maybe_federate_activity(activity) do
-    verb = activity.verb.verb
-    Bonfire.Social.Integration.activity_ap_publish(activity.subject_id, verb, activity)
+  defp maybe_federate_activity(verb, object, activity) do
+    Bonfire.Social.Integration.activity_ap_publish(activity.subject_id, verb, object, activity)
   end
 end
