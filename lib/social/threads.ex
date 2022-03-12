@@ -47,13 +47,13 @@ defmodule Bonfire.Social.Threads do
           %{}=reply_to ->
             debug("[Threads.cast_replied/3] parent has no thread, creating one")
 
-            repo().insert_all(Replied, %{id: reply_to.id, thread_id: reply_to.id}, on_conflict: :nothing)
+            repo().upsert(changeset(%{id: reply_to.id, thread_id: reply_to.id}))
 
             thread_id = custom_thread_id || reply_to.id
 
-            %{thread_id: thread_id, reply_to: reply_to}
-              |> do_cast_replied(changeset, ...)
-              |> put_in(
+
+            do_cast_replied(changeset, %{thread_id: thread_id, reply_to: reply_to})
+              |> put_in( # FIXME: function Ecto.Changeset.get_and_update/3 is undefined (Ecto.Changeset does not implement the Access behaviour)
                 [:changes, :replied, :data, :reply_to, :replied],
                 %Replied{id: reply_to.id, thread_id: thread_id}
               )

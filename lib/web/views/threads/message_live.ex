@@ -50,7 +50,10 @@ defmodule Bonfire.Social.Web.MessageLive do
               |> Integration.repo().maybe_preload(tags: [:character])
               |> debug("the message")
 
+      reply_to_id = e(params, "reply_to_id", id)
+
       # debug(activity, "activity")
+      smart_input_prompt = l("Reply to message:")<>" "<>text_only(e(object, :post_content, :name, e(object, :post_content, :summary, e(object, :post_content, :html_body, reply_to_id))))
 
       other_characters = if e(activity, :subject, :character, nil) && e(activity, :subject, :id, nil) != e(current_user, :id, nil) do
         [e(activity, :subject, :character, nil)]
@@ -62,7 +65,6 @@ defmodule Bonfire.Social.Web.MessageLive do
 
       to_circles = if other_characters, do: Enum.map(other_characters, & {e(&1, :username, l "someone"), e(&1, :id, nil)})
 
-      reply_to_id = e(params, "reply_to_id", id)
 
       {:noreply,
       socket
@@ -71,7 +73,7 @@ defmodule Bonfire.Social.Web.MessageLive do
         page: "Private Message",
         has_private_tab: false,
         reply_to_id: reply_to_id,
-        smart_input_prompt: "Reply to message #{reply_to_id}",
+        smart_input_prompt: smart_input_prompt,
         activity: activity,
         url: url,
         object: object,

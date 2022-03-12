@@ -21,7 +21,6 @@ defmodule Bonfire.Social.Web.WriteLive do
       page_title: "Post",
       page: "Write",
       smart_input_text: "",
-      smart_input_prompt: "",
       has_private_tab: false,
       reply_to_id: nil,
       thread_id: nil,

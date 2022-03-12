@@ -35,21 +35,30 @@ defmodule Bonfire.Social.Web.PostLive do
 
     current_user = current_user(socket)
 
-    debug(params, "PARAMS")
+    # debug(params, "PARAMS")
+    debug(url, "post url")
 
     with {:ok, post} <- Bonfire.Social.Posts.read(id, socket) do
-      # debug(post, "the post:")
 
       {activity, post} = Map.pop(post, :activity)
+      # debug(post, "the post")
+      # debug(activity, "the activity")
       # following = if current_user && module_enabled?(Bonfire.Social.Follows) && Bonfire.Social.Follows.following?(current_user, post), do: [post.id]
 
       reply_to_id = e(params, "reply_to_id", id) #|> debug("reply_to_id")
 
-      other_characters = if e(activity, :subject, :character, nil) && e(activity, :subject, :id, nil) != e(current_user, :id, nil) do
-        [e(activity, :subject, :character, nil)]
+      # smart_input_prompt = l("Reply to post:")<>" "<>text_only(e(post, :post_content, :name, e(post, :post_content, :summary, e(post, :post_content, :html_body, reply_to_id))))
+      smart_input_prompt = l("Reply")
+
+      subject_character = e(activity, :subject, :character, nil) || e(post, :created, :creator, :character, nil)
+      # debug(subject_character, "the subject_character")
+
+      # TODO: add other already mentioned in the post we're replying to
+      other_characters = if subject_character && e(subject_character, :id, nil) != e(current_user, :id, nil) do
+        [subject_character]
       end
 
-      mentions = if other_characters, do: Enum.map_join(other_characters, " ", & "@"<>e(&1, :username, ""))<>" " |> debug()
+      mentions = if other_characters, do: Enum.map_join(other_characters, " ", & "@"<>e(&1, :username, ""))<>" " #|> dump("mentions")
 
       {:noreply,
       socket
@@ -61,9 +70,9 @@ defmodule Bonfire.Social.Web.PostLive do
       )
       |> assign_global(
         thread_id: e(post, :id, nil),
-        smart_input_prompt: "Reply to post #{reply_to_id}",
+        smart_input_prompt: smart_input_prompt,
         reply_to_id: reply_to_id,
-        smart_input_text: mentions || "",
+        smart_input_text: mentions,
       )
       }
 
