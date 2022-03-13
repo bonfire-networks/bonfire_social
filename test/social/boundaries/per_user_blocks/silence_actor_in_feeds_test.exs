@@ -34,7 +34,7 @@ defmodule Bonfire.Social.Boundaries.SilenceActorFeedsPerUserTest do
     me = fake_user!(@my_name)
     other_user = fake_user!(@other_name)
 
-    Bonfire.Boundaries.block(other_user, :silence, current_user: me)
+    Bonfire.Boundaries.Blocks.block(other_user, :silence, current_user: me)
 
     assert {:ok, post} = Posts.publish(current_user: other_user, post_attrs: @attrs, boundary: "public")
 
@@ -47,7 +47,7 @@ defmodule Bonfire.Social.Boundaries.SilenceActorFeedsPerUserTest do
 
     Bonfire.Social.Follows.follow(me, other_user)
 
-    Bonfire.Boundaries.block(other_user, :silence, current_user: me)
+    Bonfire.Boundaries.Blocks.block(other_user, :silence, current_user: me)
 
     # Bonfire.Boundaries.Circles.get_stereotype_circles(me, [:silence_me])
     # |> Bonfire.Repo.maybe_preload(caretaker: [:profile], encircles: [subject: [:profile]])
@@ -74,7 +74,7 @@ defmodule Bonfire.Social.Boundaries.SilenceActorFeedsPerUserTest do
     me = fake_user!(@my_name)
     other_user = fake_user!(@other_name)
 
-    Bonfire.Boundaries.block(other_user, :silence, current_user: me)
+    Bonfire.Boundaries.Blocks.block(other_user, :silence, current_user: me)
 
     # debug_user_acls(me, "me")
     # debug_user_acls(me, "other_user")
@@ -96,7 +96,7 @@ defmodule Bonfire.Social.Boundaries.SilenceActorFeedsPerUserTest do
 
     assert {:ok, post} = Posts.publish(current_user: other_user, post_attrs: @attrs, boundary: "public")
 
-    Bonfire.Boundaries.block(other_user, :silence, current_user: me)
+    Bonfire.Boundaries.Blocks.block(other_user, :silence, current_user: me)
 
     feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
     assert %{edges: []} = Bonfire.Social.FeedActivities.feed(feed_id, me)

@@ -33,7 +33,7 @@ defmodule Bonfire.Social.Boundaries.GhostActorFeedsPerUserTest do
     me = fake_user!(@my_name)
     other_user = fake_user!()
 
-    Bonfire.Boundaries.block(me, :ghost, current_user: other_user)
+    Bonfire.Boundaries.Blocks.block(me, :ghost, current_user: other_user)
 
     assert {:ok, post} = Posts.publish(current_user: other_user, post_attrs: @attrs, boundary: "public")
 
@@ -46,7 +46,7 @@ defmodule Bonfire.Social.Boundaries.GhostActorFeedsPerUserTest do
 
     Bonfire.Social.Follows.follow(me, other_user)
 
-    Bonfire.Boundaries.block(me, :ghost, current_user: other_user)
+    Bonfire.Boundaries.Blocks.block(me, :ghost, current_user: other_user)
 
     assert {:ok, post} = Posts.publish(current_user: other_user, post_attrs: @attrs, boundary: "public")
 
@@ -57,7 +57,7 @@ defmodule Bonfire.Social.Boundaries.GhostActorFeedsPerUserTest do
     me = fake_user!(@my_name)
     other_user = fake_user!()
 
-    Bonfire.Boundaries.block(me, :ghost, current_user: other_user)
+    Bonfire.Boundaries.Blocks.block(me, :ghost, current_user: other_user)
 
     # debug_user_acls(me, "me")
     # debug_user_acls(me, "other_user")
@@ -83,7 +83,7 @@ defmodule Bonfire.Social.Boundaries.GhostActorFeedsPerUserTest do
 
     assert %{edges: [feed_entry]} = Bonfire.Social.FeedActivities.feed(feed_id, me) # check that I can see it before being ghosted
 
-    Bonfire.Boundaries.block(me, :ghost, current_user: other_user)
+    Bonfire.Boundaries.Blocks.block(me, :ghost, current_user: other_user)
 
     assert %{edges: []} = Bonfire.Social.FeedActivities.feed(feed_id, me)
   end

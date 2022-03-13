@@ -35,16 +35,16 @@ defmodule Bonfire.Social.Boundaries.InstanceWideSilenceActorFeedsPerUserTest do
   test "does not show in any feeds a post from a instance-wide silenced user" do
     bob = fake_user!(@other_name)
 
-    Bonfire.Boundaries.block(bob, :silence, :instance_wide)
+    Bonfire.Boundaries.Blocks.block(bob, :silence, :instance_wide)
 
-    Bonfire.Boundaries.instance_wide_circles([:silence_me])
-    |> Bonfire.Boundaries.Circles.list_by_ids()
-    |> Bonfire.Repo.maybe_preload(caretaker: [:profile], encircles: [subject: [:profile]])
-    |> dump("silenced details")
+    # Bonfire.Boundaries.Blocks.instance_wide_circles([:silence_me])
+    # |> Bonfire.Boundaries.Circles.list_by_ids()
+    # |> Bonfire.Repo.maybe_preload(caretaker: [:profile], encircles: [subject: [:profile]])
+    # |> dump("silenced details")
 
     assert {:ok, post} = Posts.publish(current_user: bob, post_attrs: @attrs, boundary: "public")
 
-    debug_object_acls(post)
+    # debug_object_acls(post)
 
     feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
     assert %{edges: []} = Bonfire.Social.FeedActivities.feed(feed_id)
@@ -57,20 +57,19 @@ defmodule Bonfire.Social.Boundaries.InstanceWideSilenceActorFeedsPerUserTest do
   test "does not show in any feeds a post from an user that was instance-wide silenced later on" do
     bob = fake_user!(@other_name)
 
-
-    Bonfire.Boundaries.instance_wide_circles([:silence_me])
-    |> Bonfire.Boundaries.Circles.list_by_ids()
-    |> Bonfire.Repo.maybe_preload(caretaker: [:profile], encircles: [subject: [:profile]])
-    |> dump("silenced details")
+    # Bonfire.Boundaries.Blocks.instance_wide_circles([:silence_me])
+    # |> Bonfire.Boundaries.Circles.list_by_ids()
+    # |> Bonfire.Repo.maybe_preload(caretaker: [:profile], encircles: [subject: [:profile]])
+    # |> dump("silenced details")
 
     assert {:ok, post} = Posts.publish(current_user: bob, post_attrs: @attrs, boundary: "public")
 
-    debug_object_acls(post)
+    # debug_object_acls(post)
 
     feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
     assert %{edges: [_]} = Bonfire.Social.FeedActivities.feed(feed_id)
 
-    Bonfire.Boundaries.block(bob, :silence, :instance_wide)
+    Bonfire.Boundaries.Blocks.block(bob, :silence, :instance_wide)
 
     assert %{edges: []} = Bonfire.Social.FeedActivities.feed(feed_id)
 
