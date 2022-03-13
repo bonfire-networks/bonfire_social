@@ -366,7 +366,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def the_object({%{} = object, _mixin_object}), do: object
-  def the_object(%{} = object), do: object
+  def the_object(object), do: object
 
   @doc "Delete an activity (usage by things like unlike)"
   def delete_for_object(%{id: id}), do: delete_for_object(id)
