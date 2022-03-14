@@ -153,7 +153,7 @@ defmodule Bonfire.Social.Activities do
     query
     |> activity_preloads(opts, :minimal)
     |> proload(activity: @default_activity_preloads)
-    # |> debug(label: "activity with preloads")
+    # |> debug("activity with preloads")
   end
 
   def activity_preloads(query, _opts, :minimal) do

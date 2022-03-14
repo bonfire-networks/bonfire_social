@@ -149,25 +149,25 @@ defmodule Bonfire.Social.FeedActivities do
     query
       |> query_extras(current_user_or_socket_or_opts)
       |> query_filter(filters, nil, nil)
-      # |> debug(label: "FeedActivities - query")
+      # |> debug("FeedActivities - query")
   end
 
   def query(filters, current_user_or_socket_or_opts, query) do
     query
       # |> query_extras(current_user)
       # |> query_filter(filters, nil, nil)
-      |> debug(label: "FeedActivities invalid feed query with filters #{inspect filters}")
+      |> debug("FeedActivities invalid feed query with filters #{inspect filters}")
   end
 
   defp query_extras(query, current_user_or_socket_or_opts) do
 
     query
-      # |> debug(label: "feed_paginated pre-preloads")
+      # |> debug("feed_paginated pre-preloads")
       # add assocs needed in timelines/feeds
       |> Activities.activity_preloads(current_user_or_socket_or_opts, e(current_user_or_socket_or_opts, :preloads, :all))
-      # |> debug(label: "feed_paginated post-preloads")
+      # |> debug("feed_paginated post-preloads")
       |> Activities.as_permitted_for(current_user_or_socket_or_opts)
-      # |> debug(label: "feed_paginated post-boundaries")
+      # |> debug("feed_paginated post-boundaries")
       |> order_by([activity: activity], [desc: activity.id])
   end
 
@@ -182,7 +182,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   def publish(subject, verb_or_activity, object, preset_or_custom_boundary \\ nil) when is_atom(verb_or_activity) or is_struct(verb_or_activity) do
     # debug("FeedActivities: just making visible for and putting in these circles/feeds: #{inspect circles}")
-    # Bonfire.Boundaries.maybe_make_visible_for(subject, object, circles) # |> debug(label: "grant")
+    # Bonfire.Boundaries.maybe_make_visible_for(subject, object, circles) # |> debug("grant")
     Feeds.target_feeds(the_object(object), subject, preset_or_custom_boundary)
     |>
     maybe_feed_publish(subject, verb_or_activity, object, ...)
@@ -271,7 +271,7 @@ defmodule Bonfire.Social.FeedActivities do
   def notify_feeds(subject, verb_or_activity, object, feed_ids) do
     # debug(feed_ids)
 
-    ret = publish(subject, verb_or_activity, object, to_feeds: feed_ids) #|> debug(label: "notify_feeds")
+    ret = publish(subject, verb_or_activity, object, to_feeds: feed_ids) #|> debug("notify_feeds")
     Bonfire.Social.LivePush.notify(subject, Activities.verb(verb_or_activity), object, feed_ids)
     ret
   end

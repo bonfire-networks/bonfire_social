@@ -92,7 +92,7 @@ defmodule Bonfire.Social.Posts do
   def list_paginated(filters, opts_or_current_user) when is_list(filters) do
     paginate = e(opts_or_current_user, :paginate, opts_or_current_user)
     filters
-    # |> debug(label: "Posts.list_paginated:filters")
+    # |> debug("Posts.list_paginated:filters")
     |> query_paginated(opts_or_current_user)
     |> Bonfire.Repo.many_paginated(paginate)
     # |> FeedActivities.feed_paginated(filters, opts_or_current_user)
@@ -102,7 +102,7 @@ defmodule Bonfire.Social.Posts do
   def query_paginated(filters, opts_or_current_user \\ [])
   def query_paginated(filters, opts_or_current_user) when is_list(filters) do
     filters
-    # |> debug(label: "Posts.query_paginated:filters")
+    # |> debug("Posts.query_paginated:filters")
     |> Keyword.drop([:paginate])
     |> FeedActivities.query_paginated(opts_or_current_user, Post)
     # |> debug("after FeedActivities.query_paginated")

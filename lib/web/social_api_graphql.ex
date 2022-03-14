@@ -2,7 +2,7 @@ if Bonfire.Common.Utils.module_enabled?(Bonfire.API.GraphQL) do
 defmodule Bonfire.Social.API.GraphQL do
   use Absinthe.Schema.Notation
   import Absinthe.Resolution.Helpers
-  alias Bonfire.GraphQL
+  alias Bonfire.API.GraphQL
   alias Bonfire.Common.Utils
 
   object :post do

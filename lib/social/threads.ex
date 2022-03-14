@@ -196,7 +196,7 @@ defmodule Bonfire.Social.Threads do
       |> Replied.where_depth(is_smaller_than_or_equal_to: opts[:max_depth])
       |> Activities.query_object_preload_create_activity(current_user)
       |> Activities.as_permitted_for(current_user, [:see])
-      # |> debug(label: "Thread nested query")
+      # |> debug("Thread nested query")
   end
 
   def query(filter, opts) do
@@ -207,7 +207,7 @@ defmodule Bonfire.Social.Threads do
       |> query_filter(filter)
       |> Activities.query_object_preload_create_activity(current_user)
       |> Activities.as_permitted_for(current_user, [:see])
-      # |> debug(label: "Thread filtered query")
+      # |> debug("Thread filtered query")
   end
 
   def arrange_replies_tree(replies), do: replies |> Replied.arrange() # uses https://github.com/bonfire-networks/ecto_materialized_path

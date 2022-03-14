@@ -92,7 +92,7 @@ defmodule Bonfire.Social.Messages do
       messages_involving: {{with_user_id, current_user_id}, &filter/3},
       # distinct: {:threads, &Bonfire.Social.Threads.filter/3}
     ]
-    # |> debug(label: "list message filters")
+    # |> debug("list message filters")
     |> list_paginated(current_user, cursor_after, preloads),
     else: list(current_user, nil, cursor_after, preloads)
 
@@ -105,7 +105,7 @@ defmodule Bonfire.Social.Messages do
       messages_involving: {current_user_id, &filter/3},
       # distinct: {:threads, &Bonfire.Social.Threads.filter/3}
     ]
-    # |> debug(label: "my messages filters")
+    # |> debug("my messages filters")
     |> list_paginated(current_user, cursor_after, preloads)
   end
 
@@ -116,17 +116,17 @@ defmodule Bonfire.Social.Messages do
     query
       # add assocs needed in timelines/feeds
       # |> join_preload([:activity])
-      # |> debug(label: "pre-preloads")
+      # |> debug("pre-preloads")
       |> Activities.activity_preloads(current_user, preloads)
       |> query_filter(filters)
-      # |> debug(label: "message_paginated_post-preloads")
+      # |> debug("message_paginated_post-preloads")
       |> Activities.as_permitted_for(current_user, [:see])
       # |> distinct([fp], [desc: fp.id, desc: fp.activity_id]) # not sure if/why needed... but possible fix for found duplicate ID for component Bonfire.UI.Social.ActivityLive in UI
       # |> order_by([fp], desc: fp.id)
-      # |> debug(label: "post-permissions")
+      # |> debug("post-permissions")
       # |> repo().many() # return all items
       |> Bonfire.Repo.many_paginated(before: cursor_after) # return a page of items (reverse chronological) + pagination metadata
-      # |> debug(label: "feed")
+      # |> debug("feed")
   end
 
     #doc "List messages "

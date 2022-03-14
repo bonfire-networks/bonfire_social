@@ -11,13 +11,13 @@ defmodule Bonfire.Social.PostContents do
     with {:ok, tags} <- Bonfire.Social.Tags.maybe_process(creator, attrs) do
       tags
       |> Map.merge(prepare_content(attrs, Utils.e(tags, :text, nil)))
-      # |> debug(label: "Social.PostContents.cast: attrs")
+      # |> debug("Social.PostContents.cast: attrs")
       |> Changeset.cast(changeset, %{post_content: ...}, [])
     else
       _ -> Changeset.cast(changeset, %{post_content: prepare_content(attrs)}, [])
     end
     |> Changeset.cast_assoc(:post_content, required: true, with: &changeset/2)
-    # |> debug(label: "Social.PostContents: changeset")
+    # |> debug("Social.PostContents: changeset")
   end
 
   def prepare_content(attrs, text \\ nil)
