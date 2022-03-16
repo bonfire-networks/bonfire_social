@@ -59,7 +59,7 @@ defmodule Bonfire.Social.Integration do
   end
 
   def ap_publish(verb, thing_id, user_id) do
-    if Bonfire.Common.Utils.module_enabled?(Bonfire.Federate.ActivityPub.APPublishWorker) do
+    if Bonfire.Common.Extend.module_enabled?(Bonfire.Federate.ActivityPub.APPublishWorker) do
       Bonfire.Federate.ActivityPub.APPublishWorker.enqueue(verb, %{
         "context_id" => thing_id,
         "user_id" => user_id
@@ -70,13 +70,13 @@ defmodule Bonfire.Social.Integration do
   end
 
   def is_local?(thing) do
-    if Bonfire.Common.Utils.module_enabled?(Bonfire.Federate.ActivityPub.Utils) do
+    if Bonfire.Common.Extend.module_enabled?(Bonfire.Federate.ActivityPub.Utils) do
       Bonfire.Federate.ActivityPub.Utils.is_local?(thing)
     end
   end
 
   def maybe_index(object) do
-    if Config.module_enabled?(Bonfire.Search.Indexer) do
+    if Bonfire.Common.Extend.module_enabled?(Bonfire.Search.Indexer) do
       Bonfire.Search.Indexer.maybe_index_object(object)
     else
       :ok
@@ -84,7 +84,7 @@ defmodule Bonfire.Social.Integration do
   end
 
   def maybe_unindex(object) do
-    if Config.module_enabled?(Bonfire.Search.Indexer) do
+    if Bonfire.Common.Extend.module_enabled?(Bonfire.Search.Indexer) do
       Bonfire.Search.Indexer.maybe_delete_object(object)
     else
       :ok

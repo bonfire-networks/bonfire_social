@@ -111,6 +111,7 @@ defmodule Bonfire.Social.Likes do
   defp create(liker, liked, preset_or_custom_boundary) do
     Edges.changeset(Like, liker, :like, liked, preset_or_custom_boundary)
     |> repo().insert()
+    # |> repo().maybe_preload(edge: [:object])
   end
 
 
@@ -122,6 +123,7 @@ defmodule Bonfire.Social.Likes do
 
 
   def ap_publish_activity("create", like) do
+    dump(like)
     with {:ok, liker} <- ActivityPub.Actor.get_cached_by_local_id(like.edge.subject_id),
          object when not is_nil(object) <- Bonfire.Federate.ActivityPub.Utils.get_object(like.edge.object) do
             ActivityPub.like(liker, object)

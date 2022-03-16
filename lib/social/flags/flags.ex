@@ -133,7 +133,7 @@ defmodule Bonfire.Social.Flags do
     flag = repo().preload(flag, flagged: [])
 
     with {:ok, flagger} <- ActivityPub.Actor.get_cached_by_local_id(flag.flagger_id) do
-      flagged = Common.Pointers.follow!(flag.context)
+      flagged = Common.Pointers.get(flag.context)
 
       #FIXME: only works for flagged posts and users
       params =

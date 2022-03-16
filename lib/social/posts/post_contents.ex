@@ -2,8 +2,8 @@ defmodule Bonfire.Social.PostContents do
   use Arrows
 
   alias Bonfire.Data.Social.PostContent
-  alias Bonfire.Common.Extend
-  alias Bonfire.Common.Utils
+  import Bonfire.Common.Extend
+  use Bonfire.Common.Utils
   alias Ecto.Changeset
 
   def cast(changeset, attrs, creator, _preset_or_custom_boundary) do
@@ -57,7 +57,7 @@ defmodule Bonfire.Social.PostContents do
   def prepare_content(attrs, _), do: attrs
 
   def prepare_text(text) when is_binary(text) and text !="" do
-    if Extend.module_enabled?(Emote) do
+    if module_enabled?(Emote) do
       text
       |> Utils.markdown()
       |> Emote.convert_text()
