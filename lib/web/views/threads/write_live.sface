@@ -1,16 +1,111 @@
-<section class="flex-grow bg-base-100 w-full h-full mx-auto shrink-0 md:mx-3 md:mr-0 lg:mr-3 w-center max-w-[580px]">
-  <Bonfire.UI.Social.PageHeaderLive
-    page_title={"Compose"}
-    before
-  />
-    <Bonfire.UI.Social.SmartInputLive
-      :if={current_user(assigns)}
-      current_user={current_user(assigns)}
-      reply_to_id={@reply_to_id}
-      thread_id={@thread_id}
-      create_activity_type={e(assigns, :create_activity_type, nil)}
-      to_circles={e(assigns, :to_circles, [])}
-      smart_input_prompt={@smart_input_prompt}
-      smart_input_text={@smart_input_text}
-    />
+<section class="bg-base-100 w-full block mx-auto h-body max-w-[740px]">
+  <div
+    x-cloak
+    x-data="{
+      title_open: false, 
+      open_boundaries: false,
+      boundary_selected: 'public'  
+    }"
+   class="">
+    <div class="flex items-center justify-between p-2 space-x-2 rounded-b bg-neutral bg-opacity-30 sm:px-3">
+      <div class="flex items-center flex-1 space-x-3">
+      
+        <div 
+          data-tip="Upload an image" 
+          class="relative z-20 flex items-center tooltip tooltip-bottom" >
+          <button
+            type="button"
+            class="btn btn-ghost btn-square btn-sm tooltip tooltip-bottom">
+            <Solid.PaperClipIcon class="w-4 h-4 mx-auto text-base-content text-opacity-70" />
+          </button>
+        </div>
+        <div 
+          data-tip="Add a content warning" 
+          class="relative z-20 flex items-center tooltip tooltip-bottom">
+          <button
+            :if={Bonfire.Common.Config.get([:ui, :smart_input, :cw], []) == true}
+            type="button"
+            @click="title_open = !title_open"
+            :class="{'text-primary-content bg-primary' : title_open}"
+            class="btn btn-ghost btn-square btn-sm">
+            <span class="text-xs font-medium text-base-content text-opacity-70">CW</span>
+          </button>
+        </div>
+        <Bonfire.UI.Social.BoundariesLive 
+          :if={e(assigns, :to_circles, [])==[]}
+        />
+      </div>
+
+      <button type="submit" class="capitalize btn-sm justify-self-end btn btn-primary">
+        <!-- {if e(assigns, :create_activity_type, nil) == :message, do: l "Message", else: l "Post"} -->
+        {l "Publish"}
+      </button>
+    </div>
+  
+    <Form 
+      for={Bonfire.Social.Posts.LiveHandler.post_changeset(current_user(assigns))} 
+      submit="Bonfire.Social.Posts:post" opts={ autocomplete: "off"}
+      class={"form_with_editor"}>
+
+      <HiddenInput 
+        name="reply_to[reply_to_id]" 
+        opts={["x-model": "reply_to_id"]}
+        value={e(assigns, :reply_to_id, '')  || ""} />
+      <HiddenInput 
+        name="reply_to[thread_id]" 
+        opts={["x-model": "thread_id"]}
+        value={e(assigns, :thread_id, '') || ""} />
+      <Field name={:create_activity_type}>
+        <HiddenInput value={e(assigns, :create_activity_type, '')} />
+      </Field>
+      <input 
+        :if={e(assigns, :to_circles, nil) && is_list(e(assigns, :to_circles, nil)) && length(e(assigns, :to_circles, nil))>0}
+        :for={{_name, id} <- e(assigns, :to_circles, []) |> debug} 
+        type="hidden" 
+        name="to_circles[]" 
+        value={id} />
+
+      <!-- <div 
+        x-show="'reply_to_id' != '' && smart_input_prompt != ''" 
+        x-text= "smart_input_prompt" 
+        class="block mb-2 text-sm truncate rounded shadow-lg alert alert-info ellipsis ">
+        {@smart_input_prompt || ""}  
+      </div> -->
+
+      <Inputs for={:post_content}>
+        <div
+          phx-update="ignore"
+          id="textarea_wrapper"
+          class="">
+          <div x-show="title_open" x-transition>
+            <label for="title" class="sr-only">{l "Title"}</label>
+            <Field name={:name}>
+              <TextInput
+                opts={placeholder: "Enter a title"}
+                class="block w-full border-0 pt-2.5 text-lg font-medium placeholder-base-content placeholder-opacity-70 bg-base-100 text-base-content focus:ring-0 border-b border-base-300" 
+                />
+            </Field>
+          </div>  
+          <label for="description" class="sr-only">{l "Description"}</label>
+          <Field  class="h-full min-h-full" name={:html_body}>
+            <Bonfire.Editor.Ck.Bubble 
+              field_name="post[post_content][html_body]"
+              textarea_class={"min-h-[calc(100vh-128px)] prose prose-lg max-w-full"}
+              placeholder="Type your message"
+              content={e(assigns, :smart_input_text, '')}
+            /> 
+            
+
+            <!-- <Bonfire.Editor.Ck.Bubble 
+              field_name="post[post_content][html_body]"
+              textarea_class={"min-h-[calc(100vh-128px)]"}
+              placeholder="Type your message"
+              content={""}
+            />  -->
+          </Field>
+        </div>
+      </Inputs>
+    </Form>
+
+  </div>
 </section>

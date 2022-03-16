@@ -1,5 +1,5 @@
 defmodule Bonfire.Social.Web.WriteLive do
-  use Bonfire.Web, :surface_view
+  use Bonfire.Web, {:surface_view, [layout: {Bonfire.UI.Social.Web.LayoutView, "without_sidebar.html"}]}
   alias Bonfire.Web.LivePlugs
 
   def mount(params, session, socket) do
@@ -20,6 +20,7 @@ defmodule Bonfire.Social.Web.WriteLive do
     |> assign(
       page_title: "Post",
       page: "Write",
+      create_activity_type: "",
       smart_input_text: "",
       has_private_tab: false,
       reply_to_id: nil,
