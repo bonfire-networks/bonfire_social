@@ -35,9 +35,10 @@ defmodule Bonfire.Social.Follows do
   end
 
   def accept(request, opts) do
-    with {:ok, request} <- Requests.accept(request, opts) |> repo().maybe_preload(edge: [:subject, :object]),
-         _ <- Edges.delete_by_both(request.edge.subject, Follow, request.edge.object), # remove the Edge so we can recreate one linked to the Follow, because of the unique key on subject/object/table_id
-         {:ok, follow} <- do_follow(request.edge.subject, request.edge.object, opts) do
+    with {:ok, %{edge: %{object: object, subject: subject}} = request} <- Requests.accept(request, opts) |> repo().maybe_preload(edge: [:subject, :object]),
+         _ <- Edges.delete_by_both(subject, Follow, object), # remove the Edge so we can recreate one linked to the Follow, because of the unique key on subject/object/table_id
+         _ <- Activities.delete_by_subject_verb_object(subject, :verb, object), # remove the Request Activity from notifications
+         {:ok, follow} <- do_follow(subject, object, opts) do
 
       maybe_publish_accept(request, follow)
 
@@ -178,17 +179,12 @@ defmodule Bonfire.Social.Follows do
 
       # debug(follow)
 
-      # TEMPORARY: make my profile visible to people I follow
-      # Boundaries.maybe_make_visible_for(follower, follower, object)
-
-      # TEMPORARY: make sure the profile of someone I follow is visible to me
-      # Boundaries.maybe_make_visible_for(object, object, follower)
-
-      # make the follow itself visible to both
+      # make the follow itself visible to both?
       # Boundaries.maybe_make_visible_for(follower, follow, object)
 
       {:ok, activity} = FeedActivities.notify_object(follower, :follow, {object, follow})
-      FeedActivities.publish(follower, activity, object) # TODO: make configurable whether to publish the follow
+
+      FeedActivities.publish(follower, activity, object, "public") # TODO: make configurable whether to publish the follow
 
       {:ok, Activities.activity_under_object(activity, follow)}
     else e ->

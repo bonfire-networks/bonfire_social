@@ -55,7 +55,7 @@ defmodule Bonfire.Social.Requests do
   def get(filters, opts \\ []), do: Edges.get(__MODULE__, filters, opts)
 
   def requested(request, opts \\ [])
-  def requested(%Request{id: _} = request, _opts), do: request
+  def requested(%Request{id: _} = request, _opts), do: {:ok, request}
   def requested(request, opts), do: get([id: ulid(request)], opts)
 
   # TODO: abstract the next few functions into Edges

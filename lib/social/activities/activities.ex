@@ -270,6 +270,7 @@ defmodule Bonfire.Social.Activities do
   def verb(%{verb: %{verb: verb}}), do: verb
   def verb(%{verb_id: id}), do: Bonfire.Boundaries.Verbs.get_slug(id)
 
+  def verb_maybe_modify("request", _), do: "request to follow" # FIXME: temporary as we may later request other things
   def verb_maybe_modify("create", %{replied: %{reply_to: %{post_content: %{id: _}} = _reply_to}}), do: "reply"
   def verb_maybe_modify("create", %{replied: %{reply_to: %{id: _} = _reply_to}}), do: "respond"
   def verb_maybe_modify("create", %{replied: %{reply_to_id: reply_to_id}}) when is_binary(reply_to_id), do: "respond"
@@ -283,11 +284,25 @@ defmodule Bonfire.Social.Activities do
   def verb_maybe_modify("create", %{object: %{action: %{id: id}} = _economic_event}), do: id
   def verb_maybe_modify("create", %{object: %{action_id: label} = _economic_event}) when is_binary(label), do: label
   def verb_maybe_modify("create", %{object: %{action: label} = _economic_event}) when is_binary(label), do: label
-  def verb_maybe_modify(verb, _), do: verb
+  def verb_maybe_modify(%{verb: verb}, activity) when is_binary(verb), do: verb |> String.downcase() |> verb_maybe_modify(activity)
+  def verb_maybe_modify(%{verb: verb}, activity), do: verb_maybe_modify(verb, activity)
+  def verb_maybe_modify(verb, activity) when is_atom(verb), do: maybe_to_string(verb) |> String.downcase() |> verb_maybe_modify(activity)
+  def verb_maybe_modify(verb, _) when is_binary(verb), do: verb |> String.downcase()
 
-  def verb_display(verb) when is_atom(verb), do: Atom.to_string(verb) |> verb_display()
   def verb_display(verb) do
+    verb = maybe_to_string(verb)
+
+    case String.split(verb) do
+
+      [verb, "to", other_verb] -> Enum.join([verb_congugate(verb), "to", other_verb], " ")
+
+      _ -> verb_congugate(verb)
+
+    end
+  end
+
+  defp verb_congugate(verb) do
     verb
-      |> Verbs.conjugate(tense: "past", person: "third", plurality: "plural")
+    |> Verbs.conjugate(tense: "past", person: "third", plurality: "plural")
   end
 end

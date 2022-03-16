@@ -28,6 +28,17 @@ defmodule Bonfire.Social.Follows.LiveHandler do
     end
   end
 
+  def handle_event("accept", %{"id"=> id}=params, socket) do
+    # debug(socket)
+
+    with {:ok, _follow} <- Bonfire.Social.Follows.accept(id, current_user: current_user(socket)) do
+      {:noreply, socket}
+    else e ->
+      debug(e)
+      {:error, "Maybe you had already followed"}
+    end
+  end
+
   def preload(list_of_assigns) do
     current_user = current_user(List.first(list_of_assigns))
     # |> debug("current_user")

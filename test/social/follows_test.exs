@@ -112,8 +112,8 @@ defmodule Bonfire.Social.FollowsTest do
 
   test "follow appears in followed's notifications" do
 
-    follower = Fake.fake_user!("follower")
-    followed = Fake.fake_user!("followed")
+    follower = Fake.fake_user!()
+    followed = Fake.fake_user!()
     assert {:ok, follow} = Follows.follow(follower, followed)
 
     assert %{edges: [fetched_follow]} = Follows.list_followers(followed, follower)
