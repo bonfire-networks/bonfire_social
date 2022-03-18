@@ -37,7 +37,7 @@ defmodule Bonfire.Social.Follows do
   def accept(request, opts) do
     with {:ok, %{edge: %{object: object, subject: subject}} = request} <- Requests.accept(request, opts) |> repo().maybe_preload(edge: [:subject, :object]),
          _ <- Edges.delete_by_both(subject, Follow, object), # remove the Edge so we can recreate one linked to the Follow, because of the unique key on subject/object/table_id
-         _ <- Activities.delete_by_subject_verb_object(subject, :verb, object), # remove the Request Activity from notifications
+         _ <- Activities.delete_by_subject_verb_object(subject, :request, object), # remove the Request Activity from notifications
          {:ok, follow} <- do_follow(subject, object, opts) do
 
       maybe_publish_accept(request, follow)

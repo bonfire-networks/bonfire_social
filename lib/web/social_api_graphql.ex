@@ -9,7 +9,6 @@ defmodule Bonfire.Social.API.GraphQL do
     field(:id, :id)
     field(:post_content, :post_content)
     field(:activity, :activity)
-
   end
 
   object :verb do

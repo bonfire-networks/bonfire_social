@@ -45,6 +45,8 @@ defmodule Bonfire.Social.Feeds do
     do_target_feeds(creator, preset_or_custom_boundary, [], reply_to_creator, thread_id)
   end
 
+  def target_feeds({_, %{}= object}, creator, preset_or_custom_boundary), do: target_feeds(object, creator, preset_or_custom_boundary)
+
   def do_target_feeds(creator, preset_or_custom_boundary, mentions \\ [], reply_to_creator \\ nil, thread_id \\ nil) do
 
     # include any extra feeds specified in opts
