@@ -5,7 +5,6 @@ defmodule Bonfire.Social.FollowsTest do
   alias Bonfire.Me.Fake
 
   test "can follow" do
-
     me = Fake.fake_user!()
     followed = Fake.fake_user!()
     assert {:ok, %{edge: edge} = follow} = Follows.follow(me, followed)
@@ -119,7 +118,7 @@ defmodule Bonfire.Social.FollowsTest do
     assert %{edges: [fetched_follow]} = Follows.list_followers(followed, follower)
     assert fetched_follow.id == follow.id
 
-    assert %{edges: fetched} = p = FeedActivities.feed(:notifications, followed)
+    assert %{edges: fetched} = p = FeedActivities.feed(:notifications, current_user: followed)
     # debug(notifications: p)
     assert %{} = notification = List.first(fetched)
     assert activity = notification.activity |> Bonfire.Repo.maybe_preload([object: [:profile]])

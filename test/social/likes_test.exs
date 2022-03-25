@@ -76,8 +76,10 @@ defmodule Bonfire.Social.LikesTest do
     attrs = %{post_content: %{html_body: "<p>hey you have an epic html post</p>"}}
     assert {:ok, post} = Posts.publish(current_user: alice, post_attrs: attrs, boundary: "public")
     assert {:ok, like} = Likes.like(bob, post)
-    assert %{edges: [fetched_liked]} = FeedActivities.feed(:notifications, alice)
-    assert fetched_liked.activity.object_id == post.id
+    assert %{edges: edges} = FeedActivities.feed(:notifications, current_user: alice)
+    for e <- edges, do: IO.inspect(id: e.id, table_id: e.table_id)
+    assert [fetched_like] = edges
+    assert fetched_like.activity.object_id == post.id
   end
 
 end

@@ -3,11 +3,7 @@ defmodule Bonfire.Social.Boosts do
   alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Boost
   alias Bonfire.Boundaries.Verbs
-  # alias Bonfire.Data.Social.BoostCount
-  alias Bonfire.Social.{Activities, FeedActivities}
-  alias Bonfire.Social.Edges
-  alias Bonfire.Social.Objects
-  alias Bonfire.Social.Feeds
+  alias Bonfire.Social.{Activities, Edges, Feeds, FeedActivities, Integration, LivePush, Objects}
   alias Bonfire.Data.Edges.Edge
 
   use Bonfire.Repo,
@@ -26,26 +22,24 @@ defmodule Bonfire.Social.Boosts do
   def get!(subject, object, opts \\ []), do: Edges.get!(__MODULE__, subject, object, opts)
 
   def boost(%{} = booster, %{} = boosted) do
-
     boosted = Objects.preload_creator(boosted)
     boosted_creator = Objects.object_creator(boosted)
-
-    preset_or_custom_boundary = [
+    opts = [
       boundary: "public", # TODO: get the preset for boosting from config and/or user's settings
       to_circles: [ulid(boosted_creator)],
-      to_feeds: [Feeds.feed_id(:notifications, boosted_creator), Feeds.feed_id(:outbox, booster)]
+      to_feeds: [notifications: boosted_creator, outbox: booster],
     ]
-
-    with {:ok, boost} <- create(booster, boosted, preset_or_custom_boundary),
-    {:ok, published} <- FeedActivities.publish(booster, :boost, {boosted, boost}, preset_or_custom_boundary) do
-
-      # debug(published)
-      # make the boost itself visible to both
-      # Bonfire.Boundaries.maybe_make_visible_for(booster, boost, e(boosted, :created, :creator_id, nil))
-
-      FeedActivities.maybe_notify_creator(booster, published, {boosted, boost}) #|> IO.inspect
-
-      {:ok, Activities.activity_under_object(published, boost)}
+    with {:ok, boost} <- create(booster, boosted, opts) do
+      # Push to AP, which will need to see the subject and object
+      boost = repo().preload boost, edge: [
+        subject: fn _ -> [booster] end,
+        object:  fn _ -> [boosted] end,
+      ]
+      Integration.ap_push_activity(booster.id, boost)
+      # Also livepush, which will need a list of feed IDs we published to
+      feed_ids = for fp <- boost.feed_publishes, do: fp.feed_id
+      LivePush.push_activity(feed_ids, boost)
+      {:ok, boost}
     end
   end
   def boost(%{} = booster, boosted) when is_binary(boosted) do
@@ -110,8 +104,8 @@ defmodule Bonfire.Social.Boosts do
     query_base(filters, opts)
   end
 
-  defp create(booster, boosted, preset_or_custom_boundary) do
-    Edges.changeset(Boost, booster, :boost, boosted, preset_or_custom_boundary)
+  defp create(booster, boosted, opts) do
+    Edges.changeset(Boost, booster, :boost, boosted, opts)
     |> repo().insert()
   end
 

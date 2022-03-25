@@ -12,10 +12,27 @@ defmodule Bonfire.Social.Threads do
   alias Bonfire.Data.Social.Replied
   alias Bonfire.Social.{Activities, FeedActivities}
   alias Bonfire.Boundaries.Verbs
-  alias Pointers.{Pointer, ULID}
+  alias Pointers.{Changesets, Pointer, ULID}
 
   def context_module, do: Replied
   def queries_module, do: Replied
+
+  @doc """
+  Returns `{:ok, reply}` or `{:error, reason}`, where `reason` may be:
+  * `:not_found` - we could not find the object you are replying to.
+  * `:not_permitted` - you do not have permission to reply to this.
+  """
+  def find_reply_to(attrs, user) do
+    reply_to = find_reply_id(attrs)
+    if is_binary(reply_to) do
+      case load_reply_to(user, reply_to) do
+        %{}=reply -> {:ok, reply}
+        _ -> {:error, :not_permitted}
+      end
+    else
+      {:error, :not_found}
+    end
+  end
 
   @doc """
   Handles casting related to the reply and threading.
@@ -26,46 +43,42 @@ defmodule Bonfire.Social.Threads do
   def cast(changeset, attrs, user, _preset_or_custom_boundary), do: cast_replied(changeset, attrs, user)
 
   defp cast_replied(changeset, attrs, user) do
-
-    custom_thread_id = find_thread_id(attrs) |> load_thread_id(user, ...) # for forking threads
-
-    case find_reply_id(attrs) do
-      reply_to when is_binary(reply_to) ->
-        case load_reply_to(user, reply_to) do
-
-          %{replied: %{thread_id: thread_id}}=reply_to when is_binary(thread_id) ->
-            debug("[Threads.cast_replied/3] copying thread from reply_to")
-
-            # reply to the thread if we're allowed to (or a custom one if specified)
-            thread_id = custom_thread_id || load_thread_id(user, thread_id) || reply_to.id
-
-            replied = %{thread_id: thread_id, reply_to: reply_to} #|> debug()
-              |> do_cast_replied(changeset, ...)
-              # |> Changeset.change(%{replied: replied})
-              # |> debug("cs with replied")
-
-          %{}=reply_to ->
-            debug("[Threads.cast_replied/3] parent has no thread, creating one")
-
-            repo().upsert(changeset(%{id: reply_to.id, thread_id: reply_to.id}))
-
-            thread_id = custom_thread_id || reply_to.id
-
-
-            do_cast_replied(changeset, %{thread_id: thread_id, reply_to: reply_to})
-              |> put_in( # FIXME: function Ecto.Changeset.get_and_update/3 is undefined (Ecto.Changeset does not implement the Access behaviour)
-                [:changes, :replied, :data, :reply_to, :replied],
-                %Replied{id: reply_to.id, thread_id: thread_id}
-              )
-
-          _ ->
-            debug("[Threads.cast_replied/3] not permitted to reply to this, starting new thread")
-            start_new_thread(changeset)
-        end
-      _ ->
-        debug("[Threads.cast_replied/3] does not reply to anything, starting new thread")
+    case find_reply_to(attrs, user) do
+      {:ok, %{replied: %{thread_id: thread_id, thread: %{}}}=reply_to} ->
+        debug("threading under parent thread root")
+        changeset
+        |> Changesets.put_assoc(:replied, %{thread_id: thread_id, reply_to: reply_to}) #|> debug()
+        # |> debug("cs with replied")
+      {:ok, %{replied: %{thread_id: thread_id}}=reply_to} when is_binary(thread_id) ->
+        # we're permitted to reply to the thing, but not the thread root
+        debug("threading under parent")
+        changeset
+        |> Changesets.put_assoc(:replied, %{thread_id: reply_to.id, reply_to: reply_to}) #|> debug()
+      {:ok, %{}=reply_to} ->
+        debug("parent has no thread, creating one")
+        replied_attrs = %{id: reply_to.id, thread_id: reply_to.id}
+        # pretend the replied already exists, because it will in a moment
+        replied = Changesets.set_state(struct(Replied, replied_attrs), :loaded)
+        reply_to = Map.put(reply_to, :replied, replied)
+        changeset
+        |> Changeset.prepare_changes(&create_parent_replied(&1, replied, replied_attrs))
+        %{thread_id: reply_to.id, reply_to: reply_to}
+        |> Changesets.put_assoc(changeset, :replied, replied_attrs) #|> debug()
+        |> put_in([:changes, :replied, :data, :reply_to, :replied], replied)
+      {:error, :not_permitted} ->
+        debug("not permitted to reply to this, starting new thread")
+        start_new_thread(changeset)
+      {:error, :not_found}->
+        debug("does not reply to anything, starting new thread")
         start_new_thread(changeset)
     end
+  end
+
+  @doc false
+  def create_parent_replied(changeset, replied, replied_attrs) do
+    changeset.repo.insert_all(Replied, [replied_attrs], on_conflict: :nothing)
+    changeset
+    |> Changesets.update_data(:replied, [replied])
   end
 
   defp do_cast_replied(changeset, attrs) do
@@ -97,30 +110,20 @@ defmodule Bonfire.Social.Threads do
   # loads a reply, but only if you are allowed to reply to it.
   defp load_reply_to(user, id) do
     from(p in Pointer, as: :root, where: p.id == ^id)
-    |> proload([:replied, created: [creator: [:character]]])
+    # load the reply_to's Replied and in particular its thread and that creator
+    |> proload([replied: [thread: [created: [creator: [:character, :peered]]]]])
+    |> proload([created: [creator: [:character, :peered]]])
     |> boundarise(root.id, verbs: [:reply], current_user: user)
+    |> boundarise(thread.id, verbs: [:reply], current_user: user)
     |> repo().one()
   end
 
-  defp load_thread_id(user, id) when is_binary(id) do
-    from(p in Pointer, as: :root, where: p.id == ^id)
-    |> proload([:replied])
-    |> boundarise(root.id, verbs: [:reply], current_user: user)
-    |> repo().one()
-    |> e(:id, nil)
-  end
-  defp load_thread_id(user, _), do: nil
+  # defp load_thread_id(user, id), do: e(load_thread_for_reply(user, id), :id, nil)
 
   @doc false
   def start_new_thread(changeset) do
-    # changeset = force_to_have_id(changeset) # FIXME?
-    id = Changeset.get_field(changeset, :id)
-    do_cast_replied(changeset, %{reply_to_id: nil, thread_id: id})
-  end
-
-  defp force_to_have_id(changeset) do
-    if Changeset.get_field(changeset, :id), do: changeset,
-      else: Changeset.put_change(changeset, :id, ULID.generate())
+    Changeset.get_field(changeset, :id)
+    |> Changesets.cast_assoc(changeset, :replied, %{reply_to_id: nil, thread_id: ...})
   end
 
   defp create(attrs) do
@@ -131,7 +134,6 @@ defmodule Bonfire.Social.Threads do
     current_user = current_user(socket_or_current_user)
     with {:ok, object} <- Replied |> query_filter(id: object_id)
       |> Activities.read(socket_or_current_user) do
-
         {:ok, object}
       end
   end
@@ -210,6 +212,11 @@ defmodule Bonfire.Social.Threads do
       # |> debug("Thread filtered query")
   end
 
+  # old; not sure this is what forks will look like when we implement thread forking
+  # defp custom_thread_id(attrs, user) do
+  #   find_thread_id(attrs) |> load_thread_id(user, ...)
+  # end
+
   def arrange_replies_tree(replies), do: replies |> Replied.arrange() # uses https://github.com/bonfire-networks/ecto_materialized_path
 
   # Deprecated:
@@ -263,7 +270,5 @@ defmodule Bonfire.Social.Threads do
 
   #   end)
   # end
-
-  # def get_feed_id(%
 
 end

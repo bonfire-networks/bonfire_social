@@ -1,6 +1,8 @@
 defmodule Bonfire.Social.APActivities do
   alias Bonfire.Data.Social.APActivity
-  alias Bonfire.Social.FeedActivities
+  alias Bonfire.Social.{Activities, FeedActivities}
+  alias Ecto.Changeset
+  alias Pointers.Changesets
 
   import Where
 
@@ -25,8 +27,8 @@ defmodule Bonfire.Social.APActivities do
       e(activity, :data, %{})
       |> Map.put("object", object.data)
 
-    with {:ok, apactivity} <- insert(json),
-         {:ok, _} <- FeedActivities.save_fediverse_incoming_activity(actor, :create, apactivity) do
+    with {:ok, apactivity} <- insert(actor, json) do
+         # {:ok, _} <- FeedActivities.save_fediverse_incoming_activity(actor, :create, apactivity) do
       {:ok, apactivity}
     end
   end
@@ -42,15 +44,19 @@ defmodule Bonfire.Social.APActivities do
         e(activity, :data, %{})
       end
 
-    with {:ok, apactivity} <- insert(json),
+    with {:ok, apactivity} <- insert(actor, json),
          {:ok, _} <- FeedActivities.save_fediverse_incoming_activity(actor, :create, apactivity) do
       {:ok, apactivity}
     end
   end
 
-  def insert(json) do
-    %APActivity{}
-    |> APActivity.changeset(%{json: json})
+  def insert(actor, json) do
+    activity =
+      %APActivity{}
+      |> APActivity.changeset(%{json: json})
+    id = Changeset.get_change(activity, :id)
+    activity
+    |> Activities.put_assoc(:create, actor, id)
     |> repo().insert()
   end
 end

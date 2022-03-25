@@ -45,7 +45,7 @@ defmodule Bonfire.Social.PostBoundariesTest do
 
     feed_id = Bonfire.Social.Feeds.feed_id(:outbox, user)
 
-    assert %{edges: [feed_entry]} = FeedActivities.feed(feed_id, user)
+    assert %{edges: [feed_entry]} = FeedActivities.feed(:outbox, current_user: user)
     assert feed_entry.activity.object.post_content.name =~ "name"
   end
 
@@ -55,11 +55,8 @@ defmodule Bonfire.Social.PostBoundariesTest do
 
     assert {:ok, post} = Posts.publish(current_user: user, post_attrs: attrs)
     assert post.post_content.name =~ "name"
-
-    feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
-
     me = fake_user!()
-    assert %Paginator.Page{edges: activities} = FeedActivities.feed(feed_id, me)
+    assert %Paginator.Page{edges: activities} = FeedActivities.feed(:local, current_user: me)
     assert activities == []
 
   end

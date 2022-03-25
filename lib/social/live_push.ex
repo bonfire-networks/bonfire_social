@@ -12,12 +12,14 @@ defmodule Bonfire.Social.LivePush do
     activity
   end
 
-  def notify(activity, feed_ids) do
-    notify(activity.subject, activity.verb, activity.object, feed_ids)
-  end
+  def notify(activity, feed_ids), do: notify(activity.subject, activity.verb, activity.object, feed_ids)
 
   def notify(subject, verb, object, feed_ids) do
     # debug(feed_ids)
+    feed_ids =
+      ulid(feed_ids)
+      |> List.wrap()
+      |> Enum.reject(&is_nil/1)
     Bonfire.Notifications.notify_users(
       feed_ids,
       e(subject, :profile, :name,

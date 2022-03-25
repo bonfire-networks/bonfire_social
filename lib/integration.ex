@@ -2,6 +2,7 @@ defmodule Bonfire.Social.Integration do
   use Arrows
   alias Bonfire.Common.Config
   alias Bonfire.Common.Utils
+  alias Bonfire.Data.Social.Follow
   import Where
 
   def repo, do: Config.get!(:repo_module)
@@ -37,21 +38,23 @@ defmodule Bonfire.Social.Integration do
   end
 
   def activity_ap_publish(subject_id, :like, _object, activity) do
-    like = Bonfire.Social.Likes.get!(activity.subject, activity.object_id)
+    activity = repo().preload(activity, [:subject, :object])
+    like = Bonfire.Social.Likes.get!(activity.subject, activity.object, skip_boundary_check: true)
     ap_publish("create", like.id, subject_id)
   end
 
   def activity_ap_publish(subject_id, :boost, _object, activity) do
-    boost = Bonfire.Social.Boosts.get!(activity.subject, activity.object)
+    activity = repo().preload(activity, [:subject, :object])
+    boost = Bonfire.Social.Boosts.get!(activity.subject, activity.object, skip_boundary_check: true)
     ap_publish("create", boost.id, subject_id)
   end
 
   def activity_ap_publish(subject_id, :request, object, activity) do
     # dump(object)
-    # dump(activity)
     # FIXME: we're just assuming that all requests are for follow for now
-    request = Bonfire.Social.Requests.get!(activity.subject, Follow, object || activity.object)
-    ap_publish("create", request.id, subject_id)
+    activity = repo().preload(activity, [:subject, :object])
+    request = Bonfire.Social.Requests.get!(activity.subject, Follow, object || activity.object, skip_boundary_check: true)
+    ap_publish("create", object.id, activity.subject_id)
   end
 
   def activity_ap_publish(_, verb, _, _) do
@@ -72,6 +75,8 @@ defmodule Bonfire.Social.Integration do
   def is_local?(thing) do
     if Bonfire.Common.Extend.module_enabled?(Bonfire.Federate.ActivityPub.Utils) do
       Bonfire.Federate.ActivityPub.Utils.is_local?(thing)
+    else
+      true # if activitypub is disabled, it must be?
     end
   end
 

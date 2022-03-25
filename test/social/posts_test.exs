@@ -2,7 +2,7 @@ defmodule Bonfire.Social.PostsTest do
   use Bonfire.DataCase
   use Bonfire.Common.Utils
 
-  alias Bonfire.Social.Posts
+  alias Bonfire.Social.{FeedActivities, Posts}
   alias Bonfire.Me.Fake
   use Bonfire.Common.Utils
 
@@ -17,7 +17,7 @@ defmodule Bonfire.Social.PostsTest do
     assert post.created.creator_id == user.id
   end
 
-  test "get / read a post, ignoring boundaries" do
+  test "read a public post, ignoring boundaries" do
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message 1</p>"}}
     user = Fake.fake_user!()
     assert {:ok, post} =
@@ -27,7 +27,17 @@ defmodule Bonfire.Social.PostsTest do
     assert post.id == read.id
   end
 
-  test "get / read a post, querying with boundaries" do
+  test "read a public post as a guest" do
+    attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message 1</p>"}}
+    user = Fake.fake_user!()
+    assert {:ok, post} =
+      Posts.publish(current_user: user, post_attrs: attrs, boundary: "public")
+    # debug(post, "post")
+    assert {:ok, read} = Posts.read(post.id)
+    assert post.id == read.id
+  end
+
+  test "read my own public post" do
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message 1</p>"}}
     user = Fake.fake_user!()
     assert {:ok, post} =
@@ -65,5 +75,27 @@ defmodule Bonfire.Social.PostsTest do
     assert length(posts) == 3
   end
 
+  test "when i post, it appears in my outbox feed" do
+    alice = Fake.fake_user!()
+    attrs = %{post_content: %{html_body: "<p>hey you have an epic html post</p>"}}
+    assert {:ok, post} = Posts.publish(current_user: alice, post_attrs: attrs, boundary: "public")
+    assert %{edges: edges} = FeedActivities.feed(:outbox, current_user: alice)
+    assert [post2] = edges
+    assert post2.id == post.id
+  end
+
+  test "when i post, it does not appear in my notifications feed" do
+    alice = Fake.fake_user!()
+    attrs = %{post_content: %{html_body: "<p>hey you have an epic html post</p>"}}
+    assert {:ok, post} = Posts.publish(current_user: alice, post_attrs: attrs, boundary: "public")
+    assert %{edges: []} = FeedActivities.feed(:notifications, alice)
+  end
+
+  test "when i post, it does not appear in my inbox feed" do
+    alice = Fake.fake_user!()
+    attrs = %{post_content: %{html_body: "<p>hey you have an epic html post</p>"}}
+    assert {:ok, post} = Posts.publish(current_user: alice, post_attrs: attrs, boundary: "public")
+    assert %{edges: []} = FeedActivities.feed(:inbox, current_user: alice)
+  end
 
 end

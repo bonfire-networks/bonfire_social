@@ -67,9 +67,10 @@ defmodule Bonfire.Social.Acts.Caretaker do
     end
   end
 
-  defp cast(epic, act, changeset, on, id) do
+  defp cast(epic, act, changeset, on, caretaker_id) do
+    id = Changeset.get_field(changeset, :id)
     changeset
-    |> Changeset.cast(%{caretaker: %{caretaker_id: id}}, [])
+    |> Changeset.cast(%{caretaker: %{id: id, caretaker_id: caretaker_id}}, [])
     |> Changeset.cast_assoc(:caretaker)
     |> Epic.assign(epic, on, ...)
   end

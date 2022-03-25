@@ -25,7 +25,6 @@ defmodule Bonfire.Social.Requests do
   def request(user, type, object, opts \\ [])
   def request(%{}=requester, type, object, opts) do
     opts = Keyword.put_new(opts, :current_user, requester)
-
     object
     # |> check_request(requester, ..., opts) # TODO: check if allowed to request?
     ~> do_request(requester, type, ..., opts)
@@ -163,25 +162,25 @@ defmodule Bonfire.Social.Requests do
   # end
 
   defp do_request(requester, type, object, opts) do
-    preset_or_custom_boundary = [
+    opts = [
       boundary: "mentions",
       to_circles: [ulid(object)],
-      to_feeds: [Feeds.feed_id(:notifications, object)]
+      to_feeds: [notifications: object],
     ]
-
-    with {:ok, request} <- create(requester, type, object, preset_or_custom_boundary) do
-
-      {:ok, activity} = FeedActivities.notify_object(requester, :request, {object, request})
-
-      {:ok, Activities.activity_under_object(activity, request)}
-    else e ->
-      with {ok, request} <- get(requester, type, object) do
-        debug("was already requested")
+    case create(requester, type, object, opts) do
+      {:ok, request} ->
+        Integration.ap_push_activity(requester.id, request)
         {:ok, request}
-      else _ ->
-        error(e)
-        {:error, e}
-      end
+      e ->
+        case get(requester, type, object) do
+          {:ok, request} ->
+            debug("was already requested")
+            {:ok, request}
+          e2 ->
+            error(e)
+            error(e2)
+            {:error, e}
+        end
     end
   end
 
@@ -198,8 +197,8 @@ defmodule Bonfire.Social.Requests do
     end
   end
 
-  defp create(requester, type, object, preset_or_custom_boundary) do
-    Edges.changeset({Request, type}, requester, :request, object, preset_or_custom_boundary)
+  defp create(requester, type, object, opts) do
+    Edges.changeset({Request, type}, requester, :request, object, opts)
     |> repo().upsert()
   end
 

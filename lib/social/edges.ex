@@ -4,43 +4,44 @@ defmodule Bonfire.Social.Edges do
   use Bonfire.Repo
   import Bonfire.Boundaries.Queries
   import Where
+  alias Bonfire.Boundaries.Acls
   alias Bonfire.Data.Edges.Edge
-  alias Bonfire.Social.Objects
-  alias Pointers.ULID
+  alias Bonfire.Social.{Activities, FeedActivities, Objects}
+  alias Pointers.{Changesets, ULID}
 
-  def changeset(schema, subject, verb, object, preset_or_custom_boundary) when is_atom(schema), do: changeset({schema, schema}, subject, verb, object, preset_or_custom_boundary)
-  def changeset({insert_schema, type_schema}, subject, verb, object, preset_or_custom_boundary) do
-    id = ULID.generate()
-    %{id: id,
-      edge: %{
-        id: id,
-        subject_id: ulid(subject),
-        object_id:  ulid(object),
-        table_id:   type_schema.__pointers__(:table_id),
-      }}
-    |> Changeset.cast(struct(insert_schema), ..., [:id])
-    |> Changeset.cast_assoc(:edge, [:required, with: &Edge.changeset/2])
-    |> Objects.cast_basic(%{verb: verb}, subject, preset_or_custom_boundary)
-    # |> Changeset.cast_assoc(:controlled)
+  def put_assoc(changeset, subject, object),
+    do: put_assoc(changeset, changeset.data.__struct__,  subject, object)
+
+  def put_assoc(changeset, table, subject, object) do
+    table.__pointers__(:table_id)
+    |> %{subject_id: ulid(subject), object_id: ulid(object), table_id: ...}
+    |> Changesets.put_assoc(changeset, :edge, ...)
+  end
+
+  def changeset(schema, subject, verb, object, options) when is_atom(schema),
+    do: changeset({schema, schema}, subject, verb, object, options)
+  def changeset({insert_schema, type_schema}, subject, verb, object, options) do
+    Changesets.cast(struct(insert_schema), %{}, [])
+    |> put_assoc(type_schema, subject, object)
+    |> Objects.cast_creator_caretaker(subject)
+    |> Acls.cast(subject, options)
+    |> Activities.put_assoc(verb, subject, object)
+    |> FeedActivities.put_feed_publishes(Keyword.get(options, :to_feeds, []))
   end
 
   def get(type, subject, object, opts \\ [])
-
   def get(type, filters, opts, []) when is_list(filters) and is_list(opts) do
     do_query(type, filters, opts)
-    |> dump
+    # |> dump
     |> repo().single()
   end
-
   def get(type, subject, object, opts) do
     do_query(type, subject, object, opts)
     |> repo().single()
   end
 
   def get!(type, subject, objects, opts \\ [])
-  def get!(type, subject, [], opts) do
-    []
-  end
+  def get!(type, subject, [], opts), do: []
   def get!(type, subject, objects, opts) when is_list(objects) do
     do_query(type, subject, objects, opts)
     |> repo().all()
@@ -78,9 +79,9 @@ defmodule Bonfire.Social.Edges do
 
   def query_parent(query_schema, filters, opts) do
     # debug(opts)
-    from(root in query_schema, as: :root)
+    from(root in query_schema)
     |> proload(:edge)
-    |> boundarise(root.id, opts)
+    |> boundarise(id, opts)
     |> filter(filters, opts)
     |> maybe_proload(!is_list(opts) || opts[:preload])
   end
@@ -89,16 +90,12 @@ defmodule Bonfire.Social.Edges do
 
   defp maybe_proload(query, :subject) do
     query
-    |> proload([edge: [
-      subject: {"subject_", [:profile, :character]}
-      ]])
+    |> proload(edge: [subject: {"subject_", [:profile, :character]}])
   end
 
   defp maybe_proload(query, :object) do
     query
-    |> proload([edge: [
-      object: {"object_", [:profile, :character]}
-      ]])
+    |> proload(edge: [object: {"object_", [:profile, :character]}])
   end
 
   defp maybe_proload(query, _) do
@@ -107,9 +104,11 @@ defmodule Bonfire.Social.Edges do
     |> maybe_proload(:subject)
   end
 
-  defp filter(query, filters, opts) when is_list(filters),
-    do: Enum.reduce(filters, query, &filter(&2, &1, opts))
-        |> query_filter(Keyword.drop(filters, [:object, :subject, :type]))
+  defp filter(query, filters, opts) when is_list(filters) do
+    # IO.inspect(filters, label: "filters")
+    Enum.reduce(filters, query, &filter(&2, &1, opts))
+    |> query_filter(Keyword.drop(filters, [:object, :subject, :type]))
+  end
 
   defp filter(query, {:subject, subject}, opts) do
     case subject do

@@ -1,22 +1,25 @@
-defmodule Bonfire.Social.Acts.Posts.Publish do
+ defmodule Bonfire.Social.Acts.Posts.Publish do
   @moduledoc """
   Creates a changeset for publishing a post
 
   Epic Options:
     * `:current_user` - user that will create the post, required.
     * `:post_attrs` (configurable) - attrs to create the post from, required.
+    * `:post_id` (configurable) - id to use for the created post (handy for creating
+      activitypub objects with an id representing their reported creation time)
 
   Act Options:
+    * `:id` - epic options key to find an id to force override with at, default: `:post_id`
     * `:as` - key to assign changeset to, default: `:post`.
     * `:attrs` - epic options key to find the attributes at, default: `:post_attrs`.
   """
 
-  alias Bonfire.Epics
-  alias Bonfire.Social.Posts
-  alias Bonfire.Epics.{Act, Epic}
   alias Bonfire.Ecto.Acts.Work
+  alias Bonfire.Epics.{Act, Epic}
+  alias Bonfire.Social.Posts
+  alias Ecto.Changeset
   use Arrows
-  import Epics
+  import Bonfire.Epics
   import Where
 
   @doc false # see module documentation
@@ -31,7 +34,9 @@ defmodule Bonfire.Social.Acts.Posts.Publish do
         epic
       true ->
         as = Keyword.get(act.options, :as, :post)
+        id_key = Keyword.get(act.options, :id, :post_id)
         attrs_key = Keyword.get(act.options, :attrs, :post_attrs)
+        id = epic.assigns[:options][id_key]
         attrs = Keyword.get(epic.assigns[:options], attrs_key, %{})
         boundary = epic.assigns[:options][:boundary]
         maybe_debug(epic, act, attrs_key, "Assigning changeset to :#{as} using attrs")
@@ -39,8 +44,13 @@ defmodule Bonfire.Social.Acts.Posts.Publish do
         if attrs == %{}, do: maybe_debug(act, attrs, "empty attrs")
         Posts.changeset(:create, attrs, current_user, boundary)
         |> Map.put(:action, :insert)
+        |> maybe_overwrite_id(id)
         |> Epic.assign(epic, as, ...)
         |> Work.add(:post)
     end
   end
+
+  defp maybe_overwrite_id(changeset, nil), do: changeset
+  defp maybe_overwrite_id(changeset, id), do: Changeset.put_change(changeset, :id, id)
+
 end

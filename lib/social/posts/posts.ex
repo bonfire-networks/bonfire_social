@@ -36,14 +36,13 @@ defmodule Bonfire.Social.Posts do
   end
 
   def publish(options \\ []) do
-    options = Keyword.merge(options, crash: true, debug: false, verbose: false)
+    options = Keyword.merge(options, crash: true, debug: true, verbose: false)
     epic =
       Epic.from_config!(__MODULE__, :publish)
       |> Epic.assign(:options, options)
       |> Epic.run()
     if epic.errors == [], do: {:ok, epic.assigns.post}, else: {:error, epic}
   end
-
 
   # def reply(creator, attrs) do
   #   with  {:ok, published} <- publish(creator, attrs),
@@ -61,7 +60,6 @@ defmodule Bonfire.Social.Posts do
 
   def changeset(:create, attrs, _creator, _preset) when attrs == %{} do
     # keep it simple for forms
-
     Post.changeset(%Post{}, attrs)
   end
 
@@ -69,8 +67,6 @@ defmodule Bonfire.Social.Posts do
     attrs
     # |> debug("attrs")
     |> Post.changeset(%Post{}, ...)
-    |> PostContents.cast(attrs, creator, preset_or_custom_boundary) # process text (must be done before Objects.cast)
-    |> Objects.cast(attrs, creator, preset_or_custom_boundary) # deal with threading, tagging, boundaries, activities, etc.
   end
 
   def read(post_id, opts_or_socket_or_current_user \\ []) when is_binary(post_id) do
@@ -81,44 +77,44 @@ defmodule Bonfire.Social.Posts do
   end
 
   @doc "List posts created by the user and which are in their outbox, which are not replies"
-  def list_by(by_user, opts_or_current_user \\ []) do
+  def list_by(by_user, opts \\ []) do
     # query FeedPublish
     [posts_by: {by_user, &filter/3}]
-    |> list_paginated(opts_or_current_user)
+    |> list_paginated(opts)
   end
 
   @doc "List posts with pagination"
-  def list_paginated(filters, opts_or_current_user \\ [])
-  def list_paginated(filters, opts_or_current_user) when is_list(filters) do
-    paginate = e(opts_or_current_user, :paginate, opts_or_current_user)
+  def list_paginated(filters, opts \\ [])
+  def list_paginated(filters, opts) when is_list(filters) do
+    paginate = e(opts, :paginate, opts)
     filters
-    # |> debug("Posts.list_paginated:filters")
-    |> query_paginated(opts_or_current_user)
+    # |> debug("filters")
+    |> query_paginated(opts)
     |> Bonfire.Repo.many_paginated(paginate)
-    # |> FeedActivities.feed_paginated(filters, opts_or_current_user)
+    # |> FeedActivities.feed_paginated(filters, opts)
   end
 
   @doc "Query posts with pagination"
-  def query_paginated(filters, opts_or_current_user \\ [])
-  def query_paginated(filters, opts_or_current_user) when is_list(filters) do
+  def query_paginated(filters, opts \\ [])
+  def query_paginated(filters, opts) when is_list(filters) do
     filters
-    # |> debug("Posts.query_paginated:filters")
+    # |> debug("filters")
     |> Keyword.drop([:paginate])
-    |> FeedActivities.query_paginated(opts_or_current_user, Post)
+    |> Objects.list_query()
+    # |> FeedActivities.query_paginated(opts, Post)
     # |> debug("after FeedActivities.query_paginated")
   end
   # query_paginated(filters \\ [], current_user_or_socket_or_opts \\ [],  query \\ FeedPublish)
-  def query_paginated({a,b}, opts_or_current_user), do: query_paginated([{a,b}], opts_or_current_user)
+  def query_paginated({a,b}, opts), do: query_paginated([{a,b}], opts)
 
-  def query(filters \\ [], opts_or_current_user \\ nil)
-
-  def query(filters, opts_or_current_user) when is_list(filters) or is_tuple(filters) do
-    q = base_query(filters, opts_or_current_user)
-        |> join_preload([:post_content])
-        |> boundarise(main_object.id, opts_or_current_user)
+  def query(filters \\ [], opts \\ nil)
+  def query(filters, opts) when is_list(filters) or is_tuple(filters) do
+    base_query(filters, opts)
+    |> join_preload([:post_content])
+    |> boundarise(main_object.id, opts)
   end
 
-  defp base_query(filters, opts_or_current_user) when is_list(filters) or is_tuple(filters) do
+  defp base_query(filters, opts) when is_list(filters) or is_tuple(filters) do
     (from p in Post, as: :main_object)
     |> query_filter(filters, nil, nil)
   end
@@ -217,7 +213,11 @@ defmodule Bonfire.Social.Posts do
     ap_receive_activity(creator, activity, object, [:guest])
   end
 
-  def ap_receive_activity(creator, %{data: _activity_data} = _activity, %{data: post_data, pointer_id: id} = _object, circles) do # record an incoming post
+  def ap_receive_activity(
+    creator, %{data: _activity_data} = _activity,
+    %{data: post_data, pointer_id: id} = _object,
+    circles
+  ) do # record an incoming post
     # debug(activity: activity)
     # debug(creator: creator)
     # debug(object: object)
@@ -255,7 +255,7 @@ defmodule Bonfire.Social.Posts do
         attrs
       end
 
-    publish(current_user: creator, post_attrs: attrs, boundary: "federated")
+    publish(current_user: creator, post_attrs: attrs, boundary: "federated", post_id: id)
   end
 
   # TODO: rewrite to take a post instead of an activity

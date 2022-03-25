@@ -14,8 +14,8 @@ defmodule Bonfire.Social.FlagsTest do
 
     assert {:ok, %{activity: activity}} = Flags.flag(me, flagged)
     # debug(activity)
-    assert activity.subject.id == me.id
-    assert activity.object.id == flagged.id
+    assert activity.subject_id == me.id
+    assert activity.object_id == flagged.id
 
   end
 
@@ -113,7 +113,7 @@ defmodule Bonfire.Social.FlagsTest do
     assert {:ok, flag} = Flags.flag(someone, post)
     # debug_object_acls(flag)
     assert %{edges: [feed_publish]} =
-      FeedActivities.feed(:notifications, current_user: me)
+      FeedActivities.feed(:notifications, skip_boundary_check: :admins, current_user: me)
     assert activity = feed_publish.activity
     assert flag.edge.object_id == post.id
     assert flag.edge.subject_id == someone.id

@@ -14,37 +14,61 @@ defmodule Bonfire.Social.Activities do
   alias Bonfire.Data.AccessControl.Verb
   alias Bonfire.Data.Identity.User
   alias Bonfire.Boundaries
-  alias Bonfire.Social.FeedActivities
-  alias Pointers.ULID
+  alias Bonfire.Boundaries.Verbs
+  alias Ecto.Changeset
+  alias Bonfire.Social.{Feeds, FeedActivities}
+  alias Pointers.{Changesets, Pointer, ULID}
 
   def queries_module, do: Activity
   def context_module, do: Activity
 
   def as_permitted_for(q, opts \\ [], verbs \\ [:see, :read]) do
-    opts = to_options(opts) ++ [verbs: verbs]
-    boundarise(q, activity.object_id, opts)
+    to_options(opts)
+    |> Keyword.put_new(:verbs, verbs)
+    |> boundarise(q, activity.object_id, ...)
   end
 
+  def put_assoc(changeset, verb, subject), do: put_assoc(changeset, verb, subject, changeset)
+  def put_assoc(changeset, verb, subject, object) do
+    verb = Changesets.set_state(struct(Verb, Verbs.get(verb)), :loaded)
+    verb_id = verb.id
+    %{subject_id: ulid(subject), object_id: ulid(object), verb_id: verb_id}
+    |> Changesets.put_assoc(changeset, :activity, ...)
+    |> Changeset.update_change(:activity, &put_verb(&1, verb))
+  end
+
+  def build_assoc(thing, verb, subject), do: build_assoc(thing, verb, subject, thing)
+  def build_assoc(%Changeset{}=thing, verb, subject, object) do
+    %{id: Changeset.get_field(thing, :id)}
+    |> build_assoc(verb, subject, object)
+  end
+  def build_assoc(%{}=thing, verb, subject, object) do
+    verb = Changesets.set_state(struct(Verb, Verbs.get(verb)), :loaded)
+    verb_id = verb.id
+    %{subject_id: ulid(subject), object_id: ulid(object), verb_id: verb_id}
+    |> Ecto.build_assoc(thing, :activity, ...)
+    |> Map.put(:verb, verb)
+  end
+
+  defp put_verb(changeset, verb), do: Changesets.update_data(changeset, &Map.put(&1, :verb, verb))
+
+  defp verb_id(verb) when is_binary(verb), do: verb
+  defp verb_id(verb) when is_atom(verb), do: Verbs.get_id(verb) || Verbs.get_id!(:create)
+
   def cast(changeset, verb, creator, preset_or_custom_boundary) do
-    verb_id = Boundaries.Verbs.get_id(verb) || Boundaries.Verbs.get_id!(:create)
+    verb_id = verb_id(verb)
     creator = repo().maybe_preload(creator, :character)
     #|> debug("creator")
     # debug(changeset)
-    id = Changeset.get_change(changeset, :id)
-    activity = %{
-      id: id,
-      subject_id: creator.id,
-      verb_id: verb_id
-    } # publish in appropriate feeds
-    |> Map.put(..., :feed_publishes, FeedActivities.cast_data(changeset, ..., creator, preset_or_custom_boundary))
-    # |> debug("activity attrs")
-
     changeset
-    |> Map.update(:data, nil, &Map.put(&1, :activities, [])) # force an insert
-    |> Changeset.cast(%{activities: [activity]}, [])
-    |> Changeset.cast_assoc(:activities, with: &Activity.changeset/2)
-    # |> Map.update(:data, nil, &Map.put(&1, :activity, activity)) # force an insert
-    # |> debug("changeset")
+    |> put_assoc(verb, creator)
+    |> put_in_feeds(creator, preset_or_custom_boundary)
+  end
+
+  defp put_in_feeds(changeset, creator, boundary) do
+    Feeds.target_feeds(changeset, creator, boundary)
+    |> Enum.map(&(%{feed_id: &1}))
+    |> Changesets.put_assoc(changeset, :feed_publishes, ...)
   end
 
   @doc """
@@ -53,10 +77,11 @@ defmodule Bonfire.Social.Activities do
   """
   def create(subject, verb, object, id \\ nil)
   def create(%{id: subject_id}=subject, verb, %{id: object_id}=object, id) when is_binary(id) and is_atom(verb) do
-    verb_id = Boundaries.Verbs.get_id(verb) || Boundaries.Verbs.get_id!(:create)
+    verb_id = verb_id(verb)
+    verb = Verbs.get(verb_id)
     attrs = %{id: id, subject_id: subject_id, verb_id: verb_id, object_id: object_id}
     with {:ok, activity} <- repo().put(changeset(attrs)) do
-       {:ok, %{activity | object: object, subject: subject, verb: %Verb{verb: verb}}}
+       {:ok, %{activity | object: object, subject: subject, verb: verb}}
     end
   end
   def create(subject, verb, {object, %{id: id} = mixin_object}, _) do
@@ -74,8 +99,8 @@ defmodule Bonfire.Social.Activities do
 
   @doc "Delete an activity (usage by things like unlike)"
   def delete_by_subject_verb_object(%{}=subject, verb, %{}=object) do
-    q = by_subject_verb_object_q(subject, Boundaries.Verbs.get_id!(verb), object)
-    Bonfire.Social.FeedActivities.delete_for_object(repo().many(q)) # TODO: see why cascading delete doesn't take care of this
+    q = by_subject_verb_object_q(subject, Verbs.get_id!(verb), object)
+    FeedActivities.delete_for_object(repo().many(q)) # TODO: see why cascading delete doesn't take care of this
     elem(repo().delete_all(q), 1)
   end
 
@@ -88,13 +113,10 @@ defmodule Bonfire.Social.Activities do
   end
 
 
-  def object_preload_create_activity(object) do
-    object_preload_activity(object, :create)
-  end
+  def object_preload_create_activity(object), do: object_preload_activity(object, :create)
 
   def object_preload_activity(object, verb \\ :create) do
-    verb_id = Boundaries.Verbs.get_id(verb)
-
+    verb_id = verb_id(verb)
     query = from activity in Activity, as: :activity, where: activity.verb_id == ^verb_id
     repo().preload(object, [activity: query])
   end
@@ -105,81 +127,57 @@ defmodule Bonfire.Social.Activities do
   end
 
   def query_object_preload_activity(q, verb \\ :create, object_id_field \\ :id, opts \\ [], preloads \\ :default) do
-    verb_id = Boundaries.Verbs.get_id(verb)
-    q
-    |> reusable_join(:left, [o], activity in Activity, as: :activity, on: activity.object_id == field(o, ^object_id_field) and activity.verb_id == ^verb_id)
+    verb_id = verb_id(verb)
+    reusable_join(q, :left, [o],
+      activity in Activity, as: :activity,
+      on: activity.object_id == field(o, ^object_id_field) and activity.verb_id == ^verb_id
+    )
     |> activity_preloads(opts, preloads)
   end
 
 
-  def activity_preloads(query, opts, preloads) when is_list(preloads) do
-    #debug(preloads)
-    Enum.reduce(preloads, query, fn preload, query ->
-      query
-      |> activity_preloads(opts, preload)
-    end)
+  def activity_preloads(query, opts, preloads) do
+    case preloads do
+      _ when is_list(preloads) ->
+        Enum.reduce(preloads, query, &activity_preloads(&2, opts, &1))
+      :all -> activity_preloads(query, opts, [:with_parents, :with_creator, :default])
+      :with_parents ->
+        # If the root replied to anything, fetch that and its creator too. e.g.
+        # * Alice's post that replied to Bob's post
+        # * Bob liked alice's post
+         proload query,
+           activity: [
+             replied: [
+               reply_to: {"reply_", [
+                 :post_content,
+                 created: [creator: {"creator_", [:character, profile: :icon]}],
+               ]}
+             ]
+           ]
+      :with_creator ->
+        # This actually loads the creator of the object:
+        # * In the case of a post, creator of the post
+        # * In the case of like of a post, creator of the post
+        proload query,
+          created:  [creator: [:character, profile: :icon]],
+          activity: [object: {"object_", [created: [creator: [:character, profile: :icon]]]}]
+      :minimal ->
+        # Subject here is standing in for the creator of the root. One day it may be replaced with it.
+        proload query, activity: [subject: {"subject_", [:character, profile: :icon]}]
+      :minimum -> # ???
+        proload query, activity: [:object]
+      :default ->
+        proload query, activity: [:verb, :replied, object: {"object_", [:post_content, :peered]}]
+      _ ->
+        warn(preloads, "Unknown preload specification")
+        query
+    end
   end
-
-  def activity_preloads(query, opts, :all) do
-    query
-    |> activity_preloads(opts, :with_parents)
-    |> activity_preloads(opts, :with_creator)
-    |> activity_preloads(opts, :default)
-    # |> IO.inspect
-  end
-
-  def activity_preloads(query, _opts, :with_parents) do
-    proload query,
-      activity: [replied:
-                 [reply_to:
-                  {"reply_",
-                   [:post_content,
-                    created: [creator: {"creator_", [:profile, :character]}]]}]]
-  end
-
-  def activity_preloads(query, _opts, :with_creator) do
-    proload query,
-      activity: [object: {"object_", [created: [creator: [:profile, :character]]]}]
-  end
-
-  @default_activity_preloads [
-    :verb,
-    :replied,
-    # :boost_count, :like_count, # preload these in the view instead
-    object: {"object_", [:post_content, :peered]}
-  ]
-
-  def activity_preloads(query, opts, :default) do
-    query
-    |> activity_preloads(opts, :minimal)
-    |> proload(activity: @default_activity_preloads)
-    # |> debug("activity with preloads")
-  end
-
-  def activity_preloads(query, _opts, :minimal) do
-    proload query,
-      activity: [subject: {"subject_", [:character, profile: :icon]}]
-  end
-
-  def activity_preloads(query, _opts, :minimum) do
-    proload query,
-      # :activity
-      activity: [:object]
-  end
-
-  def activity_preloads(query, _opts, _) do
-    query
-  end
-
 
   @doc """
   Get an activity by its ID
   """
-  def get(id, opts) when is_binary(id) do
-
-    query([id: id], opts)
-    |> repo().single()
-  end
+  def get(id, opts) when is_binary(id), do: repo().single(query([id: id], opts))
 
   @doc """
   Get an activity by its object ID (usually a create activity)
@@ -221,6 +219,8 @@ defmodule Bonfire.Social.Activities do
     FeedActivities.query(filters, opts_or_current_user, :all, from(a in Activity, as: :main_object) )
   end
 
+  # this is a hack to mimic the old structure of the data provided to
+  # the activity component, which will we refactor soon(tm)
   def activity_under_object(%{activity: %{object: %{id: _} = object} = activity} = top_object) do
     activity_under_object(activity, Map.merge(top_object, object))
   end
@@ -287,22 +287,18 @@ defmodule Bonfire.Social.Activities do
   def verb_maybe_modify(%{verb: verb}, activity) when is_binary(verb), do: verb |> String.downcase() |> verb_maybe_modify(activity)
   def verb_maybe_modify(%{verb: verb}, activity), do: verb_maybe_modify(verb, activity)
   def verb_maybe_modify(verb, activity) when is_atom(verb), do: maybe_to_string(verb) |> String.downcase() |> verb_maybe_modify(activity)
-  def verb_maybe_modify(verb, _) when is_binary(verb), do: verb |> String.downcase()
+  def verb_maybe_modify(verb, _) when is_binary(verb), do:  verb |> String.downcase()
 
   def verb_display(verb) do
     verb = maybe_to_string(verb)
-
     case String.split(verb) do
-
       [verb, "to", other_verb] -> Enum.join([verb_congugate(verb), "to", other_verb], " ")
-
       _ -> verb_congugate(verb)
-
     end
   end
 
   defp verb_congugate(verb) do
-    verb
-    |> Verbs.conjugate(tense: "past", person: "third", plurality: "plural")
+    :"Elixir.Verbs".conjugate(verb, tense: "past", person: "third", plurality: "plural")
   end
+
 end

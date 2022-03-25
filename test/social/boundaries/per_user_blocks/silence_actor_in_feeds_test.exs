@@ -27,7 +27,7 @@ defmodule Bonfire.Social.Boundaries.SilenceActorFeedsPerUserTest do
 
     feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
     #|> debug()
-    assert %{edges: [feed_entry]} = Bonfire.Social.FeedActivities.feed(feed_id, me)
+    assert %{edges: [feed_entry]} = Bonfire.Social.FeedActivities.feed(feed_id, current_user: me)
   end
 
   test "does not show in my_feed a post from a per-user silenced user that I am not following" do
@@ -84,10 +84,10 @@ defmodule Bonfire.Social.Boundaries.SilenceActorFeedsPerUserTest do
     debug_object_acls(post)
 
     feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
-    assert %{edges: []} = Bonfire.Social.FeedActivities.feed(feed_id, me)
+    assert %{edges: []} = Bonfire.Social.FeedActivities.feed(feed_id, current_user: me)
 
     third_user = fake_user!()
-    assert %{edges: [feed_entry]} = Bonfire.Social.FeedActivities.feed(feed_id, third_user) # check that we do show it to others
+    assert %{edges: [feed_entry]} = Bonfire.Social.FeedActivities.feed(feed_id, current_user: third_user) # check that we do show it to others
   end
 
   test "does not show in any feeds a post from an user that was per-user silenced later on" do
@@ -99,10 +99,10 @@ defmodule Bonfire.Social.Boundaries.SilenceActorFeedsPerUserTest do
     Bonfire.Boundaries.Blocks.block(other_user, :silence, current_user: me)
 
     feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
-    assert %{edges: []} = Bonfire.Social.FeedActivities.feed(feed_id, me)
-
-    third_user = fake_user!()
-    assert %{edges: [feed_entry]} = Bonfire.Social.FeedActivities.feed(feed_id, third_user) # check that we do show it to others
+    assert %{edges: []} = Bonfire.Social.FeedActivities.feed(feed_id, current_user: me)
+    # check that we do show it to others
+    third = fake_user!()
+    assert %{edges: [feed_entry]} = Bonfire.Social.FeedActivities.feed(feed_id, current_user: third) 
   end
 
 

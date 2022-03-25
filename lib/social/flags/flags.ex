@@ -30,12 +30,19 @@ defmodule Bonfire.Social.Flags do
   def by_flagged(%{}=object), do: [object: object] |> query(current_user: object) |> repo().many()
   # def by_any(%User{}=user), do: repo().many(by_any_q(user))
 
+
   def flag(flagger, flagged, opts \\ [])
   def flag(%{} = flagger, object, opts) do
-    opts = Keyword.put_new(opts, :current_user, flagger)
+    opts =
+      opts
+      |> Keyword.put_new(:current_user, flagger)
+      |> Keyword.put_new_lazy(:to_feeds, &flag_feeds/0)
     check_flag(flagger, object, opts)
-    ~> do_flag(flagger, ..., opts)
+    ~> create(flagger, ..., opts)
   end
+
+  # determines the feeds a flag is published to
+  defp flag_feeds(), do: [notifications: Bonfire.Me.Users.list_admins()]
 
   defp check_flag(flagger, object, opts) do
     skip? = skip_boundary_check?(opts)
@@ -55,15 +62,6 @@ defmodule Bonfire.Social.Flags do
     end
   end
 
-  defp do_flag(flagger, flagged, opts) do
-    with {:ok, flag} <- create(flagger, flagged, opts),
-         {:ok, activity} <- FeedActivities.notify_admins(flagger, :flag, {flagged, flag}) do
-      # debug(activity: activity)
-      # FeedActivities.publish(flagger, activity, {flagged, flag})
-      {:ok, Activities.activity_under_object(activity, flag)}
-    end
-  end
-
   def unflag(%User{}=flagger, %{}=flagged) do
     Edges.delete_by_both(flagger, Flag, flagged) # delete the Flag
     Activities.delete_by_subject_verb_object(flagger, :flag, flagged) # delete the flag activity & feed entries (not needed unless publishing flags to feeds)
@@ -74,10 +72,8 @@ defmodule Bonfire.Social.Flags do
     end
   end
 
-  def list_paginated(filters, current_user_or_socket_or_opts \\ []) do
-    opts =
-      to_options(current_user_or_socket_or_opts)
-      |> Keyword.put_new(:skip_boundary_check, :admins)
+  def list_paginated(filters, opts \\ []) do
+    opts = Keyword.put_new(to_options(opts), :skip_boundary_check, :admins)
     filters
     |> query(opts)
     |> proload(:activity)
@@ -123,8 +119,8 @@ defmodule Bonfire.Social.Flags do
     query_base(filters, opts)
   end
 
-  defp create(flagger, flagged, preset_or_custom_boundary) do
-    Edges.changeset(Flag, flagger, :flag, flagged, preset_or_custom_boundary)
+  defp create(flagger, flagged, opts) do
+    Edges.changeset(Flag, flagger, :flag, flagged, opts)
     |> repo().insert()
   end
 

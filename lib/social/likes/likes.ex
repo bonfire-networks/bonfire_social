@@ -4,7 +4,7 @@ defmodule Bonfire.Social.Likes do
   alias Bonfire.Data.Social.Like
   # alias Bonfire.Data.Social.LikeCount
   alias Bonfire.Boundaries.Verbs
-  alias Bonfire.Social.{Activities, FeedActivities}
+  alias Bonfire.Social.{Activities, Edges, Feeds, FeedActivities, Integration, Objects}
   alias Bonfire.Social.Edges
   alias Bonfire.Social.Objects
   alias Bonfire.Social.Feeds
@@ -28,24 +28,26 @@ defmodule Bonfire.Social.Likes do
   def by_liked(%{}=subject), do: [subject: subject] |> query(current_user: subject) |> repo().many()
 
   def like(%User{} = liker, %{} = liked) do
-
     liked = Objects.preload_creator(liked)
     liked_creator = Objects.object_creator(liked)
-
-    preset_or_custom_boundary = [
+    opts = [
       boundary: "mentions", # TODO: make configurable
       to_circles: [ulid(liked_creator)],
-      to_feeds: [Feeds.feed_id(:notifications, liked_creator)]
+      to_feeds: [notifications: liked_creator],
     ]
-
-    with {:ok, like} <- create(liker, liked, preset_or_custom_boundary) do
-      # debug(like)
-
-      # make the like itself visible to both
-      # Bonfire.Boundaries.maybe_make_visible_for(liker, like, e(liked, :created, :creator_id, nil))
-
-      {:ok, activity} = FeedActivities.maybe_notify_creator(liker, :like, {liked, like}) #|> debug()
-      {:ok, Activities.activity_under_object(activity, like)}
+    case create(liker, liked, opts) do
+      {:ok, like} ->
+        Integration.ap_push_activity(liker.id, like)
+        {:ok, like}
+      {:error, e} ->
+        case get(liker, liked) do
+          {:ok, like} ->
+            debug(like, "the user already likes this object")
+            {:ok, like}
+          _ ->
+            error(e)
+            {:error, e}
+        end
     end
   end
 
@@ -61,6 +63,35 @@ defmodule Bonfire.Social.Likes do
     Activities.delete_by_subject_verb_object(liker, :like, liked) # delete the like activity & feed entries
     # Note: the like count is automatically decremented by DB triggers
   end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   def unlike(%User{} = liker, liked) when is_binary(liked) do
     with {:ok, liked} <- Bonfire.Common.Pointers.get(liked, current_user: liker) do
@@ -108,8 +139,8 @@ defmodule Bonfire.Social.Likes do
     list([object: id], current_user, cursor_after, preloads)
   end
 
-  defp create(liker, liked, preset_or_custom_boundary) do
-    Edges.changeset(Like, liker, :like, liked, preset_or_custom_boundary)
+  defp create(liker, liked, opts) do
+    Edges.changeset(Like, liker, :like, liked, opts)
     |> repo().insert()
     # |> repo().maybe_preload(edge: [:object])
   end

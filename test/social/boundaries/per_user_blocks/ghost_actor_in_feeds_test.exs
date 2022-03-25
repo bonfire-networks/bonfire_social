@@ -26,7 +26,7 @@ defmodule Bonfire.Social.Boundaries.GhostActorFeedsPerUserTest do
 
     feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
     #|> debug()
-    assert %{edges: [feed_entry]} = Bonfire.Social.FeedActivities.feed(feed_id, me)
+    assert %{edges: [feed_entry]} = Bonfire.Social.FeedActivities.feed(feed_id, current_user: me)
   end
 
   test "does not show in my_feed a post from someone who per-user ghosted me, who I am not following" do
@@ -67,10 +67,10 @@ defmodule Bonfire.Social.Boundaries.GhostActorFeedsPerUserTest do
     debug_object_acls(post)
 
     feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
-    assert %{edges: []} = Bonfire.Social.FeedActivities.feed(feed_id, me)
+    assert %{edges: []} = Bonfire.Social.FeedActivities.feed(feed_id, current_user: me)
 
     third_user = fake_user!()
-    assert %{edges: [feed_entry]} = Bonfire.Social.FeedActivities.feed(feed_id, third_user) # check that we do show it to others
+    assert %{edges: [feed_entry]} = Bonfire.Social.FeedActivities.feed(feed_id, current_user: third_user) # check that we do show it to others
   end
 
   test "does not show in any feeds a post from someone who per-user ghosted me later on" do
@@ -81,11 +81,11 @@ defmodule Bonfire.Social.Boundaries.GhostActorFeedsPerUserTest do
 
     feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
 
-    assert %{edges: [feed_entry]} = Bonfire.Social.FeedActivities.feed(feed_id, me) # check that I can see it before being ghosted
+    assert %{edges: [feed_entry]} = Bonfire.Social.FeedActivities.feed(feed_id, current_user: me) # check that I can see it before being ghosted
 
     Bonfire.Boundaries.Blocks.block(me, :ghost, current_user: other_user)
 
-    assert %{edges: []} = Bonfire.Social.FeedActivities.feed(feed_id, me)
+    assert %{edges: []} = Bonfire.Social.FeedActivities.feed(feed_id, current_user: me)
   end
 
 

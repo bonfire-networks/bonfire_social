@@ -21,7 +21,7 @@ defmodule Bonfire.Social.ThreadsPostsTest do
     assert post_reply.replied.thread_id == post.id
   end
 
-  test "see a reply (that I am permitted to see) to something I posted in my notifications" do
+  test "see a public reply to something I posted in my notifications" do
     me = Fake.fake_user!()
     someone = Fake.fake_user!()
     attrs = %{post_content: %{html_body: "<p>hey you have an epic html post</p>"}}
@@ -31,9 +31,9 @@ defmodule Bonfire.Social.ThreadsPostsTest do
     attrs_reply = %{post_content: %{summary: "summary", name: "name 2", html_body: "<p>epic html message</p>"}, reply_to_id: post.id}
     assert {:ok, post_reply} = Posts.publish(current_user: someone, post_attrs: attrs_reply, boundary: "public")
     # me = Bonfire.Me.Users.get_current(me.id)
-    assert %{edges: fetched} = FeedActivities.feed(:notifications, me)
+    assert %{edges: edges} = FeedActivities.feed(:notifications, current_user: me)
 
-    assert List.first(fetched).activity.object_id == post_reply.id
+    assert List.first(edges).activity.object_id == post_reply.id
   end
 
   test "fetching a reply works" do
@@ -63,12 +63,13 @@ defmodule Bonfire.Social.ThreadsPostsTest do
 
     # debug(replies)
     reply = List.first(replies)
+    IO.inspect(reply)
     assert reply.activity.replied.reply_to_id == post.id
     assert reply.activity.replied.thread_id == post.id
     assert reply.activity.replied.path == [post.id]
   end
 
-  test "can do nested replies" do
+  test "can read nested replies of a user talking to themselves as a guest" do
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
     user = Fake.fake_user!()
     assert {:ok, post} = Posts.publish(current_user: user, post_attrs: attrs, boundary: "public")
@@ -97,32 +98,33 @@ defmodule Bonfire.Social.ThreadsPostsTest do
     assert reply3.activity.replied.path == [post.id, post_reply.id]
   end
 
-  test "can do nested replies, with a forked thread" do
-    attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
-    user = Fake.fake_user!()
-    assert {:ok, post} = Posts.publish(current_user: user, post_attrs: attrs, boundary: "public")
+  # Forking is not yet fully worked out.
+  # test "can get nested replies across a fork" do
+  #   attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
+  #   user = Fake.fake_user!()
+  #   assert {:ok, post} = Posts.publish(current_user: user, post_attrs: attrs, boundary: "public")
 
-    attrs_reply = %{post_content: %{summary: "summary", name: "name 2", html_body: "<p>epic html message</p>"}, reply_to_id: post.id}
-    assert {:ok, post_reply} = Posts.publish(current_user: user, post_attrs: attrs_reply, boundary: "public")
+  #   attrs_reply = %{post_content: %{summary: "summary", name: "name 2", html_body: "<p>epic html message</p>"}, reply_to_id: post.id}
+  #   assert {:ok, post_reply} = Posts.publish(current_user: user, post_attrs: attrs_reply, boundary: "public")
 
-    attrs_reply3 = %{post_content: %{summary: "summary", name: "name 3", html_body: "<p>epic html message</p>"}, reply_to_id: post_reply.id, thread_id: post_reply.id}
-    assert {:ok, post_reply3} = Posts.publish(current_user: user, post_attrs: attrs_reply3, boundary: "public")
+  #   attrs_reply3 = %{post_content: %{summary: "summary", name: "name 3", html_body: "<p>epic html message</p>"}, reply_to_id: post_reply.id, thread_id: post_reply.id}
+  #   assert {:ok, post_reply3} = Posts.publish(current_user: user, post_attrs: attrs_reply3, boundary: "public")
 
-    assert %{edges: replies} = Threads.list_replies(post.id, user)
+  #   assert %{edges: replies} = Threads.list_replies(post.id, user)
 
-    # debug(replies)
-    assert length(replies) == 2
-    reply = List.last(replies)
-    reply3 = List.first(replies)
+  #   # debug(replies)
+  #   assert length(replies) == 2
+  #   reply = List.last(replies)
+  #   reply3 = List.first(replies)
 
-    assert reply.activity.replied.reply_to_id == post.id
-    assert reply.activity.replied.thread_id == post.id
-    assert reply.activity.replied.path == [post.id]
+  #   assert reply.activity.replied.reply_to_id == post.id
+  #   assert reply.activity.replied.thread_id == post.id
+  #   assert reply.activity.replied.path == [post.id]
 
-    assert reply3.activity.replied.reply_to_id == post_reply.id
-    assert reply3.activity.replied.thread_id == post_reply.id
-    assert reply3.activity.replied.path == [post.id, post_reply.id]
-  end
+  #   assert reply3.activity.replied.reply_to_id == post_reply.id
+  #   assert reply3.activity.replied.thread_id == post_reply.id
+  #   assert reply3.activity.replied.path == [post.id, post_reply.id]
+  # end
 
   test "can arrange nested replies into a tree" do
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}

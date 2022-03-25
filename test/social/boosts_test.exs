@@ -90,7 +90,7 @@ defmodule Bonfire.Social.BoostsTest do
     assert {:ok, post} = Posts.publish(current_user: me, post_attrs: attrs, boundary: "public")
     assert {:ok, boost} = Boosts.boost(someone, post)
 
-    assert %{edges: [fetched_boost, _]} = FeedActivities.feed(:notifications, me)
+    assert %{edges: [fetched_boost]} = FeedActivities.feed(:notifications, current_user: me)
 
     assert fetched_boost.activity.object_id == post.id
   end

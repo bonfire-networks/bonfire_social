@@ -12,7 +12,8 @@ defmodule Bonfire.Social.Messages do
   # import Bonfire.Boundaries.Queries
   alias Bonfire.Social.Threads
   alias Bonfire.Social.PostContents
-  alias Bonfire.Boundaries.Verbs
+  alias Bonfire.Boundaries
+  alias Bzonfire.Boundaries.Verbs
   alias Bonfire.Social.LivePush
 
   # def queries_module, do: Message
@@ -27,67 +28,74 @@ defmodule Bonfire.Social.Messages do
     end
   end
 
+  # attempts to get the optional parameter `to` first, falls back to the attributes
+  defp get_to(to, attrs), do: with([] <- get_to(to), do: get_to(Utils.e(attrs, :to_circles, [])))
+
+  defp get_to(nil), do: []
+  defp get_to(tos), do: Enum.reject(List.wrap(tos), &is_nil/1)
+
+  @doc """
+  Warning: as per the tests, anyone can message anyone :/
+  """
   def send(%{id: _} = creator, attrs, to \\ nil) do
-
     # debug(attrs)
-    repo().transact_with(fn ->
-      with to when is_list(to) and length(to) > 0 <- to || Utils.e(attrs, :to_circles, nil),
-        {:ok, to_characters} <- Characters.get(to),
-           preset_or_custom_boundary <- [
-              boundary: "message",
-              to_circles: to_characters,
-              to_feeds: Feeds.feed_ids(:inbox, to) #|> debug()
-            ],
-        {:ok, message} <- create(creator, Map.put(attrs, :tags, to_characters), preset_or_custom_boundary) |> Activities.activity_under_object() do
-
-          LivePush.notify(creator, "message", message, preset_or_custom_boundary[:to_feeds])
+    opts = [current_user: creator]
+    to = Boundaries.load_pointers(get_to(to, attrs), opts)
+    if to != [] do
+      debug(to, "to")
+      opts = [
+        boundary: "message",
+        to_circles: to,
+        to_feeds: [inbox: to]
+      ]
+      attrs = Map.put(attrs, :tags, to)
+      repo().transact_with fn ->
+        with {:ok, message} <- create(creator, attrs, opts) do
+          LivePush.notify(creator, "message", message, opts[:to_feeds])
           Bonfire.Social.Integration.ap_push_activity(creator.id, message)
-
           {:ok, message}
-
-      else e ->
-        debug(e)
-        {:error, "Oops, could not send the message."}
+        end
       end
-    end)
+    else
+      could_not_find_recipient(to)
+    end
   end
 
+  defp could_not_find_recipient(e) do
+    debug(e)
+    {:error, "Could not find recipient."}
+  end
 
-  defp create(%{id: creator_id} = creator, attrs, preset_or_custom_boundary \\ []) do
+  defp create(%{id: creator_id} = creator, attrs, opts \\ []) do
     # we attempt to avoid entering the transaction as long as possible.
-    changeset = changeset(:create, attrs, creator, preset_or_custom_boundary)
+    changeset = changeset(:create, attrs, creator, opts)
     repo().transact_with(fn -> repo().insert(changeset) end)
   end
 
-  def changeset(:create, attrs, creator, preset_or_custom_boundary \\ []) do
-
+  def changeset(:create, attrs, creator, opts \\ []) do
     attrs
     # |> debug("attrs")
     |> Message.changeset(%Message{}, ...)
-    |> PostContents.cast(attrs, creator, preset_or_custom_boundary) # process text (must be done before Objects.cast)
-    |> Objects.cast(attrs, creator, preset_or_custom_boundary) # deal with threading, tagging, boundaries, activities, etc.
+    |> PostContents.cast(attrs, creator, opts) # process text (must be done before Objects.cast)
+    |> Objects.cast(attrs, creator, opts) # threading, tagging, boundaries, creator, caretaker
+    |> Activities.put_assoc(:create, creator)
+    |> FeedActivities.put_feed_publishes(Keyword.get(opts, :to_feeds, []))
     # |> dump
   end
 
-  def read(message_id, socket_or_current_user) when is_binary(message_id) do
-
-    current_user = Utils.current_user(socket_or_current_user)
-
-    with {:ok, message} <- Message |> query_filter(id: message_id)
-      |> Activities.read(socket_or_current_user) do
-
-        {:ok, message}
-      end
+  def read(message_id, opts) when is_binary(message_id) do
+    query_filter(Message, id: message_id)
+    |> Activities.read(opts)
   end
 
   @doc "List posts created by the user and which are in their outbox, which are not replies"
   def list(current_user, with_user \\ nil, cursor_after \\ nil, preloads \\ :all)
 
-  def list(%{id: current_user_id} = current_user, with_user, cursor_after, preloads) when ( is_binary(with_user) or is_list(with_user) or is_map(with_user) ) and with_user != current_user_id and with_user != current_user do
+  def list(%{id: current_user_id} = current_user, with_user, cursor_after, preloads)
+  when ( is_binary(with_user) or is_list(with_user) or is_map(with_user) )
+  and with_user != current_user_id and with_user != current_user do
     # all messages between two people
-
     with_user_id = Utils.ulid(with_user)
-
     if with_user_id && with_user_id != current_user_id, do: [
       messages_involving: {{with_user_id, current_user_id}, &filter/3},
       # distinct: {:threads, &Bonfire.Social.Threads.filter/3}
@@ -95,12 +103,10 @@ defmodule Bonfire.Social.Messages do
     # |> debug("list message filters")
     |> list_paginated(current_user, cursor_after, preloads),
     else: list(current_user, nil, cursor_after, preloads)
-
   end
 
   def list(%{id: current_user_id} = current_user, _, cursor_after, preloads) do
     # all current_user's message
-
     [
       messages_involving: {current_user_id, &filter/3},
       # distinct: {:threads, &Bonfire.Social.Threads.filter/3}
@@ -112,7 +118,6 @@ defmodule Bonfire.Social.Messages do
   def list(_current_user, _with_user, _cursor_before, _preloads), do: []
 
   def list_paginated(filters, current_user \\ nil, cursor_after \\ nil, preloads \\ :all, query \\ Message) do
-
     query
       # add assocs needed in timelines/feeds
       # |> join_preload([:activity])
@@ -157,29 +162,24 @@ defmodule Bonfire.Social.Messages do
 
   def ap_publish_activity("create", message) do
     message = repo().preload(message, [activity: [:tags]])
-
     {:ok, actor} = ActivityPub.Adapter.get_actor_by_id(Utils.e(message, :created, :creator_id, nil))
-
     # debug(message.activity.tags)
     recipients =
       Enum.filter(message.activity.tags, fn tag -> tag.table_id == "5EVSER1S0STENS1B1YHVMAN01D" end)
       |> Enum.map(fn tag -> ActivityPub.Actor.get_by_local_id!(tag.id) end)
       |> Enum.map(fn actor -> actor.ap_id end)
-
       object = %{
         "type" => "ChatMessage",
         "actor" => actor.ap_id,
         "content" => (Utils.e(message, :post_content, :html_body, nil)),
         "to" => recipients
       }
-
       attrs = %{
         actor: actor,
         context: ActivityPub.Utils.generate_context_id(),
         object: object,
         to: recipients,
       }
-
       ActivityPub.create(attrs, message.id)
   end
 
