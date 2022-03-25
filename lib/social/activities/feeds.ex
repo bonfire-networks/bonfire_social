@@ -32,9 +32,12 @@ defmodule Bonfire.Social.Feeds do
   end
 
   def target_feeds(%{} = object, creator, preset_or_custom_boundary) do
+    object = object
+            |> repo().maybe_preload(replied: [reply_to: [created: :creator]])
+            |> repo().maybe_preload(:tags)
 
-    # FIXME: maybe include people, tags or other characters that were mentioned/tagged
-    # mentions = Utils.e(object, :post_content, :mentions, []) #|> debug("mentions")
+    # maybe include people, tags or other characters that were mentioned/tagged
+    tags = Utils.e(object, :tags, []) #|> debug("mentions")
 
     # maybe include the creator of what we're replying to
     reply_to_creator = Utils.e(object, :replied, :reply_to, :created, :creator, nil) #|> debug("reply_to")
@@ -42,7 +45,7 @@ defmodule Bonfire.Social.Feeds do
     # include the thread as feed, so it can be followed
     thread_id = Utils.e(object, :replied, :thread_id, nil) || Utils.e(object, :replied, :reply_to, :thread_id, nil) #|> debug("thread_id")
 
-    do_target_feeds(creator, preset_or_custom_boundary, [], reply_to_creator, thread_id)
+    do_target_feeds(creator, preset_or_custom_boundary, tags, reply_to_creator, thread_id)
   end
 
   def target_feeds({_, %{}= object}, creator, preset_or_custom_boundary), do: target_feeds(object, creator, preset_or_custom_boundary)
@@ -98,12 +101,13 @@ defmodule Bonfire.Social.Feeds do
       _ -> [] # default to none except any custom ones
     end
     |> List.flatten()
+    |> Enum.reject(& &1==feed_id(:notifications, creator) ) # avoid self-notifying
     |> Utils.filter_empty([])
     |> Enum.uniq()
     |> debug("target feeds")
   end
 
-   def maybe_custom_feeds(preset_and_custom_boundary), do: Boundaries.maybe_from_opts(preset_and_custom_boundary, :to_feeds)
+  def maybe_custom_feeds(preset_and_custom_boundary), do: Boundaries.maybe_from_opts(preset_and_custom_boundary, :to_feeds)
 
   def named_feed_id(name) when is_atom(name), do: Bonfire.Boundaries.Circles.get_id(name)
   def named_feed_id(name) when is_binary(name) do
