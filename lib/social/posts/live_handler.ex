@@ -105,6 +105,29 @@ defmodule Bonfire.Social.Posts.LiveHandler do
     {:noreply, socket}
   end
 
+  def handle_event("add_data", %{"activity" => activity_id}, socket) do
+    IO.inspect("TEST")
+    send_update(Bonfire.UI.Social.ActivityLive, id: "activity_component_" <> activity_id, activity_id: activity_id)
+    {:noreply, socket}
+  end
+
+  def handle_event("remove_data", _params, socket) do
+    send_update(Bonfire.UI.Social.CreateActivityLive, [activity: nil, id: :create_activity_form])
+    {:noreply, socket}
+  end
+
+
+  def handle_event("open_activity", %{"id" => id, "showing_within" => showing_within} = _params, socket) do
+    debug("Redirect to the activity page")
+    if showing_within == "thread" do
+      {:noreply, socket}
+    else
+      {:noreply,
+        socket
+        |> push_redirect(to: id)
+      }
+    end
+  end
 
   def live_more(thread_id, cursor, socket) do
     # debug(pagination: cursor)

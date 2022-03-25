@@ -7,9 +7,28 @@
       boundary_selected: 'public'  
     }"
    class="">
+    <Form 
+      for={Bonfire.Social.Posts.LiveHandler.post_changeset(current_user(assigns))} 
+      submit="Bonfire.Social.Posts:post" opts={ autocomplete: "off"}
+      class={"form_with_editor"}>
     <div class="flex items-center justify-between p-2 space-x-2 rounded-b bg-neutral bg-opacity-30 sm:px-3">
       <div class="flex items-center flex-1 space-x-3">
-      
+        <a
+          aria-label="Navigate to the previous page"
+          href="javascript:window.history.back()"
+        >
+          <span class="btn btn-circle btn-ghost btn-xs md:btn-sm">
+            <svg
+              class="w-4 h-4 stroke-current"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+            </svg>
+          </span>
+        </a>
         <div 
           data-tip="Upload an image" 
           class="relative z-20 flex items-center tooltip tooltip-bottom" >
@@ -42,10 +61,7 @@
       </button>
     </div>
   
-    <Form 
-      for={Bonfire.Social.Posts.LiveHandler.post_changeset(current_user(assigns))} 
-      submit="Bonfire.Social.Posts:post" opts={ autocomplete: "off"}
-      class={"form_with_editor"}>
+
 
       <HiddenInput 
         name="reply_to[reply_to_id]" 
