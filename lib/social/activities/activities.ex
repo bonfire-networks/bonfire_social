@@ -79,7 +79,7 @@ defmodule Bonfire.Social.Activities do
   def create(%{id: subject_id}=subject, verb, %{id: object_id}=object, id) when is_binary(id) and is_atom(verb) do
     verb_id = verb_id(verb)
     verb = Verbs.get(verb_id)
-    attrs = %{id: id, subject_id: subject_id, verb_id: verb_id, object_id: object_id}
+    attrs = %{id: id, subject_id: subject_id, verb_id: verb_id, object_id: object_id} |> dump
     with {:ok, activity} <- repo().put(changeset(attrs)) do
        {:ok, %{activity | object: object, subject: subject, verb: verb}}
     end
@@ -95,6 +95,7 @@ defmodule Bonfire.Social.Activities do
 
   def changeset(activity \\ %Activity{}, %{} = attrs) do
     Activity.changeset(activity, attrs)
+    |> Ecto.Changeset.cast(attrs, [:id])
   end
 
   @doc "Delete an activity (usage by things like unlike)"
