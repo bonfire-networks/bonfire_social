@@ -18,9 +18,14 @@ defmodule Bonfire.Social.FeedActivities do
   def queries_module, do: FeedPublish
   def context_module, do: FeedPublish
 
-  def cast_data(changeset, activity, creator, boundary) do
-    Feeds.target_feeds(changeset, creator, boundary)
-    |> Enum.map(&(%{feed_id: &1, id: activity.object_id}))
+  def cast(changeset, creator, opts) do
+    Feeds.target_feeds(changeset, creator, opts)
+    |> cast(changeset, ...)
+  end
+
+  def cast(changeset, feed_ids) do
+    Enum.map(feed_ids, &(%{feed_id: &1}))
+    |> Changesets.put_assoc(changeset, :feed_publishes, ...)
   end
 
   @doc """
@@ -253,7 +258,7 @@ defmodule Bonfire.Social.FeedActivities do
     # process all the specifications
     options = get_feed_publishes_options(options)
     # build an index to look up the feed types by id
-    index = get_feed_publishes_index(options, keys) 
+    index = get_feed_publishes_index(options, keys)
     # preload them all together
     all = Enum.flat_map(keys, &Keyword.get(options, &1, []))
     loaded = repo().maybe_preload(all, :character)
@@ -307,7 +312,7 @@ defmodule Bonfire.Social.FeedActivities do
         acc
     end
   end
-     
+
 
   # builds an index of object ids to the names of the feeds we should query for them
   defp get_feed_publishes_index(options, keys) do
@@ -318,7 +323,7 @@ defmodule Bonfire.Social.FeedActivities do
         id = ulid(v)
         Map.update(acc, id, [k], &[k | &1])
     end
-  end    
+  end
 
   @doc """
   Creates a new local activity or takes an existing one and publishes
@@ -448,7 +453,7 @@ defmodule Bonfire.Social.FeedActivities do
   def the_object({%{} = object, _mixin_object}), do: object
   def the_object(object), do: object
 
-  
+
   @doc "Delete an activity (usage by things like unlike)"
   def delete_for_object(%{id: id}), do: delete_for_object(id)
   def delete_for_object(id_or_ids) do

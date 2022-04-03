@@ -96,11 +96,13 @@ defmodule Bonfire.Social.Posts.LiveHandler do
   def handle_info({:new_reply, {thread_id, data}}, socket) do
 
     debug("Bonfire.Social.Posts handle_info received :new_reply")
-    # debug(replies: Utils.e(socket.assigns, :replies, []))
 
+    # debug(replies: Utils.e(socket.assigns, :replies, []))
     # replies = [data] ++ Utils.e(socket.assigns, :replies, [])
 
-    send_update(Bonfire.UI.Social.ThreadLive, id: thread_id, new_reply: data)
+    permitted? = e(data, :object, :id, nil) && Bonfire.Common.Pointers.exists?([id: e(data, :object, :id, nil)], current_user: current_user(socket)) |> debug("check boundary upon receiving a LivePush")
+
+    if permitted?, do: send_update(Bonfire.UI.Social.ThreadLive, id: thread_id, new_reply: data)
 
     {:noreply, socket}
   end

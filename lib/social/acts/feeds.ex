@@ -1,5 +1,6 @@
 defmodule Bonfire.Social.Acts.Feeds do
   @moduledoc """
+  (not currently used)
   Finds a list of appropriate feeds into which to post.
 
   Epic Options:
@@ -46,7 +47,7 @@ defmodule Bonfire.Social.Acts.Feeds do
         end
     end
   end
-  
+
   # TODO: unravel the pleroma mentions parsing so we can deal with mentions properly
   defp get_feed_ids(epic, act, _on, _me, "admins") do
     Feeds.admins_notifications()

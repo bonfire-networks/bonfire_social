@@ -15,7 +15,7 @@ defmodule Bonfire.Social.Web.Feeds.FederationLive do
 
   defp mounted(params, _session, socket) do
 
-    feed_assigns = Bonfire.Social.Web.Feeds.BrowseLive.fediverse_feed(socket)
+    feed_assigns = Bonfire.Social.Feeds.LiveHandler.fediverse_feed_assigns(socket)
 
     {:ok, socket
     |> assign(

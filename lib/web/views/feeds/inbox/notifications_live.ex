@@ -15,6 +15,7 @@ defmodule Bonfire.Social.Web.Feeds.NotificationsLive do
 
   defp mounted(params, _session, socket) do
 
+    feed_id = Bonfire.Social.FeedActivities.my_feed_id(:notifications, socket)
     feed = Bonfire.Social.FeedActivities.feed(:notifications, socket)
 
     {:ok, socket
@@ -23,7 +24,7 @@ defmodule Bonfire.Social.Web.Feeds.NotificationsLive do
       selected_tab: "notifications",
       page_title: "Notifications",
       current_user: current_user(socket),
-      feed_id: :notifications,
+      feed_id: feed_id,
       feed: e(feed, :edges, []),
       page_info: e(feed, :page_info, [])
       )}

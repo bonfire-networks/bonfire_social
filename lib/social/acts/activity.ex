@@ -1,7 +1,7 @@
 defmodule Bonfire.Social.Acts.Activity do
 
   alias Bonfire.{Epics.Epic, Epics}
-  alias Bonfire.Social.Activities
+  alias Bonfire.Social.{Activities, Feeds}
   alias Ecto.Changeset
   import Epics
   import Where, only: [warn: 2]
@@ -31,11 +31,17 @@ defmodule Bonfire.Social.Acts.Activity do
       changeset.action == :insert ->
         boundary = epic.assigns[:options][:boundary]
         attrs_key = Keyword.get(act.options, :attrs, :post_attrs)
+        feeds_key = Keyword.get(act.options, :feeds, :feed_ids)
+
         attrs = Keyword.get(epic.assigns[:options], attrs_key, %{})
+        feed_ids = Feeds.target_feeds(changeset, current_user, boundary)
+
         debug(epic, act, "activity", "Casting")
         changeset
-        |> Activities.cast(verb, current_user, boundary)
+        |> Activities.cast(verb, current_user, feed_ids: feed_ids, boundary: boundary)
         |> Epic.assign(epic, on, ...)
+        |> Epic.assign(..., feeds_key, feed_ids)
+
       changeset.action == :delete ->
         # TODO: deletion
         epic

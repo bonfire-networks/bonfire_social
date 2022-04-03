@@ -3,10 +3,17 @@ defmodule Bonfire.Social.LivePush do
   import Where
 
   def push_activity(feed_ids, %{id: _, activity: %{id: _}=activity} = object),
-    do: push_activity(feed_ids, activity |> Map.put(:object, object))
+    do: push_activity(feed_ids, activity |> Map.put(:object, object)) # push object under activity
 
   def push_activity(feed_ids, activity) do
-    pubsub_broadcast(feed_ids, {{Bonfire.Social.Feeds, :new_activity}, activity})
+    debug(feed_ids, "push :new_activity")
+    pubsub_broadcast(feed_ids, {
+      {Bonfire.Social.Feeds, :new_activity},
+      [
+        feed_ids: feed_ids,
+        activity: activity
+      ]
+      })
     # debug(activity)
     maybe_push_thread(activity)
     activity

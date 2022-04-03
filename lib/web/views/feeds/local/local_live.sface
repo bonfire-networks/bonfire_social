@@ -2,6 +2,6 @@
   page_title={@page_title}
   current_user={@current_user}
   feed={@feed}
-  feed_id="feed:instance"
+  feed_id={@feed_id}
   page_info={@page_info}
 />

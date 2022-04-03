@@ -16,12 +16,13 @@ defmodule Bonfire.Social.Web.Feeds.LocalLive do
 
   defp mounted(params, _session, socket) do
 
-    feed_assigns = Bonfire.Social.Web.Feeds.BrowseLive.instance_feed(socket)
+    feed_assigns = Bonfire.Social.Feeds.LiveHandler.instance_feed_assigns(socket)
 
     {:ok, socket
     |> assign(
-      feed_assigns ++ [page: "local",
-      page_title: "Local",
+      feed_assigns ++ [
+        page: "local",
+        page_title: "Local",
       ])}
 
   end

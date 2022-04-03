@@ -22,10 +22,14 @@ defmodule Bonfire.Social.Activities do
   def queries_module, do: Activity
   def context_module, do: Activity
 
-  def as_permitted_for(q, opts \\ [], verbs \\ [:see, :read]) do
-    to_options(opts)
-    |> Keyword.put_new(:verbs, verbs)
-    |> boundarise(q, activity.object_id, ...)
+  def cast(changeset, verb, creator, opts) do
+    verb_id = verb_id(verb)
+    creator = repo().maybe_preload(creator, :character)
+    #|> debug("creator")
+    # debug(changeset)
+    changeset
+    |> put_assoc(verb, creator)
+    |> FeedActivities.cast(opts[:feed_ids])
   end
 
   def put_assoc(changeset, verb, subject), do: put_assoc(changeset, verb, subject, changeset)
@@ -52,23 +56,10 @@ defmodule Bonfire.Social.Activities do
 
   defp put_verb(changeset, verb), do: Changesets.update_data(changeset, &Map.put(&1, :verb, verb))
 
-  defp verb_id(verb) when is_binary(verb), do: verb
-  defp verb_id(verb) when is_atom(verb), do: Verbs.get_id(verb) || Verbs.get_id!(:create)
-
-  def cast(changeset, verb, creator, preset_or_custom_boundary) do
-    verb_id = verb_id(verb)
-    creator = repo().maybe_preload(creator, :character)
-    #|> debug("creator")
-    # debug(changeset)
-    changeset
-    |> put_assoc(verb, creator)
-    |> put_in_feeds(creator, preset_or_custom_boundary)
-  end
-
-  defp put_in_feeds(changeset, creator, boundary) do
-    Feeds.target_feeds(changeset, creator, boundary)
-    |> Enum.map(&(%{feed_id: &1}))
-    |> Changesets.put_assoc(changeset, :feed_publishes, ...)
+  def as_permitted_for(q, opts \\ [], verbs \\ [:see, :read]) do
+    to_options(opts)
+    |> Keyword.put_new(:verbs, verbs)
+    |> boundarise(q, activity.object_id, ...)
   end
 
   @doc """
@@ -301,5 +292,8 @@ defmodule Bonfire.Social.Activities do
   defp verb_congugate(verb) do
     :"Elixir.Verbs".conjugate(verb, tense: "past", person: "third", plurality: "plural")
   end
+
+  defp verb_id(verb) when is_binary(verb), do: verb
+  defp verb_id(verb) when is_atom(verb), do: Verbs.get_id(verb) || Verbs.get_id!(:create)
 
 end
