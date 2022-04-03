@@ -15,8 +15,8 @@ defmodule Bonfire.Social.Web.Feeds.NotificationsLive do
 
   defp mounted(params, _session, socket) do
 
-    feed_id = Bonfire.Social.FeedActivities.my_feed_id(:notifications, socket)
-    feed = Bonfire.Social.FeedActivities.feed(:notifications, socket)
+    feed_id = Bonfire.Social.Feeds.my_feed_id(:notifications, socket)
+    feed = Bonfire.Social.FeedActivities.feed(:notifications, socket) # TODO: avoid two queries for feed_id?
 
     {:ok, socket
     |> assign(

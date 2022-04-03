@@ -11,10 +11,15 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
     test "not logged in, display instance feed instead" do
       conn = conn()
       conn = get(conn, "/home")
-      # assert redirected_to(conn) =~ "/login"
-      doc = floki_response(conn)
-      # main = Floki.find(doc, "main") |> IO.inspect
-      assert [_] = Floki.find(doc, "[id='feed:my:']")
+      feed_id = Bonfire.Social.Feeds.my_feed_id(:inbox, nil)
+      assert redirected_to(conn) =~ "/login"
+
+      # doc = floki_response(conn)
+      # # main = Floki.find(doc, "main") |> IO.inspect
+      # assert [] = Floki.find(doc, "[id='#{feed_id}']")
+
+      # feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
+      # assert [_] = Floki.find(doc, "[id='#{feed_id}']")
     end
 
 
@@ -23,8 +28,10 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
       user = fake_user!(account)
       conn = conn(user: user, account: account)
       next = "/home"
+      feed_id = Bonfire.Social.Feeds.my_feed_id(:inbox, user)
+
       {view, doc} = floki_live(conn, next) #|> IO.inspect
-      assert [_] = Floki.find(doc, "[id='feed:my:#{user.id}']")
+      assert [_] = Floki.find(doc, "[id='#{feed_id}']")
     end
 
     test "my own posts in my feed" do
@@ -37,10 +44,12 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
 
       conn = conn(user: user, account: account)
       next = "/home"
+      feed_id = Bonfire.Social.Feeds.my_feed_id(:inbox, user)
+
       {view, doc} = floki_live(conn, next) #|> IO.inspect
       # debug(user: user)
       main = Floki.find(doc, "main") #|> debug()
-      assert [feed] = Floki.find(doc, "[id='feed:my:#{user.id}']")
+      assert [feed] = Floki.find(doc, "[id='#{feed_id}']")
       assert Floki.text(feed) =~ "test post name"
     end
 
@@ -59,10 +68,12 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
 
       conn = conn(user: user2, account: account2)
       next = "/home"
+      feed_id = Bonfire.Social.Feeds.my_feed_id(:inbox, user2)
+
       {view, doc} = floki_live(conn, next) #|> IO.inspect
-      debug(user: user2)
+      # debug(user: user2)
       main = Floki.find(doc, "main") #|> debug()
-      assert [feed] = Floki.find(doc, "[id='feed:my:#{user2.id}']")
+      assert [feed] = Floki.find(doc, "[id='#{feed_id}']")
       assert Floki.text(feed) =~ "test post name"
     end
 
@@ -72,8 +83,7 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
 
     test "with account only" do
       account = fake_account!()
-      user = fake_user!(account)
-      conn = conn(account: account)
+      conn = conn(account: account) #|> dump
       next = "/home"
       {view, doc} = floki_live(conn, next)
       main = Floki.find(doc, "main") #|> IO.inspect
@@ -91,8 +101,10 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
       user = fake_user!(account)
       conn = conn(user: user, account: account)
       next = "/home"
+      feed_id = Bonfire.Social.Feeds.my_feed_id(:inbox, user)
+
       {view, doc} = floki_live(conn, next) #|> IO.inspect
-      assert [feed] = Floki.find(doc, "[id='feed:my:#{user.id}']")
+      assert [feed] = Floki.find(doc, "[id='#{feed_id}']")
       refute Floki.text(feed) =~ "test post name"
 
     end
@@ -112,9 +124,11 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
 
       conn = conn(user: user2, account: account2)
       next = "/home"
+      feed_id = Bonfire.Social.Feeds.my_feed_id(:inbox, user2)
+
       {view, doc} = floki_live(conn, next) #|> IO.inspect
       # main = Floki.find(doc, "main") |> IO.inspect
-      assert [feed] = Floki.find(doc, "[id='feed:my:#{user2.id}']")
+      assert [feed] = Floki.find(doc, "[id='#{feed_id}']")
       refute Floki.text(feed) =~ "test post name"
     end
   end
