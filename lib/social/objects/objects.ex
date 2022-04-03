@@ -71,7 +71,7 @@ defmodule Bonfire.Social.Objects do
     # debug(creator, "creator")
     changeset
     |> cast_mini(attrs, creator, opts)
-    |> cast_activity(attrs, creator, opts) 
+    |> cast_activity(attrs, creator, opts)
     # |> debug()
   end
 
@@ -184,9 +184,16 @@ defmodule Bonfire.Social.Objects do
     end)
   end
 
-  def list_query(type \\ nil, opts) do
-    query_base(type)
+  def list_query(type_or_query \\ nil, opts)
+
+  def list_query(%Ecto.Query{}= query, opts) do
+    query
     |> FeedActivities.query_extras(opts)
+  end
+
+  def list_query(type, opts) when is_atom(type) do
+    query_base(type)
+    |> list_query(opts)
   end
 
   @doc """

@@ -79,15 +79,17 @@ defmodule Bonfire.Social.Posts do
   @doc "List posts created by the user and which are in their outbox, which are not replies"
   def list_by(by_user, opts \\ []) do
     # query FeedPublish
-    [posts_by: {by_user, &filter/3}]
+    # [posts_by: {by_user, &filter/3}]
+    filter(:posts_by, by_user, Post)
     |> list_paginated(opts)
   end
 
   @doc "List posts with pagination"
   def list_paginated(filters, opts \\ [])
-  def list_paginated(filters, opts) when is_list(filters) do
+  def list_paginated(filters, opts) when is_list(filters) or is_struct(filters) do
     paginate = e(opts, :paginate, opts)
     filters
+    # |> Keyword.drop([:paginate])
     # |> debug("filters")
     |> query_paginated(opts)
     |> Bonfire.Repo.many_paginated(paginate)
@@ -96,11 +98,10 @@ defmodule Bonfire.Social.Posts do
 
   @doc "Query posts with pagination"
   def query_paginated(filters, opts \\ [])
-  def query_paginated(filters, opts) when is_list(filters) do
+  def query_paginated(filters, opts) when is_list(filters) or is_struct(filters) do
     filters
     # |> debug("filters")
-    |> Keyword.drop([:paginate])
-    |> Objects.list_query()
+    |> Objects.list_query(opts)
     # |> FeedActivities.query_paginated(opts, Post)
     # |> debug("after FeedActivities.query_paginated")
   end
