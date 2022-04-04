@@ -24,6 +24,7 @@ defmodule Bonfire.Social.Acts.ActivityPub do
     cond do
       epic.errors != [] ->
         maybe_debug(epic, act, length(epic.errors), "Skipping due to epic errors")
+        epic
       is_nil(on) or not is_atom(on) ->
         maybe_debug(epic, act, on, "Skipping due to `on` option")
       not (is_struct(current_user) or is_binary(current_user)) ->

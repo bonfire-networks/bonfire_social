@@ -70,7 +70,7 @@ defmodule Bonfire.Social.Web.PostLive do
       )
       |> assign_global(
         thread_id: e(post, :id, nil),
-        smart_input_prompt: smart_input_prompt,
+        # smart_input_prompt: smart_input_prompt,
         reply_to_id: reply_to_id,
         smart_input_text: mentions,
       )

@@ -60,7 +60,7 @@ defmodule Bonfire.Social.Web.DiscussionLive do
         url: url,
         object: Map.merge(object, preloaded_object || %{}),
         thread_id: e(object, :id, nil),
-        smart_input_prompt: "Reply to #{reply_to_id}",
+        # smart_input_prompt: "Reply to #{reply_to_id}",
         smart_input_text: mentions || "",
       )}
 
