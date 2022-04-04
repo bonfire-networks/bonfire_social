@@ -15,7 +15,7 @@ defmodule Bonfire.Social.Web.HomeLive do
   end
 
   defp mounted(params, _session, socket) do
-    debug("mount")
+    # debug("mount")
     # feed_assigns = LiveHandler.default_feed_assigns(socket)
 
     {:ok, socket
@@ -39,9 +39,9 @@ defmodule Bonfire.Social.Web.HomeLive do
   end
 
   def do_handle_params(_params, _url, socket) do
-    debug("param")
+    # debug("param")
 
-    {:noreply, assign(socket, LiveHandler.default_feed_assigns(socket) |> debug)}
+    {:noreply, assign(socket, LiveHandler.default_feed_assigns(socket))}
   end
 
 

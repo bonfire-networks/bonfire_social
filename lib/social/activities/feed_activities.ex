@@ -84,8 +84,8 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed(other, _) do
-    error("FeedActivities.feed: not a recognised feed query format - got #{inspect other}")
-    []
+    error(other, "FeedActivities.feed: not a recognised feed query param")
+    nil
   end
 
   def user_feed(user, feed_name, opts \\ []) do

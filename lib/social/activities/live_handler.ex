@@ -2,15 +2,15 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
   use Bonfire.Web, :live_handler
   import Where
 
-  def handle_params(%{"after" => _cursor_after} = opts, _, %{assigns: %{feed_id: feed_id}} = socket) do
+  def handle_params(%{"after" => _cursor_after} = opts, _, %{assigns: %{feed_id: feed_id}} = socket) when not is_nil(feed_id) do
     debug("Feeds - paginate with params - if a feed_id has been assigned in the view, load that")
-    Bonfire.Social.FeedActivities.feed(feed_id, [socket: socket, paginate: opts])
+    Bonfire.Social.FeedActivities.feed(feed_id, [current_user: current_user(socket), paginate: opts])
     |> assign_feed(socket)
   end
 
   def handle_params(%{"after" => _cursor_after} = opts, _, socket) do
     debug("Feeds - paginate with params - if there's no feed_id but we have a current_user, load My Feed")
-    Bonfire.Social.FeedActivities.my_feed([socket: socket, paginate: opts])
+    Bonfire.Social.FeedActivities.my_feed([current_user: current_user(socket), paginate: opts])
     |> assign_feed(socket)
   end
 
@@ -18,16 +18,16 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
     {:noreply, socket}
   end
 
-  def handle_event("load_more", opts, %{assigns: %{feed_id: feed_id}} = socket) do
+  def handle_event("load_more", opts, %{assigns: %{feed_id: feed_id}} = socket) when not is_nil(feed_id) do
     debug("Feeds - paginate with live event - if a feed_id has been assigned in the view, load that")
-    Bonfire.Social.FeedActivities.feed(feed_id, [socket: socket, paginate: opts])
+    Bonfire.Social.FeedActivities.feed(feed_id, [current_user: current_user(socket), paginate: opts])
     |> live_more(socket)
   end
 
   def handle_event("load_more", opts, socket) do
 
     debug("Feeds - paginate with live event - if there's no feed_id but we have a current_user, load My Feed")
-    Bonfire.Social.FeedActivities.my_feed([socket: socket, paginate: opts])
+    Bonfire.Social.FeedActivities.my_feed([current_user: current_user(socket), paginate: opts])
     |> live_more(socket)
   end
 
