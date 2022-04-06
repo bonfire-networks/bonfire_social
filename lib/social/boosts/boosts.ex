@@ -70,7 +70,7 @@ defmodule Bonfire.Social.Boosts do
 
     # query FeedPublish
     [subject: by_user]
-    |> list_paginated(opts)
+    |> list_paginated(opts ++ [preload: :object])
   end
 
   @doc "List boost of an object"
@@ -78,7 +78,7 @@ defmodule Bonfire.Social.Boosts do
 
     # query FeedPublish
     [object: id]
-    |> list_paginated(opts)
+    |> list_paginated(opts ++ [preload: :subject])
   end
 
   def list_paginated(filters, opts \\ []) do

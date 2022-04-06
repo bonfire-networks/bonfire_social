@@ -64,35 +64,6 @@ defmodule Bonfire.Social.Likes do
     # Note: the like count is automatically decremented by DB triggers
   end
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
   def unlike(%User{} = liker, liked) when is_binary(liked) do
     with {:ok, liked} <- Bonfire.Common.Pointers.get(liked, current_user: liker) do
       unlike(liker, liked)
@@ -114,29 +85,27 @@ defmodule Bonfire.Social.Likes do
     query_base(filters, opts)
   end
 
-
-  defp list(filters, opts, cursor_after \\ nil, preloads \\ nil) do
+  defp list_paginated(filters, opts \\ []) do
     query(filters, opts)
     # |> Activities.query_object_preload_activity(:like, :liked_id, opts, preloads)
     # |> Activities.as_permitted_for(opts, [:see])
-    |> Bonfire.Repo.many_paginated(before: cursor_after)
+    # |> debug()
+    |> Bonfire.Repo.many_paginated(opts)
   end
 
-  @doc "List current user's likes"
-  def list_my(current_user, cursor_after \\ nil, preloads \\ nil) when is_binary(current_user) or is_map(current_user) do
-    list_by(current_user, current_user, cursor_after, preloads)
+  @doc "List the current user's likes"
+  def list_my(opts) when is_list(opts) do
+    list_by(current_user(opts), opts)
   end
 
-  @doc "List likes by the user"
-  def list_by(by_user, current_user \\ nil, cursor_after \\ nil, preloads \\ nil) when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
-
-    list([subject: by_user], current_user, cursor_after, preloads)
+  @doc "List likes by a user"
+  def list_by(by_user, opts \\ []) when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
+    list_paginated([subject: by_user], opts ++ [preload: :object])
   end
 
-  @doc "List likes of something"
-  def list_of(id, current_user \\ nil, cursor_after \\ nil, preloads \\ nil) when is_binary(id) or is_list(id) or is_map(id) do
-
-    list([object: id], current_user, cursor_after, preloads)
+  @doc "List likers of something(s)"
+  def list_of(object, opts \\ []) when is_binary(object) or is_list(object) or is_map(object) do
+    list_paginated([object: object], opts ++ [preload: :subject])
   end
 
   defp create(liker, liked, opts) do
@@ -145,13 +114,11 @@ defmodule Bonfire.Social.Likes do
     # |> repo().maybe_preload(edge: [:object])
   end
 
-
   # defp by_type_q(q, type) do
   #   q
   #   |> join(:inner, [l], ot in ^type, as: :liked, on: ot.id == l.liked_id)
   #   |> join_preload([:liked])
   # end
-
 
   def ap_publish_activity("create", like) do
     dump(like)

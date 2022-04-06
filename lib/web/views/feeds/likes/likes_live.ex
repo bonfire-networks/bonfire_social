@@ -1,4 +1,4 @@
-defmodule Bonfire.Social.Web.Feeds.FavouritedLive do
+defmodule Bonfire.Social.Web.Feeds.LikesLive do
   use Bonfire.Web, :surface_view
   alias Bonfire.Web.LivePlugs
 
@@ -16,15 +16,15 @@ defmodule Bonfire.Social.Web.Feeds.FavouritedLive do
   defp mounted(params, _session, socket) do
     current_user = current_user(socket)
 
-    %{edges: feed, page_info: page_info} = Bonfire.Social.Likes.list_my(current_user)
-    #|> debug()
+    %{edges: feed, page_info: page_info} = Bonfire.Social.Likes.list_my(current_user: current_user)
+    |> debug()
 
     {:ok, socket
     |> assign(
       feed: feed,
       page_info: page_info,
-      page: "favourited",
-      page_title: "Favourited",
+      page: "likes",
+      page_title: "Likes / Favourites",
       )
       }
 
