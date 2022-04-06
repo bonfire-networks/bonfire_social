@@ -83,7 +83,7 @@ defmodule Bonfire.Social.Edges do
     |> proload(:edge)
     |> boundarise(id, opts)
     |> filter(filters, opts)
-    |> maybe_proload(opts[:preload])
+    |> maybe_proload(e(opts, :preload, nil))
   end
 
   defp maybe_proload(query, _skip_preload? = false), do: query
