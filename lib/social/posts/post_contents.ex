@@ -7,17 +7,22 @@ defmodule Bonfire.Social.PostContents do
   alias Ecto.Changeset
 
   def cast(changeset, attrs, creator, _preset_or_custom_boundary) do
+    Changeset.cast(changeset, %{post_content: maybe_prepare_contents(attrs, creator)}, [])
+    |> Changeset.cast_assoc(:post_content, required: true, with: &changeset/2)
+    |> debug("Social.PostContents: changeset")
+  end
+
+  def maybe_prepare_contents(%{local: false} = attrs, _creator), do: e(attrs, :post_content, nil) || attrs # do not process remote contents
+
+  def maybe_prepare_contents(attrs, creator) do
     # TODO: process tags within the prepare_text function instead (so tags can be used in all three fields at once)
     with {:ok, tags} <- Bonfire.Social.Tags.maybe_process(creator, attrs) do
       tags
       |> Map.merge(prepare_content(attrs, Utils.e(tags, :text, nil)))
       # |> debug("Social.PostContents.cast: attrs")
-      |> Changeset.cast(changeset, %{post_content: ...}, [])
     else
-      _ -> Changeset.cast(changeset, %{post_content: prepare_content(attrs)}, [])
+      _ -> prepare_content(attrs)
     end
-    |> Changeset.cast_assoc(:post_content, required: true, with: &changeset/2)
-    # |> debug("Social.PostContents: changeset")
   end
 
   def prepare_content(attrs, text \\ nil)

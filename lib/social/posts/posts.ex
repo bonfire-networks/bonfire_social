@@ -65,7 +65,7 @@ defmodule Bonfire.Social.Posts do
 
   def changeset(:create, attrs, creator, preset_or_custom_boundary) do
     attrs
-    # |> debug("attrs")
+    |> debug("post_attrs")
     |> Post.changeset(%Post{}, ...)
   end
 
@@ -245,6 +245,7 @@ defmodule Bonfire.Social.Posts do
         date: post_data["published"] # FIXME
       }
     }
+    |> debug()
 
     attrs =
       if post_data["inReplyTo"] do
