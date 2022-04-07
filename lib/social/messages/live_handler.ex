@@ -13,12 +13,12 @@ defmodule Bonfire.Social.Messages.LiveHandler do
         socket
         |> put_flash(:info, "Sent!")
       }
-    else e ->
-      debug(message_error: e)
-      {:noreply,
-        socket
-        |> put_flash(:error, "Could not send...")
-      }
+    # else e ->
+    #   debug(message_error: e)
+    #   {:noreply,
+    #     socket
+    #     |> put_flash(:error, "Could not send...")
+    #   }
     end
   end
 end
