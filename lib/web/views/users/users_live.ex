@@ -6,6 +6,7 @@ defmodule Bonfire.Social.Web.UsersLive do
     LivePlugs.live_plug(params, session, socket, [
       LivePlugs.LoadCurrentAccount,
       LivePlugs.LoadCurrentUser,
+      LivePlugs.AccountRequired,
       LivePlugs.LoadCurrentUserCircles,
       # LivePlugs.LoadCurrentAccountUsers,
       LivePlugs.StaticChanged,

@@ -6,6 +6,7 @@ defmodule Bonfire.Social.Web.Feeds.NotificationsLive do
     LivePlugs.live_plug params, session, socket, [
       LivePlugs.LoadCurrentAccount,
       LivePlugs.LoadCurrentUser,
+      LivePlugs.AccountRequired,
       # LivePlugs.LoadCurrentAccountUsers,
       LivePlugs.StaticChanged,
       LivePlugs.Csrf, LivePlugs.Locale,

@@ -6,6 +6,7 @@ defmodule Bonfire.Social.Web.WriteLive do
     LivePlugs.live_plug(params, session, socket, [
       LivePlugs.LoadCurrentAccount,
       LivePlugs.LoadCurrentUser,
+      LivePlugs.UserRequired,
       LivePlugs.LoadCurrentUserCircles,
       # LivePlugs.LoadCurrentAccountUsers,
       LivePlugs.StaticChanged,
