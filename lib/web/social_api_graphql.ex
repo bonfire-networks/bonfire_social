@@ -71,13 +71,6 @@ defmodule Bonfire.Social.API.GraphQL do
     field(:html_body, :string)
   end
 
-  object :follow do
-    field(:follower_profile, :profile)
-    field(:follower_character, :character)
-    field(:followed_profile, :profile)
-    field(:followed_character, :character)
-  end
-
   object :replied do
     field(:activity, :activity)
     field(:post, :post)

@@ -208,7 +208,7 @@ defmodule Bonfire.Social.Activities do
   def query(filters, opts_or_current_user) do
     # debug(filters, "filters")
     # debug(opts_or_current_user, "opts or user")
-    FeedActivities.query(filters, opts_or_current_user, :all, from(a in Activity, as: :main_object) )
+    FeedActivities.query(filters, opts_or_current_user, from(a in Activity, as: :main_object) )
   end
 
   # this is a hack to mimic the old structure of the data provided to

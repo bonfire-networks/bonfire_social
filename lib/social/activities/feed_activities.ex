@@ -173,7 +173,7 @@ defmodule Bonfire.Social.FeedActivities do
     query
     # |> query_extras(current_user)
     # |> query_filter(filters, nil, nil)
-    |> debug("FeedActivities invalid feed query with filters #{inspect filters}")
+    |> warn("invalid feed query with filters #{inspect filters}")
   end
 
   @doc false # add assocs needed in timelines/feeds
