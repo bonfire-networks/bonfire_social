@@ -51,7 +51,7 @@ defmodule Bonfire.Social.Boosts do
 
   def unboost(%{}=booster, %{}=boosted) do
     Edges.delete_by_both(booster, Boost, boosted) # delete the Boost
-    Activities.delete_by_subject_verb_object(booster, :boost, boosted) # delete the boost activity & feed entries
+    {:ok, Activities.delete_by_subject_verb_object(booster, :boost, boosted)} # delete the boost activity & feed entries
   end
   def unboost(%{} = booster, boosted) when is_binary(boosted) do
     with {:ok, boosted} <- Bonfire.Common.Pointers.get(boosted, current_user: booster) do
