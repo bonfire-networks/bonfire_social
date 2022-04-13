@@ -193,25 +193,25 @@ defmodule Bonfire.Social.FeedActivities do
   @doc """
   Creates a new local activity and publishes to appropriate feeds
   """
-  def publish(subject, verb_or_activity, object, boundary \\ nil)
+  def publish(subject, verb_or_activity, object, opts \\ [])
   when is_atom(verb_or_activity) or is_struct(verb_or_activity) do
     # debug("FeedActivities: just making visible for and putting in these circles/feeds: #{inspect circles}")
     # Bonfire.Boundaries.maybe_make_visible_for(subject, object, circles) # |> debug("grant")
-    Feeds.target_feeds(the_object(object), subject, boundary)
-    |> maybe_feed_publish(subject, verb_or_activity, object, ...)
+    Feeds.target_feeds(the_object(object), subject, opts)
+    |> maybe_feed_publish(subject, verb_or_activity, object, ..., opts)
   end
 
-  def publish(subject, verb, object, circles) do
+  def publish(subject, verb, object, opts) do
     debug(verb, "Undefined verb, changing to :create")
-    publish(subject, :create, object, circles)
+    publish(subject, :create, object, opts)
   end
 
   @doc """
   Records a remote activity and puts in appropriate feeds
   """
-  def save_fediverse_incoming_activity(subject, verb, object) when is_atom(verb) do
-    # TODO: us the appropriate preset, eg "public" for public activities
-    publish(subject, verb, object, boundary: "local", to_feeds: [Feeds.named_feed_id(:activity_pub)])
+  def save_fediverse_incoming_activity(subject, verb, object) when is_atom(verb) and not is_nil(subject) do
+    # TODO: use the appropriate preset (eg "public" for public activities?)
+    publish(subject, verb, object, boundary: "federated")
   end
 
   @doc """
@@ -363,24 +363,24 @@ defmodule Bonfire.Social.FeedActivities do
   @doc """
   Creates a new local activity or takes an existing one and publishes to specified feeds
   """
-  defp maybe_feed_publish(subject, verb_or_activity, object \\ nil, feeds)
-  defp maybe_feed_publish(subject, verb, object, feeds) when is_atom(verb), do: create_and_put_in_feeds(subject, verb, object, feeds)
-  defp maybe_feed_publish(subject, %Bonfire.Data.Social.Activity{} = activity, object, feeds) do
-    put_in_feeds_and_maybe_federate(feeds, subject, activity.verb.verb, object, activity)
+  defp maybe_feed_publish(subject, verb_or_activity, object, feeds, opts \\ [])
+  defp maybe_feed_publish(subject, verb, object, feeds, opts) when is_atom(verb), do: create_and_put_in_feeds(subject, verb, object, feeds, opts)
+  defp maybe_feed_publish(subject, %Bonfire.Data.Social.Activity{} = activity, object, feeds, opts) do
+    put_in_feeds_and_maybe_federate(feeds, subject, activity.verb.verb, object, activity, opts)
     {:ok, activity}
     # TODO: notify remote users via AP
   end
-  defp maybe_feed_publish(subject, %{activity: %{id: _} = activity}, _, feeds), do: maybe_feed_publish(subject, activity, feeds)
-  defp maybe_feed_publish(subject, %{activity: _activity_not_loaded} = parent, _, feeds), do: maybe_feed_publish(subject, parent |> repo().maybe_preload(:activity) |> e(:activity, nil), feeds)
-  defp maybe_feed_publish(_, activity, _, _) do
+  defp maybe_feed_publish(subject, %{activity: %{id: _} = activity}, _, feeds, opts), do: maybe_feed_publish(subject, activity, nil, feeds, opts)
+  defp maybe_feed_publish(subject, %{activity: _activity_not_loaded} = parent, _, feeds, opts), do: maybe_feed_publish(subject, parent |> repo().maybe_preload(:activity) |> e(:activity, nil), nil, feeds, opts)
+  defp maybe_feed_publish(_, activity, _, _, _) do
     error("maybe_feed_publish: did not put in feeds or federate, expected an Activity or a Verb+Object, got #{inspect activity}")
     {:ok, activity}
   end
 
 
-  defp create_and_put_in_feeds(subject, verb, object, feed_id) when is_map(object) and is_binary(feed_id) or is_list(feed_id) do
+  defp create_and_put_in_feeds(subject, verb, object, feed_id, opts) when is_map(object) and is_binary(feed_id) or is_list(feed_id) do
     with {:ok, activity} <- Activities.create(subject, verb, object) do
-      with {:ok, published} <- put_in_feeds_and_maybe_federate(feed_id, subject, verb, object, activity) do # publish in specified feed
+      with {:ok, published} <- put_in_feeds_and_maybe_federate(feed_id, subject, verb, object, activity, opts) do # publish in specified feed
         # debug(published, "create_and_put_in_feeds")
         {:ok, activity}
       else # meh
@@ -391,15 +391,15 @@ defmodule Bonfire.Social.FeedActivities do
       end
     end
   end
-  defp create_and_put_in_feeds(subject, verb, object, %{feed_id: feed_id}), do: create_and_put_in_feeds(subject, verb, object, feed_id)
-  defp create_and_put_in_feeds(subject, verb, object, _) when is_map(object) do
+  defp create_and_put_in_feeds(subject, verb, object, %{feed_id: feed_id}, opts), do: create_and_put_in_feeds(subject, verb, object, feed_id, opts)
+  defp create_and_put_in_feeds(subject, verb, object, _, opts) when is_map(object) do
     # for activities with no target feed, still create the activity and push it to AP
     ret = Activities.create(subject, verb, object)
     try do
       # FIXME only run if ActivityPub is a target circle/feed?
       # TODO: only run for non-local activity
         {:ok, activity} = ret
-        maybe_federate_activity(verb, object, activity)
+        maybe_federate_activity(verb, object, activity, opts)
 
         ret
       rescue
@@ -407,7 +407,7 @@ defmodule Bonfire.Social.FeedActivities do
       end
   end
 
-  defp put_in_feeds_and_maybe_federate(feeds, _subject, verb, object, activity) do
+  defp put_in_feeds_and_maybe_federate(feeds, _subject, verb, object, activity, opts) do
     # This makes sure it gets put in feed even if the
     # federation hook fails
     feeds = feeds |> Utils.filter_empty([])
@@ -416,7 +416,7 @@ defmodule Bonfire.Social.FeedActivities do
     try do
     # FIXME only run if ActivityPub is a target circle/feed?
     # TODO: only run for non-local activity
-        maybe_federate_activity(verb, object, activity)
+        maybe_federate_activity(verb, object, activity, opts)
       ret
     rescue
       _ -> ret
@@ -469,7 +469,7 @@ defmodule Bonfire.Social.FeedActivities do
     end
   end
 
-  defp maybe_federate_activity(verb, object, activity) do
-    Bonfire.Social.Integration.activity_ap_publish(activity.subject_id, verb, object, activity)
+  defp maybe_federate_activity(verb, object, activity, opts) do
+    if e(opts, :boundary, nil) !="federated", do: Bonfire.Social.Integration.activity_ap_publish(activity.subject_id, verb, object, activity)
   end
 end

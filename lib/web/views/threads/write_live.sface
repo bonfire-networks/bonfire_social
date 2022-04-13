@@ -45,7 +45,7 @@
             :if={Bonfire.Common.Config.get([:ui, :smart_input, :cw], []) == true}
             type="button"
             @click="title_open = !title_open"
-            :class="{'text-primary-content bg-primary' : title_open}"
+            :class="{'text-base-content bg-primary' : title_open}"
             class="btn btn-ghost btn-square btn-sm">
             <span class="text-xs font-medium text-base-content text-opacity-70">CW</span>
           </button>

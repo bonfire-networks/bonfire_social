@@ -16,9 +16,7 @@ defmodule Bonfire.Social.APActivities do
         create(activity, object, actor)
 
       else _ ->
-        error = "AP - cannot create a fallback activity with no actor"
-        error(error)
-        {:error, error}
+        error("AP - cannot create a fallback activity with no valid actor")
     end
   end
 
@@ -55,6 +53,7 @@ defmodule Bonfire.Social.APActivities do
       %APActivity{}
       |> APActivity.changeset(%{json: json})
     id = Changeset.get_change(activity, :id)
+
     activity
     |> Activities.put_assoc(:create, actor, id)
     |> repo().insert()

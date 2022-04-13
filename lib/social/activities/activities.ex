@@ -66,11 +66,11 @@ defmodule Bonfire.Social.Activities do
   Create an Activity
   NOTE: you will usually want to use `cast/3` instead
   """
-  def create(subject, verb, object, id \\ nil)
-  def create(%{id: subject_id}=subject, verb, %{id: object_id}=object, id) when is_binary(id) and is_atom(verb) do
+  def create(subject, verb, object, activity_id \\ nil)
+  def create(%{id: subject_id}=subject, verb, %{id: object_id}=object, activity_id) when  is_binary(subject_id) and is_binary(activity_id) and is_atom(verb) do
     verb_id = verb_id(verb)
     verb = Verbs.get(verb_id)
-    attrs = %{id: id, subject_id: subject_id, verb_id: verb_id, object_id: object_id} |> dump
+    attrs = %{id: activity_id, subject_id: subject_id, verb_id: verb_id, object_id: object_id} |> dump
     with {:ok, activity} <- repo().put(changeset(attrs)) do
        {:ok, %{activity | object: object, subject: subject, verb: verb}}
     end
@@ -84,7 +84,7 @@ defmodule Bonfire.Social.Activities do
     create(subject, verb, object, id)
   end
 
-  def changeset(activity \\ %Activity{}, %{} = attrs) do
+  defp changeset(activity \\ %Activity{}, %{} = attrs) do
     Activity.changeset(activity, attrs)
     |> Ecto.Changeset.cast(attrs, [:id])
   end
@@ -241,11 +241,12 @@ defmodule Bonfire.Social.Activities do
   def object_from_activity(%{object: %Pointers.Pointer{id: _} = object}), do: load_object(object) # get other pointable objects (only as fallback, should normally already be preloaded)
   def object_from_activity(%{object: %{id: _} = object}), do: object # any other preloaded object
   def object_from_activity(%{object_id: id}), do: load_object(id) # last fallback, load any non-preloaded pointable object
-  def object_from_activity(activity), do: activity
+  def object_from_activity(%Pointers.Pointer{id: _} = object), do: load_object(object) # get other pointable objects (only as fallback, should normally already be preloaded)
+  def object_from_activity(object_or_activity), do: object_or_activity
 
   def load_object(id_or_pointer) do
     with {:ok, obj} <- Bonfire.Common.Pointers.get(id_or_pointer, skip_boundary_check: true)
-      # |> IO.inspect
+      |> debug
       # TODO: avoid so many queries
       |> repo().maybe_preload([:post_content])
       |> repo().maybe_preload([created: [:creator_profile, :creator_character]])
