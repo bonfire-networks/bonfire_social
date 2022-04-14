@@ -237,9 +237,11 @@ defmodule Bonfire.Social.Activities do
   end
 
 
+  def object_from_activity(%{object: %{edge: %{object: %{id: _} = object}}}), do: object |> repo().maybe_preload([:post_content]) |> repo().maybe_preload([:profile, :character]) # special case for edges (eg. Boost) coming to us via LivePush - FIXME: do this somewhere else and use Feed preload functions
   def object_from_activity(%{object: %{post_content: %{id: _} = _content} = object}), do: object # no need to load Post object
   def object_from_activity(%{object: %Pointers.Pointer{id: _} = object}), do: load_object(object) # get other pointable objects (only as fallback, should normally already be preloaded)
   def object_from_activity(%{object: %{id: _} = object}), do: object # any other preloaded object
+  def object_from_activity(%{activity: activity}), do: object_from_activity(activity)
   def object_from_activity(%{object_id: id}), do: load_object(id) # last fallback, load any non-preloaded pointable object
   def object_from_activity(%Pointers.Pointer{id: _} = object), do: load_object(object) # get other pointable objects (only as fallback, should normally already be preloaded)
   def object_from_activity(object_or_activity), do: object_or_activity
