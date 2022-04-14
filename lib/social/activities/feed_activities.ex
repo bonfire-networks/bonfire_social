@@ -403,7 +403,9 @@ defmodule Bonfire.Social.FeedActivities do
 
         ret
       rescue
-        _ -> ret
+        e ->
+          error(__STACKTRACE__, inspect e)
+          ret
       end
   end
 
@@ -419,7 +421,9 @@ defmodule Bonfire.Social.FeedActivities do
         maybe_federate_activity(verb, object, activity, opts)
       ret
     rescue
-      _ -> ret
+      e ->
+        error(__STACKTRACE__, inspect e)
+        ret
     end
   end
 
