@@ -115,7 +115,7 @@ defmodule Bonfire.Social.Requests do
 
   def query(filters, type \\ nil, opts) do
     query_base(filters, type, opts)
-    # |> dump("requests query")
+    # |> info("requests query")
   end
 
   def list_my_requested(type, opts, with_profile_only \\ true),
@@ -147,13 +147,13 @@ defmodule Bonfire.Social.Requests do
   #   opts = Keyword.put_new(opts, :verbs, [:request])
 
   #   if skip? do
-  #     dump("skip boundary check")
+  #     info("skip boundary check")
   #     {:ok, object}
   #   else
   #     case ulid(object) do
   #       id when is_binary(id) ->
   #         Common.Pointers.one(id, opts ++ [log_query: true])
-  #         |> dump("allowed to request ?")
+  #         |> info("allowed to request ?")
   #       _ ->
   #         error(object, "no object ID, try with username")
   #         maybe_apply(Characters, :by_username, [object, opts])
@@ -206,7 +206,7 @@ defmodule Bonfire.Social.Requests do
 
   # publish follow requests
   def ap_publish_activity("create", %{edge: %{table_id: "70110WTHE1EADER1EADER1EADE"}} = request) do
-    # dump(request)
+    # info(request)
     with {:ok, follower} <- ActivityPub.Adapter.get_actor_by_id(request.edge.subject_id),
          {:ok, object} <- ActivityPub.Adapter.get_actor_by_id(request.edge.object_id) do
       ActivityPub.follow(follower, object, nil, true)

@@ -187,7 +187,7 @@ defmodule Bonfire.Social.Follows do
             nil -> :not_permitted
             loaded ->
               object = repo().maybe_preload(loaded, [:peered, created: [creator: :peered]])
-              dump(object)
+              #|> debug()
               if Integration.is_local?(object), do: {:local, object}, else: {:remote, object}
           end
         _ ->
@@ -286,7 +286,7 @@ defmodule Bonfire.Social.Follows do
         })
 
       {:ok, %Request{} = request} ->
-        dump("Follow was requested and remains pending")
+        info("Follow was requested and remains pending")
         {:ok, request}
       e ->
         error(e, "Could not follow")

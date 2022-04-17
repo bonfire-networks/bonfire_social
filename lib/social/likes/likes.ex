@@ -121,7 +121,7 @@ defmodule Bonfire.Social.Likes do
   # end
 
   def ap_publish_activity("create", like) do
-    dump(like)
+    info(like)
     with {:ok, liker} <- ActivityPub.Actor.get_cached_by_local_id(like.edge.subject_id),
          object when not is_nil(object) <- Bonfire.Federate.ActivityPub.Utils.get_object(like.edge.object) do
             ActivityPub.like(liker, object)

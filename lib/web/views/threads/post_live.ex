@@ -58,7 +58,7 @@ defmodule Bonfire.Social.Web.PostLive do
         [subject_character]
       end
 
-      mentions = if other_characters, do: Enum.map_join(other_characters, " ", & "@"<>e(&1, :username, ""))<>" " #|> dump("mentions")
+      mentions = if other_characters, do: Enum.map_join(other_characters, " ", & "@"<>e(&1, :username, ""))<>" " #|> info("mentions")
 
       {:noreply,
       socket

@@ -38,7 +38,7 @@ defmodule Bonfire.Social.Boundaries.InstanceWideSilenceActorFeedsPerUserTest do
     # Bonfire.Boundaries.Blocks.instance_wide_circles([:silence_me])
     # |> Bonfire.Boundaries.Circles.list_by_ids()
     # |> Bonfire.Repo.maybe_preload(caretaker: [:profile], encircles: [subject: [:profile]])
-    # |> dump("silenced details")
+    # |> info("silenced details")
 
     assert {:ok, post} = Posts.publish(current_user: bob, post_attrs: @attrs, boundary: "public")
     # debug_object_acls(post)
@@ -54,7 +54,7 @@ defmodule Bonfire.Social.Boundaries.InstanceWideSilenceActorFeedsPerUserTest do
     # Bonfire.Boundaries.Blocks.instance_wide_circles([:silence_me])
     # |> Bonfire.Boundaries.Circles.list_by_ids()
     # |> Bonfire.Repo.maybe_preload(caretaker: [:profile], encircles: [subject: [:profile]])
-    # |> dump("silenced details")
+    # |> info("silenced details")
     assert {:ok, post} = Posts.publish(current_user: bob, post_attrs: @attrs, boundary: "public")
     # debug_object_acls(post)
     feed_id = Bonfire.Social.Feeds.named_feed_id(:local)

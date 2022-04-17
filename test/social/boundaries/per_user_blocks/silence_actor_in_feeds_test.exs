@@ -51,19 +51,19 @@ defmodule Bonfire.Social.Boundaries.SilenceActorFeedsPerUserTest do
 
     # Bonfire.Boundaries.Circles.get_stereotype_circles(me, [:silence_me])
     # |> Bonfire.Repo.maybe_preload(caretaker: [:profile], encircles: [subject: [:profile]])
-    # |> dump("me: silence_me encircles")
+    # |> info("me: silence_me encircles")
 
     # Bonfire.Boundaries.Circles.get_stereotype_circles(me, [:silence_them])
     # |> Bonfire.Repo.maybe_preload(caretaker: [:profile], encircles: [subject: [:profile]])
-    # |> dump("me: silence_them encircles")
+    # |> info("me: silence_them encircles")
 
     # Bonfire.Boundaries.Circles.get_stereotype_circles(other_user, [:silence_me])
     # |> Bonfire.Repo.maybe_preload(caretaker: [:profile], encircles: [subject: [:profile]])
-    # |> dump("other_user: silence_me encircles")
+    # |> info("other_user: silence_me encircles")
 
     # Bonfire.Boundaries.Circles.get_stereotype_circles(other_user, [:silence_them])
     # |> Bonfire.Repo.maybe_preload(caretaker: [:profile], encircles: [subject: [:profile]])
-    # |> dump("other_user: silence_them encircles")
+    # |> info("other_user: silence_them encircles")
 
     assert {:ok, post} = Posts.publish(current_user: other_user, post_attrs: @attrs, boundary: "public")
 
@@ -102,7 +102,7 @@ defmodule Bonfire.Social.Boundaries.SilenceActorFeedsPerUserTest do
     assert %{edges: []} = Bonfire.Social.FeedActivities.feed(feed_id, current_user: me)
     # check that we do show it to others
     third = fake_user!()
-    assert %{edges: [feed_entry]} = Bonfire.Social.FeedActivities.feed(feed_id, current_user: third) 
+    assert %{edges: [feed_entry]} = Bonfire.Social.FeedActivities.feed(feed_id, current_user: third)
   end
 
 

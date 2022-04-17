@@ -145,7 +145,7 @@ defmodule Bonfire.Social.Posts do
     post = post
     |> repo().maybe_preload([:created, :replied, :post_content, tags: [:character]])
     |> Activities.object_preload_create_activity()
-    # |> dump("ap_publish_activity post")
+    # |> info("ap_publish_activity post")
 
     {:ok, actor} = ActivityPub.Adapter.get_actor_by_id(e(post, :activity, :subject_id, nil) || e(post, :created, :creator_id, nil))
 

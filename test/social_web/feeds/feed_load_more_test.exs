@@ -81,7 +81,7 @@ defmodule Bonfire.Social.Feeds.LoadMoreTest do
 
       # FIXME: the extra activities are being sent via pubsub, need to figure out how to test that
       articles = Floki.find(more_doc, "[data-id=feed]  > article")
-      # dump(articles, "articles")
+      # info(articles, "articles")
       assert Enum.count(articles) == total_posts
 
     end

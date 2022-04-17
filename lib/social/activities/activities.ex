@@ -76,11 +76,11 @@ defmodule Bonfire.Social.Activities do
     end
   end
   def create(subject, verb, {object, %{id: id} = mixin_object}, _) do
-    # dump(mixin_object, "mixin_object")
+    # info(mixin_object, "mixin_object")
     create(subject, verb, object, id)
   end
   def create(subject, verb, %{id: id} = object, _) do
-    # dump(object, "create_object")
+    # info(object, "create_object")
     create(subject, verb, object, id)
   end
 

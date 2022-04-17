@@ -50,7 +50,7 @@ defmodule Bonfire.Social.Integration do
   end
 
   def activity_ap_publish(subject_id, :request, object, activity) do
-    # dump(object)
+    # info(object)
     # FIXME: we're just assuming that all requests are for follow for now
     activity = repo().preload(activity, [:subject, :object])
     request = Bonfire.Social.Requests.get!(activity.subject, Follow, object || activity.object, skip_boundary_check: true)
