@@ -58,7 +58,7 @@ defmodule Bonfire.Social.Acts.Caretaker do
                 epic
             end
           other ->
-            Act.warn(other, "Invalid custom caretaker")
+            Epics.smart(epic, act, other, "Invalid custom caretaker")
             epic
         end
       changeset.action == :delete ->

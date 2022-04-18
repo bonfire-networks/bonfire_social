@@ -11,33 +11,26 @@ defmodule Bonfire.Social.Acts.MeiliSearch.Queue do
   use Arrows
   require Logger
 
-  def index(epic) do
-    Epic.update(epic, __MODULE__, [], &[:index | &1])
-  end
-
-  def unindex(epic, thing) do
-    Epic.update(epic, __MODULE__, [], &[:unindex | &1])
-  end
-
   @doc false # see module documentation
   def run(epic, act) do
     on = Keyword.get(act.options, :on, :post)
     object = epic.assigns[on]
+    action = Keyword.get(epic.assigns[:options], :action, :insert)
 
     if epic.errors != [] do
-      maybe_debug(epic, act, length(epic.errors), "Skipping due to epic errors")
+      maybe_debug(epic, act, length(epic.errors), "Meili: Skipping due to epic errors")
     else
-      work = Map.get(epic.assigns, __MODULE__, [])
-      for action <- work do
-        case action do
-          :index   ->
-            maybe_debug(epic, act, :index, "Submitting action")
-            # maybe_debug(epic, act, object, "Non-formated object")
-            object |> to_indexable() |> Integration.maybe_index()
-          :unindex ->
-            maybe_debug(epic, act, :unindex, "Submitting action")
-            Integration.maybe_unindex(object)
-        end
+      case action do
+        :insert ->
+          maybe_debug(epic, act, action, "Meili queuing")
+          # maybe_debug(epic, act, object, "Non-formated object")
+          object |> to_indexable() |> Integration.maybe_index()
+        :delete ->
+          maybe_debug(epic, act, action, "Meili queuing")
+          Integration.maybe_unindex(object)
+        action ->
+          debug(epic, act, action, "Meili: Skipping due to unknown action")
+          epic
       end
     end
     epic

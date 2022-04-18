@@ -36,12 +36,28 @@ defmodule Bonfire.Social.Posts do
   end
 
   def publish(options \\ []) do
+    run_epic(:publish, options)
+  end
+
+  def delete(object, options \\ []) do
+    options = to_options(options)
+    |> Keyword.put(:object, object)
+
+    options
+    |> Keyword.put(:delete_associations,
+      options[:delete_associations] ++ [ # adds to generic assocs defined by `Objects.delete/2`
+        :post_content
+      ])
+    |> run_epic(:delete, ..., :object)
+  end
+
+  def run_epic(type, options \\ [], on \\ :post) do
     options = Keyword.merge(options, crash: true, debug: true, verbose: false)
     epic =
-      Epic.from_config!(__MODULE__, :publish)
+      Epic.from_config!(__MODULE__, type)
       |> Epic.assign(:options, options)
       |> Epic.run()
-    if epic.errors == [], do: {:ok, epic.assigns.post}, else: {:error, epic}
+    if epic.errors == [], do: {:ok, epic.assigns[on]}, else: {:error, epic}
   end
 
   # def reply(creator, attrs) do

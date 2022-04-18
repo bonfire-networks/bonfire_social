@@ -20,20 +20,30 @@ defmodule Bonfire.Social.Acts.ActivityPub do
   def run(epic, act) do
     on = Keyword.get(act.options, :on, :post)
     object = epic.assigns[on]
+    action = Keyword.get(epic.assigns[:options], :action, :insert)
     current_user = epic.assigns[:options][:current_user]
     cond do
       epic.errors != [] ->
-        maybe_debug(epic, act, length(epic.errors), "Skipping due to epic errors")
+        maybe_debug(epic, act, length(epic.errors), "ActivityPub: Skipping due to epic errors")
         epic
       is_nil(on) or not is_atom(on) ->
-        maybe_debug(epic, act, on, "Skipping due to `on` option")
+        maybe_debug(epic, act, on, "ActivityPub: Skipping due to `on` option")
+        epic
       not (is_struct(current_user) or is_binary(current_user)) ->
-        warn(current_user, "Skipping due to missing current_user")
+        warn(current_user, "ActivityPub: Skipping due to missing current_user")
+        epic
+      action in [:insert] ->
+        maybe_debug(epic, act, action, "Queue for federated")
+        Bonfire.Social.Integration.ap_push_activity(current_user.id, object)
+      action in [:update] ->
+        maybe_debug(epic, act, action, "Queue for federated")
+        Bonfire.Social.Integration.ap_push_activity(current_user.id, object, :update)
+      action == :delete -> # TODO: deletion
+        maybe_debug(epic, act, action, "Queue for federated")
+        Bonfire.Social.Integration.ap_push_activity(current_user.id, object, :delete)
       true ->
-        case object do
-          %{id: _} -> Bonfire.Social.Integration.ap_push_activity(current_user.id, object)
-          _ -> warn(object, "Skipping, not sure what to do with this")
-        end
+        maybe_debug(epic, act, action, "ActivityPub: Skipping due to unknown action")
+        epic
     end
     epic
   end

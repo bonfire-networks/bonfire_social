@@ -19,7 +19,7 @@ defmodule Bonfire.Social.Acts.Boundaries do
         maybe_debug(epic, act, on, "Skipping due to `on` option")
         epic
       not (is_struct(current_user) or is_binary(current_user)) ->
-        Act.warn(current_user, "Skipping due to missing current_user")
+        maybe_debug(epic, act, current_user, "Skipping due to missing current_user")
         epic
       not is_struct(changeset) || changeset.__struct__ != Changeset ->
         maybe_debug(epic, act, changeset, "Skipping :#{on} due to changeset")

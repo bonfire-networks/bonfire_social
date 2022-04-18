@@ -34,6 +34,7 @@ defmodule Bonfire.Social.Acts.Creator do
         epic
       not is_struct(changeset) || changeset.__struct__ != Changeset ->
         maybe_debug(epic, act, changeset, "Skipping :#{on} due to changeset")
+        epic
       changeset.action not in [:insert, :delete] ->
         maybe_debug(epic, act, changeset.action, "Skipping, no matching action on changeset")
         epic
@@ -58,7 +59,7 @@ defmodule Bonfire.Social.Acts.Creator do
                 epic
             end
           other ->
-            Act.warn(other, "Invalid custom creator")
+            Epics.smart(epic, act, other, "Invalid custom creator")
             epic
         end
       changeset.action == :delete ->

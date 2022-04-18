@@ -28,8 +28,16 @@ defmodule Bonfire.Social.Integration do
 
   # TODO: clean up the following patterns
 
-  def activity_ap_publish(subject_id, :create, _object, activity) do
-    ap_publish("create", activity.object_id, subject_id)
+  def activity_ap_publish(subject_id, :create, object, activity) do
+    ap_publish("create", Utils.e(activity, :object_id, Utils.ulid(object)), subject_id)
+  end
+
+  def activity_ap_publish(subject_id, :update, object, activity) do
+    ap_publish("update", Utils.e(activity, :object_id, Utils.ulid(object)), subject_id)
+  end
+
+  def activity_ap_publish(subject_id, :delete, object, activity) do
+    ap_publish("delete", Utils.e(activity, :object_id, Utils.ulid(object)), subject_id)
   end
 
   def activity_ap_publish(subject_id, :follow, _object, activity) do
@@ -57,8 +65,9 @@ defmodule Bonfire.Social.Integration do
     ap_publish("create", object.id, activity.subject_id)
   end
 
-  def activity_ap_publish(_, verb, _, _) do
-    warn("unhandled outgoing federation verb: #{inspect verb}")
+  def activity_ap_publish(subject_id, verb, object, activity) do
+    warn(verb, "unhandled outgoing federation verb (fallback to create)")
+    ap_publish("create", Utils.e(activity, :object_id, Utils.ulid(object)), subject_id)
   end
 
   def ap_publish(verb, thing_id, user_id) do

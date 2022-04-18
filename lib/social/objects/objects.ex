@@ -213,5 +213,22 @@ defmodule Bonfire.Social.Objects do
   #   from(q in query, where: q.table_id not in ^types)
   # end
 
+  def delete(object, opts) do
+    object = Bonfire.Common.Pointers.get(object, opts)
+            ~> debug("WIP: deletion")
+
+    opts = to_options(opts)
+    |> Keyword.put(:action, :delete)
+    |> Keyword.put(:delete_associations, [
+        :creator,
+        :caretaker,
+        :caretaker,
+        :activities,
+        :peered,
+        :controlled
+      ])
+
+    Bonfire.Common.ContextModules.maybe_apply(object, :delete, [object, opts])
+  end
 
 end
