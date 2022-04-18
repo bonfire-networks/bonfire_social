@@ -85,9 +85,10 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
       account = fake_account!()
       conn = conn(account: account) #|> dump
       next = "/home"
-      {view, doc} = floki_live(conn, next)
-      main = Floki.find(doc, "main") #|> IO.inspect
-      assert [] = Floki.find(doc, "article")
+      assert floki_redirect(conn, next) =~ "/switch-user"
+      # {view, doc} = floki_live(conn, next)
+      # main = Floki.find(doc, "main") #|> IO.inspect
+      # assert [] = Floki.find(doc, "article")
     end
 
     test "posts from people I am not following in my feed" do

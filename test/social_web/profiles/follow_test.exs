@@ -23,7 +23,7 @@ defmodule Bonfire.Social.Follows.Test do
 
       assert true == Follows.following?(me, someone)
 
-      assert Floki.text(follow) =~ "Unfollow" # FIXME
+      assert follow |> Floki.parse_fragment() ~> Floki.find("[data-id=follow]") |> Floki.text()  =~ "Unfollow" # FIXME
     end
 
   end
@@ -41,13 +41,13 @@ defmodule Bonfire.Social.Follows.Test do
       # assert true == Follows.following?(me, someone)
 
       conn = conn(user: me, account: my_account)
-      next = Bonfire.Common.URIs.path(someone)
+      next = Bonfire.Common.URIs.path(someone) |> info("path")
       {view, doc} = floki_live(conn, next) #|> IO.inspect
 
       assert unfollow = view |> element("[data-id='unfollow']") |> render_click()
       assert false == Follows.following?(me, someone)
 
-      assert Floki.text(unfollow) =~ "Follow"
+      assert unfollow |> Floki.parse_fragment() ~> Floki.find("[data-id=follow]") |> Floki.text() =~ "Follow"
     end
   end
 end

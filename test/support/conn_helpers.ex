@@ -115,6 +115,11 @@ defmodule Bonfire.Social.Test.ConnHelpers do
     {view, doc}
   end
 
+  def floki_redirect(%Plug.Conn{} = conn \\ conn(), path \\ nil) do
+    assert {:error, {:live_redirect, %{to: to}}} = do_live(conn, path)
+    to
+  end
+
   def floki_click(conn_or_view \\ conn(), path_or_value \\ %{}, value \\ %{})
 
   def floki_click(%Plug.Conn{} = conn, path, value) do

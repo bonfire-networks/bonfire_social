@@ -4,7 +4,6 @@ defmodule Bonfire.Social.Messages.LiveHandler do
   def send_message(params, socket) do
     attrs = params
     |> input_to_atoms()
-    # |> merge_child(:post)
     # |> IO.inspect
 
     with {:ok, _sent} <- Bonfire.Social.Messages.send(current_user(socket), attrs) do

@@ -55,7 +55,7 @@ defmodule Bonfire.Social.Activities.BoostPost.Test do
       next = "/local"
       {view, doc} = floki_live(conn, next) #|> IO.inspect
       assert view
-      |> element(".feed article:first-child() [data-id='boost_action]")
+      |> element(".feed article:first-child() button[data-id='boost_action]", "Boosted")
       |> render_click()
       |> Floki.text() =~ "Boost"
 

@@ -8,12 +8,6 @@ defmodule Bonfire.Social.Posts.LiveHandler do
   alias Bonfire.Data.Social.Post
   alias Ecto.Changeset
 
-  def merge_child(%{} = map, key) do
-    map
-    |> Map.merge(
-      Map.get(map, key)
-    )
-  end
 
   def handle_params(%{"after" => cursor} = attrs, _, %{assigns: %{thread_id: thread_id}} = socket) do
     live_more(thread_id, input_to_atoms(attrs), socket)
@@ -22,6 +16,14 @@ defmodule Bonfire.Social.Posts.LiveHandler do
   def handle_params(%{"after" => cursor, "context" => thread_id} = attrs, _, socket) do
     live_more(thread_id, input_to_atoms(attrs), socket)
   end
+
+  def handle_params(attrs, uri, socket) do # workaround for a weird issue appearing in tests
+    case URI.parse(uri) do
+      %{path: "/discussion/"<>thread_id} -> live_more(thread_id, input_to_atoms(attrs), socket)
+      %{path: "/post/"<>thread_id} -> live_more(thread_id, input_to_atoms(attrs), socket)
+    end
+  end
+
 
   def handle_event("load_more", %{"after" => cursor} = attrs, %{assigns: %{thread_id: thread_id}} = socket) do
     live_more(thread_id, input_to_atoms(attrs), socket)
