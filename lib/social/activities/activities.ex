@@ -159,7 +159,11 @@ defmodule Bonfire.Social.Activities do
       :minimum -> # ???
         proload query, activity: [:object]
       :default ->
-        proload query, activity: [:verb, :replied, object: {"object_", [:post_content, :peered]}]
+        proload query, activity: [
+          :verb, :replied,
+          subject: [:character, :profile],
+          object: {"object_", [:post_content, :peered, :character, :profile]}
+        ]
       _ ->
         warn(preloads, "Unknown preload specification")
         query
@@ -237,7 +241,7 @@ defmodule Bonfire.Social.Activities do
   end
 
 
-  def object_from_activity(%{object: %{edge: %{object: %{id: _} = object}}}), do: object |> repo().maybe_preload([:post_content]) |> repo().maybe_preload([:profile, :character]) # special case for edges (eg. Boost) coming to us via LivePush - FIXME: do this somewhere else and use Feed preload functions
+  def object_from_activity(%{object: %{edge: %{object: %{id: _} = object}}}), do: object |> repo().maybe_preload([:post_content, :profile, :character]) # special case for edges (eg. Boost) coming to us via LivePush - FIXME: do this somewhere else and use Feed preload functions
   def object_from_activity(%{object: %{post_content: %{id: _} = _content} = object}), do: object # no need to load Post object
   def object_from_activity(%{object: %Pointers.Pointer{id: _} = object}), do: load_object(object) # get other pointable objects (only as fallback, should normally already be preloaded)
   def object_from_activity(%{object: %{id: _} = object}), do: object # any other preloaded object
