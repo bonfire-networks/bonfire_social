@@ -35,9 +35,9 @@ defmodule Bonfire.Social.Web.Routes do
         pipe_through :user_required
 
         live "/my/likes/", Feeds.LikesLive, as: Bonfire.Data.Social.Like
-
-        live "/message/:id", MessageLive, as: Bonfire.Data.Social.Message
-        live "/message/:id/reply/:reply_to_id", MessageLive
+        live "/messages", MessageLive
+        live "/messages/:id", MessageLive, as: Bonfire.Data.Social.Message
+        live "/messages/:id/reply/:reply_to_id", MessageLive
 
       end
 

@@ -1,5 +1,4 @@
-
-<Bonfire.UI.Social.ObjectThreadLive
+<!-- <Bonfire.UI.Social.ObjectThreadLive
   page={@page}
   page_title={@page_title}
   has_private_tab={@has_private_tab}
@@ -11,4 +10,12 @@
   activity={@activity}
   object={@object}
   url={@url}
+/> -->
+
+<Bonfire.UI.Social.PrivateViewLive
+  page_title={@page_title}
+  page={@page}
+  feed={@feed}
+  tab_id={@tab_id}
+  users={@users}
 />

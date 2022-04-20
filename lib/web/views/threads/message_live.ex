@@ -1,5 +1,5 @@
 defmodule Bonfire.Social.Web.MessageLive do
-  use Bonfire.Web, :surface_view
+  use Bonfire.Web, {:surface_view, [layout: {Bonfire.UI.Social.Web.LayoutView, "without_sidebar.html"}]}
   alias Bonfire.Web.LivePlugs
   alias Bonfire.Social.Integration
   import Where
@@ -37,6 +37,22 @@ defmodule Bonfire.Social.Web.MessageLive do
     }
   end
 
+  def do_handle_params(%{"id" => "compose" = id} = params, url, socket) do
+    current_user = current_user(socket)
+    users = Bonfire.Social.Follows.list_my_followed(current_user) |> debug("USERS")
+    feed = if current_user, do: if module_enabled?(Bonfire.Social.Messages), do: Bonfire.Social.Messages.list(current_user, ulid(e(socket.assigns, :user, nil))) #|> debug()
+
+    {:noreply,
+    socket
+    |> assign(
+      page_title: "Direct Messages",
+      page: "Direct Messages",
+      users: e(users, :edges, []),
+      feed: e(feed, :edges, []),
+      tab_id: "pick_audience",
+      to_circles: [])}
+  end
+  
   def do_handle_params(%{"id" => id} = params, url, socket) do
    current_user = current_user(socket)
 
@@ -91,18 +107,47 @@ defmodule Bonfire.Social.Web.MessageLive do
     end
   end
 
+  def do_handle_params(_params, url, socket) do
+    current_user = current_user(socket)
+    users = Bonfire.Social.Follows.list_my_followed(current_user) |> debug("USERS")
+
+    feed = if current_user, do: if module_enabled?(Bonfire.Social.Messages), do: Bonfire.Social.Messages.list(current_user, ulid(e(socket.assigns, :user, nil))) #|> debug()
+
+
+    {:noreply,
+    socket
+    |> assign(
+      page_title: "Direct Messages",
+      page: "Direct Messages",
+      users: e(users, :edges, []),
+      feed: e(feed, :edges, []),
+      tab_id: nil,
+      to_circles: []
+    ) #|> IO.inspect
+  }
+  end
+
 
   def handle_event("create_reply", %{"id"=> id}, socket) do # boost in LV
     debug(id: id)
     debug("create reply")
-    # with {:ok, _boost} <- Bonfire.Social.Boosts.boost(current_user(socket), id) do
-    #   {:noreply, Phoenix.LiveView.assign(socket,
-    #   boosted: Map.get(socket.assigns, :boosted, []) ++ [{id, true}]
-    # )}
-    # end
     {:noreply, assign(socket, comment_reply_to_id: id)}
   end
 
+  def handle_event("add_to_circles", %{"id"=> id}, socket) do
+    debug(id: id)
+    debug("add to circles")
+    debug(e(socket, :to_circles, []))
+    to_circles = [id | e(socket, :to_circles, [])]
+    debug(to_circles)
+    {:noreply, assign(socket, to_circles: to_circles)}
+  end
+
+  # def handle_event("compose_thread", _ , socket) do
+  #   debug("start a thread")
+  #   debug(e(socket, :to_circles, []))
+  #   {:noreply, assign(socket, tab_id: "pick_audience")}
+  # end
 
   def handle_params(params, uri, socket) do
     # poor man's hook I guess
