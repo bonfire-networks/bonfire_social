@@ -56,16 +56,16 @@ defmodule Bonfire.Social.Threads do
         |> Changesets.put_assoc(:replied, %{thread_id: reply_to.id, reply_to: reply_to}) #|> debug()
       {:ok, %{}=reply_to} ->
         debug("parent has no thread, creating one")
+        debug(reply_to)
         replied_attrs = %{id: reply_to.id, thread_id: reply_to.id}
         # pretend the replied already exists, because it will in a moment
         replied = Changesets.set_state(struct(Replied, replied_attrs), :loaded)
         reply_to = Map.put(reply_to, :replied, replied)
         changeset
         |> Changeset.prepare_changes(&create_parent_replied(&1, replied, replied_attrs))
-        %{thread_id: reply_to.id, reply_to: reply_to}
-        |> Changesets.put_assoc(changeset, :replied, replied_attrs) #|> debug()
-        |> put_in([:changes, :replied, :data, :reply_to, :replied], replied)
-      {:error, :not_permitted} ->
+        |> Changesets.put_assoc(:replied, %{thread_id: reply_to.id, reply_to: reply_to}) #|> debug()
+        # |> put_in([:changes, :replied, :data, :reply_to, :replied], replied) # FIXME?
+        {:error, :not_permitted} ->
         debug("not permitted to reply to this, starting new thread")
         start_new_thread(changeset)
       {:error, :not_found}->
@@ -78,7 +78,7 @@ defmodule Bonfire.Social.Threads do
   def create_parent_replied(changeset, replied, replied_attrs) do
     changeset.repo.insert_all(Replied, [replied_attrs], on_conflict: :nothing)
     changeset
-    |> Changesets.update_data(:replied, [replied])
+    |> Changesets.update_data(&Map.put(&1, :replied, replied))
   end
 
   defp do_cast_replied(changeset, attrs) do
@@ -114,7 +114,7 @@ defmodule Bonfire.Social.Threads do
     |> proload([replied: [thread: [created: [creator: [:character, :peered]]]]])
     |> proload([created: [creator: [:character, :peered]]])
     |> boundarise(root.id, verbs: [:reply], current_user: user)
-    |> boundarise(thread.id, verbs: [:reply], current_user: user)
+    # |> boundarise(thread.id, verbs: [:reply], current_user: user) # FIMXE: including this fails when parent has no thread_id
     |> repo().one()
   end
 
@@ -123,7 +123,7 @@ defmodule Bonfire.Social.Threads do
   @doc false
   def start_new_thread(changeset) do
     Changeset.get_field(changeset, :id)
-    |> Changesets.cast_assoc(changeset, :replied, %{reply_to_id: nil, thread_id: ...})
+    |> Changesets.put_assoc(changeset, :replied, %{reply_to_id: nil, thread_id: ...})
   end
 
   defp create(attrs) do

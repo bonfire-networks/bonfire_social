@@ -9,16 +9,19 @@ defmodule Bonfire.Social.Tags do
   alias Bonfire.Data.Social.PostContent
   alias Ecto.Changeset
 
-  def cast(changeset, attrs, creator, preset_or_custom_boundary) do
+  def cast(changeset, attrs, creator, opts) do
     with true <- module_enabled?(Bonfire.Tag),
          tags when is_list(tags) and length(tags)>0 <-
-          (e(changeset, :changes, :post_content, :changes, :mentions, []) # use any mentions that were found in the text and injected into the changeset by PostContents
-          ++ e(attrs, :tags, []))
+          (
+            e(changeset, :changes, :post_content, :changes, :mentions, []) # tag any mentions that were found in the text and injected into the changeset by PostContents (NOTE: this doesn't necessarly mean they should be included in boundaries or notified)
+            ++ e(attrs, :tags, [])
+          )
           |> filter_empty([])
-          |> Enum.uniq()
+          |> uniq_by_id()
+          |> debug
     do
       changeset
-      |> Changeset.cast(%{tagged: tags_preloads(tags, preset_or_custom_boundary)}, [])
+      |> Changeset.cast(%{tagged: tags_preloads(tags, opts)}, [])
       # |> debug("before cast assoc")
       |> Changeset.cast_assoc(:tagged, with: &Bonfire.Tag.Tagged.changeset/2)
     else

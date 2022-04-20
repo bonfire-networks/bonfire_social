@@ -107,7 +107,7 @@ defmodule Bonfire.Social.Feeds do
     |> debug("target feeds")
   end
 
-  def maybe_custom_feeds(preset_and_custom_boundary), do: Boundaries.maybe_from_opts(preset_and_custom_boundary, :to_feeds)
+  def maybe_custom_feeds(preset_and_custom_boundary), do: maybe_from_opts(preset_and_custom_boundary, :to_feeds, [])
 
   def named_feed_id(name) when is_atom(name), do: Bonfire.Boundaries.Circles.get_id(name)
   def named_feed_id(name) when is_binary(name) do

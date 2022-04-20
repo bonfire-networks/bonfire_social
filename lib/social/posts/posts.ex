@@ -231,49 +231,72 @@ defmodule Bonfire.Social.Posts do
   end
 
   def ap_receive_activity(
-    creator, %{data: _activity_data} = _activity,
-    %{data: post_data, pointer_id: id} = _object,
+    creator, %{data: activity_data} = _activity,
+    %{data: post_data, pointer_id: id, public: is_public} = _object,
     circles
   ) do # record an incoming post
     # debug(activity: activity)
     # debug(creator: creator)
     # debug(object: object)
 
-    direct_recipients = post_data["to"] || []
-
-    direct_recipients =
-      direct_recipients
+    direct_recipients = (
+        List.wrap(activity_data["to"])
+        ++ List.wrap(activity_data["cc"])
+        ++ List.wrap(activity_data["audience"])
+        ++ List.wrap(post_data["to"])
+        ++ List.wrap(post_data["cc"])
+        ++ List.wrap(post_data["audience"])
+      )
+      |> filter_empty([])
       |> List.delete(Bonfire.Federate.ActivityPub.Utils.public_uri())
       |> Enum.map(fn ap_id -> Bonfire.Me.Users.by_ap_id!(ap_id) end)
-      |> Enum.filter(fn x -> not is_nil(x) end)
-      |> Enum.map(fn user -> user.id end)
+      |> ulid()
+      |> filter_empty([])
+
+    reply_to = post_data["inReplyTo"] || activity_data["inReplyTo"]
+    reply_to_id = if reply_to, do: reply_to |> info() |> ActivityPub.Object.get_cached_by_ap_id() |> e(:pointer_id, nil)
+
+    tags = (
+        List.wrap(activity_data["tag"])
+        ++ List.wrap(post_data["tag"])
+    ) |> Enum.uniq()
+
+    mentions = for %{"type"=>"Mention", "href"=>mention} <- tags do
+      with {:ok, character} <- Bonfire.Federate.ActivityPub.Utils.get_character_by_ap_id(mention) do
+        character
+      else _ ->
+        nil
+      end
+    end
+    |> filter_empty(nil)
+    # |> info("mentions")
 
     attrs = %{
       id: id,
       local: false, # FIXME?
       canonical_url: nil, # TODO, in a mixin?
       to_circles: circles ++ direct_recipients,
+      tags: mentions,
       post_content: %{
         name: post_data["name"],
         html_body: post_data["content"]
       },
       created: %{
         date: post_data["published"] # FIXME
-      }
+      },
+      reply_to_id: reply_to_id
     }
-    |> debug()
+    |> info("post attrs")
 
-    attrs =
-      if post_data["inReplyTo"] do
-        case ActivityPub.Object.get_cached_by_ap_id(post_data["inReplyTo"]) do
-          nil -> attrs
-          object -> Map.put(attrs, :reply_to_id, object.pointer_id)
-        end
-      else
-        attrs
-      end
+    info(is_public, "is_public")
 
-    publish(current_user: creator, post_attrs: attrs, boundary: "federated", post_id: id)
+    if is_public==false and is_list(mentions) and length(mentions)>0 do
+      info("treat as Message if private with @ mentions")
+      Bonfire.Social.Messages.send(creator, attrs)
+    else
+      boundary = (if is_public, do: "federated", else: "mentions") |> info("boundary")
+      publish(current_user: creator, post_attrs: attrs, boundary: boundary, post_id: id)
+    end
   end
 
   # TODO: rewrite to take a post instead of an activity

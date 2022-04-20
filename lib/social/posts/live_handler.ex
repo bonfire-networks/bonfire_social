@@ -37,7 +37,6 @@ defmodule Bonfire.Social.Posts.LiveHandler do
     Bonfire.Social.Messages.LiveHandler.send_message(params, socket)
   end
 
-
   def handle_event("post", params, socket) do # if not a message, it's a post by default
     attrs = params
     # |> debug("handle_event: post inputs")

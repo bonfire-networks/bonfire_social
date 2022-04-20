@@ -29,22 +29,26 @@ defmodule Bonfire.Social.Messages do
   end
 
   # attempts to get the optional parameter `to` first, falls back to the attributes
-  defp get_to(to, attrs), do: with([] <- get_to(to), do: get_to(Utils.e(attrs, :to_circles, [])))
+  defp get_tos(to, attrs), do: with(nil <- get_to(to), do: get_to(Utils.e(attrs, :to_circles, nil)))
 
-  defp get_to(nil), do: []
-  defp get_to(tos), do: Enum.reject(List.wrap(tos), &is_nil/1)
+  defp get_to(tos), do: List.wrap(tos) |> filter_empty(nil) |> debug
 
   @doc """
-  Warning: as per the tests, anyone can message anyone :/
+  TODO: check boundaries, right now anyone can message anyone :/
   """
   def send(%{id: _} = creator, attrs, to \\ nil) do
-    # debug(attrs)
+    debug(attrs)
     opts = [current_user: creator]
-    to = Boundaries.load_pointers(get_to(to, attrs), opts)
-    if to != [] do
-      debug(to, "to")
+
+    to = get_tos(to, attrs)
+    |> debug("tos")
+    |> Boundaries.load_pointers(opts ++ [verb: :message])
+    |> debug("to pointers")
+
+    if is_list(to) and length(to)>0 do
       opts = [
         boundary: "message",
+        verbs_to_grant: Config.get(:verbs_eyes_only_reply) |> debug(),
         to_circles: to,
         to_feeds: [inbox: to]
       ]
@@ -57,18 +61,14 @@ defmodule Bonfire.Social.Messages do
         end
       end
     else
-      could_not_find_recipient(to)
+      error("Could not find recipient.")
     end
-  end
-
-  defp could_not_find_recipient(e) do
-    debug(e)
-    {:error, "Could not find recipient."}
   end
 
   defp create(%{id: creator_id} = creator, attrs, opts \\ []) do
     # we attempt to avoid entering the transaction as long as possible.
     changeset = changeset(:create, attrs, creator, opts)
+    |> info
     repo().transact_with(fn -> repo().insert(changeset) end)
   end
 
@@ -89,48 +89,46 @@ defmodule Bonfire.Social.Messages do
   end
 
   @doc "List posts created by the user and which are in their outbox, which are not replies"
-  def list(current_user, with_user \\ nil, cursor_after \\ nil, preloads \\ :all)
+  def list(current_user, with_user \\ nil, opts \\ [])
 
-  def list(%{id: current_user_id} = current_user, with_user, cursor_after, preloads)
-  when ( is_binary(with_user) or is_list(with_user) or is_map(with_user) )
-  and with_user != current_user_id and with_user != current_user do
+  def list(%{id: current_user_id} = current_user, with_user, opts)
+    when ( is_binary(with_user) or is_list(with_user) or is_map(with_user) )
+    and with_user != current_user_id and with_user != current_user do
     # all messages between two people
     with_user_id = Utils.ulid(with_user)
     if with_user_id && with_user_id != current_user_id, do: [
       messages_involving: {{with_user_id, current_user_id}, &filter/3},
-      # distinct: {:threads, &Bonfire.Social.Threads.filter/3}
     ]
     # |> debug("list message filters")
-    |> list_paginated(current_user, cursor_after, preloads),
-    else: list(current_user, nil, cursor_after, preloads)
+    |> list_paginated(current_user, opts),
+    else: list(current_user, nil, opts)
   end
 
-  def list(%{id: current_user_id} = current_user, _, cursor_after, preloads) do
+  def list(%{id: current_user_id} = current_user, _, opts) do
     # all current_user's message
     [
       messages_involving: {current_user_id, &filter/3},
-      # distinct: {:threads, &Bonfire.Social.Threads.filter/3}
     ]
     # |> debug("my messages filters")
-    |> list_paginated(current_user, cursor_after, preloads)
+    |> list_paginated(current_user, opts)
   end
 
   def list(_current_user, _with_user, _cursor_before, _preloads), do: []
 
-  def list_paginated(filters, current_user \\ nil, cursor_after \\ nil, preloads \\ :all, query \\ Message) do
+  defp list_paginated(filters, current_user \\ nil, opts \\ [], query \\ Message) do
     query
       # add assocs needed in timelines/feeds
       # |> join_preload([:activity])
       # |> debug("pre-preloads")
-      |> Activities.activity_preloads(current_user, preloads)
-      |> query_filter(filters)
+      |> Activities.activity_preloads([current_user: current_user], :all)
+      |> query_filter(filters ++ [distinct: {:threads, &Bonfire.Social.Threads.filter/3}])
       # |> debug("message_paginated_post-preloads")
-      |> Activities.as_permitted_for(current_user, [:see])
+      |> Activities.as_permitted_for(current_user, [:see, :read])
       # |> distinct([fp], [desc: fp.id, desc: fp.activity_id]) # not sure if/why needed... but possible fix for found duplicate ID for component Bonfire.UI.Social.ActivityLive in UI
       # |> order_by([fp], desc: fp.id)
       # |> debug("post-permissions")
       # |> repo().many() # return all items
-      |> Bonfire.Repo.many_paginated(before: cursor_after) # return a page of items (reverse chronological) + pagination metadata
+      |> Bonfire.Repo.many_paginated(opts) # return a page of items (reverse chronological) + pagination metadata
       # |> debug("feed")
   end
 
@@ -168,19 +166,20 @@ defmodule Bonfire.Social.Messages do
       Enum.filter(message.activity.tags, fn tag -> tag.table_id == "5EVSER1S0STENS1B1YHVMAN01D" end)
       |> Enum.map(fn tag -> ActivityPub.Actor.get_by_local_id!(tag.id) end)
       |> Enum.map(fn actor -> actor.ap_id end)
-      object = %{
-        "type" => "ChatMessage",
-        "actor" => actor.ap_id,
-        "content" => (Utils.e(message, :post_content, :html_body, nil)),
-        "to" => recipients
-      }
-      attrs = %{
-        actor: actor,
-        context: ActivityPub.Utils.generate_context_id(),
-        object: object,
-        to: recipients,
-      }
-      ActivityPub.create(attrs, message.id)
+
+    object = %{
+      "type" => "Note", #"ChatMessage", # TODO: use ChatMessage with peers that support it?
+      "actor" => actor.ap_id,
+      "content" => (Utils.e(message, :post_content, :html_body, nil)),
+      "to" => recipients
+    }
+    attrs = %{
+      actor: actor,
+      context: ActivityPub.Utils.generate_context_id(),
+      object: object,
+      to: recipients,
+    }
+    ActivityPub.create(attrs, message.id)
   end
 
   def ap_receive_activity(creator, activity, object) do
