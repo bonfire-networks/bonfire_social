@@ -171,7 +171,7 @@ defmodule Bonfire.Social.Follows do
   # end
 
   defp check_follow(follower, object, opts) do
-    skip? = skip_boundary_check?(opts)
+    skip? = skip_boundary_check?(opts, object)
     skip? = (:admins == skip? && Users.is_admin?(follower)) || (skip? == true)
     opts =
       opts
@@ -179,7 +179,7 @@ defmodule Bonfire.Social.Follows do
       |> Keyword.put_new(:current_user, follower)
     if skip? do
       debug("skip boundary check")
-      {:ok, object}
+      {:local, object}
     else
       case ulid(object) do
         id when is_binary(id) ->

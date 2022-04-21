@@ -142,7 +142,7 @@ defmodule Bonfire.Social.Requests do
   defp maybe_with_requester_profile_only(q, _), do: q
 
   # defp check_request(requester, object, opts) do
-  #   skip? = skip_boundary_check?(opts)
+  #   skip? = skip_boundary_check?(opts, object)
   #   skip? = (:admins == skip? && Users.is_admin?(requester)) || (skip? == true)
   #   opts = Keyword.put_new(opts, :verbs, [:request])
 

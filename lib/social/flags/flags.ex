@@ -45,7 +45,7 @@ defmodule Bonfire.Social.Flags do
   defp flag_feeds(), do: [notifications: Bonfire.Me.Users.list_admins()]
 
   defp check_flag(flagger, object, opts) do
-    skip? = skip_boundary_check?(opts)
+    skip? = skip_boundary_check?(opts, object)
     skip? = (:admins == skip? && Users.is_admin?(flagger)) || (skip? == true)
     case object do
       %{id: id} ->

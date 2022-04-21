@@ -47,13 +47,13 @@ defmodule Bonfire.Social.Threads do
       {:ok, %{replied: %{thread_id: thread_id, thread: %{}}}=reply_to} ->
         debug("threading under parent thread root")
         changeset
-        |> Changesets.put_assoc(:replied, %{thread_id: thread_id, reply_to: reply_to}) #|> debug()
+        |> make_threaded(thread_id, reply_to)
         # |> debug("cs with replied")
       {:ok, %{replied: %{thread_id: thread_id}}=reply_to} when is_binary(thread_id) ->
         # we're permitted to reply to the thing, but not the thread root
         debug("threading under parent")
         changeset
-        |> Changesets.put_assoc(:replied, %{thread_id: reply_to.id, reply_to: reply_to}) #|> debug()
+        |> make_threaded(reply_to.id, reply_to)
       {:ok, %{}=reply_to} ->
         debug("parent has no thread, creating one")
         debug(reply_to)
@@ -63,7 +63,7 @@ defmodule Bonfire.Social.Threads do
         reply_to = Map.put(reply_to, :replied, replied)
         changeset
         |> Changeset.prepare_changes(&create_parent_replied(&1, replied, replied_attrs))
-        |> Changesets.put_assoc(:replied, %{thread_id: reply_to.id, reply_to: reply_to}) #|> debug()
+        |> make_threaded(reply_to.id, reply_to)
         # |> put_in([:changes, :replied, :data, :reply_to, :replied], replied) # FIXME?
         {:error, :not_permitted} ->
         debug("not permitted to reply to this, starting new thread")
@@ -81,19 +81,37 @@ defmodule Bonfire.Social.Threads do
     |> Changesets.update_data(&Map.put(&1, :replied, replied))
   end
 
-  defp do_cast_replied(changeset, attrs) do
-    # debug(attrs)
-    changeset
-    |> Changeset.cast(%{replied: attrs}, [])
-    # |> debug()
-    |> Changeset.cast_assoc(:replied, with: &changeset_casted/2)
+  defp start_new_thread(changeset) do
+    Changeset.get_field(changeset, :id)
+    |> Changesets.put_assoc(changeset, :replied, %{reply_to_id: nil, thread_id: ...})
   end
 
-  defp changeset_casted(cs \\ %Replied{}, attrs) do
-    # debug(attrs)
-    changeset(cs, attrs)
-    |> Changeset.cast(Map.put(attrs, :replying_to, attrs[:reply_to]), [:replying_to]) # ugly hack to pass the data along so it can be used by Acls.cast and Feeds.target_feeds
+  defp make_threaded(changeset, thread_id, reply_to) do
+    changeset
+    |> Changesets.put_assoc(:replied, make_child_of(reply_to, %{thread_id: thread_id, reply_to: reply_to}))
   end
+
+  defp make_child_of(reply_to = %{ id: id }, attrs) do
+    #  Reimplementation of a function from EctoMaterializedPath to work with our nested changesets
+    (
+      Map.get(reply_to, :path, [])
+      ++ [id]
+    ) |> Map.put(attrs, :path, ...)
+  end
+
+  # defp do_cast_replied(changeset, attrs) do
+  #   # debug(attrs)
+  #   changeset
+  #   |> Changeset.cast(%{replied: attrs}, [])
+  #   # |> debug()
+  #   |> Changeset.cast_assoc(:replied, with: &changeset_casted/2)
+  # end
+
+  # defp changeset_casted(cs \\ %Replied{}, attrs) do
+  #   # debug(attrs)
+  #   changeset(cs, attrs)
+  #   |> Changeset.cast(Map.put(attrs, :replying_to, attrs[:reply_to]), [:replying_to]) # ugly hack to pass the data along so it can be used by Acls.cast and Feeds.target_feeds
+  # end
 
   def changeset(replied \\ %Replied{}, %{} = attrs) do
     Replied.changeset(replied, attrs)
@@ -101,6 +119,7 @@ defmodule Bonfire.Social.Threads do
 
   defp find_reply_id(%{reply_to_id: id}) when is_binary(id) and id != "", do: id
   defp find_reply_id(%{reply_to: attrs}), do: find_reply_id(attrs)
+  defp find_reply_id(%{thread_id: id}) when is_binary(id) and id != "", do: id
   defp find_reply_id(_), do: nil
 
   defp find_thread_id(%{thread_id: id}) when is_binary(id) and id != "", do: id
@@ -120,12 +139,6 @@ defmodule Bonfire.Social.Threads do
 
   # defp load_thread_id(user, id), do: e(load_thread_for_reply(user, id), :id, nil)
 
-  @doc false
-  def start_new_thread(changeset) do
-    Changeset.get_field(changeset, :id)
-    |> Changesets.put_assoc(changeset, :replied, %{reply_to_id: nil, thread_id: ...})
-  end
-
   defp create(attrs) do
     repo().put(changeset(attrs))
   end
@@ -139,32 +152,40 @@ defmodule Bonfire.Social.Threads do
   end
 
   @doc "List participants in a thread (depending on user's boundaries)"
-  def list_participants(thread_id, current_user \\ nil, opts \\ [], preloads \\ :minimal) when is_binary(thread_id) or is_list(thread_id) do
+  def list_participants(thread_id, opts \\ []) when is_binary(thread_id) or is_list(thread_id) do
+    opts = to_options(opts)
 
     FeedActivities.feed_paginated(
       [participants_in: {thread_id, &filter/3}],
-      current_user, opts, preloads, Replied, false)
+      opts ++ [preload: :minimal],
+      Replied)
   end
 
-  def filter(:participants_in, thread_id, query) do
+  def filter(:participants_in, thread_id, query) when not is_list(thread_id), do: filter(:participants_in, [thread_id], query)
+
+  def filter(:participants_in, thread_ids, query) do
     verb_id = Verbs.get_id!(:create)
 
     query
-      |> join_preload([:activity, :subject_character])
+      # |> join_preload([:activity, :subject, :character])
       |> distinct([fp, subject_character: subject_character], [desc: subject_character.id])
       |> where(
         [replied, activity: activity, subject_character: subject_character],
-        (replied.thread_id == ^thread_id  or replied.id == ^thread_id or replied.reply_to_id == ^thread_id) and activity.verb_id==^verb_id
+        activity.verb_id==^verb_id
+        and (
+          replied.thread_id in ^thread_ids
+          or replied.id in ^thread_ids
+          or replied.reply_to_id in ^thread_ids)
       )
   end
 
   #doc "Group per-thread "
   def filter(:distinct, :threads, query) do
     query
-      |> join_preload([:activity, :replied])
-      |> distinct([fp, replied: replied], [desc: replied.thread_id])
+    # |> join_preload([:activity, :replied])
+    # |> order_by([root], [desc: root.id])
+    |> distinct([replied: replied], desc: replied.thread_id)
   end
-
 
   def list_replies(thread, opts \\ [])
   def list_replies(%{thread_id: thread_id}, opts), do: list_replies(thread_id, opts)
@@ -191,26 +212,35 @@ defmodule Bonfire.Social.Threads do
       to_options(opts)
       |> Keyword.put_new(:max_depth, Config.get(:thread_default_max_depth, 3))
 
-    current_user = current_user(opts)
-
     %Replied{id: Bonfire.Common.Pointers.id_binary(thread_id)}
       |> Replied.descendants()
-      |> Replied.where_depth(is_smaller_than_or_equal_to: opts[:max_depth])
-      |> Activities.query_object_preload_create_activity(current_user)
-      |> Activities.as_permitted_for(current_user, [:see])
-      # |> debug("Thread nested query")
+      |> maybe_max_depth(opts[:max_depth])
+      |> or_where([replied], replied.thread_id == ^thread_id or replied.reply_to_id == ^thread_id)
+      |> where([replied], replied.id != ^thread_id)
+      |> Activities.query_object_preload_create_activity(opts)
+      # |> Activities.as_permitted_for(opts, [:see, :read])
+      |> if opts[:reverse_order] do
+        order_by(..., [root], root.id)
+      else
+        ...
+      end
+      |> debug("Thread nested query")
   end
 
   def query(filter, opts) do
 
-    current_user = current_user(opts)
-
     Replied
       |> query_filter(filter)
-      |> Activities.query_object_preload_create_activity(current_user)
-      |> Activities.as_permitted_for(current_user, [:see])
+      |> Activities.query_object_preload_create_activity(opts)
+      |> Activities.as_permitted_for(opts, [:see])
       # |> debug("Thread filtered query")
   end
+
+  defp maybe_max_depth(query, max_depth) when is_integer(max_depth) do
+    query
+    |> Replied.where_depth(is_smaller_than_or_equal_to: max_depth)
+  end
+  defp maybe_max_depth(query, _max_depth), do: query
 
   # old; not sure this is what forks will look like when we implement thread forking
   # defp custom_thread_id(attrs, user) do

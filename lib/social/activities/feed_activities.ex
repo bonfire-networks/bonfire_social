@@ -136,7 +136,7 @@ defmodule Bonfire.Social.FeedActivities do
   def query_paginated(filters, opts) when is_list(filters) do
   #   feed_i
   #   query_paginated(base_
-
+    query(filters, opts)
   end
   def query_paginated(filters, opts, query) when is_list(filters) do
     # paginate = e(opts, :paginate, opts)
@@ -181,7 +181,7 @@ defmodule Bonfire.Social.FeedActivities do
     query
     # |> debug("feed_paginated pre-preloads")
     # add assocs needed in timelines/feeds
-    |> Activities.activity_preloads(opts, e(opts, :preloads, :all))
+    |> Activities.activity_preloads(opts, e(opts, :preload, :all))
     # |> debug("feed_paginated post-preloads")
     |> Activities.as_permitted_for(opts)
   end
@@ -263,7 +263,7 @@ defmodule Bonfire.Social.FeedActivities do
     all = Enum.flat_map(keys, &Keyword.get(options, &1, []))
     loaded = repo().maybe_preload(all, :character)
     # and finally, look up the appropriate feed from the loaded characters
-    ids = for(character <- loaded, feed <- index[character.id], do: Feeds.feed_id(feed, character))
+    ids = for(character <- loaded, feed <- index[ulid(character)], do: Feeds.feed_id(feed, character))
     (ids ++ Keyword.get(options, :feeds, []))
     # Dedupe
     |> MapSet.new()

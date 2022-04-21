@@ -27,7 +27,7 @@ defmodule Bonfire.Social.Web.DiscussionLive do
   end
 
   def do_handle_params(%{"id" => id} = params, url, socket) do
-    # FIXME: consolidate common code with PostLive and MessageLive
+    # FIXME: consolidate common code with PostLive and MessagesLive
 
     current_user = current_user(socket)
     # debug(params, "PARAMS")

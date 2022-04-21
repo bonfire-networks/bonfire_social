@@ -13,8 +13,8 @@ defmodule Bonfire.Social.Web.Routes do
 
         # live "/post", PostLive, as: Bonfire.Data.Social.Post
         live "/post/:id", PostLive, as: Bonfire.Data.Social.Post
-        live "/discussion/:id", DiscussionLive, as: Bonfire.Data.Social.PostContent
-        live "/discussion/:id/reply/:reply_to_id", DiscussionLive
+        live "/discussion/:id", DiscussionLive, as: Pointers.Pointer
+        live "/discussion/:id/reply/:reply_to_id", DiscussionLive, as: Pointers.Pointer
 
       end
 
@@ -35,9 +35,10 @@ defmodule Bonfire.Social.Web.Routes do
         pipe_through :user_required
 
         live "/my/likes/", Feeds.LikesLive, as: Bonfire.Data.Social.Like
-        live "/messages", MessageLive
-        live "/messages/:id", MessageLive, as: Bonfire.Data.Social.Message
-        live "/messages/:id/reply/:reply_to_id", MessageLive
+        live "/messages/:id", MessagesLive, as: Bonfire.Data.Social.Message
+        live "/messages/:id/reply/:reply_to_id", MessagesLive, as: Bonfire.Data.Social.Message
+        live "/messages/@:username", MessagesLive, as: Bonfire.Data.Social.Message
+        live "/messages", MessagesLive, as: Bonfire.Data.Social.Message
 
       end
 

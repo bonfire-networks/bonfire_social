@@ -9,7 +9,7 @@ defmodule Bonfire.Social.PostContents do
   def cast(changeset, attrs, creator, _preset_or_custom_boundary) do
     Changeset.cast(changeset, %{post_content: maybe_prepare_contents(attrs, creator)}, [])
     |> Changeset.cast_assoc(:post_content, required: true, with: &changeset/2)
-    |> debug("Social.PostContents: changeset")
+    # |> debug()
   end
 
   def maybe_prepare_contents(%{local: false} = attrs, _creator), do: e(attrs, :post_content, nil) || attrs # do not process remote contents

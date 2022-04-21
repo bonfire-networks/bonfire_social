@@ -1,0 +1,16 @@
+
+<Bonfire.UI.Social.MessagesViewLive
+  page_title={@page_title}
+  page={@page}
+  feed={e(assigns, :feed, [])}
+  tab_id={e(assigns, :tab_id, nil)}
+  users={e(assigns, :users, [])}
+  to_circles={e(assigns, :to_circles, [])}
+  activity={e(assigns, :activity, nil)}
+  object={e(assigns, :object, nil)}
+  url={e(assigns, :url, nil)}
+  thread_id={e(assigns, :thread_id, nil)}
+  participants={e(assigns, :participants, nil)}
+  smart_input_prompt={e(assigns, :smart_input_prompt, nil)}
+  
+/>

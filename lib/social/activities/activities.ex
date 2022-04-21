@@ -114,17 +114,28 @@ defmodule Bonfire.Social.Activities do
   end
 
 
-  def query_object_preload_create_activity(q, opts \\ [], preloads \\ :default) do
-    query_object_preload_activity(q, :create, :id, opts, preloads)
+  def query_object_preload_create_activity(q, opts \\ []) do
+    query_object_preload_activity(q, :create, :id, opts)
   end
 
-  def query_object_preload_activity(q, verb \\ :create, object_id_field \\ :id, opts \\ [], preloads \\ :default) do
+  def query_object_preload_activity(q, verb \\ :create, object_id_field \\ :id, opts \\ [])
+  def query_object_preload_activity(q, :create, object_id_field, opts) do
+    q
+    |> reusable_join(:left, [o],
+      activity in Activity, as: :activity,
+      on: activity.id == field(o, ^object_id_field)
+    )
+    |> activity_preloads(opts, opts[:preload])
+  end
+
+  def query_object_preload_activity(q, verb, object_id_field, opts) do
     verb_id = verb_id(verb)
-    reusable_join(q, :left, [o],
+    q
+    |> reusable_join(:left, [o],
       activity in Activity, as: :activity,
       on: activity.object_id == field(o, ^object_id_field) and activity.verb_id == ^verb_id
     )
-    |> activity_preloads(opts, preloads)
+    |> activity_preloads(opts, opts[:preload])
   end
 
 
@@ -142,7 +153,7 @@ defmodule Bonfire.Social.Activities do
              replied: [
                reply_to: {"reply_", [
                  :post_content,
-                 created: [creator: {"creator_", [:character, profile: :icon]}],
+                 created: [creator: {"reply_to_creator_", [:character, profile: :icon]}],
                ]}
              ]
            ]
@@ -151,22 +162,23 @@ defmodule Bonfire.Social.Activities do
         # * In the case of a post, creator of the post
         # * In the case of like of a post, creator of the post
         proload query,
-          created:  [creator: [:character, profile: :icon]],
+          # created:  [creator: [:character, profile: :icon]],
           activity: [object: {"object_", [created: [creator: [:character, profile: :icon]]]}]
+      :tags ->
+        # Tags/mentions
+        proload query,
+          activity: [tags:  [:character, profile: :icon]]
       :minimal ->
         # Subject here is standing in for the creator of the root. One day it may be replaced with it.
         proload query, activity: [subject: {"subject_", [:character, profile: :icon]}]
       :minimum -> # ???
         proload query, activity: [:object]
-      :default ->
+      _default ->
         proload query, activity: [
           :verb, :replied,
           subject: [:character, :profile],
           object: {"object_", [:post_content, :peered, :character, :profile]}
         ]
-      _ ->
-        warn(preloads, "Unknown preload specification")
-        query
     end
   end
 
@@ -183,10 +195,11 @@ defmodule Bonfire.Social.Activities do
   def read(object_id, opts) when is_binary(object_id), do: read([object_id: object_id], opts)
   def read(%Ecto.Query{} = query, %User{}=user), do: read(query, current_user: user)
   def read(%Ecto.Query{} = query, opts) do
+    opts = to_options(opts)
     # debug(opts, "opts")
     query
     # |> debug("base query")
-    |> query_object_preload_create_activity(opts, [:default, :with_parents])
+    |> query_object_preload_create_activity(opts ++ [preload: [:default, :with_parents]])
     # |> debug("activity query")
     |> as_permitted_for(opts, [:read])
     # |> debug("permitted query")

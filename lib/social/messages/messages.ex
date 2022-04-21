@@ -43,18 +43,19 @@ defmodule Bonfire.Social.Messages do
     to = get_tos(to, attrs)
     |> debug("tos")
     |> Boundaries.load_pointers(opts ++ [verb: :message])
-    |> debug("to pointers")
+    # |> debug("to pointers")
 
     if is_list(to) and length(to)>0 do
       opts = [
         boundary: "message",
-        verbs_to_grant: Config.get(:verbs_eyes_only_reply) |> debug(),
+        verbs_to_grant: Config.get(:verbs_eyes_only_reply),
         to_circles: to,
         to_feeds: [inbox: to]
       ]
       attrs = Map.put(attrs, :tags, to)
       repo().transact_with fn ->
         with {:ok, message} <- create(creator, attrs, opts) do
+          debug(message)
           LivePush.notify(creator, "message", message, opts[:to_feeds])
           Bonfire.Social.Integration.ap_push_activity(creator.id, message)
           {:ok, message}
@@ -85,7 +86,7 @@ defmodule Bonfire.Social.Messages do
 
   def read(message_id, opts) when is_binary(message_id) do
     query_filter(Message, id: message_id)
-    |> Activities.read(opts)
+    |> Activities.read(opts ++ [preload: [:default, :with_parents, :tags]])
   end
 
   @doc "List posts created by the user and which are in their outbox, which are not replies"
@@ -95,20 +96,33 @@ defmodule Bonfire.Social.Messages do
     when ( is_binary(with_user) or is_list(with_user) or is_map(with_user) )
     and with_user != current_user_id and with_user != current_user do
     # all messages between two people
+
     with_user_id = Utils.ulid(with_user)
-    if with_user_id && with_user_id != current_user_id, do: [
-      messages_involving: {{with_user_id, current_user_id}, &filter/3},
-    ]
-    # |> debug("list message filters")
-    |> list_paginated(current_user, opts),
-    else: list(current_user, nil, opts)
+
+    if with_user_id && with_user_id != current_user_id do
+      opts = to_options(opts)
+      filter_key = if opts[:threads_only], do: :threads_involving, else: :messages_involving
+
+      [{
+        filter_key,
+        {{with_user_id, current_user_id}, &filter/3}
+      }]
+      # |> debug("list message filters")
+      |> list_paginated(current_user, opts)
+    else
+      list(current_user, nil, opts)
+    end
   end
 
   def list(%{id: current_user_id} = current_user, _, opts) do
+    opts = to_options(opts)
+    filter_key = if opts[:threads_only], do: :threads_involving, else: :messages_involving
+
     # all current_user's message
-    [
-      messages_involving: {current_user_id, &filter/3},
-    ]
+    [{
+      filter_key,
+      {current_user_id, &filter/3}
+    }]
     # |> debug("my messages filters")
     |> list_paginated(current_user, opts)
   end
@@ -116,28 +130,56 @@ defmodule Bonfire.Social.Messages do
   def list(_current_user, _with_user, _cursor_before, _preloads), do: []
 
   defp list_paginated(filters, current_user \\ nil, opts \\ [], query \\ Message) do
+    opts = to_options(opts)
+
+    filters = filters ++ (if opts[:latest_in_threads], do: [distinct: {:threads, &Bonfire.Social.Threads.filter/3}], else: [])
+
     query
       # add assocs needed in timelines/feeds
       # |> join_preload([:activity])
       # |> debug("pre-preloads")
       |> Activities.activity_preloads([current_user: current_user], :all)
-      |> query_filter(filters ++ [distinct: {:threads, &Bonfire.Social.Threads.filter/3}])
+      |> query_filter(filters)
       # |> debug("message_paginated_post-preloads")
       |> Activities.as_permitted_for(current_user, [:see, :read])
-      # |> distinct([fp], [desc: fp.id, desc: fp.activity_id]) # not sure if/why needed... but possible fix for found duplicate ID for component Bonfire.UI.Social.ActivityLive in UI
-      # |> order_by([fp], desc: fp.id)
+      # |> maybe_re_order(opts)
       # |> debug("post-permissions")
       # |> repo().many() # return all items
       |> Bonfire.Repo.many_paginated(opts) # return a page of items (reverse chronological) + pagination metadata
+      |> maybe_re_order_result(opts)
       # |> debug("feed")
   end
 
-    #doc "List messages "
+  defp maybe_re_order(query, opts)  do # re-order distinct threads after DISTINCT ON ordered them by thread_id
+    if opts[:latest_in_threads], do: (from all in subquery(query), order_by: all.id), else: query
+    # FIXME: this results in (Ecto.QueryError) cannot preload associations in subquery in query
+  end
+
+  defp maybe_re_order_result(%{edges: list} = result, opts) do
+    if opts[:latest_in_threads], do: Map.put(result, :edges, Enum.sort_by(list, fn(i) -> i.id end, :desc)), else: result
+  end
+
+  def filter(:threads_involving, {user_id, current_user_id}, query) when is_binary(user_id) do
+    filter(:messages_involving, {user_id, current_user_id}, query)
+    |> where(
+      [replied: replied],
+      is_nil(replied.reply_to_id)
+    )
+  end
+
+  def filter(:threads_involving, user_id, query) do
+    filter(:messages_involving, user_id, query)
+    |> where(
+      [replied: replied],
+      is_nil(replied.reply_to_id)
+    )
+  end
+
   def filter(:messages_involving, {user_id, _current_user_id}, query) when is_binary(user_id) do
     # messages between current user & someone else
 
     query
-    |> join_preload([:activity, :object, :tags])
+    # |> join_preload([:activity, :object, :tags])
     |> where(
       [activity: activity, tags: tags],
       (

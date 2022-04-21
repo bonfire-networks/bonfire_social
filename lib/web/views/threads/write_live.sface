@@ -52,6 +52,7 @@
         </div>
         <Bonfire.UI.Social.BoundariesLive 
           :if={e(assigns, :to_circles, [])==[]}
+          to_circles={e(assigns, :to_circles, [])}
         />
       </div>
 
