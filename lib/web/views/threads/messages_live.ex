@@ -63,7 +63,7 @@ defmodule Bonfire.Social.Web.MessagesLive do
       smart_input_text = if e(current_user, :character, :username, "") == e(user, :character, :username, ""), do:
       "", else: "@"<>e(user, :character, :username, "")<>" "
 
-      feed = if current_user, do: if module_enabled?(Bonfire.Social.Messages), do: Bonfire.Social.Messages.list(current_user, ulid(e(socket.assigns, :user, nil)), latest_in_threads: true) #|> debug()
+      feed = if current_user, do: if module_enabled?(Bonfire.Social.Messages), do: Bonfire.Social.Messages.list(current_user, ulid(e(socket.assigns, :user, nil)), latest_in_threads: true, limit: 10) #|> debug()
 
       {:noreply,
         socket
@@ -145,16 +145,20 @@ defmodule Bonfire.Social.Web.MessagesLive do
         |> Enum.reject(&( e(&1, :character, :id, nil) == e(current_user, :id, nil) ))
         |> debug("participants")
 
-        mentions = if length(participants)>0, do: Enum.map_join(participants, " ", & "@"<>e(&1, :character, :username, ""))<>" "
-
         to_circles = if length(participants)>0, do: Enum.map(participants, & {e(&1, :character, :username, l "someone"), e(&1, :id, nil)})
 
-        prompt = if mentions, do: l("Compose a thoughtful response for %{people}", people: mentions), else: l "Note to self..."
+        names = if length(participants)>0, do: Enum.map_join(participants, ", ", &e(&1, :profile, :name, e(&1, :character, :username, l "someone else")))
+
+        # mentions = if length(participants)>0, do: Enum.map_join(participants, " ", & "@"<>e(&1, :character, :username, ""))<>" "
+
+        prompt =  l("Compose a thoughtful response") #  if mentions, do: "for %{people}", people: mentions), else: l "Note to self..."
+
+        title = if names, do: l("Conversation with %{people}", people: names), else: l "Conversation"
 
         {:noreply,
         socket
         |> assign(
-          page_title: l("Private Message"),
+          page_title: title,
           page: "message",
           has_private_tab: false,
           tab_id: "thread",
@@ -178,7 +182,7 @@ defmodule Bonfire.Social.Web.MessagesLive do
   def do_handle_params(_params, url, socket) do # show all my threads
     current_user = current_user(socket)
 
-    feed = if current_user, do: if module_enabled?(Bonfire.Social.Messages), do: Bonfire.Social.Messages.list(current_user, nil, latest_in_threads: true) #|> debug()
+    feed = if current_user, do: if module_enabled?(Bonfire.Social.Messages), do: Bonfire.Social.Messages.list(current_user, nil, latest_in_threads: true, limit: 10) #|> debug()
 
     {:noreply,
     socket

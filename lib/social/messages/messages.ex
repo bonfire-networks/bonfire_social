@@ -37,7 +37,6 @@ defmodule Bonfire.Social.Messages do
   TODO: check boundaries, right now anyone can message anyone :/
   """
   def send(%{id: _} = creator, attrs, to \\ nil) do
-    debug(attrs)
     opts = [current_user: creator]
 
     to = get_tos(to, attrs)
@@ -46,13 +45,14 @@ defmodule Bonfire.Social.Messages do
     # |> debug("to pointers")
 
     if is_list(to) and length(to)>0 do
+      attrs = Map.put(attrs, :tags, to)
+      |> debug("message attrs")
       opts = [
         boundary: "message",
         verbs_to_grant: Config.get(:verbs_eyes_only_reply),
         to_circles: to,
         to_feeds: [inbox: to]
       ]
-      attrs = Map.put(attrs, :tags, to)
       repo().transact_with fn ->
         with {:ok, message} <- create(creator, attrs, opts) do
           debug(message)
@@ -86,7 +86,8 @@ defmodule Bonfire.Social.Messages do
 
   def read(message_id, opts) when is_binary(message_id) do
     query_filter(Message, id: message_id)
-    |> Activities.read(opts ++ [preload: [:default, :with_parents, :tags]])
+    |> Activities.read(opts ++ [preload: [:default, :with_parents]])
+    |> repo().maybe_preload(activity: [tags: [:character, profile: :icon]]) # load audience list
   end
 
   @doc "List posts created by the user and which are in their outbox, which are not replies"

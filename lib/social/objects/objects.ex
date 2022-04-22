@@ -13,6 +13,7 @@ defmodule Bonfire.Social.Objects do
   alias Bonfire.Boundaries.Acls
   alias Bonfire.Social.{Activities, FeedActivities, Tags, Threads}
   alias Pointers.{Changesets, Pointer}
+  alias Bonfire.Epics.Epic
 
   @doc """
   Handles casting:
@@ -214,21 +215,56 @@ defmodule Bonfire.Social.Objects do
   # end
 
   def delete(object, opts) do
-    object = Bonfire.Common.Pointers.get(object, opts)
-            ~> debug("WIP: deletion")
-
     opts = to_options(opts)
-    |> Keyword.put(:action, :delete)
-    |> Keyword.put(:delete_associations, [
-        :creator,
-        :caretaker,
-        :caretaker,
-        :activities,
-        :peered,
-        :controlled
-      ])
 
-    Bonfire.Common.ContextModules.maybe_apply(object, :delete, [object, opts])
+    # load & check permission
+    with %{} = object <- Bonfire.Common.Pointers.get(object, opts ++ [verbs: [:delete]])
+            ~> debug("WIP: deletion") do
+      opts =opts
+      |> Keyword.put(:action, :delete)
+      |> Keyword.put(:delete_associations, [ # generic things to delete from all object types
+          :creator,
+          :caretaker,
+          :caretaker,
+          :activities,
+          :peered,
+          :controlled
+        ])
+
+      with {:error, _} <- Bonfire.Common.ContextModules.maybe_apply(object, :delete, [object, opts]),
+          {:error, _} <- Bonfire.Common.ContextModules.maybe_apply(object, :soft_delete, [current_user(opts), object]),
+          {:error, _} <- Bonfire.Common.ContextModules.maybe_apply(object, :soft_delete, [object]) do
+            warn("there's no per-type delete functions, try with generic_delete anyway")
+            generic_delete(object, opts)
+      end
+    else
+      _ ->
+        error(l "No permission to delete this")
+    end
+  end
+
+  def generic_delete(object, options \\ []) do
+    options = to_options(options)
+    |> Keyword.put(:object, object)
+
+    options
+    |> Keyword.put(:delete_associations,
+      options[:delete_associations] ++ [ # cover our bases with common mixins
+        :post_content,
+        :profile,
+        :character,
+        :named
+      ])
+    |> run_epic(:delete, ..., :object)
+  end
+
+  def run_epic(type, options \\ [], on \\ :object) do
+    options = Keyword.merge(options, crash: true, debug: true, verbose: false)
+    epic =
+      Epic.from_config!(__MODULE__, type)
+      |> Epic.assign(:options, options)
+      |> Epic.run()
+    if epic.errors == [], do: {:ok, epic.assigns[on]}, else: {:error, epic}
   end
 
 end

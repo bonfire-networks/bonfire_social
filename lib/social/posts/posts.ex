@@ -45,7 +45,7 @@ defmodule Bonfire.Social.Posts do
 
     options
     |> Keyword.put(:delete_associations,
-      options[:delete_associations] ++ [ # adds to generic assocs defined by `Objects.delete/2`
+      options[:delete_associations] ++ [ # adds per-type assocs
         :post_content
       ])
     |> run_epic(:delete, ..., :object)

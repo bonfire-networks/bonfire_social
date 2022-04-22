@@ -5,12 +5,22 @@ defmodule Bonfire.Social.Messages.LiveHandler do
     send_message(params, socket)
   end
 
+  def handle_event("select_recipient", %{"id"=> id, "action" =>"deselect"}, socket) do
+    debug(id, "remove from circles")
+    # debug(e(socket.assigns, :to_circles, []))
+    to_circles = Enum.reject(e(socket.assigns, :to_circles, []), fn {_name, cid} -> cid==id end)
+    |> debug()
+    {:noreply,
+      assign(socket, to_circles: to_circles)
+    }
+  end
+
   def handle_event("select_recipient", %{"id"=> id, "name"=>name}, socket) do
-    debug(id: id)
-    debug("add to circles")
-    debug(e(socket, :to_circles, []))
-    to_circles = [{name, id} | e(socket, :to_circles, [])]
-    debug(to_circles)
+    debug(id, "add to circles")
+    # debug(e(socket.assigns, :to_circles, []))
+    to_circles = [{name, id} | e(socket.assigns, :to_circles, [])]
+    |> Enum.uniq()
+    # |> debug()
     {:noreply,
       assign(socket, to_circles: to_circles)
     }

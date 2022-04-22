@@ -459,17 +459,17 @@ defmodule Bonfire.Social.FeedActivities do
 
 
   @doc "Delete an activity (usage by things like unlike)"
-  def delete_for_object(%{id: id}), do: delete_for_object(id)
-  def delete_for_object(id_or_ids) do
-    cond do
-      is_list(id_or_ids) ->
-        Enum.each(id_or_ids, fn x -> delete_for_object(x) end)
-      is_binary(id_or_ids) and id_or_ids !="" ->
+  def delete(objects, by_field \\ :id) do
+    case ulid(objects) do
+      # is_list(id_or_ids) ->
+      #   Enum.each(id_or_ids, fn x -> delete(x, by_field) end)
+      nil -> error("Nothing to delete")
+      objects ->
         FeedPublish
-        |> query_filter(id: id_or_ids)
+        |> query_filter({by_field, objects})
+        |> debug()
         |> repo().delete_many()
-        |> elem(1)
-      true -> nil
+        |> elem(0)
     end
   end
 

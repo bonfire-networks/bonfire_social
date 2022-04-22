@@ -31,6 +31,17 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
     |> live_more(socket)
   end
 
+  def handle_event("delete", %{"id"=> id} = params, socket) do
+    # TODO: check permission
+    with num when is_integer(num) <- Bonfire.Social.FeedActivities.delete(id) do
+      Bonfire.UI.Social.OpenModalLive.close()
+
+      {:noreply,
+        socket
+        |> put_flash(:info, l("Deleted from %{number} feeds!", number: num))
+      }
+    end
+  end
 
   def assign_feed(%{} = feed, socket) do
     new = [

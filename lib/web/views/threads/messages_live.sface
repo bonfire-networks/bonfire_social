@@ -4,6 +4,7 @@
   page={@page}
   feed={e(assigns, :feed, [])}
   tab_id={e(assigns, :tab_id, nil)}
+  thread_id={e(assigns, :thread_id, nil)}
   users={e(assigns, :users, [])}
   to_circles={e(assigns, :to_circles, [])}
   activity={e(assigns, :activity, nil)}

@@ -92,7 +92,7 @@ defmodule Bonfire.Social.Activities do
   @doc "Delete an activity (usage by things like unlike)"
   def delete_by_subject_verb_object(%{}=subject, verb, %{}=object) do
     q = by_subject_verb_object_q(subject, Verbs.get_id!(verb), object)
-    FeedActivities.delete_for_object(repo().many(q)) # TODO: see why cascading delete doesn't take care of this
+    FeedActivities.delete(repo().many(q)) # TODO: see why cascading delete doesn't take care of this
     elem(repo().delete_all(q), 1)
   end
 
@@ -164,10 +164,10 @@ defmodule Bonfire.Social.Activities do
         proload query,
           # created:  [creator: [:character, profile: :icon]],
           activity: [object: {"object_", [created: [creator: [:character, profile: :icon]]]}]
-      :tags ->
-        # Tags/mentions
-        proload query,
-          activity: [tags:  [:character, profile: :icon]]
+      # :tags ->
+      #   # Tags/mentions (this actual needs to be done by Repo.preload to be able to list more than one)
+      #   proload query,
+      #     activity: [tags:  {"tag_", [:character, profile: :icon]}]
       :minimal ->
         # Subject here is standing in for the creator of the root. One day it may be replaced with it.
         proload query, activity: [subject: {"subject_", [:character, profile: :icon]}]
@@ -176,7 +176,7 @@ defmodule Bonfire.Social.Activities do
       _default ->
         proload query, activity: [
           :verb, :replied,
-          subject: [:character, :profile],
+          subject: {"subject_", [:character, :profile]},
           object: {"object_", [:post_content, :peered, :character, :profile]}
         ]
     end
