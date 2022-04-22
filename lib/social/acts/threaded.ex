@@ -73,14 +73,8 @@ defmodule Bonfire.Social.Acts.Threaded do
         |> put_replied(reply_to.id, reply_to.id)
         |> Epic.assign(epic, on, ...)
         |> Epic.assign(:reply_to, reply_to)
-      {:error, :not_permitted} ->
-        debug(epic, act, "not permitted to reply to this, starting new thread")
-        id = Changeset.get_field(changeset, :id)
-        changeset
-        |> put_replied(id, nil)
-        |> Epic.assign(epic, on, ...)
-      {:error, :not_found}->
-        debug(epic, act, "does not reply to anything, starting new thread")
+      _ ->
+        debug(epic, act, "does not reply to anything or not permitted to reply to, so starting new thread")
         id = Changeset.get_field(changeset, :id)
         changeset
         |> put_replied(id, nil)
