@@ -38,7 +38,8 @@ defmodule Bonfire.Social.Activities do
     verb_id = verb.id
     %{subject_id: ulid(subject), object_id: ulid(object), verb_id: verb_id}
     |> Changesets.put_assoc(changeset, :activity, ...)
-    |> Changeset.update_change(:activity, &put_verb(&1, verb))
+    # |> Changeset.update_change(:activity, &put_data(&1, :subject, maybe_to_struct(subject, Pointers.Pointer)))
+    |> Changeset.update_change(:activity, &put_data(&1, :verb, verb))
   end
 
   def build_assoc(thing, verb, subject), do: build_assoc(thing, verb, subject, thing)
@@ -54,7 +55,7 @@ defmodule Bonfire.Social.Activities do
     |> Map.put(:verb, verb)
   end
 
-  defp put_verb(changeset, verb), do: Changesets.update_data(changeset, &Map.put(&1, :verb, verb))
+  defp put_data(changeset, key, value), do: Changesets.update_data(changeset, &Map.put(&1, key, value))
 
   def as_permitted_for(q, opts \\ [], verbs \\ [:see, :read]) do
     to_options(opts)

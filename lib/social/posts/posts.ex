@@ -301,21 +301,34 @@ defmodule Bonfire.Social.Posts do
 
   # TODO: rewrite to take a post instead of an activity
   def indexing_object_format(post, opts \\ []) do
+    current_user = current_user(opts)
     case post do
       # The indexer is written in terms of the inserted object, so changesets need fake inserting
       %{id: id, post_content: content, activity: %{subject: %{profile: profile, character: character} = activity}} ->
-        %{ "id" => id,
-           "index_type" => "Bonfire.Data.Social.Post",
-           # "url" => path(post),
-           "post_content" => PostContents.indexing_object_format(content),
-           "creator" => Bonfire.Me.Integration.indexing_format(profile, character), # this looks suspicious
-           "tag_names" => Tags.indexing_format_tags(activity)
-         } #|> IO.inspect
+        indexable(id, content, activity, profile, character)
+
+      %{id: id, post_content: content, created: %{creator: %{id: _} = creator}, activity: activity} ->
+        indexable(id, content, activity, e(creator, :profile, nil), e(creator, :character, nil))
+
+      %{id: id, post_content: content, activity: %{subject_id: subject_id} = activity} ->
+        creator = Bonfire.Me.Users.by_id(subject_id) # FIXME: we should get the creator/subject from the data
+        indexable(id, content, activity, e(creator, :profile, nil), e(creator, :character, nil))
+
       _ ->
         error("Posts: no clause match for function indexing_object_format/3")
-        error(post, "post")
+        dump(post)
         nil
     end
+  end
+
+  defp indexable(id, content, activity, profile, character) do
+    %{ "id" => id,
+        "index_type" => "Bonfire.Data.Social.Post",
+        # "url" => path(post),
+        "post_content" => PostContents.indexing_object_format(content),
+        "created" => Bonfire.Me.Integration.indexing_format_created(profile, character),
+        "tags" => Tags.indexing_format_tags(activity)
+      }
   end
 
   def maybe_index(post, options \\ []) do
