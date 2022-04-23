@@ -120,17 +120,21 @@ defmodule Bonfire.Social.Posts.LiveHandler do
   end
 
 
-  # def handle_event("open_activity", %{"id" => id, "showing_within" => showing_within} = _params, socket) do
-  #   debug("Redirect to the activity page")
-  #   if showing_within == "thread" do
-  #     {:noreply, socket}
-  #   else
-  #     {:noreply,
-  #       socket
-  #       |> push_redirect(to: id)
-  #     }
-  #   end
-  # end
+  def handle_event("open_activity", %{"id" => id, "showing_within" => showing_within} = _params, socket) do
+    debug("Redirect to the activity page")
+    if showing_within == "thread" do
+      {:noreply, socket}
+    else
+      {:noreply,
+        socket
+        |> push_redirect(to: id)
+      }
+    end
+  end
+
+  def handle_event("open_activity", %{"ignore" => ignore} = _params, socket) do
+      {:noreply, socket}
+  end
 
   def live_more(thread_id, cursor, socket) do
     # debug(pagination: cursor)
