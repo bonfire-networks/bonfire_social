@@ -133,7 +133,7 @@ defmodule Bonfire.Social.Messages do
   defp list_paginated(filters, current_user \\ nil, opts \\ [], query \\ Message) do
     opts = to_options(opts)
 
-    filters = filters ++ (if opts[:latest_in_threads], do: [distinct: {:threads, &Bonfire.Social.Threads.filter/3}], else: [])
+    filters = filters ++ (if opts[:latest_in_threads], do: [distinct: {:threads, &Threads.filter/3}], else: [])
 
     query
       # add assocs needed in timelines/feeds
@@ -143,22 +143,14 @@ defmodule Bonfire.Social.Messages do
       |> query_filter(filters)
       # |> debug("message_paginated_post-preloads")
       |> Activities.as_permitted_for(current_user, [:see, :read])
-      # |> maybe_re_order(opts)
-      # |> debug("post-permissions")
+      # |> Threads.maybe_re_order_with_subquery(opts)
+      |> debug("post preloads & permissions")
       # |> repo().many() # return all items
       |> Bonfire.Repo.many_paginated(opts) # return a page of items (reverse chronological) + pagination metadata
-      |> maybe_re_order_result(opts)
+      # |> Threads.maybe_re_order_result(opts)
       # |> debug("feed")
   end
 
-  defp maybe_re_order(query, opts)  do # re-order distinct threads after DISTINCT ON ordered them by thread_id
-    if opts[:latest_in_threads], do: (from all in subquery(query), order_by: all.id), else: query
-    # FIXME: this results in (Ecto.QueryError) cannot preload associations in subquery in query
-  end
-
-  defp maybe_re_order_result(%{edges: list} = result, opts) do
-    if opts[:latest_in_threads], do: Map.put(result, :edges, Enum.sort_by(list, fn(i) -> i.id end, :desc)), else: result
-  end
 
   def filter(:threads_involving, {user_id, current_user_id}, query) when is_binary(user_id) do
     filter(:messages_involving, {user_id, current_user_id}, query)
