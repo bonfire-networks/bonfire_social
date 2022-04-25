@@ -144,7 +144,9 @@ defmodule Bonfire.Social.Activities do
     case preloads do
       _ when is_list(preloads) ->
         Enum.reduce(preloads, query, &activity_preloads(&2, opts, &1))
-      :all -> activity_preloads(query, opts, [:with_parents, :with_creator, :default])
+      :all -> activity_preloads(query, opts, [
+          :with_parents, :with_creator, :with_subject, :default
+        ])
       :with_parents ->
         # If the root replied to anything, fetch that and its creator too. e.g.
         # * Alice's post that replied to Bob's post
@@ -169,15 +171,14 @@ defmodule Bonfire.Social.Activities do
       #   # Tags/mentions (this actual needs to be done by Repo.preload to be able to list more than one)
       #   proload query,
       #     activity: [tags:  {"tag_", [:character, profile: :icon]}]
-      :minimal ->
+      :with_subject ->
         # Subject here is standing in for the creator of the root. One day it may be replaced with it.
         proload query, activity: [subject: {"subject_", [:character, profile: :icon]}]
-      :minimum -> # ???
+      :with_object -> # ???
         proload query, activity: [:object]
       _default ->
         proload query, activity: [
           :verb, :replied,
-          subject: {"subject_", [:character, :profile]},
           object: {"object_", [:post_content, :peered, :character, :profile]}
         ]
     end
