@@ -103,7 +103,7 @@ defmodule Bonfire.Social.Acts.Feeds do
   end
 
   defp user_notifications_feeds(epic, act, users, boundary) do
-    debug(epic, act, users, "users going in")
+    # debug(epic, act, users, "users going in")
     cond do
       boundary in ["public", "mentions", "federated"] ->
         users

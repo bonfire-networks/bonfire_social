@@ -173,7 +173,7 @@ defmodule Bonfire.Social.Threads do
 
     FeedActivities.feed_paginated(
       [participants_in: {thread_id, &filter/3}],
-      opts ++ [preload: :minimal],
+      opts ++ [preload: :with_subject],
       Replied)
   end
 

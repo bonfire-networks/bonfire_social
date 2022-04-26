@@ -174,11 +174,12 @@ defmodule Bonfire.Social.Activities do
       :with_subject ->
         # Subject here is standing in for the creator of the root. One day it may be replaced with it.
         proload query, activity: [subject: {"subject_", [:character, profile: :icon]}]
-      :with_object -> # ???
+      :with_object ->
         proload query, activity: [:object]
       _default ->
         proload query, activity: [
-          :verb, :replied,
+          :verb,
+          :replied,
           object: {"object_", [:post_content, :peered, :character, :profile]}
         ]
     end
