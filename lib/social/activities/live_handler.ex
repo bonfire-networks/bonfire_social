@@ -43,6 +43,22 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
     end
   end
 
+  def handle_event("open_activity", %{"ignore" => "true"} = _params, socket) do
+    {:noreply, socket}
+  end
+
+  def handle_event("open_activity", %{"permalink" => permalink} = _params, socket) do
+    debug("Redirect to the activity page")
+    {:noreply,
+      socket
+      |> push_redirect(to: permalink)
+    }
+  end
+
+  def handle_event("open_activity", _params, socket) do
+    {:noreply, socket}
+  end
+
   def assign_feed(%{} = feed, socket) do
     new = [
       feed: e(feed, :edges, []),
@@ -69,11 +85,11 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
   end
 
   def handle_info({:new_activity, data}, socket) do
-    debug(data[:feed_ids], "handle_info :new_activity")
-    # debug(data)
+    debug(data[:feed_ids], "received new_activity for feeds")
+    dump(data)
     current_user = current_user(socket)
 
-    permitted? = Bonfire.Common.Pointers.exists?([id: e(data, :activity, :object, :id, nil)], current_user: current_user) |> debug("check boundary upon receiving a LivePush")
+    permitted? = Bonfire.Common.Pointers.exists?([id: e(data, :activity, :object, :id, nil)], current_user: current_user) |> debug("checked boundary upon receiving a LivePush")
 
     if permitted? && is_list(data[:feed_ids]) do
       my_home_feed_ids = Bonfire.Social.Feeds.my_home_feed_ids(current_user)

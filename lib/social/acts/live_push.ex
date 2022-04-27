@@ -17,10 +17,11 @@ defmodule Bonfire.Social.Acts.LivePush do
           feeds = Map.get(epic.assigns, feeds_key, [])
           maybe_debug(epic, act, feeds, "Publishing to feeds at assign #{feeds_key}")
           LivePush.push_activity(feeds, activity)
+          |> Epic.assign(epic, on, ...)
       end
     else
       maybe_debug(act, length(epic.errors), "Skipping due to errors!")
+      epic
     end
-    epic
   end
 end

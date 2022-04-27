@@ -1,12 +1,23 @@
 defmodule Bonfire.Social.LivePush do
   use Bonfire.Common.Utils
   import Where
+  alias Bonfire.Social.Activities
 
-  def push_activity(feed_ids, %{id: _, activity: %{id: _}=activity} = object),
-    do: push_activity(feed_ids, activity |> Map.put(:object, object)) # push object under activity
+  def push_activity(feed_ids, %{id: _, activity: %{id: _}} = object) do
+    debug(feed_ids, "push an object as :new_activity")
+    object = Activities.activity_preloads(object, :feed, [])
+
+    object.activity
+    |> Map.put(:object, Map.drop(object, [:activity])) # push as activity with :object
+    |> push_activity(feed_ids, ...)
+
+    object
+  end
 
   def push_activity(feed_ids, activity) do
-    debug(feed_ids, "push :new_activity")
+    debug(feed_ids, "push a :new_activity")
+    activity = Activities.activity_preloads(activity, :feed, [])
+
     pubsub_broadcast(feed_ids, {
       {Bonfire.Social.Feeds, :new_activity},
       [
@@ -14,8 +25,9 @@ defmodule Bonfire.Social.LivePush do
         activity: activity
       ]
       })
-    # debug(activity)
+
     maybe_push_thread(activity)
+
     activity
   end
 

@@ -126,7 +126,7 @@ defmodule Bonfire.Social.Activities do
       activity in Activity, as: :activity,
       on: activity.id == field(o, ^object_id_field)
     )
-    |> activity_preloads(opts, opts[:preload])
+    |> activity_preloads(opts)
   end
 
   def query_object_preload_activity(q, verb, object_id_field, opts) do
@@ -136,18 +136,71 @@ defmodule Bonfire.Social.Activities do
       activity in Activity, as: :activity,
       on: activity.object_id == field(o, ^object_id_field) and activity.verb_id == ^verb_id
     )
-    |> activity_preloads(opts, opts[:preload])
+    |> activity_preloads(opts)
   end
 
 
-  def activity_preloads(query, opts, preloads) do
+  def activity_preloads(query, opts) do
+    activity_preloads(query, opts[:preload], opts)
+  end
+
+  def activity_preloads(query, preloads, opts) when is_list(preloads) or preloads in [:all, :feed, :posts, :posts_with_reply_to, :default] do
     case preloads do
       _ when is_list(preloads) ->
-        Enum.reduce(preloads, query, &activity_preloads(&2, opts, &1))
-      :all -> activity_preloads(query, opts, [
-          :with_parents, :with_creator, :with_subject, :default
-        ])
-      :with_parents ->
+        Enum.reduce(preloads, query, &activity_preloads(&2, &1, opts))
+      :all -> activity_preloads(query, [
+          :with_subject, :with_creator, :with_verb, :with_object_posts, :with_reply_to
+        ], opts)
+      :feed -> activity_preloads(query, [
+          :with_subject, :with_creator, :with_verb, :with_object_posts, :with_reply_to
+        ], opts)
+      :posts_with_reply_to -> activity_preloads(query, [
+          :with_subject, :with_object_posts, :with_reply_to
+        ], opts)
+      :posts -> activity_preloads(query, [
+          :with_subject, :with_object_posts, :with_replied
+        ], opts)
+      _default -> activity_preloads(query, [
+          :with_subject, :with_verb, :with_object_posts, :with_replied
+        ], opts)
+    end
+  end
+
+  def activity_preloads(query, preloads, opts) do
+  if Ecto.Queryable.impl_for(query) do
+    case preloads do
+      :with_creator ->
+        # This actually loads the creator of the object:
+        # * In the case of a post, creator of the post
+        # * In the case of like of a post, creator of the post
+        # TODO: in feeds, maybe load the creator with a where clause to skip it when creator==subject
+        proload query,
+          # created:  [creator: [:character, profile: :icon]],
+          activity: [object: {"object_", [created: [creator: [:character, profile: :icon]]]}]
+      # :tags ->
+      #   # Tags/mentions (this actual needs to be done by Repo.preload to be able to list more than one)
+      #   proload query,
+      #     activity: [tags:  {"tag_", [:character, profile: :icon]}]
+      :with_subject ->
+        # Subject here is standing in for the creator of the root. One day it may be replaced with it.
+        proload query, activity: [subject: {"subject_", [:character, profile: :icon]}]
+      :with_verb ->
+        proload query, activity: [:verb]
+      :with_object ->
+        proload query, activity: [:object]
+      :with_object_posts ->
+        proload query, activity: [
+          :replied,
+          object: {"object_", [:post_content, :peered]}
+        ]
+      :with_object_more ->
+        proload query, activity: [
+          :replied,
+          object: {"object_", [:post_content, :peered, :character, profile: :icon]}
+        ]
+      :with_replied ->
+        proload query, activity: [:replied]
+      :with_reply_to ->
         # If the root replied to anything, fetch that and its creator too. e.g.
         # * Alice's post that replied to Bob's post
         # * Bob liked alice's post
@@ -160,29 +213,58 @@ defmodule Bonfire.Social.Activities do
                ]}
              ]
            ]
+    end
+  else
+    case preloads do
       :with_creator ->
         # This actually loads the creator of the object:
         # * In the case of a post, creator of the post
         # * In the case of like of a post, creator of the post
-        proload query,
-          # created:  [creator: [:character, profile: :icon]],
-          activity: [object: {"object_", [created: [creator: [:character, profile: :icon]]]}]
-      # :tags ->
-      #   # Tags/mentions (this actual needs to be done by Repo.preload to be able to list more than one)
-      #   proload query,
-      #     activity: [tags:  {"tag_", [:character, profile: :icon]}]
+        [object: [created: [creator: [:character, profile: :icon]]]]
+      :tags ->
+        # Tags/mentions (this actual needs to be done by Repo.preload to be able to list more than one)
+        [tags:  [:character, profile: :icon]]
       :with_subject ->
         # Subject here is standing in for the creator of the root. One day it may be replaced with it.
-        proload query, activity: [subject: {"subject_", [:character, profile: :icon]}]
+        [subject: [:character, profile: :icon]]
+      :with_verb ->
+        [:verb]
       :with_object ->
-        proload query, activity: [:object]
-      _default ->
-        proload query, activity: [
-          :verb,
+        [:object]
+      :with_object_posts ->
+        [
           :replied,
-          object: {"object_", [:post_content, :peered, :character, :profile]}
+          object: [:post_content, :peered]
         ]
+      :with_object_more ->
+        [
+          :replied,
+          object: [:post_content, :peered, :character, profile: :icon]
+        ]
+      :with_replied ->
+        [:replied]
+      :with_reply_to ->
+        # If the root replied to anything, fetch that and its creator too. e.g.
+        # * Alice's post that replied to Bob's post
+        # * Bob liked alice's post
+           [
+             replied: [
+               reply_to: [
+                 :post_content,
+                 created: [creator: [:character, profile: :icon]],
+               ]
+             ]
+           ]
+      end
+      |> maybe_repo_preload(query, ...)
     end
+  end
+
+  defp maybe_repo_preload(%Bonfire.Data.Social.Activity{} = object, preloads) do
+    repo().maybe_preload(object, preloads)
+  end
+  defp maybe_repo_preload(%{activity: _} = object, preloads) do
+    repo().maybe_preload(object, activity: preloads)
   end
 
   @doc """
@@ -202,7 +284,7 @@ defmodule Bonfire.Social.Activities do
     # debug(opts, "opts")
     query
     # |> debug("base query")
-    |> query_object_preload_create_activity(opts ++ [preload: [:default, :with_parents]])
+    |> query_object_preload_create_activity(opts ++ [preload: [:default, :with_reply_to]])
     # |> debug("activity query")
     |> as_permitted_for(opts, [:read])
     # |> debug("permitted query")

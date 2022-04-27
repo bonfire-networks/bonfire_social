@@ -86,7 +86,7 @@ defmodule Bonfire.Social.Messages do
 
   def read(message_id, opts) when is_binary(message_id) do
     query_filter(Message, id: message_id)
-    |> Activities.read(opts ++ [preload: [:default, :with_parents]])
+    |> Activities.read(opts ++ [preload: [:posts]])
     |> repo().maybe_preload(activity: [tags: [:character, profile: :icon]]) # load audience list
   end
 
@@ -102,10 +102,10 @@ defmodule Bonfire.Social.Messages do
 
     if with_user_id && with_user_id != current_user_id do
       opts = to_options(opts)
-      filter_key = if opts[:threads_only], do: :threads_involving, else: :messages_involving
+      |> Keyword.put(:preload, (if opts[:latest_in_threads], do: :posts, else: :posts_with_reply_to)) # TODO: only loads reply_to when displaying flat threads
 
       [{
-        filter_key,
+        :messages_involving,
         {{with_user_id, current_user_id}, &filter/3}
       }]
       # |> debug("list message filters")
@@ -116,12 +116,13 @@ defmodule Bonfire.Social.Messages do
   end
 
   def list(%{id: current_user_id} = current_user, _, opts) do
-    opts = to_options(opts)
-    filter_key = if opts[:threads_only], do: :threads_involving, else: :messages_involving
-
     # all current_user's message
+
+    opts = to_options(opts)
+    |> Keyword.put(:preload, :posts)
+
     [{
-      filter_key,
+      :messages_involving,
       {current_user_id, &filter/3}
     }]
     # |> debug("my messages filters")
@@ -132,6 +133,7 @@ defmodule Bonfire.Social.Messages do
 
   defp list_paginated(filters, current_user \\ nil, opts \\ [], query \\ Message) do
     opts = to_options(opts)
+    |> Keyword.put(:current_user, current_user)
 
     filters = filters ++ (if opts[:latest_in_threads], do: [distinct: {:threads, &Threads.filter/3}], else: [])
 
@@ -139,7 +141,7 @@ defmodule Bonfire.Social.Messages do
       # add assocs needed in timelines/feeds
       # |> join_preload([:activity])
       # |> debug("pre-preloads")
-      |> Activities.activity_preloads([current_user: current_user], :all)
+      |> Activities.activity_preloads(opts)
       |> query_filter(filters)
       # |> debug("message_paginated_post-preloads")
       |> Activities.as_permitted_for(current_user, [:see, :read])
@@ -151,22 +153,6 @@ defmodule Bonfire.Social.Messages do
       # |> debug("feed")
   end
 
-
-  def filter(:threads_involving, {user_id, current_user_id}, query) when is_binary(user_id) do
-    filter(:messages_involving, {user_id, current_user_id}, query)
-    |> where(
-      [replied: replied],
-      is_nil(replied.reply_to_id)
-    )
-  end
-
-  def filter(:threads_involving, user_id, query) do
-    filter(:messages_involving, user_id, query)
-    |> where(
-      [replied: replied],
-      is_nil(replied.reply_to_id)
-    )
-  end
 
   def filter(:messages_involving, {user_id, _current_user_id}, query) when is_binary(user_id) do
     # messages between current user & someone else
