@@ -137,10 +137,12 @@ defmodule Bonfire.Social.Objects do
 
   # TODO: does not take permissions into consideration
   def preload_creator(object),
-    do: Bonfire.Repo.maybe_preload(object, [created: [creator: [:character]]])
+    do: object
+        |> Bonfire.Repo.maybe_preload([created: [creator: [:character]]])
+        |> Bonfire.Repo.maybe_preload([creator: [:character]])
 
   def object_creator(object) do
-    e(object, :created, :creator, :character, e(object, :creator, nil))
+    e(object, :created, :creator, e(object, :creator, nil))
   end
 
   defp tag_ids(tags), do: Enum.map(tags, &(&1.id))

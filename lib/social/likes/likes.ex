@@ -33,7 +33,7 @@ defmodule Bonfire.Social.Likes do
     opts = [
       boundary: "mentions", # TODO: make configurable
       to_circles: [ulid(liked_creator)],
-      to_feeds: [notifications: liked_creator],
+      to_feeds: Feeds.maybe_creator_notification(liker, liked_creator),
     ]
     case create(liker, liked, opts) do
       {:ok, like} ->

@@ -21,13 +21,14 @@ defmodule Bonfire.Social.Boosts do
   def get(subject, object, opts \\ []), do: Edges.get(__MODULE__, subject, object, opts)
   def get!(subject, object, opts \\ []), do: Edges.get!(__MODULE__, subject, object, opts)
 
+
   def boost(%{} = booster, %{} = boosted) do
     boosted = Objects.preload_creator(boosted)
     boosted_creator = Objects.object_creator(boosted)
     opts = [
       boundary: "public", # TODO: get the preset for boosting from config and/or user's settings
       to_circles: [ulid(boosted_creator)],
-      to_feeds: [notifications: boosted_creator, outbox: booster],
+      to_feeds: [outbox: booster] ++ Feeds.maybe_creator_notification(booster, boosted_creator),
     ]
     with {:ok, boost} <- create(booster, boosted, opts) do
       # Push to AP, which will need to see the subject and object

@@ -211,6 +211,9 @@ defmodule Bonfire.Social.Feeds do
   defp feed_key(:notification), do: :notifications_id # just in case
   defp feed_key(other), do: raise "Unknown user feed name: #{inspect(other)}"
 
+  def maybe_creator_notification(subject, object_creator) do
+    if ulid(subject) != ulid(object_creator), do: [notifications: object_creator], else: []
+  end
 
   def inbox_of_obj_creator(object) do
     Objects.preload_creator(object) |> Objects.object_creator() |> feed_id(:notifications, ...) #|> IO.inspect
