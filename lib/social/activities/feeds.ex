@@ -12,9 +12,82 @@ defmodule Bonfire.Social.Feeds do
   alias Bonfire.Me.Characters
   alias Bonfire.Boundaries
 
+  @global_feeds %{
+    "public"    => [:guest, :local],
+    "federated" => [:guest, :activity_pub],
+    "local"     => [:local],
+  }
 
   # def queries_module, do: Feed
   def context_module, do: Feed
+
+
+  def get_feed_ids(_me, "admins", _) do
+    admins_notifications()
+    |> debug("posting to admin feeds")
+  end
+  def get_feed_ids(me, boundary, assigns) do
+    my_notifications = feed_id(:notifications, me)
+
+    [
+      e(assigns, :reply_to, :replied, :thread, :id, nil),
+      maybe_my_outbox_feed_id(me, boundary),
+      global_feed_ids(boundary),
+      mentions_feed_ids(assigns, boundary)
+    ]
+    |> List.flatten()
+    |> Enum.uniq()
+    |> Enum.reject(&( &1 == my_notifications )) # avoid self-notifying
+    |> Utils.filter_empty([])
+  end
+
+  def maybe_my_outbox_feed_id(me, boundary) do
+    if boundary in ["public", "federated", "local"] do
+      case my_feed_id(:outbox, me) do
+        nil ->
+          warn("Cannot find my outbox to publish!")
+          nil
+        id ->
+          debug(boundary, "Publishing to my outbox, boundary")
+          [id]
+      end
+    else
+      debug(boundary, "Not publishing to my outbox, boundary")
+      nil
+    end
+  end
+
+
+  def global_feed_ids(boundary), do: Map.get(@global_feeds, boundary, []) |> Enum.map(&named_feed_id/1)
+
+  def mentions_feed_ids(assigns, boundary) do
+    # TODO: unravel the mentions parsing so we can deal with mentions properly
+    mentions = Map.get(assigns, :mentions, [])
+    reply_to_creator = e(assigns, :reply_to, :created, :creator, nil)
+    user_notifications_feeds([reply_to_creator | mentions], boundary)
+    |> debug("mentions notifications feeds")
+  end
+
+  def user_notifications_feeds(users, boundary) do
+    # debug(epic, act, users, "users going in")
+    cond do
+      boundary in ["public", "mentions", "federated"] ->
+        users
+        |> filter_empty([])
+        |> repo().maybe_preload([:character])
+        |> Enum.map(&feed_id(:notifications, &1))
+      boundary == "local" ->
+        users
+        |> filter_empty([])
+        |> repo().maybe_preload([:character, :peered])
+        |> Enum.filter(&is_local?/1) # only local
+        |> Enum.map(&feed_id(:notifications, &1))
+      true ->
+        nil
+    end
+  end
+
+## TODO: de-duplicate the above functions and target_feeds/4 below ##
 
   def target_feeds(%Ecto.Changeset{} = changeset, creator, preset_or_custom_boundary) do
     # debug(changeset)
@@ -52,58 +125,66 @@ defmodule Bonfire.Social.Feeds do
 
   def do_target_feeds(creator, preset_or_custom_boundary, mentions \\ [], reply_to_creator \\ nil, thread_id \\ nil) do
 
+    creator_notifications = feed_id(:notifications, creator)
+    |> debug("creator_notifications")
+
     # include any extra feeds specified in opts
-    to_feeds_extra = maybe_custom_feeds(preset_or_custom_boundary) || []
-    |> debug("to_feeds_extra")
+    to_feeds_custom = maybe_custom_feeds(preset_or_custom_boundary) || []
+    |> debug("to_feeds_custom")
 
     []
-    ++ [to_feeds_extra]
+    ++ [to_feeds_custom]
     ++ case Boundaries.preset(preset_or_custom_boundary) do
 
       "public" -> # put in all reply_to creators and mentions inboxes + guest/local feeds
         [ named_feed_id(:guest),
           named_feed_id(:local),
-          feed_id(:notifications, reply_to_creator),
           thread_id,
           my_feed_id(:outbox, creator)
         ]
-        ++ feed_ids(:notifications, mentions)
+        ++ # put in inboxes (notifications) of any users we're replying to and mentions
+          (([reply_to_creator]
+           ++ mentions)
+          |> feed_ids(:notifications, ...))
 
-      "federated" -> # like public but put in federated instead of local (is this what we want?)
+      "federated" -> # like public but put in federated feed instead of local (is this what we want?)
       [ named_feed_id(:guest),
         named_feed_id(:activity_pub),
-        feed_id(:notifications, reply_to_creator),
         thread_id,
         my_feed_id(:outbox, creator)
       ]
-      ++ feed_ids(:notifications, mentions)
+      ++ # put in inboxes (notifications) of any users we're replying to and mentions
+          (([reply_to_creator]
+           ++ mentions)
+          |> feed_ids(:notifications, ...))
 
       "local" ->
 
         [named_feed_id(:local)] # put in local instance feed
         ++
-        [( # put in inboxes (notifications) of any local reply_to creators and mentions
-          ([reply_to_creator]
-           ++ mentions)
-          |> Enum.filter(&is_local?/1)
-          |> feed_id(:notifications, ...)
-        )] ++ [
+        [
           thread_id,
           my_feed_id(:outbox, creator)
-        ]
+        ] ++ # put in inboxes (notifications) of any local users we're replying to and local mentions
+          (([reply_to_creator]
+           ++ mentions)
+          |> Enum.filter(&is_local?/1)
+          |> feed_ids(:notifications, ...))
 
       "mentions" ->
-        feed_ids(:notifications, mentions)
+        mentions
+        |> feed_ids(:notifications)
 
       "admins" ->
         admins_notifications()
 
       _ -> [] # default to none except any custom ones
     end
+    |> debug("pre-target feeds")
     |> List.flatten()
-    |> Enum.reject(& &1==feed_id(:notifications, creator) ) # avoid self-notifying
-    |> Utils.filter_empty([])
     |> Enum.uniq()
+    |> Enum.reject(&( &1 == creator_notifications )) # avoid self-notifying
+    |> Utils.filter_empty([])
     |> debug("target feeds")
   end
 
@@ -154,7 +235,7 @@ defmodule Bonfire.Social.Feeds do
   def my_feed_id(type, other) do
     case current_user(other) do
       nil ->
-        error("Social.Feeds.my_feed_id: no user found in #{inspect other}")
+        error("no user found in #{inspect other}")
         nil
 
       current_user ->
@@ -168,14 +249,14 @@ defmodule Bonfire.Social.Feeds do
     |> repo().maybe_preload([:character])
     |> Enum.map(&feed_id(feed_name, &1))
     |> List.flatten()
-    |> Enum.reject(&is_nil/1)
+    |> filter_empty([])
   end
-  # def feed_ids(feed_name, for_subject), do: feed_id(feed_name, for_subject)
+  def feed_ids(feed_name, for_subject), do: [feed_id(feed_name, for_subject)]
 
 
   # def feed_id(type, for_subjects) when is_list(for_subjects), do: feed_ids(type, for_subjects)
 
-  def feed_id(type, %{character: _} = object), do: repo().maybe_preload(object, :character) |> e(:character, nil) |> feed_id(type, ...)
+  def feed_id(type, %{character: _} = object), do: object |> repo().maybe_preload(:character) |> e(:character, nil) |> feed_id(type, ...)
 
   def feed_id(feed_name, for_subject) do
     cond do
@@ -183,7 +264,7 @@ defmodule Bonfire.Social.Feeds do
         Characters.get(for_subject)
         ~> feed_id(feed_name, ...)
 
-      is_atom(feed_name) ->
+      is_atom(feed_name) and is_map(for_subject) ->
         # debug(for_subject, "subject before looking for feed")
 
         (feed_key(feed_name) #|> debug()
@@ -195,6 +276,7 @@ defmodule Bonfire.Social.Feeds do
       #   |> Enum.reject(&is_nil/1)
 
       true ->
+        error(for_subject, "Could not get #{feed_name} feed_id for")
         nil
     end
   end
@@ -241,10 +323,10 @@ defmodule Bonfire.Social.Feeds do
   def maybe_create_feed(type, for_subject) do
     with feed_id when is_binary(feed_id) <- create_box(type, for_subject) do
       # debug(for_subject)
-      debug("Feeds: created new #{inspect type} with id #{inspect feed_id} for #{inspect ulid(for_subject)}")
+      debug("created new #{inspect type} with id #{inspect feed_id} for #{inspect ulid(for_subject)}")
       feed_id
     else e ->
-      error("Feeds.feed_id: could not find or create feed (#{inspect e}) for #{inspect ulid(for_subject)}")
+      error("could not find or create feed (#{inspect e}) for #{inspect ulid(for_subject)}")
       nil
     end
   end
