@@ -36,21 +36,25 @@ defmodule Bonfire.Social.Web.DiscussionLive do
 
       {activity, object} = Map.pop(object, :activity)
       {preloaded_object, activity} = Map.pop(activity, :object)
+      activity = Bonfire.Social.Activities.activity_preloads(activity, :all, current_user: current_user)
+
+      thread_id = e(activity, :replied, :thread_id, id)
 
       # following = if current_user && module_enabled?(Bonfire.Social.Follows) do
       #   a = if Bonfire.Social.Follows.following?(current_user, object), do: object.id
-      #   thread_id = e(activity, :replied, :thread_id, nil)
       #   b = if thread_id && Bonfire.Social.Follows.following?(current_user, thread_id), do: thread_id
       #   [a, b]
       # end
 
       reply_to_id = e(params, "reply_to_id", id)
 
-      other_characters = if e(activity, :subject, :character, nil) && e(activity, :subject, :id, nil) != e(current_user, :id, nil) do
-        [e(activity, :subject, :character, nil)]
-      end
+      participants = Bonfire.Social.Threads.list_participants(activity, thread_id, current_user: current_user)
 
-      mentions = if other_characters, do: Enum.map_join(other_characters, " ", & "@"<>e(&1, :username, ""))<>" "
+      to_circles = if length(participants)>0, do: Enum.map(participants, & {e(&1, :character, :username, l "someone"), e(&1, :id, nil)})
+
+      # names = if length(participants)>0, do: Enum.map_join(participants, ", ", &e(&1, :profile, :name, e(&1, :character, :username, l "someone else")))
+
+      mentions = if length(participants)>0, do: Enum.map_join(participants, " ", & "@"<>e(&1, :character, :username, ""))<>" "
 
       {:noreply,
       socket
@@ -59,10 +63,18 @@ defmodule Bonfire.Social.Web.DiscussionLive do
         activity: activity,
         url: url,
         object: Map.merge(object, preloaded_object || %{}),
-        thread_id: e(object, :id, nil),
+        # thread_id: e(object, :id, nil),
         # smart_input_prompt: "Reply to #{reply_to_id}",
-        smart_input_text: mentions || "",
-      )}
+        # smart_input_text: mentions,
+        # to_circles: to_circles,
+        participants: participants,
+      ) |> assign_global(
+        thread_id: e(object, :id, nil),
+        # smart_input_prompt: smart_input_prompt,
+        reply_to_id: reply_to_id,
+        smart_input_text: mentions,
+        to_circles: to_circles,
+      ) }
 
     else _e ->
       {:error, "Not found (or you don't have permission to view this)"}

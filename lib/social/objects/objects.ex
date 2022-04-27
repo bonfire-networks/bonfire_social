@@ -76,7 +76,7 @@ defmodule Bonfire.Social.Objects do
     # |> debug()
   end
 
-  defp cast_acl(changeset, creator, opts) do
+  def cast_acl(changeset, creator, opts) do
     changeset
     |> Acls.cast(creator, opts)
   end

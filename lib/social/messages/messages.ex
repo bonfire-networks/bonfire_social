@@ -12,6 +12,7 @@ defmodule Bonfire.Social.Messages do
   # import Bonfire.Boundaries.Queries
   alias Bonfire.Social.Threads
   alias Bonfire.Social.PostContents
+  alias Bonfire.Social.Tags
   alias Bonfire.Boundaries
   alias Bzonfire.Boundaries.Verbs
   alias Bonfire.Social.LivePush
@@ -77,10 +78,16 @@ defmodule Bonfire.Social.Messages do
     attrs
     # |> debug("attrs")
     |> Message.changeset(%Message{}, ...)
-    |> PostContents.cast(attrs, creator, opts) # process text (must be done before Objects.cast)
-    |> Objects.cast(attrs, creator, opts) # threading, tagging, boundaries, creator, caretaker
+    |> Tags.cast(attrs, creator, opts) # before PostContents since we only want to tag `to` users, not mentions
+    |> PostContents.cast(attrs, creator, "message") # process text (must be done before Objects.cast)
+    |> Objects.cast_creator_caretaker(creator)
+    # record replies & threads. preloads data that will be checked by `Acls`
+    |> Threads.cast(attrs, creator, opts)
+    # apply boundaries on all objects, note that ORDER MATTERS, as it uses data preloaded by `Threads` and `PostContents`
+    |> Objects.cast_acl(creator, opts)
     |> Activities.put_assoc(:create, creator)
-    |> FeedActivities.put_feed_publishes(Keyword.get(opts, :to_feeds, []))
+    # |> FeedActivities.put_feed_publishes(Keyword.get(opts, :to_feeds, [])) # messages shouldn't need to be in any feeds?
+    # TODO: LivePush & notify
     # |> dump
   end
 

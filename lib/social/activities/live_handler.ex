@@ -31,6 +31,42 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
     |> live_more(socket)
   end
 
+  def handle_event("reply", _, socket) do
+    debug("reply!")
+
+    activity = e(socket, :assigns, :activity, nil)
+    participants = Bonfire.Social.Threads.list_participants(activity, nil, current_user: current_user(socket))
+
+    to_circles = if length(participants)>0, do: Enum.map(participants, & {e(&1, :character, :username, l "someone"), e(&1, :id, nil)})
+
+    mentions = if length(participants)>0, do: Enum.map_join(participants, " ", & "@"<>e(&1, :character, :username, ""))<>" "
+
+    send_update(Bonfire.UI.Social.CreateActivityLive,
+      id: :create_activity_form,
+      # reply to objects, not activities
+      reply_to_id:
+        e(socket, :assigns, :object_id, nil) || e(socket, :assigns, :object, :id, nil) ||
+          e(activity, :object, :id, nil),
+      # thread_id: activity_id,
+      activity: activity,
+      object: e(socket, :assigns, :object, nil),
+      smart_input_text: mentions,
+      to_circles: to_circles,
+      activity_inception: "reply_to"
+    )
+
+    {:noreply, socket}
+  end
+
+  def handle_event("remove_data", _params, socket) do
+    send_update(Bonfire.UI.Social.CreateActivityLive, [
+      id: :create_activity_form,
+      activity: nil,
+      object: nil,
+      reply_to_id: nil])
+    {:noreply, socket}
+  end
+
   def handle_event("delete", %{"id"=> id} = params, socket) do
     # TODO: check permission
     with num when is_integer(num) <- Bonfire.Social.FeedActivities.delete(id) do

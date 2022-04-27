@@ -119,31 +119,18 @@ defmodule Bonfire.Social.Web.MessagesLive do
 
         {activity, message} = Map.pop(message, :activity)
         {preloaded_object, activity} = Map.pop(activity, :object)
+        activity = Bonfire.Social.Activities.activity_preloads(activity, :all, current_user: current_user)
 
         message = Map.merge(message, preloaded_object)
                 |> debug("the message object")
 
         reply_to_id = e(params, "reply_to_id", id)
-        thread_id = e(activity, :replied, :thread_id, nil)
+        thread_id = e(activity, :replied, :thread_id, id)
 
         # debug(activity, "activity")
         smart_input_prompt = l("Reply to message:")<>" "<>text_only(e(message, :post_content, :name, e(message, :post_content, :summary, e(message, :post_content, :html_body, reply_to_id))))
 
-        participants = (
-          [e(activity, :subject, nil)] # add author of root message
-          ++ [e(activity, :reply_to, :created, :creator, nil)] # add author of the message it was replying to
-          ++ e(activity, :tags, []) # add all previously tagged people
-          ++ (
-            Bonfire.Social.Threads.list_participants([ulid(message), thread_id], current_user: current_user) # add any other participants in the thread
-            |> e(:edges, [])
-            |> Enum.map(&e(&1, :activity, :subject, nil))
-          )
-        )
-        # |> debug("participants grab bag")
-        |> filter_empty([])
-        |> Enum.uniq_by(&e(&1, :character, :id, nil))
-        |> Enum.reject(&( e(&1, :character, :id, nil) == e(current_user, :id, nil) ))
-        |> debug("participants")
+        participants = Bonfire.Social.Threads.list_participants(activity, thread_id, current_user: current_user)
 
         to_circles = if length(participants)>0, do: Enum.map(participants, & {e(&1, :character, :username, l "someone"), e(&1, :id, nil)})
 

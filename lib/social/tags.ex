@@ -4,7 +4,8 @@ defmodule Bonfire.Social.Tags do
   use Bonfire.Common.Utils
 
   alias Bonfire.Common.Config
-  alias Bonfire.Tag.{Tags, TextContent}
+  alias Bonfire.Tag.Tags
+  alias Bonfire.Tag.TextContent
   alias Bonfire.Social.PostContents
   alias Bonfire.Data.Social.PostContent
   alias Ecto.Changeset

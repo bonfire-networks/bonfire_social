@@ -9,4 +9,5 @@
   object={@post}
   thread_id={@thread_id}
   url={@url}
+  participants={e(assigns, :participants, nil)}
 />

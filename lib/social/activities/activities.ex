@@ -149,7 +149,7 @@ defmodule Bonfire.Social.Activities do
       _ when is_list(preloads) ->
         Enum.reduce(preloads, query, &activity_preloads(&2, &1, opts))
       :all -> activity_preloads(query, [
-          :with_subject, :with_creator, :with_verb, :with_object_posts, :with_reply_to
+          :with_subject, :with_creator, :with_verb, :with_object_posts, :with_reply_to, :tags
         ], opts)
       :feed -> activity_preloads(query, [
           :with_subject, :with_creator, :with_verb, :with_object_posts, :with_reply_to

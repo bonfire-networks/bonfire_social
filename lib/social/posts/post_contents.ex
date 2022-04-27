@@ -6,28 +6,39 @@ defmodule Bonfire.Social.PostContents do
   use Bonfire.Common.Utils
   alias Ecto.Changeset
 
-  def cast(changeset, attrs, creator, _preset_or_custom_boundary) do
-    Changeset.cast(changeset, %{post_content: maybe_prepare_contents(attrs, creator)}, [])
+  def cast(changeset, attrs, creator, boundary) do
+    %{post_content: maybe_prepare_contents(attrs, creator, boundary)}
+    |> Changeset.cast(changeset, ..., [])
     |> Changeset.cast_assoc(:post_content, required: true, with: &changeset/2)
     # |> debug()
   end
 
-  def maybe_prepare_contents(%{local: false} = attrs, _creator), do: e(attrs, :post_content, nil) || attrs # do not process remote contents
+  def maybe_prepare_contents(%{post_content: %{} = attrs}, creator, boundary), do: maybe_prepare_contents(attrs, creator, boundary)
+  def maybe_prepare_contents(%{post: %{} = attrs}, creator, boundary), do: maybe_prepare_contents(attrs, creator, boundary)
 
-  def maybe_prepare_contents(attrs, creator) do
-    # TODO: process tags within the prepare_text function instead (so tags can be used in all three fields at once)
+  def maybe_prepare_contents(%{local: false} = attrs, _creator, _boundary) do
+    debug("do not process remote contents or messages for tags/mentions")
+    e(attrs, :post_content, nil) || attrs
+  end
+
+  def maybe_prepare_contents(attrs, _creator, boundary) when boundary in ["message"] do
+    debug("do not process messages for tags/mentions")
+    e(attrs, :post_content, nil) || attrs
+  end
+
+  def maybe_prepare_contents(attrs, creator, _boundary) do
+    debug("process post contents for tags/mentions")
+    # TODO: process tags within the prepare_text function instead (so tags can be used in all html_body/title/summary fields at once)
     with {:ok, tags} <- Bonfire.Social.Tags.maybe_process(creator, attrs) do
       tags
       |> Map.merge(prepare_content(attrs, Utils.e(tags, :text, nil)))
-      # |> debug("Social.PostContents.cast: attrs")
+      # |> debug()
     else
       _ -> prepare_content(attrs)
     end
   end
 
   def prepare_content(attrs, text \\ nil)
-  def prepare_content(%{post_content: %{} = attrs}, text), do: prepare_content(attrs, text)
-  def prepare_content(%{post: %{} = attrs}, text), do: prepare_content(attrs, text)
   def prepare_content(attrs, text) when is_binary(text) and bit_size(text) > 0 do
     # use seperate text param if provided directly
     Map.merge(attrs, %{

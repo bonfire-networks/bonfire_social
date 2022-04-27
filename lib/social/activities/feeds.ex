@@ -173,7 +173,7 @@ defmodule Bonfire.Social.Feeds do
 
       "mentions" ->
         mentions
-        |> feed_ids(:notifications)
+        |> feed_ids(:notifications, ...)
 
       "admins" ->
         admins_notifications()
@@ -276,7 +276,7 @@ defmodule Bonfire.Social.Feeds do
       #   |> Enum.reject(&is_nil/1)
 
       true ->
-        error(for_subject, "Could not get #{feed_name} feed_id for")
+        error(for_subject, "Could not get #{inspect feed_name} feed_id for")
         nil
     end
   end

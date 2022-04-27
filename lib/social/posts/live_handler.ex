@@ -114,10 +114,6 @@ defmodule Bonfire.Social.Posts.LiveHandler do
   #   {:noreply, socket}
   # end
 
-  def handle_event("remove_data", _params, socket) do
-    send_update(Bonfire.UI.Social.CreateActivityLive, [activity: nil, id: :create_activity_form])
-    {:noreply, socket}
-  end
 
 
   def live_more(thread_id, cursor, socket) do

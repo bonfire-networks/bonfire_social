@@ -167,8 +167,31 @@ defmodule Bonfire.Social.Threads do
       end
   end
 
+  @doc "List participants of an activity or thread (depending on user's boundaries)"
+  def list_participants(activity, thread_or_object_id \\ nil, opts \\ []) do
+    opts = to_options(opts)
+    current_user = current_user(opts)
+    activity = Activities.activity_preloads(activity, [:with_subject, :with_reply_to, :tags], opts)
+
+    (
+      [e(activity, :subject, nil)] # add author of root message
+      ++ [e(activity, :reply_to, :created, :creator, nil)] # add author of the message it was replying to
+      ++ e(activity, :tags, []) # add all previously tagged people
+      ++ (
+        if thread_or_object_id, do: Bonfire.Social.Threads.fetch_participants([ulid(activity.object_id), thread_or_object_id], current_user: current_user) # add any other participants in the thread
+        |> e(:edges, [])
+        |> Enum.map(&e(&1, :activity, :subject, nil)), else: []
+      )
+    )
+    # |> debug("participants grab bag")
+    |> filter_empty([])
+    |> Enum.uniq_by(&e(&1, :character, :id, nil))
+    |> Enum.reject(&( e(&1, :character, :id, nil) == e(current_user, :id, nil) ))
+    |> debug("participants")
+  end
+
   @doc "List participants in a thread (depending on user's boundaries)"
-  def list_participants(thread_id, opts \\ []) when is_binary(thread_id) or is_list(thread_id) do
+  def fetch_participants(thread_id, opts \\ []) when is_binary(thread_id) or (is_list(thread_id) and length(thread_id)>0) do
     opts = to_options(opts)
 
     FeedActivities.feed_paginated(
