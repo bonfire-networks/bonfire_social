@@ -41,8 +41,8 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
 
     mentions = if length(participants)>0, do: Enum.map_join(participants, " ", & "@"<>e(&1, :character, :username, ""))<>" "
 
-    send_update(Bonfire.UI.Social.CreateActivityLive,
-      id: :create_activity_form,
+    send_update(Bonfire.UI.Social.SmartInputLive,
+      id: :smart_input,
       # reply to objects, not activities
       reply_to_id:
         e(socket, :assigns, :object_id, nil) || e(socket, :assigns, :object, :id, nil) ||
@@ -59,8 +59,8 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
   end
 
   def handle_event("remove_data", _params, socket) do
-    send_update(Bonfire.UI.Social.CreateActivityLive, [
-      id: :create_activity_form,
+    send_update(Bonfire.UI.Social.SmartInputLive, [
+      id: :smart_input,
       activity: nil,
       object: nil,
       reply_to_id: nil])

@@ -63,7 +63,7 @@ defmodule Bonfire.Social.Web.MessagesLive do
       smart_input_text = if e(current_user, :character, :username, "") == e(user, :character, :username, ""), do:
       "", else: "@"<>e(user, :character, :username, "")<>" "
 
-      feed = if current_user, do: if module_enabled?(Bonfire.Social.Messages), do: Bonfire.Social.Messages.list(current_user, ulid(e(socket.assigns, :user, nil)), latest_in_threads: true, limit: 10) #|> debug()
+      feed = list(current_user, ulid(e(socket.assigns, :user, nil)))
 
       {:noreply,
         socket
@@ -158,6 +158,7 @@ defmodule Bonfire.Social.Web.MessagesLive do
           smart_input_prompt: prompt,
           to_circles: to_circles || []
         )
+        |> assign_new(:feed, fn -> list(current_user) |> e(:edges, []) end)
       }
 
       else _e ->
@@ -169,7 +170,7 @@ defmodule Bonfire.Social.Web.MessagesLive do
   def do_handle_params(_params, url, socket) do # show all my threads
     current_user = current_user(socket)
 
-    feed = if current_user, do: if module_enabled?(Bonfire.Social.Messages), do: Bonfire.Social.Messages.list(current_user, nil, latest_in_threads: true, limit: 10) #|> debug()
+    feed = list(current_user)
 
     {:noreply,
     socket
@@ -182,6 +183,10 @@ defmodule Bonfire.Social.Web.MessagesLive do
       thread_id: nil
     ) #|> IO.inspect
   }
+  end
+
+  defp list(current_user, user \\ nil) do
+    if current_user, do: if module_enabled?(Bonfire.Social.Messages), do: Bonfire.Social.Messages.list(current_user, user, latest_in_threads: true, limit: 10)
   end
 
   # def handle_event("compose_thread", _ , socket) do

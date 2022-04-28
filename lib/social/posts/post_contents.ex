@@ -13,17 +13,17 @@ defmodule Bonfire.Social.PostContents do
     # |> debug()
   end
 
+  def maybe_prepare_contents(%{local: false} = attrs, _creator, _boundary) do
+    debug("do not process remote contents or messages for tags/mentions")
+    only_prepare_content(attrs)
+  end
+
   def maybe_prepare_contents(%{post_content: %{} = attrs}, creator, boundary), do: maybe_prepare_contents(attrs, creator, boundary)
   def maybe_prepare_contents(%{post: %{} = attrs}, creator, boundary), do: maybe_prepare_contents(attrs, creator, boundary)
 
-  def maybe_prepare_contents(%{local: false} = attrs, _creator, _boundary) do
-    debug("do not process remote contents or messages for tags/mentions")
-    e(attrs, :post_content, nil) || attrs
-  end
-
   def maybe_prepare_contents(attrs, _creator, boundary) when boundary in ["message"] do
     debug("do not process messages for tags/mentions")
-    e(attrs, :post_content, nil) || attrs
+    only_prepare_content(attrs)
   end
 
   def maybe_prepare_contents(attrs, creator, _boundary) do
@@ -38,8 +38,12 @@ defmodule Bonfire.Social.PostContents do
     end
   end
 
+  def only_prepare_content(attrs) do
+    prepare_content(e(attrs, :post, :post_content, nil) || e(attrs, :post_content, nil) || e(attrs, :post, nil) || attrs)
+  end
+
   def prepare_content(attrs, text \\ nil)
-  def prepare_content(attrs, text) when is_binary(text) and bit_size(text) > 0 do
+  def prepare_content(attrs, text) when is_binary(text) and text !="" do
     # use seperate text param if provided directly
     Map.merge(attrs, %{
       html_body: prepare_text(text),
@@ -72,16 +76,17 @@ defmodule Bonfire.Social.PostContents do
   end
   def prepare_content(attrs, _), do: attrs
 
-  def prepare_text(text) when is_binary(text) and text !="" do
-    if module_enabled?(Emote) do
-      text
-      |> Utils.markdown()
-      |> Emote.convert_text()
-    else
-      text
-      |> Utils.markdown()
-    end
-  end
+  # we also process markdown on display, but yeah maybe better do it once here
+  # def prepare_text(text) when is_binary(text) and text !="" do
+  #   if module_enabled?(Emote) do
+  #     text
+  #     |> Utils.markdown()
+  #     |> Emote.convert_text()
+  #   else
+  #     text
+  #     |> Utils.markdown()
+  #   end
+  # end
   def prepare_text(other), do: other
 
 

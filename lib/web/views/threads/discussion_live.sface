@@ -13,5 +13,5 @@
   object={@object}
   url={@url}
   thread_id={@thread_id}
-  participants={e(assigns, :participants, nil)}
+  participants={e(assigns, :participants, [])}
 />

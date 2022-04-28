@@ -45,9 +45,17 @@ defmodule Bonfire.Social.Posts.LiveHandler do
 
     current_user = current_user(socket)
 
-    with %{valid?: true} <- post_changeset(attrs, current_user),
-         {:ok, _published} <- Bonfire.Social.Posts.publish(current_user: current_user, post_attrs: attrs, boundary: params["boundary_selected"]) do
+    with %{} <- current_user,
+         %{valid?: true} <- post_changeset(attrs, current_user),
+         uploaded_media <- upload(current_user, socket) |> debug(),
+         {:ok, published} <- Bonfire.Social.Posts.publish(
+            current_user: current_user,
+            post_attrs: attrs |> Map.put(:uploaded_media, uploaded_media),
+            boundary: params["boundary_selected"]) do
       # debug("published!")
+
+        # uploads_for_object(published, socket)
+
       {:noreply,
         socket
         |> put_flash(:info, "Posted!")
@@ -57,6 +65,14 @@ defmodule Bonfire.Social.Posts.LiveHandler do
         # )
       }
     end
+  end
+
+  defp upload(current_user, socket) do
+    consume_uploaded_entries(socket, :files, fn %{path: path} = meta, _entry ->
+      debug(meta, "consume_uploaded_entries meta")
+      Bonfire.Files.upload(nil, current_user, path)
+      |> debug("uploaded")
+    end)
   end
 
   def handle_event("load_replies", %{"id" => id, "level" => level}, socket) do

@@ -11,7 +11,7 @@
   object={e(assigns, :object, nil)}
   url={e(assigns, :url, nil)}
   thread_id={e(assigns, :thread_id, nil)}
-  participants={e(assigns, :participants, nil)}
+  participants={e(assigns, :participants, [])}
   smart_input_prompt={e(assigns, :smart_input_prompt, nil)}
   
 />
