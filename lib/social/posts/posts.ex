@@ -194,8 +194,8 @@ defmodule Bonfire.Social.Posts do
       "actor" => actor.ap_id,
       "attributedTo" => actor.ap_id,
       "name" => (e(post, :post_content, :name, nil)),
-      "summary" => (e(post, :post_content, :summary, nil)),
-      "content" => (e(post, :post_content, :html_body, nil)),
+      "summary" => Text.maybe_markdown_to_html(e(post, :post_content, :summary, nil)),
+      "content" => Text.maybe_markdown_to_html(e(post, :post_content, :html_body, nil)),
       "to" => to ++ direct_recipients,
       "cc" => cc
     }

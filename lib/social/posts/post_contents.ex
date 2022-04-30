@@ -76,17 +76,11 @@ defmodule Bonfire.Social.PostContents do
   end
   def prepare_content(attrs, _), do: attrs
 
-  # we also process markdown on display, but yeah maybe better do it once here
-  # def prepare_text(text) when is_binary(text) and text !="" do
-  #   if module_enabled?(Emote) do
-  #     text
-  #     |> Utils.markdown()
-  #     |> Emote.convert_text()
-  #   else
-  #     text
-  #     |> Utils.markdown()
-  #   end
-  # end
+  def prepare_text(text) when is_binary(text) and text !="" do
+    text
+    |> Text.maybe_emote() # transform emoticons to emojis
+    |> Text.maybe_sane_html() # remove potentially dangerous or dirty markup
+  end
   def prepare_text(other), do: other
 
 

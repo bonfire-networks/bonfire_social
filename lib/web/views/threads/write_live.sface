@@ -112,13 +112,6 @@
               content={e(assigns, :smart_input_text, '')}
             /> 
             
-
-            <!-- <Bonfire.Editor.Ck.Bubble 
-              field_name="post[post_content][html_body]"
-              textarea_class={"min-h-[calc(100vh-128px)]"}
-              placeholder="Type your message"
-              content={""}
-            />  -->
           </Field>
         </div>
       </Inputs>

@@ -47,7 +47,7 @@ defmodule Bonfire.Social.Posts.LiveHandler do
 
     with %{} <- current_user,
          %{valid?: true} <- post_changeset(attrs, current_user),
-         uploaded_media <- upload(current_user, socket) |> debug(),
+         uploaded_media <- multi_upload(current_user, params["upload_metadata"], socket) |> debug(),
          {:ok, published} <- Bonfire.Social.Posts.publish(
             current_user: current_user,
             post_attrs: attrs |> Map.put(:uploaded_media, uploaded_media),
@@ -67,10 +67,11 @@ defmodule Bonfire.Social.Posts.LiveHandler do
     end
   end
 
-  defp upload(current_user, socket) do
-    consume_uploaded_entries(socket, :files, fn %{path: path} = meta, _entry ->
+  defp multi_upload(current_user, metadata, socket) do
+    consume_uploaded_entries(socket, :files, fn %{path: path} = meta, entry ->
       debug(meta, "consume_uploaded_entries meta")
-      Bonfire.Files.upload(nil, current_user, path)
+      debug(entry, "consume_uploaded_entries entry")
+      Bonfire.Files.upload(nil, current_user, path, %{client_name: entry.client_name, metadata: metadata[entry.ref]})
       |> debug("uploaded")
     end)
   end
