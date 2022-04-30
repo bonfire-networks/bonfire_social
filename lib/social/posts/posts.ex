@@ -159,7 +159,7 @@ defmodule Bonfire.Social.Posts do
   # in an ideal world this would be able to work off the changeset, but for now, fuck it.
   def ap_publish_activity_object("create", post) do
     post = post
-    |> repo().maybe_preload([:created, :replied, :post_content, tags: [:character]])
+    |> repo().maybe_preload([:created, :replied, :post_content, :media, tags: [:character]])
     |> Activities.object_preload_create_activity()
     # |> info("ap_publish_activity post")
 
@@ -193,14 +193,15 @@ defmodule Bonfire.Social.Posts do
       "type" => "Note",
       "actor" => actor.ap_id,
       "attributedTo" => actor.ap_id,
+      "to" => to ++ direct_recipients,
+      "cc" => cc,
       "name" => (e(post, :post_content, :name, nil)),
       "summary" => Text.maybe_markdown_to_html(e(post, :post_content, :summary, nil)),
       "content" => Text.maybe_markdown_to_html(e(post, :post_content, :html_body, nil)),
-      "to" => to ++ direct_recipients,
-      "cc" => cc
+      "attachment" => Bonfire.Files.ap_publish_activity(e(post, :media, nil))
     }
-      |> Enum.filter(fn {_, v} -> not is_nil(v) end)
-      |> Enum.into(%{})
+    |> Enum.filter(fn {_, v} -> not is_nil(v) end)
+    |> Enum.into(%{})
 
     object =
       if e(post, :replied, :reply_to_id, nil) do
@@ -284,7 +285,8 @@ defmodule Bonfire.Social.Posts do
       created: %{
         date: post_data["published"] # FIXME
       },
-      reply_to_id: reply_to_id
+      reply_to_id: reply_to_id,
+      uploaded_media: Bonfire.Files.ap_receive_attachments(creator, post_data["attachment"])
     }
     |> info("post attrs")
 
@@ -298,6 +300,7 @@ defmodule Bonfire.Social.Posts do
       publish(current_user: creator, post_attrs: attrs, boundary: boundary, post_id: id)
     end
   end
+
 
   # TODO: rewrite to take a post instead of an activity
   def indexing_object_format(post, opts \\ []) do

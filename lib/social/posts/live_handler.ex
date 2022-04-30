@@ -71,9 +71,15 @@ defmodule Bonfire.Social.Posts.LiveHandler do
     consume_uploaded_entries(socket, :files, fn %{path: path} = meta, entry ->
       debug(meta, "consume_uploaded_entries meta")
       debug(entry, "consume_uploaded_entries entry")
-      Bonfire.Files.upload(nil, current_user, path, %{client_name: entry.client_name, metadata: metadata[entry.ref]})
-      |> debug("uploaded")
+      with {:ok, uploaded} <- Bonfire.Files.upload(nil, current_user, path, %{client_name: entry.client_name, metadata: metadata[entry.ref]})
+      |> debug("uploaded") do
+        {:ok, uploaded}
+      else e ->
+        error(e, "Could not upload #{entry.client_name}")
+        {:postpone, nil}
+      end
     end)
+    |> filter_empty([])
   end
 
   def handle_event("load_replies", %{"id" => id, "level" => level}, socket) do
