@@ -165,12 +165,13 @@ defmodule Bonfire.Social.Messages do
     # messages between current user & someone else
 
     query
-    # |> join_preload([:activity, :object, :tags])
+    # |> join_preload([:activity, :tags])
+    |> join(:left, [activity: activity], assoc(activity, :tagged), as: :tagged)
     |> where(
-      [activity: activity, tags: tags],
+      [activity: activity, tagged: tagged],
       (
         (
-          tags.id == ^user_id
+          tagged.tag_id == ^user_id
           # and activity.subject_id == ^current_user_id # shouldn't be needed if boundaries does the filtering
         ) or (
           activity.subject_id == ^user_id

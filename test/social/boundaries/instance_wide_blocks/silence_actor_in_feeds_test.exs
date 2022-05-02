@@ -5,6 +5,7 @@ defmodule Bonfire.Social.Boundaries.InstanceWideSilenceActorFeedsPerUserTest do
   alias ActivityPub.Config
   alias Bonfire.Social.Posts
   alias Bonfire.Data.ActivityPub.Peered
+  alias Bonfire.Federate.ActivityPub.Simulate
 
   @my_name "alice"
   @other_name "bob"

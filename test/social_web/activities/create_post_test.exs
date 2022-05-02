@@ -20,7 +20,7 @@ defmodule Bonfire.Social.Activities.CreatePost.Test do
       next = "/home"
       {view, doc} = floki_live(conn, next) #|> IO.inspect
       assert view
-      |> form(".create_activity form")
+      |> form("#smart_input form")
       |> render_submit(%{"boundary_selected" => "public", "post" => %{"post_content" => %{"html_body" => content}}})
       |> Floki.text() =~ "Posted"
 

@@ -100,11 +100,13 @@ defmodule Bonfire.Social.Likes do
 
   @doc "List likes by a user"
   def list_by(by_user, opts \\ []) when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
+    opts = to_options(opts)
     list_paginated([subject: by_user], opts ++ [preload: :object])
   end
 
   @doc "List likers of something(s)"
   def list_of(object, opts \\ []) when is_binary(object) or is_list(object) or is_map(object) do
+    opts = to_options(opts)
     list_paginated([object: object], opts ++ [preload: :subject])
   end
 

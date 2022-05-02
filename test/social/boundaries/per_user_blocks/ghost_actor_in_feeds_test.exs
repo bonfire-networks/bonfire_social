@@ -5,6 +5,7 @@ defmodule Bonfire.Social.Boundaries.GhostActorFeedsPerUserTest do
   alias ActivityPub.Config
   alias Bonfire.Social.Posts
   alias Bonfire.Data.ActivityPub.Peered
+  alias Bonfire.Federate.ActivityPub.Simulate
 
   @my_name "alice"
   @attrs %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
