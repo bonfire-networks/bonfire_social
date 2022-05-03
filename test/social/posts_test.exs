@@ -88,7 +88,7 @@ defmodule Bonfire.Social.PostsTest do
     alice = Fake.fake_user!()
     attrs = %{post_content: %{html_body: "<p>hey you have an epic html post</p>"}}
     assert {:ok, post} = Posts.publish(current_user: alice, post_attrs: attrs, boundary: "public")
-    assert %{edges: []} = FeedActivities.feed(:notifications, alice)
+    assert %{edges: []} = FeedActivities.feed(:notifications, current_user: alice)
   end
 
   test "when i post, it does not appear in my inbox feed" do

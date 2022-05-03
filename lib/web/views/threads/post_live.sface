@@ -11,4 +11,7 @@
   thread_id={@thread_id}
   url={@url}
   participants={e(assigns, :participants, [])}
+  replies={e(assigns, :replies, nil)}
+  threaded_replies={e(assigns, :threaded_replies, [])}
+  page_info={e(assigns, :page_info, [])}
 />

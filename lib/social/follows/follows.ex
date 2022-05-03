@@ -210,7 +210,10 @@ defmodule Bonfire.Social.Follows do
     opts = [
       boundary: "public", # TODO: make configurable (currently public is required so follows can be listed by AP adapter)
       to_circles: [ulid(object)], # also allow the followed user to see it
-      to_feeds: [outbox: [user], notifications: [object]], # put it in our outbox and their notifications
+      to_feeds: [
+        # outbox: [user],
+        notifications: [object]
+      ], # put it in our outbox and their notifications
     ]
     case create(user, object, opts) do
       {:ok, follow} ->

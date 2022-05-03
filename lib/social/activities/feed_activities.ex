@@ -63,7 +63,17 @@ defmodule Bonfire.Social.FeedActivities do
     |> repo.many_paginated(paginate)
   end
   def feed(:flags, opts), do: Bonfire.Social.Flags.list_paginated([], opts)
+  def feed(:notifications = feed_name, opts), do: do_feed(feed_name, opts ++ [skip_boundary_check: :admins])
   def feed(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
+    do_feed(feed_name, opts)
+  end
+
+  def feed(other, _) do
+    error(other, "FeedActivities.feed: not a recognised feed query param")
+    nil
+  end
+
+  defp do_feed(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
     paginate = e(opts, :paginate, nil) || e(opts, :after, nil)
     # current_user = current_user(current_user_or_socket)
     # debug(opts)
@@ -81,11 +91,6 @@ defmodule Bonfire.Social.FeedActivities do
         debug(opts)
         nil
     end
-  end
-
-  def feed(other, _) do
-    error(other, "FeedActivities.feed: not a recognised feed query param")
-    nil
   end
 
   def user_feed(user, feed_name, opts \\ []) do

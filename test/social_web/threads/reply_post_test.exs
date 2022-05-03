@@ -26,7 +26,8 @@ defmodule Bonfire.Social.Threads.RepliesTest do
     next = "/home"
     {view, doc} = floki_live(conn, next)
     assert doc
-      |> Floki.find("[data-id=feed]  > article")
+      # |> info
+      |> Floki.find("[data-id=feed] article")
       |> List.last
       |> Floki.text =~ "Reply"
   end
