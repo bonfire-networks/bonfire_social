@@ -18,11 +18,11 @@ defmodule Bonfire.Social.Web.DiscussionLive do
     {:ok,
     socket
     |> assign(
-      page_title: "Discussion",
-      page: "Discussion",
+      page_title: l("Discussion"),
+      page: "discussion",
       has_private_tab: false,
-      search_placeholder: "Search this discussion",
-      smart_input_prompt: "Reply to this discussion",
+      search_placeholder: l("Search this discussion"),
+      smart_input_prompt: l("Reply to this discussion"),
     )}
   end
 
@@ -77,7 +77,7 @@ defmodule Bonfire.Social.Web.DiscussionLive do
       ) }
 
     else _e ->
-      {:error, "Not found (or you don't have permission to view this)"}
+      {:error, l("Not found (or you don't have permission to view this)")}
     end
 
   end

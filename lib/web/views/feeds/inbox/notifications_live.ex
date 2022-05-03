@@ -24,7 +24,7 @@ defmodule Bonfire.Social.Web.Feeds.NotificationsLive do
     |> assign(
       page: "notifications",
       selected_tab: "notifications",
-      page_title: "Notifications",
+      page_title: l("Notifications"),
       current_user: current_user,
       feed_id: feed_id,
       feed: e(feed, :edges, []),

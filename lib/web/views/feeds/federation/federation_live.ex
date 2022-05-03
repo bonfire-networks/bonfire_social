@@ -21,7 +21,7 @@ defmodule Bonfire.Social.Web.Feeds.FederationLive do
     |> assign(
       feed_assigns ++ [
       page: "federation",
-      page_title: "Federation",
+      page_title: l("Federation"),
       ])
       }
 

@@ -25,7 +25,7 @@ defmodule Bonfire.Social.Web.HomeLive do
       [
         selected_tab: "home",
         page: "home",
-        page_title: "Home",
+        page_title: l("Home"),
       ])
     }
   end

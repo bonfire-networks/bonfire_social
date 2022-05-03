@@ -19,9 +19,9 @@ defmodule Bonfire.Social.Web.PostLive do
     {:ok,
     socket
     |> assign(
-      page_title: "Post",
-      page: "Discussion",
-      smart_input_prompt: "Reply to this post",
+      page_title: l("Post"),
+      page: "discussion",
+      smart_input_prompt: l("Reply to this post"),
       has_private_tab: false,
       activity: nil,
       post: nil,

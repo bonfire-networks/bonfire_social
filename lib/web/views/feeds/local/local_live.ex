@@ -22,7 +22,7 @@ defmodule Bonfire.Social.Web.Feeds.LocalLive do
     |> assign(
       feed_assigns ++ [
         page: "local",
-        page_title: "Local",
+        page_title: l("Local"),
       ])}
 
   end

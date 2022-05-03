@@ -25,7 +25,7 @@ defmodule Bonfire.Social.Web.Feeds.LikesLive do
       feed: feed,
       page_info: page_info,
       page: "likes",
-      page_title: "Likes / Favourites",
+      page_title: l("My Favourites"),
       )
       }
 

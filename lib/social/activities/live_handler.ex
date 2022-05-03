@@ -169,9 +169,9 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
     [
       current_user: current_user(socket),
       selected_tab: "fediverse",
-      page_title: "federation",
+      page_title: l("Federated activities from remote instances"),
       page: "federation",
-      feed_title: "Activities from around the fediverse",
+      feed_title: l("Activities from around the fediverse"),
       feed_id: feed_id,
       feed: e(feed, :edges, []),
       page_info: e(feed, :page_info, []),
@@ -185,9 +185,9 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
     [
       current_user: current_user(socket),
       selected_tab: "instance",
-      page_title: "local",
+      page_title: l("Local activities"),
       page: "local",
-      feed_title: "Activities on this instance",
+      feed_title: l("Activities on this instance"),
       feed_id: feed_id,
       feed: e(feed, :edges, []),
       page_info: e(feed, :page_info, []) #|> IO.inspect
@@ -201,8 +201,8 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
     [
       current_user: current_user,
       selected_tab: "home",
-      page_title: "Home",
-      feed_title: "My Feed",
+      page_title: l("Home"),
+      feed_title: l("My Feed"),
       feed_id: feed_id,
       feed: e(feed, :edges, []),
       page_info: e(feed, :page_info, [])

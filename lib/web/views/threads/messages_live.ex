@@ -21,7 +21,7 @@ defmodule Bonfire.Social.Web.MessagesLive do
     {:ok,
       socket
       |> assign(
-        page_title: l("Private Message"),
+        page_title: l("Messages"),
         page: "messages",
         has_private_tab: false,
         activity: nil,

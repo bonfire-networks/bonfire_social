@@ -3,5 +3,6 @@
   current_user={@current_user}
   feed={@feed}
   feed_id={@feed_id}
+  feed_title={@feed_title}
   page_info={@page_info}
 />

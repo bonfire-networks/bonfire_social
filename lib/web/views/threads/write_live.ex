@@ -19,8 +19,8 @@ defmodule Bonfire.Social.Web.WriteLive do
     {:ok,
     socket
     |> assign(
-      page_title: "Post",
-      page: "Write",
+      page_title: l("Write"),
+      page: "write",
       create_activity_type: "",
       smart_input_text: "",
       has_private_tab: false,
