@@ -5,6 +5,7 @@
   smart_input_prompt={@smart_input_prompt}
   smart_input_text={@smart_input_text}
   reply_to_id={@reply_to_id}
+  thread_mode={:flat}
   activity={@activity}
   object={@post}
   thread_id={@thread_id}

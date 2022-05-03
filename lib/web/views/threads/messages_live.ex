@@ -68,7 +68,7 @@ defmodule Bonfire.Social.Web.MessagesLive do
       {:noreply,
         socket
         |> assign(
-          page: "private",
+          page: "messages",
           feed: e(feed, :edges, []),
           smart_input: true,
           tab_id: "compose",
@@ -146,7 +146,7 @@ defmodule Bonfire.Social.Web.MessagesLive do
         socket
         |> assign(
           page_title: title,
-          page: "message",
+          page: "messages",
           has_private_tab: false,
           tab_id: "thread",
           reply_to_id: reply_to_id,

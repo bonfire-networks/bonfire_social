@@ -10,6 +10,7 @@
   to_circles={e(assigns, :to_circles, [])}
   reply_to_id={@reply_to_id}
   activity={@activity}
+  thread_mode={:flat}
   object={@object}
   url={@url}
   thread_id={@thread_id}

@@ -169,7 +169,8 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
     [
       current_user: current_user(socket),
       selected_tab: "fediverse",
-      page_title: "Federation",
+      page_title: "federation",
+      page: "federation",
       feed_title: "Activities from around the fediverse",
       feed_id: feed_id,
       feed: e(feed, :edges, []),
@@ -184,7 +185,8 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
     [
       current_user: current_user(socket),
       selected_tab: "instance",
-      page_title: "Local",
+      page_title: "local",
+      page: "local",
       feed_title: "Activities on this instance",
       feed_id: feed_id,
       feed: e(feed, :edges, []),

@@ -1,4 +1,3 @@
-
 <Bonfire.UI.Social.MessagesViewLive
   page_title={@page_title}
   page={@page}
