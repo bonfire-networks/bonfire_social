@@ -243,6 +243,7 @@ defmodule Bonfire.Social.Threads do
     opts =
       to_options(opts)
       |> Keyword.put_new(:limit, Config.get(:thread_default_pagination_limit, 500))
+      |> info("oooopts")
 
     pubsub_subscribe(thread_id, opts) # subscribe to realtime thread updates
 

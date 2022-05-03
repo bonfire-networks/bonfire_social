@@ -13,5 +13,8 @@
   thread_id={e(assigns, :thread_id, nil)}
   participants={e(assigns, :participants, [])}
   smart_input_prompt={e(assigns, :smart_input_prompt, nil)}
-  
+  replies={e(assigns, :replies, nil)}
+  threaded_replies={e(assigns, :threaded_replies, [])}
+  page_info={e(assigns, :page_info, [])}
+
 />

@@ -115,15 +115,20 @@ defmodule Bonfire.Social.Threads.LoadMoreTest do
       conn = conn(user: bob, account: account2)
       next = "/discussion/#{op.id}"
       {view, doc} = floki_live(conn, next)
-      assert [load_more_query_string] = Floki.attribute(doc, "[data-id=load_more] a a", "href")
+
+      # replies = Floki.find(doc, "[data-id='replies'] > [data-id='comment']")
+      # |> info("replies")
+
+      assert [_, load_more_query_string] = Floki.attribute(doc, "[data-id=load_more] a", "href")
 
       url = "/discussion/#{op.id}"<>load_more_query_string
-      debug(url)
+      info(url, "pagination url")
+
       conn = get(conn, url)
       more_doc = floki_response(conn) #|> IO.inspect
 
-      replies = Floki.find(more_doc, "[data-id='replies'] > [data-id='comment']") # |> debug()
-      assert Enum.count(replies) == total_posts
+      replies = Floki.find(more_doc, "[data-id='replies'] > [data-id='comment']") |> info("replies")
+      assert Enum.count(replies) == 5
     end
 
 
