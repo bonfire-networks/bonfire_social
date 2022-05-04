@@ -1,6 +1,6 @@
 defmodule Bonfire.Social.Threads.LoadMoreTest do
 
-  use Bonfire.Social.ConnCase
+  use Bonfire.Social.ConnCase, async: true
   alias Bonfire.Social.Fake
   alias Bonfire.Social.{Boosts, Likes, Follows, Posts}
 
@@ -127,7 +127,8 @@ defmodule Bonfire.Social.Threads.LoadMoreTest do
       conn = get(conn, url)
       more_doc = floki_response(conn) #|> IO.inspect
 
-      replies = Floki.find(more_doc, "[data-id='replies'] > [data-id='comment']") |> info("replies")
+      replies = Floki.find(more_doc, "[data-id='replies'] > [data-id='comment']")
+      # |> info("replies")
       assert Enum.count(replies) == 5
     end
 

@@ -23,9 +23,10 @@ defmodule Bonfire.Social.DataCase do
       import Ecto
       import Ecto.Changeset
       import Ecto.Query
-      import Bonfire.Social.DataCase
+      # import Bonfire.Social.DataCase
       use Bonfire.Common.Utils
-      import Bonfire.Me.Fake
+      import Bonfire.UI.Common.Testing.Helpers
+
     end
   end
 

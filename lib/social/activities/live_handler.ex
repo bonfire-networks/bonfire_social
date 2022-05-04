@@ -122,7 +122,7 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
 
   def handle_info({:new_activity, data}, socket) do
     debug(data[:feed_ids], "received new_activity for feeds")
-    dump(data)
+    # info(data)
     current_user = current_user(socket)
 
     permitted? = Bonfire.Common.Pointers.exists?([id: e(data, :activity, :object, :id, nil)], current_user: current_user) |> debug("checked boundary upon receiving a LivePush")

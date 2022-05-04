@@ -10,7 +10,7 @@ defmodule Bonfire.Social.Test.ConnHelpers do
   alias Bonfire.Me.Users
   alias Bonfire.Data.Identity.Account
   alias Bonfire.Data.Identity.User
-  import Bonfire.Me.Fake
+
 
   @endpoint Bonfire.Common.Config.get!(:endpoint_module)
 

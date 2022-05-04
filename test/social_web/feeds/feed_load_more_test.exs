@@ -1,6 +1,6 @@
 defmodule Bonfire.Social.Feeds.LoadMoreTest do
 
-  use Bonfire.Social.ConnCase
+  use Bonfire.Social.ConnCase, async: true
   alias Bonfire.Social.Fake
   alias Bonfire.Social.{Boosts, Likes, Follows, Posts}
   import Where
@@ -106,7 +106,7 @@ defmodule Bonfire.Social.Feeds.LoadMoreTest do
       conn = conn(user: bob, account: account2)
       next = "/local"
       {view, doc} = floki_live(conn, next)
-      assert [load_more_query_string] = Floki.attribute(doc, "[data-id=load_more] a a", "href")
+      assert [_, load_more_query_string] = Floki.attribute(doc, "[data-id=load_more] a", "href")
 
       url = "/local"<>load_more_query_string
       debug(url, "pagination URL")

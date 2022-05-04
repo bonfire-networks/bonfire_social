@@ -1,6 +1,6 @@
 defmodule Bonfire.Social.Notifications.Flag.Test do
 
-  use Bonfire.Social.ConnCase
+  use Bonfire.Social.ConnCase, async: true
   alias Bonfire.Me.Users
   alias Bonfire.Social.Fake
   alias Bonfire.Social.Flags
@@ -57,4 +57,3 @@ defmodule Bonfire.Social.Notifications.Flag.Test do
   end
 
 end
- 

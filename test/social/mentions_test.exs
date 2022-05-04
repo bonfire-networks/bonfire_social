@@ -1,5 +1,5 @@
 defmodule Bonfire.Social.MentionsTest do
-  use Bonfire.DataCase
+  use Bonfire.Social.DataCase, async: true
   use Bonfire.Common.Utils
 
   alias Bonfire.Social.{Posts, Feeds, FeedActivities}

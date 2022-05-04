@@ -1,5 +1,5 @@
 defmodule Bonfire.Social.FollowsTest do
-  use Bonfire.DataCase
+  use Bonfire.Social.DataCase, async: true
 
   alias Bonfire.Social.{Follows, FeedActivities}
   alias Bonfire.Me.Fake

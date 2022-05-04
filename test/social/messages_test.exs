@@ -1,5 +1,5 @@
 defmodule Bonfire.Social.MessagesTest do
-  use Bonfire.DataCase
+  use Bonfire.Social.DataCase, async: true
 
   alias Bonfire.Social.{Messages, Feeds, FeedActivities}
   alias Bonfire.Me.Fake

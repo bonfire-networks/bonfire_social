@@ -26,12 +26,12 @@ defmodule Bonfire.Social.ConnCase do
       import Bonfire.UI.Common.Testing.Helpers
 
       import Phoenix.LiveViewTest
-      import Bonfire.Social.ConnCase
+      # import Bonfire.Social.ConnCase
       import Bonfire.Social.Test.ConnHelpers
       import Bonfire.Social.Test.FakeHelpers
       alias Bonfire.Social.Fake
       # import Bonfire.Social.Fake
-      import Bonfire.Me.Fake
+
       use Bonfire.Common.Utils
 
       # The default endpoint for testing

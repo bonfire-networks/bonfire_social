@@ -3,6 +3,11 @@ defmodule Bonfire.Social.Fake do
   import Bonfire.Me.Fake
   alias Bonfire.Social.{Follows}
 
+  def fake_remote_user!() do
+      {:ok, user} = Bonfire.Federate.ActivityPub.Simulate.fake_remote_user()
+      user
+  end
+
   @username "test"
 
   def fake_follow!() do
