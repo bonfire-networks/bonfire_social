@@ -10,7 +10,7 @@ defmodule Bonfire.Social.Posts do
   alias Bonfire.Social.{Integration, PostContents, Tags, Threads}
   alias Ecto.Changeset
 
-  use Bonfire.Repo,
+  use Bonfire.Common.Repo,
     schema: Post,
     searchable_fields: [:id],
     sortable_fields: [:id]
@@ -108,7 +108,7 @@ defmodule Bonfire.Social.Posts do
     # |> Keyword.drop([:paginate])
     # |> debug("filters")
     |> query_paginated(opts)
-    |> Bonfire.Repo.many_paginated(paginate)
+    |> Bonfire.Common.Repo.many_paginated(paginate)
     # |> FeedActivities.feed_paginated(filters, opts)
   end
 

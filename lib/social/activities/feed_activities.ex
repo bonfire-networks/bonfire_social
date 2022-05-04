@@ -1,7 +1,7 @@
 defmodule Bonfire.Social.FeedActivities do
   use Arrows
   use Bonfire.Common.Utils
-  use Bonfire.Repo
+  use Bonfire.Common.Repo
   import Ecto.Query
   import Where
   alias Bonfire.Boundaries

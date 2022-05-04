@@ -1,5 +1,7 @@
 arrows = "https://github.com/bonfire-networks/arrows#main"
 bonfire_common = "https://github.com/bonfire-networks/bonfire_common#main"
+bonfire_ui_common = "https://github.com/bonfire-networks/bonfire_ui_common#main"
+bonfire_ui_social = "https://github.com/bonfire-networks/bonfire_ui_social#main"
 bonfire_epics = "https://github.com/bonfire-networks/bonfire_epics#main"
 bonfire_me = "https://github.com/bonfire-networks/bonfire_me#main"
 bonfire_data_social = "https://github.com/bonfire-networks/bonfire_data_social#main"

@@ -1,6 +1,6 @@
 defmodule Bonfire.Social.Messages do
   use Arrows
-  use Bonfire.Repo
+  use Bonfire.Common.Repo
   use Bonfire.Common.Utils
   import Where
 
@@ -155,7 +155,7 @@ defmodule Bonfire.Social.Messages do
       # |> Threads.maybe_re_order_with_subquery(opts)
       |> debug("post preloads & permissions")
       # |> repo().many() # return all items
-      |> Bonfire.Repo.many_paginated(opts) # return a page of items (reverse chronological) + pagination metadata
+      |> Bonfire.Common.Repo.many_paginated(opts) # return a page of items (reverse chronological) + pagination metadata
       # |> Threads.maybe_re_order_result(opts)
       # |> debug("feed")
   end

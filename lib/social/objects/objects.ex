@@ -1,7 +1,7 @@
 defmodule Bonfire.Social.Objects do
 
   use Arrows
-  use Bonfire.Repo,
+  use Bonfire.Common.Repo,
     schema: Pointers.Pointer,
     searchable_fields: [:id],
     sortable_fields: [:id]
@@ -130,16 +130,16 @@ defmodule Bonfire.Social.Objects do
 
   def preload_reply_creator(object) do
     object
-    |> Bonfire.Repo.maybe_preload([replied: [reply_to: [created: [creator: [:character]]]]]) #|> IO.inspect
-    # |> Bonfire.Repo.maybe_preload([replied: [:reply_to]]) #|> IO.inspect
-    |> Bonfire.Repo.maybe_preload([replied: [reply_to: [creator: [:character]]]]) #|> IO.inspect
+    |> Bonfire.Common.Repo.maybe_preload([replied: [reply_to: [created: [creator: [:character]]]]]) #|> IO.inspect
+    # |> Bonfire.Common.Repo.maybe_preload([replied: [:reply_to]]) #|> IO.inspect
+    |> Bonfire.Common.Repo.maybe_preload([replied: [reply_to: [creator: [:character]]]]) #|> IO.inspect
   end
 
   # TODO: does not take permissions into consideration
   def preload_creator(object),
     do: object
-        |> Bonfire.Repo.maybe_preload([created: [creator: [:character]]])
-        |> Bonfire.Repo.maybe_preload([creator: [:character]])
+        |> Bonfire.Common.Repo.maybe_preload([created: [creator: [:character]]])
+        |> Bonfire.Common.Repo.maybe_preload([creator: [:character]])
 
   def object_creator(object) do
     e(object, :created, :creator, e(object, :creator, nil))

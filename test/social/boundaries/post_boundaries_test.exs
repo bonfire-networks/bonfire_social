@@ -6,7 +6,7 @@ defmodule Bonfire.Social.PostBoundariesTest do
   alias Bonfire.Social.Posts
   alias Bonfire.Social.FeedActivities
   alias Bonfire.Boundaries
-  alias Bonfire.Repo
+  alias Bonfire.Common.Repo
 
 
   test "creating & then reading my own post" do

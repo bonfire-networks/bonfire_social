@@ -1,6 +1,6 @@
 defmodule Bonfire.Social.APIntegrationTest do
   use Bonfire.Social.DataCase
-  use Oban.Testing, repo: Bonfire.Repo
+  use Oban.Testing, repo: Bonfire.Common.Repo
 
   alias Bonfire.Me.Fake
   alias Bonfire.Social.Follows

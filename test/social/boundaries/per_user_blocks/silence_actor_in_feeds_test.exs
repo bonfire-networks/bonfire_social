@@ -51,19 +51,19 @@ defmodule Bonfire.Social.Boundaries.SilenceActorFeedsPerUserTest do
     Bonfire.Boundaries.Blocks.block(other_user, :silence, current_user: me)
 
     # Bonfire.Boundaries.Circles.get_stereotype_circles(me, [:silence_me])
-    # |> Bonfire.Repo.maybe_preload(caretaker: [:profile], encircles: [subject: [:profile]])
+    # |> Bonfire.Common.Repo.maybe_preload(caretaker: [:profile], encircles: [subject: [:profile]])
     # |> info("me: silence_me encircles")
 
     # Bonfire.Boundaries.Circles.get_stereotype_circles(me, [:silence_them])
-    # |> Bonfire.Repo.maybe_preload(caretaker: [:profile], encircles: [subject: [:profile]])
+    # |> Bonfire.Common.Repo.maybe_preload(caretaker: [:profile], encircles: [subject: [:profile]])
     # |> info("me: silence_them encircles")
 
     # Bonfire.Boundaries.Circles.get_stereotype_circles(other_user, [:silence_me])
-    # |> Bonfire.Repo.maybe_preload(caretaker: [:profile], encircles: [subject: [:profile]])
+    # |> Bonfire.Common.Repo.maybe_preload(caretaker: [:profile], encircles: [subject: [:profile]])
     # |> info("other_user: silence_me encircles")
 
     # Bonfire.Boundaries.Circles.get_stereotype_circles(other_user, [:silence_them])
-    # |> Bonfire.Repo.maybe_preload(caretaker: [:profile], encircles: [subject: [:profile]])
+    # |> Bonfire.Common.Repo.maybe_preload(caretaker: [:profile], encircles: [subject: [:profile]])
     # |> info("other_user: silence_them encircles")
 
     assert {:ok, post} = Posts.publish(current_user: other_user, post_attrs: @attrs, boundary: "public")

@@ -1,7 +1,7 @@
 defmodule Bonfire.Social.Edges do
   use Arrows
   use Bonfire.Common.Utils
-  use Bonfire.Repo
+  use Bonfire.Common.Repo
   import Bonfire.Boundaries.Queries
   import Where
   alias Bonfire.Boundaries.Acls

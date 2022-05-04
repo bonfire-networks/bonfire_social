@@ -10,7 +10,7 @@ defmodule Bonfire.Social.Acts.Files do
   use Bonfire.Common.Utils
   alias Bonfire.Epics
   alias Bonfire.Epics.Epic
-  alias Bonfire.Repo
+  alias Bonfire.Common.Repo
   # alias Bonfire.Files
   alias Ecto.Changeset
   alias Pointers.Changesets

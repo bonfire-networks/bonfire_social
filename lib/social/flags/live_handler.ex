@@ -1,5 +1,5 @@
 defmodule Bonfire.Social.Flags.LiveHandler do
-  use Bonfire.Web, :live_handler
+  use Bonfire.UI.Common.Web, :live_handler
 
   def handle_event("flag", %{"id"=> id}, socket) do # flag in LV
     #debug(socket)

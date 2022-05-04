@@ -10,7 +10,7 @@ defmodule Bonfire.Social.Follows do
   import Where
   use Arrows
   use Bonfire.Common.Utils
-  use Bonfire.Repo
+  use Bonfire.Common.Repo
 
   def queries_module, do: Follow
   def context_module, do: Follow

@@ -6,7 +6,7 @@ defmodule Bonfire.Social.Boosts do
   alias Bonfire.Social.{Activities, Edges, Feeds, FeedActivities, Integration, LivePush, Objects}
   alias Bonfire.Data.Edges.Edge
 
-  use Bonfire.Repo,
+  use Bonfire.Common.Repo,
     searchable_fields: [:booster_id, :boosted_id]
   # import Bonfire.Social.Integration
   use Bonfire.Common.Utils
@@ -88,7 +88,7 @@ defmodule Bonfire.Social.Boosts do
     filters
     |> query(opts)
     # |> debug()
-    |> Bonfire.Repo.many_paginated(opts)
+    |> Bonfire.Common.Repo.many_paginated(opts)
     # TODO: activity preloads
   end
 

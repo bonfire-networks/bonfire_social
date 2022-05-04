@@ -121,7 +121,7 @@ defmodule Bonfire.Social.FollowsTest do
     assert %{edges: fetched} = p = FeedActivities.feed(:notifications, current_user: followed)
     # debug(notifications: p)
     assert %{} = notification = List.first(fetched)
-    assert activity = notification.activity |> Bonfire.Repo.maybe_preload([object: [:profile]])
+    assert activity = notification.activity |> Bonfire.Common.Repo.maybe_preload([object: [:profile]])
     # debug(followed: followed)
     # debug(notifications: activity)
 

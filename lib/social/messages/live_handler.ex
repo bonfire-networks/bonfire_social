@@ -1,5 +1,5 @@
 defmodule Bonfire.Social.Messages.LiveHandler do
-  use Bonfire.Web, :live_handler
+  use Bonfire.UI.Common.Web, :live_handler
 
   def handle_event("send", params, socket) do
     send_message(params, socket)

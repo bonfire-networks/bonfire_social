@@ -87,7 +87,7 @@ defmodule Bonfire.Social.PostContents do
   def indexing_object_format(%{post_content: obj}), do: indexing_object_format(obj)
   def indexing_object_format(%PostContent{id: _} = obj) do
 
-    # obj = Bonfire.Repo.maybe_preload(obj, [:icon, :image])
+    # obj = Bonfire.Common.Repo.maybe_preload(obj, [:icon, :image])
 
     # icon = Bonfire.Files.IconUploader.remote_url(obj.icon)
     # image = Bonfire.Files.ImageUploader.remote_url(obj.image)

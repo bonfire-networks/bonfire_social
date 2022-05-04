@@ -1,15 +1,16 @@
 defmodule Bonfire.Social.Web.Feeds.NotificationsLive do
-  use Bonfire.Web, :surface_view
-  alias Bonfire.Web.LivePlugs
+  use Bonfire.UI.Common.Web, :surface_view
+  alias Bonfire.Me.Web.LivePlugs
 
   def mount(params, session, socket) do
-    LivePlugs.live_plug params, session, socket, [
+    live_plug params, session, socket, [
       LivePlugs.LoadCurrentAccount,
       LivePlugs.LoadCurrentUser,
       LivePlugs.AccountRequired,
       # LivePlugs.LoadCurrentAccountUsers,
-      LivePlugs.StaticChanged,
-      LivePlugs.Csrf, LivePlugs.Locale,
+      Bonfire.UI.Common.LivePlugs.StaticChanged,
+      Bonfire.UI.Common.LivePlugs.Csrf,
+      Bonfire.UI.Common.LivePlugs.Locale,
       &mounted/3,
     ]
   end
@@ -48,8 +49,8 @@ defmodule Bonfire.Social.Web.Feeds.NotificationsLive do
   #    )}
   # end
 
-  defdelegate handle_params(params, attrs, socket), to: Bonfire.Common.LiveHandlers
-  def handle_event(action, attrs, socket), do: Bonfire.Common.LiveHandlers.handle_event(action, attrs, socket, __MODULE__)
-  def handle_info(info, socket), do: Bonfire.Common.LiveHandlers.handle_info(info, socket, __MODULE__)
+  defdelegate handle_params(params, attrs, socket), to: Bonfire.UI.Common.LiveHandlers
+  def handle_event(action, attrs, socket), do: Bonfire.UI.Common.LiveHandlers.handle_event(action, attrs, socket, __MODULE__)
+  def handle_info(info, socket), do: Bonfire.UI.Common.LiveHandlers.handle_info(info, socket, __MODULE__)
 
 end

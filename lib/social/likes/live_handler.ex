@@ -1,5 +1,5 @@
 defmodule Bonfire.Social.Likes.LiveHandler do
-  use Bonfire.Web, :live_handler
+  use Bonfire.UI.Common.Web, :live_handler
   import Where
 
   def handle_event("like", %{"direction"=>"up", "id"=> id} = params, socket) do # like in LV

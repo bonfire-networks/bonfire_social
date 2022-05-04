@@ -42,8 +42,8 @@ defmodule Bonfire.Social.PostsTest do
     user = Fake.fake_user!()
     assert {:ok, post} =
       Posts.publish(current_user: user, post_attrs: attrs, boundary: "public")
-    # post = Bonfire.Repo.preload(post, [:caretaker, controlled: [acl: [:named, :caretaker]]])
-    # user = Bonfire.Repo.preload(user, encircles: [circle: [:named]])
+    # post = Bonfire.Common.Repo.preload(post, [:caretaker, controlled: [acl: [:named, :caretaker]]])
+    # user = Bonfire.Common.Repo.preload(user, encircles: [circle: [:named]])
     # debug(post, "post")
     # debug(user, "user")
     assert {:ok, read} = Posts.read(post.id, current_user: user)

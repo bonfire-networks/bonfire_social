@@ -304,7 +304,7 @@ defmodule Bonfire.Social.Feeds do
   # def admins_inboxes(), do: Bonfire.Me.Users.list_admins() |> admins_inboxes()
   # def admins_inboxes(admins) when is_list(admins), do: Enum.map(admins, fn x -> admin_inbox(x) end)
   # def admin_inbox(admin) do
-  #   admin = admin |> Bonfire.Repo.maybe_preload([:character]) # |> IO.inspect
+  #   admin = admin |> Bonfire.Common.Repo.maybe_preload([:character]) # |> IO.inspect
   #   #|> debug()
   #   e(admin, :character, :inbox_id, nil)
   #     || feed_id(:inbox, admin)
@@ -312,7 +312,7 @@ defmodule Bonfire.Social.Feeds do
 
   def admins_notifications(), do:
     Bonfire.Me.Users.list_admins()
-    |> Bonfire.Repo.maybe_preload([:character])
+    |> Bonfire.Common.Repo.maybe_preload([:character])
     |> admins_notifications()
   def admins_notifications(admins) when is_list(admins), do: Enum.map(admins, fn x -> admin_notifications(x) end)
   def admin_notifications(admin) do

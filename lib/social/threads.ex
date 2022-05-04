@@ -2,7 +2,7 @@ defmodule Bonfire.Social.Threads do
 
   use Arrows
   use Bonfire.Common.Utils
-  use Bonfire.Repo,
+  use Bonfire.Common.Repo,
     schema: Replied,
     searchable_fields: [:id, :thread_id, :reply_to_id],
     sortable_fields: [:id]
@@ -252,7 +252,7 @@ defmodule Bonfire.Social.Threads do
       opts
     )
       # |> debug()
-      |> Bonfire.Repo.many_paginated(opts) # return a page of items + pagination metadata
+      |> Bonfire.Common.Repo.many_paginated(opts) # return a page of items + pagination metadata
       # |> repo().many # without pagination
       # |> debug("thread")
   end

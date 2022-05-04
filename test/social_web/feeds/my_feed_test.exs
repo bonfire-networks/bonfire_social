@@ -4,7 +4,7 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
   alias Bonfire.Social.Fake
   alias Bonfire.Social.Posts
   alias Bonfire.Social.Follows
-  alias Bonfire.Repo
+  alias Bonfire.Common.Repo
 
   describe "show" do
 

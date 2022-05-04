@@ -12,7 +12,7 @@ defmodule Bonfire.Social.Likes do
   # import Ecto.Query
   # import Bonfire.Social.Integration
   use Bonfire.Common.Utils
-  use Bonfire.Repo
+  use Bonfire.Common.Repo
 
   def queries_module, do: Like
   def context_module, do: Like
@@ -90,7 +90,7 @@ defmodule Bonfire.Social.Likes do
     # |> Activities.query_object_preload_activity(:like, :liked_id, opts)
     # |> Activities.as_permitted_for(opts, [:see])
     # |> debug()
-    |> Bonfire.Repo.many_paginated(opts)
+    |> Bonfire.Common.Repo.many_paginated(opts)
   end
 
   @doc "List the current user's likes"

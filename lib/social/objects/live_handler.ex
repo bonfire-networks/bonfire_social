@@ -1,5 +1,5 @@
 defmodule Bonfire.Social.Objects.LiveHandler do
-  use Bonfire.Web, :live_handler
+  use Bonfire.UI.Common.Web, :live_handler
   import Where
 
   def handle_event("delete", %{"id"=> id} = params, socket) do

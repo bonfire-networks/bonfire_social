@@ -12,7 +12,7 @@ defmodule Bonfire.Social.Flags do
   alias Bonfire.Social.Objects
   use Arrows
   use Bonfire.Common.Utils
-  use Bonfire.Repo,
+  use Bonfire.Common.Repo,
     schema: Flag,
     searchable_fields: [:flagger_id, :flagged_id]
   import Bonfire.Boundaries.Queries
@@ -77,7 +77,7 @@ defmodule Bonfire.Social.Flags do
     filters
     |> query(opts)
     |> proload(:activity)
-    |> Bonfire.Repo.many_paginated(opts)
+    |> Bonfire.Common.Repo.many_paginated(opts)
     # TODO: activity preloads
   end
 

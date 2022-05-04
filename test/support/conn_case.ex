@@ -22,6 +22,9 @@ defmodule Bonfire.Social.ConnCase do
       # Import conveniences for testing with connections
       import Plug.Conn
       import Phoenix.ConnTest
+
+      import Bonfire.UI.Common.Testing.Helpers
+
       import Phoenix.LiveViewTest
       import Bonfire.Social.ConnCase
       import Bonfire.Social.Test.ConnHelpers

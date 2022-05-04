@@ -1,5 +1,5 @@
 defmodule Bonfire.Social.Feeds.LiveHandler do
-  use Bonfire.Web, :live_handler
+  use Bonfire.UI.Common.Web, :live_handler
   import Where
 
   def handle_params(%{"after" => _cursor_after} = opts, _, %{assigns: %{feed_id: feed_id}} = socket) when not is_nil(feed_id) do

@@ -1,5 +1,5 @@
 defmodule Bonfire.Social.Tags do
-  use Bonfire.Repo
+  use Bonfire.Common.Repo
   use Arrows
   use Bonfire.Common.Utils
 

@@ -1,7 +1,7 @@
 defmodule Bonfire.Social.Activities do
 
   use Arrows
-  use Bonfire.Repo,
+  use Bonfire.Common.Repo,
     schema: Activity,
     searchable_fields: [:id, :subject_id, :verb_id, :object_id],
     sortable_fields: [:id, :subject_id, :verb_id, :object_id]

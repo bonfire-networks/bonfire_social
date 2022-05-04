@@ -1,5 +1,5 @@
 defmodule Bonfire.Social.Posts.LiveHandler do
-  use Bonfire.Web, :live_handler
+  use Bonfire.UI.Common.Web, :live_handler
   import Where
 
   alias Bonfire.Social.Posts
