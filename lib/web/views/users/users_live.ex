@@ -25,7 +25,6 @@ defmodule Bonfire.Social.Web.UsersLive do
       |> assign(
         page_title: "Users directory",
         page: "Users",
-        has_private_tab: false,
         search_placeholder: "Search in users directory"
       )}
   end

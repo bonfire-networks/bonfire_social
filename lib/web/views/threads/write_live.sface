@@ -105,13 +105,6 @@
           </div>  
           <label for="description" class="sr-only">{l "Description"}</label>
           <Field  class="h-full min-h-full" name={:html_body}>
-            <Bonfire.Editor.Ck.Bubble 
-              field_name="post[post_content][html_body]"
-              textarea_class={"min-h-[calc(100vh-128px)] prose prose-lg max-w-full"}
-              placeholder="Type your message"
-              content={e(assigns, :smart_input_text, '')}
-            /> 
-            
           </Field>
         </div>
       </Inputs>

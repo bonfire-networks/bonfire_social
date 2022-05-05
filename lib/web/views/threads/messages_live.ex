@@ -1,5 +1,5 @@
 defmodule Bonfire.Social.Web.MessagesLive do
-  use Bonfire.UI.Common.Web, {:surface_view, [layout: {Bonfire.UI.Social.Web.LayoutView, "without_sidebar.html"}]}
+  use Bonfire.UI.Common.Web, :surface_view
   alias Bonfire.Me.Web.LivePlugs
   alias Bonfire.Social.Integration
   import Where
@@ -24,13 +24,15 @@ defmodule Bonfire.Social.Web.MessagesLive do
       |> assign(
         page_title: l("Messages"),
         page: "messages",
-        has_private_tab: false,
         activity: nil,
         object: nil,
         reply_to_id: nil,
-        thread_id: nil
+        thread_id: nil,
+       
+        # without_sidebar: true
       )
       |> assign_global(
+        showing_within: :message,
         search_placeholder: l("Search this discussion"),
         create_activity_type: :message,
         smart_input_prompt: l("Compose a thoughtful message...")
@@ -73,7 +75,6 @@ defmodule Bonfire.Social.Web.MessagesLive do
           feed: e(feed, :edges, []),
           smart_input: true,
           tab_id: "compose",
-          has_private_tab: true,
           feed_title: l("Messages"),
           user: user, # the user to display
           reply_to_id: nil,
@@ -148,7 +149,6 @@ defmodule Bonfire.Social.Web.MessagesLive do
         |> assign(
           page_title: title,
           page: "messages",
-          has_private_tab: false,
           tab_id: "thread",
           reply_to_id: reply_to_id,
           url: url,

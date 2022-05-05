@@ -2,7 +2,6 @@
 <Bonfire.UI.Social.ObjectThreadLive
   page={@page}
   page_title={@page_title}
-  has_private_tab={@has_private_tab}
   search_placeholder={@search_placeholder}
   smart_input_prompt={@smart_input_prompt}
   smart_input_text={@smart_input_text}
@@ -10,7 +9,7 @@
   to_circles={e(assigns, :to_circles, [])}
   reply_to_id={@reply_to_id}
   activity={@activity}
-  thread_mode={:flat}
+  thread_mode={e(assigns, :thread_mode, nil)}
   object={@object}
   url={@url}
   thread_id={@thread_id}
