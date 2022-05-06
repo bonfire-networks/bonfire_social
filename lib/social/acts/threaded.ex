@@ -7,7 +7,7 @@ defmodule Bonfire.Social.Acts.Threaded do
   alias Ecto.Changeset
   alias Pointers.Changesets
   import Epics
-  import Where, only: [warn: 2]
+  import Where
   use Arrows
 
   def run(epic, act) do
@@ -62,15 +62,11 @@ defmodule Bonfire.Social.Acts.Threaded do
       {:ok, %{}=reply_to} ->
         # we're permitted to reply to the parent, but it appears to have no threading information.
         debug(epic, act, "parent missing threading, creating as root")
-        replied_attrs = %{id: reply_to.id, thread_id: reply_to.id}
-        # pretend the replied already exists, because it will in a moment
-        replied = Changesets.set_state(struct(Replied, replied_attrs), :loaded)
-        reply_to = Map.put(reply_to, :replied, replied)
+
+        reply_to = init_replied(reply_to)
+
         changeset
-        # HACK: inserts the parent replied in a nasty way to get around there being no way to do an
-        # insert across an association with `on_conflict: :ignore`
-        |> Changeset.prepare_changes(&Threads.create_parent_replied(&1, replied, replied_attrs))
-        |> put_replied(reply_to.id, reply_to.id)
+        |> put_replied(reply_to.id, reply_to)
         |> Epic.assign(epic, on, ...)
         |> Epic.assign(:reply_to, reply_to)
       _ ->
@@ -89,5 +85,22 @@ defmodule Bonfire.Social.Acts.Threaded do
     |> Changesets.put_assoc(:replied, %{thread_id: thread_id, reply_to_id: reply_to.id}) #|> debug()
     |> Changeset.update_change(:replied, &Replied.make_child_of(&1, reply_to.replied))
   end
+
+  defp init_replied(reply_to) do
+    %Replied{id: reply_to.id, thread_id: reply_to.id}
+    |> Threads.init_parent_replied()
+    ~> Map.put(reply_to, :replied, ...)
+  end
+  # defp init_replied(changeset, reply_to) do
+  #   replied_attrs = %{id: reply_to.id, thread_id: reply_to.id}
+  #   # pretend the replied already exists, because it will in a moment
+  #   replied = Changesets.set_state(struct(Replied, replied_attrs), :loaded)
+  #   reply_to = Map.put(reply_to, :replied, replied)
+  #   |> debug("reply_to")
+
+  #   # HACK: inserts the parent replied in a nasty way to get around there being no way to do an insert across an association with `on_conflict: :ignore`
+  #   # FIXME: causes a `no case clause matching: :raise` error
+  #   Changeset.prepare_changes(changeset, &Threads.create_parent_replied(&1, replied, replied_attrs))
+  # end
 
 end

@@ -93,6 +93,11 @@ defmodule Bonfire.Social.Threads do
   end
 
   @doc false
+  def init_parent_replied(replied_attrs) do # TODO: can we do this in the transaction?
+    repo().insert(replied_attrs, on_conflict: :nothing)
+  end
+
+  @doc false
   def create_parent_replied(changeset, replied, replied_attrs) do
     changeset.repo.insert_all(Replied, [replied_attrs], on_conflict: :nothing)
     changeset
