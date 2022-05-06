@@ -2,24 +2,28 @@ defmodule Bonfire.Social.Boosts.LiveHandler do
   use Bonfire.UI.Common.Web, :live_handler
   import Where
 
+  def handle_event("boost", params, %{assigns: %{object: object}} = socket) do # boost in LV stateful component
+    with {:ok, boost} <- Bonfire.Social.Boosts.boost(current_user(socket), object) do
+      boost_action(object, true, params, socket)
+    end
+  end
+
   def handle_event("boost", %{"id"=> id} = params, socket) do # boost in LV
-    #debug(socket)
     with {:ok, boost} <- Bonfire.Social.Boosts.boost(current_user(socket), id) do
-
-      set = [my_boost: true]
-
-      ComponentID.send_assigns(e(params, "component", Bonfire.UI.Social.Activity.BoostActionLive), id, set, socket)
-
+      boost_action(id, true, params, socket)
     end
   end
 
   def handle_event("undo", %{"id"=> id} = params, socket) do # unboost in LV
     with {:ok, unboost} <- Bonfire.Social.Boosts.unboost(current_user(socket), id) do
-      set = [my_boost: false]
-
-      ComponentID.send_assigns(e(params, "component", Bonfire.UI.Social.Activity.BoostActionLive), id, set, socket)
-
+      boost_action(id, false, params, socket)
     end
+  end
+
+  defp boost_action(object, boost?, params, socket) do
+    set = [my_boost: boost?]
+
+    ComponentID.send_assigns(e(params, "component", Bonfire.UI.Social.Activity.BoostActionLive), ulid(object), set, socket)
   end
 
   def preload(list_of_assigns) do
