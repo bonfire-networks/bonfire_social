@@ -62,6 +62,7 @@ defmodule Bonfire.Social.Migrations do
 
       Bonfire.Data.Social.Message.Migration.migrate_message()
       Bonfire.Data.Social.FeedPublish.Migration.migrate_feed_publish()
+      # Bonfire.Data.Social.Replied.Migration.migrate_functions()
       Bonfire.Data.Social.Replied.Migration.migrate_replied()
       Bonfire.Data.Social.Boost.Migration.migrate_boost()
       Bonfire.Data.Social.Flag.Migration.migrate_flag()
