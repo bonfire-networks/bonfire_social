@@ -1,5 +1,5 @@
 defmodule Bonfire.Social.LivePush do
-  use Bonfire.Common.Utils
+  use Bonfire.UI.Common
   import Where
   alias Bonfire.Social.Activities
 

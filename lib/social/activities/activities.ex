@@ -289,7 +289,6 @@ defmodule Bonfire.Social.Activities do
     |> as_permitted_for(opts, [:read])
     # |> debug("permitted query")
     |> repo().single()
-    # # pubsub_subscribe(e(object, :activity, :replied, :thread_id, nil) || object.id, opts) # subscribe to realtime feed updates
     #  #|> repo().maybe_preload(controlled: [acl: [grants: [access: [:interacts]]]]) |> IO.inspect
   end
 

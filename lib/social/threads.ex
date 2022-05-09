@@ -250,8 +250,6 @@ defmodule Bonfire.Social.Threads do
       |> Keyword.put_new(:limit, Config.get(:thread_default_pagination_limit, 500))
       |> info("oooopts")
 
-    pubsub_subscribe(thread_id, opts) # subscribe to realtime thread updates
-
     query(
       [thread_id: thread_id], # note this won't query by thread_id but rather by path
       opts

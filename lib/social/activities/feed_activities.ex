@@ -57,7 +57,6 @@ defmodule Bonfire.Social.FeedActivities do
   when is_binary(id_or_ids) or (is_list(id_or_ids) and id_or_ids != []) do
     feed_id_or_ids = ulid(id_or_ids)
     paginate = e(opts, :paginate, nil) || e(opts, :after, nil)
-    pubsub_subscribe(feed_id_or_ids, opts) # subscribe to realtime feed updates
     base_feed_query(feed_id_or_ids)
     |> query_extras(opts)
     |> repo.many_paginated(paginate)
@@ -82,7 +81,6 @@ defmodule Bonfire.Social.FeedActivities do
         # debug(ulid(current_user(opts)), "current_user")
         # debug(feed_name, "feed_name")
         # debug(feed, "feed_id")
-        pubsub_subscribe(feed, opts) # subscribe to realtime feed updates
         base_feed_query(feed)
         |> query_extras(opts)
         |> repo.many_paginated(paginate)
