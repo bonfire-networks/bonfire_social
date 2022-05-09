@@ -200,7 +200,7 @@ defmodule Bonfire.Social.Feeds do
     end
   end
 
-  def my_home_feed_ids(socket, extra_feeds \\ [])
+  def my_home_feed_ids(socket_or_opts, extra_feeds \\ [])
   # TODO: make configurable if user wants notifications included in home feed
 
   def my_home_feed_ids(socket_or_opts, extra_feeds) do

@@ -17,12 +17,8 @@ defmodule Bonfire.Social.Web.HomeLive do
   end
 
   defp mounted(params, _session, socket) do
-    # debug("mount")
-    # feed_assigns = LiveHandler.default_feed_assigns(socket)
-
     {:ok, socket
     |> assign(
-      # feed_assigns ++
       [
         selected_tab: "home",
         page: "home",

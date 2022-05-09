@@ -197,13 +197,15 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
   def my_feed_assigns(current_user, socket) do
     # debug(myfeed: feed)
     feed_id = Bonfire.Social.Feeds.my_feed_id(:inbox, socket)
-    feed = Bonfire.Social.FeedActivities.my_feed(socket)
+    feed_ids = Bonfire.Social.Feeds.my_home_feed_ids(socket)
+    feed = Bonfire.Social.FeedActivities.feed(feed_ids, socket)
     [
       current_user: current_user,
       selected_tab: "home",
       page_title: l("Home"),
       feed_title: l("My Feed"),
       feed_id: feed_id,
+      feed_ids: feed_ids,
       feed: e(feed, :edges, []),
       page_info: e(feed, :page_info, [])
     ]
