@@ -5,7 +5,6 @@ defmodule Bonfire.Social.Tags do
 
   alias Bonfire.Common.Config
   alias Bonfire.Tag.Tags
-  alias Bonfire.Tag.TextContent
   alias Bonfire.Social.PostContents
   alias Bonfire.Data.Social.PostContent
   alias Ecto.Changeset
@@ -15,11 +14,12 @@ defmodule Bonfire.Social.Tags do
          tags when is_list(tags) and length(tags)>0 <-
           (
             e(changeset, :changes, :post_content, :changes, :mentions, []) # tag any mentions that were found in the text and injected into the changeset by PostContents (NOTE: this doesn't necessarly mean they should be included in boundaries or notified)
+            ++ e(changeset, :changes, :post_content, :changes, :hashtags, []) # tag any hashtags that were found in the text and injected into the changeset by PostContents
             ++ e(attrs, :tags, [])
           )
           |> filter_empty([])
           |> uniq_by_id()
-          |> debug
+          |> debug("cast tags")
     do
       changeset
       |> Changeset.cast(%{tagged: tags_preloads(tags, opts)}, [])
@@ -31,10 +31,14 @@ defmodule Bonfire.Social.Tags do
     # |> debug("changeset")
   end
 
-  def maybe_process(creator, attrs) do
-    with true <- module_enabled?(Bonfire.Tag),
-         {text, mentions, hashtags} <- TextContent.Process.process(creator, attrs, "text/markdown") do
-      {:ok, %{text: text, mentions: Keyword.values(mentions), hashtags: hashtags}}
+  def maybe_process(creator, text) do
+    with true <- is_binary(text) and text !="",
+         true <- module_enabled?(Bonfire.Tag),
+         {text, mentions, hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, text, "text/markdown") do # TODO: set content-type based on which rich editor is used?
+      {:ok, %{text: text, mentions: Keyword.values(mentions), hashtags: Keyword.values(hashtags)}}
+
+    else _ ->
+      {:ok, %{text: text, mentions: [], hashtags: []}}
     end
   end
 

@@ -18,9 +18,6 @@ defmodule Bonfire.Social.PostContents do
     only_prepare_content(attrs)
   end
 
-  def maybe_prepare_contents(%{post_content: %{} = attrs}, creator, boundary), do: maybe_prepare_contents(attrs, creator, boundary)
-  def maybe_prepare_contents(%{post: %{} = attrs}, creator, boundary), do: maybe_prepare_contents(attrs, creator, boundary)
-
   def maybe_prepare_contents(attrs, _creator, boundary) when boundary in ["message"] do
     debug("do not process messages for tags/mentions")
     only_prepare_content(attrs)
@@ -28,53 +25,33 @@ defmodule Bonfire.Social.PostContents do
 
   def maybe_prepare_contents(attrs, creator, _boundary) do
     debug("process post contents for tags/mentions")
-    # TODO: process tags within the prepare_text function instead (so tags can be used in all html_body/title/summary fields at once)
-    with {:ok, tags} <- Bonfire.Social.Tags.maybe_process(creator, attrs) do
-      tags
-      |> Map.merge(prepare_content(attrs, Utils.e(tags, :text, nil)))
-      # |> debug()
-    else
-      _ -> prepare_content(attrs)
+    # TODO: refactor this function?
+    with {:ok, %{text: html_body, mentions: mentions1, hashtags: hashtags1}} <- Bonfire.Social.Tags.maybe_process(creator, prepare_text(get_attr(attrs, :html_body))),
+         {:ok, %{text: name, mentions: mentions2, hashtags: hashtags2}} <- Bonfire.Social.Tags.maybe_process(creator, prepare_text(get_attr(attrs, :name))),
+         {:ok, %{text: summary, mentions: mentions3, hashtags: hashtags3}} <- Bonfire.Social.Tags.maybe_process(creator, prepare_text(get_attr(attrs, :summary))) do
+      attrs
+      |> Map.merge(
+      %{
+        html_body: html_body,
+        name: name,
+        summary: summary,
+        mentions: (mentions1 ++ mentions2 ++ mentions3),
+        hashtags: (hashtags1 ++ hashtags2 ++ hashtags3)
+      })
     end
   end
 
   def only_prepare_content(attrs) do
-    prepare_content(e(attrs, :post, :post_content, nil) || e(attrs, :post_content, nil) || e(attrs, :post, nil) || attrs)
+    Map.merge(attrs, %{
+      html_body: prepare_text(get_attr(attrs, :html_body)),
+      name: prepare_text(get_attr(attrs, :name)),
+      summary: prepare_text(get_attr(attrs, :summary))
+    })
   end
 
-  def prepare_content(attrs, text \\ nil)
-  def prepare_content(attrs, text) when is_binary(text) and text !="" do
-    # use seperate text param if provided directly
-    Map.merge(attrs, %{
-      html_body: prepare_text(text),
-      name: prepare_text(Map.get(attrs, :name)),
-      summary: prepare_text(Map.get(attrs, :summary))
-    })
+  defp get_attr(attrs, key) do
+    e(attrs, key, nil) || e(attrs, :post, :post_content, key, nil) || e(attrs, :post_content, key, nil) || e(attrs, :post, key, nil)
   end
-  def prepare_content(%{summary: summary, html_body: body} = attrs, _) when (not is_binary(body) or body=="") and not (is_nil(summary) or summary=="") do
-    # use summary as body if no body entered
-    Map.merge(attrs, %{
-      html_body: prepare_text(summary),
-      summary: nil,
-      name: prepare_text(Map.get(attrs, :name))
-    })
-  end
-  def prepare_content(%{name: name, html_body: body} = attrs, _) when (not is_binary(body) or body=="") and not (is_nil(name) or name=="") do
-    # use title as body if no body entered
-    Map.merge(attrs, %{
-      html_body: prepare_text(name),
-      name: nil,
-      summary: prepare_text(Map.get(attrs, :summary))
-    })
-  end
-  def prepare_content(%{} = attrs, _) do
-    Map.merge(attrs, %{
-      html_body: prepare_text(Map.get(attrs, :html_body)),
-      name: prepare_text(Map.get(attrs, :name)),
-      summary: prepare_text(Map.get(attrs, :summary))
-    })
-  end
-  def prepare_content(attrs, _), do: attrs
 
   def prepare_text(text) when is_binary(text) and text !="" do
     text
