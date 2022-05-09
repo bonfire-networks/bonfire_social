@@ -28,7 +28,7 @@ defmodule Bonfire.Social.Web.MessagesLive do
         object: nil,
         reply_to_id: nil,
         thread_id: nil,
-       
+
         # without_sidebar: true
       )
       |> assign_global(
@@ -88,7 +88,7 @@ defmodule Bonfire.Social.Web.MessagesLive do
       {:noreply,
         socket
         |> put_flash(:error, l("User not found"))
-        |> push_redirect(to: "/error")
+        |> push_redirect(to: path(:error))
       }
     end
   end
