@@ -200,8 +200,13 @@ defmodule Bonfire.Social.Follows do
     end
   end
 
+  defp local_or_remote_object(id) when is_binary(id) do
+    Bonfire.Common.Pointers.get(id)
+    ~> local_or_remote_object()
+  end
   defp local_or_remote_object(object) do
     object = repo().maybe_preload(object, [:peered, created: [creator: :peered]])
+    |> info()
 
     if Integration.is_local?(object) do
       {:local, object}
