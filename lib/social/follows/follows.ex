@@ -32,22 +32,22 @@ defmodule Bonfire.Social.Follows do
     case check_follow(follower, object, opts) do
       {:local, object} ->
         if Integration.is_local?(follower) do
-          debug(object, "local following local, attempting follow")
+          info(object, "local following local, attempting follow")
           do_follow(follower, object, opts)
         else
-          debug(object, "remote following local, attempting a request")
+          info(object, "remote following local, attempting a request")
           Requests.request(follower, Follow, object, opts)
         end
       {:remote, object} ->
         if Integration.is_local?(follower) do
-          debug(object, "local following remote, attempting a request")
+          info(object, "local following remote, attempting a request")
           Requests.request(follower, Follow, object, opts)
         else
-          debug(object, "remote following remote, should not be here")
+          info(object, "remote following remote, should not be possible!")
           {:error, :not_permitted}
         end
       :not_permitted ->
-        debug(object, "not permitted to follow, attempting a request instead")
+        info(object, "not permitted to follow, attempting a request instead")
         Requests.request(follower, Follow, object, opts)
     end
   end
@@ -178,27 +178,35 @@ defmodule Bonfire.Social.Follows do
       |> Keyword.put_new(:verbs, [:follow])
       |> Keyword.put_new(:current_user, follower)
     if skip? do
-      debug("skip boundary check")
-      {:local, object}
+      info("skip boundary check")
+      local_or_remote_object(object)
     else
       case ulid(object) do
         id when is_binary(id) ->
           case Bonfire.Boundaries.load_pointers(id, current_user: follower, verbs: :follow) do
-            nil -> :not_permitted
-            loaded ->
-              object = repo().maybe_preload(loaded, [:peered, created: [creator: :peered]])
-              #|> debug()
-              if Integration.is_local?(object), do: {:local, object}, else: {:remote, object}
+            nil ->
+              :not_permitted
+            object ->
+              local_or_remote_object(object)
           end
         _ ->
           error(object, "no object ID, attempting with username")
           case maybe_apply(Characters, :by_username, [object, opts]) do
             nil -> :not_permitted
             _ ->
-              object = repo().maybe_preload(object, [:peered])
-              if Integration.is_local?(object), do: {:local, object}, else: {:remote, object}
+              local_or_remote_object(object)
           end
       end
+    end
+  end
+
+  defp local_or_remote_object(object) do
+    object = repo().maybe_preload(object, [:peered, created: [creator: :peered]])
+
+    if Integration.is_local?(object) do
+      {:local, object}
+    else
+      {:remote, object}
     end
   end
 
@@ -267,9 +275,10 @@ defmodule Bonfire.Social.Follows do
   end
 
   def ap_receive_activity(follower, %{data: %{"type" => "Follow"} = data} = _activity, %{pointer_id: _followed_id} = object) when is_binary(follower) or is_struct(follower) do
-    warn("Follows: recording an incoming follow")
-    with false <- following?(follower, object), # check if not already following
-         {:ok, %Follow{} = follow} <- follow(follower, object, current_user: follower) do
+    warn("Follows: recording an incoming follow...")
+    with {:ok, followed} <- Bonfire.Federate.ActivityPub.Utils.get_character_by_ap_id(object),
+         false <- following?(follower, followed), # check if not already following
+         {:ok, %Follow{} = follow} <- follow(follower, followed, current_user: follower) do
       ActivityPub.accept(%{
         actor: object,
         to: [data["actor"]],
