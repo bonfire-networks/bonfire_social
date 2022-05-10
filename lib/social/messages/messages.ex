@@ -70,7 +70,7 @@ defmodule Bonfire.Social.Messages do
   defp create(%{id: creator_id} = creator, attrs, opts \\ []) do
     # we attempt to avoid entering the transaction as long as possible.
     changeset = changeset(:create, attrs, creator, opts)
-    |> info
+    # |> info
     repo().transact_with(fn -> repo().insert(changeset) end)
   end
 

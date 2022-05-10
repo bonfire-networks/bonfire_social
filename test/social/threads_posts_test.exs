@@ -63,7 +63,7 @@ defmodule Bonfire.Social.ThreadsPostsTest do
 
     # debug(replies)
     reply = List.first(replies)
-    IO.inspect(reply)
+    # IO.inspect(reply)
     assert reply.activity.replied.reply_to_id == post.id
     assert reply.activity.replied.thread_id == post.id
     assert reply.activity.replied.path == [post.id]

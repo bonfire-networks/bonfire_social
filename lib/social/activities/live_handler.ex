@@ -2,33 +2,34 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
   use Bonfire.UI.Common.Web, :live_handler
   import Where
 
-  def handle_params(%{"after" => _cursor_after} = opts, _, %{assigns: %{feed_id: feed_id}} = socket) when not is_nil(feed_id) do
-    debug("Feeds - paginate with params - if a feed_id has been assigned in the view, load that")
-    Bonfire.Social.FeedActivities.feed(feed_id, [current_user: current_user(socket), paginate: opts])
+  def handle_params(%{"after" => _cursor_after} = attrs, _, %{assigns: %{feed_id: feed_id}} = socket) when not is_nil(feed_id) do
+    input_to_atoms(attrs)
+    |> info("Feeds - paginate with params - since a feed_id has been assigned in the view, load that")
+    |> Bonfire.Social.FeedActivities.feed(feed_id, [current_user: current_user(socket), paginate: ...])
     |> assign_feed(socket)
   end
 
-  def handle_params(%{"after" => _cursor_after} = opts, _, socket) do
-    debug("Feeds - paginate with params - if there's no feed_id but we have a current_user, load My Feed")
-    Bonfire.Social.FeedActivities.my_feed([current_user: current_user(socket), paginate: opts])
-    |> assign_feed(socket)
+  def handle_params(%{"after" => _cursor_after} = attrs, _, socket) do
+    input_to_atoms(attrs)
+    |> info("Feeds - paginate with params - there's no feed_id, so load default feed")
+    |> {:noreply, socket |> assign(default_feed_assigns([current_user: current_user(socket), paginate: ...]))}
   end
 
   def handle_params(_attrs, _, socket) do
     {:noreply, socket}
   end
 
-  def handle_event("load_more", opts, %{assigns: %{feed_id: feed_id}} = socket) when not is_nil(feed_id) do
-    debug("Feeds - paginate with live event - if a feed_id has been assigned in the view, load that")
-    Bonfire.Social.FeedActivities.feed(feed_id, [current_user: current_user(socket), paginate: opts])
-    |> live_more(socket)
+  def handle_event("load_more", attrs, %{assigns: %{feed_id: feed_id}} = socket) when not is_nil(feed_id) do
+    input_to_atoms(attrs)
+    |> debug("Feeds - paginate with live event - if a feed_id has been assigned in the view, load that")
+    |> Bonfire.Social.FeedActivities.feed(feed_id, [current_user: current_user(socket), paginate: ...])
+    |> assign_feed(socket)
   end
 
-  def handle_event("load_more", opts, socket) do
-
-    debug("Feeds - paginate with live event - if there's no feed_id but we have a current_user, load My Feed")
-    Bonfire.Social.FeedActivities.my_feed([current_user: current_user(socket), paginate: opts])
-    |> live_more(socket)
+  def handle_event("load_more", attrs, socket) do
+    input_to_atoms(attrs)
+    |> debug("Feeds - paginate with live event - if there's no feed_id so load the default")
+    |> {:noreply, socket |> assign(default_feed_assigns([current_user: current_user(socket), paginate: ...]))}
   end
 
   def handle_event("reply", _, socket) do
@@ -105,21 +106,6 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
     {:noreply, socket |> assign(new) }
   end
 
-  def live_more(%{} = feed, socket) do
-    # debug(feed_pagination: feed)
-
-    assign_feed(feed, socket)
-
-    # new = [
-    #   feed: e(feed, :edges, []),
-    #   page_info: e(feed, :page_info, [])
-    # ]
-
-    # send_update(Bonfire.UI.Social.FeedLive, [id: "feed"] ++ new)
-
-    # {:noreply, socket}
-  end
-
   def handle_info({:new_activity, data}, socket) do
     debug(data[:feed_ids], "received new_activity for feeds")
     # info(data)
@@ -149,25 +135,25 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
     end
   end
 
-  def default_feed_assigns(socket) do
-    current_user = current_user(socket)
-    current_account = current_account(socket)
+  def default_feed_assigns(socket_or_opts) do
+    current_user = current_user(socket_or_opts)
+    current_account = current_account(socket_or_opts)
 
     current = current_user || current_account
 
     if current do
-      my_feed_assigns(current, socket) # my feed
+      my_feed_assigns(current, socket_or_opts) # my feed
     else
-      instance_feed_assigns(socket) # fallback to showing instance feed
+      instance_feed_assigns(socket_or_opts) # fallback to showing instance feed
     end
   end
 
-  def fediverse_feed_assigns(socket) do
+  def fediverse_feed_assigns(socket_or_opts) do
     feed_id = Bonfire.Social.Feeds.named_feed_id(:activity_pub)
-    feed = Bonfire.Social.FeedActivities.feed(feed_id, socket)
+    feed = Bonfire.Social.FeedActivities.feed(feed_id, socket_or_opts)
 
     [
-      current_user: current_user(socket),
+      current_user: current_user(socket_or_opts),
       selected_tab: "fediverse",
       page_title: l("Federated activities from remote instances"),
       page: "federation",
@@ -178,12 +164,12 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
     ]
   end
 
-  def instance_feed_assigns(socket) do
+  def instance_feed_assigns(socket_or_opts) do
     feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
-    feed = Bonfire.Social.FeedActivities.feed(feed_id, socket)
+    feed = Bonfire.Social.FeedActivities.feed(feed_id, socket_or_opts)
 
     [
-      current_user: current_user(socket),
+      current_user: current_user(socket_or_opts),
       selected_tab: "instance",
       page_title: l("Local activities"),
       page: "local",
@@ -194,11 +180,11 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
     ]
   end
 
-  def my_feed_assigns(current_user, socket) do
+  def my_feed_assigns(current_user, socket_or_opts) do
     # debug(myfeed: feed)
-    feed_id = Bonfire.Social.Feeds.my_feed_id(:inbox, socket)
-    feed_ids = Bonfire.Social.Feeds.my_home_feed_ids(socket)
-    feed = Bonfire.Social.FeedActivities.feed(feed_ids, socket)
+    feed_id = Bonfire.Social.Feeds.my_feed_id(:inbox, socket_or_opts)
+    feed_ids = Bonfire.Social.Feeds.my_home_feed_ids(socket_or_opts)
+    feed = Bonfire.Social.FeedActivities.feed(feed_ids, socket_or_opts)
     [
       current_user: current_user,
       selected_tab: "home",

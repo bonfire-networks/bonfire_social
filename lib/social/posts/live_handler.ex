@@ -10,11 +10,11 @@ defmodule Bonfire.Social.Posts.LiveHandler do
 
 
   def handle_params(%{"after" => cursor} = attrs, _, %{assigns: %{thread_id: thread_id}} = socket) do
-    live_more(thread_id, %{after: cursor}, socket)
+    live_more(thread_id, [after: cursor], socket)
   end
 
   def handle_params(%{"after" => cursor, "context" => thread_id} = attrs, _, socket) do
-    live_more(thread_id, %{after: cursor}, socket)
+    live_more(thread_id, [after: cursor], socket)
   end
 
   def handle_params(attrs, uri, socket) do # workaround for a weird issue appearing in tests
@@ -83,6 +83,7 @@ defmodule Bonfire.Social.Posts.LiveHandler do
   end
 
   def handle_event("load_replies", %{"id" => id, "level" => level}, socket) do
+    info("load extra replies")
     {level, _} = Integer.parse(level)
     %{edges: replies} = Bonfire.Social.Threads.list_replies(id, socket: socket, max_depth: level + 1)
     replies = replies ++ Utils.e(socket.assigns, :replies, [])
@@ -138,25 +139,24 @@ defmodule Bonfire.Social.Posts.LiveHandler do
   # end
 
 
-
-  def live_more(thread_id, cursor, socket) do
-    info(cursor, "pagination")
+  def live_more(thread_id, pagination, socket) do
+    info(pagination, "paginate thread")
     current_user = current_user(socket)
-    with %{edges: replies, page_info: page_info} <- Bonfire.Social.Threads.list_replies(thread_id, current_user: current_user, pagination: cursor) do
+    with %{edges: replies, page_info: page_info} <- Bonfire.Social.Threads.list_replies(thread_id, current_user: current_user, paginate: pagination) do
 
-      replies = ( e(socket.assigns, :replies, []) ++ (replies || []) ) |> Enum.uniq()
-      # debug(replies, "REPLIES:")
+      replies = ( e(socket.assigns, :replies, []) ++ replies )
+      |> Enum.uniq()
+      |> info("REPLIES")
 
       threaded_replies = if is_list(replies) and length(replies)>0, do: Bonfire.Social.Threads.arrange_replies_tree(replies), else: []
       # debug(threaded_replies, "REPLIES threaded")
 
-      new = [
-        replies: replies || [],
+      {:noreply, socket
+      |> assign([
+        replies: replies,
         threaded_replies: threaded_replies,
         page_info: page_info
-      ]
-
-      {:noreply, socket |> assign(new)}
+      ])}
     end
   end
 

@@ -55,11 +55,10 @@ defmodule Bonfire.Social.FeedActivities do
   def feed([feed_id], opts), do: feed(feed_id, opts)
   def feed(id_or_ids, opts)
   when is_binary(id_or_ids) or (is_list(id_or_ids) and id_or_ids != []) do
-    feed_id_or_ids = ulid(id_or_ids)
-    paginate = e(opts, :paginate, nil) || e(opts, :after, nil)
-    base_feed_query(feed_id_or_ids)
+    ulid(id_or_ids)
+    |> base_feed_query()
     |> query_extras(opts)
-    |> repo.many_paginated(paginate)
+    |> repo().many_paginated(opts)
   end
   def feed(:flags, opts), do: Bonfire.Social.Flags.list_paginated([], opts)
   def feed(:notifications = feed_name, opts), do: do_feed(feed_name, opts ++ [skip_boundary_check: :admins])
@@ -73,7 +72,6 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   defp do_feed(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
-    paginate = e(opts, :paginate, nil) || e(opts, :after, nil)
     # current_user = current_user(current_user_or_socket)
     # debug(opts)
     case Feeds.named_feed_id(feed_name) || Bonfire.Social.Feeds.my_feed_id(feed_name, opts) do
@@ -83,7 +81,7 @@ defmodule Bonfire.Social.FeedActivities do
         # debug(feed, "feed_id")
         base_feed_query(feed)
         |> query_extras(opts)
-        |> repo.many_paginated(paginate)
+        |> repo().many_paginated(opts)
     e ->
         error("FeedActivities.feed: no known feed #{inspect feed_name} - #{inspect e}")
         debug(opts)

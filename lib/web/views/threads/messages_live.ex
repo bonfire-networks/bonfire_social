@@ -117,7 +117,7 @@ defmodule Bonfire.Social.Web.MessagesLive do
       current_user = current_user(socket)
 
       with {:ok, message} <- Bonfire.Social.Messages.read(id, current_user: current_user) do
-        dump(message, "the queried message")
+        # dump(message, "the queried message")
 
         {activity, message} = Map.pop(message, :activity)
         {preloaded_object, activity} = Map.pop(activity, :object)

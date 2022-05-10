@@ -289,7 +289,8 @@ defmodule Bonfire.Social.Activities do
     |> as_permitted_for(opts, [:read])
     # |> debug("permitted query")
     |> repo().single()
-    #  #|> repo().maybe_preload(controlled: [acl: [grants: [access: [:interacts]]]]) |> IO.inspect
+    #  #|> repo().maybe_preload(controlled: [acl: [grants: [access: [:interacts]]]])
+    # |> IO.inspect
   end
 
   def read(filters, opts) when is_map(filters) or is_list(filters) do

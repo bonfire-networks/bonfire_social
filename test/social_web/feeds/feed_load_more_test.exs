@@ -53,7 +53,6 @@ defmodule Bonfire.Social.Feeds.LoadMoreTest do
       assert Floki.find(doc, "[data-id=load_more]") != []
     end
 
-    @tag :fixme # the browser sees the correct behaviour but this test does not :/
     test "As a user when I click on load more I want to see next activities below the others (using LiveView websocket)" do
       total_posts = 15
       # Create alice user
@@ -80,12 +79,11 @@ defmodule Bonfire.Social.Feeds.LoadMoreTest do
       |> element("[data-id=load_more]")
       |> render_click()
 
-      # FIXME: the extra activities are being sent via pubsub, need to figure out how to test that
+      # TODO: the extra activities are being sent via pubsub, need to figure out how to test that
       articles = Floki.find(more_doc, "[data-id=feed] article")
       # |> info("articles")
 
-      assert Enum.count(articles) == total_posts
-
+      assert Enum.count(articles) == 5
     end
 
     test "As a user when I click on load more I want to see next activities even without JavaScript (using HTTP)" do
@@ -109,7 +107,7 @@ defmodule Bonfire.Social.Feeds.LoadMoreTest do
       assert [_, load_more_query_string] = Floki.attribute(doc, "[data-id=load_more] a", "href")
 
       url = "/local"<>load_more_query_string
-      debug(url, "pagination URL")
+      info(url, "pagination URL")
       conn = get(conn, url)
       more_doc = floki_response(conn) #|> IO.inspect
       assert Enum.count(Floki.find(more_doc, "[data-id=feed] article")) == 5

@@ -254,10 +254,10 @@ defmodule Bonfire.Social.Threads do
       [thread_id: thread_id], # note this won't query by thread_id but rather by path
       opts
     )
-      # |> debug()
-      |> Bonfire.Common.Repo.many_paginated(opts) # return a page of items + pagination metadata
-      # |> repo().many # without pagination
-      # |> debug("thread")
+    # |> debug()
+    |> Bonfire.Common.Repo.many_paginated(opts) # return a page of items + pagination metadata
+    # |> repo().many # without pagination
+    # |> debug("thread")
   end
 
   def query([thread_id: thread_id], opts) do
