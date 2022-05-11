@@ -23,6 +23,17 @@ defmodule Bonfire.Social.Web.HomeLive do
         selected_tab: "home",
         page: "home",
         page_title: l("Home"),
+        sidebar_widgets: [
+          users: [
+            main: [
+              {Bonfire.UI.Social.HomeBannerLive, []}
+            ],
+            secondary: [
+              {Bonfire.UI.Social.WidgetTimelinesLive, [page: "home"]},
+              {Bonfire.UI.Social.WidgetTagsLive , []}
+            ]
+          ]
+        ]
       ])
     }
   end

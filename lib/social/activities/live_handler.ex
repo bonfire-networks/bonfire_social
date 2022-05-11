@@ -163,6 +163,18 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
       feed_id: feed_id,
       feed: e(feed, :edges, []),
       page_info: e(feed, :page_info, []),
+      # FIXME: seems too much re-assigning the whole sidebar widgets only to change the page prop?
+      sidebar_widgets: [
+        users: [
+          main: [
+            {Bonfire.UI.Social.HomeBannerLive, []}
+          ],
+          secondary: [
+            {Bonfire.UI.Social.WidgetTimelinesLive, [page: "federation"]},
+            {Bonfire.UI.Social.WidgetTagsLive , []}
+          ]
+        ]
+      ]
     ]
   end
 
@@ -178,7 +190,19 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
       feed_title: l("Activities on this instance"),
       feed_id: feed_id,
       feed: e(feed, :edges, []),
-      page_info: e(feed, :page_info, []) #|> IO.inspect
+      page_info: e(feed, :page_info, []), #|> IO.inspect
+      # FIXME: seems too much re-assigning the whole sidebar widgets only to change the page prop?
+      sidebar_widgets: [
+        users: [
+          main: [
+            {Bonfire.UI.Social.HomeBannerLive, []}
+          ],
+          secondary: [
+            {Bonfire.UI.Social.WidgetTimelinesLive, [page: "local"]},
+            {Bonfire.UI.Social.WidgetTagsLive , []}
+          ]
+        ]
+      ]
     ]
   end
 
