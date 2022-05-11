@@ -184,17 +184,18 @@ defmodule Bonfire.Social.Follows do
       case ulid(object) do
         id when is_binary(id) ->
           case Bonfire.Boundaries.load_pointers(id, current_user: follower, verbs: :follow) do
-            nil ->
-              :not_permitted
-            object ->
+            object when is_struct(object) ->
               local_or_remote_object(object)
+            _ ->
+              :not_permitted
           end
         _ ->
           error(object, "no object ID, attempting with username")
           case maybe_apply(Characters, :by_username, [object, opts]) do
-            nil -> :not_permitted
-            _ ->
+            object when is_struct(object) ->
               local_or_remote_object(object)
+            _ ->
+              :not_permitted
           end
       end
     end
