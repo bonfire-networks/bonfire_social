@@ -23,7 +23,7 @@ defmodule Bonfire.Social.Threads.RepliesTest do
     assert {:ok, post_reply} = Posts.publish(current_user: bob, post_attrs: attrs_reply, boundary: "public")
 
     conn = conn(user: bob, account: account2)
-    next = "/home"
+    next = "/feed"
     {view, doc} = floki_live(conn, next)
     assert doc
       # |> info

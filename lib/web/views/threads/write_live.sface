@@ -10,7 +10,7 @@
     <Form 
       for={Bonfire.Social.Posts.LiveHandler.post_changeset(current_user(assigns))} 
       submit="Bonfire.Social.Posts:post" opts={ autocomplete: "off"}
-      class={"form_with_editor"}>
+      class={"with_editor"}>
     <div class="flex items-center justify-between p-2 space-x-2 rounded-b bg-neutral bg-opacity-30 sm:px-3">
       <div class="flex items-center flex-1 space-x-3">
         <a

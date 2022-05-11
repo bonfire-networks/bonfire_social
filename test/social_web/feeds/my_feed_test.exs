@@ -10,7 +10,7 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
 
     test "not logged in, display instance feed instead" do
       conn = conn()
-      conn = get(conn, "/home")
+      conn = get(conn, "/feed")
       feed_id = Bonfire.Social.Feeds.my_feed_id(:inbox, nil)
       assert redirected_to(conn) =~ "/login"
 
@@ -27,7 +27,7 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
       account = fake_account!()
       user = fake_user!(account)
       conn = conn(user: user, account: account)
-      next = "/home"
+      next = "/feed"
       feed_id = Bonfire.Social.Feeds.my_feed_id(:inbox, user)
 
       {view, doc} = floki_live(conn, next) #|> IO.inspect
@@ -43,7 +43,7 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
       assert post.post_content.name =~ "test post name"
 
       conn = conn(user: user, account: account)
-      next = "/home"
+      next = "/feed"
       feed_id = Bonfire.Social.Feeds.my_feed_id(:inbox, user)
 
       {view, doc} = floki_live(conn, next) #|> IO.inspect
@@ -67,7 +67,7 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
       assert post.post_content.name =~ "test post name"
 
       conn = conn(user: user2, account: account2)
-      next = "/home"
+      next = "/feed"
       feed_id = Bonfire.Social.Feeds.my_feed_id(:inbox, user2)
 
       {view, doc} = floki_live(conn, next) #|> IO.inspect
@@ -84,7 +84,7 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
     test "with account only" do
       account = fake_account!()
       conn = conn(account: account) #|> dump
-      next = "/home"
+      next = "/feed"
       assert floki_redirect(conn, next) =~ "/switch-user"
       # {view, doc} = floki_live(conn, next)
       # main = Floki.find(doc, "main") #|> IO.inspect
@@ -101,7 +101,7 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
       account = fake_account!()
       user = fake_user!(account)
       conn = conn(user: user, account: account)
-      next = "/home"
+      next = "/feed"
       feed_id = Bonfire.Social.Feeds.my_feed_id(:inbox, user)
 
       {view, doc} = floki_live(conn, next) #|> IO.inspect
@@ -124,7 +124,7 @@ defmodule Bonfire.Social.Feeds.MyFeed.Test do
       assert post.post_content.name =~ "test post name"
 
       conn = conn(user: user2, account: account2)
-      next = "/home"
+      next = "/feed"
       feed_id = Bonfire.Social.Feeds.my_feed_id(:inbox, user2)
 
       {view, doc} = floki_live(conn, next) #|> IO.inspect

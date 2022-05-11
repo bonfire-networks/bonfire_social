@@ -91,7 +91,7 @@ defmodule Bonfire.Social.Activities.BoostPost.Test do
   #   assert {:ok, boost} = Boosts.boost(bob, post)
 
   #   conn = conn(user: bob, account: account2)
-  #   next = "/home"
+  #   next = "/feed"
   #   {view, doc} = floki_live(conn, next)
   #   activity =  doc
   #     |> Floki.find("[data-id=feed] article [data-id='boost_action]")

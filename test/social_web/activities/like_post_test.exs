@@ -112,7 +112,7 @@ defmodule Bonfire.Social.Activities.LikePost.Test do
   #   assert {:ok, like} = Likes.like(charlie, post)
 
   #   conn = conn(user: bob, account: account2)
-  #   next = "/home"
+  #   next = "/feed"
   #   {view, doc} = floki_live(conn, next)
   #   assert doc
   #     |> Floki.find("[data-id=feed] article")

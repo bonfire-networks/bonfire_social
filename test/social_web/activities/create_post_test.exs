@@ -18,7 +18,7 @@ defmodule Bonfire.Social.Activities.CreatePost.Test do
 
       conn = conn(user: someone, account: some_account)
 
-      next = "/home"
+      next = "/feed"
       {view, doc} = floki_live(conn, next) #|> IO.inspect
 
       assert view = view
@@ -40,7 +40,7 @@ defmodule Bonfire.Social.Activities.CreatePost.Test do
 
       conn = conn(user: someone, account: some_account)
 
-      next = "/home"
+      next = "/feed"
       {view, doc} = floki_live(conn, next) #|> IO.inspect
 
       assert view
