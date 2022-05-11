@@ -140,13 +140,13 @@ defmodule Bonfire.Social.Posts.LiveHandler do
 
 
   def live_more(thread_id, pagination, socket) do
-    info(pagination, "paginate thread")
+    # info(pagination, "paginate thread")
     current_user = current_user(socket)
     with %{edges: replies, page_info: page_info} <- Bonfire.Social.Threads.list_replies(thread_id, current_user: current_user, paginate: pagination) do
 
       replies = ( e(socket.assigns, :replies, []) ++ replies )
       |> Enum.uniq()
-      |> info("REPLIES")
+      # |> info("REPLIES")
 
       threaded_replies = if is_list(replies) and length(replies)>0, do: Bonfire.Social.Threads.arrange_replies_tree(replies), else: []
       # debug(threaded_replies, "REPLIES threaded")
