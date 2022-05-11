@@ -191,8 +191,10 @@ defmodule Bonfire.Social.Messages do
     message = repo().preload(message, [activity: [:tags]])
     {:ok, actor} = ActivityPub.Adapter.get_actor_by_id(Utils.e(message, :created, :creator_id, nil))
     # debug(message.activity.tags)
+
+    recipient_types = [Bonfire.Data.Identity.User.__pointers__(:table_id)] # TODO: extensible
     recipients =
-      Enum.filter(message.activity.tags, fn tag -> tag.table_id == "5EVSER1S0STENS1B1YHVMAN01D" end)
+      Enum.filter(message.activity.tags, fn tag -> tag.table_id in recipient_types end)
       |> Enum.map(fn tag -> ActivityPub.Actor.get_by_local_id!(tag.id) end)
       |> Enum.map(fn actor -> actor.ap_id end)
 
