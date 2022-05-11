@@ -47,7 +47,7 @@ defmodule Bonfire.Social.Messages do
 
     if is_list(to) and length(to)>0 do
       attrs = Map.put(attrs, :tags, to)
-      |> debug("message attrs")
+      # |> debug("message attrs")
       opts = [
         boundary: "message",
         verbs_to_grant: Config.get(:verbs_eyes_only_reply),

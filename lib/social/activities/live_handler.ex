@@ -46,14 +46,16 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
       id: :smart_input,
       # reply to objects, not activities
       reply_to_id:
-        e(socket, :assigns, :object_id, nil) || e(socket, :assigns, :object, :id, nil) ||
-          e(activity, :object, :id, nil),
+        e(socket, :assigns, :object_id, nil)
+          || e(socket, :assigns, :object, :id, nil)
+          || e(activity, :object, :id, nil),
       # thread_id: activity_id,
       activity: activity,
       object: e(socket, :assigns, :object, nil),
       smart_input_text: mentions,
       to_circles: to_circles,
-      activity_inception: "reply_to"
+      activity_inception: "reply_to",
+      preset_boundary: Bonfire.Boundaries.preset_boundary_name_from_acl(e(socket, :assigns, :object_boundary, nil))
     )
 
     {:noreply, socket}

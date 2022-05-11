@@ -147,46 +147,6 @@ defmodule Bonfire.Social.Objects do
 
   defp tag_ids(tags), do: Enum.map(tags, &(&1.id))
 
-  def preload_boundaries(list_of_assigns) do
-    current_user = current_user(List.first(list_of_assigns))
-    # |> debug("current_user")
-
-    list_of_objects = list_of_assigns
-    |> Enum.map(& e(&1, :object, nil))
-    # |> debug("list_of_objects")
-
-    list_of_ids = list_of_objects
-    |> Enum.map(& e(&1, :id, nil))
-    |> filter_empty([])
-    # |> debug("list_of_ids")
-
-    my_states = if current_user,
-      do: Bonfire.Boundaries.Controlleds.list_on_objects(list_of_ids)
-        |> Map.new(fn c -> { # Map.new discards duplicates for the same key, which is convenient for now as we only display one ACL (note that the order_by in the `list_on_objects` query matters)
-          e(c, :id, nil),
-          e(c, :acl, nil)
-        } end),
-      else: %{}
-
-    # debug(my_states, "boundaries")
-
-    list_of_assigns
-    |> Enum.map(fn assigns ->
-      object_id = e(assigns, :object, :id, nil)
-
-      assigns
-      # |> Map.put(
-      #   :object_boundaries,
-      #   Map.get(my_states, object_id)
-      # )
-      |> Map.put(
-        :object_primary_boundary,
-        Map.get(my_states, object_id)
-          |> e(:named, nil)
-      )
-    end)
-  end
-
   def list_query(type_or_query \\ nil, opts)
 
   def list_query(%Ecto.Query{}= query, opts) do
