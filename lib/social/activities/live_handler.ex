@@ -37,10 +37,10 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
 
     activity = e(socket, :assigns, :activity, nil)
     participants = Bonfire.Social.Threads.list_participants(activity, nil, current_user: current_user(socket))
-
     to_circles = if length(participants)>0, do: Enum.map(participants, & {e(&1, :character, :username, l "someone"), e(&1, :id, nil)})
-
+    
     mentions = if length(participants)>0, do: Enum.map_join(participants, " ", & "@"<>e(&1, :character, :username, ""))<>" "
+    IO.inspect(mentions, label: "PARTS")
 
     send_update(Bonfire.UI.Social.SmartInputLive,
       id: :smart_input,
