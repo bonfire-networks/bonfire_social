@@ -65,13 +65,28 @@ defmodule Bonfire.Social.MentionsTest do
     assert fp.activity.object_id == mention.id
   end
 
-  test "mentioning someone does not appear in their feed, if using the 'mentions' preset" do
+  test "mentioning someone does not appear in their home feed, if they don't follow me, and have disabled notifications in home feed" do
     me = Fake.fake_user!()
     mentioned = Fake.fake_user!()
     attrs = %{post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
 
+    Bonfire.Me.Settings.put([Bonfire.Social.Feeds, :my_feed_includes, :notifications], false, current_user: mentioned) # change settings
+
     assert {:ok, mention} = Posts.publish(current_user: me, post_attrs: attrs, boundary: "mentions")
     assert %{edges: []} = FeedActivities.my_feed(mentioned)
+  end
+
+  test "mentioning someone appears in their home feed, if they don't follow me, and have enabled notifications in home feed" do
+    me = Fake.fake_user!()
+    mentioned = Fake.fake_user!()
+    attrs = %{post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
+
+    Bonfire.Me.Settings.put([Bonfire.Social.Feeds, :my_feed_includes, :notifications], true, current_user: mentioned) # change settings
+
+    assert {:ok, mention} = Posts.publish(current_user: me, post_attrs: attrs, boundary: "mentions")
+    assert %{edges: feed} = FeedActivities.my_feed(mentioned)
+    assert %{} = fp = List.first(feed)
+    assert fp.activity.object_id == mention.id
   end
 
   test "mentioning someone DOES NOT appear (if NOT using the preset 'mentions' boundary) in their instance feed" do
