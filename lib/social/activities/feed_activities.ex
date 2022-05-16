@@ -45,7 +45,25 @@ defmodule Bonfire.Social.FeedActivities do
   @doc """
   Gets a user's home feed, a combination of all feeds the user is subscribed to.
   """
-  def my_feed(opts), do: feed(Feeds.my_home_feed_ids(opts), opts)
+  def my_feed(opts, home_feed_ids \\ nil) do
+    opts = to_options(opts)
+
+    # TODO: clean up this code
+    exclude_verbs = if !Bonfire.Me.Settings.get([Bonfire.Social.Feeds, :my_feed_includes, :boost], true, opts), do: [:boost], else: []
+
+    exclude_verbs = if !Bonfire.Me.Settings.get([Bonfire.Social.Feeds, :my_feed_includes, :follow], true, opts), do: exclude_verbs ++ [:follow], else: exclude_verbs
+
+    exclude_replies = !(Bonfire.Me.Settings.get([Bonfire.Social.Feeds, :my_feed_includes, :reply], true, opts))
+    #|> debug("exclude_replies")
+
+    opts = opts
+    |> Keyword.put(:exclude_verbs, exclude_verbs)
+    |> Keyword.put(:exclude_replies, exclude_replies)
+
+    home_feed_ids = home_feed_ids || Feeds.my_home_feed_ids(opts)
+
+    feed(home_feed_ids, opts)
+  end
 
   @doc """
   Gets a feed by id or ids or a thing/things containing an id/ids.
@@ -56,7 +74,8 @@ defmodule Bonfire.Social.FeedActivities do
   def feed(id_or_ids, opts)
   when is_binary(id_or_ids) or (is_list(id_or_ids) and id_or_ids != []) do
     ulid(id_or_ids)
-    |> base_feed_query()
+    |> base_feed_query(opts)
+    |> debug()
     |> query_extras(opts)
     |> repo().many_paginated(opts)
   end
@@ -79,7 +98,7 @@ defmodule Bonfire.Social.FeedActivities do
         # debug(ulid(current_user(opts)), "current_user")
         # debug(feed_name, "feed_name")
         # debug(feed, "feed_id")
-        base_feed_query(feed)
+        base_feed_query(feed, opts)
         |> query_extras(opts)
         |> repo().many_paginated(opts)
     e ->
@@ -89,15 +108,16 @@ defmodule Bonfire.Social.FeedActivities do
     end
   end
 
-  def user_feed(user, feed_name, opts \\ []) do
-    paginate = e(opts, :paginate, nil) || e(opts, :after, nil)
-    opts = Keyword.put_new(opts, :current_user, user)
-    id = Feeds.named_feed_id(feed_name) ||
-      Bonfire.Social.Feeds.my_feed_id(feed_name, user)
-    base_feed_query(id)
-    |> query_extras(opts)
-    |> repo().many_paginated(paginate)
-  end
+  # TODO: is this needed for anything?
+  # def user_feed(user, feed_name, opts \\ []) do
+  #   paginate = e(opts, :paginate, nil) || e(opts, :after, nil)
+  #   opts = Keyword.put_new(opts, :current_user, user)
+  #   id = Feeds.named_feed_id(feed_name) ||
+  #     Bonfire.Social.Feeds.my_feed_id(feed_name, user)
+  #   base_feed_query(id, opts)
+  #   |> query_extras(opts)
+  #   |> repo().many_paginated(paginate)
+  # end
 
   @doc """
   Return a page of Feed Activities (reverse chronological) + pagination metadata
@@ -117,19 +137,27 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp default_query(), do: select(Pointers.undeleted(), [p], p)
 
-  defp base_feed_query(feed_ids) do
+  defp base_feed_query(feed_ids, opts) do
     feed_ids = List.wrap(ulid(feed_ids))
-    message = Message.__pointers__(:table_id)
-    feeds = from fp in FeedPublish,
+
+    exclude_object_types = [Message] ++ e(opts, :exclude_object_types, []) # eg. private messages should never appear in feeds
+    exclude_verbs = [:message] ++ e(opts, :exclude_verbs, []) # exclude certain activity tpes
+
+    exclude_table_ids = exclude_object_types |> Enum.map(&maybe_apply(&1, :__pointers__,:table_id))
+    exclude_verb_ids = exclude_verbs |> Enum.map(&Bonfire.Social.Activities.verb_id(&1))
+
+    feeds = from fp in FeedPublish, # why the subquery?..
       where: fp.feed_id in ^feed_ids,
       group_by: fp.id,
       select: %{id: fp.id, dummy: count(fp.feed_id)}
+
     from p in Pointer,
-      join: fp in subquery(feeds),
-      on: p.id == fp.id,
+      join: fp in subquery(feeds), on: p.id == fp.id,
+      join: a in Activity, as: :activity, on: a.id == fp.id,
       order_by: [desc: p.id],
+      where: a.verb_id not in ^exclude_verb_ids,
       where: is_nil(p.deleted_at),   # Don't show anything deleted
-      where: p.table_id != ^message  # private messages should never appear in feeds
+      where: p.table_id not in ^exclude_table_ids
   end
 
 
@@ -159,7 +187,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   def query([feed_id: feed_id_or_ids], opts) when is_binary(feed_id_or_ids) or is_list(feed_id_or_ids) do
     # debug(feed_id_or_ids: feed_id_or_ids)
-    base_feed_query(feed_id_or_ids)
+    base_feed_query(feed_id_or_ids, opts)
     query([], opts, query)
   end
 
@@ -183,8 +211,23 @@ defmodule Bonfire.Social.FeedActivities do
     # |> debug("feed_paginated pre-preloads")
     # add assocs needed in timelines/feeds
     |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
+    |> maybe_exclude_replies(opts)
     # |> debug("feed_paginated post-preloads")
     |> Activities.as_permitted_for(opts)
+  end
+
+  defp maybe_exclude_replies(query, opts) do
+    if e(opts, :exclude_replies, nil) do
+      query
+      |> proload(activity: [object: {"object_", [:replied]}])
+      |> where(
+        [object_replied: replied],
+        is_nil(replied.reply_to_id)
+      )
+      # |> debug("exclude_replies")
+    else
+      query
+    end
   end
 
   # def feed(%{feed_publishes: _} = feed_for, _) do

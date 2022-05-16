@@ -33,7 +33,7 @@ defmodule Bonfire.Social.Acts.Feeds do
         case changeset do
           %Changeset{valid?: true}=changeset ->
             smart(epic, act, changeset, "valid changeset")
-            feed_ids = Feeds.get_feed_ids(current_user, boundary, epic.assigns)
+            feed_ids = Feeds.feed_ids_to_publish(current_user, boundary, epic.assigns)
             pubs = Enum.map(feed_ids, &(%{feed_id: &1}))
             Changesets.put_assoc(changeset, :feed_publishes, pubs)
             |> Epic.assign(epic, on, ...)

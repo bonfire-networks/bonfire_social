@@ -225,7 +225,7 @@ defmodule Bonfire.Social.Follows do
       boundary: "public", # TODO: make configurable (currently public is required so follows can be listed by AP adapter)
       to_circles: [ulid(object)], # also allow the followed user to see it
       to_feeds: [
-        # outbox: [user],
+        outbox: [user], # we include follows in feeds, since user has control over whether or not they want to see them in settings
         notifications: [object]
       ], # put it in our outbox and their notifications
     ]

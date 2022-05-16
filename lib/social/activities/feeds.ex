@@ -22,11 +22,11 @@ defmodule Bonfire.Social.Feeds do
   def context_module, do: Feed
 
 
-  def get_feed_ids(_me, "admins", _) do
+  def feed_ids_to_publish(_me, "admins", _) do
     admins_notifications()
     |> debug("posting to admin feeds")
   end
-  def get_feed_ids(me, boundary, assigns) do
+  def feed_ids_to_publish(me, boundary, assigns) do
     my_notifications = feed_id(:notifications, me)
 
     [
@@ -87,7 +87,7 @@ defmodule Bonfire.Social.Feeds do
     end
   end
 
-## TODO: de-duplicate the above functions and target_feeds/4 below ##
+## TODO: de-duplicate feed_ids_to_publish/3 and target_feeds/4 ##
 
   def target_feeds(%Ecto.Changeset{} = changeset, creator, preset_or_custom_boundary) do
     # debug(changeset)
@@ -209,11 +209,12 @@ defmodule Bonfire.Social.Feeds do
     current_user = current_user(socket_or_opts)
 
     # include my outbox
-    my_outbox_id = my_feed_id(:outbox, current_user) #|> debug("my_outbox_id")
+    my_outbox_id = if Bonfire.Me.Settings.get([Bonfire.Social.Feeds, :my_feed_includes, :outbox], true, socket_or_opts), do: my_feed_id(:outbox, current_user) #|> debug("my_outbox_id")
 
     # include my notifications?
-    extra_feeds = extra_feeds ++ [my_outbox_id] ++
-      if e(socket_or_opts, :include_notifications?, false), do: [my_feed_id(:notifications, current_user)], else: []
+    my_notifications_id = if Bonfire.Me.Settings.get([Bonfire.Social.Feeds, :my_feed_includes, :notifications], true, socket_or_opts), do: my_feed_id(:notifications, current_user)
+
+    extra_feeds = extra_feeds ++ [my_outbox_id] ++ [my_notifications_id]
 
     # include outboxes of everyone I follow
     with _ when not is_nil(current_user) <- current_user,

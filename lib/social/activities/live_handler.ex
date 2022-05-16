@@ -38,7 +38,7 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
     activity = e(socket, :assigns, :activity, nil)
     participants = Bonfire.Social.Threads.list_participants(activity, nil, current_user: current_user(socket))
     to_circles = if length(participants)>0, do: Enum.map(participants, & {e(&1, :character, :username, l "someone"), e(&1, :id, nil)})
-    
+
     mentions = if length(participants)>0, do: Enum.map_join(participants, " ", & "@"<>e(&1, :character, :username, ""))<>" "
     IO.inspect(mentions, label: "PARTS")
 
@@ -109,7 +109,7 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
   end
 
   def handle_info({:new_activity, data}, socket) do
-    debug(data[:feed_ids], "received new_activity for feeds")
+    debug(data[:feed_ids], "received new_activity for these feed ids")
     # info(data)
     current_user = current_user(socket)
 
@@ -117,8 +117,9 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
 
     if permitted? && is_list(data[:feed_ids]) do
       my_home_feed_ids = Bonfire.Social.Feeds.my_home_feed_ids(current_user)
+
       feed_ids = if Enum.any?(data[:feed_ids], fn feed_id -> feed_id in my_home_feed_ids end) do
-        data[:feed_ids] ++ [Bonfire.Social.Feeds.my_feed_id(:inbox, current_user)]
+        data[:feed_ids] ++ [Bonfire.Social.Feeds.my_feed_id(:inbox, current_user)] # if activity targets any feeds we're following and/or meant to see in home feed, then target the home feed component
       else
         data[:feed_ids]
       end
@@ -210,7 +211,7 @@ defmodule Bonfire.Social.Feeds.LiveHandler do
     # debug(myfeed: feed)
     feed_id = Bonfire.Social.Feeds.my_feed_id(:inbox, socket_or_opts)
     feed_ids = Bonfire.Social.Feeds.my_home_feed_ids(socket_or_opts)
-    feed = Bonfire.Social.FeedActivities.feed(feed_ids, socket_or_opts)
+    feed = Bonfire.Social.FeedActivities.my_feed(socket_or_opts, feed_ids)
     [
       current_user: current_user,
       selected_tab: "home",

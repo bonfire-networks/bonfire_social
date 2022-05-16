@@ -398,7 +398,7 @@ defmodule Bonfire.Social.Activities do
     :"Elixir.Verbs".conjugate(verb, tense: "past", person: "third", plurality: "plural")
   end
 
-  defp verb_id(verb) when is_binary(verb), do: verb
-  defp verb_id(verb) when is_atom(verb), do: Verbs.get_id(verb) || Verbs.get_id!(:create)
+  def verb_id(verb) when is_binary(verb), do: ulid(verb) || Verbs.get_id(maybe_to_atom(verb))
+  def verb_id(verb) when is_atom(verb), do: Verbs.get_id(verb) || Verbs.get_id!(:create)
 
 end
