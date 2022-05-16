@@ -174,14 +174,22 @@ defmodule Bonfire.Social.Threads do
 
   @doc "List participants of an activity or thread (depending on user's boundaries)"
   def list_participants(activity, thread_or_object_id \\ nil, opts \\ []) do
+
     opts = to_options(opts)
     current_user = current_user(opts)
+
+    exclude_table_id = maybe_apply(Bonfire.Tag.Hashtag, :__pointers__, :table_id)
+
     activity = Activities.activity_preloads(activity, [:with_subject, :with_reply_to, :tags], opts)
 
     (
       [e(activity, :subject, nil)] # add author of root message
       ++ [e(activity, :reply_to, :created, :creator, nil)] # add author of the message it was replying to
-      ++ e(activity, :tags, []) # add all previously tagged people
+      ++ (
+        e(activity, :tags, []) # add all previously tagged people
+        |> Enum.reject(& e(&1, :table_id, nil)==exclude_table_id ) # no hashtags
+        |> debug("tags")
+      )
       ++ (
         if thread_or_object_id, do: Bonfire.Social.Threads.fetch_participants([ulid(activity.object_id), thread_or_object_id], current_user: current_user) # add any other participants in the thread
         |> e(:edges, [])
