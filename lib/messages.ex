@@ -30,9 +30,11 @@ defmodule Bonfire.Social.Messages do
   end
 
   # attempts to get the optional parameter `to` first, falls back to the attributes
-  defp get_tos(to, attrs), do: with(nil <- get_to(to), do: get_to(Utils.e(attrs, :to_circles, nil)))
+  defp get_tos(nil, to_circles) when is_list(to_circles), do: clean_tos(to_circles)
+  defp get_tos(nil, to_circles) when is_binary(to_circles), do: String.split(to_circles, ",") |> clean_tos()
+  defp get_tos(to, _), do: clean_tos(to)
 
-  defp get_to(tos), do: List.wrap(tos) |> filter_empty(nil) |> debug
+  defp clean_tos(tos), do: List.wrap(tos) |> filter_empty(nil)
 
   @doc """
   TODO: check boundaries, right now anyone can message anyone :/
@@ -40,7 +42,7 @@ defmodule Bonfire.Social.Messages do
   def send(%{id: _} = creator, attrs, to \\ nil) do
     opts = [current_user: creator]
 
-    to = get_tos(to, attrs)
+    to = get_tos(to, Utils.e(attrs, :to_circles, nil))
     |> debug("tos")
     |> Boundaries.load_pointers(opts ++ [verb: :message])
     # |> debug("to pointers")
