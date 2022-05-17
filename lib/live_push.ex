@@ -39,6 +39,7 @@ defmodule Bonfire.Social.LivePush do
       ulid(feed_ids)
       |> List.wrap()
       |> Enum.reject(&is_nil/1)
+
     Bonfire.Notifications.notify_users(
       feed_ids,
       e(subject, :profile, :name,

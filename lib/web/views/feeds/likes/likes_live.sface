@@ -1,8 +1,0 @@
-<Bonfire.UI.Social.FeedViewLive 
-  page_title={@page_title}
-  current_user={@current_user}
-  feed={@feed}
-  feed_id="feed:profile:likes"
-  page_info={@page_info}
-  verb_default="like"
-/>
