@@ -17,7 +17,7 @@ defmodule Bonfire.Social.ChannelCase do
 
   use ExUnit.CaseTemplate
 
-  import Bonfire.Social.Integration
+  # import Bonfire.Social.Integration
 
   using do
     quote do
