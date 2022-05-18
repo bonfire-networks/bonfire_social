@@ -219,7 +219,7 @@ defmodule Bonfire.Social.API.GraphQL do
   defp create_post(args, info) do
     user = GraphQL.current_user(info)
     if user do
-      Bonfire.Social.Posts.publish(user, args)
+      Bonfire.Social.Posts.publish(post_attrs: args, current_user: user)
     else
       {:error, "Not authenticated"}
     end

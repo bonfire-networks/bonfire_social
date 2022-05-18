@@ -4,14 +4,14 @@ defmodule Bonfire.Social.FeedActivities do
   use Bonfire.Common.Repo
   import Ecto.Query
   import Where
-  alias Bonfire.Boundaries
+  # alias Bonfire.Boundaries
   alias Bonfire.Boundaries.Circles
-  alias Bonfire.Data.Social.{Activity, FeedPublish, Feed, Message, PostContent}
-  alias Bonfire.Data.Identity.{Character, User}
+  alias Bonfire.Data.Social.{Activity, FeedPublish, Message}
+  # alias Bonfire.Data.Identity.Character
   alias Bonfire.Social.Feeds
   alias Bonfire.Social.Activities
   alias Bonfire.Social.Objects
-  alias Bonfire.Social.Threads
+  # alias Bonfire.Social.Threads
   alias Pointers
   alias Pointers.{Pointer, Changesets}
 
@@ -135,7 +135,7 @@ defmodule Bonfire.Social.FeedActivities do
     # |> debug()
   end
 
-  defp default_query(), do: select(Pointers.undeleted(), [p], p)
+  defp default_query(), do: select(Pointers.query_base(), [p], p)
 
   defp base_feed_query(feed_ids, opts) do
     feed_ids = List.wrap(ulid(feed_ids))
@@ -173,23 +173,24 @@ defmodule Bonfire.Social.FeedActivities do
     query(filters, opts, query)
   end
 
-  def query_paginated(query, opts, _query) do
+  def query_paginated(query, _opts, _query) do
     # paginate = e(opts, :paginate, opts)
     # TODO: actually return a query with pagination filters
     query
   end
 
   def query(filters \\ [], opts \\ []), do: query(filters, opts, default_query())
+
   # def query(filters, opts, query, true = _distinct)  do
   #   query(filters, opts, query, false)
   #     |> distinct([activity: activity], [desc: activity.id])
   # end
 
-  def query([feed_id: feed_id_or_ids], opts) when is_binary(feed_id_or_ids) or is_list(feed_id_or_ids) do
-    # debug(feed_id_or_ids: feed_id_or_ids)
-    base_feed_query(feed_id_or_ids, opts)
-    query([], opts, query)
-  end
+  # def query([feed_id: feed_id_or_ids], opts) when is_binary(feed_id_or_ids) or is_list(feed_id_or_ids) do
+  #   # debug(feed_id_or_ids: feed_id_or_ids)
+  #   base_feed_query(feed_id_or_ids, opts)
+  #   query([], opts, query)
+  # end
 
   def query(filters, opts, query) when is_list(filters) do
     query
@@ -198,7 +199,7 @@ defmodule Bonfire.Social.FeedActivities do
       # |> debug("FeedActivities - query")
   end
 
-  def query(filters, opts, query) do
+  def query(filters, _opts, query) do
     query
     # |> query_extras(current_user)
     # |> query_filter(filters, nil, nil)
@@ -238,6 +239,8 @@ defmodule Bonfire.Social.FeedActivities do
   Creates a new local activity and publishes to appropriate feeds
   """
   def publish(subject, verb_or_activity, object, opts \\ [])
+
+  def publish(subject, verb_or_activity, object, opts)
   when is_atom(verb_or_activity) or is_struct(verb_or_activity) do
     # debug("FeedActivities: just making visible for and putting in these circles/feeds: #{inspect circles}")
     # Bonfire.Boundaries.maybe_make_visible_for(subject, object, circles) # |> debug("grant")
@@ -404,9 +407,7 @@ defmodule Bonfire.Social.FeedActivities do
     ret
   end
 
-  @doc """
-  Creates a new local activity or takes an existing one and publishes to specified feeds
-  """
+  #doc "Creates a new local activity or takes an existing one and publishes to specified feeds"
   defp maybe_feed_publish(subject, verb_or_activity, object, feeds, opts \\ [])
   defp maybe_feed_publish(subject, verb, object, feeds, opts) when is_atom(verb), do: create_and_put_in_feeds(subject, verb, object, feeds, opts)
   defp maybe_feed_publish(subject, %Bonfire.Data.Social.Activity{} = activity, object, feeds, opts) do
@@ -424,7 +425,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp create_and_put_in_feeds(subject, verb, object, feed_id, opts) when is_map(object) and is_binary(feed_id) or is_list(feed_id) do
     with {:ok, activity} <- Activities.create(subject, verb, object) do
-      with {:ok, published} <- put_in_feeds_and_maybe_federate(feed_id, subject, verb, object, activity, opts) do # publish in specified feed
+      with {:ok, _published} <- put_in_feeds_and_maybe_federate(feed_id, subject, verb, object, activity, opts) do # publish in specified feed
         # debug(published, "create_and_put_in_feeds")
         {:ok, activity}
       else # meh
