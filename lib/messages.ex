@@ -144,8 +144,14 @@ defmodule Bonfire.Social.Messages do
     opts = to_options(opts)
     |> Keyword.put(:current_user, current_user)
 
-    filters = filters ++ (if opts[:latest_in_threads], do: [distinct: {:threads, &Threads.filter/3}], else: [])
+    if opts[:latest_in_threads] do
+      list_threads_paginated(filters, current_user, opts, query)
+    else
+      list_messages_paginated(filters, current_user, opts, query)
+    end
+  end
 
+  defp list_messages_paginated(filters, current_user \\ nil, opts \\ [], query \\ Message) do
     query
       # add assocs needed in timelines/feeds
       # |> join_preload([:activity])
@@ -154,14 +160,34 @@ defmodule Bonfire.Social.Messages do
       |> query_filter(filters)
       # |> debug("message_paginated_post-preloads")
       |> Activities.as_permitted_for(current_user, [:see, :read])
-      # |> Threads.maybe_re_order_with_subquery(opts)
       |> debug("post preloads & permissions")
       # |> repo().many() # return all items
       |> Bonfire.Common.Repo.many_paginated(opts) # return a page of items (reverse chronological) + pagination metadata
-      # |> Threads.maybe_re_order_result(opts)
-      # |> debug("feed")
+      # |> debug("result")
   end
 
+  defp list_threads_paginated(filters, current_user \\ nil, opts \\ [], query \\ Message) do
+    opts = opts
+    |> Keyword.put(:preload, :posts)
+
+    filters = filters ++ [distinct: {:threads, &Threads.filter/3}]
+
+    query
+      # add assocs needed in timelines/feeds
+      # |> join_preload([:activity])
+      # |> debug("pre-preloads")
+      # |> Activities.activity_preloads(opts)
+      |> query_filter(filters)
+      # |> debug("message_paginated_post-preloads")
+      |> Activities.as_permitted_for(current_user, [:see, :read])
+      |> Threads.maybe_re_order_with_subquery(opts)
+      # |> debug("post preloads & permissions")
+      # |> repo().many() # return all items
+      |> Bonfire.Common.Repo.many_paginated(opts) # return a page of items (reverse chronological) + pagination metadata
+      # |> Threads.maybe_re_order_result(opts)
+      |> Activities.activity_preloads(opts)
+      |> debug("result")
+  end
 
   def filter(:messages_involving, {user_id, _current_user_id}, query) when is_binary(user_id) do
     # messages between current user & someone else

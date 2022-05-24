@@ -266,6 +266,24 @@ defmodule Bonfire.Social.Activities do
   defp maybe_repo_preload(%{activity: _} = object, preloads) do
     repo().maybe_preload(object, activity: preloads)
   end
+  defp maybe_repo_preload(%{edges: list} = page, preloads) when is_list(list) do
+    case List.first(list) do
+      %Bonfire.Data.Social.Activity{} ->
+        repo().maybe_preload(page, preloads)
+
+      %{activity: _} ->
+        repo().maybe_preload(page, activity: preloads)
+    end
+  end
+  defp maybe_repo_preload(list, preloads) when is_list(list) do
+    case List.first(list) do
+      %Bonfire.Data.Social.Activity{} ->
+        repo().maybe_preload(list, preloads)
+
+      %{activity: _} ->
+        repo().maybe_preload(list, activity: preloads)
+    end
+  end
 
   @doc """
   Get an activity by its ID
