@@ -156,11 +156,12 @@ defmodule Bonfire.Social.FeedActivities do
       join: a in Activity, as: :activity, on: a.id == fp.id,
       join: ap in Pointer, as: :activity_pointer, on: ap.id == a.id,
       join: op in Pointer, as: :object, on: op.id == a.object_id,
-      order_by: [desc: fp.id],
       where: fp.feed_id in ^feed_ids,
       where: a.verb_id not in ^exclude_verb_ids,
       where: is_nil(op.deleted_at) and is_nil(ap.deleted_at),   # Don't show anything deleted
-      where: ap.table_id not in ^exclude_table_ids and op.table_id not in ^exclude_table_ids
+      where: ap.table_id not in ^exclude_table_ids and op.table_id not in ^exclude_table_ids,
+      distinct: [desc: fp.id],
+      order_by: [desc: fp.id]
   end
 
 
