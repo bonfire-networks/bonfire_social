@@ -77,7 +77,7 @@ defmodule Bonfire.Social.LikesTest do
     assert {:ok, post} = Posts.publish(current_user: alice, post_attrs: attrs, boundary: "public")
     assert {:ok, like} = Likes.like(bob, post)
     assert %{edges: edges} = FeedActivities.feed(:notifications, current_user: alice)
-    for e <- edges, do: IO.inspect(id: e.id, table_id: e.table_id)
+    # for e <- edges, do: IO.inspect(id: e.id, table_id: e.table_id)
     assert [fetched_like] = edges
     assert fetched_like.activity.object_id == post.id
   end
