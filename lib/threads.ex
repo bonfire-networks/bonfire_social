@@ -238,11 +238,14 @@ defmodule Bonfire.Social.Threads do
     # |> join_preload([:activity, :replied])
     |> distinct([replied: replied], desc: replied.thread_id)
     |> order_by([root], [desc: root.id])
+    |> select([root, replied: replied], %{root | thread_id: replied.thread_id})
   end
 
   @doc "re-order distinct threads after DISTINCT ON ordered them by thread_id - Note: this results in (Ecto.QueryError) cannot preload associations in subquery in query"
-  def maybe_re_order_with_subquery(query, opts)  do #
-    if opts[:latest_in_threads], do: (from all in subquery(query), order_by: [desc: all.id]), else: query
+  def re_order_using_subquery(query, opts)  do #
+    from all in subquery(query),
+    # select: %{all | thread_id: all.thread_id},
+    order_by: [desc: all.id]
   end
 
   @doc "re-order distinct threads after DISTINCT ON ordered them by thread_id - Note: does not support pagination"

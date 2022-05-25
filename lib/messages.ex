@@ -167,8 +167,13 @@ defmodule Bonfire.Social.Messages do
   end
 
   defp list_threads_paginated(filters, current_user \\ nil, opts \\ [], query \\ Message) do
+    # paginate = if opts[:paginate], do: Keyword.new(opts[:paginate]), else: opts
+
     opts = opts
     |> Keyword.put(:preload, :posts)
+    # |> Keyword.put(:paginate, paginate
+    #                           |> Keyword.put(:cursor_fields, [{:thread_id, :desc}])
+    #   )
 
     filters = filters ++ [distinct: {:threads, &Threads.filter/3}]
 
@@ -180,13 +185,13 @@ defmodule Bonfire.Social.Messages do
       |> query_filter(filters)
       # |> debug("message_paginated_post-preloads")
       |> Activities.as_permitted_for(current_user, [:see, :read])
-      |> Threads.maybe_re_order_with_subquery(opts)
+      |> Threads.re_order_using_subquery(opts)
       # |> debug("post preloads & permissions")
       # |> repo().many() # return all items
       |> Bonfire.Common.Repo.many_paginated(opts) # return a page of items (reverse chronological) + pagination metadata
       # |> Threads.maybe_re_order_result(opts)
       |> Activities.activity_preloads(opts)
-      |> debug("result")
+      # |> debug("result")
   end
 
   def filter(:messages_involving, {user_id, _current_user_id}, query) when is_binary(user_id) do
@@ -194,7 +199,8 @@ defmodule Bonfire.Social.Messages do
 
     query
     # |> join_preload([:activity, :tags])
-    |> join(:left, [activity: activity], assoc(activity, :tagged), as: :tagged)
+    |> reusable_join(:left, [root], assoc(root, :activity), as: :activity)
+    |> reusable_join(:left, [activity: activity], assoc(activity, :tagged), as: :tagged)
     |> where(
       [activity: activity, tagged: tagged],
       (
