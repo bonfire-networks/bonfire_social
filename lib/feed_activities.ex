@@ -146,18 +146,21 @@ defmodule Bonfire.Social.FeedActivities do
     exclude_table_ids = exclude_object_types |> Enum.map(&maybe_apply(&1, :__pointers__,:table_id))
     exclude_verb_ids = exclude_verbs |> Enum.map(&Bonfire.Social.Activities.verb_id(&1))
 
-    feeds = from fp in FeedPublish, # why the subquery?..
-      where: fp.feed_id in ^feed_ids,
-      group_by: fp.id,
-      select: %{id: fp.id, dummy: count(fp.feed_id)}
+    # feeds = from fp in FeedPublish, # why the subquery?..
+    #   where: fp.feed_id in ^feed_ids,
+    #   group_by: fp.id,
+    #   select: %{id: fp.id, dummy: count(fp.feed_id)}
 
-    from p in Pointer,
-      join: fp in subquery(feeds), on: p.id == fp.id,
+    from fp in FeedPublish,
+      # join: fp in subquery(feeds), on: p.id == fp.id,
       join: a in Activity, as: :activity, on: a.id == fp.id,
-      order_by: [desc: p.id],
+      join: ap in Pointer, as: :activity_pointer, on: ap.id == a.id,
+      join: op in Pointer, as: :object, on: op.id == a.object_id,
+      order_by: [desc: fp.id],
+      where: fp.feed_id in ^feed_ids,
       where: a.verb_id not in ^exclude_verb_ids,
-      where: is_nil(p.deleted_at),   # Don't show anything deleted
-      where: p.table_id not in ^exclude_table_ids
+      where: is_nil(op.deleted_at) and is_nil(ap.deleted_at),   # Don't show anything deleted
+      where: ap.table_id not in ^exclude_table_ids and op.table_id not in ^exclude_table_ids
   end
 
 
