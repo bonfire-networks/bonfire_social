@@ -169,8 +169,7 @@ defmodule Bonfire.Social.Messages do
   defp list_threads_paginated(filters, current_user \\ nil, opts \\ [], query \\ Message) do
     # paginate = if opts[:paginate], do: Keyword.new(opts[:paginate]), else: opts
 
-    opts = opts
-    |> Keyword.put(:preload, :posts)
+    # opts = opts
     # |> Keyword.put(:paginate, paginate
     #                           |> Keyword.put(:cursor_fields, [{:thread_id, :desc}])
     #   )

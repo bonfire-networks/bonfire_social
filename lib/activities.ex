@@ -149,16 +149,16 @@ defmodule Bonfire.Social.Activities do
       _ when is_list(preloads) ->
         Enum.reduce(preloads, query, &activity_preloads(&2, &1, opts))
       :all -> activity_preloads(query, [
-          :with_subject, :with_creator, :with_verb, :with_object_posts, :with_reply_to, :tags
+          :with_subject, :with_creator, :with_verb, :with_object_posts, :with_reply_to, :tags, :with_thread_name
         ], opts)
       :feed -> activity_preloads(query, [
-          :with_subject, :with_creator, :with_verb, :with_object_posts, :with_reply_to
+          :with_subject, :with_creator, :with_verb, :with_object_posts, :with_reply_to, :with_thread_name
         ], opts)
       :posts_with_reply_to -> activity_preloads(query, [
           :with_subject, :with_object_posts, :with_reply_to
         ], opts)
       :posts -> activity_preloads(query, [
-          :with_subject, :with_object_posts, :with_replied
+          :with_subject, :with_object_posts, :with_replied, :with_thread_name
         ], opts)
       _default -> activity_preloads(query, [
           :with_subject, :with_verb, :with_object_posts, :with_replied
@@ -200,6 +200,8 @@ defmodule Bonfire.Social.Activities do
         ]
       :with_replied ->
         proload query, activity: [:replied]
+      :with_thread_name ->
+        proload query, activity: [replied: [thread: [:named]]]
       :with_reply_to ->
         # If the root replied to anything, fetch that and its creator too. e.g.
         # * Alice's post that replied to Bob's post
@@ -243,6 +245,8 @@ defmodule Bonfire.Social.Activities do
         ]
       :with_replied ->
         [:replied]
+      :with_thread_name ->
+        [replied: [thread: [:named]]]
       :with_reply_to ->
         # If the root replied to anything, fetch that and its creator too. e.g.
         # * Alice's post that replied to Bob's post

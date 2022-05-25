@@ -176,6 +176,24 @@ defmodule Bonfire.Social.Objects do
   #   from(q in query, where: q.table_id not in ^types)
   # end
 
+  def set_name(id, name, opts) when is_binary(id) do
+    Bonfire.Common.Pointers.one(id, opts)
+    ~> set_name(name, opts)
+  end
+  def set_name(%{} = object, name, _opts) do
+    # TODO: check user's edit permissions
+    object
+    |> repo().maybe_preload(:named)
+    |> changeset_named(%{named: %{id: ulid(object), name: name}})
+    |> repo().update()
+  end
+
+  def changeset_named(object \\ %{}, attrs) do
+    Pointers.Changesets.cast(object, attrs, [])
+    |> Pointers.Changesets.cast_assoc(:named, [])
+    |> debug("cs")
+  end
+
   def delete(object, opts) do
     opts = to_options(opts)
 
