@@ -57,6 +57,7 @@ defmodule Bonfire.Social.PostContents do
     text
     |> Text.maybe_emote() # transform emoticons to emojis
     |> Text.maybe_sane_html() # remove potentially dangerous or dirty markup
+    |> Text.maybe_normalize_html() # make sure we end up with proper HTML
   end
   def prepare_text(other), do: other
 
