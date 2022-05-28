@@ -195,9 +195,9 @@ defmodule Bonfire.Social.Posts do
       "attributedTo" => actor.ap_id,
       "to" => to ++ direct_recipients,
       "cc" => cc,
-      "name" => (e(post, :post_content, :name, nil)),
-      "summary" => Text.maybe_markdown_to_html(e(post, :post_content, :summary, nil)),
-      "content" => Text.maybe_markdown_to_html(e(post, :post_content, :html_body, nil)),
+      "name" => e(post, :post_content, :name, nil),
+      "summary" => e(post, :post_content, :summary, nil),
+      "content" => e(post, :post_content, :html_body, nil),
       "attachment" => Bonfire.Files.ap_publish_activity(e(post, :media, nil))
     }
     |> Enum.filter(fn {_, v} -> not is_nil(v) end)

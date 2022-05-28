@@ -13,22 +13,22 @@ defmodule Bonfire.Social.PostContents do
     # |> debug()
   end
 
-  def maybe_prepare_contents(%{local: false} = attrs, _creator, _boundary) do
+  def maybe_prepare_contents(%{local: false} = attrs, creator, _boundary) do
     debug("do not process remote contents or messages for tags/mentions")
-    only_prepare_content(attrs)
+    only_prepare_content(attrs, creator)
   end
 
-  def maybe_prepare_contents(attrs, _creator, boundary) when boundary in ["message"] do
+  def maybe_prepare_contents(attrs, creator, boundary) when boundary in ["message"] do
     debug("do not process messages for tags/mentions")
-    only_prepare_content(attrs)
+    only_prepare_content(attrs, creator)
   end
 
   def maybe_prepare_contents(attrs, creator, _boundary) do
     debug("process post contents for tags/mentions")
     # TODO: refactor this function?
-    with {:ok, %{text: html_body, mentions: mentions1, hashtags: hashtags1}} <- Bonfire.Social.Tags.maybe_process(creator, prepare_text(get_attr(attrs, :html_body))),
-         {:ok, %{text: name, mentions: mentions2, hashtags: hashtags2}} <- Bonfire.Social.Tags.maybe_process(creator, prepare_text(get_attr(attrs, :name))),
-         {:ok, %{text: summary, mentions: mentions3, hashtags: hashtags3}} <- Bonfire.Social.Tags.maybe_process(creator, prepare_text(get_attr(attrs, :summary))) do
+    with {:ok, %{text: html_body, mentions: mentions1, hashtags: hashtags1}} <- Bonfire.Social.Tags.maybe_process(creator, prepare_text(get_attr(attrs, :html_body), creator)),
+         {:ok, %{text: name, mentions: mentions2, hashtags: hashtags2}} <- Bonfire.Social.Tags.maybe_process(creator, prepare_text(get_attr(attrs, :name), creator)),
+         {:ok, %{text: summary, mentions: mentions3, hashtags: hashtags3}} <- Bonfire.Social.Tags.maybe_process(creator, prepare_text(get_attr(attrs, :summary), creator)) do
       attrs
       |> Map.merge(
       %{
@@ -41,11 +41,11 @@ defmodule Bonfire.Social.PostContents do
     end
   end
 
-  def only_prepare_content(attrs) do
+  def only_prepare_content(attrs, creator) do
     Map.merge(attrs, %{
-      html_body: prepare_text(get_attr(attrs, :html_body)),
-      name: prepare_text(get_attr(attrs, :name)),
-      summary: prepare_text(get_attr(attrs, :summary))
+      html_body: prepare_text(get_attr(attrs, :html_body), creator),
+      name: prepare_text(get_attr(attrs, :name), creator),
+      summary: prepare_text(get_attr(attrs, :summary), creator)
     })
   end
 
@@ -53,14 +53,28 @@ defmodule Bonfire.Social.PostContents do
     e(attrs, key, nil) || e(attrs, :post, :post_content, key, nil) || e(attrs, :post_content, key, nil) || e(attrs, :post, key, nil)
   end
 
-  def prepare_text(text) when is_binary(text) and text !="" do
+  def prepare_text(text, creator) when is_binary(text) and text !="" do
     text
+    |> maybe_process_markdown(creator) # if not using an HTML-based WYSIWYG editor, then we convert any markdown to HTML
     |> Text.maybe_emote() # transform emoticons to emojis
     |> Text.maybe_sane_html() # remove potentially dangerous or dirty markup
     |> Text.maybe_normalize_html() # make sure we end up with proper HTML
   end
-  def prepare_text(other), do: other
+  def prepare_text(other, _), do: other
 
+  def maybe_process_markdown(text, creator) do
+    if Bonfire.Me.Settings.get([:ui, :rich_text_editor_disabled], false, creator) ||  maybe_apply(Bonfire.Me.Settings.get([:ui, :rich_text_editor], nil, creator), :output_format, [], &no_known_ouput/2)==:markdown do
+      Text.maybe_markdown_to_html(text)
+    else
+      text
+    end
+  end
+
+  def no_known_ouput(error, args) do
+    error("maybe_process_markdown: #{error} - don't know what editor is being used or what output format it uses (expect a module configured under [:bonfire, :ui, :rich_text_editor] which should have an output_format/0 function returning an atom (eg. :markdown, :html)")
+
+    nil
+  end
 
   def indexing_object_format(%{post_content: obj}), do: indexing_object_format(obj)
   def indexing_object_format(%PostContent{id: _} = obj) do
