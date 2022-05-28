@@ -2,21 +2,23 @@ defmodule Bonfire.Social.LivePush do
   use Bonfire.UI.Common
   import Where
   alias Bonfire.Social.Activities
+  alias Bonfire.Data.Social.Activity
 
-  def push_activity(feed_ids, %{id: _, activity: %{id: _}} = object) do
+  def push_activity(feed_ids, activity, opts \\ [])
+  def push_activity(feed_ids, %{id: _, activity: %{id: _}} = object, opts) do
     debug(feed_ids, "push an object as :new_activity")
-    object = Activities.activity_preloads(object, :feed, [])
+    object = Activities.activity_preloads(object, :feed, []) # makes sure that all needed assocs are preloaded without n+1
 
     object.activity
     |> Map.put(:object, Map.drop(object, [:activity])) # push as activity with :object
-    |> push_activity(feed_ids, ...)
+    |> push_activity(feed_ids, ..., opts)
 
     object
   end
 
-  def push_activity(feed_ids, activity) do
+  def push_activity(feed_ids, %Activity{} = activity, opts) do
     debug(feed_ids, "push a :new_activity")
-    activity = Activities.activity_preloads(activity, :feed, [])
+    activity = Activities.activity_preloads(activity, :feed, []) # makes sure that all needed assocs are preloaded without n+1
 
     pubsub_broadcast(feed_ids, {
       {Bonfire.Social.Feeds, :new_activity},
@@ -26,7 +28,7 @@ defmodule Bonfire.Social.LivePush do
       ]
       })
 
-    maybe_push_thread(activity)
+    if Keyword.get(opts, :push_to_thread, true), do: maybe_push_thread(activity)
 
     activity
   end
