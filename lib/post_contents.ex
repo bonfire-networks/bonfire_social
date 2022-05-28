@@ -63,14 +63,14 @@ defmodule Bonfire.Social.PostContents do
   def prepare_text(other, _), do: other
 
   def maybe_process_markdown(text, creator) do
-    if Bonfire.Me.Settings.get([:ui, :rich_text_editor_disabled], false, creator) ||  maybe_apply(Bonfire.Me.Settings.get([:ui, :rich_text_editor], nil, creator), :output_format, [], &no_known_ouput/2)==:markdown do
+    if Bonfire.Me.Settings.get([:ui, :rich_text_editor_disabled], false, creator) ||  maybe_apply(Bonfire.Me.Settings.get([:ui, :rich_text_editor], nil, creator), :output_format, [], &no_known_output/2)==:markdown do
       Text.maybe_markdown_to_html(text)
     else
       text
     end
   end
 
-  def no_known_ouput(error, args) do
+  def no_known_output(error, args) do
     error("maybe_process_markdown: #{error} - don't know what editor is being used or what output format it uses (expect a module configured under [:bonfire, :ui, :rich_text_editor] which should have an output_format/0 function returning an atom (eg. :markdown, :html)")
 
     nil

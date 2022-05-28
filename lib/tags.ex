@@ -34,12 +34,22 @@ defmodule Bonfire.Social.Tags do
   def maybe_process(creator, text) do
     with true <- is_binary(text) and text !="",
          true <- module_enabled?(Bonfire.Tag),
-         {text, mentions, hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, text, "text/markdown") do # TODO: set content-type based on which rich editor is used?
+         {text, mentions, hashtags} <- Bonfire.Tag.TextContent.Process.process(creator, text, editor_output_content_type(creator)) do
       {:ok, %{text: text, mentions: Keyword.values(mentions), hashtags: Keyword.values(hashtags)}}
 
     else _ ->
       {:ok, %{text: text, mentions: [], hashtags: []}}
     end
+  end
+
+  def editor_output_content_type(user) do
+    Bonfire.Common.Utils.maybe_apply(Bonfire.Me.Settings.get([:ui, :rich_text_editor], nil, user), :output_format, [], &no_known_output/2)
+  end
+
+  def no_known_output(error, args) do
+    warn("#{error} - don't know what editor is being used or what output format it uses (expect a module configured under [:bonfire, :ui, :rich_text_editor] which should have an output_format/0 function returning an atom (eg. :markdown, :html)")
+
+    @default_content_type
   end
 
   defp tags_preloads(mentions, _preset_or_custom_boundary) do
