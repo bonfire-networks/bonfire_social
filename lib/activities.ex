@@ -429,7 +429,7 @@ defmodule Bonfire.Social.Activities.LocaliseVerbs do
   Runs at compile-time to include all verbs (including in past tense for display in feeds) in localisation string extraction
   """
   use Bonfire.Common.Localise
-  # TODO: extract verbs for localisation
+
   Bonfire.Boundaries.Verbs.verbs()
   |> Map.values()
   |> Enum.flat_map(fn v ->
