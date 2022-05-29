@@ -416,11 +416,25 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
-  defp verb_congugate(verb) do
+  def verb_congugate(verb) do
     :"Elixir.Verbs".conjugate(verb, tense: "past", person: "third", plurality: "plural")
   end
 
   def verb_id(verb) when is_binary(verb), do: ulid(verb) || Verbs.get_id(maybe_to_atom(verb))
   def verb_id(verb) when is_atom(verb), do: Verbs.get_id(verb) || Verbs.get_id!(:create)
 
+end
+defmodule Bonfire.Social.Activities.LocaliseVerbs do
+  @moduledoc """
+  Runs at compile-time to include all verbs (including in past tense for display in feeds) in localisation string extraction
+  """
+  use Bonfire.Common.Localise
+  # TODO: extract verbs for localisation
+  Bonfire.Boundaries.Verbs.verbs()
+  |> Map.values()
+  |> Enum.flat_map(fn v ->
+    [v[:verb], Bonfire.Social.Activities.verb_congugate(v[:verb])]
+  end)
+  |> IO.inspect(label: "Making all verbs localisable")
+  |> localise_strings()
 end
