@@ -389,31 +389,35 @@ defmodule Bonfire.Social.Activities do
   def verb(%{verb: %{verb: verb}}), do: verb
   def verb(%{verb_id: id}), do: Bonfire.Boundaries.Verbs.get_slug(id)
 
-  def verb_maybe_modify("request", _), do: "request to follow" # FIXME: temporary as we may later request other things
-  def verb_maybe_modify("create", %{replied: %{reply_to: %{post_content: %{id: _}} = _reply_to}}), do: "reply"
-  def verb_maybe_modify("create", %{replied: %{reply_to: %{id: _} = _reply_to}}), do: "respond"
-  def verb_maybe_modify("create", %{replied: %{reply_to_id: reply_to_id}}) when is_binary(reply_to_id), do: "respond"
-  # def verb_maybe_modify("created", %{reply_to: %{id: _} = reply_to, object: %Bonfire.Data.Social.Post{}}), do: reply_to_display(reply_to)
-  # def verb_maybe_modify("created", %{reply_to: %{id: _} = reply_to}), do: reply_to_display(reply_to)
-  def verb_maybe_modify("create", %{object: %{post_content: %{id: _}}}), do: "write"
-  def verb_maybe_modify("create", %{object: %Bonfire.Data.Social.PostContent{}}), do: "write"
-  def verb_maybe_modify("create", %{object: %Bonfire.Data.Social.Post{} = _post}), do: "write"
-  def verb_maybe_modify("create", %{object: %Bonfire.Data.Social.Message{}}), do: "send"
-  def verb_maybe_modify("create", %{object: %{action: %{label: label}} = _economic_event}), do: label
-  def verb_maybe_modify("create", %{object: %{action: %{id: id}} = _economic_event}), do: id
-  def verb_maybe_modify("create", %{object: %{action_id: label} = _economic_event}) when is_binary(label), do: label
-  def verb_maybe_modify("create", %{object: %{action: label} = _economic_event}) when is_binary(label), do: label
-  def verb_maybe_modify(%{verb: verb}, activity) when is_binary(verb), do: verb |> String.downcase() |> verb_maybe_modify(activity)
+  def verb_maybe_modify("Request", _), do: "Request to Follow" # FIXME: temporary as we may later request other things
+  def verb_maybe_modify("Create", %{replied: %{reply_to: %{post_content: %{id: _}} = _reply_to}}), do: "Reply"
+  def verb_maybe_modify("Create", %{replied: %{reply_to: %{id: _} = _reply_to}}), do: "Respond"
+  def verb_maybe_modify("Create", %{replied: %{reply_to_id: reply_to_id}}) when is_binary(reply_to_id), do: "Respond"
+  # def verb_maybe_modify("Created", %{reply_to: %{id: _} = reply_to, object: %Bonfire.Data.Social.Post{}}), do: reply_to_display(reply_to)
+  # def verb_maybe_modify("Created", %{reply_to: %{id: _} = reply_to}), do: reply_to_display(reply_to)
+  def verb_maybe_modify("Create", %{object: %{post_content: %{id: _}}}), do: "Write"
+  def verb_maybe_modify("Create", %{object: %Bonfire.Data.Social.PostContent{}}), do: "Write"
+  def verb_maybe_modify("Create", %{object: %Bonfire.Data.Social.Post{} = _post}), do: "Write"
+  def verb_maybe_modify("Create", %{object: %Bonfire.Data.Social.Message{}}), do: "Send"
+  def verb_maybe_modify("Create", %{object: %{action: %{label: label}} = _economic_event}), do: label
+  def verb_maybe_modify("Create", %{object: %{action: %{id: id}} = _economic_event}), do: id
+  def verb_maybe_modify("Create", %{object: %{action_id: label} = _economic_event}) when is_binary(label), do: label
+  def verb_maybe_modify("Create", %{object: %{action: label} = _economic_event}) when is_binary(label), do: label
+  # def verb_maybe_modify(%{verb: verb}, activity) when is_binary(verb), do: verb |> verb_maybe_modify(activity)
   def verb_maybe_modify(%{verb: verb}, activity), do: verb_maybe_modify(verb, activity)
-  def verb_maybe_modify(verb, activity) when is_atom(verb), do: maybe_to_string(verb) |> String.downcase() |> verb_maybe_modify(activity)
-  def verb_maybe_modify(verb, _) when is_binary(verb), do:  verb |> String.downcase()
+  def verb_maybe_modify(verb, activity) when is_atom(verb), do: maybe_to_string(verb) |> verb_maybe_modify(activity)
+  def verb_maybe_modify(verb, _) when is_binary(verb), do: verb
+  #|> String.downcase()
 
   def verb_display(verb) do
     verb = maybe_to_string(verb)
     case String.split(verb) do
+      # FIXME: support localisation
       [verb, "to", other_verb] -> Enum.join([verb_congugate(verb), "to", other_verb], " ")
       _ -> verb_congugate(verb)
     end
+    |> localise_dynamic(__MODULE__)
+    |> String.downcase()
   end
 
   def verb_congugate(verb) do
@@ -426,14 +430,15 @@ defmodule Bonfire.Social.Activities do
 end
 defmodule Bonfire.Social.Activities.LocaliseVerbs do
   @moduledoc """
-  Runs at compile-time to include all verbs (including in past tense for display in feeds) in localisation string extraction
+  Runs at compile-time to include all verbs (including in past tense for display in feeds) in localisation string extraction.
   """
   use Bonfire.Common.Localise
 
   Bonfire.Boundaries.Verbs.verbs()
   |> Map.values()
   |> Enum.flat_map(fn v ->
-    [v[:verb], Bonfire.Social.Activities.verb_congugate(v[:verb])]
+    conjugated = Bonfire.Social.Activities.verb_congugate(v[:verb])
+    [v[:verb], "Request to "<>v[:verb], "Requested to "<>v[:verb], conjugated, conjugated<>" by %{user}"]
   end)
   |> IO.inspect(label: "Making all verbs localisable")
   |> localise_strings()
