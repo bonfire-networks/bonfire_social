@@ -285,10 +285,7 @@ defmodule Bonfire.Social.FeedActivities do
   @doc """
   Arranges for an insert changeset to also publish to feeds related to some objects.
 
-  Options:
-  * `:inbox` - list of objects whose inbox we should attempt to insert into
-  * `:outbox` - list of objects whose outbox we should attempt to insert into
-  * `:notifications` - list of objects whose notifications we should attempt to insert into
+  Options: see `get_feed_ids/1`
   """
   def put_feed_publishes(changeset, options) do
     get_feed_publishes(options)
@@ -297,6 +294,18 @@ defmodule Bonfire.Social.FeedActivities do
 
   @doc """
   Creates the underlying data for `put_feed_publishes/2`.
+  """
+  def get_feed_publishes(options) do
+    get_feed_ids(options)
+    # Dedupe
+    |> MapSet.new()
+    |> MapSet.delete(nil)
+    # turn into attrs
+    |> Enum.map(&(%FeedPublish{feed_id: &1}))
+  end
+
+  @doc """
+  Computes the feed ids for `get_feed_publishes/2`.
 
   Options:
   * `:inbox` - list of objects whose inbox we should attempt to insert into.
@@ -304,7 +313,7 @@ defmodule Bonfire.Social.FeedActivities do
   * `:notifications` - list of objects whose notifications we should attempt to insert into.
   * `:feeds` - list of ids (or objects containing IDs of feeds to post to.
   """
-  def get_feed_publishes(options) do
+  def get_feed_ids(options) do
     keys = [:inbox, :outbox, :notifications]
     # process all the specifications
     options = get_feed_publishes_options(options)
@@ -312,15 +321,10 @@ defmodule Bonfire.Social.FeedActivities do
     index = get_feed_publishes_index(options, keys)
     # preload them all together
     all = Enum.flat_map(keys, &Keyword.get(options, &1, []))
-    loaded = repo().maybe_preload(all, :character)
+    all = repo().maybe_preload(all, :character)
     # and finally, look up the appropriate feed from the loaded characters
-    ids = for(character <- loaded, feed <- index[ulid(character)], do: Feeds.feed_id(feed, character))
-    (ids ++ Keyword.get(options, :feeds, []))
-    # Dedupe
-    |> MapSet.new()
-    |> MapSet.delete(nil)
-    # turn into attrs
-    |> Enum.map(&(%FeedPublish{feed_id: &1}))
+    ids = for(character <- all, feed <- index[ulid(character)], do: Feeds.feed_id(feed, character))
+    ids ++ Keyword.get(options, :feeds, [])
   end
 
   defp get_feed_publishes_options(options) do
@@ -364,7 +368,6 @@ defmodule Bonfire.Social.FeedActivities do
     end
   end
 
-
   # builds an index of object ids to the names of the feeds we should query for them
   defp get_feed_publishes_index(options, keys) do
     for k <- keys,
@@ -407,7 +410,7 @@ defmodule Bonfire.Social.FeedActivities do
   def notify_feeds(subject, verb_or_activity, object, feed_ids) do
     # debug(feed_ids)
     ret = publish(subject, verb_or_activity, object, to_feeds: feed_ids) #|> debug("notify_feeds")
-    Bonfire.Social.LivePush.notify(subject, Activities.verb(verb_or_activity), object, feed_ids)
+    Bonfire.Social.LivePush.notify(subject, verb_or_activity, object, feed_ids)
     ret
   end
 

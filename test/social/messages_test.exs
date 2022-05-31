@@ -69,17 +69,17 @@ defmodule Bonfire.Social.MessagesTest do
     refute match? %{edges: [_]}, Messages.list(other, sender)
   end
 
-  # broken because we filter messages out of feeds and use Messages.list instead
-  # test "messages addressed to me appear in my inbox feed" do
-  #   sender = Fake.fake_user!()
-  #   receiver = Fake.fake_user!()
-  #   attrs = %{to_circles: [receiver.id], post_content: %{html_body: @html_body}}
+  # FIXME: because we filter messages out of feeds and use Messages.list instead
+  test "messages addressed to me appear in my inbox feed" do
+    sender = Fake.fake_user!()
+    receiver = Fake.fake_user!()
+    attrs = %{to_circles: [receiver.id], post_content: %{html_body: @html_body}}
 
-  #   assert {:ok, m} = Messages.send(sender, attrs)
+    assert {:ok, m} = Messages.send(sender, attrs)
 
-  #   assert %{edges: [fp]} = FeedActivities.feed(:inbox, receiver)
-  #   assert fp.activity.id == m.activity.id
-  # end
+    assert %{edges: [fp]} = FeedActivities.feed(:inbox, receiver)
+    assert fp.activity.id == m.activity.id
+  end
 
   test "messaging someone does NOT appear in my own inbox feed" do
     sender = Fake.fake_user!()

@@ -384,10 +384,11 @@ defmodule Bonfire.Social.Activities do
       end
   end
 
-
-  def verb(verb) when is_atom(verb), do: verb
-  def verb(%{verb: %{verb: verb}}), do: verb
-  def verb(%{verb_id: id}), do: Bonfire.Boundaries.Verbs.get_slug(id)
+  # TODO: put in Verbs module
+  def verb_name(slug) when is_atom(slug), do: Bonfire.Boundaries.Verbs.get(slug)[:verb]
+  def verb_name(%{verb: %{verb: verb}}), do: verb
+  def verb_name(%{verb_id: id}), do: Bonfire.Boundaries.Verbs.get(id)[:verb]
+  def verb_name(%{verb: verb}) when is_binary(verb), do: verb
 
   def verb_maybe_modify("Request", _), do: "Request to Follow" # FIXME: temporary as we may later request other things
   def verb_maybe_modify("Create", %{replied: %{reply_to: %{post_content: %{id: _}} = _reply_to}}), do: "Reply"

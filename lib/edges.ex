@@ -48,6 +48,7 @@ defmodule Bonfire.Social.Edges do
   end
   def get!(type, subject, object, opts) do
     do_query(type, subject, object, opts)
+    |> limit(1)
     |> repo().one()
   end
 

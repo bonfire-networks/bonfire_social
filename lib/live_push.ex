@@ -1,5 +1,5 @@
 defmodule Bonfire.Social.LivePush do
-  use Bonfire.UI.Common
+  use Bonfire.UI.Common # FIXME: dependency on ui_common should be optional
   import Where
   alias Bonfire.Social.Activities
   alias Bonfire.Data.Social.Activity
@@ -7,7 +7,7 @@ defmodule Bonfire.Social.LivePush do
   def push_activity(feed_ids, activity, opts \\ [])
   def push_activity(feed_ids, %{id: _, activity: %{id: _}} = object, opts) do
     debug(feed_ids, "push an object as :new_activity")
-    object = Activities.activity_preloads(object, :feed, []) # makes sure that all needed assocs are preloaded without n+1
+    # object = Activities.activity_preloads(object, :feed, []) # makes sure that all needed assocs are preloaded without n+1
 
     object.activity
     |> Map.put(:object, Map.drop(object, [:activity])) # push as activity with :object
@@ -30,17 +30,26 @@ defmodule Bonfire.Social.LivePush do
 
     if Keyword.get(opts, :push_to_thread, true), do: maybe_push_thread(activity)
 
+    if Keyword.get(opts, :notify, true), do: notify(activity, feed_ids)
+
     activity
   end
 
   def notify(activity, feed_ids), do: notify(activity.subject, activity.verb, activity.object, feed_ids)
 
   def notify(subject, verb, object, feed_ids) do
-    # debug(feed_ids)
+    verb_display = Bonfire.Social.Activities.verb_name(verb)
+    |> Bonfire.Social.Activities.verb_display()
+
     feed_ids =
-      ulid(feed_ids)
+      feed_ids
+      |> debug("feed_ids")
+      |> ulid()
       |> List.wrap()
-      |> Enum.reject(&is_nil/1)
+      |> filter_empty([])
+
+    # increment currently visible unread counters
+    increment_counters(feed_ids)
 
     Bonfire.Notifications.notify_users(
       feed_ids,
@@ -48,7 +57,7 @@ defmodule Bonfire.Social.LivePush do
         e(subject, :character, :username, "")
       )
       <> " "
-      <> Bonfire.Social.Activities.verb_display(verb),
+      <> verb_display,
       e(object, :post_content, :name,
         e(object, :post_content, :summary,
           e(object, :post_content, :html_body,
@@ -59,6 +68,12 @@ defmodule Bonfire.Social.LivePush do
         )
       )
     )
+  end
+
+  defp increment_counters(feed_ids) do
+    feed_ids
+    |> Enum.map(& "unread_count:#{&1}")
+    |> pubsub_broadcast({{Bonfire.Social.Feeds, :count_increment}, feed_ids})
   end
 
   defp maybe_push_thread(%{replied: %{id: _} = replied} = activity) do

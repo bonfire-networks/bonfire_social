@@ -3,6 +3,7 @@ defmodule Bonfire.Social.Follows do
   alias Bonfire.Data.Social.{Follow, Request}
   alias Bonfire.Me.{Boundaries, Characters, Users}
   alias Bonfire.Social.{Activities, APActivities, Edges, FeedActivities, Feeds, Integration, Requests}
+  alias Bonfire.Social.LivePush
   alias Bonfire.Data.Identity.User
   alias Ecto.Changeset
   alias Pointers.Changesets
@@ -27,6 +28,13 @@ defmodule Bonfire.Social.Follows do
   """
   def follow(user, object, opts \\ [])
   def follow(%{}=follower, object, opts) do
+    with {:ok, result} <- maybe_follow_or_request(follower, object, opts) do
+      # debug(result, "follow or request result")
+      {:ok, result}
+    end
+  end
+
+  defp maybe_follow_or_request(follower, object, opts) do
     opts = Keyword.put_new(opts, :current_user, follower)
     follower = repo().preload(follower, :peered)
     case check_follow(follower, object, opts) do
@@ -221,16 +229,18 @@ defmodule Bonfire.Social.Follows do
   # * When we start allowing to follow things that aren't users, we might need to adjust the circles.
   # * Figure out how to avoid the advance lookup and ensuing race condition.
   defp do_follow(user, object, _opts) do
+    to = [
+      outbox: [user], # we include follows in feeds, since user has control over whether or not they want to see them in settings
+      notifications: [object]
+    ]
     opts = [
       boundary: "public", # TODO: make configurable (currently public is required so follows can be listed by AP adapter)
       to_circles: [ulid(object)], # also allow the followed user to see it
-      to_feeds: [
-        outbox: [user], # we include follows in feeds, since user has control over whether or not they want to see them in settings
-        notifications: [object]
-      ], # put it in our outbox and their notifications
+      to_feeds: to, # put it in our outbox and their notifications
     ]
     case create(user, object, opts) do
       {:ok, follow} ->
+        LivePush.push_activity(FeedActivities.get_feed_ids(opts[:to_feeds]), follow, push_to_thread: false, notify: true) # FIXME: should not compute feed ids twice
         Integration.ap_push_activity(user.id, follow)
         {:ok, follow}
       {:error, e} ->

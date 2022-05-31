@@ -45,6 +45,7 @@ defmodule Bonfire.Social.Messages do
     to = get_tos(to, Utils.e(attrs, :to_circles, nil))
     |> debug("tos")
     |> Boundaries.load_pointers(opts ++ [verb: :message])
+    # TODO: if not allowed to message, request to message?
     # |> debug("to pointers")
 
     if is_list(to) and length(to)>0 do
@@ -58,8 +59,8 @@ defmodule Bonfire.Social.Messages do
       ]
       repo().transact_with fn ->
         with {:ok, message} <- create(creator, attrs, opts) do
-          debug(message)
-          LivePush.notify(creator, "message", message, opts[:to_feeds])
+          # debug(message)
+          LivePush.notify(creator, :message, message, FeedActivities.get_feed_ids(opts[:to_feeds])) # FIXME: should not compute feed ids twice
           Bonfire.Social.Integration.ap_push_activity(creator.id, message)
           {:ok, message}
         end
@@ -89,8 +90,7 @@ defmodule Bonfire.Social.Messages do
     |> Objects.cast_acl(creator, opts)
     |> Activities.put_assoc(:create, creator)
     # |> FeedActivities.put_feed_publishes(Keyword.get(opts, :to_feeds, [])) # messages shouldn't need to be in any feeds?
-    # TODO: LivePush & notify
-    # |> dump
+    # TODO: LivePush & notify?
   end
 
   def read(message_id, opts) when is_binary(message_id) do

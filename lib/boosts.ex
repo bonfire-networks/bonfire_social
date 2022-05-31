@@ -39,7 +39,7 @@ defmodule Bonfire.Social.Boosts do
       Integration.ap_push_activity(booster.id, boost)
       # Also livepush, which will need a list of feed IDs we published to
       feed_ids = for fp <- boost.feed_publishes, do: fp.feed_id
-      LivePush.push_activity(feed_ids, boost, push_to_thread: false)
+      LivePush.push_activity(feed_ids, boost, push_to_thread: false, notify: true)
       {:ok, boost}
     end
   end
