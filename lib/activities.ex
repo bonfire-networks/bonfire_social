@@ -277,6 +277,10 @@ defmodule Bonfire.Social.Activities do
 
       %{activity: _} ->
         repo().maybe_preload(page, activity: preloads)
+
+      _ ->
+        warn(list, "Could not preload activities")
+        page
     end
   end
   defp maybe_repo_preload(list, preloads) when is_list(list) do
