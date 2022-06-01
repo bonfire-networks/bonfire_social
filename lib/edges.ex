@@ -9,20 +9,27 @@ defmodule Bonfire.Social.Edges do
   alias Bonfire.Social.{Activities, FeedActivities, Objects}
   alias Pointers.{Changesets, ULID}
 
-  def put_assoc(changeset, subject, object),
-    do: put_assoc(changeset, changeset.data.__struct__,  subject, object)
+  def table_id(schema), do: schema.__pointers__(:table_id)
 
-  def put_assoc(changeset, table, subject, object) do
-    table.__pointers__(:table_id)
-    |> %{subject_id: ulid(subject), object_id: ulid(object), table_id: ...}
-    |> Changesets.put_assoc(changeset, :edge, ...)
+  def put_edge_assoc(changeset, subject, object),
+    do: put_edge_assoc(changeset, changeset.data.__struct__,  subject, object)
+
+  def put_edge_assoc(changeset, schema, subject, object) do
+    %{subject_id: ulid(subject), object_id: ulid(object), table_id: table_id(schema)}
+    # |> Changesets.put_assoc(changeset, :edge, ...)
+    |> Ecto.Changeset.cast(changeset, %{edge: ...}, [])
+    |> Ecto.Changeset.cast_assoc(:edge, with: &Edge.changeset/2)
   end
 
-  def changeset(schema, subject, verb, object, options) when is_atom(schema),
-    do: changeset({schema, schema}, subject, verb, object, options)
-  def changeset({insert_schema, type_schema}, subject, verb, object, options) do
+  def changeset_base(schema, subject, object, options) when is_atom(schema),
+    do: changeset_base({schema, schema}, subject, object, options)
+  def changeset_base({insert_schema, type_schema}, subject, object, options) do
     Changesets.cast(struct(insert_schema), %{}, [])
-    |> put_assoc(type_schema, subject, object)
+    |> put_edge_assoc(type_schema, subject, object)
+  end
+
+  def changeset(schema, subject, verb, object, options) do
+    changeset_base(schema, subject, object, options)
     |> Objects.cast_creator_caretaker(subject)
     |> Acls.cast(subject, options)
     |> Activities.put_assoc(verb, subject, object)
@@ -154,7 +161,7 @@ defmodule Bonfire.Social.Edges do
   # defp delete_by_any(me), do: do_delete(by_any_q(me))
 
   #doc "Delete Follows where i am the subject and someone else is the object."
-  def delete_by_both(me, schema, object), do: [subject: me, object: object, table_id: schema.__pointers__(:table_id)] |> query(skip_boundary_check: true) |> do_delete()
+  def delete_by_both(me, schema, object), do: [subject: me, object: object, table_id: table_id(schema)] |> query(skip_boundary_check: true) |> do_delete()
 
   defp do_delete(q), do: q |> Ecto.Query.exclude(:preload) |> Ecto.Query.exclude(:order_by) |> repo().delete_all() |> elem(1)
 

@@ -60,7 +60,7 @@ defmodule Bonfire.Social.Messages do
       repo().transact_with fn ->
         with {:ok, message} <- create(creator, attrs, opts) do
           # debug(message)
-          LivePush.notify(creator, :message, message, FeedActivities.get_feed_ids(opts[:to_feeds])) # FIXME: should not compute feed ids twice
+          LivePush.notify_of_message(creator, :message, message, to)
           Bonfire.Social.Integration.ap_push_activity(creator.id, message)
           {:ok, message}
         end
@@ -89,7 +89,7 @@ defmodule Bonfire.Social.Messages do
     # apply boundaries on all objects, note that ORDER MATTERS, as it uses data preloaded by `Threads` and `PostContents`
     |> Objects.cast_acl(creator, opts)
     |> Activities.put_assoc(:create, creator)
-    # |> FeedActivities.put_feed_publishes(Keyword.get(opts, :to_feeds, [])) # messages shouldn't need to be in any feeds?
+    |> FeedActivities.put_feed_publishes(Keyword.get(opts, :to_feeds, [])) # messages go in inbox feeds so we can easily count unread (TODO: query from inbox as well?)
     # TODO: LivePush & notify?
   end
 

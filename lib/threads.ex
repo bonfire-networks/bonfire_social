@@ -274,10 +274,14 @@ defmodule Bonfire.Social.Threads do
   end
 
   def query([thread_id: thread_id], opts) do
+
+    preloads = (if opts[:thread_mode]==:flat, do: [:posts_with_reply_to], else: [:posts])
+               ++ (if opts[:showing_within]==:messages, do: [:with_seen], else: [])
+
     opts =
       to_options(opts)
       |> Keyword.put_new(:max_depth, Config.get(:thread_default_max_depth, 3))
-      |> Keyword.put_new(:preload, (if opts[:thread_mode]==:flat, do: :posts_with_reply_to, else: :posts))
+      |> Keyword.put_new(:preload, preloads)
 
     %Replied{id: Bonfire.Common.Pointers.id_binary(thread_id)}
       |> Replied.descendants()

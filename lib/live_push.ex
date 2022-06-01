@@ -1,16 +1,15 @@
 defmodule Bonfire.Social.LivePush do
   use Bonfire.UI.Common # FIXME: dependency on ui_common should be optional
   import Where
-  alias Bonfire.Social.Activities
+  alias Bonfire.Social.{Activities, FeedActivities}
   alias Bonfire.Data.Social.Activity
 
   def push_activity(feed_ids, activity, opts \\ [])
   def push_activity(feed_ids, %{id: _, activity: %{id: _}} = object, opts) do
     debug(feed_ids, "push an object as :new_activity")
-    # object = Activities.activity_preloads(object, :feed, []) # makes sure that all needed assocs are preloaded without n+1
 
     object.activity
-    |> Map.put(:object, Map.drop(object, [:activity])) # push as activity with :object
+    |> Map.put(:object, object |> Map.drop([:activity])) # push as activity with :object
     |> push_activity(feed_ids, ..., opts)
 
     object
@@ -35,23 +34,40 @@ defmodule Bonfire.Social.LivePush do
     activity
   end
 
+  def notify_users(subject, verb, object, users) do
+    FeedActivities.get_feed_ids(notifications: users)
+    |> normalise_feed_ids()
+    |> send_notifications(subject, verb, object, ...)
+  end
+
+  def notify_of_message(subject, verb, object, users) do
+
+    FeedActivities.get_feed_ids(inbox: users) # FIXME: avoid querying this again
+    |> increment_counters()
+
+    FeedActivities.get_feed_ids(notifications: users)
+    |> normalise_feed_ids()
+    |> send_notifications(subject, verb, object, ...)
+  end
+
   def notify(activity, feed_ids), do: notify(activity.subject, activity.verb, activity.object, feed_ids)
 
   def notify(subject, verb, object, feed_ids) do
-    verb_display = Bonfire.Social.Activities.verb_name(verb)
-    |> Bonfire.Social.Activities.verb_display()
 
-    feed_ids =
-      feed_ids
-      |> debug("feed_ids")
-      |> ulid()
-      |> List.wrap()
-      |> filter_empty([])
+    feed_ids = normalise_feed_ids(feed_ids)
 
     # increment currently visible unread counters
     increment_counters(feed_ids)
 
-    Bonfire.Notifications.notify_users(
+    send_notifications(subject, verb, object, feed_ids)
+  end
+
+  defp send_notifications(subject, verb, object, feed_ids) do
+
+    verb_display = Bonfire.Social.Activities.verb_name(verb)
+    |> Bonfire.Social.Activities.verb_display()
+
+    Bonfire.Notifications.notify_feeds(
       feed_ids,
       e(subject, :profile, :name,
         e(subject, :character, :username, "")
@@ -72,8 +88,16 @@ defmodule Bonfire.Social.LivePush do
 
   defp increment_counters(feed_ids) do
     feed_ids
-    |> Enum.map(& "unread_count:#{&1}")
+    |> Enum.map(& "unseen_count:#{&1}")
     |> pubsub_broadcast({{Bonfire.Social.Feeds, :count_increment}, feed_ids})
+  end
+
+  defp normalise_feed_ids(feed_ids) do
+    feed_ids
+      |> debug("feed_ids")
+      |> ulid()
+      |> List.wrap()
+      |> filter_empty([])
   end
 
   defp maybe_push_thread(%{replied: %{id: _} = replied} = activity) do

@@ -6,12 +6,9 @@ defmodule Bonfire.Social.FeedActivities do
   import Where
   # alias Bonfire.Boundaries
   alias Bonfire.Boundaries.Circles
-  alias Bonfire.Data.Social.{Activity, FeedPublish, Message}
-  # alias Bonfire.Data.Identity.Character
-  alias Bonfire.Social.Feeds
-  alias Bonfire.Social.Activities
-  alias Bonfire.Social.Objects
-  # alias Bonfire.Social.Threads
+  alias Bonfire.Data.Social.{Activity, FeedPublish, Message, Seen}
+  alias Bonfire.Data.Edges.Edge
+  alias Bonfire.Social.{Activities, Edges, Feeds, Objects}
   alias Pointers
   alias Pointers.{Pointer, Changesets}
 
@@ -79,8 +76,11 @@ defmodule Bonfire.Social.FeedActivities do
     |> query_extras(opts)
     |> repo().many_paginated(opts)
   end
+
+  def feed(:notifications = feed_name, opts), do: do_feed(feed_name, opts ++ [skip_boundary_check: :admins, preload: :notifications])
+
   def feed(:flags, opts), do: Bonfire.Social.Flags.list_paginated([], opts)
-  def feed(:notifications = feed_name, opts), do: do_feed(feed_name, opts ++ [skip_boundary_check: :admins])
+
   def feed(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
     do_feed(feed_name, opts)
   end
@@ -528,4 +528,18 @@ defmodule Bonfire.Social.FeedActivities do
   defp maybe_federate_activity(verb, object, activity, opts) do
     if e(opts, :boundary, nil) !="federated", do: Bonfire.Social.Integration.activity_ap_publish(activity.subject_id, verb, object, activity)
   end
+
+  def unseen_count(feed_id, opts \\ []) do
+    table_id = Edges.table_id(Seen)
+
+    from(fp in FeedPublish,
+      left_join: seen_edge in Edge,
+      on: fp.id == seen_edge.object_id and seen_edge.table_id == ^table_id, # and seen_edge.subject_id == ^user_id,
+      where: fp.feed_id == ^feed_id,
+      where: is_nil(seen_edge.id),
+      select: count())
+    |> debug()
+    |> repo().one()
+  end
+
 end

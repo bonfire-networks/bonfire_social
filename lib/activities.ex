@@ -10,13 +10,14 @@ defmodule Bonfire.Social.Activities do
   use Bonfire.Common.Utils
   import Bonfire.Boundaries.Queries
   import Ecto.Query
-  alias Bonfire.Data.Social.{Activity, Like, Boost, Flag, PostContent}
+  alias Bonfire.Data.Social.{Activity, Like, Boost, Flag, PostContent, Seen}
+  alias Bonfire.Data.Edges.Edge
   alias Bonfire.Data.AccessControl.Verb
   alias Bonfire.Data.Identity.User
   alias Bonfire.Boundaries
   alias Bonfire.Boundaries.Verbs
   alias Ecto.Changeset
-  alias Bonfire.Social.{Feeds, FeedActivities}
+  alias Bonfire.Social.{Edges, Feeds, FeedActivities}
   alias Pointers.{Changesets, Pointer, ULID}
 
   def queries_module, do: Activity
@@ -114,7 +115,6 @@ defmodule Bonfire.Social.Activities do
     repo().preload(object, [activity: query])
   end
 
-
   def query_object_preload_create_activity(q, opts \\ []) do
     query_object_preload_activity(q, :create, :id, opts)
   end
@@ -139,20 +139,49 @@ defmodule Bonfire.Social.Activities do
     |> activity_preloads(opts)
   end
 
+  # def preload_seen(object, opts) do # TODO
+  #   user = current_user(opts)
+  #   if user do
+  #     preload_query = from seen in Seen, as: :activity_seen, where: activity.id == seen.object_id and seen.subject_id == ^user
+  #     repo().preload(object, [activity: [seen: preload_query]])
+  #   else
+  #     q
+  #   end
+  # end
+
+  def query_preload_seen(q, opts) do
+    user_id = ulid(current_user(opts))
+    if user_id do
+      table_id = Edges.table_id(Seen)
+      q
+      |> reusable_join(:left, [activity: activity],
+        seen_edge in Edge, as: :seen,
+        on: activity.id == seen_edge.object_id and seen_edge.table_id == ^table_id and seen_edge.subject_id == ^user_id
+      )
+      |> preload([activity: activity, seen: seen], [activity: {activity, seen: seen}])
+    else
+      q
+    end
+  end
+
 
   def activity_preloads(query, opts) do
     activity_preloads(query, opts[:preload], opts)
   end
 
-  def activity_preloads(query, preloads, opts) when is_list(preloads) or preloads in [:all, :feed, :posts, :posts_with_reply_to, :default] do
+  def activity_preloads(query, preloads, opts) when is_nil(preloads) or is_list(preloads) or preloads in [:all, :feed, :notifications, :posts, :posts_with_reply_to, :default] do
     case preloads do
       _ when is_list(preloads) ->
         Enum.reduce(preloads, query, &activity_preloads(&2, &1, opts))
       :all -> activity_preloads(query, [
-          :with_subject, :with_creator, :with_verb, :with_object_posts, :with_reply_to, :tags, :with_thread_name
+          :feed, :tags
         ], opts)
       :feed -> activity_preloads(query, [
-          :with_subject, :with_creator, :with_verb, :with_object_posts, :with_reply_to, :with_thread_name
+          :posts_with_reply_to, :with_creator, :with_verb, :with_thread_name
+        ], opts)
+      :notifications ->
+        activity_preloads(query, [
+          :feed, :with_seen
         ], opts)
       :posts_with_reply_to -> activity_preloads(query, [
           :with_subject, :with_object_posts, :with_reply_to
@@ -166,9 +195,9 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
-  def activity_preloads(query, preloads, opts) do
+  def activity_preloads(query, preload, opts) when is_atom(preload) do
   if Ecto.Queryable.impl_for(query) do
-    case preloads do
+    case preload do
       :with_creator ->
         # This actually loads the creator of the object:
         # * In the case of a post, creator of the post
@@ -215,9 +244,11 @@ defmodule Bonfire.Social.Activities do
                ]}
              ]
            ]
+        :with_seen ->
+          query_preload_seen(query, opts)
     end
   else
-    case preloads do
+    case preload do
       :with_creator ->
         # This actually loads the creator of the object:
         # * In the case of a post, creator of the post
@@ -259,6 +290,9 @@ defmodule Bonfire.Social.Activities do
                ]
              ]
            ]
+        :with_seen ->
+          # TODO
+          []
       end
       |> maybe_repo_preload(query, ...)
     end
