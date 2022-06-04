@@ -276,6 +276,16 @@ defmodule Bonfire.Social.Feeds do
       #   Enum.map(feed_name, &feed_id!(user, &1))
       #   |> Enum.reject(&is_nil/1)
 
+      is_binary(feed_name) ->
+        case maybe_to_atom(feed_name) do
+          feed_name when is_atom(feed_name) ->
+            feed_id(feed_name, for_subject)
+
+          _ ->
+            error(for_subject, "Could not get #{inspect feed_name} feed_id for")
+            nil
+        end
+
       true ->
         error(for_subject, "Could not get #{inspect feed_name} feed_id for")
         nil

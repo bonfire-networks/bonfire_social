@@ -164,7 +164,6 @@ defmodule Bonfire.Social.FeedActivities do
       order_by: [desc: fp.id]
   end
 
-
   def query_paginated(query_or_filters \\ [], opts \\ [])
   def query_paginated(filters, opts) when is_list(filters) do
   #   feed_i
@@ -429,7 +428,6 @@ defmodule Bonfire.Social.FeedActivities do
     {:ok, activity}
   end
 
-
   defp create_and_put_in_feeds(subject, verb, object, feed_id, opts) when is_map(object) and is_binary(feed_id) or is_list(feed_id) do
     with {:ok, activity} <- Activities.create(subject, verb, object) do
       with {:ok, _published} <- put_in_feeds_and_maybe_federate(feed_id, subject, verb, object, activity, opts) do # publish in specified feed
@@ -479,7 +477,6 @@ defmodule Bonfire.Social.FeedActivities do
     end
   end
 
-
   defp put_in_feeds(feeds, activity) when is_list(feeds) do
     feeds
     |> Circles.circle_ids() # ????
@@ -519,7 +516,7 @@ defmodule Bonfire.Social.FeedActivities do
       objects ->
         FeedPublish
         |> query_filter({by_field, objects})
-        |> debug()
+        # |> debug()
         |> repo().delete_many()
         |> elem(0)
     end
@@ -529,17 +526,30 @@ defmodule Bonfire.Social.FeedActivities do
     if e(opts, :boundary, nil) !="federated", do: Bonfire.Social.Integration.activity_ap_publish(activity.subject_id, verb, object, activity)
   end
 
-  def unseen_count(feed_id, opts \\ []) do
+  def unseen_query(feed_id, opts) do
     table_id = Edges.table_id(Seen)
+    current_user = current_user(opts)
+    feed_id = if is_ulid?(feed_id), do: feed_id, else: Bonfire.Social.Feeds.my_feed_id(feed_id, current_user)
 
-    from(fp in FeedPublish,
+    if current_user, do: from(fp in FeedPublish,
       left_join: seen_edge in Edge,
-      on: fp.id == seen_edge.object_id and seen_edge.table_id == ^table_id, # and seen_edge.subject_id == ^user_id,
+      on: fp.id == seen_edge.object_id and seen_edge.table_id == ^table_id and seen_edge.subject_id == ^ulid(current_user),
       where: fp.feed_id == ^feed_id,
-      where: is_nil(seen_edge.id),
-      select: count())
+      where: is_nil(seen_edge.id))
     |> debug()
+  end
+
+  def unseen_count(feed_id, opts) do
+    unseen_query(feed_id, opts)
+    |> select(count())
     |> repo().one()
+  end
+
+  def mark_all_seen(feed_id, opts) do
+    unseen_query(feed_id, opts)
+    |> select([c], %{id: c.id})
+    |> repo().all()
+    |> Bonfire.Social.Seen.mark_seen(current_user(opts), ...)
   end
 
 end

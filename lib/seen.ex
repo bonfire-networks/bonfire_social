@@ -1,4 +1,4 @@
-defmodule Bonfire.Social.Seens do
+defmodule Bonfire.Social.Seen do
   @moduledoc """
   Track seen/unseen (similar to read/unread, but only indicates that it was displayed in a feed or other listing for the user, not that they actually read it) status of things (usually `Activities`)
   """
@@ -26,7 +26,7 @@ defmodule Bonfire.Social.Seens do
 
   # def by_subject(%{}=subject), do: [subject: subject] |> query(current_user: subject) |> repo().many()
 
-  def mark_seen(%User{} = subject, %{} = object) do
+  def mark_seen(%User{} = subject, %{id: _} = object) do
     case create(subject, object) do
       {:ok, seen} ->
         {:ok, seen}
@@ -51,6 +51,11 @@ defmodule Bonfire.Social.Seens do
       #debug(seen)
       mark_seen(subject, seen)
     end
+  end
+
+  def mark_seen(%User{} = subject, objects) do
+    Enum.each(objects, &mark_seen(subject, &1))
+    Enum.count(objects)
   end
 
   def mark_unseen(%User{}=subject, %{}=object) do
@@ -78,7 +83,6 @@ defmodule Bonfire.Social.Seens do
   def query(filters, opts) do
     query_base(filters, opts)
   end
-
 
   defp create(subject, seen, opts \\ []) do
     Edges.changeset_base(Seen, subject, seen, opts)
