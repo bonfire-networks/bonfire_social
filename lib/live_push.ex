@@ -43,7 +43,7 @@ defmodule Bonfire.Social.LivePush do
   def notify_of_message(subject, verb, object, users) do
 
     FeedActivities.get_feed_ids(inbox: users) # FIXME: avoid querying this again
-    |> increment_counters()
+    |> increment_counters(:inbox)
 
     FeedActivities.get_feed_ids(notifications: users)
     |> normalise_feed_ids()
@@ -57,7 +57,7 @@ defmodule Bonfire.Social.LivePush do
     feed_ids = normalise_feed_ids(feed_ids)
 
     # increment currently visible unread counters
-    increment_counters(feed_ids)
+    increment_counters(feed_ids, :notifications)
 
     send_notifications(subject, verb, object, feed_ids)
   end
@@ -67,8 +67,9 @@ defmodule Bonfire.Social.LivePush do
     verb_display = Bonfire.Social.Activities.verb_name(verb)
     |> Bonfire.Social.Activities.verb_display()
 
-    Bonfire.Notifications.notify_feeds(
-      feed_ids,
+    feed_ids
+    |> debug("feed_ids")
+    |> Bonfire.UI.Common.Notifications.notify_feeds(
       e(subject, :profile, :name,
         e(subject, :character, :username, "")
       )
@@ -86,10 +87,10 @@ defmodule Bonfire.Social.LivePush do
     )
   end
 
-  defp increment_counters(feed_ids) do
+  defp increment_counters(feed_ids, box) do
     feed_ids
-    |> Enum.map(& "unseen_count:#{&1}")
-    |> pubsub_broadcast({{Bonfire.Social.Feeds, :count_increment}, feed_ids})
+    |> Enum.map(& "unseen_count:#{box}:#{&1}")
+    |> pubsub_broadcast({{Bonfire.Social.Feeds, :count_increment}, box})
   end
 
   defp normalise_feed_ids(feed_ids) do
