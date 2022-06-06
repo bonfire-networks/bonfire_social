@@ -5,19 +5,11 @@ defmodule Bonfire.Social.LivePush do
   alias Bonfire.Data.Social.Activity
 
   def push_activity(feed_ids, activity, opts \\ [])
-  def push_activity(feed_ids, %{id: _, activity: %{id: _}} = object, opts) do
-    debug(feed_ids, "push an object as :new_activity")
-
-    object.activity
-    |> Map.put(:object, object |> Map.drop([:activity])) # push as activity with :object
-    |> push_activity(feed_ids, ..., opts)
-
-    object
-  end
 
   def push_activity(feed_ids, %Activity{} = activity, opts) do
     debug(feed_ids, "push a :new_activity")
-    activity = Activities.activity_preloads(activity, :feed, []) # makes sure that all needed assocs are preloaded without n+1
+    activity = Activities.activity_preloads(activity, :feed, [])  # makes sure that all needed assocs are preloaded without n+1
+    |> dump()
 
     pubsub_broadcast(feed_ids, {
       {Bonfire.Social.Feeds, :new_activity},
@@ -32,6 +24,17 @@ defmodule Bonfire.Social.LivePush do
     if Keyword.get(opts, :notify, true), do: notify(activity, feed_ids)
 
     activity
+  end
+
+  def push_activity(feed_ids, %{id: _, activity: %{id: _}} = object, opts) do
+    debug(feed_ids, "push an object as :new_activity")
+
+    maybe_merge_to_struct(object.activity, object) # add object assocs to the activity
+    |> Map.put(:object, object |> Map.drop([:activity])) # push as activity with :object
+    |> Map.drop([:activity])
+    |> push_activity(feed_ids, ..., opts)
+
+    object
   end
 
   def notify_users(subject, verb, object, users) do
