@@ -90,7 +90,7 @@ defmodule Bonfire.Social.Messages do
     |> Objects.cast_acl(creator, opts)
     |> Activities.put_assoc(:create, creator)
     |> FeedActivities.put_feed_publishes(Keyword.get(opts, :to_feeds, [])) # messages go in inbox feeds so we can easily count unread (TODO: query from inbox as well?)
-    # TODO: LivePush & notify?
+    |> info()
   end
 
   def read(message_id, opts) when is_binary(message_id) do

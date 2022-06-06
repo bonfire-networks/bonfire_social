@@ -70,7 +70,9 @@ defmodule Bonfire.Social.MentionsTest do
     mentioned = Fake.fake_user!()
     attrs = %{post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
 
-    Bonfire.Me.Settings.put([Bonfire.Social.Feeds, :my_feed_includes, :notifications], false, current_user: mentioned) # change settings
+    {:ok, %{assign_context: assigns}} = Bonfire.Me.Settings.put([Bonfire.Social.Feeds, :my_feed_includes, :notifications], false, current_user: mentioned)
+    # |> info("change settings")
+    mentioned = assigns[:current_user] || mentioned # user with updated settings
 
     assert {:ok, mention} = Posts.publish(current_user: me, post_attrs: attrs, boundary: "mentions")
     assert %{edges: []} = FeedActivities.my_feed(mentioned)
@@ -81,7 +83,7 @@ defmodule Bonfire.Social.MentionsTest do
     mentioned = Fake.fake_user!()
     attrs = %{post_content: %{html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"}}
 
-    Bonfire.Me.Settings.put([Bonfire.Social.Feeds, :my_feed_includes, :notifications], true, current_user: mentioned) # change settings
+    # Bonfire.Me.Settings.put([Bonfire.Social.Feeds, :my_feed_includes, :notifications], true, current_user: mentioned) # default anyway
 
     assert {:ok, mention} = Posts.publish(current_user: me, post_attrs: attrs, boundary: "mentions")
     assert %{edges: feed} = FeedActivities.my_feed(mentioned)

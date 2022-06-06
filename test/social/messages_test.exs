@@ -69,7 +69,7 @@ defmodule Bonfire.Social.MessagesTest do
     refute match? %{edges: [_]}, Messages.list(other, sender)
   end
 
-  # FIXME: because we filter messages out of feeds and use Messages.list instead
+  @tag :skip # because we filter messages out of feeds (and use Messages.list instead)
   test "messages addressed to me appear in my inbox feed" do
     sender = Fake.fake_user!()
     receiver = Fake.fake_user!()

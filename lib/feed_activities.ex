@@ -77,12 +77,12 @@ defmodule Bonfire.Social.FeedActivities do
     |> repo().many_paginated(opts)
   end
 
-  def feed(:notifications = feed_name, opts), do: do_feed(feed_name, opts ++ [skip_boundary_check: :admins, preload: :notifications])
+  def feed(:notifications = feed_name, opts), do: named_feed(feed_name, opts ++ [skip_boundary_check: :admins, preload: :notifications])
 
   def feed(:flags, opts), do: Bonfire.Social.Flags.list_paginated([], opts)
 
   def feed(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
-    do_feed(feed_name, opts)
+    named_feed(feed_name, opts)
   end
 
   def feed(other, _) do
@@ -90,14 +90,14 @@ defmodule Bonfire.Social.FeedActivities do
     nil
   end
 
-  defp do_feed(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
+  defp named_feed(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
     # current_user = current_user(current_user_or_socket)
     # debug(opts)
     case Feeds.named_feed_id(feed_name) || Bonfire.Social.Feeds.my_feed_id(feed_name, opts) do
       feed when is_binary(feed) or is_list(feed) ->
         # debug(ulid(current_user(opts)), "current_user")
         # debug(feed_name, "feed_name")
-        # debug(feed, "feed_id")
+        debug(feed, "feed id(s)")
         base_feed_query(feed, opts)
         |> query_extras(opts)
         |> repo().many_paginated(opts)
@@ -288,6 +288,7 @@ defmodule Bonfire.Social.FeedActivities do
   """
   def put_feed_publishes(changeset, options) do
     get_feed_publishes(options)
+    |> info()
     |> Changesets.put_assoc(changeset, :feed_publishes, ...)
   end
 
@@ -295,12 +296,17 @@ defmodule Bonfire.Social.FeedActivities do
   Creates the underlying data for `put_feed_publishes/2`.
   """
   def get_feed_publishes(options) do
-    get_feed_ids(options)
+    options
+    # |> info()
+    |> get_feed_ids()
+    # |> info()
     # Dedupe
     |> MapSet.new()
     |> MapSet.delete(nil)
     # turn into attrs
-    |> Enum.map(&(%FeedPublish{feed_id: &1}))
+    # |> Enum.map(&(%FeedPublish{feed_id: &1}))
+    |> Enum.map(&(%{feed_id: &1}))
+    # |> info()
   end
 
   @doc """
