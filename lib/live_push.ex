@@ -9,7 +9,7 @@ defmodule Bonfire.Social.LivePush do
   def push_activity(feed_ids, %Activity{} = activity, opts) do
     debug(feed_ids, "push a :new_activity")
     activity = Activities.activity_preloads(activity, :feed, [])  # makes sure that all needed assocs are preloaded without n+1
-    |> dump()
+    # |> dump()
 
     pubsub_broadcast(feed_ids, {
       {Bonfire.Social.Feeds, :new_activity},

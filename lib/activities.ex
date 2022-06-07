@@ -169,15 +169,24 @@ defmodule Bonfire.Social.Activities do
     activity_preloads(query, opts[:preload], opts)
   end
 
+
   def activity_preloads(query, preloads, opts) when is_nil(preloads) or is_list(preloads) or preloads in [:all, :feed, :notifications, :posts, :posts_with_reply_to, :default] do
     case preloads do
       _ when is_list(preloads) ->
-        Enum.reduce(preloads, query, &activity_preloads(&2, &1, opts))
+
+        if Ecto.Queryable.impl_for(query) do
+          Enum.reduce(preloads, query, &activity_preloads(&2, &1, opts))
+        else
+          Enum.map(preloads, &activity_preloads(nil, &1, opts))
+          |> debug("accumulated preloads")
+          |> maybe_repo_preload(query, ..., opts)
+        end
+
       :all -> activity_preloads(query, [
           :feed, :tags
         ], opts)
       :feed -> activity_preloads(query, [
-          :posts_with_reply_to, :with_creator, :with_verb, :with_thread_name
+          :with_subject, :with_creator, :with_verb, :with_object_more, :with_reply_to, :with_thread_name, :with_media
         ], opts)
       :notifications ->
         activity_preloads(query, [
@@ -196,42 +205,42 @@ defmodule Bonfire.Social.Activities do
   end
 
   def activity_preloads(query, preload, opts) when is_atom(preload) do
-  if Ecto.Queryable.impl_for(query) do
-    case preload do
-      :with_creator ->
-        # This actually loads the creator of the object:
-        # * In the case of a post, creator of the post
-        # * In the case of like of a post, creator of the post
-        # TODO: in feeds, maybe load the creator with a where clause to skip it when creator==subject
-        proload query,
-          # created:  [creator: [:character, profile: :icon]],
-          activity: [object: {"object_", [created: [creator: [:character, profile: :icon]]]}]
-      # :tags ->
-      #   # Tags/mentions (this actual needs to be done by Repo.preload to be able to list more than one)
-      #   proload query,
-      #     activity: [tags:  {"tag_", [:character, profile: :icon]}]
-      :with_subject ->
-        # Subject here is standing in for the creator of the root. One day it may be replaced with it.
-        proload query, activity: [subject: {"subject_", [:character, profile: :icon]}]
-      :with_verb ->
-        proload query, activity: [:verb]
-      :with_object ->
-        proload query, activity: [:object]
-      :with_object_posts ->
-        proload query, activity: [
-          :replied,
-          object: {"object_", [:post_content, :peered]}
-        ]
-      :with_object_more ->
-        proload query, activity: [
-          :replied,
-          object: {"object_", [:post_content, :peered, :character, profile: :icon]}
-        ]
-      :with_replied ->
-        proload query, activity: [:replied]
-      :with_thread_name ->
-        proload query, activity: [replied: [thread: [:named]]]
-      :with_reply_to ->
+    if not is_nil(query) and Ecto.Queryable.impl_for(query) do
+      case preload do
+        :with_creator ->
+          # This actually loads the creator of the object:
+          # * In the case of a post, creator of the post
+          # * In the case of like of a post, creator of the post
+          # TODO: in feeds, maybe load the creator with a where clause to skip it when creator==subject
+          proload query,
+            # created:  [creator: [:character, profile: :icon]],
+            activity: [object: {"object_", [created: [creator: [:character, profile: :icon]]]}]
+        # :tags ->
+        #   # Tags/mentions (this actual needs to be done by Repo.preload to be able to list more than one)
+        #   proload query,
+        #     activity: [tags:  {"tag_", [:character, profile: :icon]}]
+        :with_subject ->
+          # Subject here is standing in for the creator of the root. One day it may be replaced with it.
+          proload query, activity: [subject: {"subject_", [:character, profile: :icon]}]
+        :with_verb ->
+          proload query, activity: [:verb]
+        :with_object ->
+          proload query, activity: [:object]
+        :with_object_posts ->
+          proload query, activity: [
+            :replied,
+            object: {"object_", [:post_content, :peered]}
+          ]
+        :with_object_more ->
+          proload query, activity: [
+            :replied,
+            object: {"object_", [:post_content, :peered, :character, profile: :icon]}
+          ]
+        :with_replied ->
+          proload query, activity: [:replied]
+        :with_thread_name ->
+          proload query, activity: [replied: [thread: [:named]]]
+        :with_reply_to ->
         # If the root replied to anything, fetch that and its creator too. e.g.
         # * Alice's post that replied to Bob's post
         # * Bob liked alice's post
@@ -244,6 +253,8 @@ defmodule Bonfire.Social.Activities do
                ]}
              ]
            ]
+        :with_media ->
+          proload query, activity: [:media]
         :with_seen ->
           query_preload_seen(query, opts)
     end
@@ -290,41 +301,48 @@ defmodule Bonfire.Social.Activities do
                ]
              ]
            ]
+        :with_media ->
+          [:media]
         :with_seen ->
           # TODO
           []
       end
-      |> maybe_repo_preload(query, ...)
     end
   end
 
-  defp maybe_repo_preload(%Bonfire.Data.Social.Activity{} = object, preloads) do
-    repo().maybe_preload(object, preloads)
+  defp maybe_repo_preload(%Bonfire.Data.Social.Activity{} = object, preloads, opts) do
+    do_maybe_repo_preload(object, preloads, opts)
   end
-  defp maybe_repo_preload(%{activity: _} = object, preloads) do
-    repo().maybe_preload(object, activity: preloads)
+  defp maybe_repo_preload(%{activity: _} = object, preloads, opts) do
+    do_maybe_repo_preload(object, [activity: preloads], opts)
   end
-  defp maybe_repo_preload(%{edges: list} = page, preloads) when is_list(list) do
+  defp maybe_repo_preload(%{edges: list} = page, preloads, opts) when is_list(list) do
     case List.first(list) do
       %Bonfire.Data.Social.Activity{} ->
-        repo().maybe_preload(page, preloads)
+        do_maybe_repo_preload(page, preloads, opts)
 
       %{activity: _} ->
-        repo().maybe_preload(page, activity: preloads)
+        do_maybe_repo_preload(page, [activity: preloads], opts)
 
       _ ->
         warn(list, "Could not preload activities")
         page
     end
   end
-  defp maybe_repo_preload(list, preloads) when is_list(list) do
+  defp maybe_repo_preload(list, preloads, opts) when is_list(list) do
     case List.first(list) do
       %Bonfire.Data.Social.Activity{} ->
-        repo().maybe_preload(list, preloads)
+        do_maybe_repo_preload(list, preloads, opts)
 
       %{activity: _} ->
-        repo().maybe_preload(list, activity: preloads)
+        do_maybe_repo_preload(list, [activity: preloads], opts)
     end
+  end
+
+  defp do_maybe_repo_preload(objects, preloads, opts) do
+    opts
+    |> Keyword.put_new(:follow_pointers, false)
+    |> repo().maybe_preload(objects, preloads, ...)
   end
 
   @doc """
@@ -401,20 +419,21 @@ defmodule Bonfire.Social.Activities do
 
   def object_from_activity(%{object: %{edge: %{object: %{id: _} = object}}}), do: object |> repo().maybe_preload([:post_content, :profile, :character]) # special case for edges (eg. Boost) coming to us via LivePush - FIXME: do this somewhere else and use Feed preload functions
   def object_from_activity(%{object: %{post_content: %{id: _} = _content} = object}), do: object # no need to load Post object
-  def object_from_activity(%{object: %Pointers.Pointer{id: _} = object}), do: load_object(object) # get other pointable objects (only as fallback, should normally already be preloaded)
+  # def object_from_activity(%{object: %Pointers.Pointer{id: _} = object}), do: load_object(object) # get other pointable objects (only as fallback, should normally already be preloaded)
   def object_from_activity(%{object: %{id: _} = object}), do: object # any other preloaded object
   def object_from_activity(%{activity: activity}), do: object_from_activity(activity)
   def object_from_activity(%{object_id: id}), do: load_object(id) # last fallback, load any non-preloaded pointable object
-  def object_from_activity(%Pointers.Pointer{id: _} = object), do: load_object(object) # get other pointable objects (only as fallback, should normally already be preloaded)
+  # def object_from_activity(%Pointers.Pointer{id: _} = object), do: load_object(object) # get other pointable objects (only as fallback, should normally already be preloaded)
   def object_from_activity(object_or_activity), do: object_or_activity
 
   def load_object(id_or_pointer) do
     with {:ok, obj} <- Bonfire.Common.Pointers.get(id_or_pointer, skip_boundary_check: true)
       |> debug
       # TODO: avoid so many queries
-      |> repo().maybe_preload([:post_content])
-      |> repo().maybe_preload([created: [:creator_profile, :creator_character]])
-      |> repo().maybe_preload([:profile, :character]) do
+      # |> repo().maybe_preload([:post_content])
+      # |> repo().maybe_preload([created: [:creator_profile, :creator_character]])
+      # |> repo().maybe_preload([:profile, :character])
+      do
         obj
       else
         # {:ok, obj} -> obj

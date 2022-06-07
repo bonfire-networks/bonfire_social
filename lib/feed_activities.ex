@@ -214,7 +214,8 @@ defmodule Bonfire.Social.FeedActivities do
     query
     # |> debug("feed_paginated pre-preloads")
     # add assocs needed in timelines/feeds
-    |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
+    # |> Activities.activity_preloads(e(opts, :preload, :with_object), opts) # if we want to preload the rest later to allow for caching
+    |> Activities.activity_preloads(e(opts, :preload, :feed), opts) # preload all things we commonly want in feeds
     |> maybe_exclude_replies(opts)
     # |> debug("feed_paginated post-preloads")
     |> Activities.as_permitted_for(opts)

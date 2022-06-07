@@ -123,6 +123,10 @@ defmodule Bonfire.Social.Follows do
   end
 
   def all_followed_outboxes(user, opts \\ []) do
+    Cache.maybe_apply_cached(&fetch_all_followed_outboxes/2, [user, opts], opts ++ [cache_key: "my_followed:#{ulid(user)}"])
+  end
+
+  defp fetch_all_followed_outboxes(user, opts \\ []) do
     all_objects_by_subject(user, opts)
     |> Enum.map(& e(&1, :character, :outbox_id, nil))
   end
@@ -240,6 +244,7 @@ defmodule Bonfire.Social.Follows do
     ]
     case create(user, object, opts) do
       {:ok, follow} ->
+        Cache.remove("my_followed:#{ulid(user)}")
         LivePush.push_activity(FeedActivities.get_feed_ids(opts[:to_feeds]), follow, push_to_thread: false, notify: true) # FIXME: should not compute feed ids twice
         Integration.ap_push_activity(user.id, follow)
         {:ok, follow}
@@ -256,10 +261,12 @@ defmodule Bonfire.Social.Follows do
   end
 
   def unfollow(follower, %{} = object) do
-    with [_id] <- Edges.delete_by_both(follower, Follow, object) do
+    un = Edges.delete_by_both(follower, Follow, object)
+    # with [_id] <- un do
       # delete the like activity & feed entries
       Activities.delete_by_subject_verb_object(follower, :follow, object)
-    end
+      Cache.remove("my_followed:#{ulid(follower)}")
+    # end
   end
 
   def unfollow(%{} = user, object) when is_binary(object) do
