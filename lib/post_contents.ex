@@ -54,6 +54,9 @@ defmodule Bonfire.Social.PostContents do
   end
 
   def prepare_text(text, creator) when is_binary(text) and text !="" do
+
+    if String.contains?(text, "/crash!"), do: 1/0 # little trick to test error handling
+
     text
     |> maybe_process_markdown(creator) # if not using an HTML-based WYSIWYG editor, then we convert any markdown to HTML
     |> Text.maybe_emote() # transform emoticons to emojis

@@ -21,7 +21,7 @@ defmodule Bonfire.Social.LivePush do
 
     if Keyword.get(opts, :push_to_thread, true), do: maybe_push_thread(activity)
 
-    if Keyword.get(opts, :notify, true), do: notify(activity, feed_ids)
+    if Keyword.get(opts, :notify, false), do: notify(activity, feed_ids)
 
     activity
   end

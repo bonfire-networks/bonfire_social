@@ -198,7 +198,7 @@ defmodule Bonfire.Social.Objects do
     opts = to_options(opts)
 
     # load & check permission
-    with %{} = object <- Bonfire.Common.Pointers.get(object, opts ++ [verbs: [:delete]])
+    with %{__struct__: type} = object <- Bonfire.Common.Pointers.get(object, opts ++ [verbs: [:delete]])
             ~> debug("WIP: deletion") do
       opts =opts
       |> Keyword.put(:action, :delete)
@@ -215,7 +215,7 @@ defmodule Bonfire.Social.Objects do
           {:error, _} <- Bonfire.Common.ContextModules.maybe_apply(object, :soft_delete, [current_user(opts), object]),
           {:error, _} <- Bonfire.Common.ContextModules.maybe_apply(object, :soft_delete, [object]) do
             warn("there's no per-type delete functions, try with generic_delete anyway")
-            generic_delete(object, opts)
+            maybe_generic_delete(type, object, opts)
       end
     else
       _ ->
@@ -223,7 +223,8 @@ defmodule Bonfire.Social.Objects do
     end
   end
 
-  def generic_delete(object, options \\ []) do
+  def maybe_generic_delete(type, object, options \\ [])
+  def maybe_generic_delete(type, object, options) when type not in [Bonfire.Data.Identity.User] do
     options = to_options(options)
     |> Keyword.put(:object, object)
 
@@ -236,6 +237,10 @@ defmodule Bonfire.Social.Objects do
         :named
       ])
     |> run_epic(:delete, ..., :object)
+  end
+  def maybe_generic_delete(type, _object, _options) do
+    warn(type, "Deletion not implemented for")
+    nil
   end
 
   def run_epic(type, options \\ [], on \\ :object) do
