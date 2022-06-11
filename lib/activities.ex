@@ -485,19 +485,22 @@ defmodule Bonfire.Social.Activities do
   def verb_id(verb) when is_binary(verb), do: ulid(verb) || Verbs.get_id(maybe_to_atom(verb))
   def verb_id(verb) when is_atom(verb), do: Verbs.get_id(verb) || Verbs.get_id!(:create)
 
-end
-defmodule Bonfire.Social.Activities.LocaliseVerbs do
-  @moduledoc """
-  Runs at compile-time to include all verbs (including in past tense for display in feeds) in localisation string extraction.
+  @doc """
+  Outputs the names all object verbs, for the purpose of adding to the localisation strings, as long as the output is piped through to localise_strings/1 at compile time.
   """
-  use Bonfire.Common.Localise
+  def all_verb_names() do
+    Bonfire.Boundaries.Verbs.verbs()
+    |> Map.values()
+    |> Enum.flat_map(fn v ->
+      conjugated = v[:verb]
+      |> Bonfire.Social.Activities.verb_congugate()
+      |> sanitise_verb_name()
 
-  Bonfire.Boundaries.Verbs.verbs()
-  |> Map.values()
-  |> Enum.flat_map(fn v ->
-    conjugated = Bonfire.Social.Activities.verb_congugate(v[:verb])
-    [v[:verb], "Request to "<>v[:verb], "Requested to "<>v[:verb], conjugated, conjugated<>" by %{user}"]
-  end)
-  |> IO.inspect(label: "Making all verbs localisable")
-  |> localise_strings()
+      [v[:verb], "Request to "<>v[:verb], "Requested to "<>v[:verb], conjugated, conjugated<>" by %{user}"]
+    end)
+    # |> IO.inspect(label: "Making all verb names localisable")
+  end
+
+  defp sanitise_verb_name("Editted"), do: "Edited" # workaround `Verbs` bug
+  defp sanitise_verb_name(verb), do: verb
 end
