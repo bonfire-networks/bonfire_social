@@ -245,18 +245,25 @@ defmodule Bonfire.Social.Follows do
     case create(user, object, opts) do
       {:ok, follow} ->
         Cache.remove("my_followed:#{ulid(user)}")
-        LivePush.push_activity(FeedActivities.get_feed_ids(opts[:to_feeds]), follow, push_to_thread: false, notify: true) # FIXME: should not compute feed ids twice
+        LivePush.push_activity_object(FeedActivities.get_feed_ids(opts[:to_feeds]), follow, object, push_to_thread: false, notify: true) # FIXME: should not compute feed ids twice
         Integration.ap_push_activity(user.id, follow)
         {:ok, follow}
       {:error, e} ->
-        case get(user, object) do
-          {:ok, follow} ->
-            debug("the user already follows this object")
-            {:ok, follow}
-          _ ->
-            error(e)
-            {:error, e}
-        end
+        error(e)
+        maybe_already_followed(user, object)
+    end
+  rescue e in Ecto.ConstraintError ->
+    error(e)
+    maybe_already_followed(user, object)
+  end
+
+  defp maybe_already_followed(user, object) do
+    case get(user, object) do
+      {:ok, follow} ->
+        debug("the user already follows this object")
+        {:ok, follow}
+      e ->
+        error(e)
     end
   end
 

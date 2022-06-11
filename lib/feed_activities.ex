@@ -79,7 +79,11 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed(:notifications = feed_name, opts), do: named_feed(feed_name, opts ++ [skip_boundary_check: :admins, preload: :notifications])
 
-  def feed(:flags, opts), do: Bonfire.Social.Flags.list_paginated([], opts)
+  def feed(:flags, opts) do
+    Bonfire.Social.Flags.list_paginated([], opts)
+    |> repo().maybe_preload([edge: [object: [created: [creator: [:profile, :character]]]]], [follow_pointers: false])
+    |> dump("ffflags")
+  end
 
   def feed(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
     named_feed(feed_name, opts)

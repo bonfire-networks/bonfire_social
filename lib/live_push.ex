@@ -8,8 +8,8 @@ defmodule Bonfire.Social.LivePush do
 
   def push_activity(feed_ids, %Activity{} = activity, opts) do
     debug(feed_ids, "push a :new_activity")
-    activity = Activities.activity_preloads(activity, :feed, [])  # makes sure that all needed assocs are preloaded without n+1
-    # |> dump()
+    activity = Activities.activity_preloads(activity, :feed_metadata, opts)
+    |> dump("make sure that all needed assocs are preloaded without n+1")
 
     pubsub_broadcast(feed_ids, {
       {Bonfire.Social.Feeds, :new_activity},
@@ -26,11 +26,22 @@ defmodule Bonfire.Social.LivePush do
     activity
   end
 
-  def push_activity(feed_ids, %{id: _, activity: %{id: _}} = object, opts) do
+  def push_activity(feed_ids, %{id: _, activity: %{id: _} = activity} = object, opts) do
     debug(feed_ids, "push an object as :new_activity")
+    object = Map.drop(object, [:activity])
+    maybe_merge_to_struct(activity, object) # add object assocs to the activity
+    |> Map.put(:object, object) # push as activity with :object
+    |> Map.drop([:activity])
+    |> push_activity(feed_ids, ..., opts)
 
-    maybe_merge_to_struct(object.activity, object) # add object assocs to the activity
-    |> Map.put(:object, object |> Map.drop([:activity])) # push as activity with :object
+    object
+  end
+
+  def push_activity_object(feed_ids, %{id: _, activity: %{id: _}} = parent_object, object, opts) do
+    debug(feed_ids, "push an activity with custom object as :new_activity")
+
+    maybe_merge_to_struct(parent_object.activity, Map.drop(parent_object, [:activity])) # add object assocs to the activity
+    |> Map.put(:object, Map.drop(object, [:activity])) # push as activity with :object
     |> Map.drop([:activity])
     |> push_activity(feed_ids, ..., opts)
 

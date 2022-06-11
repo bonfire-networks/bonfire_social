@@ -170,7 +170,7 @@ defmodule Bonfire.Social.Activities do
   end
 
 
-  def activity_preloads(query, preloads, opts) when is_nil(preloads) or is_list(preloads) or preloads in [:all, :feed, :notifications, :posts, :posts_with_reply_to, :default] do
+  def activity_preloads(query, preloads, opts) when is_nil(preloads) or is_list(preloads) or preloads in [:all, :feed, :feed_metadata, :notifications, :posts, :posts_with_reply_to, :default] do
     case preloads do
       _ when is_list(preloads) ->
 
@@ -178,7 +178,7 @@ defmodule Bonfire.Social.Activities do
           Enum.reduce(preloads, query, &activity_preloads(&2, &1, opts))
         else
           Enum.map(preloads, &activity_preloads(nil, &1, opts))
-          |> debug("accumulated preloads")
+          |> debug("accumulated preloads to try")
           |> maybe_repo_preload(query, ..., opts)
         end
 
@@ -187,6 +187,9 @@ defmodule Bonfire.Social.Activities do
         ], opts)
       :feed -> activity_preloads(query, [
           :with_subject, :with_creator, :with_verb, :with_object_more, :with_reply_to, :with_thread_name, :with_media
+        ], opts)
+      :feed_metadata -> activity_preloads(query, [
+          :with_subject, :with_creator, :with_verb, :with_reply_to, :with_thread_name, :with_media
         ], opts)
       :notifications ->
         activity_preloads(query, [
@@ -341,7 +344,7 @@ defmodule Bonfire.Social.Activities do
 
   defp do_maybe_repo_preload(objects, preloads, opts) do
     opts
-    |> Keyword.put_new(:follow_pointers, false)
+    # |> Keyword.put_new(:follow_pointers, false)
     |> repo().maybe_preload(objects, preloads, ...)
   end
 
