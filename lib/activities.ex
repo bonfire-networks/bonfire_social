@@ -313,32 +313,28 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
-  defp maybe_repo_preload(%Bonfire.Data.Social.Activity{} = object, preloads, opts) do
-    do_maybe_repo_preload(object, preloads, opts)
-  end
-  defp maybe_repo_preload(%{activity: _} = object, preloads, opts) do
-    do_maybe_repo_preload(object, [activity: preloads], opts)
-  end
+
   defp maybe_repo_preload(%{edges: list} = page, preloads, opts) when is_list(list) do
-    case List.first(list) do
-      %Bonfire.Data.Social.Activity{} ->
-        do_maybe_repo_preload(page, preloads, opts)
-
-      %{activity: _} ->
-        do_maybe_repo_preload(page, [activity: preloads], opts)
-
-      _ ->
-        warn(list, "Could not preload activities")
-        page
-    end
+    cased_maybe_repo_preload(List.first(list), page, preloads, opts)
   end
   defp maybe_repo_preload(list, preloads, opts) when is_list(list) do
-    case List.first(list) do
+    cased_maybe_repo_preload(List.first(list), list, preloads, opts)
+  end
+  defp maybe_repo_preload(object, preloads, opts) do
+    cased_maybe_repo_preload(object, preloads, opts)
+  end
+
+  defp cased_maybe_repo_preload(example_object \\ nil, objects, preloads, opts) do
+    case example_object || objects do
       %Bonfire.Data.Social.Activity{} ->
-        do_maybe_repo_preload(list, preloads, opts)
+        do_maybe_repo_preload(objects, preloads, opts)
 
       %{activity: _} ->
-        do_maybe_repo_preload(list, [activity: preloads], opts)
+        do_maybe_repo_preload(objects, [activity: preloads], opts)
+
+      # _ ->
+      #   error(objects, "Could not preload activity data")
+      #   objects
     end
   end
 

@@ -4,12 +4,15 @@ defmodule Bonfire.Social.LivePush do
   alias Bonfire.Social.{Activities, FeedActivities}
   alias Bonfire.Data.Social.Activity
 
+  @doc """
+  Receives an activity with a nested object, or vice versa, uses PubSub to pushes to feeds and optionally notifications, and returns an Activity.
+  """
   def push_activity(feed_ids, activity, opts \\ [])
 
   def push_activity(feed_ids, %Activity{} = activity, opts) do
     debug(feed_ids, "push a :new_activity")
     activity = Activities.activity_preloads(activity, :feed_metadata, opts)
-    |> dump("make sure that all needed assocs are preloaded without n+1")
+    # |> dump("make sure that all needed assocs are preloaded without n+1")
 
     pubsub_broadcast(feed_ids, {
       {Bonfire.Social.Feeds, :new_activity},
@@ -29,14 +32,16 @@ defmodule Bonfire.Social.LivePush do
   def push_activity(feed_ids, %{id: _, activity: %{id: _} = activity} = object, opts) do
     debug(feed_ids, "push an object as :new_activity")
     object = Map.drop(object, [:activity])
+
     maybe_merge_to_struct(activity, object) # add object assocs to the activity
     |> Map.put(:object, object) # push as activity with :object
     |> Map.drop([:activity])
     |> push_activity(feed_ids, ..., opts)
-
-    object
   end
 
+  @doc """
+  Receives an activity *and* object, uses PubSub to pushes to feeds and optionally notifications, and returns an Activity.
+  """
   def push_activity_object(feed_ids, %{id: _, activity: %{id: _}} = parent_object, object, opts) do
     debug(feed_ids, "push an activity with custom object as :new_activity")
 
@@ -44,8 +49,6 @@ defmodule Bonfire.Social.LivePush do
     |> Map.put(:object, Map.drop(object, [:activity])) # push as activity with :object
     |> Map.drop([:activity])
     |> push_activity(feed_ids, ..., opts)
-
-    object
   end
 
   def notify_users(subject, verb, object, users) do
