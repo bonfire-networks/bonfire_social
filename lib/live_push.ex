@@ -5,7 +5,7 @@ defmodule Bonfire.Social.LivePush do
   alias Bonfire.Data.Social.Activity
 
   @doc """
-  Receives an activity with a nested object, or vice versa, uses PubSub to pushes to feeds and optionally notifications, and returns an Activity.
+  Receives an activity with a nested object, or vice versa, uses PubSub to pushes to feeds and optionally notifications
   """
   def push_activity(feed_ids, activity, opts \\ [])
 
@@ -37,6 +37,7 @@ defmodule Bonfire.Social.LivePush do
     |> Map.put(:object, object) # push as activity with :object
     |> Map.drop([:activity])
     |> push_activity(feed_ids, ..., opts)
+    |> Map.put(object, :activity, ...) # returns the object + the preloaded activity
   end
 
   @doc """

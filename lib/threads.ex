@@ -282,6 +282,7 @@ defmodule Bonfire.Social.Threads do
       to_options(opts)
       |> Keyword.put_new(:max_depth, Config.get(:thread_default_max_depth, 3))
       |> Keyword.put_new(:preload, preloads)
+      |> debug("thread opts")
 
     %Replied{id: Bonfire.Common.Pointers.id_binary(thread_id)}
       |> Replied.descendants()

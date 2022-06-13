@@ -30,7 +30,6 @@ defmodule Bonfire.Social.Flags do
   def by_flagged(%{}=object), do: [object: object] |> query(current_user: object) |> repo().many()
   # def by_any(%User{}=user), do: repo().many(by_any_q(user))
 
-
   def flag(flagger, flagged, opts \\ [])
   def flag(%{} = flagger, object, opts) do
     opts =
@@ -39,6 +38,9 @@ defmodule Bonfire.Social.Flags do
       |> Keyword.put_new_lazy(:to_feeds, &flag_feeds/0)
     check_flag(flagger, object, opts)
     ~> create(flagger, ..., opts)
+  rescue e in Ecto.ConstraintError ->
+    warn(e)
+    {:ok, "Already flagged"}
   end
 
   # determines the feeds a flag is published to
