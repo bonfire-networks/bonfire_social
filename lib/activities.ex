@@ -515,14 +515,27 @@ defmodule Bonfire.Social.Activities do
   Outputs the names all object verbs, for the purpose of adding to the localisation strings, as long as the output is piped through to localise_strings/1 at compile time.
   """
   def all_verb_names() do
-    Bonfire.Boundaries.Verbs.verbs()
-    |> Map.values()
+    # Bonfire.Boundaries.Verbs.verbs()
+    case Bonfire.Common.Config.get(:verbs) do
+      verbs when is_map(verbs) ->
+        verbs
+        |> Map.values()
+        |> Enum.flat_map(fn v ->
+          [v[:verb]]
+        end)
+      _ ->
+        Bonfire.Common.Config.get!(:verb_names)
+    end
+  end
+
+  def all_verb_names_extra() do
+    all_verb_names()
     |> Enum.flat_map(fn v ->
-      conjugated = v[:verb]
+      conjugated = v
       |> Bonfire.Social.Activities.verb_congugate()
       |> sanitise_verb_name()
 
-      [v[:verb], "Request to "<>v[:verb], "Requested to "<>v[:verb], conjugated, conjugated<>" by %{user}"]
+      [v, "Request to "<>v, "Requested to "<>v, conjugated, conjugated<>" by %{user}"]
     end)
     # |> IO.inspect(label: "Making all verb names localisable")
   end
