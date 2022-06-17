@@ -149,7 +149,7 @@ defmodule Bonfire.Social.Activities do
   #   end
   # end
 
-  def query_preload_seen(q, opts) do
+  defp query_preload_seen(q, opts) do
     user_id = ulid(current_user(opts))
     if user_id do
       table_id = Edges.table_id(Seen)
@@ -164,50 +164,75 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
+  defp subquery_preload_seen(opts) do
+    user_id = ulid(current_user(opts) |> debug())
+    if user_id do
+      table_id = Edges.table_id(Seen)
+      from(seen_edge in Edge, where: seen_edge.table_id == ^table_id and seen_edge.subject_id == ^user_id)
+    end
+  end
 
   def activity_preloads(query, opts) do
     activity_preloads(query, opts[:preload], opts)
   end
 
+  def activity_preloads(query, preloads, opts) when is_list(preloads) do
+    debug(query, "query or data")
+    debug(preloads, "preloads")
+    if not is_nil(query) and Ecto.Queryable.impl_for(query) do
+      Enum.reduce(preloads, query, &do_activity_preloads(&2, &1, opts))
+    else
+      all_preloads = Enum.flat_map(preloads, &do_activity_preloads(nil, &1, opts))
+      |> debug("accumulated preloads to try")
+      maybe_repo_preload(query, all_preloads, opts)
+    end
+  end
 
-  def activity_preloads(query, preloads, opts) when is_nil(preloads) or is_list(preloads) or preloads in [:all, :feed, :feed_metadata, :notifications, :posts, :posts_with_reply_to, :default] do
+  def activity_preloads(query, preloads, opts) do
+    activity_preloads(query, [preloads], opts)
+  end
+
+  defp do_activity_preloads(query, preloads, opts) when is_list(preloads) do
+    debug(preloads)
+    if not is_nil(query) and Ecto.Queryable.impl_for(query) do
+      Enum.reduce(preloads, query, &do_activity_preloads(&2, &1, opts))
+    else
+      Enum.flat_map(preloads, &do_activity_preloads(nil, &1, opts))
+      |> debug("subset from preset")
+    end
+  end
+
+  defp do_activity_preloads(query, preloads, opts) when preloads in [:all, :feed, :feed_metadata, :notifications, :posts, :posts_with_reply_to, :default] do
+    # shorthand presets
+    debug(preloads)
     case preloads do
-      _ when is_list(preloads) ->
-
-        if Ecto.Queryable.impl_for(query) do
-          Enum.reduce(preloads, query, &activity_preloads(&2, &1, opts))
-        else
-          Enum.map(preloads, &activity_preloads(nil, &1, opts))
-          |> debug("accumulated preloads to try")
-          |> maybe_repo_preload(query, ..., opts)
-        end
-
-      :all -> activity_preloads(query, [
+      :all -> do_activity_preloads(query, [
           :feed, :tags
         ], opts)
-      :feed -> activity_preloads(query, [
+      :feed -> do_activity_preloads(query, [
           :with_subject, :with_creator, :with_verb, :with_object_more, :with_reply_to, :with_thread_name, :with_media
         ], opts)
-      :feed_metadata -> activity_preloads(query, [
+      :feed_metadata -> do_activity_preloads(query, [
           :with_subject, :with_creator, :with_verb, :with_reply_to, :with_thread_name, :with_media
         ], opts)
       :notifications ->
-        activity_preloads(query, [
+        do_activity_preloads(query, [
           :feed, :with_seen
         ], opts)
-      :posts_with_reply_to -> activity_preloads(query, [
+      :posts_with_reply_to -> do_activity_preloads(query, [
           :with_subject, :with_object_posts, :with_reply_to
         ], opts)
-      :posts -> activity_preloads(query, [
+      :posts -> do_activity_preloads(query, [
           :with_subject, :with_object_posts, :with_replied, :with_thread_name
         ], opts)
-      _default -> activity_preloads(query, [
+      _default -> do_activity_preloads(query, [
           :with_subject, :with_verb, :with_object_posts, :with_replied
         ], opts)
     end
   end
 
-  def activity_preloads(query, preload, opts) when is_atom(preload) do
+  defp do_activity_preloads(query, preload, opts) when is_atom(preload) do
+    debug(preload)
     if not is_nil(query) and Ecto.Queryable.impl_for(query) do
       case preload do
         :with_creator ->
@@ -257,7 +282,8 @@ defmodule Bonfire.Social.Activities do
              ]
            ]
         :with_media ->
-          proload query, activity: [:media]
+          query
+          # proload query, activity: [:media] # FYI: proloading media only queries one attachment
         :with_seen ->
           query_preload_seen(query, opts)
     end
@@ -307,8 +333,8 @@ defmodule Bonfire.Social.Activities do
         :with_media ->
           [:media]
         :with_seen ->
-          # TODO
-          []
+          subquery = subquery_preload_seen(opts)
+          if subquery, do: [seen: subquery], else: []
       end
     end
   end
@@ -321,13 +347,14 @@ defmodule Bonfire.Social.Activities do
     cased_maybe_repo_preload(List.first(list), list, preloads, opts)
   end
   defp maybe_repo_preload(object, preloads, opts) do
-    cased_maybe_repo_preload(object, preloads, opts)
+    cased_maybe_repo_preload(nil, object, preloads, opts)
   end
 
-  defp cased_maybe_repo_preload(example_object \\ nil, objects, preloads, opts) do
+  defp cased_maybe_repo_preload(example_object, objects, preloads, opts) do
+    debug(example_object)
     case example_object || objects do
       %Bonfire.Data.Social.Activity{} ->
-        do_maybe_repo_preload(objects, preloads, opts)
+        do_maybe_repo_preload(objects, List.wrap(preloads), opts)
 
       %{activity: _} ->
         do_maybe_repo_preload(objects, [activity: preloads], opts)
@@ -340,7 +367,7 @@ defmodule Bonfire.Social.Activities do
 
   defp do_maybe_repo_preload(objects, preloads, opts) do
     opts
-    # |> Keyword.put_new(:follow_pointers, false)
+    |> Keyword.put_new(:follow_pointers, false)
     |> repo().maybe_preload(objects, preloads, ...)
   end
 

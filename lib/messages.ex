@@ -39,12 +39,13 @@ defmodule Bonfire.Social.Messages do
   @doc """
   TODO: check boundaries, right now anyone can message anyone :/
   """
-  def send(%{id: _} = creator, attrs, to \\ nil) do
+  def send(%{id: creator_id} = creator, attrs, to \\ nil) do
     opts = [current_user: creator]
 
     to = get_tos(to, Utils.e(attrs, :to_circles, nil))
     |> debug("tos")
     |> Boundaries.load_pointers(opts ++ [verb: :message])
+    |> repo().maybe_preload(:character)
     # TODO: if not allowed to message, request to message?
     # |> debug("to pointers")
 
@@ -89,8 +90,8 @@ defmodule Bonfire.Social.Messages do
     # apply boundaries on all objects, note that ORDER MATTERS, as it uses data preloaded by `Threads` and `PostContents`
     |> Objects.cast_acl(creator, opts)
     |> Activities.put_assoc(:create, creator)
-    |> FeedActivities.put_feed_publishes(Keyword.get(opts, :to_feeds, [])) # messages go in inbox feeds so we can easily count unread (TODO: query from inbox as well?)
-    |> info()
+    |> FeedActivities.put_feed_publishes(Keyword.get(opts, :to_feeds, [])) # messages go in inbox feeds so we can easily count unread (TODO: switch to querying from inbox as well?)
+    # |> info()
   end
 
   def read(message_id, opts) when is_binary(message_id) do
@@ -107,11 +108,13 @@ defmodule Bonfire.Social.Messages do
     and with_user != current_user_id and with_user != current_user do
     # all messages between two people
 
+    opts = to_options(opts)
+      |> Keyword.put(:preload, (if opts[:latest_in_threads], do: [:posts, :with_seen], else: [:posts_with_reply_to, :with_seen])) # TODO: only loads reply_to when displaying flat threads
+      |> debug("opts")
+
     with_user_id = Utils.ulid(with_user)
 
     if with_user_id && with_user_id != current_user_id do
-      opts = to_options(opts)
-      |> Keyword.put(:preload, (if opts[:latest_in_threads], do: :posts, else: :posts_with_reply_to)) # TODO: only loads reply_to when displaying flat threads
 
       [{
         :messages_involving,
@@ -128,7 +131,7 @@ defmodule Bonfire.Social.Messages do
     # all current_user's message
 
     opts = to_options(opts)
-    |> Keyword.put(:preload, :posts)
+    |> Keyword.put_new(:preload, [:posts, :with_seen])
 
     [{
       :messages_involving,
@@ -173,6 +176,8 @@ defmodule Bonfire.Social.Messages do
     # |> Keyword.put(:paginate, paginate
     #                           |> Keyword.put(:cursor_fields, [{:thread_id, :desc}])
     #   )
+
+    # debug(opts)
 
     filters = filters ++ [distinct: {:threads, &Threads.filter/3}]
 

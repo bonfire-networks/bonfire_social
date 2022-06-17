@@ -11,8 +11,7 @@ defmodule Bonfire.Social.LivePush do
 
   def push_activity(feed_ids, %Activity{} = activity, opts) do
     debug(feed_ids, "push a :new_activity")
-    activity = Activities.activity_preloads(activity, :feed_metadata, opts)
-    # |> dump("make sure that all needed assocs are preloaded without n+1")
+    activity = prepare_activity(activity, opts)
 
     pubsub_broadcast(feed_ids, {
       {Bonfire.Social.Feeds, :new_activity},
@@ -29,13 +28,10 @@ defmodule Bonfire.Social.LivePush do
     activity
   end
 
-  def push_activity(feed_ids, %{id: _, activity: %{id: _} = activity} = object, opts) do
+  def push_activity(feed_ids, %{id: _, activity: %{id: _} = _activity} = object, opts) do
     debug(feed_ids, "push an object as :new_activity")
-    object = Map.drop(object, [:activity])
 
-    maybe_merge_to_struct(activity, object) # add object assocs to the activity
-    |> Map.put(:object, object) # push as activity with :object
-    |> Map.drop([:activity])
+    activity_from_object(object)
     |> push_activity(feed_ids, ..., opts)
     |> Map.put(object, :activity, ...) # returns the object + the preloaded activity
   end
@@ -52,20 +48,36 @@ defmodule Bonfire.Social.LivePush do
     |> push_activity(feed_ids, ..., opts)
   end
 
+  @doc """
+  Sends a notification about an activity to a list of users, excluding the author/subject
+  """
   def notify_users(subject, verb, object, users) do
-    FeedActivities.get_feed_ids(notifications: users)
+    users
+    |> Enum.reject(&( ulid(&1)==ulid(subject) ))
+    |> FeedActivities.get_feed_ids(notifications: ...)
     |> normalise_feed_ids()
     |> send_notifications(subject, verb, object, ...)
   end
 
   def notify_of_message(subject, verb, object, users) do
 
+    activity_from_object(object)
+    |> prepare_activity()
+    |> maybe_push_thread()
+
+    users = users
+    |> Enum.reject(&( ulid(&1)==ulid(subject) ))
+    |> debug()
+
     FeedActivities.get_feed_ids(inbox: users) # FIXME: avoid querying this again
     |> increment_counters(:inbox)
 
-    FeedActivities.get_feed_ids(notifications: users)
-    |> normalise_feed_ids()
-    |> send_notifications(subject, verb, object, ...)
+    notify_users(subject, verb, object, users)
+  end
+
+  def prepare_activity(%Activity{} = activity, opts \\ []) do
+    Activities.activity_preloads(activity, :feed_metadata, opts)
+    # |> dump("make sure that all needed assocs are preloaded without n+1")
   end
 
   def notify(activity, feed_ids), do: notify(activity.subject, activity.verb, activity.object, feed_ids)
@@ -119,6 +131,14 @@ defmodule Bonfire.Social.LivePush do
       |> filter_empty([])
   end
 
+  defp activity_from_object(%{id: _, activity: %{id: _} = activity} = object) do
+    object = Map.drop(object, [:activity])
+
+    maybe_merge_to_struct(activity, object) # add object assocs to the activity
+    |> Map.put(:object, object) # push as activity with :object
+    |> Map.drop([:activity])
+  end
+
   defp maybe_push_thread(%{replied: %{id: _} = replied} = activity) do
     maybe_push_thread(replied, activity)
   end
@@ -126,7 +146,7 @@ defmodule Bonfire.Social.LivePush do
     maybe_push_thread(replied, activity)
   end
   defp maybe_push_thread(activity) do
-    # debug(activity, "maybe_push_thread: no replied info found}")
+    warn(activity, "maybe_push_thread: no replied info found}")
     nil
   end
 
@@ -138,7 +158,7 @@ defmodule Bonfire.Social.LivePush do
     # pubsub_broadcast(reply_to_id, {{Bonfire.Social.Posts, :new_reply}, {reply_to_id, activity}})
   end
   defp maybe_push_thread(replied, activity) do
-    # debug(replied, "maybe_push_thread: no reply_to info found}")
+    debug(replied, "maybe_push_thread: no reply_to info found}")
     nil
   end
 end
