@@ -203,17 +203,16 @@ defmodule Bonfire.Social.Objects do
       opts =opts
       |> Keyword.put(:action, :delete)
       |> Keyword.put(:delete_associations, [ # generic things to delete from all object types
-          :creator,
-          :caretaker,
+          :created,
           :caretaker,
           :activities,
           :peered,
           :controlled
         ])
 
-      with {:error, _} <- Bonfire.Common.ContextModules.maybe_apply(object, :delete, [object, opts]),
-          {:error, _} <- Bonfire.Common.ContextModules.maybe_apply(object, :soft_delete, [current_user(opts), object]),
-          {:error, _} <- Bonfire.Common.ContextModules.maybe_apply(object, :soft_delete, [object]) do
+      with {:error, _} <- Bonfire.Common.ContextModules.maybe_apply(object, :delete, [object, opts], &delete_apply_error/2),
+          {:error, _} <- Bonfire.Common.ContextModules.maybe_apply(object, :soft_delete, [current_user(opts), object], &delete_apply_error/2),
+          {:error, _} <- Bonfire.Common.ContextModules.maybe_apply(object, :soft_delete, [object], &delete_apply_error/2) do
             warn("there's no per-type delete functions, try with generic_delete anyway")
             maybe_generic_delete(type, object, opts)
       end
@@ -230,7 +229,7 @@ defmodule Bonfire.Social.Objects do
 
     options
     |> Keyword.put(:delete_associations,
-      options[:delete_associations] ++ [ # cover our bases with common mixins
+      options[:delete_associations] ++ [ # cover our bases with some more common mixins
         :post_content,
         :profile,
         :character,
@@ -250,6 +249,12 @@ defmodule Bonfire.Social.Objects do
       |> Epic.assign(:options, options)
       |> Epic.run()
     if epic.errors == [], do: {:ok, epic.assigns[on]}, else: {:error, epic}
+  end
+
+  def delete_apply_error(error, _args) do
+    # error("maybe_apply: #{error} - with args: (#{inspect args})")
+
+    {:error, error}
   end
 
 end

@@ -268,7 +268,8 @@ defmodule Bonfire.Social.Threads do
       opts
     )
     # |> debug()
-    |> Bonfire.Common.Repo.many_paginated(opts) # return a page of items + pagination metadata
+    |> repo().many_paginated(opts) # return a page of items + pagination metadata
+    |> repo().maybe_preload(activity: [:media]) # preloaded after so we can get more than 1
     # |> repo().many # without pagination
     # |> debug("thread")
   end
