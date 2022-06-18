@@ -30,7 +30,7 @@ defmodule Bonfire.Social.Acts.MeiliSearch.Queue do
 
           if prepared_object do
             prepared_object
-            |> maybe_indexable_object()
+            |> Integration.maybe_indexable_object()
             |> Integration.maybe_index()
 
             Epic.assign(epic, on, prepared_object)
@@ -73,13 +73,6 @@ defmodule Bonfire.Social.Acts.MeiliSearch.Queue do
         IO.inspect(thing, label: "thing")
         nil
     end
-  end
-
-
-  def maybe_indexable_object(object) do
-    if Bonfire.Common.Extend.module_enabled?(Bonfire.Search.Indexer), do: object
-    |> Bonfire.Social.Activities.activity_under_object()
-    |> Bonfire.Search.Indexer.maybe_indexable_object()
   end
 
 end

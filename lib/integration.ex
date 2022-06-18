@@ -89,6 +89,12 @@ defmodule Bonfire.Social.Integration do
     end
   end
 
+  def maybe_indexable_object(object) do
+    if Bonfire.Common.Extend.module_enabled?(Bonfire.Search.Indexer), do: object
+    |> Bonfire.Social.Activities.activity_under_object()
+    |> Bonfire.Search.Indexer.maybe_indexable_object()
+  end
+
   def maybe_index(object) do
     if Bonfire.Common.Extend.module_enabled?(Bonfire.Search.Indexer) do
       Bonfire.Search.Indexer.maybe_index_object(object)
