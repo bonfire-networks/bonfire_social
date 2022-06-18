@@ -92,6 +92,7 @@ defmodule Bonfire.Social.Integration do
   def maybe_index(object) do
     if Bonfire.Common.Extend.module_enabled?(Bonfire.Search.Indexer) do
       Bonfire.Search.Indexer.maybe_index_object(object)
+      |> debug()
     else
       :ok
     end

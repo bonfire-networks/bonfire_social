@@ -302,7 +302,7 @@ defmodule Bonfire.Social.Posts do
   end
 
 
-  # TODO: rewrite to take a post instead of an activity
+  # TODO: rewrite to take a post instead of an activity?
   def indexing_object_format(post, opts \\ []) do
     current_user = current_user(opts)
     case post do
@@ -325,13 +325,14 @@ defmodule Bonfire.Social.Posts do
   end
 
   defp indexable(id, content, activity, profile, character) do
-    %{ "id" => id,
-        "index_type" => "Bonfire.Data.Social.Post",
-        # "url" => path(post),
-        "post_content" => PostContents.indexing_object_format(content),
-        "created" => Bonfire.Me.Integration.indexing_format_created(profile, character),
-        "tags" => Tags.indexing_format_tags(activity)
-      }
+    %{
+      "id" => id,
+      "index_type" => "Bonfire.Data.Social.Post",
+      # "url" => path(post),
+      "post_content" => PostContents.indexing_object_format(content),
+      "created" => Bonfire.Me.Integration.indexing_format_created(profile, character),
+      "tags" => Tags.indexing_format_tags(activity)
+      } |> debug()
   end
 
   def maybe_index(post, options \\ []) do

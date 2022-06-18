@@ -64,12 +64,24 @@ defmodule Bonfire.Social.Tags do
     else: {:ok, post}
   end
 
-  def indexing_format_tags(obj) do
+  def indexing_format_tags(tags) when is_list(tags) do
     if Bonfire.Common.Extend.module_enabled?(Bonfire.Tag.Tags) do
-      repo().maybe_preload(obj, tags: [:profile])
-      |> Map.get(:tags, [])
+      tags
       |> Enum.map(&Bonfire.Tag.Tags.indexing_object_format_name/1)
     end
+  end
+  def indexing_format_tags(%{tags: tags}) when is_list(tags) do
+    indexing_format_tags(tags)
+  end
+  def indexing_format_tags(%{activity: %{tags: _}} = object) do
+    repo().maybe_preload(object, activity: [tags: [:profile]])
+    |> e(:activity, :tags, [])
+    |> indexing_format_tags()
+  end
+  def indexing_format_tags(%{tags: _} = object) do
+    repo().maybe_preload(object, tags: [:profile])
+    |> Map.get(:tags, [])
+    |> indexing_format_tags()
   end
 
 end
