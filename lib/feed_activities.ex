@@ -97,7 +97,7 @@ defmodule Bonfire.Social.FeedActivities do
   defp named_feed(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
     # current_user = current_user(current_user_or_socket)
     # debug(opts)
-    case Feeds.named_feed_id(feed_name) || Bonfire.Social.Feeds.my_feed_id(feed_name, opts) do
+    case Feeds.named_feed_id(feed_name) || Feeds.my_feed_id(feed_name, opts) do
       feed when is_binary(feed) or is_list(feed) ->
         # debug(ulid(current_user(opts)), "current_user")
         # debug(feed_name, "feed_name")

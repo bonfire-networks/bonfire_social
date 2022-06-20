@@ -359,9 +359,9 @@ defmodule Bonfire.Social.Activities do
       %{activity: _} ->
         do_maybe_repo_preload(objects, [activity: preloads], opts)
 
-      # _ ->
-      #   error(objects, "Could not preload activity data")
-      #   objects
+      _ ->
+        error(objects, "Could not preload activity data")
+        objects
     end
   end
 
