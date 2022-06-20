@@ -9,8 +9,9 @@ defmodule Bonfire.Social.MixProject do
       elixir: "~> 1.11",
       start_permanent: Mix.env() == :prod,
       deps: Mess.deps [
+        {:bonfire_me, git: "https://github.com/bonfire-networks/bonfire_me", branch: "main", optional: true},
         {:bonfire_api_graphql, git: "https://github.com/bonfire-networks/bonfire_api_graphql", branch: "main", optional: true},
-        {:bonfire_me, git: "https://github.com/bonfire-networks/bonfire_me", branch: "main", optional: true}
+        {:absinthe, "~> 1.7", optional: true}
       ]
     ]
   end

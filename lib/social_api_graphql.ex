@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-if Bonfire.Common.Extend.module_enabled?(Bonfire.API.GraphQL) do
 defmodule Bonfire.Social.API.GraphQL do
+if Bonfire.Common.Extend.module_enabled?(Bonfire.API.GraphQL) do
   use Absinthe.Schema.Notation
-  import Absinthe.Resolution.Helpers
+  alias Absinthe.Resolution.Helpers
 
   alias Bonfire.API.GraphQL
   alias Bonfire.Common.Utils
@@ -55,7 +55,7 @@ defmodule Bonfire.Social.API.GraphQL do
     field(:direct_replies, list_of(:replied)) do
       arg :paginate, :paginate # TODO
 
-      resolve dataloader(Pointers.Pointer) #, args: %{my: :followed})
+      resolve Absinthe.Resolution.Helpers.dataloader(Pointers.Pointer) #, args: %{my: :followed})
     end
 
   end
@@ -83,7 +83,7 @@ defmodule Bonfire.Social.API.GraphQL do
     field(:direct_replies, list_of(:replied)) do
       arg :paginate, :paginate # TODO
 
-      resolve dataloader(Pointers.Pointer) #, args: %{my: :followed})
+      resolve Absinthe.Resolution.Helpers.dataloader(Pointers.Pointer) #, args: %{my: :followed})
     end
   end
 
