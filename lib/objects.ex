@@ -223,7 +223,7 @@ defmodule Bonfire.Social.Objects do
   end
 
   def maybe_generic_delete(type, object, options \\ [])
-  def maybe_generic_delete(type, object, options) when type not in [Bonfire.Data.Identity.User] do
+  def maybe_generic_delete(type, object, options) do
     options = to_options(options)
     |> Keyword.put(:object, object)
 

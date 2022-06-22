@@ -24,13 +24,14 @@
 
   @doc false # see module documentation
   def run(epic, act) do
+    current_account = epic.assigns[:options][:current_account]
     current_user = epic.assigns[:options][:current_user]
     cond do
       epic.errors != [] ->
         maybe_debug(epic, act, length(epic.errors), "Skipping due to epic errors")
         epic
-      not (is_struct(current_user) or is_binary(current_user)) ->
-        maybe_debug(epic, act, current_user, "Skipping due to missing current_user")
+      not (is_struct(current_user) or is_binary(current_user) or is_struct(current_account) or is_binary(current_account)) ->
+        maybe_debug(epic, act, [current_account: current_account, current_user: current_user], "Skipping due to missing current account or user")
         epic
       true ->
         as = Keyword.get(act.options, :as, :object)

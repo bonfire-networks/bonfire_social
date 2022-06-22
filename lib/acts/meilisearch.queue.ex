@@ -15,7 +15,7 @@ defmodule Bonfire.Social.Acts.MeiliSearch.Queue do
   def run(epic, act) do
     on = Keyword.get(act.options, :on, :post)
     object = epic.assigns[on]
-    action = Keyword.get(epic.assigns[:options], :action, :insert)
+    action = Keyword.get(epic.assigns[:options], :action)
 
     if epic.errors != [] do
       maybe_debug(epic, act, length(epic.errors), "Meili: Skipping due to epic errors")
