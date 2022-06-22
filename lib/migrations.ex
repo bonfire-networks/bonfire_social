@@ -63,7 +63,7 @@ defmodule Bonfire.Social.Migrations do
       require Bonfire.Data.Social.Request.Migration
       require Bonfire.Data.Social.Seen.Migration
 
-      Bonfire.Data.Social.Message.Migration.migrate_seen()
+      Bonfire.Data.Social.Seen.Migration.migrate_seen()
       Bonfire.Data.Social.Request.Migration.migrate_request()
       Bonfire.Data.Social.Message.Migration.migrate_message()
       Bonfire.Data.Social.FeedPublish.Migration.migrate_feed_publish()

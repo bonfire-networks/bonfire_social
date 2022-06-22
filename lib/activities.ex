@@ -165,7 +165,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   defp subquery_preload_seen(opts) do
-    user_id = ulid(current_user(opts) |> debug())
+    user_id = ulid(current_user(opts))
     if user_id do
       table_id = Edges.table_id(Seen)
       from(seen_edge in Edge, where: seen_edge.table_id == ^table_id and seen_edge.subject_id == ^user_id)
