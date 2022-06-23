@@ -7,9 +7,11 @@ defmodule Bonfire.Social.PostContents do
   alias Ecto.Changeset
 
   def cast(changeset, attrs, creator, boundary) do
+    has_images = is_list(attrs[:uploaded_media]) and length(attrs[:uploaded_media])>0
+
     %{post_content: maybe_prepare_contents(attrs, creator, boundary)}
     |> Changeset.cast(changeset, ..., [])
-    |> Changeset.cast_assoc(:post_content, required: true, with: &changeset/2)
+    |> Changeset.cast_assoc(:post_content, required: !has_images, with: &changeset/2)
     # |> debug()
   end
 
@@ -24,29 +26,41 @@ defmodule Bonfire.Social.PostContents do
   end
 
   def maybe_prepare_contents(attrs, creator, _boundary) do
-    debug("process post contents for tags/mentions")
-    # TODO: refactor this function?
-    with {:ok, %{text: html_body, mentions: mentions1, hashtags: hashtags1}} <- Bonfire.Social.Tags.maybe_process(creator, prepare_text(get_attr(attrs, :html_body), creator)),
-         {:ok, %{text: name, mentions: mentions2, hashtags: hashtags2}} <- Bonfire.Social.Tags.maybe_process(creator, prepare_text(get_attr(attrs, :name), creator)),
-         {:ok, %{text: summary, mentions: mentions3, hashtags: hashtags3}} <- Bonfire.Social.Tags.maybe_process(creator, prepare_text(get_attr(attrs, :summary), creator)) do
-      attrs
-      |> Map.merge(
-      %{
-        html_body: html_body,
-        name: name,
-        summary: summary,
-        mentions: (mentions1 ++ mentions2 ++ mentions3),
-        hashtags: (hashtags1 ++ hashtags2 ++ hashtags3)
-      })
+    if module_enabled?(Bonfire.Social.Tags) do
+      debug("process post contents for tags/mentions")
+      # TODO: refactor this function?
+      with {:ok, %{text: html_body, mentions: mentions1, hashtags: hashtags1}} <- Bonfire.Social.Tags.maybe_process(creator, prepare_text(get_attr(attrs, :html_body), creator)),
+          {:ok, %{text: name, mentions: mentions2, hashtags: hashtags2}} <- Bonfire.Social.Tags.maybe_process(creator, prepare_text(get_attr(attrs, :name), creator)),
+          {:ok, %{text: summary, mentions: mentions3, hashtags: hashtags3}} <- Bonfire.Social.Tags.maybe_process(creator, prepare_text(get_attr(attrs, :summary), creator)) do
+
+        merge_with_body_or_nil(
+          attrs,
+          %{
+            html_body: html_body,
+            name: name,
+            summary: summary,
+            mentions: (mentions1 ++ mentions2 ++ mentions3),
+            hashtags: (hashtags1 ++ hashtags2 ++ hashtags3)
+        })
+      end
+    else
+      only_prepare_content(attrs, creator)
     end
   end
 
   def only_prepare_content(attrs, creator) do
-    Map.merge(attrs, %{
+    merge_with_body_or_nil(attrs, %{
       html_body: prepare_text(get_attr(attrs, :html_body), creator),
       name: prepare_text(get_attr(attrs, :name), creator),
       summary: prepare_text(get_attr(attrs, :summary), creator)
     })
+  end
+
+  def merge_with_body_or_nil(_, %{html_body: html_body}) when is_nil(html_body) or html_body =="" do
+    nil
+  end
+  def merge_with_body_or_nil(attrs, map) do
+    Map.merge(attrs, map)
   end
 
   defp get_attr(attrs, key) do
@@ -63,6 +77,7 @@ defmodule Bonfire.Social.PostContents do
     |> Text.maybe_sane_html() # remove potentially dangerous or dirty markup
     |> Text.maybe_normalize_html() # make sure we end up with proper HTML
   end
+  def prepare_text("", _), do: nil
   def prepare_text(other, _), do: other
 
   def maybe_process_markdown(text, creator) do

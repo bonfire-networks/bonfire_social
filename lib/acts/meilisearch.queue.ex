@@ -22,7 +22,12 @@ defmodule Bonfire.Social.Acts.MeiliSearch.Queue do
       epic
     else
       case action do
-        :insert ->
+        :delete ->
+          maybe_debug(epic, act, action, "Meili queuing")
+          Integration.maybe_unindex(object)
+          epic
+
+        action -> # :insert
           maybe_debug(epic, act, action, "Meili queuing")
           # maybe_debug(epic, act, object, "Non-formated object")
 
@@ -39,13 +44,10 @@ defmodule Bonfire.Social.Acts.MeiliSearch.Queue do
             epic
           end
 
-        :delete ->
-          maybe_debug(epic, act, action, "Meili queuing")
-          Integration.maybe_unindex(object)
-          epic
-        action ->
-          debug(epic, act, action, "Meili: Skipping due to unknown action")
-          epic
+
+        # action ->
+        #   debug(epic, act, action, "Meili: Skipping due to unknown action")
+        #   epic
       end
     end
 
