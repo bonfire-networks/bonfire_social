@@ -48,7 +48,7 @@ defmodule Bonfire.Social.FeedActivities do
     # TODO: clean up this code
     exclude_verbs = if !Bonfire.Me.Settings.get([Bonfire.Social.Feeds, :my_feed_includes, :boost], true, opts), do: [:boost], else: []
 
-    exclude_verbs = if !Bonfire.Me.Settings.get([Bonfire.Social.Feeds, :my_feed_includes, :follow], true, opts), do: exclude_verbs ++ [:follow], else: exclude_verbs
+    exclude_verbs = if !Bonfire.Me.Settings.get([Bonfire.Social.Feeds, :my_feed_includes, :follow], false, opts), do: exclude_verbs ++ [:follow], else: exclude_verbs
 
     exclude_replies = !(Bonfire.Me.Settings.get([Bonfire.Social.Feeds, :my_feed_includes, :reply], true, opts))
     #|> debug("exclude_replies")
