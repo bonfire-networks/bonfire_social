@@ -154,8 +154,8 @@ defmodule Bonfire.Social.LivePush do
     debug("maybe_push_thread: put in thread feed for anyone following the thread: #{inspect thread_id}")
     # debug(activity: activity)
     debug("maybe_push_thread: broadcasting to anyone currently viewing the thread")
-    pubsub_broadcast(thread_id, {{Bonfire.Social.Posts, :new_reply}, {thread_id, activity}})
-    # pubsub_broadcast(reply_to_id, {{Bonfire.Social.Posts, :new_reply}, {reply_to_id, activity}})
+    pubsub_broadcast(thread_id, {{Bonfire.Social.Threads.LiveHandler, :new_reply}, {thread_id, activity}})
+    # pubsub_broadcast(reply_to_id, {{Bonfire.Social.Threads.LiveHandler, :new_reply}, {reply_to_id, activity}})
   end
   defp maybe_push_thread(replied, activity) do
     debug(replied, "maybe_push_thread: no reply_to info found}")
