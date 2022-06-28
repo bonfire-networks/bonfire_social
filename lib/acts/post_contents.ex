@@ -37,17 +37,18 @@ defmodule Bonfire.Social.Acts.PostContents do
         changeset
         |> PostContents.cast(attrs, current_user, boundary)
         |> Epic.assign(epic, on, ...)
-        |> assign_mentions(act, on)
+        |> assign_meta(act, on, :mentions)
+        |> assign_meta(act, on, :urls)
       changeset.action == :delete ->
         # TODO: deletion
         epic
     end
   end
 
-  defp assign_mentions(epic, act, on) do
-    mentions = Utils.e(epic.assigns[on], :changes, :post_content, :changes, :mentions, [])
-    smart(epic, act, mentions, "found mentions")
-    Epic.assign(epic, :mentions, mentions)
+  defp assign_meta(epic, act, on, meta_key) do
+    data = Utils.e(epic.assigns[on], :changes, :post_content, :changes, meta_key, [])
+    smart(epic, act, data, "found #{meta_key}")
+    Epic.assign(epic, meta_key, data)
   end
 
 end

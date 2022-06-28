@@ -177,7 +177,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   def activity_preloads(query, preloads, opts) when is_list(preloads) do
-    debug(query, "query or data")
+    # dump(query, "query or data")
     debug(preloads, "preloads")
     if not is_nil(query) and Ecto.Queryable.impl_for(query) do
       Enum.reduce(preloads, query, &do_activity_preloads(&2, &1, opts))
@@ -185,6 +185,7 @@ defmodule Bonfire.Social.Activities do
       all_preloads = Enum.flat_map(preloads, &do_activity_preloads(nil, &1, opts))
       |> debug("accumulated preloads to try")
       maybe_repo_preload(query, all_preloads, opts)
+      # |> dump()
     end
   end
 

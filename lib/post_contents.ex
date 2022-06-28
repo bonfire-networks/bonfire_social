@@ -12,7 +12,7 @@ defmodule Bonfire.Social.PostContents do
     %{post_content: maybe_prepare_contents(attrs, creator, boundary)}
     |> Changeset.cast(changeset, ..., [])
     |> Changeset.cast_assoc(:post_content, required: !has_images, with: &changeset/2)
-    # |> debug()
+    |> debug()
   end
 
   def maybe_prepare_contents(%{local: false} = attrs, creator, _boundary) do
@@ -29,9 +29,9 @@ defmodule Bonfire.Social.PostContents do
     if module_enabled?(Bonfire.Social.Tags) do
       debug("process post contents for tags/mentions")
       # TODO: refactor this function?
-      with {:ok, %{text: html_body, mentions: mentions1, hashtags: hashtags1}} <- Bonfire.Social.Tags.maybe_process(creator, prepare_text(get_attr(attrs, :html_body), creator)),
-          {:ok, %{text: name, mentions: mentions2, hashtags: hashtags2}} <- Bonfire.Social.Tags.maybe_process(creator, prepare_text(get_attr(attrs, :name), creator)),
-          {:ok, %{text: summary, mentions: mentions3, hashtags: hashtags3}} <- Bonfire.Social.Tags.maybe_process(creator, prepare_text(get_attr(attrs, :summary), creator)) do
+      with {:ok, %{text: html_body, mentions: mentions1, hashtags: hashtags1, urls: urls1}} <- Bonfire.Social.Tags.maybe_process(creator, prepare_text(get_attr(attrs, :html_body), creator)),
+          {:ok, %{text: name, mentions: mentions2, hashtags: hashtags2, urls: urls2}} <- Bonfire.Social.Tags.maybe_process(creator, prepare_text(get_attr(attrs, :name), creator)),
+          {:ok, %{text: summary, mentions: mentions3, hashtags: hashtags3, urls: urls3}} <- Bonfire.Social.Tags.maybe_process(creator, prepare_text(get_attr(attrs, :summary), creator)) do
 
         merge_with_body_or_nil(
           attrs,
@@ -40,7 +40,8 @@ defmodule Bonfire.Social.PostContents do
             name: name,
             summary: summary,
             mentions: (mentions1 ++ mentions2 ++ mentions3),
-            hashtags: (hashtags1 ++ hashtags2 ++ hashtags3)
+            hashtags: (hashtags1 ++ hashtags2 ++ hashtags3),
+            urls: (urls1 ++ urls2 ++ urls3)
         })
       end
     else
@@ -116,7 +117,7 @@ defmodule Bonfire.Social.PostContents do
 
   def changeset(%PostContent{} = cs \\ %PostContent{}, attrs) do
     PostContent.changeset(cs, attrs)
-    |> Changeset.cast(attrs, [:hashtags, :mentions])
+    |> Changeset.cast(attrs, [:hashtags, :mentions, :urls])
   end
 
 end

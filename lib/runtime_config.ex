@@ -20,6 +20,7 @@ defmodule Bonfire.Social.RuntimeConfig do
     PostContents,
     Tags,
     Threaded,
+    URLPreviews
   }
 
   @doc """
@@ -64,14 +65,15 @@ defmodule Bonfire.Social.RuntimeConfig do
           # Prep: a little bit of querying and a lot of preparing changesets
           Posts.Publish,           # Create a changeset for insertion
           PostContents,            # with a sanitised body and tags extracted,
-          {Caretaker,  on: :post}, # a caretaker,
-          {Creator,    on: :post}, # and a creator,
-          {Files,      on: :post}, # possibly with uploaded files,
-          {Threaded,   on: :post}, # possibly occurring in a thread,
-          {Tags,       on: :post}, # with extracted tags fully hooked up,
-          {Boundaries, on: :post}, # and the appropriate boundaries established,
-          {Activity,   on: :post}, # summarised by an activity,
-          {Feeds,      on: :post}, # appearing in feeds.
+          {Caretaker,   on: :post}, # a caretaker,
+          {Creator,     on: :post}, # and a creator,
+          {URLPreviews, on: :post}, # and possibly fetch contents of URLs,
+          {Files,       on: :post}, # possibly with uploaded files,
+          {Threaded,    on: :post}, # possibly occurring in a thread,
+          {Tags,        on: :post}, # with extracted tags fully hooked up,
+          {Boundaries,  on: :post}, # and the appropriate boundaries established,
+          {Activity,    on: :post}, # summarised by an activity,
+          {Feeds,       on: :post}, # appearing in feeds.
 
           # Now we have a short critical section
           Ecto.Begin,
