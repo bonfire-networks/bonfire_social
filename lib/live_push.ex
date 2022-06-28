@@ -113,7 +113,8 @@ defmodule Bonfire.Social.LivePush do
             )
           )
         )
-      )
+      ),
+      avatar_url(subject)
     )
   end
 
