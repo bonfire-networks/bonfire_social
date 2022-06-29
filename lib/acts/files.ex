@@ -30,7 +30,7 @@ defmodule Bonfire.Social.Acts.Files do
         attrs_key = Keyword.get(act.options, :attrs, :post_attrs)
         attrs = Keyword.get(epic.assigns[:options], attrs_key, %{})
         uploads_key = Keyword.get(act.options, :uploads, :uploaded_media)
-        uploaded_media = Map.get(attrs, uploads_key, []) ++ Map.get(epic.assigns, uploads_key, [])
+        uploaded_media = e(attrs, uploads_key, []) ++ e(epic.assigns, uploads_key, [])
         case changeset do
           %Changeset{valid?: true}=changeset ->
             smart(epic, act, uploaded_media, "upload media")
