@@ -152,26 +152,28 @@ defmodule Bonfire.Social.Follows do
     query_base(filters, opts)
   end
 
-  def list_my_followed(opts, paginate? \\ true, cursor_after \\ nil, with_profile_only \\ true),
-    do: list_followed(current_user(opts), opts, with_profile_only)
+  def list_my_followed(current_user, opts \\ []),
+    do: list_followed(current_user, [current_user: current_user] ++ opts)
 
-  def list_followed(%{id: user_id} = _user, opts \\ [], paginate? \\ true, cursor_after \\ nil, with_profile_only \\ true) when is_binary(user_id) do
+  def list_followed(%{id: user_id} = _user, opts \\ []) when is_binary(user_id) do
     query([subject: user_id], opts)
-    # |> maybe_with_followed_profile_only(with_profile_only)
-    |> many(paginate?, cursor_after)
+    |> where([object: object], object.id not in ^e(opts, :exclude_ids, []))
+    # |> maybe_with_followed_profile_only(opts)
+    |> many(opts[:paginate], opts[:pagination])
   end
 
-  def list_my_followers(opts, paginate? \\ true, cursor_after \\ nil, with_profile_only \\ true),
-    do: list_followers(current_user(opts), opts, with_profile_only)
+  def list_my_followers(current_user, opts \\ []),
+    do: list_followers(current_user, [current_user: current_user] ++ opts)
 
-  def list_followers(%{id: user_id} = _user, opts \\ [], paginate? \\ true, cursor_after \\ nil, with_profile_only \\ true) when is_binary(user_id) do
+  def list_followers(%{id: user_id} = _user, opts \\ []) when is_binary(user_id) do
     query([object: user_id], opts)
-    # |> maybe_with_follower_profile_only(with_profile_only)
-    |> many(paginate?, cursor_after)
+    |> where([subject: subject], subject.id not in ^e(opts, :exclude_ids, []))
+    # |> maybe_with_follower_profile_only(opts)
+    |> many(opts[:paginate], opts[:pagination])
   end
 
-  defp many(query, paginate?, cursor_after \\ nil)
-  defp many(query, true, cursor_after), do: Repo.many_paginated(query, before: cursor_after)
+  defp many(query, paginate?, pagination \\ nil)
+  defp many(query, true, pagination), do: Repo.many_paginated(query, pagination)
   defp many(query, _, _), do: repo().many(query)
 
   defp maybe_with_follower_profile_only(q, true), do: q |> where([follower_profile: p], not is_nil(p.id))
@@ -245,8 +247,14 @@ defmodule Bonfire.Social.Follows do
     case create(user, object, opts) do
       {:ok, follow} ->
         Cache.remove("my_followed:#{ulid(user)}")
+
         LivePush.push_activity_object(FeedActivities.get_feed_ids(opts[:to_feeds]), follow, object, push_to_thread: false, notify: true) # FIXME: should not compute feed ids twice
+
+        Bonfire.Boundaries.Circles.add_to_circles(object, Bonfire.Boundaries.Circles.get_stereotype_circles(user, :followed))
+        Bonfire.Boundaries.Circles.add_to_circles(user, Bonfire.Boundaries.Circles.get_stereotype_circles(object, :followers))
+
         Integration.ap_push_activity(user.id, follow)
+
         {:ok, follow}
       {:error, e} ->
         error(e)
@@ -267,12 +275,17 @@ defmodule Bonfire.Social.Follows do
     end
   end
 
-  def unfollow(follower, %{} = object) do
-    un = Edges.delete_by_both(follower, Follow, object)
+  def unfollow(user, %{} = object) do
+    un = Edges.delete_by_both(user, Follow, object)
     # with [_id] <- un do
       # delete the like activity & feed entries
-      Activities.delete_by_subject_verb_object(follower, :follow, object)
-      Cache.remove("my_followed:#{ulid(follower)}")
+      Activities.delete_by_subject_verb_object(user, :follow, object)
+
+      Cache.remove("my_followed:#{ulid(user)}")
+
+      Bonfire.Boundaries.Circles.get_stereotype_circles(user, :followed) ~> Bonfire.Boundaries.Circles.remove_from_circles(object, ...)
+      Bonfire.Boundaries.Circles.get_stereotype_circles(object, :followers) ~> Bonfire.Boundaries.Circles.remove_from_circles(user, ...)
+
     # end
   end
 

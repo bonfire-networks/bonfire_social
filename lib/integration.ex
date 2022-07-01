@@ -18,6 +18,10 @@ defmodule Bonfire.Social.Integration do
     activity
   end
   def ap_push_activity(subject_id, %{activity: %{}} = object, verb, _object), do: repo().maybe_preload(object, activity: [:verb]) |> ap_push_activity(subject_id, ..., verb, object)
+  def ap_push_activity(_subject_id, activity, _verb, _object) do
+    error(activity, "Cannot federate: Expected an Activity, or an object containing one, but got")
+    activity
+  end
 
   def ap_push_activity_with_object(subject_id, %Bonfire.Data.Social.Activity{} = activity, verb, object) do
     activity = repo().maybe_preload(activity, [:verb, :object])
