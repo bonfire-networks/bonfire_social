@@ -199,7 +199,7 @@ defmodule Bonfire.Social.Requests do
 
   defp create(requester, type, object, opts) do
     Edges.changeset({Request, type}, requester, :request, object, opts)
-    |> repo().upsert()
+    |> repo().insert_or_ignore()
   end
 
   ###
