@@ -153,7 +153,7 @@ defmodule Bonfire.Social.Follows do
   end
 
   def list_my_followed(current_user, opts \\ []),
-    do: list_followed(current_user, [current_user: current_user] ++ opts)
+    do: list_followed(current_user, [current_user: current_user] ++ to_options(opts))
 
   def list_followed(%{id: user_id} = _user, opts \\ []) when is_binary(user_id) do
     query([subject: user_id], opts)
@@ -163,7 +163,7 @@ defmodule Bonfire.Social.Follows do
   end
 
   def list_my_followers(current_user, opts \\ []),
-    do: list_followers(current_user, [current_user: current_user] ++ opts)
+    do: list_followers(current_user, [current_user: current_user] ++ to_options(opts))
 
   def list_followers(%{id: user_id} = _user, opts \\ []) when is_binary(user_id) do
     query([object: user_id], opts)
@@ -173,8 +173,8 @@ defmodule Bonfire.Social.Follows do
   end
 
   defp many(query, paginate?, pagination \\ nil)
-  defp many(query, true, pagination), do: Repo.many_paginated(query, pagination)
-  defp many(query, _, _), do: repo().many(query)
+  defp many(query, false, _), do: repo().many(query)
+  defp many(query, _, pagination), do: Repo.many_paginated(query, pagination)
 
   defp maybe_with_follower_profile_only(q, true), do: q |> where([follower_profile: p], not is_nil(p.id))
   defp maybe_with_follower_profile_only(q, _), do: q

@@ -54,7 +54,7 @@ defmodule Bonfire.Social.Messages do
       # |> debug("message attrs")
       opts = [
         boundary: "message",
-        verbs_to_grant: Config.get(:verbs_to_grant, :message),
+        verbs_to_grant: Config.get([:verbs_to_grant, :message]),
         to_circles: to,
         to_feeds: [inbox: to]
       ]
