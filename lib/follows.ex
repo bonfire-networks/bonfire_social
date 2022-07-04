@@ -156,6 +156,7 @@ defmodule Bonfire.Social.Follows do
     do: list_followed(current_user, [current_user: current_user] ++ to_options(opts))
 
   def list_followed(%{id: user_id} = _user, opts \\ []) when is_binary(user_id) do
+    opts = to_options(opts)
     query([subject: user_id], opts)
     |> where([object: object], object.id not in ^e(opts, :exclude_ids, []))
     # |> maybe_with_followed_profile_only(opts)
@@ -166,6 +167,7 @@ defmodule Bonfire.Social.Follows do
     do: list_followers(current_user, [current_user: current_user] ++ to_options(opts))
 
   def list_followers(%{id: user_id} = _user, opts \\ []) when is_binary(user_id) do
+    opts = to_options(opts)
     query([object: user_id], opts)
     |> where([subject: subject], subject.id not in ^e(opts, :exclude_ids, []))
     # |> maybe_with_follower_profile_only(opts)

@@ -74,7 +74,7 @@ defmodule Bonfire.Social.FollowsTest do
     assert {:ok, follow} = Follows.follow(follower, me)
 
     assert %{edges: [fetched_follow]} =
-      Follows.list_my_followers(current_user: me, skip_boundary_check: true)
+      Follows.list_my_followers(me, skip_boundary_check: true)
 
     assert fetched_follow.id == follow.id
   end
@@ -95,7 +95,7 @@ defmodule Bonfire.Social.FollowsTest do
     someone = Fake.fake_user!()
     assert {:ok, follow} = Follows.follow(me, someone)
 
-    assert %{edges: [fetched_follow]} = Follows.list_followers(someone, me)
+    assert %{edges: [fetched_follow]} = Follows.list_followers(someone, current_user: me)
 
     assert fetched_follow.id == follow.id
   end
@@ -105,7 +105,7 @@ defmodule Bonfire.Social.FollowsTest do
     someone = Fake.fake_user!()
     assert {:ok, follow} = Follows.follow(me, someone)
 
-    assert %{edges: [fetched_follow]} = Follows.list_followers(someone, me)
+    assert %{edges: [fetched_follow]} = Follows.list_followers(someone, current_user: me)
     assert fetched_follow.id == follow.id
   end
 
@@ -115,7 +115,7 @@ defmodule Bonfire.Social.FollowsTest do
     followed = Fake.fake_user!()
     assert {:ok, follow} = Follows.follow(follower, followed)
 
-    assert %{edges: [fetched_follow]} = Follows.list_followers(followed, follower)
+    assert %{edges: [fetched_follow]} = Follows.list_followers(followed, current_user: follower)
     assert fetched_follow.id == follow.id
 
     assert %{edges: fetched} = p = FeedActivities.feed(:notifications, current_user: followed)

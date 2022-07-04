@@ -1,6 +1,6 @@
 defmodule Bonfire.Social.APActivities do
   alias Bonfire.Data.Social.APActivity
-  alias Bonfire.Social.{Activities, FeedActivities}
+  alias Bonfire.Social.{Activities, FeedActivities, Objects}
   alias Ecto.Changeset
   alias Pointers.Changesets
 
@@ -10,28 +10,20 @@ defmodule Bonfire.Social.APActivities do
   import Bonfire.Common.Config, only: [repo: 0]
 
   def create(activity, object, nil) do
-    with actor_id when is_binary(actor_id) <- e(activity, :data, "actor", nil),
-         {:ok, actor} <- Bonfire.Federate.ActivityPub.Adapter.get_actor_by_ap_id(actor_id) do
+    with actor_id when is_binary(actor_id) <-
+      e(activity, :data, "actor", "id", nil) || e(activity, :data, "actor", nil)
+      || e(object, :data, "attributedTo", "id", nil) || e(object, :data, "attributedTo", nil)
+      || e(object, :data, "actor", "id", nil) || e(object, :data, "actor", nil),
+         {:ok, character} <- Bonfire.Federate.ActivityPub.Utils.get_character_by_ap_id(actor_id |> info) do
 
-        create(activity, object, actor)
+        create(activity, object, character)
 
-      else _ ->
-        error("AP - cannot create a fallback activity with no valid actor")
+      else other ->
+        error(other, "AP - cannot create a fallback activity with no valid character")
     end
   end
 
-  def create(activity, object, actor) when is_map(object) do
-    json =
-      e(activity, :data, %{})
-      |> Map.put("object", object.data)
-
-    with {:ok, apactivity} <- insert(actor, json) do
-         # {:ok, _} <- FeedActivities.save_fediverse_incoming_activity(actor, :create, apactivity) do
-      {:ok, apactivity}
-    end
-  end
-
-  def create(activity, object, actor) do
+  def create(activity, object, character) do
     object = ActivityPub.Object.normalize(object, true)
 
     json =
@@ -42,20 +34,26 @@ defmodule Bonfire.Social.APActivities do
         e(activity, :data, %{})
       end
 
-    with {:ok, apactivity} <- insert(actor, json),
-         {:ok, _} <- FeedActivities.save_fediverse_incoming_activity(actor, :create, apactivity) do
+    # TODO: reuse logic from Posts for targeting the audience, and handling public/private
+    opts = [boundary: "federated"]
+
+    with {:ok, apactivity} <- insert(character, json, opts) do
+        #  {:ok, _} <- FeedActivities.save_fediverse_incoming_activity(character, :create, apactivity) do # Note: using `Activities.put_assoc/` instead
       {:ok, apactivity}
     end
   end
 
-  def insert(actor, json) do
+  def insert(character, json, opts) do
     activity =
       %APActivity{}
       |> APActivity.changeset(%{json: json})
+      |> Objects.cast_caretaker(character)
+      |> Objects.cast_acl(character, opts)
+
     id = Changeset.get_change(activity, :id)
 
     activity
-    |> Activities.put_assoc(:create, actor, id)
+    |> Activities.put_assoc(:create, character, id)
     |> repo().insert()
   end
 end

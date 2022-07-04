@@ -93,22 +93,27 @@ defmodule Bonfire.Social.Objects do
   end
 
   def cast_creator(changeset, creator),
-    do: cast_creator(changeset, creator, e(creator, :id, nil))
+    do: cast_creator(changeset, creator, ulid(creator))
 
-  def cast_creator(changeset, _creator, nil), do: changeset
-  def cast_creator(changeset, _creator, creator_id) do
+  defp cast_creator(changeset, _creator, nil), do: changeset
+  defp cast_creator(changeset, _creator, creator_id) do
     changeset
     |> Changesets.maybe_put_assoc(:created, %{creator_id: creator_id})
   end
 
-  def cast_creator_caretaker(changeset, creator),
-    do: cast_creator_caretaker(changeset, creator, e(creator, :id, nil))
+  def cast_caretaker(changeset, caretaker),
+    do: cast_caretaker(changeset, caretaker, ulid(caretaker))
 
-  defp cast_creator_caretaker(changeset, _creator, nil), do: changeset
-  defp cast_creator_caretaker(changeset, _creator, creator_id) do
+  defp cast_caretaker(changeset, _caretaker, nil), do: changeset
+  defp cast_caretaker(changeset, _caretaker, caretaker_id) do
     changeset
-    |> Changesets.maybe_put_assoc(:created,   %{creator_id: creator_id})
-    |> Changesets.maybe_put_assoc(:caretaker, %{caretaker_id: creator_id})
+    |> Changesets.maybe_put_assoc(:caretaker, %{caretaker_id: caretaker_id})
+  end
+
+  def cast_creator_caretaker(changeset, user) do
+    changeset
+    |> cast_creator(user)
+    |> cast_caretaker(user)
   end
 
   def read(object_id, socket_or_current_user) when is_binary(object_id) do
