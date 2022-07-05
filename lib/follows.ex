@@ -218,7 +218,7 @@ defmodule Bonfire.Social.Follows do
   end
 
   defp local_or_remote_object(id) when is_binary(id) do
-    Bonfire.Common.Pointers.get(id)
+    Bonfire.Common.Pointers.get(id, skip_boundary_check: true)
     ~> local_or_remote_object()
   end
   defp local_or_remote_object(object) do
