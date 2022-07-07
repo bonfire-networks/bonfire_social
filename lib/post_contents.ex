@@ -28,7 +28,8 @@ defmodule Bonfire.Social.PostContents do
   def maybe_prepare_contents(attrs, creator, _boundary) do
     if module_enabled?(Bonfire.Social.Tags) do
       debug("process post contents for tags/mentions")
-      # TODO: refactor this function?
+
+      # TODO: refactor this?
       with {:ok, %{text: html_body, mentions: mentions1, hashtags: hashtags1, urls: urls1}} <- Bonfire.Social.Tags.maybe_process(creator, prepare_text(get_attr(attrs, :html_body), creator)),
           {:ok, %{text: name, mentions: mentions2, hashtags: hashtags2, urls: urls2}} <- Bonfire.Social.Tags.maybe_process(creator, prepare_text(get_attr(attrs, :name), creator)),
           {:ok, %{text: summary, mentions: mentions3, hashtags: hashtags3, urls: urls3}} <- Bonfire.Social.Tags.maybe_process(creator, prepare_text(get_attr(attrs, :summary), creator)) do
@@ -41,7 +42,8 @@ defmodule Bonfire.Social.PostContents do
             summary: summary,
             mentions: (mentions1 ++ mentions2 ++ mentions3),
             hashtags: (hashtags1 ++ hashtags2 ++ hashtags3),
-            urls: (urls1 ++ urls2 ++ urls3)
+            urls: (urls1 ++ urls2 ++ urls3),
+            languages: maybe_detect_languages(attrs)
         })
       end
     else
@@ -53,7 +55,8 @@ defmodule Bonfire.Social.PostContents do
     merge_with_body_or_nil(attrs, %{
       html_body: prepare_text(get_attr(attrs, :html_body), creator),
       name: prepare_text(get_attr(attrs, :name), creator),
-      summary: prepare_text(get_attr(attrs, :summary), creator)
+      summary: prepare_text(get_attr(attrs, :summary), creator),
+      languages: maybe_detect_languages(attrs)
     })
   end
 
@@ -62,6 +65,15 @@ defmodule Bonfire.Social.PostContents do
   end
   def merge_with_body_or_nil(attrs, map) do
     Map.merge(attrs, map)
+  end
+
+  def maybe_detect_languages(attrs, fields \\ [:name, :summary, :html_body]) do
+    fields
+    |> Enum.map(&get_attr(attrs, &1))
+    |> Enum.join("\n\n")
+    |> Text.text_only()
+    |> Elixir.Text.Language.classify()
+    |> debug
   end
 
   defp get_attr(attrs, key) do
@@ -73,7 +85,7 @@ defmodule Bonfire.Social.PostContents do
     if String.contains?(text, "/crash!"), do: throw("User-triggered crash") # little trick to test error handling
 
     text
-    |> maybe_process_markdown(creator) # if not using an HTML-based WYSIWYG editor, then we convert any markdown to HTML
+    |> maybe_process_markdown(creator) # if not using an HTML-based WYSIWYG editor, then we convert any markdown to HTML # TODO: we should store the markdown instead
     |> Text.maybe_emote() # transform emoticons to emojis
     |> Text.maybe_sane_html() # remove potentially dangerous or dirty markup
     |> Text.maybe_normalize_html() # make sure we end up with proper HTML
