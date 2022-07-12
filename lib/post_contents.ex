@@ -72,8 +72,16 @@ defmodule Bonfire.Social.PostContents do
     |> Enum.map(&get_attr(attrs, &1))
     |> Enum.join("\n\n")
     |> Text.text_only()
-    |> Elixir.Text.Language.classify()
+    |> String.trim()
+    |> do_maybe_detect_languages()
     |> debug
+  end
+
+  defp do_maybe_detect_languages(text) when is_binary(text) and text !="" do
+    Elixir.Text.Language.classify(text)
+  end
+  defp do_maybe_detect_languages(_) do
+    nil
   end
 
   defp get_attr(attrs, key) do
