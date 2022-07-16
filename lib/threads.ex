@@ -291,7 +291,7 @@ defmodule Bonfire.Social.Threads do
       |> or_where([replied], replied.thread_id == ^thread_id or replied.reply_to_id == ^thread_id)
       |> where([replied], replied.id != ^thread_id)
       |> Activities.query_object_preload_create_activity(opts)
-      # |> Activities.as_permitted_for(opts, [:see, :read])
+      |> Activities.as_permitted_for(opts, [:see, :read])
       |> if opts[:reverse_order] do
         order_by(..., [root], root.id)
       else

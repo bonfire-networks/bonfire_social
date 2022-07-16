@@ -27,7 +27,26 @@ defmodule Bonfire.Social.Likes do
   # def by_liker(%{}=subject, type), do: [subject: subject] |> query(current_user: subject) |>  by_type_q(type) |> repo().many()
   def by_liked(%{}=subject), do: [subject: subject] |> query(current_user: subject) |> repo().many()
 
-  def like(%User{} = liker, %{} = liked) do
+  def like(%{} = liker, %{} = object) do
+    id = ulid!(object)
+    case Bonfire.Boundaries.load_pointers(id, current_user: liker, verbs: [:like], ids_only: true) do
+      %{id: id} ->
+        do_like(liker, object)
+      _ ->
+        error(l "Sorry, you cannot react to this")
+    end
+  end
+
+  def like(%User{} = liker, liked) when is_binary(liked) do
+    with {:ok, object} <- Bonfire.Common.Pointers.get(liked, current_user: liker, verbs: [:like]) do
+      #debug(liked)
+      do_like(liker, object)
+    else _ ->
+        error(l "Sorry, you cannot react to this")
+    end
+  end
+
+  defp do_like(%User{} = liker, %{} = liked) do
     liked = Objects.preload_creator(liked)
     liked_creator = Objects.object_creator(liked)
     opts = [
@@ -48,13 +67,6 @@ defmodule Bonfire.Social.Likes do
             error(e)
             {:error, e}
         end
-    end
-  end
-
-  def like(%User{} = liker, liked) when is_binary(liked) do
-    with {:ok, liked} <- Bonfire.Common.Pointers.get(liked, current_user: liker) do
-      #debug(liked)
-      like(liker, liked)
     end
   end
 

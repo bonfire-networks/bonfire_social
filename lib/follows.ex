@@ -199,7 +199,7 @@ defmodule Bonfire.Social.Follows do
     else
       case ulid(object) do
         id when is_binary(id) ->
-          case Bonfire.Boundaries.load_pointers(id, current_user: follower, verbs: :follow) do
+          case Bonfire.Boundaries.load_pointers(id, opts) do
             object when is_struct(object) ->
               local_or_remote_object(object)
             _ ->

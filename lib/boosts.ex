@@ -22,7 +22,25 @@ defmodule Bonfire.Social.Boosts do
   def get!(subject, object, opts \\ []), do: Edges.get!(__MODULE__, subject, object, opts)
 
 
-  def boost(%{} = booster, %{} = boosted) do
+  def boost(%{} = booster, %{} = object) do
+    id = ulid!(object)
+    case Bonfire.Boundaries.load_pointers(id, current_user: booster, verbs: [:boost], ids_only: true) do
+      %{id: id} ->
+        do_boost(booster, object)
+      _ ->
+        error(l "Sorry, you cannot boost this")
+    end
+  end
+  def boost(%{} = booster, boosted) when is_binary(boosted) do
+    with {:ok, object} <- Bonfire.Common.Pointers.get(boosted, current_user: booster, verbs: [:boost]) do
+      #debug(liked)
+      do_boost(booster, object)
+    else _ ->
+        error(l "Sorry, you cannot boost this")
+    end
+  end
+
+  defp do_boost(%{} = booster, %{} = boosted) do
     boosted = Objects.preload_creator(boosted)
     boosted_creator = Objects.object_creator(boosted)
     opts = [
@@ -41,12 +59,6 @@ defmodule Bonfire.Social.Boosts do
       feed_ids = for fp <- boost.feed_publishes, do: fp.feed_id
       LivePush.push_activity_object(feed_ids, boost, boosted, push_to_thread: false, notify: true)
       {:ok, boost}
-    end
-  end
-  def boost(%{} = booster, boosted) when is_binary(boosted) do
-    with {:ok, boosted} <- Bonfire.Common.Pointers.get(boosted, current_user: booster) do
-      #debug(liked)
-      boost(booster, boosted)
     end
   end
 
