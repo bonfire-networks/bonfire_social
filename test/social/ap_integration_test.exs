@@ -32,7 +32,7 @@ defmodule Bonfire.Social.APIntegrationTest do
     post_creator = Fake.fake_user!()
 
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
-    assert {:ok, post} = Posts.publish(current_user: post_creator, post_attrs: attrs)
+    assert {:ok, post} = Posts.publish(current_user: post_creator, post_attrs: attrs, boundary: "public")
 
     assert {:ok, like} = Likes.like(me, post)
 
@@ -44,7 +44,7 @@ defmodule Bonfire.Social.APIntegrationTest do
     post_creator = Fake.fake_user!()
 
     attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
-    assert {:ok, boosted} = Posts.publish(current_user: post_creator, post_attrs: attrs)
+    assert {:ok, boosted} = Posts.publish(current_user: post_creator, post_attrs: attrs, boundary: "public")
 
     assert {:ok, boost} = Boosts.boost(me, boosted)
 
