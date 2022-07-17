@@ -39,13 +39,13 @@ defmodule Bonfire.Social.Posts do
     run_epic(:publish, options)
   end
 
-  def delete(object, options \\ []) do
-    options = to_options(options)
+  def delete(object, opts \\ []) do
+    opts = to_options(opts)
     |> Keyword.put(:object, object)
 
-    options
+    opts
     |> Keyword.put(:delete_associations,
-      options[:delete_associations] ++ [ # adds per-type assocs
+      opts[:delete_associations] ++ [ # adds per-type assocs
         :post_content
       ])
     |> run_epic(:delete, ..., :object)

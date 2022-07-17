@@ -1,17 +1,6 @@
  defmodule Bonfire.Social.Acts.Objects.Delete do
   @moduledoc """
-  Delete something with a changeset
-
-  Epic Options:
-    * `:current_user` - user that will create the post, required.
-    * `:post_attrs` (configurable) - attrs to create the post from, required.
-    * `:post_id` (configurable) - id to use for the created post (handy for creating
-      activitypub objects with an id representing their reported creation time)
-
-  Act Options:
-    * `:id` - epic options key to find an id to force override with at, default: `:post_id`
-    * `:as` - key to assign changeset to, default: `:post`.
-    * `:attrs` - epic options key to find the attributes at, default: `:post_attrs`.
+  Delete something + specified associations with a changeset
   """
 
   alias Bonfire.Ecto.Acts.Work

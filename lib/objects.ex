@@ -207,7 +207,7 @@ defmodule Bonfire.Social.Objects do
             ~> debug("WIP: deletion") do
       opts =opts
       |> Keyword.put(:action, :delete)
-      |> Keyword.put(:delete_associations, [ # generic things to delete from all object types
+      |> Keyword.put(:delete_associations, [ # generic assocs to delete from all object types if they exist
           :created,
           :caretaker,
           :activities,
@@ -216,7 +216,7 @@ defmodule Bonfire.Social.Objects do
         ])
 
       with {:error, _} <- Bonfire.Common.ContextModules.maybe_apply(object, :delete, [object, opts], &delete_apply_error/2),
-          {:error, _} <- Bonfire.Common.ContextModules.maybe_apply(object, :soft_delete, [current_user(opts), object], &delete_apply_error/2),
+          {:error, _} <- Bonfire.Common.ContextModules.maybe_apply(object, :soft_delete, [object, opts], &delete_apply_error/2),
           {:error, _} <- Bonfire.Common.ContextModules.maybe_apply(object, :soft_delete, [object], &delete_apply_error/2) do
             warn("there's no per-type delete functions, try with generic_delete anyway")
             maybe_generic_delete(type, object, opts)
