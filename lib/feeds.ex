@@ -134,7 +134,7 @@ defmodule Bonfire.Social.Feeds do
 
     []
     ++ [to_feeds_custom]
-    ++ case Boundaries.preset(preset_or_custom_boundary) do
+    ++ case Boundaries.preset_name(maybe_from_opts(preset_or_custom_boundary, :boundary, preset_or_custom_boundary)) do
 
       "public" -> # put in all reply_to creators and mentions inboxes + guest/local feeds
         [ named_feed_id(:guest),
@@ -147,29 +147,38 @@ defmodule Bonfire.Social.Feeds do
            ++ mentions)
           |> feed_ids(:notifications, ...))
 
-      "federated" -> # like public but put in federated feed instead of local (is this what we want?)
-      [ named_feed_id(:guest),
-        named_feed_id(:activity_pub),
-        thread_id,
-        my_feed_id(:outbox, creator)
-      ]
-      ++ # put in inboxes (notifications) of any users we're replying to and mentions
-          (([reply_to_creator]
-           ++ mentions)
-          |> feed_ids(:notifications, ...))
+      "federated" -> # like public but put in federated feed instead of local (FIXME: is this right?)
+        [ named_feed_id(:guest),
+          named_feed_id(:activity_pub),
+          thread_id,
+          my_feed_id(:outbox, creator)
+        ]
+        ++ # put in inboxes (notifications) of any users we're replying to and mentions
+        (
+          (
+            [reply_to_creator]
+            ++ mentions
+          )
+          |> feed_ids(:notifications, ...)
+        )
 
       "local" ->
 
-        [named_feed_id(:local)] # put in local instance feed
+        [named_feed_id(:local)] # put in local instance feed - TODO: is this necessary?
         ++
         [
-          thread_id,
-          my_feed_id(:outbox, creator)
-        ] ++ # put in inboxes (notifications) of any local users we're replying to and local mentions
-          (([reply_to_creator]
-           ++ mentions)
+          thread_id, # thread feed
+          my_feed_id(:outbox, creator) # author outbox
+        ]
+        ++ # put in inboxes (notifications) of any local users we're replying to and local mentions
+        (
+          (
+            [reply_to_creator]
+            ++ mentions
+          )
           |> Enum.filter(&is_local?/1)
-          |> feed_ids(:notifications, ...))
+          |> feed_ids(:notifications, ...)
+        )
 
       "mentions" ->
         mentions
