@@ -71,21 +71,20 @@ defmodule Bonfire.Social.FeedActivities do
   def feed(id_or_ids, opts)
   when is_binary(id_or_ids) or (is_list(id_or_ids) and id_or_ids != []) do
     ulid(id_or_ids)
-    |> base_feed_query(opts)
+    |> feed_query(opts)
     |> debug()
-    |> query_extras(opts)
     |> repo().many_paginated(opts)
   end
 
-  def feed(:notifications = feed_name, opts), do: named_feed(feed_name, opts ++ [skip_boundary_check: :admins, preload: :notifications])
+  def feed(:notifications = feed_name, opts), do: named_feed(feed_name, opts ++ [skip_boundary_check: :admins, preload: :notifications]) # so we can show flags to admins in notifications
 
   def feed(:flags, opts) do
     Bonfire.Social.Flags.list_paginated([], opts)
     |> repo().maybe_preload([edge: [object: [created: [creator: [:profile, :character]]]]], [follow_pointers: false])
-    |> dump("ffflags")
+    # |> debug()
   end
 
-  def feed(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
+  def feed(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do # eg: :local
     named_feed(feed_name, opts)
   end
 
@@ -102,9 +101,7 @@ defmodule Bonfire.Social.FeedActivities do
         # debug(ulid(current_user(opts)), "current_user")
         # debug(feed_name, "feed_name")
         debug(feed, "feed id(s)")
-        base_feed_query(feed, opts)
-        |> query_extras(opts)
-        |> repo().many_paginated(opts)
+        feed(feed, opts)
     e ->
         error("FeedActivities.feed: no known feed #{inspect feed_name} - #{inspect e}")
         debug(opts)
@@ -118,7 +115,7 @@ defmodule Bonfire.Social.FeedActivities do
   #   opts = Keyword.put_new(opts, :current_user, user)
   #   id = Feeds.named_feed_id(feed_name) ||
   #     Bonfire.Social.Feeds.my_feed_id(feed_name, user)
-  #   base_feed_query(id, opts)
+  #   feed_query(id, opts)
   #   |> query_extras(opts)
   #   |> repo().many_paginated(paginate)
   # end
@@ -141,8 +138,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp default_query(), do: select(Pointers.query_base(), [p], p)
 
-  defp base_feed_query(feed_ids, opts) do
-    feed_ids = List.wrap(ulid(feed_ids))
+  defp base_query(opts) do
 
     exclude_object_types = [Message] ++ e(opts, :exclude_object_types, []) # eg. private messages should never appear in feeds
     exclude_verbs = [:message] ++ e(opts, :exclude_verbs, []) # exclude certain activity tpes
@@ -160,12 +156,37 @@ defmodule Bonfire.Social.FeedActivities do
       join: a in Activity, as: :activity, on: a.id == fp.id,
       join: ap in Pointer, as: :activity_pointer, on: ap.id == a.id,
       join: op in Pointer, as: :object, on: op.id == a.object_id,
-      where: fp.feed_id in ^feed_ids,
       where: a.verb_id not in ^exclude_verb_ids,
       where: is_nil(op.deleted_at) and is_nil(ap.deleted_at),   # Don't show anything deleted
       where: ap.table_id not in ^exclude_table_ids and op.table_id not in ^exclude_table_ids,
       distinct: [desc: fp.id],
       order_by: [desc: fp.id]
+  end
+
+  defp feed_query(feed_ids, opts) do
+    local_feed_id = Feeds.named_feed_id(:local)
+    federated_feed_id = Feeds.named_feed_id(:activity_pub)
+
+    cond do
+      local_feed_id == feed_ids ->
+        base_query(opts)
+        |> query_extras(opts)
+        |> where([fp, object_peered: object_peered], fp.feed_id in ^ulids(feed_ids) or is_nil(object_peered.id))
+
+      federated_feed_id == feed_ids ->
+        base_query(opts)
+        |> query_extras(opts)
+        |> where([fp, object_peered: object_peered], fp.feed_id in ^ulids(feed_ids) or not is_nil(object_peered.id))
+
+      true ->
+        generic_feed_query(feed_ids, opts)
+    end
+  end
+
+  defp generic_feed_query(feed_ids, opts) do
+    base_query(opts)
+    |> query_extras(opts)
+    |> where([fp], fp.feed_id in ^ulids(feed_ids))
   end
 
   def query_paginated(query_or_filters \\ [], opts \\ [])
@@ -195,7 +216,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   # def query([feed_id: feed_id_or_ids], opts) when is_binary(feed_id_or_ids) or is_list(feed_id_or_ids) do
   #   # debug(feed_id_or_ids: feed_id_or_ids)
-  #   base_feed_query(feed_id_or_ids, opts)
+  #   feed_query(feed_id_or_ids, opts)
   #   query([], opts, query)
   # end
 
