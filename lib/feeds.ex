@@ -14,15 +14,16 @@ defmodule Bonfire.Social.Feeds do
 
   @global_feeds %{
     "public"    => [:guest, :local],
-    "federated" => [:guest, :activity_pub],
+    "federated" => [:activity_pub],
     "local"     => [:local],
   }
 
   # def queries_module, do: Feed
   def context_module, do: Feed
 
+## TODO: de-duplicate feed_ids_to_publish/3 and target_feeds/4 ##
 
-  def feed_ids_to_publish(_me, "admins", _) do
+def feed_ids_to_publish(_me, "admins", _) do
     admins_notifications()
     |> debug("posting to admin feeds")
   end
@@ -42,14 +43,14 @@ defmodule Bonfire.Social.Feeds do
   end
 
   def maybe_my_outbox_feed_id(me, boundary) do
-    if boundary in ["public", "federated", "local"] do
+    if boundary not in ["mentions", "admins"] do
       case my_feed_id(:outbox, me) do
         nil ->
           warn("Cannot find my outbox to publish!")
           nil
         id ->
           debug(boundary, "Publishing to my outbox, boundary")
-          [id]
+          id
       end
     else
       debug(boundary, "Not publishing to my outbox, boundary")
@@ -83,12 +84,12 @@ defmodule Bonfire.Social.Feeds do
         |> Enum.filter(&is_local?/1) # only local
         |> Enum.map(&feed_id(:notifications, &1))
       true ->
+        # TODO: we should notify mentions & reply_to_creator IF they are included in the object's boundaries
         nil
     end
   end
 
 ## TODO: de-duplicate feed_ids_to_publish/3 and target_feeds/4 ##
-
   def target_feeds(%Ecto.Changeset{} = changeset, creator, preset_or_custom_boundary) do
     # debug(changeset)
 
@@ -147,9 +148,8 @@ defmodule Bonfire.Social.Feeds do
            ++ mentions)
           |> feed_ids(:notifications, ...))
 
-      "federated" -> # like public but put in federated feed instead of local (FIXME: is this right?)
-        [ named_feed_id(:guest),
-          named_feed_id(:activity_pub),
+      "federated" -> # like public but put in remote/federated feed instead of guest and local
+        [ named_feed_id(:activity_pub),
           thread_id,
           my_feed_id(:outbox, creator)
         ]
@@ -164,9 +164,7 @@ defmodule Bonfire.Social.Feeds do
 
       "local" ->
 
-        [named_feed_id(:local)] # put in local instance feed - TODO: is this necessary?
-        ++
-        [
+        [ named_feed_id(:local), # put in local instance feed
           thread_id, # thread feed
           my_feed_id(:outbox, creator) # author outbox
         ]
@@ -187,7 +185,11 @@ defmodule Bonfire.Social.Feeds do
       "admins" ->
         admins_notifications()
 
-      _ -> [] # default to none except any custom ones
+      _ -> # defaults for custom boundaries with none of the presets selected
+        # TODO: we should notify mentions & reply_to_creator IF they are included in the object's boundaries
+        [ thread_id, # thread feed
+          my_feed_id(:outbox, creator) # author outbox
+        ]
     end
     |> debug("pre-target feeds")
     |> List.flatten()
