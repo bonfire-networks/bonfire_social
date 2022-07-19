@@ -77,7 +77,7 @@ defmodule Bonfire.Social.PostContents do
     |> debug
   end
 
-  defp do_maybe_detect_languages(text) when is_binary(text) and text !="" do
+  defp do_maybe_detect_languages(text) when is_binary(text) and text !="" and byte_size(text) > 5 do
     Elixir.Text.Language.classify(text)
   end
   defp do_maybe_detect_languages(_) do
