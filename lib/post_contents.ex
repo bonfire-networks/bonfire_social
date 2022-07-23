@@ -12,7 +12,7 @@ defmodule Bonfire.Social.PostContents do
     %{post_content: maybe_prepare_contents(attrs, creator, boundary)}
     |> Changeset.cast(changeset, ..., [])
     |> Changeset.cast_assoc(:post_content, required: !has_images, with: &changeset/2)
-    |> debug()
+    # |> debug()
   end
 
   def maybe_prepare_contents(%{local: false} = attrs, creator, _boundary) do
@@ -43,7 +43,7 @@ defmodule Bonfire.Social.PostContents do
             mentions: (mentions1 ++ mentions2 ++ mentions3),
             hashtags: (hashtags1 ++ hashtags2 ++ hashtags3),
             urls: (urls1 ++ urls2 ++ urls3),
-            languages: maybe_detect_languages(attrs)
+            languages: maybe_detect_languages(attrs) # TODO: show languages to user, then save the one they confirm
         })
       end
     else

@@ -32,12 +32,11 @@ defmodule Bonfire.Social.Tags do
   end
 
   def maybe_process(creator, text) do
-    debug(text)
+    # debug(text)
     with true <- is_binary(text) and text !="",
          true <- module_enabled?(Bonfire.Tag),
-         {text, mentions, hashtags, urls} <- Bonfire.Tag.TextContent.Process.process(creator, text, editor_output_content_type(creator)) |> debug do
+         {text, mentions, hashtags, urls} <- Bonfire.Tag.TextContent.Process.process(creator, text, editor_output_content_type(creator)) do
       {:ok, %{text: text, mentions: Keyword.values(mentions), hashtags: Keyword.values(hashtags), urls: Keyword.values(urls)}}
-
     else _ ->
       {:ok, %{text: text, mentions: [], hashtags: [], urls: []}}
     end

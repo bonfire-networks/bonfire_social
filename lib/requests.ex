@@ -35,17 +35,17 @@ defmodule Bonfire.Social.Requests do
   Request someone/something, and federate it
   """
   def accept(request, opts) do
-    requested(request, opts)
-    ~> Request.changeset(%{accepted_at: DateTime.now!("Etc/UTC")})
-    |> repo().update()
-    # |> dump
+    with {:ok, request} <- requested(request, opts) do
+      Request.changeset(request, %{accepted_at: DateTime.now!("Etc/UTC")})
+      |> repo().update()
+    end
   end
 
   def ignore(request, opts) do
-    requested(request, opts)
-    ~> Request.changeset(%{ignored_at: DateTime.now!("Etc/UTC")})
-    |> repo().update()
-    # |> dump
+    with {:ok, request} <- requested(request, opts) do
+      Request.changeset(request, %{ignored_at: DateTime.now!("Etc/UTC")})
+      |> repo().update()
+    end
   end
 
   def get(subject, type, object, opts \\ []), do: Edges.get({__MODULE__, type}, subject, object, opts)
