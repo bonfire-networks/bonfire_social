@@ -90,8 +90,8 @@ defmodule Bonfire.Social.Edges do
     from(root in query_schema)
     |> proload(:edge)
     |> boundarise(id, opts)
-    |> filter(filters, opts)
     |> maybe_proload(e(opts, :preload, nil))
+    |> filter(filters, opts)
   end
 
   defp maybe_proload(query, _skip_preload? = false), do: query
@@ -113,7 +113,7 @@ defmodule Bonfire.Social.Edges do
   end
 
   defp filter(query, filters, opts) when is_list(filters) do
-    # IO.inspect(filters, label: "filters")
+    debug(filters, "filters")
     Enum.reduce(filters, query, &filter(&2, &1, opts))
     |> query_filter(Keyword.drop(filters, [:object, :subject, :type]))
   end
@@ -138,18 +138,42 @@ defmodule Bonfire.Social.Edges do
     end
   end
 
-  defp filter(query, {:type, type}, opts) do
-    case type do
-      _ when is_list(type) ->
-        where(query, [edge: edge], edge.table_id in ^ulid(type))
-      _ when is_map(type) or is_binary(type) ->
-        where(query, [edge: edge], edge.table_id == ^ulid(type))
+  defp filter(query, {:type, types}, opts) do
+    case table_types(types) |> List.wrap() |> debug |> Utils.filter_empty(nil) do
+      table_ids when is_list(table_ids) ->
+        where(query, [edge: edge], edge.table_id in ^table_ids)
+      _ ->
+        query
+    end
+  end
+
+  defp filter(query, {:subject_type, types}, opts) do
+    case table_types(types) |> List.wrap() |> debug |> Utils.filter_empty(nil) do
+      table_ids when is_list(table_ids) ->
+        where(query, [subject: subject], subject.table_id in ^table_ids)
+      _ ->
+        query
+    end
+  end
+
+  defp filter(query, {:object_type, types}, opts) do
+    case table_types(types) |> List.wrap() |> debug |> Utils.filter_empty(nil) do
+      table_ids when is_list(table_ids) ->
+        where(query, [object: object], object.table_id in ^table_ids)
+      _ ->
+        query
     end
   end
 
   defp filter(query, filters, _opts) do
+    warn(filters, "Filter params not recognised")
     query
   end
+
+  def table_types(types) when is_list(types), do: Enum.map(types, &table_types/1)
+  def table_types(type) when is_atom(type) and not is_nil(type), do: table_id(type)
+  def table_types(type) when is_map(type) or is_binary(type), do: ulid(type)
+  def table_types(_), do: nil
 
   #doc "Delete Follows where i am the subject"
   def delete_by_subject(user), do: query([subject: user], skip_boundary_check: true) |> do_delete()

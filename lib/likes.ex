@@ -24,7 +24,6 @@ defmodule Bonfire.Social.Likes do
   def get!(subject, object, opts \\ []), do: Edges.get!(__MODULE__, subject, object, opts)
 
   def by_liker(%{}=subject), do: [subject: subject] |> query(current_user: subject) |> repo().many()
-  # def by_liker(%{}=subject, type), do: [subject: subject] |> query(current_user: subject) |>  by_type_q(type) |> repo().many()
   def by_liked(%{}=subject), do: [subject: subject] |> query(current_user: subject) |> repo().many()
 
   def like(%{} = liker, %{} = object) do
@@ -127,12 +126,6 @@ defmodule Bonfire.Social.Likes do
     |> repo().insert()
     # |> repo().maybe_preload(edge: [:object])
   end
-
-  # defp by_type_q(q, type) do
-  #   q
-  #   |> join(:inner, [l], ot in ^type, as: :liked, on: ot.id == l.liked_id)
-  #   |> join_preload([:liked])
-  # end
 
   def ap_publish_activity("create", like) do
     info(like)
