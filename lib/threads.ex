@@ -199,7 +199,7 @@ defmodule Bonfire.Social.Threads do
     # |> debug("participants grab bag")
     |> filter_empty([])
     |> Enum.uniq_by(&e(&1, :character, :id, nil))
-    # |> Enum.reject(&( e(&1, :character, :id, nil) == e(current_user, :id, nil) ))
+    # |> Enum.reject(&( e(&1, :character, :id, nil) == ulid(current_user) ))
     |> debug("participants")
   end
 
