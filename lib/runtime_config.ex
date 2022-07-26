@@ -88,6 +88,8 @@ defmodule Bonfire.Social.RuntimeConfig do
           # Oban would rather we put these here than in the transaction
           # above because it knows better than us, obviously.
           {ActivityPub, on: :post}, # Prepare for federation and do the queue insert (oban).
+
+          {Bonfire.Social.Acts.CategoriesAutoBoost, on: :post}, # Once the activity/object exists, we can apply side effects
         ],
 
         delete: delete_object,

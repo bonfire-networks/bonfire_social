@@ -36,10 +36,36 @@ defmodule Bonfire.Social.Tags do
     with true <- is_binary(text) and text !="",
          true <- module_enabled?(Bonfire.Tag),
          {text, mentions, hashtags, urls} <- Bonfire.Tag.TextContent.Process.process(creator, text, editor_output_content_type(creator)) do
+
       {:ok, %{text: text, mentions: Keyword.values(mentions), hashtags: Keyword.values(hashtags), urls: Keyword.values(urls)}}
     else _ ->
       {:ok, %{text: text, mentions: [], hashtags: [], urls: []}}
     end
+  end
+
+  def maybe_boostable_categories(creator, mentions) do
+    mentions
+    |> Enum.map(&maybe_boostable_category(creator, &1))
+    |> filter_empty([])
+  end
+
+  defp maybe_boostable_category(creator, %{table_id: "2AGSCANBECATEG0RY0RHASHTAG"} = character) do
+    case Bonfire.Boundaries.load_pointer(character, current_user: creator, verbs: [:tag]) do
+      %{id: _} ->
+        debug(character, "boostable")
+        character
+      _ ->
+        debug("we don't have tag permission, so category auto-boosting will be skipped")
+        nil
+    end
+  end
+  # defp maybe_boostable_category(creator, {"+"<> _name, character}) do
+  #   debug(character, "boostable")
+  #   character
+  # end
+  defp maybe_boostable_category(_, _mention) do
+    # debug(mention, "skip")
+    nil
   end
 
   def editor_output_content_type(user) do

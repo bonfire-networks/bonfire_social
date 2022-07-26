@@ -34,7 +34,7 @@ defmodule Bonfire.Social.Acts.Activity do
         feeds_key = Keyword.get(act.options, :feeds, :feed_ids)
 
         attrs = Keyword.get(epic.assigns[:options], attrs_key, %{})
-        feed_ids = Feeds.target_feeds(changeset, current_user, boundary)
+        feed_ids = Feeds.target_feeds(changeset, current_user, boundary) # seems like a duplicate of `Feeds.feed_ids_to_publish` in the Feeds act?
 
         debug(epic, act, "activity", "Casting")
         changeset

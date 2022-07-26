@@ -24,7 +24,7 @@ defmodule Bonfire.Social.Boosts do
 
   def boost(%{} = booster, %{} = object) do
     id = ulid!(object)
-    case Bonfire.Boundaries.load_pointers(id, current_user: booster, verbs: [:boost], ids_only: true) do
+    case Bonfire.Boundaries.load_pointer(id, current_user: booster, verbs: [:boost], ids_only: true) do
       %{id: id} ->
         do_boost(booster, object)
       _ ->

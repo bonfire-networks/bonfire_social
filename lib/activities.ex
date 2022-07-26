@@ -94,7 +94,7 @@ defmodule Bonfire.Social.Activities do
   @doc "Delete an activity (usage by things like unlike)"
   def delete_by_subject_verb_object(%{}=subject, verb, %{}=object) do
     q = by_subject_verb_object_q(subject, Verbs.get_id!(verb), object)
-    FeedActivities.delete(repo().many(q)) # TODO: see why cascading delete doesn't take care of this
+    FeedActivities.delete(repo().many(q), :id) # TODO: see why cascading delete doesn't take care of this
     elem(repo().delete_all(q), 1)
   end
 

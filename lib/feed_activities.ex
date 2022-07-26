@@ -143,8 +143,10 @@ defmodule Bonfire.Social.FeedActivities do
     exclude_object_types = [Message] ++ e(opts, :exclude_object_types, []) # eg. private messages should never appear in feeds
     exclude_verbs = [:message] ++ e(opts, :exclude_verbs, []) # exclude certain activity tpes
 
-    exclude_table_ids = exclude_object_types |> Enum.map(&maybe_apply(&1, :__pointers__,:table_id))
-    exclude_verb_ids = exclude_verbs |> Enum.map(&Bonfire.Social.Activities.verb_id(&1))
+    exclude_table_ids = exclude_object_types |> Enum.map(&maybe_apply(&1, :__pointers__,:table_id)) |> List.wrap()
+    exclude_verb_ids = exclude_verbs |> Enum.map(&Bonfire.Social.Activities.verb_id(&1)) |> List.wrap()
+
+    # exclude_feed_ids = e(opts, :exclude_feed_ids, []) |> List.wrap() # WIP - to exclude activities that also appear in another feed
 
     # feeds = from fp in FeedPublish, # why the subquery?..
     #   where: fp.feed_id in ^feed_ids,
@@ -156,6 +158,7 @@ defmodule Bonfire.Social.FeedActivities do
       join: a in Activity, as: :activity, on: a.id == fp.id,
       join: ap in Pointer, as: :activity_pointer, on: ap.id == a.id,
       join: op in Pointer, as: :object, on: op.id == a.object_id,
+      # where: fp.feed_id not in ^exclude_feed_ids,
       where: a.verb_id not in ^exclude_verb_ids,
       where: is_nil(op.deleted_at) and is_nil(ap.deleted_at),   # Don't show anything deleted
       where: ap.table_id not in ^exclude_table_ids and op.table_id not in ^exclude_table_ids,
@@ -539,19 +542,24 @@ defmodule Bonfire.Social.FeedActivities do
   def the_object(object), do: object
 
 
-  @doc "Delete an activity (usage by things like unlike)"
-  def delete(objects, by_field \\ :id) do
+  @doc "Remove one or more activities from all feeds"
+  def delete(objects, by_field) when is_atom(by_field) do
     case ulid(objects) do
       # is_list(id_or_ids) ->
       #   Enum.each(id_or_ids, fn x -> delete(x, by_field) end)
       nil -> error("Nothing to delete")
       objects ->
-        FeedPublish
-        |> query_filter({by_field, objects})
-        # |> debug()
-        |> repo().delete_many()
-        |> elem(0)
+        delete({by_field || :id, objects})
     end
+  end
+
+  @doc "Remove activities from feeds, using specific filters"
+  def delete(filters) when is_list(filters) do
+    FeedPublish
+    |> query_filter(filters)
+    # |> debug()
+    |> repo().delete_many()
+    |> elem(0)
   end
 
   defp maybe_federate_activity(verb, object, activity, opts) do

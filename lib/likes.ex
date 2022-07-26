@@ -28,7 +28,7 @@ defmodule Bonfire.Social.Likes do
 
   def like(%{} = liker, %{} = object) do
     id = ulid!(object)
-    case Bonfire.Boundaries.load_pointers(id, current_user: liker, verbs: [:like], ids_only: true) do
+    case Bonfire.Boundaries.load_pointer(id, current_user: liker, verbs: [:like], ids_only: true) do
       %{id: id} ->
         do_like(liker, object)
       _ ->

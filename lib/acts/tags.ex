@@ -3,6 +3,7 @@ defmodule Bonfire.Social.Acts.Tags do
   alias Bonfire.Epics
   alias Bonfire.Epics.{Act, Epic}
   alias Bonfire.Social.Tags
+  alias Bonfire.Common.Utils
   alias Ecto.Changeset
   import Epics
   use Arrows
@@ -31,10 +32,15 @@ defmodule Bonfire.Social.Acts.Tags do
         boundary = epic.assigns[:options][:boundary]
         attrs_key = Keyword.get(act.options, :attrs, :post_attrs)
         attrs = Keyword.get(epic.assigns[:options], attrs_key, %{})
+        categories_auto_boost = Utils.e(changeset, :changes, :post_content, :changes, :mentions, [])
+        |> Tags.maybe_boostable_categories(current_user, ...)
+        # |> maybe_debug(epic, act, ..., "categories_auto_boost")
+
         maybe_debug(epic, act, "tags", "Casting")
         changeset
         |> Tags.cast(attrs, current_user, boundary)
         |> Epic.assign(epic, on, ...)
+        |> Epic.assign(..., :categories_auto_boost, categories_auto_boost)
       changeset.action == :delete ->
         # TODO: deletion
         epic
