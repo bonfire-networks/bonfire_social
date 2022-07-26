@@ -238,7 +238,7 @@ defmodule Bonfire.Social.Follows do
   # * Make it pay attention to options passed in
   # * When we start allowing to follow things that aren't users, we might need to adjust the circles.
   # * Figure out how to avoid the advance lookup and ensuing race condition.
-  defp do_follow(user, object, _opts) do
+  defp do_follow(%user_struct{} = user, %object_struct{} = object, _opts) do
     to = [
       outbox: [user], # we include follows in feeds, since user has control over whether or not they want to see them in settings
       notifications: [object]
@@ -254,8 +254,9 @@ defmodule Bonfire.Social.Follows do
 
         LivePush.push_activity_object(FeedActivities.get_feed_ids(opts[:to_feeds]), follow, object, push_to_thread: false, notify: true) # FIXME: should not compute feed ids twice
 
-        Bonfire.Boundaries.Circles.add_to_circles(object, Bonfire.Boundaries.Circles.get_stereotype_circles(user, :followed))
-        Bonfire.Boundaries.Circles.add_to_circles(user, Bonfire.Boundaries.Circles.get_stereotype_circles(object, :followers))
+        if user_struct==Bonfire.Data.Identity.User, do: Bonfire.Boundaries.Circles.add_to_circles(object, Bonfire.Boundaries.Circles.get_stereotype_circles(user, :followed))
+
+        if object_struct==Bonfire.Data.Identity.User, do: Bonfire.Boundaries.Circles.add_to_circles(user, Bonfire.Boundaries.Circles.get_stereotype_circles(object, :followers))
 
         Integration.ap_push_activity(user.id, follow)
 
@@ -290,6 +291,8 @@ defmodule Bonfire.Social.Follows do
       Bonfire.Boundaries.Circles.get_stereotype_circles(user, :followed) ~> Bonfire.Boundaries.Circles.remove_from_circles(object, ...)
       Bonfire.Boundaries.Circles.get_stereotype_circles(object, :followers) ~> Bonfire.Boundaries.Circles.remove_from_circles(user, ...)
 
+      # Integration.ap_push_activity(user.id, undo_follow) # TODO!
+
     # end
   end
 
@@ -299,7 +302,7 @@ defmodule Bonfire.Social.Follows do
     end
   end
 
-  defp create(follower, object, opts) do
+  defp create(%{} = follower, object, opts) do
     Edges.changeset(Follow, follower, :follow, object, opts)
     |> repo().insert()
   end
