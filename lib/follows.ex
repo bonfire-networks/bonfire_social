@@ -294,7 +294,7 @@ defmodule Bonfire.Social.Follows do
   end
 
   def unfollow(%{} = user, object) when is_binary(object) do
-    with {:ok, object} <- Bonfire.Common.Pointers.get(object, current_user: user) do
+    with {:ok, object} <- Bonfire.Common.Pointers.get(object, current_user: user, skip_boundary_check: true) do
       unfollow(user, object)
     end
   end
