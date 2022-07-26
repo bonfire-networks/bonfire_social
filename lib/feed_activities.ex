@@ -554,7 +554,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   @doc "Remove activities from feeds, using specific filters"
-  def delete(filters) when is_list(filters) do
+  def delete(filters) when is_list(filters) or is_tuple(filters) do
     FeedPublish
     |> query_filter(filters)
     # |> debug()
