@@ -27,12 +27,10 @@ defmodule Bonfire.Social.Likes do
   def by_liked(%{}=subject), do: [subject: subject] |> query(current_user: subject) |> repo().many()
 
   def like(%{} = liker, %{} = object) do
-    id = ulid!(object)
-    case Bonfire.Boundaries.load_pointer(id, current_user: liker, verbs: [:like], ids_only: true) do
-      %{id: id} ->
-        do_like(liker, object)
-      _ ->
-        error(l "Sorry, you cannot react to this")
+    if Bonfire.Boundaries.can?(liker, :like, object) do
+      do_like(liker, object)
+    else
+      error(l "Sorry, you cannot react to this")
     end
   end
 

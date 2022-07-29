@@ -23,12 +23,10 @@ defmodule Bonfire.Social.Boosts do
 
 
   def boost(%{} = booster, %{} = object) do
-    id = ulid!(object)
-    case Bonfire.Boundaries.load_pointer(id, current_user: booster, verbs: [:boost], ids_only: true) do
-      %{id: id} ->
-        do_boost(booster, object)
-      _ ->
-        error(l "Sorry, you cannot boost this")
+    if Bonfire.Boundaries.can?(booster, :boost, object) do
+      do_boost(booster, object)
+    else
+      error(l "Sorry, you cannot boost this")
     end
   end
   def boost(%{} = booster, boosted) when is_binary(boosted) do

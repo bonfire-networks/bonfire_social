@@ -50,13 +50,12 @@ defmodule Bonfire.Social.Tags do
   end
 
   defp maybe_boostable_category(creator, %{table_id: "2AGSCANBECATEG0RY0RHASHTAG"} = character) do
-    case Bonfire.Boundaries.load_pointer(character, current_user: creator, verbs: [:tag]) do
-      %{id: _} ->
-        debug(character, "boostable")
-        character
-      _ ->
-        debug("we don't have tag permission, so category auto-boosting will be skipped")
-        nil
+    if Bonfire.Boundaries.can?(creator, :tag, character) do
+      debug(character, "boostable")
+      character
+    else
+      debug("we don't have tag permission, so category auto-boosting will be skipped")
+      nil
     end
   end
   # defp maybe_boostable_category(creator, {"+"<> _name, character}) do
