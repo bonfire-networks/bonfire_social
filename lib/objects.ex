@@ -150,8 +150,6 @@ defmodule Bonfire.Social.Objects do
     e(object, :created, :creator, e(object, :creator, nil))
   end
 
-  defp tag_ids(tags), do: Enum.map(tags, &(&1.id))
-
   def list_query(type_or_query \\ nil, opts)
 
   def list_query(%Ecto.Query{}= query, opts) do

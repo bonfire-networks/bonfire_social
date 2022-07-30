@@ -18,13 +18,13 @@ defmodule Bonfire.Social.Acts.CategoriesAutoBoost do
 
         %{object: %{id: _} = object} ->
 
-          auto_boost(categories_auto_boost, object)
+          Bonfire.Social.Tags.auto_boost(categories_auto_boost, object)
 
           epic
 
         object ->
 
-          auto_boost(categories_auto_boost, object)
+          Bonfire.Social.Tags.auto_boost(categories_auto_boost, object)
 
           epic
       end
@@ -34,17 +34,5 @@ defmodule Bonfire.Social.Acts.CategoriesAutoBoost do
     end
   end
 
-  def auto_boost(categories_auto_boost, object) when is_list(categories_auto_boost) do
-    categories_auto_boost
-    |> Enum.each(&auto_boost(&1, object))
-  end
 
-  def auto_boost(%{} = category, object) do
-    Bonfire.Social.Boosts.boost(category, object)
-
-    inbox_id = e(category, :character, :notifications_id, nil)
-    |> debug()
-
-    if inbox_id, do: Bonfire.Social.FeedActivities.delete(feed_id: inbox_id, id: ulid(object)) |> debug() # remove it from the "Submitted" tab
-  end
 end

@@ -43,13 +43,13 @@ defmodule Bonfire.Social.Tags do
     end
   end
 
-  def maybe_boostable_categories(creator, mentions) do
+  def maybe_boostable_categories(creator, mentions) when is_list(mentions) do
     mentions
-    |> Enum.map(&maybe_boostable_category(creator, &1))
+    |> Enum.map(&maybe_boostable_categories(creator, &1)) # TODO: optimise, maybe using Bonfire.Boundaries.load_pointers ?
     |> filter_empty([])
   end
 
-  defp maybe_boostable_category(creator, %{table_id: "2AGSCANBECATEG0RY0RHASHTAG"} = character) do
+  def maybe_boostable_categories(creator, %{table_id: "2AGSCANBECATEG0RY0RHASHTAG"} = character) do
     if Bonfire.Boundaries.can?(creator, :tag, character) do
       debug(character, "boostable")
       character
@@ -58,12 +58,12 @@ defmodule Bonfire.Social.Tags do
       nil
     end
   end
-  # defp maybe_boostable_category(creator, {"+"<> _name, character}) do
+  # def maybe_boostable_categories(creator, {"+"<> _name, character}) do
   #   debug(character, "boostable")
   #   character
   # end
-  defp maybe_boostable_category(_, _mention) do
-    # debug(mention, "skip")
+  def maybe_boostable_categories(_, mention) do
+    debug(mention, "not a category?")
     nil
   end
 
@@ -83,10 +83,36 @@ defmodule Bonfire.Social.Tags do
     |> if(preload?, do: repo().maybe_preload(..., [:character]), else: ...)
   end
 
-  def maybe_tag(creator, post, tags, mentions_are_private? \\ true) do
-    if module_enabled?(Bonfire.Tag.Tags),
-      do: Bonfire.Tag.Tags.maybe_tag(creator, post, tags, mentions_are_private?),
-    else: {:ok, post}
+  def maybe_tag(creator, object, tags, mentions_are_private? \\ false) do
+    if module_enabled?(Bonfire.Tag.Tags) do
+      boost_category_tags = !mentions_are_private?
+      Bonfire.Tag.Tags.maybe_tag(creator, object, tags, boost_category_tags)
+      |> debug
+      # ~> maybe_boostable_categories(creator, e(..., :tags, [])) # done in Bonfire.Tag.Tags instead
+      # ~> auto_boost(..., object)
+    else
+      error("No tagging extension available.")
+    end
+  end
+
+  def maybe_auto_boost(creator, categories, object) when is_list(categories) do
+    maybe_boostable_categories(creator, categories)
+    |> debug
+    |> auto_boost(..., object)
+  end
+
+  def auto_boost(categories_auto_boost, object) when is_list(categories_auto_boost) do
+    categories_auto_boost
+    |> Enum.each(&auto_boost(&1, object))
+  end
+
+  def auto_boost(%{} = category, object) do
+    Bonfire.Social.Boosts.do_boost(category, object)
+
+    inbox_id = e(category, :character, :notifications_id, nil)
+    |> debug()
+
+    if inbox_id, do: Bonfire.Social.FeedActivities.delete(feed_id: inbox_id, id: ulid(object)) |> debug(), else: debug("no inbox ID") # remove it from the "Submitted" tab
   end
 
   def indexing_format_tags(tags) when is_list(tags) do
@@ -95,14 +121,17 @@ defmodule Bonfire.Social.Tags do
       |> Enum.map(&Bonfire.Tag.Tags.indexing_object_format_name/1)
     end
   end
+
   def indexing_format_tags(%{tags: tags}) when is_list(tags) do
     indexing_format_tags(tags)
   end
+
   def indexing_format_tags(%{activity: %{tags: _}} = object) do
     repo().maybe_preload(object, activity: [tags: [:profile]])
     |> e(:activity, :tags, [])
     |> indexing_format_tags()
   end
+
   def indexing_format_tags(%{tags: _} = object) do
     repo().maybe_preload(object, tags: [:profile])
     |> Map.get(:tags, [])

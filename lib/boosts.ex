@@ -38,7 +38,7 @@ defmodule Bonfire.Social.Boosts do
     end
   end
 
-  defp do_boost(%{} = booster, %{} = boosted) do
+  def do_boost(%{} = booster, %{} = boosted) do
     boosted = Objects.preload_creator(boosted)
     boosted_creator = Objects.object_creator(boosted)
     opts = [
