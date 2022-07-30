@@ -243,7 +243,7 @@ defmodule Bonfire.Social.Activities do
           # TODO: in feeds, maybe load the creator with a where clause to skip it when creator==subject
           proload query,
             # created:  [creator: [:character, profile: :icon]],
-            activity: [object: {"object_", [created: [creator: [:character, profile: :icon]]]}]
+            activity: [object: {"object_", [created: [creator: {"object_creator_", [:character, profile: :icon]}]]}]
         # :tags ->
         #   # Tags/mentions (this actual needs to be done by Repo.preload to be able to list more than one)
         #   proload query,
