@@ -75,7 +75,7 @@ defmodule Bonfire.Social.Flags do
   end
 
   def list_paginated(filters, opts \\ []) do
-    opts = Keyword.put_new(to_options(opts), :skip_boundary_check, :admins)
+    opts = Keyword.put_new(to_options(opts), :skip_boundary_check, Bonfire.Boundaries.can?(opts, :mediate, :instance) || :admins) # mediators and admins should see all flagged objects
     filters
     |> query(opts)
     |> proload(:activity)
