@@ -156,7 +156,7 @@ defmodule Bonfire.Social.Follows do
     do: list_followed(current_user, [current_user: current_user] ++ to_options(opts))
 
   def list_followed(%{id: user_id} = _user, opts \\ []) when is_binary(user_id) do
-    opts = to_options(opts)
+    opts = to_options(opts) ++ [skip_boundary_check: true] # TODO: configurable boundaries for follows
     [subject: user_id, object_type: opts[:type]]
     |> query(opts)
     |> where([object: object], object.id not in ^e(opts, :exclude_ids, []))
@@ -168,7 +168,7 @@ defmodule Bonfire.Social.Follows do
     do: list_followers(current_user, [current_user: current_user] ++ to_options(opts))
 
   def list_followers(%{id: user_id} = _user, opts \\ []) when is_binary(user_id) do
-    opts = to_options(opts)
+    opts = to_options(opts) ++ [skip_boundary_check: true]
     [object: user_id, subject_type: opts[:type]]
     |> query(opts)
     |> where([subject: subject], subject.id not in ^e(opts, :exclude_ids, []))
@@ -271,7 +271,7 @@ defmodule Bonfire.Social.Follows do
   end
 
   defp maybe_already_followed(user, object) do
-    case get(user, object) do
+    case get(user, object, skip_boundary_check: true) do
       {:ok, follow} ->
         debug("the user already follows this object")
         {:ok, follow}
