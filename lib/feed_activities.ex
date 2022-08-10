@@ -72,11 +72,12 @@ defmodule Bonfire.Social.FeedActivities do
   when is_binary(id_or_ids) or (is_list(id_or_ids) and id_or_ids != []) do
     ulid(id_or_ids)
     |> feed_query(opts)
-    |> debug()
+    # |> debug()
     |> repo().many_paginated(opts)
+    |> post_feed_query(opts)
   end
 
-  def feed(:notifications = feed_name, opts), do: named_feed(feed_name, opts ++ [skip_boundary_check: :admins, preload: :notifications]) # so we can show flags to admins in notifications
+  def feed(:notifications = feed_name, opts), do: named_feed(feed_name, opts ++ [skip_boundary_check: :admins, skip_dedup: true, preload: :notifications]) # so we can show flags to admins in notifications
 
   def feed(:flags, opts) do
     Bonfire.Social.Flags.list_paginated([], opts)
@@ -133,8 +134,21 @@ defmodule Bonfire.Social.FeedActivities do
     query_paginated(filters, opts, query)
     # |> dump
     |> repo().many_paginated(paginate)
+    |> post_feed_query(opts)
     # |> debug()
   end
+
+  defp post_feed_query(%{edges: edges} = result, opts) when is_list(edges) and length(edges)>0 do
+    if e(opts, :skip_dedup, nil) do
+      result
+    else
+      result
+      |> Map.put(:edges,
+        Enum.dedup_by(edges, &e(&1, :activity, :object_id, nil))
+      )
+    end
+  end
+  defp post_feed_query(result, _opts), do: result
 
   defp default_query(), do: select(Pointers.query_base(), [p], p)
 
