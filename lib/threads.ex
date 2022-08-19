@@ -261,7 +261,7 @@ defmodule Bonfire.Social.Threads do
     opts =
       to_options(opts)
       |> Keyword.put_new(:limit, Config.get(:thread_default_pagination_limit, 500))
-      |> info("oooopts")
+      # |> info("oooopts")
 
     query(
       [thread_id: thread_id], # note this won't query by thread_id but rather by path
