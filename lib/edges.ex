@@ -113,9 +113,9 @@ defmodule Bonfire.Social.Edges do
   end
 
   defp filter(query, filters, opts) when is_list(filters) do
-    debug(filters, "filters")
+    # debug(filters, "filters")
     Enum.reduce(filters, query, &filter(&2, &1, opts))
-    |> query_filter(Keyword.drop(filters, [:object, :subject, :type]))
+    |> query_filter(Keyword.drop(filters, [:object, :subject, :type, :object_type]))
   end
 
   defp filter(query, {:subject, subject}, opts) do
@@ -148,7 +148,7 @@ defmodule Bonfire.Social.Edges do
   end
 
   defp filter(query, {:subject_type, types}, opts) do
-    case table_types(types) |> List.wrap() |> debug |> Utils.filter_empty(nil) do
+    case table_types(types) |> List.wrap() |> Utils.filter_empty(nil) do
       table_ids when is_list(table_ids) ->
         where(query, [subject: subject], subject.table_id in ^table_ids)
       _ ->
@@ -157,7 +157,7 @@ defmodule Bonfire.Social.Edges do
   end
 
   defp filter(query, {:object_type, types}, opts) do
-    case table_types(types) |> List.wrap() |> debug |> Utils.filter_empty(nil) do
+    case table_types(types) |> List.wrap() |> Utils.filter_empty(nil) do
       table_ids when is_list(table_ids) ->
         where(query, [object: object], object.table_id in ^table_ids)
       _ ->
