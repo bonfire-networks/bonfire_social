@@ -74,7 +74,7 @@ defmodule Bonfire.Social.FeedActivities do
     |> feed_query(opts)
     # |> debug()
     |> repo().many_paginated(opts)
-    |> post_feed_query(opts)
+    |> maybe_dedup_feed_objects(opts)
   end
 
   def feed(:notifications = feed_name, opts), do: named_feed(feed_name, opts ++ [skip_boundary_check: :admins, skip_dedup: true, preload: :notifications]) # so we can show flags to admins in notifications
@@ -134,21 +134,21 @@ defmodule Bonfire.Social.FeedActivities do
     query_paginated(filters, opts, query)
     # |> dump
     |> repo().many_paginated(paginate)
-    |> post_feed_query(opts)
+    |> maybe_dedup_feed_objects(opts)
     # |> debug()
   end
 
-  defp post_feed_query(%{edges: edges} = result, opts) when is_list(edges) and length(edges)>0 do
+  defp maybe_dedup_feed_objects(%{edges: edges} = result, opts) when is_list(edges) and length(edges)>0 do
     if e(opts, :skip_dedup, nil) do
       result
     else
       result
       |> Map.put(:edges,
-        Enum.dedup_by(edges, &e(&1, :activity, :object_id, nil))
+        Enum.uniq_by(edges, &e(&1, :activity, :object_id, nil))
       )
     end
   end
-  defp post_feed_query(result, _opts), do: result
+  defp maybe_dedup_feed_objects(result, _opts), do: result
 
   defp default_query(), do: select(Pointers.query_base(), [p], p)
 
