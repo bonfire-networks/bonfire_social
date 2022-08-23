@@ -81,8 +81,14 @@ defmodule Bonfire.Social.Posts do
 
   def changeset(:create, attrs, creator, preset_or_custom_boundary) do
     attrs
+    |> prepare_post_attrs()
     |> debug("post_attrs")
     |> Post.changeset(%Post{}, ...)
+  end
+
+  def prepare_post_attrs(attrs) do
+    attrs
+    |> deep_merge(%{post: %{post_content: %{html_body: e(attrs, :post, :post_content, :html_body, nil) || e(attrs, :fallback_post, :post_content, :html_body, nil)}}}) # FIXME: find a less nasty way (this is to support graceful degradation with the textarea inside noscript)
   end
 
   def read(post_id, opts_or_socket_or_current_user \\ []) when is_binary(post_id) do
