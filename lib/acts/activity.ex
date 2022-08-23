@@ -30,17 +30,25 @@ defmodule Bonfire.Social.Acts.Activity do
         epic
       changeset.action == :insert ->
         boundary = epic.assigns[:options][:boundary]
+        boundary_name = Bonfire.Boundaries.preset_name(boundary)
+
         attrs_key = Keyword.get(act.options, :attrs, :post_attrs)
         feeds_key = Keyword.get(act.options, :feeds, :feed_ids)
+        notify_feeds_key = Keyword.get(act.options, :notify_feeds, :notify_feeds)
 
         attrs = Keyword.get(epic.assigns[:options], attrs_key, %{})
-        feed_ids = Feeds.target_feeds(changeset, current_user, boundary) # seems like a duplicate of `Feeds.feed_ids_to_publish` in the Feeds act?
+
+        notifications_feeds = Feeds.reply_and_or_mentions_notifications_feeds(current_user, epic.assigns, boundary_name)
+
+        feed_ids = Feeds.feed_ids_to_publish(current_user, boundary_name, epic.assigns, notifications_feeds) # duplicate implementation of `Feeds.target_feeds`
+        # feed_ids = Feeds.target_feeds(changeset, current_user, boundary) # duplicate of `Feeds.feed_ids_to_publish`
 
         debug(epic, act, "activity", "Casting")
         changeset
         |> Activities.cast(verb, current_user, feed_ids: feed_ids, boundary: boundary)
         |> Epic.assign(epic, on, ...)
         |> Epic.assign(..., feeds_key, feed_ids)
+        |> Epic.assign(..., notify_feeds_key, notifications_feeds)
 
       changeset.action == :delete ->
         # TODO: deletion

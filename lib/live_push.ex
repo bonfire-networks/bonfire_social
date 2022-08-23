@@ -23,7 +23,11 @@ defmodule Bonfire.Social.LivePush do
 
     if Keyword.get(opts, :push_to_thread, true), do: maybe_push_thread(activity)
 
-    if Keyword.get(opts, :notify, false), do: notify(activity, feed_ids)
+    case Keyword.get(opts, :notify) do
+      notify_feed_ids when is_list(notify_feed_ids) -> notify(activity, notify_feed_ids)
+      true -> notify(activity, feed_ids)
+      _ -> nil
+    end
 
     activity
   end
@@ -114,6 +118,7 @@ defmodule Bonfire.Social.LivePush do
           )
         )
       ),
+      path(object),
       avatar_url(subject)
     )
   end

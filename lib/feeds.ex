@@ -22,23 +22,19 @@ defmodule Bonfire.Social.Feeds do
   def context_module, do: Feed
 
 ## TODO: de-duplicate feed_ids_to_publish/3 and target_feeds/4 ##
-
-def feed_ids_to_publish(_me, "admins", _) do
+  def feed_ids_to_publish(_me, "admins", _) do
     admins_notifications()
     |> debug("posting to admin feeds")
   end
-  def feed_ids_to_publish(me, boundary, assigns) do
-    my_notifications = feed_id(:notifications, me)
-
+  def feed_ids_to_publish(me, boundary, assigns, reply_and_or_mentions_notifications_feeds \\ nil) do
     [
       e(assigns, :reply_to, :replied, :thread, :id, nil),
       maybe_my_outbox_feed_id(me, boundary),
       global_feed_ids(boundary),
-      mentions_feed_ids(assigns, boundary)
+      reply_and_or_mentions_notifications_feeds || reply_and_or_mentions_notifications_feeds(me, assigns, boundary)
     ]
     |> List.flatten()
     |> Enum.uniq()
-    |> Enum.reject(&( &1 == my_notifications )) # avoid self-notifying
     |> Utils.filter_empty([])
   end
 
@@ -59,17 +55,22 @@ def feed_ids_to_publish(_me, "admins", _) do
   end
 
 
-  def global_feed_ids(boundary), do: Map.get(@global_feeds, boundary, []) |> Enum.map(&named_feed_id/1)
+  defp global_feed_ids(boundary), do: Map.get(@global_feeds, boundary, []) |> Enum.map(&named_feed_id/1)
 
-  def mentions_feed_ids(assigns, boundary) do
+  def reply_and_or_mentions_notifications_feeds(me, assigns, boundary) do
+    my_notifications = feed_id(:notifications, me)
+
     # TODO: unravel the mentions parsing so we can deal with mentions properly
     mentions = Map.get(assigns, :mentions, [])
     reply_to_creator = e(assigns, :reply_to, :created, :creator, nil)
     user_notifications_feeds([reply_to_creator | mentions], boundary)
-    |> debug("mentions notifications feeds")
+    |> Enum.uniq()
+    |> Utils.filter_empty([])
+    |> Enum.reject(&( &1 == my_notifications )) # avoid self-notifying
+    |> debug()
   end
 
-  def user_notifications_feeds(users, boundary) do
+  defp user_notifications_feeds(users, boundary) do
     # debug(epic, act, users, "users going in")
     cond do
       boundary in ["public", "mentions", "federated"] ->
@@ -147,6 +148,7 @@ def feed_ids_to_publish(_me, "admins", _) do
           (([reply_to_creator]
            ++ mentions)
           |> feed_ids(:notifications, ...))
+          |> debug("notify reply_to creator and/or mentions")
 
       "federated" -> # like public but put in remote/federated feed instead of guest and local
         [ named_feed_id(:activity_pub),

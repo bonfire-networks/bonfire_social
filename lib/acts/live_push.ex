@@ -8,15 +8,20 @@ defmodule Bonfire.Social.Acts.LivePush do
   def run(epic, act) do
     if epic.errors == [] do
       on = Keyword.get(act.options, :on, :activity)
-      feeds_key = Keyword.get(act.options, :feeds, :feed_ids)
       case epic.assigns[on] do
         nil ->
           maybe_debug(epic, act, on, "Skipping: no activity at")
         activity ->
           maybe_debug(epic, act, on, "Publishing activity at") ##{inspect activity}
+
+          feeds_key = Keyword.get(act.options, :feeds, :feed_ids)
+          notify_feeds_key = Keyword.get(act.options, :notify_feeds, :notify_feeds)
+
           feeds = Map.get(epic.assigns, feeds_key, [])
+          notify_feeds = Map.get(epic.assigns, notify_feeds_key, [])
+
           maybe_debug(epic, act, feeds, "Publishing to feeds at assign #{feeds_key}")
-          LivePush.push_activity(feeds, activity)
+          LivePush.push_activity(feeds, activity, notify: notify_feeds)
           |> Epic.assign(epic, on, ...)
       end
     else

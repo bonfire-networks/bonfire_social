@@ -1,6 +1,6 @@
 defmodule Bonfire.Social.Acts.Feeds do
   @moduledoc """
-  Finds a list of appropriate feeds into which to post.
+  NOT USED - Finds a list of appropriate feeds into which to post.
 
   Epic Options:
     * `:current_user` - current user. required.

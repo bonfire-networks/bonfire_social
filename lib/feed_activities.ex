@@ -436,7 +436,7 @@ defmodule Bonfire.Social.FeedActivities do
     # debug(characters)
     Feeds.feed_ids(:notifications, characters)
     |> Utils.filter_empty([])
-    |> notify_feeds(subject, verb_or_activity, object, ...)
+    |> notify_to_feed_ids(subject, verb_or_activity, object, ...)
   end
 
   @doc """
@@ -452,12 +452,12 @@ defmodule Bonfire.Social.FeedActivities do
   def notify_admins(subject, verb_or_activity, object) do
     inboxes = Feeds.admins_notifications()
     # |> debug()
-    notify_feeds(subject, verb_or_activity, object, inboxes)
+    notify_to_feed_ids(subject, verb_or_activity, object, inboxes)
   end
 
-  def notify_feeds(subject, verb_or_activity, object, feed_ids) do
+  def notify_to_feed_ids(subject, verb_or_activity, object, feed_ids) do
     # debug(feed_ids)
-    ret = publish(subject, verb_or_activity, object, to_feeds: feed_ids) #|> debug("notify_feeds")
+    ret = publish(subject, verb_or_activity, object, to_feeds: feed_ids) #|> debug("notify_to_feed_ids")
     Bonfire.Social.LivePush.notify(subject, verb_or_activity, object, feed_ids)
     ret
   end

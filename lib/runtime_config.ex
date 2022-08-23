@@ -11,7 +11,6 @@ defmodule Bonfire.Social.RuntimeConfig do
     Caretaker,
     Creator,
     Edges,
-    Feeds,
     Files,
     LivePush,
     MeiliSearch,
@@ -73,7 +72,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           {Tags,        on: :post}, # with extracted tags fully hooked up,
           {Boundaries,  on: :post}, # and the appropriate boundaries established,
           {Activity,    on: :post}, # summarised by an activity,
-          {Feeds,       on: :post}, # appearing in feeds.
+          # {Feeds,       on: :post}, # appearing in feeds.
 
           # Now we have a short critical section
           Ecto.Begin,
