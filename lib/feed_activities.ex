@@ -89,6 +89,14 @@ defmodule Bonfire.Social.FeedActivities do
     named_feed(feed_name, opts)
   end
 
+  def feed(%Ecto.Query{} = custom_query, opts) do
+    custom_query
+    |> join_preload([:activity])
+    |> query_extras(opts)
+    # |> debug()
+    |> repo().many_paginated(opts)
+  end
+
   def feed(other, _) do
     error(other, "FeedActivities.feed: not a recognised feed query param")
     nil
@@ -154,14 +162,6 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp base_query(opts) do
 
-    exclude_object_types = [Message] ++ e(opts, :exclude_object_types, []) # eg. private messages should never appear in feeds
-    exclude_verbs = [:message] ++ e(opts, :exclude_verbs, []) # exclude certain activity tpes
-
-    exclude_table_ids = exclude_object_types |> Enum.map(&maybe_apply(&1, :__pointers__,:table_id)) |> List.wrap()
-    exclude_verb_ids = exclude_verbs |> Enum.map(&Bonfire.Social.Activities.verb_id(&1)) |> List.wrap()
-
-    # exclude_feed_ids = e(opts, :exclude_feed_ids, []) |> List.wrap() # WIP - to exclude activities that also appear in another feed
-
     # feeds = from fp in FeedPublish, # why the subquery?..
     #   where: fp.feed_id in ^feed_ids,
     #   group_by: fp.id,
@@ -170,12 +170,6 @@ defmodule Bonfire.Social.FeedActivities do
     from fp in FeedPublish,
       # join: fp in subquery(feeds), on: p.id == fp.id,
       join: a in Activity, as: :activity, on: a.id == fp.id,
-      join: ap in Pointer, as: :activity_pointer, on: ap.id == a.id,
-      join: op in Pointer, as: :object, on: op.id == a.object_id,
-      # where: fp.feed_id not in ^exclude_feed_ids,
-      where: a.verb_id not in ^exclude_verb_ids,
-      where: is_nil(op.deleted_at) and is_nil(ap.deleted_at),   # Don't show anything deleted
-      where: ap.table_id not in ^exclude_table_ids and op.table_id not in ^exclude_table_ids,
       distinct: [desc: fp.id],
       order_by: [desc: fp.id]
   end
@@ -253,7 +247,29 @@ defmodule Bonfire.Social.FeedActivities do
 
   @doc false # add assocs needed in timelines/feeds
   def query_extras(query, opts) do
+
+    exclude_object_types = [Message] ++ e(opts, :exclude_object_types, []) # eg. private messages should never appear in feeds
+    exclude_verbs = [:message] ++ e(opts, :exclude_verbs, []) # exclude certain activity types
+
+    exclude_table_ids = exclude_object_types |> Enum.map(&maybe_apply(&1, :__pointers__,:table_id)) |> List.wrap()
+    exclude_verb_ids = exclude_verbs |> Enum.map(&Bonfire.Social.Activities.verb_id(&1)) |> List.wrap()
+
+    # exclude_feed_ids = e(opts, :exclude_feed_ids, []) |> List.wrap() # WIP - to exclude activities that also appear in another feed
+
     query
+    |> join_preload([:activity])
+    |> join(:inner, [activity: activity], activity_pointer in Pointer, as: :activity_pointer, on: activity_pointer.id == activity.id)
+    |> join(:inner, [activity: activity], object in Pointer, as: :object, on: object.id == activity.object_id)
+    # where: fp.feed_id not in ^exclude_feed_ids,
+    # Don't show messages or anything deleted
+    |> where(
+      [activity: activity, activity_pointer: activity_pointer, object: object],
+      activity.verb_id not in ^exclude_verb_ids
+      and is_nil(object.deleted_at)
+      and is_nil(activity_pointer.deleted_at)
+      and activity_pointer.table_id not in ^exclude_table_ids
+      and object.table_id not in ^exclude_table_ids
+    )
     # |> debug("feed_paginated pre-preloads")
     # add assocs needed in timelines/feeds
     # |> Activities.activity_preloads(e(opts, :preload, :with_object), opts) # if we want to preload the rest later to allow for caching
