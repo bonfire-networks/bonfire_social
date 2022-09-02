@@ -258,8 +258,8 @@ defmodule Bonfire.Social.FeedActivities do
 
     query
     |> join_preload([:activity])
-    |> join(:inner, [activity: activity], activity_pointer in Pointer, as: :activity_pointer, on: activity_pointer.id == activity.id)
-    |> join(:inner, [activity: activity], object in Pointer, as: :object, on: object.id == activity.object_id)
+    |> reusable_join(:inner, [activity: activity], activity_pointer in Pointer, as: :activity_pointer, on: activity_pointer.id == activity.id)
+    |> reusable_join(:inner, [activity: activity], object in Pointer, as: :object, on: object.id == activity.object_id)
     # where: fp.feed_id not in ^exclude_feed_ids,
     # Don't show messages or anything deleted
     |> where(
