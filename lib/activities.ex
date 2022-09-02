@@ -6,7 +6,7 @@ defmodule Bonfire.Social.Activities do
     searchable_fields: [:id, :subject_id, :verb_id, :object_id],
     sortable_fields: [:id, :subject_id, :verb_id, :object_id]
 
-  import Where
+  import Untangle
   use Bonfire.Common.Utils
   import Bonfire.Boundaries.Queries
   import Ecto.Query

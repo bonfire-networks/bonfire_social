@@ -40,13 +40,13 @@ defmodule Bonfire.Social.Acts.MeiliSearch.Queue do
 
             Epic.assign(epic, on, prepared_object)
           else
-            debug(epic, act, object, "Meili: Skipping due to invalid object")
+            maybe_debug(epic, act, object, "Meili: Skipping due to invalid object")
             epic
           end
 
 
         # action ->
-        #   debug(epic, act, action, "Meili: Skipping due to unknown action")
+        #   maybe_debug(epic, act, action, "Meili: Skipping due to unknown action")
         #   epic
       end
     end

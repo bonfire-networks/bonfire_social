@@ -15,7 +15,7 @@ defmodule Bonfire.Social.Acts.ActivityPub do
   alias Bonfire.Social.Integration
   alias Ecto.Changeset
   import Epics
-  import Where
+  import Untangle
 
   def run(epic, act) do
     on = Keyword.get(act.options, :on, :post)

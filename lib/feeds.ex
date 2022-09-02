@@ -1,10 +1,10 @@
 defmodule Bonfire.Social.Feeds do
   use Bonfire.Common.Utils
   use Arrows
-  import Where
+  import Untangle
   import Ecto.Query
   import Bonfire.Social.Integration
-  import Where
+  import Untangle
   alias Bonfire.Data.Identity.Character
   alias Bonfire.Data.Social.Feed
   alias Bonfire.Social.Follows

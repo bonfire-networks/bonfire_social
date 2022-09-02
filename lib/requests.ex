@@ -7,7 +7,7 @@ defmodule Bonfire.Social.Requests do
   alias Bonfire.Data.Identity.User
   alias Ecto.Changeset
   import Bonfire.Boundaries.Queries
-  import Where
+  import Untangle
   use Arrows
   use Bonfire.Common.Utils
   use Bonfire.Common.Repo

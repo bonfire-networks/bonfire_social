@@ -4,7 +4,7 @@ defmodule Bonfire.Social.Acts.Activity do
   alias Bonfire.Social.{Activities, Feeds}
   alias Ecto.Changeset
   import Epics
-  import Where, only: [warn: 2]
+  import Untangle, only: [warn: 2]
   use Arrows
 
   def run(epic, act) do
@@ -14,19 +14,19 @@ defmodule Bonfire.Social.Acts.Activity do
     verb = Keyword.get(epic.assigns[:options], :verb, :create)
     cond do
       epic.errors != [] ->
-        debug(epic, act, length(epic.errors), "Skipping due to epic errors")
+        maybe_debug(epic, act, length(epic.errors), "Skipping due to epic errors")
         epic
       is_nil(on) or not is_atom(on) ->
-        debug(epic, act, on, "Skipping due to `on` option")
+        maybe_debug(epic, act, on, "Skipping due to `on` option")
         epic
       not (is_struct(current_user) or is_binary(current_user)) ->
         warn(current_user, "Skipping due to missing current_user")
         epic
       not is_struct(changeset) || changeset.__struct__ != Changeset ->
-        debug(epic, act, changeset, "Skipping :#{on} due to changeset")
+        maybe_debug(epic, act, changeset, "Skipping :#{on} due to changeset")
         epic
       changeset.action not in [:insert, :delete] ->
-        debug(epic, act, changeset.action, "Skipping, no matching action on changeset")
+        maybe_debug(epic, act, changeset.action, "Skipping, no matching action on changeset")
         epic
       changeset.action == :insert ->
         boundary = epic.assigns[:options][:boundary]
@@ -43,7 +43,7 @@ defmodule Bonfire.Social.Acts.Activity do
         feed_ids = Feeds.feed_ids_to_publish(current_user, boundary_name, epic.assigns, notifications_feeds) # duplicate implementation of `Feeds.target_feeds`
         # feed_ids = Feeds.target_feeds(changeset, current_user, boundary) # duplicate of `Feeds.feed_ids_to_publish`
 
-        debug(epic, act, "activity", "Casting")
+        maybe_debug(epic, act, "activity", "Casting")
         changeset
         |> Activities.cast(verb, current_user, feed_ids: feed_ids, boundary: boundary)
         |> Epic.assign(epic, on, ...)

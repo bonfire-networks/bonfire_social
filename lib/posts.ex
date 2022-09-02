@@ -1,7 +1,7 @@
 defmodule Bonfire.Social.Posts do
 
   use Arrows
-  import Where
+  import Untangle
   import Bonfire.Boundaries.Queries
   alias Bonfire.Data.Social.{Post, PostContent, Replied, Activity}
   alias Bonfire.Social.{Activities, FeedActivities, Feeds, Objects}

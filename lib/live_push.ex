@@ -1,6 +1,6 @@
 defmodule Bonfire.Social.LivePush do
   use Bonfire.UI.Common # FIXME: dependency on ui_common should be optional
-  import Where
+  import Untangle
   alias Bonfire.Social.{Activities, FeedActivities}
   alias Bonfire.Data.Social.Activity
 

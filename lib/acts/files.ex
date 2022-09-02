@@ -16,7 +16,7 @@ defmodule Bonfire.Social.Acts.Files do
   alias Pointers.Changesets
   import Bonfire.Social.Integration, only: [repo: 0]
   import Epics
-  import Where, only: [error: 2, warn: 1]
+  import Untangle, only: [error: 2, warn: 1]
 
   def run(epic, act) do
     cond do
@@ -39,7 +39,7 @@ defmodule Bonfire.Social.Acts.Files do
             |> Changesets.put_assoc(changeset, :files, ...)
             |> Epic.assign(epic, on, ...)
           %Changeset{valid?: false}=changeset ->
-            debug(epic, act, changeset, "invalid changeset")
+            maybe_debug(epic, act, changeset, "invalid changeset")
             epic
           other ->
             error(other, "not a changeset")

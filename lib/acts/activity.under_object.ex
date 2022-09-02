@@ -1,6 +1,6 @@
 defmodule Bonfire.Social.Acts.Activity.UnderObject do
 
-  import Where
+  import Untangle
   alias Bonfire.Social.Activities
   alias Bonfire.Epics
   alias Bonfire.Epics.{Act, Epic}

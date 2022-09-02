@@ -2,7 +2,7 @@ defmodule Bonfire.Social.Messages do
   use Arrows
   use Bonfire.Common.Repo
   use Bonfire.Common.Utils
-  import Where
+  import Untangle
 
   alias Bonfire.Data.Social.{Message, PostContent, Replied}
   alias Bonfire.Social.{Activities, FeedActivities, Feeds, Objects}

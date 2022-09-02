@@ -3,7 +3,7 @@ defmodule Bonfire.Social.MessagesTest do
 
   alias Bonfire.Social.{Messages, Feeds, FeedActivities}
   alias Bonfire.Me.Fake
-  import Where
+  import Untangle
 
   @plain_body "hey receiver, you have an epic text message"
   @html_body "<p>hey receiver, you have an epic html message</p>"

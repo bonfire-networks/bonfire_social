@@ -3,7 +3,7 @@ defmodule Bonfire.Social.Integration do
   alias Bonfire.Common.Config
   alias Bonfire.Common.Utils
   alias Bonfire.Data.Social.Follow
-  import Where
+  import Untangle
 
   def repo, do: Config.get!(:repo_module)
 

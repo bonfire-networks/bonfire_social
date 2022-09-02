@@ -4,7 +4,7 @@ defmodule Bonfire.Social.APActivities do
   alias Ecto.Changeset
   alias Pointers.Changesets
 
-  import Where
+  import Untangle
 
   use Bonfire.Common.Utils
   import Bonfire.Common.Config, only: [repo: 0]

@@ -3,7 +3,7 @@ defmodule Bonfire.Social.FeedActivities do
   use Bonfire.Common.Utils
   use Bonfire.Common.Repo
   import Ecto.Query
-  import Where
+  import Untangle
   # alias Bonfire.Boundaries
   alias Bonfire.Boundaries.Circles
   alias Bonfire.Data.Social.{Activity, FeedPublish, Message, Seen}

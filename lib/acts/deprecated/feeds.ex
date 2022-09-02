@@ -18,7 +18,7 @@ defmodule Bonfire.Social.Acts.Feeds do
   alias Pointers.Changesets
   import Bonfire.Social.Integration, only: [repo: 0]
   import Epics
-  import Where, only: [error: 2, warn: 1]
+  import Untangle, only: [error: 2, warn: 1]
 
   def run(epic, act) do
     cond do
@@ -38,7 +38,7 @@ defmodule Bonfire.Social.Acts.Feeds do
             Changesets.put_assoc(changeset, :feed_publishes, pubs)
             |> Epic.assign(epic, on, ...)
           %Changeset{valid?: false}=changeset ->
-            debug(epic, act, changeset, "invalid changeset")
+            maybe_debug(epic, act, changeset, "invalid changeset")
             epic
           other ->
             error(other, "not a changeset")

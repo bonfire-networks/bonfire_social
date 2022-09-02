@@ -16,7 +16,7 @@ defmodule Bonfire.Social.Acts.URLPreviews do
   alias Pointers.Changesets
   import Bonfire.Social.Integration, only: [repo: 0]
   import Epics
-  import Where, only: [error: 2, warn: 1]
+  import Untangle, only: [error: 2, warn: 1]
 
   def run(epic, act) do
     cond do
@@ -39,11 +39,11 @@ defmodule Bonfire.Social.Acts.URLPreviews do
             urls
             |> smart(epic, act, ..., "URLs")
             |> Enum.map(&maybe_fetch_and_save(current_user, &1))
-            |> debug(epic, act, ..., "metadata")
+            |> maybe_debug(epic, act, ..., "metadata")
             |> Epic.assign(epic, media_key, ...)
 
           %Changeset{valid?: false}=changeset ->
-            debug(epic, act, changeset, "invalid changeset")
+            maybe_debug(epic, act, changeset, "invalid changeset")
             epic
           other ->
             error(other, "not a changeset")

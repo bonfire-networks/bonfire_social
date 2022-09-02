@@ -8,7 +8,7 @@ defmodule Bonfire.Social.Follows do
   alias Ecto.Changeset
   alias Pointers.Changesets
   import Bonfire.Boundaries.Queries
-  import Where
+  import Untangle
   use Arrows
   use Bonfire.Common.Utils
   use Bonfire.Common.Repo

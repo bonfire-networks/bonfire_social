@@ -6,7 +6,7 @@ defmodule Bonfire.Social.Objects do
     searchable_fields: [:id],
     sortable_fields: [:id]
   use Bonfire.Common.Utils
-  import Where
+  import Untangle
 
   alias Bonfire.Common
   alias Bonfire.Data.Identity.Character
