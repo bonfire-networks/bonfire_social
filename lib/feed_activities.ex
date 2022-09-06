@@ -606,7 +606,7 @@ defmodule Bonfire.Social.FeedActivities do
       on: fp.id == seen_edge.object_id and seen_edge.table_id == ^table_id and seen_edge.subject_id == ^ulid(current_user),
       where: fp.feed_id == ^feed_id,
       where: is_nil(seen_edge.id))
-    |> debug()
+    # |> debug()
   end
 
   def unseen_count(feed_id, opts) do
