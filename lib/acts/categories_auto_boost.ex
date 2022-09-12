@@ -1,7 +1,9 @@
 defmodule Bonfire.Social.Acts.CategoriesAutoBoost do
   use Bonfire.Common.Utils
   alias Bonfire.Epics
-  alias Bonfire.Epics.{Act, Epic}
+  alias Bonfire.Epics.Act
+  alias Bonfire.Epics.Epic
+
   alias Bonfire.Social.LivePush
   import Epics
 
@@ -10,20 +12,24 @@ defmodule Bonfire.Social.Acts.CategoriesAutoBoost do
       on = Keyword.get(act.options, :on, :activity)
       key = :categories_auto_boost
       categories_auto_boost = e(epic.assigns, key, [])
-      maybe_debug(epic, act, categories_auto_boost, "Maybe auto-boosting to categories at assign #{key}")
+
+      maybe_debug(
+        epic,
+        act,
+        categories_auto_boost,
+        "Maybe auto-boosting to categories at assign #{key}"
+      )
 
       case epic.assigns[on] do
         nil ->
           maybe_debug(epic, act, on, "Skipping: no activity at")
 
         %{object: %{id: _} = object} ->
-
           Bonfire.Social.Tags.auto_boost(categories_auto_boost, object)
 
           epic
 
         object ->
-
           Bonfire.Social.Tags.auto_boost(categories_auto_boost, object)
 
           epic
@@ -33,6 +39,4 @@ defmodule Bonfire.Social.Acts.CategoriesAutoBoost do
       epic
     end
   end
-
-
 end

@@ -1,9 +1,10 @@
 defmodule Bonfire.Social.Acts.Activity.UnderObject do
-
   import Untangle
   alias Bonfire.Social.Activities
   alias Bonfire.Epics
-  alias Bonfire.Epics.{Act, Epic}
+  alias Bonfire.Epics.Act
+  alias Bonfire.Epics.Epic
+
   import Epics
 
   def run(epic, act) do
@@ -11,7 +12,13 @@ defmodule Bonfire.Social.Acts.Activity.UnderObject do
       maybe_debug(epic, act, act.module, "No errors, transforming.")
       do_run(epic, act)
     else
-      maybe_debug(epic, act, length(epic.errors), "Skipping because of epic errors")
+      maybe_debug(
+        epic,
+        act,
+        length(epic.errors),
+        "Skipping because of epic errors"
+      )
+
       epic
     end
   end
@@ -20,8 +27,11 @@ defmodule Bonfire.Social.Acts.Activity.UnderObject do
     Keyword.fetch!(act.options, :objects)
     |> Enum.reduce(epic, fn key, epic ->
       case key do
-        _ when is_atom(key) -> do_key(epic, act, key, key)
-        {dest, source} when is_atom(source) and is_atom(dest) -> do_key(epic, act, source, dest)
+        _ when is_atom(key) ->
+          do_key(epic, act, key, key)
+
+        {dest, source} when is_atom(source) and is_atom(dest) ->
+          do_key(epic, act, source, dest)
       end
     end)
   end
@@ -29,12 +39,18 @@ defmodule Bonfire.Social.Acts.Activity.UnderObject do
   defp do_key(epic, act, source_key, dest_key) do
     case epic.assigns[source_key] do
       nil ->
-        maybe_debug(epic, act, "#{dest_key} as Assigns key #{source_key} is nil", "Skipping")
+        maybe_debug(
+          epic,
+          act,
+          "#{dest_key} as Assigns key #{source_key} is nil",
+          "Skipping"
+        )
+
         epic
+
       other ->
         maybe_debug(epic, act, "#{source_key} to #{dest_key}", "Rewriting")
         Epic.assign(epic, dest_key, Activities.activity_under_object(other))
     end
   end
-
 end

@@ -1,18 +1,25 @@
 defmodule Bonfire.Social.Objects do
-
   use Arrows
+
   use Bonfire.Common.Repo,
     schema: Pointers.Pointer,
     searchable_fields: [:id],
     sortable_fields: [:id]
+
   use Bonfire.Common.Utils
   import Untangle
 
   alias Bonfire.Common
   alias Bonfire.Data.Identity.Character
   alias Bonfire.Boundaries.Acls
-  alias Bonfire.Social.{Activities, FeedActivities, Tags, Threads}
-  alias Pointers.{Changesets, Pointer}
+  alias Bonfire.Social.Activities
+  alias Bonfire.Social.FeedActivities
+  alias Bonfire.Social.Tags
+  alias Bonfire.Social.Threads
+
+  alias Pointers.Changesets
+  alias Pointers.Pointer
+
   alias Bonfire.Epics.Epic
 
   @doc """
@@ -34,6 +41,7 @@ defmodule Bonfire.Social.Objects do
     |> Tags.cast(attrs, creator, opts)
     # apply boundaries on all objects, note that ORDER MATTERS, as it uses data preloaded by `Threads` and `PostContents`
     |> cast_acl(creator, opts)
+
     # |> cast_activity(attrs, creator, opts)
     # |> debug()
   end
@@ -48,6 +56,7 @@ defmodule Bonfire.Social.Objects do
     changeset
     |> cast_creator_caretaker(creator)
     |> cast_acl(creator, opts)
+
     # |> debug()
   end
 
@@ -56,9 +65,9 @@ defmodule Bonfire.Social.Objects do
   * Acls
   """
   def cast_mini(changeset, attrs, creator, opts) do
-    changeset
     # apply boundaries on all objects, uses data preloaded by `Threads` and `PostContents`
-    |> cast_acl(creator, opts)
+    cast_acl(changeset, creator, opts)
+
     # |> debug()
   end
 
@@ -73,20 +82,23 @@ defmodule Bonfire.Social.Objects do
     changeset
     |> cast_mini(attrs, creator, opts)
     |> cast_activity(attrs, creator, opts)
+
     # |> debug()
   end
 
   def cast_acl(changeset, creator, opts) do
-    changeset
-    |> Acls.cast(creator, opts)
+    Acls.cast(changeset, creator, opts)
   end
 
-  defp cast_activity(changeset, %{id: id} = attrs, creator, opts) when is_binary(id) do
+  defp cast_activity(changeset, %{id: id} = attrs, creator, opts)
+       when is_binary(id) do
     changeset
-    |> Changeset.cast(attrs, [:id]) # manually set the ULID of the object (which will be the same as the Activity ID)
+    # manually set the ULID of the object (which will be the same as the Activity ID)
+    |> Changeset.cast(attrs, [:id])
     # create activity & put in feeds
     |> Activities.cast(Map.get(attrs, :verb, :create), creator, opts)
   end
+
   defp cast_activity(changeset, attrs, creator, opts) do
     Map.put(attrs, :id, Pointers.ULID.generate())
     |> cast_activity(changeset, ..., creator, opts)
@@ -96,18 +108,18 @@ defmodule Bonfire.Social.Objects do
     do: cast_creator(changeset, creator, ulid(creator))
 
   defp cast_creator(changeset, _creator, nil), do: changeset
+
   defp cast_creator(changeset, _creator, creator_id) do
-    changeset
-    |> Changesets.maybe_put_assoc(:created, %{creator_id: creator_id})
+    Changesets.maybe_put_assoc(changeset, :created, %{creator_id: creator_id})
   end
 
   def cast_caretaker(changeset, caretaker),
     do: cast_caretaker(changeset, caretaker, ulid(caretaker))
 
   defp cast_caretaker(changeset, _caretaker, nil), do: changeset
+
   defp cast_caretaker(changeset, _caretaker, caretaker_id) do
-    changeset
-    |> Changesets.maybe_put_assoc(:caretaker, %{caretaker_id: caretaker_id})
+    Changesets.maybe_put_assoc(changeset, :caretaker, %{caretaker_id: caretaker_id})
   end
 
   def cast_creator_caretaker(changeset, user) do
@@ -117,34 +129,48 @@ defmodule Bonfire.Social.Objects do
   end
 
   def read(object_id, socket_or_current_user) when is_binary(object_id) do
-    current_user = current_user(socket_or_current_user) #|> debug
+    # |> debug
+    current_user = current_user(socket_or_current_user)
+
     Common.Pointers.pointer_query([id: object_id], socket_or_current_user)
     |> Activities.read(socket: socket_or_current_user, skip_opts_check: true)
     # |> debug("object with activity")
     ~> maybe_preload_activity_object(current_user)
     ~> Activities.activity_under_object(...)
     ~> to_ok()
+
     # |> debug("final object")
   end
 
-  def maybe_preload_activity_object(%{activity: %{object: _}} = pointer, current_user) do
-    Common.Pointers.Preload.maybe_preload_nested_pointers(pointer, [activity: [:object]],
-      current_user: current_user, skip_opts_check: true)
+  def maybe_preload_activity_object(
+        %{activity: %{object: _}} = pointer,
+        current_user
+      ) do
+    Common.Pointers.Preload.maybe_preload_nested_pointers(
+      pointer,
+      [activity: [:object]],
+      current_user: current_user,
+      skip_opts_check: true
+    )
   end
+
   def maybe_preload_activity_object(pointer, _current_user), do: pointer
 
   def preload_reply_creator(object) do
     object
-    |> Bonfire.Common.Repo.maybe_preload([replied: [reply_to: [created: [creator: [:character]]]]]) #|> IO.inspect
+    # |> IO.inspect
+    |> Bonfire.Common.Repo.maybe_preload(replied: [reply_to: [created: [creator: [:character]]]])
     # |> Bonfire.Common.Repo.maybe_preload([replied: [:reply_to]]) #|> IO.inspect
-    |> Bonfire.Common.Repo.maybe_preload([replied: [reply_to: [creator: [:character]]]]) #|> IO.inspect
+    # |> IO.inspect
+    |> Bonfire.Common.Repo.maybe_preload(replied: [reply_to: [creator: [:character]]])
   end
 
   # TODO: does not take permissions into consideration
   def preload_creator(object),
-    do: object
-        |> Bonfire.Common.Repo.maybe_preload([created: [creator: [:character]]])
-        |> Bonfire.Common.Repo.maybe_preload([creator: [:character]])
+    do:
+      object
+      |> Bonfire.Common.Repo.maybe_preload(created: [creator: [:character]])
+      |> Bonfire.Common.Repo.maybe_preload(creator: [:character])
 
   def object_creator(object) do
     e(object, :created, :creator, e(object, :creator, nil))
@@ -152,9 +178,8 @@ defmodule Bonfire.Social.Objects do
 
   def list_query(type_or_query \\ nil, opts)
 
-  def list_query(%Ecto.Query{}= query, opts) do
-    query
-    |> FeedActivities.query_extras(opts)
+  def list_query(%Ecto.Query{} = query, opts) do
+    FeedActivities.query_extras(query, opts)
   end
 
   def list_query(type, opts) when is_atom(type) do
@@ -183,6 +208,7 @@ defmodule Bonfire.Social.Objects do
     Bonfire.Common.Pointers.one(id, opts)
     ~> set_name(name, opts)
   end
+
   def set_name(%{} = object, name, _opts) do
     # TODO: check user's edit permissions
     object
@@ -201,11 +227,14 @@ defmodule Bonfire.Social.Objects do
     opts = to_options(opts)
 
     # load & check permission
-    with %{__struct__: type} = object <- Bonfire.Common.Pointers.get(object, opts ++ [verbs: [:delete]])
-            ~> debug("WIP: deletion") do
-      opts =opts
-      |> Keyword.put(:action, :delete)
-      |> Keyword.put(:delete_associations, [ # generic assocs to delete from all object types if they exist
+    with %{__struct__: type} = object <-
+           Bonfire.Common.Pointers.get(object, opts ++ [verbs: [:delete]])
+           ~> debug("WIP: deletion") do
+      opts =
+        opts
+        |> Keyword.put(:action, :delete)
+        # generic assocs to delete from all object types if they exist
+        |> Keyword.put(:delete_associations, [
           :created,
           :caretaker,
           :activities,
@@ -213,33 +242,59 @@ defmodule Bonfire.Social.Objects do
           :controlled
         ])
 
-      with {:error, _} <- Bonfire.Common.ContextModules.maybe_apply(object, :delete, [object, opts], &delete_apply_error/2),
-          {:error, _} <- Bonfire.Common.ContextModules.maybe_apply(object, :soft_delete, [object, opts], &delete_apply_error/2),
-          {:error, _} <- Bonfire.Common.ContextModules.maybe_apply(object, :soft_delete, [object], &delete_apply_error/2) do
-            warn("there's no per-type delete functions, try with generic_delete anyway")
-            maybe_generic_delete(type, object, opts)
+      with {:error, _} <-
+             Bonfire.Common.ContextModules.maybe_apply(
+               object,
+               :delete,
+               [object, opts],
+               &delete_apply_error/2
+             ),
+           {:error, _} <-
+             Bonfire.Common.ContextModules.maybe_apply(
+               object,
+               :soft_delete,
+               [object, opts],
+               &delete_apply_error/2
+             ),
+           {:error, _} <-
+             Bonfire.Common.ContextModules.maybe_apply(
+               object,
+               :soft_delete,
+               [object],
+               &delete_apply_error/2
+             ) do
+        warn("there's no per-type delete functions, try with generic_delete anyway")
+
+        maybe_generic_delete(type, object, opts)
       end
     else
       _ ->
-        error(l "No permission to delete this")
+        error(l("No permission to delete this"))
     end
   end
 
   def maybe_generic_delete(type, object, options \\ [])
+
   def maybe_generic_delete(type, object, options) do
-    options = to_options(options)
-    |> Keyword.put(:object, object)
+    options =
+      to_options(options)
+      |> Keyword.put(:object, object)
 
     options
-    |> Keyword.put(:delete_associations,
-      options[:delete_associations] ++ [ # cover our bases with some more common mixins
-        :post_content,
-        :profile,
-        :character,
-        :named
-      ])
+    |> Keyword.put(
+      :delete_associations,
+      # cover our bases with some more common mixins
+      options[:delete_associations] ++
+        [
+          :post_content,
+          :profile,
+          :character,
+          :named
+        ]
+    )
     |> run_epic(:delete, ..., :object)
   end
+
   def maybe_generic_delete(type, _object, _options) do
     warn(type, "Deletion not implemented for")
     nil
@@ -247,10 +302,12 @@ defmodule Bonfire.Social.Objects do
 
   def run_epic(type, options \\ [], on \\ :object) do
     options = Keyword.merge(options, crash: true, debug: true, verbose: false)
+
     epic =
       Epic.from_config!(__MODULE__, type)
       |> Epic.assign(:options, options)
       |> Epic.run()
+
     if epic.errors == [], do: {:ok, epic.assigns[on]}, else: {:error, epic}
   end
 
@@ -262,37 +319,60 @@ defmodule Bonfire.Social.Objects do
 
   def publish(creator, verb, thing, attrs \\ nil, for_module \\ __MODULE__)
 
-  def publish(%{id: creator_id} = creator, verb, %{id: thing_id} =thing, attrs, for_module) do
-
-    opts = set_boundaries(creator, thing, attrs, for_module) # this sets permissions & returns recipients in opts to be used for publishing
+  def publish(
+        %{id: creator_id} = creator,
+        verb,
+        %{id: thing_id} = thing,
+        attrs,
+        for_module
+      ) do
+    # this sets permissions & returns recipients in opts to be used for publishing
+    opts = set_boundaries(creator, thing, attrs, for_module)
 
     # add to activity feed + maybe federate
     Bonfire.Social.FeedActivities.publish(creator, verb, thing, opts)
   end
 
-  def publish(_creator, verb, %{id: thing_id} =thing, attrs, for_module) do
+  def publish(_creator, verb, %{id: thing_id} = thing, attrs, for_module) do
     debug("No creator for object so we can't publish it")
 
     # make visible anyway
-    set_boundaries(e(thing, :creator, e(thing, :provider, nil)), thing, attrs, for_module)
+    set_boundaries(
+      e(thing, :creator, e(thing, :provider, nil)),
+      thing,
+      attrs,
+      for_module
+    )
 
     {:ok, nil}
   end
 
   def set_boundaries(creator, thing, attrs \\ nil, for_module \\ __MODULE__) do
     # TODO: make default audience configurable & per object audience selectable by user in API and UI (note: also in `Federation.ap_prepare_activity`)
-    preset_boundary = e(attrs, :to_boundaries, nil) || Bonfire.Common.Config.get_ext(for_module, :preset_boundary, "public")
+    preset_boundary =
+      e(attrs, :to_boundaries, nil) ||
+        Bonfire.Common.Config.get_ext(for_module, :preset_boundary, "public")
 
     to_circles = Bonfire.Common.Config.get_ext(for_module, :publish_to_default_circles, [])
 
-    to_feeds = Bonfire.Social.Feeds.feed_ids(:notifications, [
-                    e(thing, :context_id, nil)
-                  ])
+    to_feeds =
+      Bonfire.Social.Feeds.feed_ids(:notifications, [
+        e(thing, :context_id, nil)
+      ])
 
-    opts = [boundary: preset_boundary, to_circles: to_circles, to_feeds: to_feeds]
-    debug(opts, "boundaries to set & recipients to include (should include scope, provider, and receiver if any)")
+    opts = [
+      boundary: preset_boundary,
+      to_circles: to_circles,
+      to_feeds: to_feeds
+    ]
 
-    if module_enabled?(Bonfire.Boundaries), do: Bonfire.Boundaries.set_boundaries(creator, thing, opts)
+    debug(
+      opts,
+      "boundaries to set & recipients to include (should include scope, provider, and receiver if any)"
+    )
+
+    if module_enabled?(Bonfire.Boundaries),
+      do: Bonfire.Boundaries.set_boundaries(creator, thing, opts)
 
     opts
   end

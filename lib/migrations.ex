@@ -91,7 +91,6 @@ defmodule Bonfire.Social.Migrations do
         else: unquote(ms(:down))
     end
   end
+
   defmacro migrate_social(dir), do: ms(dir)
-
-
 end

@@ -4,21 +4,30 @@ defmodule Bonfire.Social.Acts.MeiliSearch.Queue do
   """
 
   alias Bonfire.Epics
-  alias Bonfire.Epics.{Act, Epic}
+  alias Bonfire.Epics.Act
+  alias Bonfire.Epics.Epic
+
   alias Ecto.Changeset
   alias Bonfire.Social.Integration
   import Epics
   use Arrows
   require Logger
 
-  @doc false # see module documentation
+  # see module documentation
+  @doc false
   def run(epic, act) do
     on = Keyword.get(act.options, :on, :post)
     object = epic.assigns[on]
     action = Keyword.get(epic.assigns[:options], :action)
 
     if epic.errors != [] do
-      maybe_debug(epic, act, length(epic.errors), "Meili: Skipping due to epic errors")
+      maybe_debug(
+        epic,
+        act,
+        length(epic.errors),
+        "Meili: Skipping due to epic errors"
+      )
+
       epic
     else
       case action do
@@ -27,8 +36,10 @@ defmodule Bonfire.Social.Acts.MeiliSearch.Queue do
           Integration.maybe_unindex(object)
           epic
 
-        action -> # :insert
+        # :insert
+        action ->
           maybe_debug(epic, act, action, "Meili queuing")
+
           # maybe_debug(epic, act, object, "Non-formated object")
 
           prepared_object = prepare_object(object)
@@ -40,17 +51,21 @@ defmodule Bonfire.Social.Acts.MeiliSearch.Queue do
 
             Epic.assign(epic, on, prepared_object)
           else
-            maybe_debug(epic, act, object, "Meili: Skipping due to invalid object")
+            maybe_debug(
+              epic,
+              act,
+              object,
+              "Meili: Skipping due to invalid object"
+            )
+
             epic
           end
 
-
-        # action ->
-        #   maybe_debug(epic, act, action, "Meili: Skipping due to unknown action")
-        #   epic
+          # action ->
+          #   maybe_debug(epic, act, action, "Meili: Skipping due to unknown action")
+          #   epic
       end
     end
-
   end
 
   def prepare_object(thing) do
@@ -62,19 +77,23 @@ defmodule Bonfire.Social.Acts.MeiliSearch.Queue do
       # %Activity{object: %{id: _} = object} -> prepare_object(thing, object)
       %Changeset{} ->
         case Changeset.apply_action(thing, :insert) do
-          {:ok, thing} -> prepare_object(thing)
+          {:ok, thing} ->
+            prepare_object(thing)
+
           {:error, error} ->
             Logger.error("MeiliSearch.Queue: Got error applying an action to changeset: #{error}")
+
             nil
         end
+
       %{id: _} ->
-        thing
-        |> Bonfire.Social.Activities.activity_preloads(:all, [])
+        Bonfire.Social.Activities.activity_preloads(thing, :all, [])
+
       _ ->
         Logger.error("MeiliSearch.Queue: no clause match for function to_indexable/2")
+
         IO.inspect(thing, label: "thing")
         nil
     end
   end
-
 end

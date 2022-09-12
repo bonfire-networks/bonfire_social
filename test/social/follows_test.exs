@@ -1,7 +1,9 @@
 defmodule Bonfire.Social.FollowsTest do
   use Bonfire.Social.DataCase, async: true
 
-  alias Bonfire.Social.{Follows, FeedActivities}
+  alias Bonfire.Social.Follows
+  alias Bonfire.Social.FeedActivities
+
   alias Bonfire.Me.Fake
 
   test "can follow" do
@@ -73,8 +75,7 @@ defmodule Bonfire.Social.FollowsTest do
     follower = Fake.fake_user!()
     assert {:ok, follow} = Follows.follow(follower, me)
 
-    assert %{edges: [fetched_follow]} =
-      Follows.list_my_followers(me, skip_boundary_check: true)
+    assert %{edges: [fetched_follow]} = Follows.list_my_followers(me, skip_boundary_check: true)
 
     assert fetched_follow.id == follow.id
   end
@@ -88,7 +89,6 @@ defmodule Bonfire.Social.FollowsTest do
 
     assert fetched_follow.id == follow.id
   end
-
 
   test "can list someone's followers" do
     me = Fake.fake_user!()
@@ -106,26 +106,29 @@ defmodule Bonfire.Social.FollowsTest do
     assert {:ok, follow} = Follows.follow(me, someone)
 
     assert %{edges: [fetched_follow]} = Follows.list_followers(someone, current_user: me)
+
     assert fetched_follow.id == follow.id
   end
 
   test "follow appears in followed's notifications" do
-
     follower = Fake.fake_user!()
     followed = Fake.fake_user!()
     assert {:ok, follow} = Follows.follow(follower, followed)
 
     assert %{edges: [fetched_follow]} = Follows.list_followers(followed, current_user: follower)
+
     assert fetched_follow.id == follow.id
 
     assert %{edges: fetched} = p = FeedActivities.feed(:notifications, current_user: followed)
+
     # debug(notifications: p)
     assert %{} = notification = List.first(fetched)
-    assert activity = notification.activity |> Bonfire.Common.Repo.maybe_preload([object: [:profile]])
+
+    assert activity = Bonfire.Common.Repo.maybe_preload(notification.activity, object: [:profile])
+
     # debug(followed: followed)
     # debug(notifications: activity)
 
     assert activity.object_id == followed.id
   end
-
 end

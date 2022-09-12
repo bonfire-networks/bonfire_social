@@ -9,8 +9,13 @@ defmodule Bonfire.Social.Boundaries.SilenceActorFeedsPerUserTest do
 
   @my_name "alice"
   @other_name "bob"
-  @attrs %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
-
+  @attrs %{
+    post_content: %{
+      summary: "summary",
+      name: "name",
+      html_body: "<p>epic html message</p>"
+    }
+  }
 
   setup do
     # TODO: move this into fixtures
@@ -20,14 +25,19 @@ defmodule Bonfire.Social.Boundaries.SilenceActorFeedsPerUserTest do
     end)
   end
 
-
   test "shows in feeds a post with no per-user silencing" do
     me = fake_user!(@my_name)
     other_user = fake_user!(@other_name)
-    assert {:ok, post} = Posts.publish(current_user: other_user, post_attrs: @attrs, boundary: "public")
+
+    assert {:ok, post} =
+             Posts.publish(
+               current_user: other_user,
+               post_attrs: @attrs,
+               boundary: "public"
+             )
 
     feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
-    #|> debug()
+    # |> debug()
     assert %{edges: [feed_entry]} = Bonfire.Social.FeedActivities.feed(feed_id, current_user: me)
   end
 
@@ -37,7 +47,12 @@ defmodule Bonfire.Social.Boundaries.SilenceActorFeedsPerUserTest do
 
     Bonfire.Boundaries.Blocks.block(other_user, :silence, current_user: me)
 
-    assert {:ok, post} = Posts.publish(current_user: other_user, post_attrs: @attrs, boundary: "public")
+    assert {:ok, post} =
+             Posts.publish(
+               current_user: other_user,
+               post_attrs: @attrs,
+               boundary: "public"
+             )
 
     assert %{edges: []} = Bonfire.Social.FeedActivities.my_feed(me)
   end
@@ -66,7 +81,12 @@ defmodule Bonfire.Social.Boundaries.SilenceActorFeedsPerUserTest do
     # |> Bonfire.Common.Repo.maybe_preload(caretaker: [:profile], encircles: [subject: [:profile]])
     # |> info("other_user: silence_them encircles")
 
-    assert {:ok, post} = Posts.publish(current_user: other_user, post_attrs: @attrs, boundary: "public")
+    assert {:ok, post} =
+             Posts.publish(
+               current_user: other_user,
+               post_attrs: @attrs,
+               boundary: "public"
+             )
 
     assert %{edges: []} = Bonfire.Social.FeedActivities.my_feed(me)
   end
@@ -80,31 +100,48 @@ defmodule Bonfire.Social.Boundaries.SilenceActorFeedsPerUserTest do
     # debug_user_acls(me, "me")
     # debug_user_acls(me, "other_user")
 
-    assert {:ok, post} = Posts.publish(current_user: other_user, post_attrs: @attrs, boundary: "public")
+    assert {:ok, post} =
+             Posts.publish(
+               current_user: other_user,
+               post_attrs: @attrs,
+               boundary: "public"
+             )
 
     debug_object_acls(post)
 
     feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
+
     assert %{edges: []} = Bonfire.Social.FeedActivities.feed(feed_id, current_user: me)
 
     third_user = fake_user!()
-    assert %{edges: [feed_entry]} = Bonfire.Social.FeedActivities.feed(feed_id, current_user: third_user) # check that we do show it to others
+    # check that we do show it to others
+    assert %{edges: [feed_entry]} =
+             Bonfire.Social.FeedActivities.feed(feed_id,
+               current_user: third_user
+             )
   end
 
   test "does not show in any feeds a post from an user that was per-user silenced later on" do
     me = fake_user!(@my_name)
     other_user = fake_user!(@other_name)
 
-    assert {:ok, post} = Posts.publish(current_user: other_user, post_attrs: @attrs, boundary: "public")
+    assert {:ok, post} =
+             Posts.publish(
+               current_user: other_user,
+               post_attrs: @attrs,
+               boundary: "public"
+             )
 
     Bonfire.Boundaries.Blocks.block(other_user, :silence, current_user: me)
 
     feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
+
     assert %{edges: []} = Bonfire.Social.FeedActivities.feed(feed_id, current_user: me)
+
     # check that we do show it to others
     third = fake_user!()
-    assert %{edges: [feed_entry]} = Bonfire.Social.FeedActivities.feed(feed_id, current_user: third)
+
+    assert %{edges: [feed_entry]} =
+             Bonfire.Social.FeedActivities.feed(feed_id, current_user: third)
   end
-
-
 end

@@ -1,26 +1,24 @@
 defmodule Bonfire.Social.RuntimeConfig do
-
   def config_module, do: true
 
   alias Bonfire.Data.Social.Post
   alias Bonfire.Ecto.Acts, as: Ecto
-  alias Bonfire.Social.Acts.{
-    Activity,
-    ActivityPub,
-    Boundaries,
-    Caretaker,
-    Creator,
-    Edges,
-    Files,
-    LivePush,
-    MeiliSearch,
-    Posts,
-    Objects,
-    PostContents,
-    Tags,
-    Threaded,
-    URLPreviews
-  }
+
+  alias Bonfire.Social.Acts.Activity
+  alias Bonfire.Social.Acts.ActivityPub
+  alias Bonfire.Social.Acts.Boundaries
+  alias Bonfire.Social.Acts.Caretaker
+  alias Bonfire.Social.Acts.Creator
+  alias Bonfire.Social.Acts.Edges
+  alias Bonfire.Social.Acts.Files
+  alias Bonfire.Social.Acts.LivePush
+  alias Bonfire.Social.Acts.MeiliSearch
+  alias Bonfire.Social.Acts.Posts
+  alias Bonfire.Social.Acts.Objects
+  alias Bonfire.Social.Acts.PostContents
+  alias Bonfire.Social.Acts.Tags
+  alias Bonfire.Social.Acts.Threaded
+  alias Bonfire.Social.Acts.URLPreviews
 
   @doc """
   NOTE: you can override this default config in your app's runtime.exs, by placing similarly-named config keys below the `Bonfire.Common.Config.LoadExtensionsConfig.load_configs` line
@@ -32,29 +30,31 @@ defmodule Bonfire.Social.RuntimeConfig do
       disabled: false
 
     delete_object = [
-        # Create a changeset for deletion
-        {Objects.Delete,  on: :object},
+      # Create a changeset for deletion
+      {Objects.Delete, on: :object},
 
-        # mark for deletion
-        {Bonfire.Ecto.Acts.Delete, on: :object,
-          delete_extra_associations: [
-            :post_content,
-            :tagged,
-            :media
-          ]
-        },
+      # mark for deletion
+      {Bonfire.Ecto.Acts.Delete,
+       on: :object,
+       delete_extra_associations: [
+         :post_content,
+         :tagged,
+         :media
+       ]},
 
-        # Now we have a short critical section
-        Ecto.Begin,
-        Ecto.Work,         # Run our deletes
-        Ecto.Commit,
+      # Now we have a short critical section
+      Ecto.Begin,
+      # Run our deletes
+      Ecto.Work,
+      Ecto.Commit,
+      # Enqueue for un-indexing by meilisearch
+      {MeiliSearch.Queue, on: :object},
 
-        {MeiliSearch.Queue, on: :object},       # Enqueue for un-indexing by meilisearch
-
-        # Oban would rather we put these here than in the transaction
-        # above because it knows better than us, obviously.
-        {ActivityPub, on: :object}, # Prepare for federation and add to deletion queue (oban).
-      ]
+      # Oban would rather we put these here than in the transaction
+      # above because it knows better than us, obviously.
+      # Prepare for federation and add to deletion queue (oban).
+      {ActivityPub, on: :object}
+    ]
 
     config :bonfire_social, Bonfire.Social.Follows, []
 
@@ -62,42 +62,53 @@ defmodule Bonfire.Social.RuntimeConfig do
       epics: [
         publish: [
           # Prep: a little bit of querying and a lot of preparing changesets
-          Posts.Publish,           # Create a changeset for insertion
-          PostContents,            # with a sanitised body and tags extracted,
-          {Caretaker,   on: :post}, # a caretaker,
-          {Creator,     on: :post}, # and a creator,
-          {URLPreviews, on: :post}, # and possibly fetch contents of URLs,
-          {Files,       on: :post}, # possibly with uploaded files,
-          {Threaded,    on: :post}, # possibly occurring in a thread,
-          {Tags,        on: :post}, # with extracted tags fully hooked up,
-          {Boundaries,  on: :post}, # and the appropriate boundaries established,
-          {Activity,    on: :post}, # summarised by an activity,
+          # Create a changeset for insertion
+          Posts.Publish,
+          # with a sanitised body and tags extracted,
+          PostContents,
+          # a caretaker,
+          {Caretaker, on: :post},
+          # and a creator,
+          {Creator, on: :post},
+          # and possibly fetch contents of URLs,
+          {URLPreviews, on: :post},
+          # possibly with uploaded files,
+          {Files, on: :post},
+          # possibly occurring in a thread,
+          {Threaded, on: :post},
+          # with extracted tags fully hooked up,
+          {Tags, on: :post},
+          # and the appropriate boundaries established,
+          {Boundaries, on: :post},
+          # summarised by an activity,
+          {Activity, on: :post},
           # {Feeds,       on: :post}, # appearing in feeds.
 
           # Now we have a short critical section
           Ecto.Begin,
-          Ecto.Work,         # Run our inserts
+          # Run our inserts
+          Ecto.Work,
           Ecto.Commit,
 
           # These things are free to happen casually in the background.
-          {LivePush, on: :post}, # Publish live feed updates via (in-memory) pubsub.
-
-          {MeiliSearch.Queue, on: :post},       # Enqueue for indexing by meilisearch
+          # Publish live feed updates via (in-memory) pubsub.
+          {LivePush, on: :post},
+          # Enqueue for indexing by meilisearch
+          {MeiliSearch.Queue, on: :post},
 
           # Oban would rather we put these here than in the transaction
           # above because it knows better than us, obviously.
-          {ActivityPub, on: :post}, # Prepare for federation and do the queue insert (oban).
-
-          {Bonfire.Social.Acts.CategoriesAutoBoost, on: :post}, # Once the activity/object exists, we can apply side effects
+          # Prepare for federation and do the queue insert (oban).
+          {ActivityPub, on: :post},
+          # Once the activity/object exists, we can apply side effects
+          {Bonfire.Social.Acts.CategoriesAutoBoost, on: :post}
         ],
-
-        delete: delete_object,
+        delete: delete_object
       ]
 
     config :bonfire_social, Bonfire.Social.Objects,
       epics: [
-        delete: delete_object,
+        delete: delete_object
       ]
-
   end
 end

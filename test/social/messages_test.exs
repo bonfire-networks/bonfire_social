@@ -1,7 +1,10 @@
 defmodule Bonfire.Social.MessagesTest do
   use Bonfire.Social.DataCase, async: true
 
-  alias Bonfire.Social.{Messages, Feeds, FeedActivities}
+  alias Bonfire.Social.Messages
+  alias Bonfire.Social.Feeds
+  alias Bonfire.Social.FeedActivities
+
   alias Bonfire.Me.Fake
   import Untangle
 
@@ -10,7 +13,12 @@ defmodule Bonfire.Social.MessagesTest do
   test "can message a user" do
     sender = Fake.fake_user!()
     receiver = Fake.fake_user!()
-    attrs = %{to_circles: [receiver.id], post_content: %{html_body: @plain_body}}
+
+    attrs = %{
+      to_circles: [receiver.id],
+      post_content: %{html_body: @plain_body}
+    }
+
     assert {:ok, message} = Messages.send(sender, attrs)
     assert message.post_content.html_body =~ @plain_body
   end
@@ -23,7 +31,6 @@ defmodule Bonfire.Social.MessagesTest do
     assert %{edges: [fp]} = Messages.list(sender)
     assert fp.id == message.id
   end
-
 
   test "can list messages I sent to a specific person" do
     sender = Fake.fake_user!()
@@ -64,12 +71,13 @@ defmodule Bonfire.Social.MessagesTest do
 
     assert {:ok, message} = Messages.send(sender, attrs)
 
-    refute match? %{edges: [_]}, Messages.list(other)
-    refute match? %{edges: [_]}, Messages.list(sender, other)
-    refute match? %{edges: [_]}, Messages.list(other, sender)
+    refute match?(%{edges: [_]}, Messages.list(other))
+    refute match?(%{edges: [_]}, Messages.list(sender, other))
+    refute match?(%{edges: [_]}, Messages.list(other, sender))
   end
 
-  @tag :skip # because we filter messages out of feeds (and use Messages.list instead)
+  # because we filter messages out of feeds (and use Messages.list instead)
+  @tag :skip
   test "messages addressed to me appear in my inbox feed" do
     sender = Fake.fake_user!()
     receiver = Fake.fake_user!()
@@ -88,7 +96,10 @@ defmodule Bonfire.Social.MessagesTest do
 
     assert {:ok, message} = Messages.send(sender, attrs)
 
-    refute match? %{edges: [_]}, FeedActivities.feed(:inbox, current_user: sender)
+    refute match?(
+             %{edges: [_]},
+             FeedActivities.feed(:inbox, current_user: sender)
+           )
   end
 
   test "messaging someone else does NOT appear in a 3rd party's inbox" do
@@ -97,7 +108,11 @@ defmodule Bonfire.Social.MessagesTest do
     attrs = %{to_circles: [receiver.id], post_content: %{html_body: @html_body}}
     assert {:ok, message} = Messages.send(sender, attrs)
     third = Fake.fake_user!()
-    refute match? %{edges: [_]}, FeedActivities.feed(:inbox, current_user: third)
+
+    refute match?(
+             %{edges: [_]},
+             FeedActivities.feed(:inbox, current_user: third)
+           )
   end
 
   test "messaging someone does NOT appear in their home feed" do
@@ -105,7 +120,7 @@ defmodule Bonfire.Social.MessagesTest do
     receiver = Fake.fake_user!()
     attrs = %{to_circles: [receiver.id], post_content: %{html_body: @html_body}}
     assert {:ok, message} = Messages.send(sender, attrs)
-    refute match? %{edges: [_]}, FeedActivities.my_feed(receiver)
+    refute match?(%{edges: [_]}, FeedActivities.my_feed(receiver))
   end
 
   test "messaging someone does NOT appear in their instance feed" do
@@ -113,7 +128,11 @@ defmodule Bonfire.Social.MessagesTest do
     receiver = Fake.fake_user!()
     attrs = %{to_circles: [receiver.id], post_content: %{html_body: @html_body}}
     assert {:ok, message} = Messages.send(sender, attrs)
-    refute match? %{edges: [_]}, FeedActivities.feed(:local, current_user: receiver)
+
+    refute match?(
+             %{edges: [_]},
+             FeedActivities.feed(:local, current_user: receiver)
+           )
   end
 
   test "messaging someone does NOT appear in my instance feed" do
@@ -121,7 +140,11 @@ defmodule Bonfire.Social.MessagesTest do
     receiver = Fake.fake_user!()
     attrs = %{to_circles: [receiver.id], post_content: %{html_body: @html_body}}
     assert {:ok, message} = Messages.send(sender, attrs)
-    refute match? %{edges: [_]}, FeedActivities.feed(:local, current_user: sender)
+
+    refute match?(
+             %{edges: [_]},
+             FeedActivities.feed(:local, current_user: sender)
+           )
   end
 
   test "messaging someone does NOT appear in a 3rd party's instance feed" do
@@ -130,7 +153,11 @@ defmodule Bonfire.Social.MessagesTest do
     attrs = %{to_circles: [receiver.id], post_content: %{html_body: @html_body}}
     assert {:ok, message} = Messages.send(sender, attrs)
     third = Fake.fake_user!()
-    refute match? %{edges: [_]}, FeedActivities.feed(:local, current_user: third)
+
+    refute match?(
+             %{edges: [_]},
+             FeedActivities.feed(:local, current_user: third)
+           )
   end
 
   test "messaging someone does NOT appear in the public instance feed" do
@@ -138,8 +165,6 @@ defmodule Bonfire.Social.MessagesTest do
     receiver = Fake.fake_user!()
     attrs = %{to_circles: [receiver.id], post_content: %{html_body: @html_body}}
     assert {:ok, message} = Messages.send(sender, attrs)
-    refute match? %{edges: [_]}, FeedActivities.feed(:local)
+    refute match?(%{edges: [_]}, FeedActivities.feed(:local))
   end
-
-
 end

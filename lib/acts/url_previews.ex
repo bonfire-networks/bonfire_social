@@ -23,6 +23,7 @@ defmodule Bonfire.Social.Acts.URLPreviews do
       epic.errors != [] ->
         Epics.smart(epic, act, epic.errors, "Skipping due to epic errors")
         epic
+
       true ->
         on = Keyword.fetch!(act.options, :on)
         changeset = epic.assigns[on]
@@ -31,8 +32,9 @@ defmodule Bonfire.Social.Acts.URLPreviews do
         # attrs = Keyword.get(epic.assigns[:options], attrs_key, %{})
         urls_key = Keyword.get(act.options, :urls, :urls)
         media_key = Keyword.get(act.options, :medias, :uploaded_media)
+
         case changeset do
-          %Changeset{valid?: true}=changeset ->
+          %Changeset{valid?: true} = changeset ->
             smart(epic, act, changeset, "valid changeset")
             urls = Map.get(epic.assigns, urls_key, [])
 
@@ -42,9 +44,10 @@ defmodule Bonfire.Social.Acts.URLPreviews do
             |> maybe_debug(epic, act, ..., "metadata")
             |> Epic.assign(epic, media_key, ...)
 
-          %Changeset{valid?: false}=changeset ->
+          %Changeset{valid?: false} = changeset ->
             maybe_debug(epic, act, changeset, "invalid changeset")
             epic
+
           other ->
             error(other, "not a changeset")
             Epic.add_error(epic, act, {:expected_changeset, other})
@@ -54,11 +57,19 @@ defmodule Bonfire.Social.Acts.URLPreviews do
 
   def maybe_fetch_and_save(current_user, url) do
     with {:ok, meta} <- Furlex.unfurl(url),
-      media_type <- e(meta, :oembed, "type", nil) || e(meta, :facebook, "og:type", nil),
-      {:ok, media} <- Bonfire.Files.Media.insert(current_user, url, %{media_type: media_type, size: 0}, %{metadata: Map.from_struct(meta)}) do
-       #|> debug
-       media
-      else _ ->
+         media_type <-
+           e(meta, :oembed, "type", nil) || e(meta, :facebook, "og:type", nil),
+         {:ok, media} <-
+           Bonfire.Files.Media.insert(
+             current_user,
+             url,
+             %{media_type: media_type, size: 0},
+             %{metadata: Map.from_struct(meta)}
+           ) do
+      # |> debug
+      media
+    else
+      _ ->
         nil
     end
   end
@@ -67,5 +78,4 @@ defmodule Bonfire.Social.Acts.URLPreviews do
     smart(epic, act, data, "found #{meta_key}")
     Epic.assign(epic, meta_key, data)
   end
-
 end

@@ -1,4 +1,5 @@
 Code.eval_file("mess.exs")
+
 defmodule Bonfire.Social.MixProject do
   use Mix.Project
 
@@ -8,14 +9,21 @@ defmodule Bonfire.Social.MixProject do
       version: "0.1.0",
       elixir: "~> 1.11",
       start_permanent: Mix.env() == :prod,
-      deps: Mess.deps [
-        {:bonfire_me, git: "https://github.com/bonfire-networks/bonfire_me", branch: "main", optional: true},
-        {:bonfire_api_graphql, git: "https://github.com/bonfire-networks/bonfire_api_graphql", branch: "main", optional: true},
-        {:absinthe, "~> 1.7", optional: true}
-      ]
+      deps:
+        Mess.deps([
+          {:bonfire_me,
+           git: "https://github.com/bonfire-networks/bonfire_me",
+           branch: "main",
+           optional: true},
+          {:bonfire_api_graphql,
+           git: "https://github.com/bonfire-networks/bonfire_api_graphql",
+           branch: "main",
+           optional: true},
+          {:absinthe, "~> 1.7", optional: true}
+        ])
     ]
   end
 
   # Run "mix help compile.app" to learn about applications.
-  def application, do: [ extra_applications: [:logger] ]
+  def application, do: [extra_applications: [:logger]]
 end

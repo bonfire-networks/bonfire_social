@@ -23,6 +23,7 @@ defmodule Bonfire.Social.Acts.Files do
       epic.errors != [] ->
         Epics.smart(epic, act, epic.errors, "Skipping due to epic errors")
         epic
+
       true ->
         on = Keyword.fetch!(act.options, :on)
         changeset = epic.assigns[on]
@@ -30,22 +31,26 @@ defmodule Bonfire.Social.Acts.Files do
         attrs_key = Keyword.get(act.options, :attrs, :post_attrs)
         attrs = Keyword.get(epic.assigns[:options], attrs_key, %{})
         uploads_key = Keyword.get(act.options, :uploads, :uploaded_media)
+
         uploaded_media = e(attrs, uploads_key, []) ++ e(epic.assigns, uploads_key, [])
+
         case changeset do
-          %Changeset{valid?: true}=changeset ->
+          %Changeset{valid?: true} = changeset ->
             smart(epic, act, uploaded_media, "upload media")
+
             uploaded_media
-            |> Enum.map(&(%{media: &1}))
+            |> Enum.map(&%{media: &1})
             |> Changesets.put_assoc(changeset, :files, ...)
             |> Epic.assign(epic, on, ...)
-          %Changeset{valid?: false}=changeset ->
+
+          %Changeset{valid?: false} = changeset ->
             maybe_debug(epic, act, changeset, "invalid changeset")
             epic
+
           other ->
             error(other, "not a changeset")
             Epic.add_error(epic, act, {:expected_changeset, other})
         end
     end
   end
-
 end

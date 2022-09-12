@@ -1,9 +1,16 @@
-
 defmodule Bonfire.Social.Requests do
-
   alias Bonfire.Data.Social.Request
-  alias Bonfire.Me.{Boundaries, Characters, Users}
-  alias Bonfire.Social.{Activities, APActivities, Edges, FeedActivities, Feeds, Integration}
+  alias Bonfire.Me.Boundaries
+  alias Bonfire.Me.Characters
+  alias Bonfire.Me.Users
+
+  alias Bonfire.Social.Activities
+  alias Bonfire.Social.APActivities
+  alias Bonfire.Social.Edges
+  alias Bonfire.Social.FeedActivities
+  alias Bonfire.Social.Feeds
+  alias Bonfire.Social.Integration
+
   alias Bonfire.Data.Identity.User
   alias Ecto.Changeset
   import Bonfire.Boundaries.Queries
@@ -14,22 +21,24 @@ defmodule Bonfire.Social.Requests do
 
   def queries_module, do: Request
   def context_module, do: Request
+
   # def federation_module, do: ["Accept", "Reject"]
 
-  def requested?(subject, type, object), do: not is_nil(get!(subject, type, object, skip_boundary_check: true))
-
+  def requested?(subject, type, object),
+    do: not is_nil(get!(subject, type, object, skip_boundary_check: true))
 
   @doc """
   Request someone/something, and federate it
   """
   def request(user, type, object, opts \\ [])
-  def request(%{}=requester, type, object, opts) do
+
+  def request(%{} = requester, type, object, opts) do
     opts = Keyword.put_new(opts, :current_user, requester)
+
     object
     # |> check_request(requester, ..., opts) # TODO: check if allowed to request?
     ~> do_request(requester, type, ..., opts)
   end
-
 
   @doc """
   Request someone/something, and federate it
@@ -48,8 +57,11 @@ defmodule Bonfire.Social.Requests do
     end
   end
 
-  def get(subject, type, object, opts \\ []), do: Edges.get({__MODULE__, type}, subject, object, opts)
-  def get!(subject, type, object, opts \\ []), do: Edges.get!({__MODULE__, type}, subject, object, opts)
+  def get(subject, type, object, opts \\ []),
+    do: Edges.get({__MODULE__, type}, subject, object, opts)
+
+  def get!(subject, type, object, opts \\ []),
+    do: Edges.get!({__MODULE__, type}, subject, object, opts)
 
   def get(filters, opts \\ []), do: Edges.get(__MODULE__, filters, opts)
 
@@ -68,7 +80,7 @@ defmodule Bonfire.Social.Requests do
 
   def all_objects_by_subject(user, type, opts \\ []) do
     all_by_subject(user, type, opts)
-    |> Enum.map(& e(&1, :edge, :object, nil))
+    |> Enum.map(&e(&1, :edge, :object, nil))
   end
 
   def all_by_object(user, type, opts \\ []) do
@@ -81,12 +93,12 @@ defmodule Bonfire.Social.Requests do
 
   def all_subjects_by_object(user, type, opts \\ []) do
     all_by_object(user, type, opts)
-    |> Enum.map(& e(&1, :edge, :subject, nil))
+    |> Enum.map(&e(&1, :edge, :subject, nil))
   end
 
   def all_requested_outboxes(user, type, opts \\ []) do
     all_objects_by_subject(user, type, opts)
-    |> Enum.map(& e(&1, :character, :outbox_id, nil))
+    |> Enum.map(&e(&1, :character, :outbox_id, nil))
   end
 
   # defp query_base(filters, opts) do
@@ -98,7 +110,8 @@ defmodule Bonfire.Social.Requests do
 
   defp query_base(filters, type \\ nil, opts)
 
-  defp query_base(filters, type, opts) when is_atom(type) and not is_nil(type) do
+  defp query_base(filters, type, opts)
+       when is_atom(type) and not is_nil(type) do
     (filters ++ [type: type.__pointers__(:table_id)])
     |> query_base(opts)
   end
@@ -106,22 +119,32 @@ defmodule Bonfire.Social.Requests do
   defp query_base(filters, _, opts) do
     Edges.query_parent(Request, filters, opts)
     |> query_filter(Keyword.drop(filters, [:object, :subject, :type]))
+
     # |> proload(:request)
   end
 
-  def query([my: :object], type, opts), do: [subject: current_user(opts)] |> query(type, opts)
+  def query([my: :object], type, opts),
+    do: query([subject: current_user(opts)], type, opts)
 
-  def query([my: :requesters], type, opts), do: [object: current_user(opts)] |> query(type, opts)
+  def query([my: :requesters], type, opts),
+    do: query([object: current_user(opts)], type, opts)
 
   def query(filters, type \\ nil, opts) do
     query_base(filters, type, opts)
+
     # |> info("requests query")
   end
 
   def list_my_requested(type, opts, with_profile_only \\ true),
     do: list_requested(type, current_user(opts), opts, with_profile_only)
 
-  def list_requested(%{id: user_id} = _user, type, opts \\ [], with_profile_only \\ true) when is_binary(user_id) do
+  def list_requested(
+        %{id: user_id} = _user,
+        type,
+        opts \\ [],
+        with_profile_only \\ true
+      )
+      when is_binary(user_id) do
     query([subject: user_id], type, opts)
     # |> maybe_with_requested_profile_only(with_profile_only)
     |> many(opts)
@@ -130,7 +153,13 @@ defmodule Bonfire.Social.Requests do
   def list_my_requesters(opts, type, with_profile_only \\ true),
     do: list_requesters(current_user(opts), type, opts, with_profile_only)
 
-  def list_requesters(%{id: user_id} = _user, type, opts \\ [], with_profile_only \\ true) when is_binary(user_id) do
+  def list_requesters(
+        %{id: user_id} = _user,
+        type,
+        opts \\ [],
+        with_profile_only \\ true
+      )
+      when is_binary(user_id) do
     query([object: user_id], type, opts)
     # |> maybe_with_requester_profile_only(with_profile_only)
     |> many(opts)
@@ -138,7 +167,9 @@ defmodule Bonfire.Social.Requests do
 
   def many(query, opts), do: repo().many(query, opts)
 
-  defp maybe_with_requester_profile_only(q, true), do: q |> where([requester_profile: p], not is_nil(p.id))
+  defp maybe_with_requester_profile_only(q, true),
+    do: where(q, [requester_profile: p], not is_nil(p.id))
+
   defp maybe_with_requester_profile_only(q, _), do: q
 
   # defp check_request(requester, object, opts) do
@@ -165,17 +196,20 @@ defmodule Bonfire.Social.Requests do
     opts = [
       boundary: "mentions",
       to_circles: [ulid(object)],
-      to_feeds: [notifications: object],
+      to_feeds: [notifications: object]
     ]
+
     case create(requester, type, object, opts) do
       {:ok, request} ->
         Integration.ap_push_activity(requester.id, request)
         {:ok, request}
+
       e ->
         case get(requester, type, object) do
           {:ok, request} ->
             debug("was already requested")
             {:ok, request}
+
           e2 ->
             error(e)
             error(e2)
@@ -192,7 +226,8 @@ defmodule Bonfire.Social.Requests do
   end
 
   def unrequest(%{} = user, type, object) when is_binary(object) do
-    with {:ok, object} <- Bonfire.Common.Pointers.get(object, current_user: user) do
+    with {:ok, object} <-
+           Bonfire.Common.Pointers.get(object, current_user: user) do
       unrequest(user, type, object)
     end
   end
@@ -205,10 +240,15 @@ defmodule Bonfire.Social.Requests do
   ###
 
   # publish follow requests
-  def ap_publish_activity("create", %{edge: %{table_id: "70110WTHE1EADER1EADER1EADE"}} = request) do
+  def ap_publish_activity(
+        "create",
+        %{edge: %{table_id: "70110WTHE1EADER1EADER1EADE"}} = request
+      ) do
     # info(request)
-    with {:ok, follower} <- ActivityPub.Adapter.get_actor_by_id(request.edge.subject_id),
-         {:ok, object} <- ActivityPub.Adapter.get_actor_by_id(request.edge.object_id) do
+    with {:ok, follower} <-
+           ActivityPub.Adapter.get_actor_by_id(request.edge.subject_id),
+         {:ok, object} <-
+           ActivityPub.Adapter.get_actor_by_id(request.edge.object_id) do
       ActivityPub.follow(follower, object, nil, true)
     end
   end
@@ -216,6 +256,4 @@ defmodule Bonfire.Social.Requests do
   def ap_publish_activity("create", request) do
     error(request, "unhandled request type")
   end
-
-
 end

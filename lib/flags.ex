@@ -1,5 +1,4 @@
 defmodule Bonfire.Social.Flags do
-
   use Arrows
   alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Flag
@@ -7,40 +6,57 @@ defmodule Bonfire.Social.Flags do
   alias Bonfire.Common
   alias Bonfire.Me.Users
   # alias Bonfire.Data.Social.FlagCount
-  alias Bonfire.Social.{Activities, FeedActivities}
+  alias Bonfire.Social.Activities
+  alias Bonfire.Social.FeedActivities
+
   alias Bonfire.Social.Edges
   alias Bonfire.Social.Objects
   use Arrows
   use Bonfire.Common.Utils
+
   use Bonfire.Common.Repo,
     schema: Flag,
     searchable_fields: [:flagger_id, :flagged_id]
+
   import Bonfire.Boundaries.Queries
 
   def queries_module, do: Flag
   def context_module, do: Flag
-  def federation_module, do: ["Flag", {"Create", "Flag"}, {"Undo", "Flag"}, {"Delete", "Flag"}]
 
-  def flagged?(%User{}=user, object), do: not is_nil(get!(user, object, skip_boundary_check: true))
+  def federation_module,
+    do: ["Flag", {"Create", "Flag"}, {"Undo", "Flag"}, {"Delete", "Flag"}]
 
-  def get(subject, object, opts \\ []), do: Edges.get(__MODULE__, subject, object, opts)
-  def get!(subject, object, opts \\ []), do: Edges.get!(__MODULE__, subject, object, opts)
+  def flagged?(%User{} = user, object),
+    do: not is_nil(get!(user, object, skip_boundary_check: true))
 
-  def by_flagger(%{}=subject), do: [subject: subject] |> query(current_user: subject) |> repo().many()
-  def by_flagged(%{}=object), do: [object: object] |> query(current_user: object) |> repo().many()
+  def get(subject, object, opts \\ []),
+    do: Edges.get(__MODULE__, subject, object, opts)
+
+  def get!(subject, object, opts \\ []),
+    do: Edges.get!(__MODULE__, subject, object, opts)
+
+  def by_flagger(%{} = subject),
+    do: [subject: subject] |> query(current_user: subject) |> repo().many()
+
+  def by_flagged(%{} = object),
+    do: [object: object] |> query(current_user: object) |> repo().many()
+
   # def by_any(%User{}=user), do: repo().many(by_any_q(user))
 
   def flag(flagger, flagged, opts \\ [])
+
   def flag(%{} = flagger, object, opts) do
     opts =
       opts
       |> Keyword.put_new(:current_user, flagger)
       |> Keyword.put_new_lazy(:to_feeds, &flag_feeds/0)
+
     check_flag(flagger, object, opts)
     ~> create(flagger, ..., opts)
-  rescue e in Ecto.ConstraintError ->
-    warn(e)
-    {:ok, "Already flagged"}
+  rescue
+    e in Ecto.ConstraintError ->
+      warn(e)
+      {:ok, "Already flagged"}
   end
 
   # determines the feeds a flag is published to
@@ -48,11 +64,13 @@ defmodule Bonfire.Social.Flags do
 
   defp check_flag(flagger, object, opts) do
     skip? = skip_boundary_check?(opts, object)
-    skip? = (:admins == skip? && Users.is_admin?(flagger)) || (skip? == true)
+    skip? = (:admins == skip? && Users.is_admin?(flagger)) || skip? == true
+
     case object do
       %{id: id} ->
-        if skip?, do: {:ok, object},
-        else: Common.Pointers.one(id, opts)
+        if skip?,
+          do: {:ok, object},
+          else: Common.Pointers.one(id, opts)
 
       _ when is_binary(object) ->
         if is_ulid?(object) do
@@ -64,10 +82,14 @@ defmodule Bonfire.Social.Flags do
     end
   end
 
-  def unflag(%User{}=flagger, %{}=flagged) do
-    Edges.delete_by_both(flagger, Flag, flagged) # delete the Flag
-    Activities.delete_by_subject_verb_object(flagger, :flag, flagged) # delete the flag activity & feed entries (not needed unless publishing flags to feeds)
+  def unflag(%User{} = flagger, %{} = flagged) do
+    # delete the Flag
+    Edges.delete_by_both(flagger, Flag, flagged)
+
+    # delete the flag activity & feed entries (not needed unless publishing flags to feeds)
+    Activities.delete_by_subject_verb_object(flagger, :flag, flagged)
   end
+
   def unflag(%User{} = user, object) when is_binary(object) do
     with {:ok, object} <- Common.Pointers.get(object, current_user: user) do
       unflag(user, object)
@@ -75,11 +97,19 @@ defmodule Bonfire.Social.Flags do
   end
 
   def list_paginated(filters, opts \\ []) do
-    opts = Keyword.put_new(to_options(opts), :skip_boundary_check, Bonfire.Boundaries.can?(opts, :mediate, :instance) || :admins) # mediators and admins should see all flagged objects
+    # mediators and admins should see all flagged objects
+    opts =
+      Keyword.put_new(
+        to_options(opts),
+        :skip_boundary_check,
+        Bonfire.Boundaries.can?(opts, :mediate, :instance) || :admins
+      )
+
     filters
     |> query(opts)
     |> proload(:activity)
     |> Bonfire.Common.Repo.many_paginated(opts)
+
     # TODO: activity preloads
   end
 
@@ -87,15 +117,21 @@ defmodule Bonfire.Social.Flags do
   def list_my(opts), do: list_by(current_user(opts), opts)
 
   @doc "List flags by the user and which are in their outbox"
-  def list_by(by_user, opts \\ []) when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
-    [subject: by_user]
-    |> list_paginated(opts)
+  def list_by(by_user, opts \\ [])
+      when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
+    list_paginated(
+      [subject: by_user],
+      opts
+    )
   end
 
   @doc "List flag of an object and which are in a feed"
-  def list_of(object, opts \\ []) when is_binary(object) or is_list(object) or is_map(object) do
-    [object: object]
-    |> list_paginated(opts)
+  def list_of(object, opts \\ [])
+      when is_binary(object) or is_list(object) or is_map(object) do
+    list_paginated(
+      [object: object],
+      opts
+    )
   end
 
   defp query_base(filters, opts) do
@@ -104,13 +140,14 @@ defmodule Bonfire.Social.Flags do
       filters
       |> :proplists.delete(:object, ...)
       |> :proplists.delete(:subject, ...)
+
     Edges.query_parent(Flag, filters, opts)
-    |> proload([
+    |> proload(
       edge: [
         subject: {"subject_", [:profile, :character]},
         object: {"object_", [:profile, :character, :post_content]}
       ]
-    ])
+    )
     |> query_filter(next)
   end
 
@@ -126,20 +163,18 @@ defmodule Bonfire.Social.Flags do
     |> repo().insert()
   end
 
-
   def ap_publish_activity("create", %Flag{} = flag) do
     flag = repo().preload(flag, flagged: [])
 
-    with {:ok, flagger} <- ActivityPub.Actor.get_cached_by_local_id(flag.flagger_id) do
+    with {:ok, flagger} <-
+           ActivityPub.Actor.get_cached_by_local_id(flag.flagger_id) do
       flagged = Common.Pointers.get(flag.context)
 
-      #FIXME: only works for flagged posts and users
+      # FIXME: only works for flagged posts and users
       params =
         case flagged do
           %User{id: id} when not is_nil(id) ->
-
-            {:ok, account} =
-              ActivityPub.Actor.get_by_local_id(id)
+            {:ok, account} = ActivityPub.Actor.get_by_local_id(id)
 
             %{
               statuses: nil,
@@ -150,12 +185,12 @@ defmodule Bonfire.Social.Flags do
             flagged = repo().preload(flagged, :created)
 
             {:ok, account} =
-              ActivityPub.Actor.get_or_fetch_by_username(
-                flagged.created.creator_id
-              )
+              ActivityPub.Actor.get_or_fetch_by_username(flagged.created.creator_id)
 
             %{
-              statuses: [ActivityPub.Object.get_cached_by_pointer_id(flagged.id)],
+              statuses: [
+                ActivityPub.Object.get_cached_by_pointer_id(flagged.id)
+              ],
               account: account
             }
         end

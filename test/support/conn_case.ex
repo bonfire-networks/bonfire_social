@@ -40,12 +40,10 @@ defmodule Bonfire.Social.ConnCase do
   end
 
   setup tags do
-
     # import Bonfire.Social.Integration
 
     Bonfire.Common.Test.Interactive.setup_test_repo(tags)
 
     {:ok, []}
   end
-
 end

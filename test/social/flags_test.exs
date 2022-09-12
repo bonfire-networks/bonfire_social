@@ -1,28 +1,57 @@
 defmodule Bonfire.Social.FlagsTest do
   use Bonfire.Social.DataCase, async: true
 
-  alias Bonfire.Social.{Flags, Posts, FeedActivities}
-  alias Bonfire.Me.{Fake, Users}
+  alias Bonfire.Social.Flags
+  alias Bonfire.Social.Posts
+  alias Bonfire.Social.FeedActivities
+
+  alias Bonfire.Me.Fake
+  alias Bonfire.Me.Users
+
   import Bonfire.Boundaries.Debug
 
   test "flag works" do
-
     me = Fake.fake_user!()
 
-    attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
-    assert {:ok, flagged} = Posts.publish(current_user: me, post_attrs: attrs, boundary: "public")
+    attrs = %{
+      post_content: %{
+        summary: "summary",
+        name: "name",
+        html_body: "<p>epic html message</p>"
+      }
+    }
+
+    assert {:ok, flagged} =
+             Posts.publish(
+               current_user: me,
+               post_attrs: attrs,
+               boundary: "public"
+             )
 
     assert {:ok, %{activity: activity}} = Flags.flag(me, flagged)
     # debug(activity)
     assert activity.subject_id == me.id
     assert activity.object_id == flagged.id
-
   end
 
   test "can check if I flagged something" do
     me = Fake.fake_user!()
-    attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
-    assert {:ok, flagged} = Posts.publish(current_user: me, post_attrs: attrs, boundary: "public")
+
+    attrs = %{
+      post_content: %{
+        summary: "summary",
+        name: "name",
+        html_body: "<p>epic html message</p>"
+      }
+    }
+
+    assert {:ok, flagged} =
+             Posts.publish(
+               current_user: me,
+               post_attrs: attrs,
+               boundary: "public"
+             )
+
     assert {:ok, _} = Flags.flag(me, flagged)
 
     assert true == Flags.flagged?(me, flagged)
@@ -30,16 +59,43 @@ defmodule Bonfire.Social.FlagsTest do
 
   test "can check if I did not flag something" do
     me = Fake.fake_user!()
-    attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
-    assert {:ok, flagged} = Posts.publish(current_user: me, post_attrs: attrs, boundary: "public")
+
+    attrs = %{
+      post_content: %{
+        summary: "summary",
+        name: "name",
+        html_body: "<p>epic html message</p>"
+      }
+    }
+
+    assert {:ok, flagged} =
+             Posts.publish(
+               current_user: me,
+               post_attrs: attrs,
+               boundary: "public"
+             )
 
     assert false == Flags.flagged?(me, flagged)
   end
 
   test "can unflag something" do
     me = Fake.fake_user!()
-    attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
-    assert {:ok, flagged} = Posts.publish(current_user: me, post_attrs: attrs, boundary: "public")
+
+    attrs = %{
+      post_content: %{
+        summary: "summary",
+        name: "name",
+        html_body: "<p>epic html message</p>"
+      }
+    }
+
+    assert {:ok, flagged} =
+             Posts.publish(
+               current_user: me,
+               post_attrs: attrs,
+               boundary: "public"
+             )
+
     assert {:ok, _} = Flags.flag(me, flagged)
 
     Flags.unflag(me, flagged)
@@ -49,11 +105,26 @@ defmodule Bonfire.Social.FlagsTest do
   test "can list my flags" do
     me = Fake.fake_user!()
     someone = Fake.fake_user!()
-    attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
-    assert {:ok, flagged} = Posts.publish(current_user: someone, post_attrs: attrs, boundary: "public")
+
+    attrs = %{
+      post_content: %{
+        summary: "summary",
+        name: "name",
+        html_body: "<p>epic html message</p>"
+      }
+    }
+
+    assert {:ok, flagged} =
+             Posts.publish(
+               current_user: someone,
+               post_attrs: attrs,
+               boundary: "public"
+             )
+
     assert {:ok, flag} = Flags.flag(me, flagged)
-    assert %{edges: [fetched_flag]} =
-      Flags.list_paginated([subject: me], current_user: me)
+
+    assert %{edges: [fetched_flag]} = Flags.list_paginated([subject: me], current_user: me)
+
     assert flag.id == fetched_flag.id
     assert flag.edge.object_id == fetched_flag.edge.object_id
     assert flag.edge.subject_id == fetched_flag.edge.subject_id
@@ -63,11 +134,28 @@ defmodule Bonfire.Social.FlagsTest do
     me = Fake.fake_user!()
     {:ok, me} = Users.make_admin(me)
     someone = Fake.fake_user!()
-    attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
-    assert {:ok, flagged} = Posts.publish(current_user: me, post_attrs: attrs, boundary: "public", debug: true, crash: true)
+
+    attrs = %{
+      post_content: %{
+        summary: "summary",
+        name: "name",
+        html_body: "<p>epic html message</p>"
+      }
+    }
+
+    assert {:ok, flagged} =
+             Posts.publish(
+               current_user: me,
+               post_attrs: attrs,
+               boundary: "public",
+               debug: true,
+               crash: true
+             )
+
     assert {:ok, flag} = Flags.flag(someone, flagged)
 
     assert %{edges: [fetched_flag]} = Flags.list_paginated([:all], current_user: me)
+
     assert flag.id == fetched_flag.id
     assert flag.edge.object_id == fetched_flag.edge.object_id
     assert flag.edge.subject_id == fetched_flag.edge.subject_id
@@ -77,11 +165,25 @@ defmodule Bonfire.Social.FlagsTest do
     me = Fake.fake_user!()
     {:ok, me} = Users.make_admin(me)
     someone = Fake.fake_user!()
-    attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
-    assert {:ok, flagged} = Posts.publish(current_user: me, post_attrs: attrs, boundary: "public")
+
+    attrs = %{
+      post_content: %{
+        summary: "summary",
+        name: "name",
+        html_body: "<p>epic html message</p>"
+      }
+    }
+
+    assert {:ok, flagged} =
+             Posts.publish(
+               current_user: me,
+               post_attrs: attrs,
+               boundary: "public"
+             )
+
     assert {:ok, flag} = Flags.flag(someone, flagged)
-    assert %{edges: [fetched_flag]} =
-      Flags.list_paginated([object: flagged], current_user: me)
+
+    assert %{edges: [fetched_flag]} = Flags.list_paginated([object: flagged], current_user: me)
 
     assert flag.id == fetched_flag.id
     assert flag.edge.object_id == fetched_flag.edge.object_id
@@ -92,12 +194,26 @@ defmodule Bonfire.Social.FlagsTest do
     me = Fake.fake_user!()
     {:ok, me} = Users.make_admin(me)
     someone = Fake.fake_user!()
-    attrs = %{post_content: %{summary: "summary", name: "name", html_body: "<p>epic html message</p>"}}
-    assert {:ok, flagged} = Posts.publish(current_user: me, post_attrs: attrs, boundary: "public")
+
+    attrs = %{
+      post_content: %{
+        summary: "summary",
+        name: "name",
+        html_body: "<p>epic html message</p>"
+      }
+    }
+
+    assert {:ok, flagged} =
+             Posts.publish(
+               current_user: me,
+               post_attrs: attrs,
+               boundary: "public"
+             )
+
     assert {:ok, flag} = Flags.flag(someone, flagged)
 
-    assert %{edges: [fetched_flag]} =
-      Flags.list_paginated([subject: someone], current_user: me)
+    assert %{edges: [fetched_flag]} = Flags.list_paginated([subject: someone], current_user: me)
+
     assert flag.id == fetched_flag.id
     assert flag.edge.object_id == fetched_flag.edge.object_id
     assert flag.edge.subject_id == fetched_flag.edge.subject_id
@@ -107,16 +223,24 @@ defmodule Bonfire.Social.FlagsTest do
     me = Fake.fake_user!()
     {:ok, me} = Users.make_admin(me)
     someone = Fake.fake_user!()
-    attrs = %{post_content: %{html_body: "<p>hey you have an epic html post</p>"}}
 
-    assert {:ok, post} = Posts.publish(current_user: me, post_attrs: attrs, boundary: "public")
+    attrs = %{
+      post_content: %{html_body: "<p>hey you have an epic html post</p>"}
+    }
+
+    assert {:ok, post} =
+             Posts.publish(
+               current_user: me,
+               post_attrs: attrs,
+               boundary: "public"
+             )
+
     assert {:ok, flag} = Flags.flag(someone, post)
     # debug_object_acls(flag)
-    assert %{edges: [feed_publish]} =
-      FeedActivities.feed(:notifications, current_user: me)
+    assert %{edges: [feed_publish]} = FeedActivities.feed(:notifications, current_user: me)
+
     assert activity = feed_publish.activity
     assert flag.edge.object_id == post.id
     assert flag.edge.subject_id == someone.id
   end
-
 end

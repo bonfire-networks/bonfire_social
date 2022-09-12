@@ -25,21 +25,34 @@ defmodule Bonfire.Social.Acts.Feeds do
       epic.errors != [] ->
         Epics.smart(epic, act, epic.errors, "Skipping due to epic errors")
         epic
+
       true ->
         on = Keyword.fetch!(act.options, :on)
         changeset = epic.assigns[on]
         current_user = Keyword.fetch!(epic.assigns[:options], :current_user)
         boundary = epic.assigns[:options][:boundary]
+
         case changeset do
-          %Changeset{valid?: true}=changeset ->
+          %Changeset{valid?: true} = changeset ->
             smart(epic, act, changeset, "valid changeset")
-            feed_ids = Feeds.feed_ids_to_publish(current_user, Bonfire.Boundaries.preset_name(boundary), epic.assigns) # seems like a duplicate of `Feeds.target_feeds` in the Activity act?
-            pubs = Enum.map(feed_ids, &(%{feed_id: &1}))
+
+            # seems like a duplicate of `Feeds.target_feeds` in the Activity act?
+            feed_ids =
+              Feeds.feed_ids_to_publish(
+                current_user,
+                Bonfire.Boundaries.preset_name(boundary),
+                epic.assigns
+              )
+
+            pubs = Enum.map(feed_ids, &%{feed_id: &1})
+
             Changesets.put_assoc(changeset, :feed_publishes, pubs)
             |> Epic.assign(epic, on, ...)
-          %Changeset{valid?: false}=changeset ->
+
+          %Changeset{valid?: false} = changeset ->
             maybe_debug(epic, act, changeset, "invalid changeset")
             epic
+
           other ->
             error(other, "not a changeset")
             Epic.add_error(epic, act, {:expected_changeset, other})
@@ -53,5 +66,4 @@ defmodule Bonfire.Social.Acts.Feeds do
       other -> [other]
     end
   end
-
 end
