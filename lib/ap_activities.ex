@@ -12,7 +12,7 @@ defmodule Bonfire.Social.APActivities do
   use Bonfire.Common.Utils
   import Bonfire.Common.Config, only: [repo: 0]
 
-  def create(activity, object, nil) do
+  def create(nil, activity, object) when is_map(activity) or is_map(object) do
     with actor_id when is_binary(actor_id) <-
            e(activity, :data, "actor", "id", nil) ||
              e(activity, :data, "actor", nil) ||
@@ -21,8 +21,8 @@ defmodule Bonfire.Social.APActivities do
              e(object, :data, "actor", "id", nil) ||
              e(object, :data, "actor", nil),
          {:ok, character} <-
-           Bonfire.Federate.ActivityPub.Utils.get_character_by_ap_id(info(actor_id)) do
-      create(activity, object, character)
+           Bonfire.Federate.ActivityPub.Utils.get_character_by_ap_id(actor_id) do
+      create(character, activity, object)
     else
       other ->
         error(
@@ -32,19 +32,21 @@ defmodule Bonfire.Social.APActivities do
     end
   end
 
-  def create(activity, object, character) do
-    object = ActivityPub.Object.normalize(object, true)
+  def create(character, %{data: %{} = activity}, object), do: create(character, activity, object)
+  def create(character, activity, %{data: %{} = object}), do: create(character, activity, object)
 
+  def create(character, activity, object) do
     json =
       if is_map(object) do
-        e(activity, :data, %{})
-        |> Map.put("object", object.data)
+        Enum.into(%{"object" => ActivityPub.Object.normalize(object, true)}, activity || %{})
       else
-        e(activity, :data, %{})
+        activity || %{}
       end
 
     # TODO: reuse logic from Posts for targeting the audience, and handling public/private
-    opts = [boundary: "federated"]
+    opts =
+      [boundary: "federated", id: ulid(object), verb: e(activity, :verb, :create)]
+      |> debug("ap_opts")
 
     with {:ok, apactivity} <- insert(character, json, opts) do
       #  {:ok, _} <- FeedActivities.save_fediverse_incoming_activity(character, :create, apactivity) do # Note: using `Activities.put_assoc/` instead
@@ -59,10 +61,11 @@ defmodule Bonfire.Social.APActivities do
       |> Objects.cast_caretaker(character)
       |> Objects.cast_acl(character, opts)
 
-    id = Changeset.get_change(activity, :id)
+    id = opts[:id] || Changeset.get_change(activity, :id)
 
     activity
-    |> Activities.put_assoc(:create, character, id)
+    |> Activities.put_assoc(opts[:verb], character, id)
     |> repo().insert()
+    |> debug()
   end
 end

@@ -5,7 +5,6 @@ defmodule Bonfire.Social.Requests do
   alias Bonfire.Me.Users
 
   alias Bonfire.Social.Activities
-  alias Bonfire.Social.APActivities
   alias Bonfire.Social.Edges
   alias Bonfire.Social.FeedActivities
   alias Bonfire.Social.Feeds

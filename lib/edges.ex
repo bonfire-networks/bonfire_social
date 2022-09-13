@@ -13,8 +13,6 @@ defmodule Bonfire.Social.Edges do
   alias Pointers.Changesets
   alias Pointers.ULID
 
-  def table_id(schema), do: schema.__pointers__(:table_id)
-
   def put_edge_assoc(changeset, subject, object),
     do: put_edge_assoc(changeset, changeset.data.__struct__, subject, object)
 
@@ -22,7 +20,7 @@ defmodule Bonfire.Social.Edges do
     %{
       subject_id: ulid(subject),
       object_id: ulid(object),
-      table_id: table_id(schema)
+      table_id: Bonfire.Common.Types.table_id(schema)
     }
     # |> Changesets.put_assoc(changeset, :edge, ...)
     |> Ecto.Changeset.cast(changeset, %{edge: ...}, [])
@@ -168,11 +166,8 @@ defmodule Bonfire.Social.Edges do
   end
 
   defp filter(query, {:type, types}, opts) do
-    case table_types(types)
-         |> List.wrap()
-         |> debug()
-         |> Utils.filter_empty(nil) do
-      table_ids when is_list(table_ids) ->
+    case Bonfire.Common.Types.table_types(types) do
+      table_ids when is_list(table_ids) and table_ids != [] ->
         where(query, [edge: edge], edge.table_id in ^table_ids)
 
       _ ->
@@ -181,8 +176,8 @@ defmodule Bonfire.Social.Edges do
   end
 
   defp filter(query, {:subject_type, types}, opts) do
-    case table_types(types) |> List.wrap() |> Utils.filter_empty(nil) do
-      table_ids when is_list(table_ids) ->
+    case Bonfire.Common.Types.table_types(types) do
+      table_ids when is_list(table_ids) and table_ids != [] ->
         where(query, [subject: subject], subject.table_id in ^table_ids)
 
       _ ->
@@ -191,8 +186,8 @@ defmodule Bonfire.Social.Edges do
   end
 
   defp filter(query, {:object_type, types}, opts) do
-    case table_types(types) |> List.wrap() |> Utils.filter_empty(nil) do
-      table_ids when is_list(table_ids) ->
+    case Bonfire.Common.Types.table_types(types) do
+      table_ids when is_list(table_ids) and table_ids != [] ->
         where(query, [object: object], object.table_id in ^table_ids)
 
       _ ->
@@ -200,19 +195,14 @@ defmodule Bonfire.Social.Edges do
     end
   end
 
+  defp filter(query, {ignore, _}, _opts) when ignore in [:current_user, :current_account] do
+    query
+  end
+
   defp filter(query, filters, _opts) do
     warn(filters, "Filter params not recognised")
     query
   end
-
-  def table_types(types) when is_list(types),
-    do: Enum.map(types, &table_types/1)
-
-  def table_types(type) when is_atom(type) and not is_nil(type),
-    do: table_id(type)
-
-  def table_types(type) when is_map(type) or is_binary(type), do: ulid(type)
-  def table_types(_), do: nil
 
   # doc "Delete Follows where i am the subject"
   def delete_by_subject(user),
@@ -228,7 +218,7 @@ defmodule Bonfire.Social.Edges do
   # doc "Delete Follows where i am the subject and someone else is the object."
   def delete_by_both(me, schema, object),
     do:
-      [subject: me, object: object, table_id: table_id(schema)]
+      [subject: me, object: object, table_id: Bonfire.Common.Types.table_id(schema)]
       |> query(skip_boundary_check: true)
       |> do_delete()
 

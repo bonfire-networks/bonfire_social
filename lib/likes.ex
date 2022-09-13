@@ -35,11 +35,11 @@ defmodule Bonfire.Social.Likes do
   def get!(subject, object, opts \\ []),
     do: Edges.get!(__MODULE__, subject, object, opts)
 
-  def by_liker(%{} = subject),
-    do: [subject: subject] |> query(current_user: subject) |> repo().many()
+  def by_liker(%{} = subject, opts \\ []),
+    do: (opts ++ [subject: subject]) |> query([current_user: subject] ++ opts) |> repo().many()
 
-  def by_liked(%{} = subject),
-    do: [subject: subject] |> query(current_user: subject) |> repo().many()
+  def by_liked(%{} = object, opts \\ []),
+    do: (opts ++ [object: object]) |> query(opts) |> repo().many()
 
   def like(%{} = liker, %{} = object) do
     if Bonfire.Boundaries.can?(liker, :like, object) do
@@ -141,14 +141,14 @@ defmodule Bonfire.Social.Likes do
   def list_by(by_user, opts \\ [])
       when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
     opts = to_options(opts)
-    list_paginated([subject: by_user], opts ++ [preload: :object])
+    list_paginated(opts ++ [subject: by_user], opts ++ [preload: :object])
   end
 
   @doc "List likers of something(s)"
   def list_of(object, opts \\ [])
       when is_binary(object) or is_list(object) or is_map(object) do
     opts = to_options(opts)
-    list_paginated([object: object], opts ++ [preload: :subject])
+    list_paginated(opts ++ [object: object], opts ++ [preload: :subject])
   end
 
   defp create(liker, liked, opts) do

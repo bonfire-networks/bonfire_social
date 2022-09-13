@@ -209,7 +209,7 @@ defmodule Bonfire.Social.Activities do
     user_id = ulid(current_user(opts))
 
     if user_id do
-      table_id = Edges.table_id(Seen)
+      table_id = Bonfire.Common.Types.table_id(Seen)
 
       q
       |> reusable_join(:left, [activity: activity], seen_edge in Edge,
@@ -230,7 +230,7 @@ defmodule Bonfire.Social.Activities do
     user_id = ulid(current_user(opts))
 
     if user_id do
-      table_id = Edges.table_id(Seen)
+      table_id = Bonfire.Common.Types.table_id(Seen)
 
       from(seen_edge in Edge,
         where: seen_edge.table_id == ^table_id and seen_edge.subject_id == ^user_id

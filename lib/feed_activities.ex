@@ -347,6 +347,7 @@ defmodule Bonfire.Social.FeedActivities do
       as: :object,
       on: object.id == activity.object_id
     )
+    |> maybe_filter(Enum.into(e(opts, :feed_filters, %{}), %{}))
     # where: fp.feed_id not in ^exclude_feed_ids,
     # Don't show messages or anything deleted
     |> where(
@@ -365,6 +366,21 @@ defmodule Bonfire.Social.FeedActivities do
     |> maybe_exclude_replies(opts)
     # |> debug("feed_paginated post-preloads")
     |> Activities.as_permitted_for(opts)
+  end
+
+  defp maybe_filter(query, %{object_type: object_type}) do
+    case Bonfire.Common.Types.table_types(object_type) do
+      table_ids when is_list(table_ids) and table_ids != [] ->
+        where(query, [object: object], object.table_id in ^table_ids)
+
+      _ ->
+        query
+    end
+  end
+
+  defp maybe_filter(query, filters) do
+    debug(filters, "no filter defined")
+    query
   end
 
   defp maybe_exclude_replies(query, opts) do
@@ -649,9 +665,19 @@ defmodule Bonfire.Social.FeedActivities do
     {:ok, activity}
   end
 
+  defp create_activity(subject, verb, object, true) do
+    dump([subject, verb, ulid(object), true])
+    Bonfire.Social.APActivities.create(subject, %{verb: verb}, ulid(object))
+  end
+
+  defp create_activity(subject, verb, object, %{} = json),
+    do: Bonfire.Social.APActivities.create(subject, Enum.into(json, %{verb: verb}), ulid(object))
+
+  defp create_activity(subject, verb, object, _), do: Activities.create(subject, verb, object)
+
   defp create_and_put_in_feeds(subject, verb, object, feed_id, opts)
        when (is_map(object) and is_binary(feed_id)) or is_list(feed_id) do
-    with {:ok, activity} <- Activities.create(subject, verb, object) do
+    with {:ok, activity} <- create_activity(subject, verb, object, e(opts, :activity_json, nil)) do
       # publish in specified feed
       # meh
       with {:ok, _published} <-
@@ -688,7 +714,7 @@ defmodule Bonfire.Social.FeedActivities do
   defp create_and_put_in_feeds(subject, verb, object, _, opts)
        when is_map(object) do
     # for activities with no target feed, still create the activity and push it to AP
-    ret = Activities.create(subject, verb, object)
+    ret = Activities.create(subject, verb, object, e(opts, :activity_id, nil))
 
     try do
       # FIXME only run if ActivityPub is a target circle/feed?
@@ -802,7 +828,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def unseen_query(feed_id, opts) do
-    table_id = Edges.table_id(Seen)
+    table_id = Bonfire.Common.Types.table_id(Seen)
     current_user = current_user(opts)
 
     feed_id =
