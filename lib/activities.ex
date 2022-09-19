@@ -94,8 +94,8 @@ defmodule Bonfire.Social.Activities do
         %{id: object_id} = object,
         activity_id
       )
-      when is_binary(subject_id) and is_binary(activity_id) and is_atom(verb) do
-    verb_id = verb_id(verb)
+      when is_binary(subject_id) and is_binary(activity_id) do
+    verb_id = verb_id(verb || :create)
     verb = Verbs.get(verb_id)
 
     attrs =
@@ -116,7 +116,7 @@ defmodule Bonfire.Social.Activities do
     create(subject, verb, object, id)
   end
 
-  def create(subject, verb, %{id: id} = object, _) do
+  def create(%{id: _id} = subject, verb, %{id: id} = object, _) do
     # info(object, "create_object")
     create(subject, verb, object, id)
   end
