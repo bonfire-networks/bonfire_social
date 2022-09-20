@@ -31,6 +31,7 @@ defmodule Bonfire.Social.Threads do
     do: cast_replied(changeset, attrs, user)
 
   defp cast_replied(changeset, attrs, user) do
+    # TODO: dedup with function in Threaded act
     custom_thread = find_thread(attrs, user)
 
     case find_reply_to(attrs, user) do
@@ -99,7 +100,7 @@ defmodule Bonfire.Social.Threads do
   end
 
   # old; not sure this is what forks will look like when we implement thread forking
-  defp find_thread(attrs, user) do
+  def find_thread(attrs, user) do
     find_thread_id(attrs)
     |> maybe_replyable(user)
   end
@@ -348,7 +349,8 @@ defmodule Bonfire.Social.Threads do
       to_options(opts)
       |> Keyword.put_new(:max_depth, Config.get(:thread_default_max_depth, 3))
       |> Keyword.put_new(:preload, preloads)
-      |> debug("thread opts")
+
+    # |> debug("thread opts")
 
     %Replied{id: Bonfire.Common.Pointers.id_binary(thread_id)}
     |> Replied.descendants()

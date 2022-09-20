@@ -4,6 +4,7 @@ defmodule Bonfire.Social.Acts.Threaded do
   alias Bonfire.Epics.Act
   alias Bonfire.Epics.Epic
 
+  alias Bonfire.Common.Utils
   alias Bonfire.Social.Threads
   alias Ecto.Changeset
   alias Pointers.Changesets
@@ -36,7 +37,7 @@ defmodule Bonfire.Social.Acts.Threaded do
         epic
 
       not is_struct(changeset) || changeset.__struct__ != Changeset ->
-        maybe_debug(epic, act, changeset, "Skipping :#{on} due to changeset")
+        warn(changeset, "Skipping :#{on} due to missing changeset")
         epic
 
       changeset.action not in [:insert, :delete] ->
@@ -59,14 +60,22 @@ defmodule Bonfire.Social.Acts.Threaded do
   end
 
   defp handle_insert(epic, act, on, changeset, current_user) do
+    # TODO: dedup with cast function in Threads
     boundary = epic.assigns[:options][:boundary]
     attrs_key = Keyword.get(act.options, :attrs, :post_attrs)
-    attrs = Keyword.get(epic.assigns[:options], attrs_key, %{})
 
-    case Threads.find_reply_to(attrs, current_user) do
+    attrs =
+      Keyword.get(epic.assigns[:options], attrs_key, %{})
+      |> debug("attrs")
+
+    custom_thread = Threads.find_thread(attrs, current_user)
+
+    case Threads.find_reply_to(attrs, current_user) |> debug("find_reply_to") do
       {:ok, %{replied: %{thread_id: thread_id, thread: %{}}} = reply_to} ->
         # we are permitted to both reply to the thing and the thread root.
-        maybe_debug(epic, act, thread_id, "threading under parent thread root")
+        # for thread forking
+        thread_id = Utils.ulid(custom_thread) || thread_id
+        maybe_debug(epic, act, thread_id, "threading under parent thread root or custom thread")
 
         changeset
         |> put_replied(thread_id, reply_to)
@@ -76,21 +85,23 @@ defmodule Bonfire.Social.Acts.Threaded do
       {:ok, %{replied: %{thread_id: thread_id}} = reply_to}
       when is_binary(thread_id) ->
         # we're permitted to reply to the thing, but not the thread root
-        smart(epic, act, reply_to, "threading under parent")
+        thread_id = Utils.ulid(custom_thread) || reply_to.id
+        smart(epic, act, reply_to, "threading under parent or custom thread")
 
         changeset
-        |> put_replied(reply_to.id, reply_to)
+        |> put_replied(thread_id, reply_to)
         |> Epic.assign(epic, on, ...)
         |> Epic.assign(:reply_to, reply_to)
 
       {:ok, %{} = reply_to} ->
         # we're permitted to reply to the parent, but it appears to have no threading information.
-        maybe_debug(epic, act, "parent missing threading, creating as root")
+        thread_id = Utils.ulid(custom_thread) || reply_to.id
+        maybe_debug(epic, act, "parent missing threading, creating as root or custom")
 
         reply_to = init_replied(reply_to)
 
         changeset
-        |> put_replied(reply_to.id, reply_to)
+        |> put_replied(thread_id, reply_to)
         |> Epic.assign(epic, on, ...)
         |> Epic.assign(:reply_to, reply_to)
 
@@ -98,13 +109,13 @@ defmodule Bonfire.Social.Acts.Threaded do
         maybe_debug(
           epic,
           act,
-          "does not reply to anything or not permitted to reply to, so starting new thread"
+          "does not reply to anything or not permitted to reply to, so starting new thread (or using custom if specified)"
         )
 
-        id = Changeset.get_field(changeset, :id)
+        thread_id = Utils.ulid(custom_thread) || Changeset.get_field(changeset, :id)
 
         changeset
-        |> put_replied(id, nil)
+        |> put_replied(thread_id, nil)
         |> Epic.assign(epic, on, ...)
     end
   end

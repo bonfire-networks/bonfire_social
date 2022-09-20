@@ -100,13 +100,15 @@ defmodule Bonfire.Social.PostContents do
   end
 
   def maybe_detect_languages(attrs, fields \\ [:name, :summary, :html_body]) do
-    fields
-    |> Enum.map(&get_attr(attrs, &1))
-    |> Enum.join("\n\n")
-    |> Text.text_only()
-    |> String.trim()
-    |> do_maybe_detect_languages()
-    |> debug()
+    if module_enabled?(Elixir.Text) do
+      fields
+      |> Enum.map(&get_attr(attrs, &1))
+      |> Enum.join("\n\n")
+      |> Text.text_only()
+      |> String.trim()
+      |> do_maybe_detect_languages()
+      |> debug()
+    end
   end
 
   defp do_maybe_detect_languages(text)
