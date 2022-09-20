@@ -838,27 +838,28 @@ defmodule Bonfire.Social.FeedActivities do
 
     if current_user,
       do:
-        from(fp in FeedPublish,
-          left_join: seen_edge in Edge,
-          on:
-            fp.id == seen_edge.object_id and seen_edge.table_id == ^table_id and
-              seen_edge.subject_id == ^ulid(current_user),
-          where: fp.feed_id == ^feed_id,
-          where: is_nil(seen_edge.id)
-        )
+        {:ok,
+         from(fp in FeedPublish,
+           left_join: seen_edge in Edge,
+           on:
+             fp.id == seen_edge.object_id and seen_edge.table_id == ^table_id and
+               seen_edge.subject_id == ^ulid(current_user),
+           where: fp.feed_id == ^feed_id,
+           where: is_nil(seen_edge.id)
+         )}
 
     # |> debug()
   end
 
   def unseen_count(feed_id, opts) do
     unseen_query(feed_id, opts)
-    |> select(count())
+    ~> select(count())
     |> repo().one()
   end
 
   def mark_all_seen(feed_id, opts) do
     unseen_query(feed_id, opts)
-    |> select([c], %{id: c.id})
+    ~> select([c], %{id: c.id})
     |> repo().all()
     |> Bonfire.Social.Seen.mark_seen(current_user(opts), ...)
   end
