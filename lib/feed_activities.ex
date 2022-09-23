@@ -803,6 +803,7 @@ defmodule Bonfire.Social.FeedActivities do
         error("Nothing to delete")
 
       objects ->
+        debug(objects)
         delete({by_field || :id, objects})
     end
   end

@@ -134,6 +134,21 @@ defmodule Bonfire.Social.Activities do
     elem(repo().delete_all(q), 1)
   end
 
+  @doc "Delete activities, using specific filters"
+  def delete(filters) when is_list(filters) or is_tuple(filters) do
+    q =
+      FeedPublish
+      |> query_filter(filters)
+      |> debug()
+
+    # TODO: see why cascading delete doesn't take care of this
+    FeedActivities.delete(repo().many(q), :id)
+
+    q
+    |> repo().delete_many()
+    |> elem(0)
+  end
+
   def by_subject_verb_object_q(%{id: subject}, verb, %{id: object}),
     do: by_subject_verb_object_q(subject, verb, object)
 

@@ -266,6 +266,11 @@ defmodule Bonfire.Social.Objects do
         warn("there's no per-type delete functions, try with generic_delete anyway")
 
         maybe_generic_delete(type, object, opts)
+      else
+        {:ok, _} ->
+          debug("Delete it from feeds too")
+          id = ulid(object)
+          Bonfire.Social.Activities.delete({:object_id, id})
       end
     else
       _ ->
