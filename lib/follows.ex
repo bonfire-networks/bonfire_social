@@ -65,24 +65,24 @@ defmodule Bonfire.Social.Follows do
     case check_follow(follower, object, opts) do
       {:local, object} ->
         if Integration.is_local?(follower) do
-          info(object, "local following local, attempting follow")
+          info("local following local, attempting follow")
           do_follow(follower, object, opts)
         else
-          info(object, "remote following local, attempting a request")
+          info("remote following local, attempting a request")
           Requests.request(follower, Follow, object, opts)
         end
 
       {:remote, object} ->
         if Integration.is_local?(follower) do
-          info(object, "local following remote, attempting a request")
+          info("local following remote, attempting a request")
           Requests.request(follower, Follow, object, opts)
         else
-          info(object, "remote following remote, should not be possible!")
+          info("remote following remote, should not be possible!")
           {:error, :not_permitted}
         end
 
       :not_permitted ->
-        info(object, "not permitted to follow, attempting a request instead")
+        info("not permitted to follow, attempting a request instead")
         Requests.request(follower, Follow, object, opts)
     end
   end
