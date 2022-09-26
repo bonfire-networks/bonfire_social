@@ -105,8 +105,8 @@ defmodule Bonfire.Social.FeedActivities do
       when is_binary(id_or_ids) or (is_list(id_or_ids) and id_or_ids != []) do
     ulid(id_or_ids)
     |> feed_query(opts)
-    # |> debug()
     |> repo().many_paginated(opts)
+    # |> debug()
     |> maybe_dedup_feed_objects(opts)
   end
 
@@ -258,6 +258,8 @@ defmodule Bonfire.Social.FeedActivities do
       true ->
         generic_feed_query(feed_ids, opts)
     end
+
+    # |> debug()
   end
 
   defp generic_feed_query(feed_ids, opts) do
@@ -379,7 +381,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   defp maybe_filter(query, filters) do
-    debug(filters, "no filter defined")
+    debug(filters, "no known extra filters defined")
     query
   end
 
