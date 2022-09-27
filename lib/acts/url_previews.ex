@@ -49,8 +49,8 @@ defmodule Bonfire.Social.Acts.URLPreviews do
             epic
 
           other ->
-            error(other, "not a changeset")
-            Epic.add_error(epic, act, {:expected_changeset, other})
+            maybe_debug(epic, act, changeset, "Skipping :#{on} due to changeset")
+            epic
         end
     end
   end

@@ -49,7 +49,7 @@ defmodule Bonfire.Social.Acts.Activity do
 
         epic
 
-      changeset.action == :insert ->
+      changeset.action in [:insert] ->
         boundary = epic.assigns[:options][:boundary]
         boundary_name = Bonfire.Boundaries.preset_name(boundary)
 

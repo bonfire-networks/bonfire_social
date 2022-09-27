@@ -38,7 +38,7 @@ defmodule Bonfire.Social.Acts.PostContents do
         maybe_debug(epic, act, changeset, "Skipping :#{on} due to changeset")
         epic
 
-      changeset.action not in [:insert, :delete] ->
+      changeset.action not in [:insert, :upsert, :delete] ->
         maybe_debug(
           epic,
           act,
@@ -48,17 +48,22 @@ defmodule Bonfire.Social.Acts.PostContents do
 
         epic
 
-      changeset.action == :insert ->
+      changeset.action in [:insert, :upsert] ->
         boundary = epic.assigns.options[:boundary]
         attrs_key = Keyword.get(act.options, :attrs, :post_attrs)
         attrs = Keyword.get(epic.assigns.options, attrs_key, %{})
-        maybe_debug(epic, act, "Casting post contents")
 
-        changeset
-        |> PostContents.cast(attrs, current_user, boundary)
-        |> Epic.assign(epic, on, ...)
-        |> assign_meta(act, on, :mentions)
-        |> assign_meta(act, on, :urls)
+        if attrs != %{} do
+          maybe_debug(epic, act, "Casting post contents")
+
+          changeset
+          |> PostContents.cast(attrs, current_user, boundary)
+          |> Epic.assign(epic, on, ...)
+          |> assign_meta(act, on, :mentions)
+          |> assign_meta(act, on, :urls)
+        else
+          warn(attrs_key, "Skipping due to empty attrs on key:")
+        end
 
       changeset.action == :delete ->
         # TODO: deletion

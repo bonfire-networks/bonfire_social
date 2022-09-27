@@ -46,7 +46,7 @@ defmodule Bonfire.Social.Acts.Caretaker do
         maybe_debug(epic, act, changeset, "Skipping :#{on} due to changeset")
         epic
 
-      changeset.action not in [:insert, :delete] ->
+      changeset.action not in [:insert, :upsert, :delete] ->
         maybe_debug(
           epic,
           act,
@@ -56,7 +56,7 @@ defmodule Bonfire.Social.Acts.Caretaker do
 
         epic
 
-      changeset.action == :insert ->
+      changeset.action in [:insert, :upsert] ->
         case epic.assigns[:options][:caretaker] do
           %{id: id} ->
             maybe_debug(epic, act, id, "Casting explicit caretaker")

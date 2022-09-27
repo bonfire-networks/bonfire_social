@@ -126,6 +126,14 @@ defmodule Bonfire.Social.LivePush do
       Bonfire.Social.Activities.verb_name(verb)
       |> Bonfire.Social.Activities.verb_display()
 
+    avatar = avatar_url(subject)
+
+    icon =
+      cond do
+        is_binary(avatar) and avatar != avatar_fallback() -> avatar
+        true -> Config.get([:ui, :theme, :instance_icon], "/images/bonfire-icon.png")
+      end
+
     feed_ids
     |> debug("feed_ids")
     |> Bonfire.UI.Common.Notifications.notify_feeds(
@@ -149,7 +157,7 @@ defmodule Bonfire.Social.LivePush do
         )
       ),
       path(object),
-      avatar_url(subject)
+      icon
     )
   end
 

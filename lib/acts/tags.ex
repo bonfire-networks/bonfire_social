@@ -43,7 +43,7 @@ defmodule Bonfire.Social.Acts.Tags do
         maybe_debug(epic, act, changeset, "Skipping :#{on} due to changeset")
         epic
 
-      changeset.action not in [:insert, :delete] ->
+      changeset.action not in [:insert, :upsert, :delete] ->
         maybe_debug(
           epic,
           act,
@@ -53,7 +53,7 @@ defmodule Bonfire.Social.Acts.Tags do
 
         epic
 
-      changeset.action == :insert ->
+      changeset.action in [:insert, :upsert] ->
         boundary = epic.assigns[:options][:boundary]
         attrs_key = Keyword.get(act.options, :attrs, :post_attrs)
         attrs = Keyword.get(epic.assigns[:options], attrs_key, %{})
