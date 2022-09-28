@@ -14,7 +14,6 @@ config :bonfire_data_identity, Bonfire.Data.Identity.Credential, hasher_module: 
 
 # include all used Bonfire extensions
 import_config "bonfire_social.exs"
-import_config "bonfire_fail.exs"
 
 #### Basic configuration
 
