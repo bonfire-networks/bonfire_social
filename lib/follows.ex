@@ -189,10 +189,10 @@ defmodule Bonfire.Social.Follows do
   end
 
   def query([my: :object], opts),
-    do: query([subject: current_user(opts)], opts)
+    do: query([subject: current_user_required(opts)], opts)
 
   def query([my: :followers], opts),
-    do: query([object: current_user(opts)], opts)
+    do: query([object: current_user_required(opts)], opts)
 
   def query(filters, opts) do
     query_base(filters, opts)

@@ -864,6 +864,6 @@ defmodule Bonfire.Social.FeedActivities do
     unseen_query(feed_id, opts)
     ~> select([c], %{id: c.id})
     |> repo().all()
-    |> Bonfire.Social.Seen.mark_seen(current_user(opts), ...)
+    |> Bonfire.Social.Seen.mark_seen(current_user_required(opts), ...)
   end
 end

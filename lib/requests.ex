@@ -123,10 +123,10 @@ defmodule Bonfire.Social.Requests do
   end
 
   def query([my: :object], type, opts),
-    do: query([subject: current_user(opts)], type, opts)
+    do: query([subject: current_user_required(opts)], type, opts)
 
   def query([my: :requesters], type, opts),
-    do: query([object: current_user(opts)], type, opts)
+    do: query([object: current_user_required(opts)], type, opts)
 
   def query(filters, type \\ nil, opts) do
     query_base(filters, type, opts)
@@ -135,7 +135,7 @@ defmodule Bonfire.Social.Requests do
   end
 
   def list_my_requested(type, opts, with_profile_only \\ true),
-    do: list_requested(type, current_user(opts), opts, with_profile_only)
+    do: list_requested(type, current_user_required(opts), opts, with_profile_only)
 
   def list_requested(
         %{id: user_id} = _user,
@@ -150,7 +150,7 @@ defmodule Bonfire.Social.Requests do
   end
 
   def list_my_requesters(opts, type, with_profile_only \\ true),
-    do: list_requesters(current_user(opts), type, opts, with_profile_only)
+    do: list_requesters(current_user_required(opts), type, opts, with_profile_only)
 
   def list_requesters(
         %{id: user_id} = _user,

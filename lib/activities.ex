@@ -615,7 +615,7 @@ defmodule Bonfire.Social.Activities do
   def query(filters \\ [], opts_or_current_user \\ [])
 
   def query([my: :feed], opts_or_current_user) do
-    current_user = current_user(opts_or_current_user)
+    current_user = current_user_required(opts_or_current_user)
     query([feed_id: ulid(current_user)], opts_or_current_user)
   end
 

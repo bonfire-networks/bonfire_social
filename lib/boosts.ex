@@ -114,7 +114,7 @@ defmodule Bonfire.Social.Boosts do
 
   @doc "List current user's boosts"
   def list_my(opts) do
-    list_by(current_user(opts), opts)
+    list_by(current_user_required(opts), opts)
   end
 
   @doc "List boosts by the user "
@@ -152,7 +152,7 @@ defmodule Bonfire.Social.Boosts do
   end
 
   def query([my: :boosts], opts),
-    do: query([subject: current_user(opts)], opts)
+    do: query([subject: current_user_required(opts)], opts)
 
   def query(filters, opts) do
     query_base(filters, opts)

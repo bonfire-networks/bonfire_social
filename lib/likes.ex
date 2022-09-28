@@ -118,7 +118,7 @@ defmodule Bonfire.Social.Likes do
   end
 
   def query([my: :likes], opts),
-    do: query([subject: current_user(opts)], opts)
+    do: query([subject: current_user_required(opts)], opts)
 
   def query(filters, opts) do
     query_base(filters, opts)
@@ -134,7 +134,7 @@ defmodule Bonfire.Social.Likes do
 
   @doc "List the current user's likes"
   def list_my(opts) when is_list(opts) do
-    list_by(current_user(opts), opts)
+    list_by(current_user_required(opts), opts)
   end
 
   @doc "List likes by a user"
