@@ -184,7 +184,11 @@ defmodule Bonfire.Social.Threads do
 
   # loads a reply, but only if you are allowed to reply to it.
   defp load_replyable(user, id) do
-    from(p in Pointer, as: :root, where: p.id == ^id)
+    exclude_pointables =
+      [Bonfire.Classify.Category]
+      |> Bonfire.Common.Types.table_types()
+
+    from(p in Pointer, as: :root, where: p.id == ^id and p.table_id not in ^exclude_pointables)
     # load the reply_to's Replied and in particular its thread and that creator
     |> proload(replied: [thread: [created: [creator: [:character, :peered]]]])
     |> proload(created: [creator: [:character, :peered]])
