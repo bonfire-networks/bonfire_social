@@ -100,7 +100,7 @@ defmodule Bonfire.Social.Messages do
     # before PostContents since we only want to tag `to` users, not mentions
     |> Tags.cast(attrs, creator, opts)
     # process text (must be done before Objects.cast)
-    |> PostContents.cast(attrs, creator, "message")
+    |> PostContents.cast(attrs, creator, "message", opts)
     |> Objects.cast_creator_caretaker(creator)
     # record replies & threads. preloads data that will be checked by `Acls`
     |> Threads.cast(attrs, creator, opts)

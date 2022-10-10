@@ -57,7 +57,7 @@ defmodule Bonfire.Social.Acts.PostContents do
           maybe_debug(epic, act, "Casting post contents")
 
           changeset
-          |> PostContents.cast(attrs, current_user, boundary)
+          |> PostContents.cast(attrs, current_user, boundary, epic.assigns.options)
           |> Epic.assign(epic, on, ...)
           |> assign_meta(act, on, :mentions)
           |> assign_meta(act, on, :urls)

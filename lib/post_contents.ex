@@ -6,10 +6,10 @@ defmodule Bonfire.Social.PostContents do
   use Bonfire.Common.Utils
   alias Ecto.Changeset
 
-  def cast(changeset, attrs, creator, boundary) do
+  def cast(changeset, attrs, creator, boundary, opts) do
     has_images = is_list(attrs[:uploaded_media]) and length(attrs[:uploaded_media]) > 0
 
-    %{post_content: maybe_prepare_contents(attrs, creator, boundary)}
+    %{post_content: maybe_prepare_contents(attrs, creator, boundary, opts)}
     |> Changeset.cast(changeset, ..., [])
     |> Changeset.cast_assoc(:post_content,
       required: !has_images,
@@ -19,18 +19,18 @@ defmodule Bonfire.Social.PostContents do
     # |> debug()
   end
 
-  def maybe_prepare_contents(%{local: false} = attrs, creator, _boundary) do
+  def maybe_prepare_contents(%{local: false} = attrs, creator, _boundary, opts) do
     debug("do not process remote contents or messages for tags/mentions")
-    only_prepare_content(attrs, creator)
+    only_prepare_content(attrs, creator, opts)
   end
 
-  def maybe_prepare_contents(attrs, creator, boundary)
+  def maybe_prepare_contents(attrs, creator, boundary, opts)
       when boundary in ["message"] do
     debug("do not process messages for tags/mentions")
-    only_prepare_content(attrs, creator)
+    only_prepare_content(attrs, creator, opts)
   end
 
-  def maybe_prepare_contents(attrs, creator, _boundary) do
+  def maybe_prepare_contents(attrs, creator, _boundary, opts) do
     if module_enabled?(Bonfire.Social.Tags) do
       debug("process post contents for tags/mentions")
 
@@ -44,12 +44,12 @@ defmodule Bonfire.Social.PostContents do
             }} <-
              Bonfire.Social.Tags.maybe_process(
                creator,
-               prepare_text(get_attr(attrs, :html_body), creator)
+               prepare_text(get_attr(attrs, :html_body), creator, opts)
              ),
            {:ok, %{text: name, mentions: mentions2, hashtags: hashtags2, urls: urls2}} <-
              Bonfire.Social.Tags.maybe_process(
                creator,
-               prepare_text(get_attr(attrs, :name), creator)
+               prepare_text(get_attr(attrs, :name), creator, opts)
              ),
            {:ok,
             %{
@@ -60,7 +60,7 @@ defmodule Bonfire.Social.PostContents do
             }} <-
              Bonfire.Social.Tags.maybe_process(
                creator,
-               prepare_text(get_attr(attrs, :summary), creator)
+               prepare_text(get_attr(attrs, :summary), creator, opts)
              ) do
         merge_with_body_or_nil(
           attrs,
@@ -77,15 +77,15 @@ defmodule Bonfire.Social.PostContents do
         )
       end
     else
-      only_prepare_content(attrs, creator)
+      only_prepare_content(attrs, creator, opts)
     end
   end
 
-  def only_prepare_content(attrs, creator) do
+  def only_prepare_content(attrs, creator, opts) do
     merge_with_body_or_nil(attrs, %{
-      html_body: prepare_text(get_attr(attrs, :html_body), creator),
-      name: prepare_text(get_attr(attrs, :name), creator),
-      summary: prepare_text(get_attr(attrs, :summary), creator),
+      html_body: prepare_text(get_attr(attrs, :html_body), creator, opts),
+      name: prepare_text(get_attr(attrs, :name), creator, opts),
+      summary: prepare_text(get_attr(attrs, :summary), creator, opts),
       languages: maybe_detect_languages(attrs)
     })
   end
@@ -125,7 +125,7 @@ defmodule Bonfire.Social.PostContents do
       e(attrs, :post_content, key, nil) || e(attrs, :post, key, nil)
   end
 
-  def prepare_text(text, creator) when is_binary(text) and text != "" do
+  def prepare_text(text, creator, opts) when is_binary(text) and text != "" do
     # little trick to test error handling
     if String.contains?(text, "/crash!"), do: throw("User-triggered crash")
 
@@ -134,14 +134,21 @@ defmodule Bonfire.Social.PostContents do
     |> maybe_process_markdown(creator)
     # transform emoticons to emojis
     |> Text.maybe_emote()
-    # remove potentially dangerous or dirty markup
-    |> Text.maybe_sane_html()
-    # make sure we end up with proper HTML
+    # maybe remove potentially dangerous or dirty markup
+    |> maybe_sane_html(e(opts, :do_not_strip_html, nil))
+    # make sure we end up with valid HTML
     |> Text.maybe_normalize_html()
   end
 
-  def prepare_text("", _), do: nil
-  def prepare_text(other, _), do: other
+  def prepare_text("", _, _opts), do: nil
+  def prepare_text(other, _, _opts), do: other
+
+  defp maybe_sane_html(text, true), do: text
+
+  defp maybe_sane_html(text, _) do
+    text
+    |> Text.maybe_sane_html()
+  end
 
   def maybe_process_markdown(text, creator) do
     if Bonfire.Me.Settings.get(
