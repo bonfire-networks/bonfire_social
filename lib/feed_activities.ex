@@ -322,6 +322,7 @@ defmodule Bonfire.Social.FeedActivities do
   # add assocs needed in timelines/feeds
   @doc false
   def query_extras(query, opts) do
+    dump(opts)
     # eg. private messages should never appear in feeds
     exclude_object_types = [Message] ++ e(opts, :exclude_object_types, [])
     # exclude certain activity types
@@ -349,7 +350,9 @@ defmodule Bonfire.Social.FeedActivities do
       as: :object,
       on: object.id == activity.object_id
     )
-    |> maybe_filter(Enum.into(e(opts, :feed_filters, %{}), %{}))
+    |> maybe_filter(
+      Enum.into(e(opts, :feed_filters, nil) || e(opts, :assigns, :feed_filters, %{}), %{})
+    )
     # where: fp.feed_id not in ^exclude_feed_ids,
     # Don't show messages or anything deleted
     |> where(
