@@ -4,20 +4,46 @@ defmodule Bonfire.Social.PostContents do
   alias Bonfire.Data.Social.PostContent
   import Bonfire.Common.Extend
   use Bonfire.Common.Utils
-  alias Ecto.Changeset
+  use Bonfire.Common.Repo
+
+  def query(filters, _opts \\ []) do
+    PostContent
+    |> query_filter(filters)
+  end
+
+  def one(filters, opts \\ []) do
+    query(filters, opts)
+    |> repo().single()
+  end
+
+  def get(id, opts \\ []) do
+    if is_ulid?(id), do: one([id: id], opts)
+  end
 
   def cast(changeset, attrs, creator, boundary, opts) do
     has_images = is_list(attrs[:uploaded_media]) and length(attrs[:uploaded_media]) > 0
 
-    %{post_content: maybe_prepare_contents(attrs, creator, boundary, opts)}
-    |> Changeset.cast(changeset, ..., [])
+    changeset
+    |> repo().maybe_preload(:post_content)
+    |> Changeset.cast(%{post_content: maybe_prepare_contents(attrs, creator, boundary, opts)}, [])
     |> Changeset.cast_assoc(:post_content,
       required: !has_images,
       with: &changeset/2
+      # with: (if changeset.action==:upsert, do: &changeset_update/2, else: &changeset/2)
     )
 
     # |> debug()
   end
+
+  def changeset(%PostContent{} = cs \\ %PostContent{}, attrs) do
+    PostContent.changeset(cs, attrs)
+    |> Changeset.cast(attrs, [:hashtags, :mentions, :urls])
+  end
+
+  #   defp changeset_update(%PostContent{} = cs \\ %PostContent{}, attrs) do
+  #     changeset(cs, attrs)
+  #     |> Map.put(:action, :update)
+  #   end
 
   def maybe_prepare_contents(%{local: false} = attrs, creator, _boundary, opts) do
     debug("do not process remote contents or messages for tags/mentions")
@@ -197,9 +223,4 @@ defmodule Bonfire.Social.PostContents do
   end
 
   def indexing_object_format(_), do: nil
-
-  def changeset(%PostContent{} = cs \\ %PostContent{}, attrs) do
-    PostContent.changeset(cs, attrs)
-    |> Changeset.cast(attrs, [:hashtags, :mentions, :urls])
-  end
 end

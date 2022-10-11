@@ -290,7 +290,6 @@ defmodule Bonfire.Social.Threads do
     query
     |> reusable_join(:left, [root], assoc(root, :activity), as: :activity)
     |> reusable_join(:left, [root], assoc(root, :replied), as: :replied)
-    # |> join_preload([:activity, :replied])
     |> distinct([replied: replied], desc: replied.thread_id)
     |> order_by([root], desc: root.id)
     |> select([root, replied: replied], %{root | thread_id: replied.thread_id})

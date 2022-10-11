@@ -175,7 +175,7 @@ defmodule Bonfire.Social.Posts do
 
   def query(filters, opts) when is_list(filters) or is_tuple(filters) do
     base_query(filters, opts)
-    |> join_preload([:post_content])
+    |> proload([:post_content])
     |> boundarise(main_object.id, opts)
   end
 

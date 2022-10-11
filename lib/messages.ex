@@ -206,7 +206,7 @@ defmodule Bonfire.Social.Messages do
        ) do
     query
     # add assocs needed in timelines/feeds
-    # |> join_preload([:activity])
+    # |> proload([:activity])
     # |> debug("pre-preloads")
     |> Activities.activity_preloads(opts)
     |> query_filter(filters)
@@ -238,7 +238,7 @@ defmodule Bonfire.Social.Messages do
 
     query
     # add assocs needed in timelines/feeds
-    # |> join_preload([:activity])
+    # |> proload([:activity])
     # |> debug("pre-preloads")
     # |> Activities.activity_preloads(opts)
     |> query_filter(filters)
@@ -260,7 +260,6 @@ defmodule Bonfire.Social.Messages do
     # messages between current user & someone else
 
     query
-    # |> join_preload([:activity, :tags])
     |> reusable_join(:left, [root], assoc(root, :activity), as: :activity)
     |> reusable_join(:left, [activity: activity], assoc(activity, :tagged), as: :tagged)
     |> where(

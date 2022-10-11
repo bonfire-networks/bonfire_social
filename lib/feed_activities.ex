@@ -140,7 +140,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed(%Ecto.Query{} = custom_query, opts) do
     custom_query
-    |> join_preload([:activity])
+    |> proload([:activity])
     |> query_extras(opts)
     # |> debug()
     |> repo().many_paginated(opts)
@@ -341,7 +341,7 @@ defmodule Bonfire.Social.FeedActivities do
     # exclude_feed_ids = e(opts, :exclude_feed_ids, []) |> List.wrap() # WIP - to exclude activities that also appear in another feed
 
     query
-    |> join_preload([:activity])
+    |> proload([:activity])
     |> reusable_join(:inner, [activity: activity], activity_pointer in Pointer,
       as: :activity_pointer,
       on: activity_pointer.id == activity.id
