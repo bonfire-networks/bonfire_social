@@ -594,7 +594,9 @@ defmodule Bonfire.Social.Activities do
     # debug(opts, "opts")
     query
     # |> debug("base query")
-    |> query_object_preload_create_activity(opts ++ [preload: [:default, :with_reply_to]])
+    |> query_object_preload_create_activity(
+      opts ++ [preload: [:default, :with_media, :with_reply_to]]
+    )
     # |> debug("activity query")
     |> as_permitted_for(opts, [:read])
     # |> debug("permitted query")
