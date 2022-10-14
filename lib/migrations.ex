@@ -21,6 +21,7 @@ defmodule Bonfire.Social.Migrations do
       require Bonfire.Data.Social.Message.Migration
       require Bonfire.Data.Social.Request.Migration
       require Bonfire.Data.Social.Seen.Migration
+      require Bonfire.Data.Social.Pin.Migration
 
       Bonfire.Data.Social.Block.Migration.migrate_block()
       Bonfire.Data.Social.Bookmark.Migration.migrate_bookmark()
@@ -40,6 +41,7 @@ defmodule Bonfire.Social.Migrations do
       Bonfire.Data.Social.Message.Migration.migrate_message()
       Bonfire.Data.Social.Request.Migration.migrate_request()
       Bonfire.Data.Social.Seen.Migration.migrate_seen()
+      Bonfire.Data.Social.Pin.Migration.migrate_pin()
     end
   end
 
@@ -62,7 +64,9 @@ defmodule Bonfire.Social.Migrations do
       require Bonfire.Data.Social.Message.Migration
       require Bonfire.Data.Social.Request.Migration
       require Bonfire.Data.Social.Seen.Migration
+      require Bonfire.Data.Social.Pin.Migration
 
+      Bonfire.Data.Social.Pin.Migration.migrate_pin()
       Bonfire.Data.Social.Seen.Migration.migrate_seen()
       Bonfire.Data.Social.Request.Migration.migrate_request()
       Bonfire.Data.Social.Message.Migration.migrate_message()
