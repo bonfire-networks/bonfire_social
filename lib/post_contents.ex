@@ -57,7 +57,7 @@ defmodule Bonfire.Social.PostContents do
   end
 
   def maybe_prepare_contents(attrs, creator, _boundary, opts) do
-    if module_enabled?(Bonfire.Social.Tags) do
+    if module_enabled?(Bonfire.Social.Tags, creator) do
       debug("process post contents for tags/mentions")
 
       # TODO: refactor this?

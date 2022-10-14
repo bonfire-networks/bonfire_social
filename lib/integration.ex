@@ -142,7 +142,10 @@ defmodule Bonfire.Social.Integration do
   end
 
   def ap_publish(verb, thing_id, user_id) do
-    if Bonfire.Common.Extend.module_enabled?(Bonfire.Federate.ActivityPub.APPublishWorker) do
+    if Bonfire.Common.Extend.module_enabled?(
+         Bonfire.Federate.ActivityPub.APPublishWorker,
+         user_id
+       ) do
       Bonfire.Federate.ActivityPub.APPublishWorker.enqueue(
         verb,
         %{
@@ -166,15 +169,23 @@ defmodule Bonfire.Social.Integration do
   end
 
   def maybe_indexable_object(object) do
-    if Bonfire.Common.Extend.module_enabled?(Bonfire.Search.Indexer),
-      do:
-        object
-        |> Bonfire.Social.Activities.activity_under_object()
-        |> Bonfire.Search.Indexer.maybe_indexable_object()
+    if Bonfire.Common.Extend.module_enabled?(
+         Bonfire.Search.Indexer,
+         Utils.e(object, :creator, :id, nil) ||
+           Utils.e(object, :created, :creator_id, nil)
+       ),
+       do:
+         object
+         |> Bonfire.Social.Activities.activity_under_object()
+         |> Bonfire.Search.Indexer.maybe_indexable_object()
   end
 
   def maybe_index(object) do
-    if Bonfire.Common.Extend.module_enabled?(Bonfire.Search.Indexer) do
+    if Bonfire.Common.Extend.module_enabled?(
+         Bonfire.Search.Indexer,
+         Utils.e(object, :creator, :id, nil) ||
+           Utils.e(object, :created, :creator_id, nil)
+       ) do
       Bonfire.Search.Indexer.maybe_index_object(object)
       |> debug()
     else

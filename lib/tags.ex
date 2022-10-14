@@ -10,7 +10,7 @@ defmodule Bonfire.Social.Tags do
   alias Ecto.Changeset
 
   def cast(changeset, attrs, creator, opts) do
-    with true <- module_enabled?(Bonfire.Tag),
+    with true <- module_enabled?(Bonfire.Tag, creator),
          # tag any mentions that were found in the text and injected into the changeset by PostContents (NOTE: this doesn't necessarly mean they should be included in boundaries or notified)
          # tag any hashtags that were found in the text and injected into the changeset by PostContents
          tags when is_list(tags) and length(tags) > 0 <-
@@ -34,7 +34,7 @@ defmodule Bonfire.Social.Tags do
   def maybe_process(creator, text) do
     # debug(text)
     with true <- is_binary(text) and text != "",
-         true <- module_enabled?(Bonfire.Tag),
+         true <- module_enabled?(Bonfire.Tag, creator),
          {text, mentions, hashtags, urls} <-
            Bonfire.Tag.TextContent.Process.process(
              creator,
@@ -116,7 +116,7 @@ defmodule Bonfire.Social.Tags do
   end
 
   def maybe_tag(creator, object, tags, mentions_are_private? \\ false) do
-    if module_enabled?(Bonfire.Tag.Tags) do
+    if module_enabled?(Bonfire.Tag.Tags, creator) do
       boost_category_tags = !mentions_are_private?
 
       Bonfire.Tag.Tags.maybe_tag(creator, object, tags, boost_category_tags)
