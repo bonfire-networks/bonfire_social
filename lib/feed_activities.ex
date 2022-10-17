@@ -322,7 +322,7 @@ defmodule Bonfire.Social.FeedActivities do
   # add assocs needed in timelines/feeds
   @doc false
   def query_extras(query, opts) do
-    dump(opts)
+    # debug(opts)
     # eg. private messages should never appear in feeds
     exclude_object_types = [Message] ++ e(opts, :exclude_object_types, [])
     # exclude certain activity types
