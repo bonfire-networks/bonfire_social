@@ -16,9 +16,12 @@ defmodule Bonfire.Social.Pins do
   alias Bonfire.Social.Feeds
 
   # import Ecto.Query
-  # import Bonfire.Social.Integration
+  alias Bonfire.Social.Integration
   use Bonfire.Common.Utils
   use Bonfire.Common.Repo
+
+  # TODO: check for :pin boundary verb instead?
+  @boundary_verb :boost
 
   def queries_module, do: Pin
   def context_module, do: Pin
@@ -26,7 +29,13 @@ defmodule Bonfire.Social.Pins do
   def federation_module,
     do: ["Pin", {"Create", "Pin"}, {"Undo", "Pin"}, {"Delete", "Pin"}]
 
-  def pinned?(%{} = user, object),
+  defp instance_scope,
+    do: Bonfire.Boundaries.Circles.get_id(:local) || "3SERSFR0MY0VR10CA11NSTANCE"
+
+  def pinned?(:instance, object),
+    do: not is_nil(get!(instance_scope(), object, skip_boundary_check: true))
+
+  def pinned?(user, object),
     do: not is_nil(get!(user, object, skip_boundary_check: true))
 
   def get(subject, object, opts \\ []),
@@ -41,9 +50,17 @@ defmodule Bonfire.Social.Pins do
   def by_pinned(%{} = object, opts \\ []),
     do: (opts ++ [object: object]) |> query(opts) |> repo().many()
 
-  # TODO: check for :pin boundary verb instead?
-  @boundary_verb :boost
-  def pin(%{} = pinner, %{} = object) do
+  def pin(pinner, object, scope \\ nil)
+
+  def pin(pinner, %{} = object, :instance) do
+    if Integration.is_admin?(pinner) or Bonfire.Boundaries.can?(pinner, :pin, :instance) do
+      do_pin(instance_scope(), object)
+    else
+      error(l("Sorry, you cannot pin to the instance"))
+    end
+  end
+
+  def pin(%{} = pinner, %{} = object, _) do
     if Bonfire.Boundaries.can?(pinner, @boundary_verb, object) do
       do_pin(pinner, object)
     else
@@ -51,7 +68,7 @@ defmodule Bonfire.Social.Pins do
     end
   end
 
-  def pin(%{} = pinner, pinned) when is_binary(pinned) do
+  def pin(%{} = pinner, pinned, _) when is_binary(pinned) do
     with {:ok, object} <-
            Bonfire.Common.Pointers.get(pinned,
              current_user: pinner,
@@ -65,7 +82,7 @@ defmodule Bonfire.Social.Pins do
     end
   end
 
-  defp do_pin(%{} = pinner, %{} = pinned) do
+  defp do_pin(pinner, %{} = pinned) do
     pinned = Objects.preload_creator(pinned)
     pinned_creator = Objects.object_creator(pinned)
 
@@ -78,7 +95,7 @@ defmodule Bonfire.Social.Pins do
 
     case create(pinner, pinned, opts) do
       {:ok, pin} ->
-        Integration.ap_push_activity(pinner.id, pin)
+        Integration.ap_push_activity(ulid(pinner), pin)
         {:ok, pin}
 
       {:error, e} ->
@@ -94,18 +111,28 @@ defmodule Bonfire.Social.Pins do
     end
   end
 
-  def unpin(%{} = pinner, %{} = pinned) do
+  def unpin(user, object, scope \\ nil)
+
+  def unpin(user, object, :instance) do
+    if Integration.is_admin?(user) or Bonfire.Boundaries.can?(user, :pin, :instance) do
+      unpin(instance_scope(), object, user)
+    else
+      error(l("Sorry, you cannot pin to the instance"))
+    end
+  end
+
+  def unpin(subject, %{} = pinned, _) do
     # delete the Pin
-    Edges.delete_by_both(pinner, Pin, pinned)
+    Edges.delete_by_both(subject, Pin, pinned)
     # delete the pin activity & feed entries
-    Activities.delete_by_subject_verb_object(pinner, :pin, pinned)
+    Activities.delete_by_subject_verb_object(subject, :pin, pinned)
 
     # Note: the pin count is automatically decremented by DB triggers
   end
 
-  def unpin(%{} = pinner, pinned) when is_binary(pinned) do
-    with {:ok, pinned} <- Bonfire.Common.Pointers.get(pinned, current_user: pinner) do
-      unpin(pinner, pinned)
+  def unpin(subject, pinned, user) when is_binary(pinned) do
+    with {:ok, pinned} <- Bonfire.Common.Pointers.get(pinned, current_user: user || subject) do
+      unpin(subject, pinned)
     end
   end
 
@@ -137,6 +164,10 @@ defmodule Bonfire.Social.Pins do
   @doc "List the current user's pins"
   def list_my(opts) when is_list(opts) do
     list_by(current_user_required(opts), opts)
+  end
+
+  def list_instance_pins(opts) when is_list(opts) do
+    list_by(instance_scope(), opts)
   end
 
   @doc "List pins by a user"

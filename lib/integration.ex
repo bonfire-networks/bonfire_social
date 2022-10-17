@@ -9,6 +9,15 @@ defmodule Bonfire.Social.Integration do
 
   def mailer, do: Config.get!(:mailer_module)
 
+  def is_admin?(user) do
+    if is_map(user) and Map.get(user, :instance_admin) do
+      Map.get(user.instance_admin, :is_instance_admin)
+    else
+      # FIXME
+      false
+    end
+  end
+
   # This should return the same type it accepts
   def ap_push_activity(subject_id, activity, verb \\ nil, object \\ nil)
 

@@ -127,7 +127,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   @doc "Delete an activity (usage by things like unlike)"
-  def delete_by_subject_verb_object(%{} = subject, verb, %{} = object) do
+  def delete_by_subject_verb_object(subject, verb, object) do
     q = by_subject_verb_object_q(subject, Verbs.get_id!(verb), object)
     # TODO: see why cascading delete doesn't take care of this
     FeedActivities.delete(repo().many(q), :id)
@@ -149,14 +149,11 @@ defmodule Bonfire.Social.Activities do
     |> elem(0)
   end
 
-  def by_subject_verb_object_q(%{id: subject}, verb, %{id: object}),
-    do: by_subject_verb_object_q(subject, verb, object)
-
   def by_subject_verb_object_q(subject, verb, object)
-      when is_binary(subject) and is_binary(object) do
+      when is_binary(verb) do
     from(f in Activity,
       where:
-        f.subject_id == ^subject and f.object_id == ^object and
+        f.subject_id == ^ulid!(subject) and f.object_id == ^ulid!(object) and
           f.verb_id == ^verb,
       select: f.id
     )
