@@ -136,6 +136,36 @@ defmodule Bonfire.Social.Pins do
     end
   end
 
+  def rank_pin(pin, :instance, position) do
+    rank_pin(pin, instance_scope(), position)
+  end
+
+  def rank_pin(pin, scope, position) do
+    with {:ok, %Ecto.Changeset{valid?: true} = cs} <-
+           Bonfire.Data.Assort.Ranked.changeset(%{
+             item_id: pin,
+             scope_id: ulid(scope),
+             rank_set: position
+           })
+           |> Ecto.Changeset.unique_constraint([:item_id, :scope_id],
+             name: :bonfire_data_ranked_unique_per_scope
+           )
+           |> dump(),
+         {:ok, ins} <- Bonfire.Common.Repo.insert(cs) do
+      {:ok, ins}
+    else
+      # poor man's upsert - TODO fix drag and drop ordering and make better and generic
+      {:error, %Ecto.Changeset{} = cs} ->
+        Bonfire.Common.Repo.update(cs, [:rank])
+
+      %Ecto.Changeset{} = cs ->
+        Bonfire.Common.Repo.upsert(cs, [:rank])
+
+      e ->
+        error(e)
+    end
+  end
+
   defp query_base(filters, opts) do
     Edges.query_parent(Pin, filters, opts)
 
