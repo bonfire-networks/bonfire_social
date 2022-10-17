@@ -52,26 +52,26 @@ defmodule Bonfire.Social.Pins do
 
   def pin(pinner, object, scope \\ nil)
 
-  def pin(pinner, %{} = object, :instance) do
+  def pin(pinner, object, :instance) do
     if Integration.is_admin?(pinner) or Bonfire.Boundaries.can?(pinner, :pin, :instance) do
-      do_pin(instance_scope(), object)
+      pin(instance_scope(), object, pinner)
     else
       error(l("Sorry, you cannot pin to the instance"))
     end
   end
 
-  def pin(%{} = pinner, %{} = object, _) do
-    if Bonfire.Boundaries.can?(pinner, @boundary_verb, object) do
+  def pin(pinner, %{} = object, user) do
+    if Bonfire.Boundaries.can?(user || pinner, @boundary_verb, object) do
       do_pin(pinner, object)
     else
       error(l("Sorry, you cannot pin this"))
     end
   end
 
-  def pin(%{} = pinner, pinned, _) when is_binary(pinned) do
+  def pin(pinner, pinned, user) when is_binary(pinned) do
     with {:ok, object} <-
            Bonfire.Common.Pointers.get(pinned,
-             current_user: pinner,
+             current_user: user || pinner,
              verbs: [@boundary_verb]
            ) do
       # debug(pinned)
