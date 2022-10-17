@@ -672,7 +672,8 @@ defmodule Bonfire.Social.Activities do
       }),
       do: object
 
-  # def object_from_activity(%{object: %Pointers.Pointer{id: _} = object}), do: load_object(object) # get other pointable objects (only as fallback, should normally already be preloaded)
+  # get other pointable objects (only as fallback for unknown object types, most objects should already be preloaded by `Bonfire.Social.Feeds.LiveHandler.preload/2`)
+  def object_from_activity(%{object: %Pointers.Pointer{id: _} = object}), do: load_object(object)
   # any other preloaded object
   def object_from_activity(%{object: %{id: _} = object}), do: object
 
