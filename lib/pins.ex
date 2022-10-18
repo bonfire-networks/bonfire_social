@@ -189,7 +189,13 @@ defmodule Bonfire.Social.Pins do
     # |> Activities.as_permitted_for(opts, [:see])
     # |> debug()
     |> Bonfire.Common.Repo.many_paginated(opts)
+    |> maybe_load_pointer(opts[:load_pointer])
   end
+
+  defp maybe_load_pointer(data, true),
+    do: repo().maybe_preload(data, [edge: [:object]], skip_boundary_check: true)
+
+  defp maybe_load_pointer(data, _), do: data
 
   @doc "List the current user's pins"
   def list_my(opts) when is_list(opts) do
