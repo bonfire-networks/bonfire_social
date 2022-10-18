@@ -202,15 +202,14 @@ defmodule Bonfire.Social.Follows do
     do:
       list_followed(
         current_user,
-        [current_user: current_user] ++ to_options(opts)
+        Keyword.put(to_options(opts), :current_user, current_user)
       )
 
-  def list_followed(%{id: user_id} = _user, opts \\ [])
-      when is_binary(user_id) do
+  def list_followed(user, opts \\ []) do
     # TODO: configurable boundaries for follows
     opts = to_options(opts) ++ [skip_boundary_check: true]
 
-    [subject: user_id, object_type: opts[:type]]
+    [subject: ulid(user), object_type: opts[:type]]
     |> query(opts)
     |> where([object: object], object.id not in ^e(opts, :exclude_ids, []))
     # |> maybe_with_followed_profile_only(opts)
@@ -221,14 +220,13 @@ defmodule Bonfire.Social.Follows do
     do:
       list_followers(
         current_user,
-        [current_user: current_user] ++ to_options(opts)
+        Keyword.put(to_options(opts), :current_user, current_user)
       )
 
-  def list_followers(%{id: user_id} = _user, opts \\ [])
-      when is_binary(user_id) do
+  def list_followers(user, opts \\ []) do
     opts = to_options(opts) ++ [skip_boundary_check: true]
 
-    [object: user_id, subject_type: opts[:type]]
+    [object: ulid(user), subject_type: opts[:type]]
     |> query(opts)
     |> where([subject: subject], subject.id not in ^e(opts, :exclude_ids, []))
     # |> maybe_with_follower_profile_only(opts)
