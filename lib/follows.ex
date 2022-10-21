@@ -23,8 +23,9 @@ defmodule Bonfire.Social.Follows do
   use Bonfire.Common.Utils
   use Bonfire.Common.Repo
 
-  def queries_module, do: Follow
-  def context_module, do: Follow
+  @behaviour Bonfire.Common.QueryModule
+  @behaviour Bonfire.Common.ContextModule
+  def schema_module, do: Follow
 
   def federation_module,
     do: [

@@ -23,8 +23,9 @@ defmodule Bonfire.Social.Seen do
   use Bonfire.Common.Utils
   use Bonfire.Common.Repo
 
-  def queries_module, do: Seen
-  def context_module, do: Seen
+  @behaviour Bonfire.Common.QueryModule
+  @behaviour Bonfire.Common.ContextModule
+  def schema_module, do: Seen
 
   def seen?(%{} = user, object),
     do: not is_nil(get!(user, object, skip_boundary_check: true))

@@ -20,8 +20,9 @@ defmodule Bonfire.Social.Flags do
 
   import Bonfire.Boundaries.Queries
 
-  def queries_module, do: Flag
-  def context_module, do: Flag
+  @behaviour Bonfire.Common.QueryModule
+  @behaviour Bonfire.Common.ContextModule
+  def schema_module, do: Flag
 
   def federation_module,
     do: ["Flag", {"Create", "Flag"}, {"Undo", "Flag"}, {"Delete", "Flag"}]

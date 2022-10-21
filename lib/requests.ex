@@ -18,8 +18,9 @@ defmodule Bonfire.Social.Requests do
   use Bonfire.Common.Utils
   use Bonfire.Common.Repo
 
-  def queries_module, do: Request
-  def context_module, do: Request
+  @behaviour Bonfire.Common.QueryModule
+  @behaviour Bonfire.Common.ContextModule
+  def schema_module, do: Request
 
   # def federation_module, do: ["Accept", "Reject"]
 

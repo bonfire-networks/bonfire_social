@@ -18,8 +18,9 @@ defmodule Bonfire.Social.Threads do
   alias Pointers.Pointer
   alias Pointers.ULID
 
-  def context_module, do: Replied
-  def queries_module, do: Replied
+  @behaviour Bonfire.Common.ContextModule
+  @behaviour Bonfire.Common.QueryModule
+  def schema_module, do: Replied
 
   @doc """
   Handles casting related to the reply and threading.

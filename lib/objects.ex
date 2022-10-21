@@ -243,21 +243,21 @@ defmodule Bonfire.Social.Objects do
         ])
 
       with {:error, _} <-
-             Bonfire.Common.ContextModules.maybe_apply(
+             Bonfire.Common.ContextModule.maybe_apply(
                object,
                :delete,
                [object, opts],
                &delete_apply_error/2
              ),
            {:error, _} <-
-             Bonfire.Common.ContextModules.maybe_apply(
+             Bonfire.Common.ContextModule.maybe_apply(
                object,
                :soft_delete,
                [object, opts],
                &delete_apply_error/2
              ),
            {:error, _} <-
-             Bonfire.Common.ContextModules.maybe_apply(
+             Bonfire.Common.ContextModule.maybe_apply(
                object,
                :soft_delete,
                [object],

@@ -32,8 +32,9 @@ defmodule Bonfire.Social.Posts do
 
   # import Bonfire.Boundaries.Queries
 
-  def queries_module, do: Post
-  def context_module, do: Post
+  @behaviour Bonfire.Common.QueryModule
+  @behaviour Bonfire.Common.ContextModule
+  def schema_module, do: Post
 
   def federation_module,
     do: [

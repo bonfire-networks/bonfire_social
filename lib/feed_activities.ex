@@ -21,8 +21,9 @@ defmodule Bonfire.Social.FeedActivities do
   alias Pointers.Pointer
   alias Pointers.Changesets
 
-  def queries_module, do: FeedPublish
-  def context_module, do: FeedPublish
+  @behaviour Bonfire.Common.QueryModule
+  @behaviour Bonfire.Common.ContextModule
+  def schema_module, do: FeedPublish
 
   def cast(changeset, creator, opts) do
     Feeds.target_feeds(changeset, creator, opts)

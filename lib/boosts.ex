@@ -19,8 +19,9 @@ defmodule Bonfire.Social.Boosts do
   # import Bonfire.Social.Integration
   use Bonfire.Common.Utils
 
-  def queries_module, do: Boost
-  def context_module, do: Boost
+  @behaviour Bonfire.Common.QueryModule
+  @behaviour Bonfire.Common.ContextModule
+  def schema_module, do: Boost
 
   def federation_module,
     do: [

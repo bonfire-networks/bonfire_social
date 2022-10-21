@@ -1,4 +1,5 @@
 defmodule Bonfire.Social.RuntimeConfig do
+  @behaviour Bonfire.Common.ConfigModule
   def config_module, do: true
 
   alias Bonfire.Data.Social.Post

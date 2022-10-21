@@ -18,8 +18,9 @@ defmodule Bonfire.Social.Feeds do
     "local" => [:local]
   }
 
-  # def queries_module, do: Feed
-  def context_module, do: Feed
+  @behaviour Bonfire.Common.ContextModule
+  @behaviour Bonfire.Common.QueryModule
+  def schema_module, do: Feed
 
   ## TODO: de-duplicate feed_ids_to_publish/3 and target_feeds/4 ##
   def feed_ids_to_publish(_me, "admins", _) do

@@ -24,8 +24,8 @@ defmodule Bonfire.Social.Messages do
   alias Bzonfire.Boundaries.Verbs
   alias Bonfire.Social.LivePush
 
-  # def queries_module, do: Message
-  def context_module, do: Message
+  @behaviour Bonfire.Common.ContextModule
+  def schema_module, do: Message
 
   def federation_module,
     do: [{"Create", "ChatMessage"}, {"Delete", "ChatMessage"}]

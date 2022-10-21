@@ -20,8 +20,9 @@ defmodule Bonfire.Social.Likes do
   use Bonfire.Common.Utils
   use Bonfire.Common.Repo
 
-  def queries_module, do: Like
-  def context_module, do: Like
+  @behaviour Bonfire.Common.QueryModule
+  @behaviour Bonfire.Common.ContextModule
+  def schema_module, do: Like
 
   def federation_module,
     do: ["Like", {"Create", "Like"}, {"Undo", "Like"}, {"Delete", "Like"}]

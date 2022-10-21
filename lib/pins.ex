@@ -23,8 +23,9 @@ defmodule Bonfire.Social.Pins do
   # TODO: check for :pin boundary verb instead?
   @boundary_verb :boost
 
-  def queries_module, do: Pin
-  def context_module, do: Pin
+  @behaviour Bonfire.Common.QueryModule
+  @behaviour Bonfire.Common.ContextModule
+  def schema_module, do: Pin
 
   def federation_module,
     do: ["Pin", {"Create", "Pin"}, {"Undo", "Pin"}, {"Delete", "Pin"}]

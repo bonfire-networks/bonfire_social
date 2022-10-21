@@ -31,8 +31,9 @@ defmodule Bonfire.Social.Activities do
   alias Pointers.Pointer
   alias Pointers.ULID
 
-  def queries_module, do: Activity
-  def context_module, do: Activity
+  @behaviour Bonfire.Common.QueryModule
+  @behaviour Bonfire.Common.ContextModule
+  def schema_module, do: Activity
 
   def cast(changeset, verb, creator, opts) do
     verb_id = verb_id(verb)
