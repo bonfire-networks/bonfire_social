@@ -38,7 +38,7 @@ defmodule Bonfire.Social.APActivities do
   def create(character, activity, object) do
     json =
       if is_map(object) do
-        Enum.into(%{"object" => ActivityPub.Object.normalize(object, true)}, activity || %{})
+        Enum.into(%{"object" => the_object(object)}, activity || %{})
       else
         activity || %{}
       end
@@ -52,6 +52,19 @@ defmodule Bonfire.Social.APActivities do
       #  {:ok, _} <- FeedActivities.save_fediverse_incoming_activity(character, :create, apactivity) do # Note: using `Activities.put_assoc/` instead
       {:ok, apactivity}
     end
+  end
+
+  defp the_object(object) do
+    ActivityPub.Object.normalize(object, true)
+    |> ret_object()
+  end
+
+  defp ret_object(%{data: data}) do
+    data
+  end
+
+  defp ret_object(data) do
+    data
   end
 
   def insert(character, json, opts) do

@@ -10,7 +10,7 @@ defmodule Bonfire.Social.Acts.URLPreviews do
   use Bonfire.Common.Utils
   alias Bonfire.Epics
   alias Bonfire.Epics.Epic
-  alias Bonfire.Common.Repo
+
   # alias Bonfire.Files
   alias Ecto.Changeset
   alias Pointers.Changesets

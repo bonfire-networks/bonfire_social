@@ -254,6 +254,7 @@ defmodule Bonfire.Social.Requests do
   end
 
   def ap_publish_activity("create", request) do
+    # TODO
     error(request, "unhandled request type")
   end
 end

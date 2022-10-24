@@ -215,7 +215,7 @@ defmodule Bonfire.Social.Messages do
     |> debug("post preloads & permissions")
     # |> repo().many() # return all items
     # return a page of items (reverse chronological) + pagination metadata
-    |> Bonfire.Common.Repo.many_paginated(opts)
+    |> repo().many_paginated(opts)
 
     # |> debug("result")
   end
@@ -248,7 +248,7 @@ defmodule Bonfire.Social.Messages do
     # |> debug("post preloads & permissions")
     # |> repo().many() # return all items
     # return a page of items (reverse chronological) + pagination metadata
-    |> Bonfire.Common.Repo.many_paginated(opts)
+    |> repo().many_paginated(opts)
     # |> Threads.maybe_re_order_result(opts)
     |> Activities.activity_preloads(opts)
 

@@ -236,7 +236,7 @@ defmodule Bonfire.Social.Follows do
 
   defp many(query, paginate?, pagination \\ nil)
   defp many(query, false, _), do: repo().many(query)
-  defp many(query, _, pagination), do: Repo.many_paginated(query, pagination)
+  defp many(query, _, pagination), do: repo().many_paginated(query, pagination)
 
   defp maybe_with_follower_profile_only(q, true),
     do: where(q, [follower_profile: p], not is_nil(p.id))

@@ -159,18 +159,18 @@ defmodule Bonfire.Social.Objects do
   def preload_reply_creator(object) do
     object
     # |> IO.inspect
-    |> Bonfire.Common.Repo.maybe_preload(replied: [reply_to: [created: [creator: [:character]]]])
-    # |> Bonfire.Common.Repo.maybe_preload([replied: [:reply_to]]) #|> IO.inspect
+    |> repo().maybe_preload(replied: [reply_to: [created: [creator: [:character]]]])
+    # |> repo().maybe_preload([replied: [:reply_to]]) #|> IO.inspect
     # |> IO.inspect
-    |> Bonfire.Common.Repo.maybe_preload(replied: [reply_to: [creator: [:character]]])
+    |> repo().maybe_preload(replied: [reply_to: [creator: [:character]]])
   end
 
   # TODO: does not take permissions into consideration
   def preload_creator(object),
     do:
       object
-      |> Bonfire.Common.Repo.maybe_preload(created: [creator: [:character]])
-      |> Bonfire.Common.Repo.maybe_preload(creator: [:character])
+      |> repo().maybe_preload(created: [creator: [:character]])
+      |> repo().maybe_preload(creator: [:character])
 
   def object_creator(object) do
     e(object, :created, :creator, e(object, :creator, nil))

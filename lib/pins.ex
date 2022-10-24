@@ -152,15 +152,15 @@ defmodule Bonfire.Social.Pins do
              name: :bonfire_data_ranked_unique_per_scope
            )
            |> dump(),
-         {:ok, ins} <- Bonfire.Common.Repo.insert(cs) do
+         {:ok, ins} <- repo().insert(cs) do
       {:ok, ins}
     else
       # poor man's upsert - TODO fix drag and drop ordering and make better and generic
       {:error, %Ecto.Changeset{} = cs} ->
-        Bonfire.Common.Repo.update(cs, [:rank])
+        repo().update(cs, [:rank])
 
       %Ecto.Changeset{} = cs ->
-        Bonfire.Common.Repo.upsert(cs, [:rank])
+        repo().upsert(cs, [:rank])
 
       e ->
         error(e)
@@ -189,7 +189,7 @@ defmodule Bonfire.Social.Pins do
     # |> Activities.query_object_preload_activity(:pin, :pinned_id, opts)
     # |> Activities.as_permitted_for(opts, [:see])
     # |> debug()
-    |> Bonfire.Common.Repo.many_paginated(opts)
+    |> repo().many_paginated(opts)
     |> maybe_load_pointer(opts[:load_pointer])
   end
 
@@ -265,7 +265,7 @@ defmodule Bonfire.Social.Pins do
   #       %{data: %{"type" => "Undo"}} = _activity,
   #       %{data: %{"object" => pinned_object}} = _object
   #     ) do
-  #   with object when not is_nil(object) <-
+  #   with {:ok, object} <-
   #          ActivityPub.Object.get_cached_by_ap_id(pinned_object),
   #        {:ok, pinned} <-
   #          Bonfire.Common.Pointers.get(object.pointer_id, current_user: creator),

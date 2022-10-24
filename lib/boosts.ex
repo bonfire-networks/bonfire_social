@@ -137,7 +137,7 @@ defmodule Bonfire.Social.Boosts do
     filters
     |> query(opts)
     # |> debug()
-    |> Bonfire.Common.Repo.many_paginated(opts)
+    |> repo().many_paginated(opts)
 
     # TODO: activity preloads
   end
@@ -198,7 +198,7 @@ defmodule Bonfire.Social.Boosts do
         %{data: %{"type" => "Undo"}} = _activity,
         %{data: %{"object" => boosted_object}} = _object
       ) do
-    with object when not is_nil(object) <-
+    with {:ok, object} <-
            ActivityPub.Object.get_cached_by_ap_id(boosted_object),
          {:ok, boosted} <-
            Bonfire.Common.Pointers.get(object.pointer_id, current_user: creator),

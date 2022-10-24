@@ -152,7 +152,7 @@ defmodule Bonfire.Social.Posts do
     # |> Keyword.drop([:paginate])
     # |> debug("filters")
     |> query_paginated(opts)
-    |> Bonfire.Common.Repo.many_paginated(paginate)
+    |> repo().many_paginated(paginate)
 
     # |> FeedActivities.feed_paginated(filters, opts)
   end
@@ -273,9 +273,14 @@ defmodule Bonfire.Social.Posts do
 
     object =
       if e(post, :replied, :reply_to_id, nil) do
-        ap_object = ActivityPub.Object.get_cached_by_pointer_id(post.replied.reply_to_id)
-
-        Map.put(object, "inReplyTo", ap_object.data["id"])
+        with {:ok, ap_object} <-
+               ActivityPub.Object.get_cached_by_pointer_id(post.replied.reply_to_id) do
+          Map.put(object, "inReplyTo", ap_object.data["id"])
+        else
+          e ->
+            error(e, "Could not fetch what is being replied to")
+            object
+        end
       else
         object
       end
@@ -332,7 +337,7 @@ defmodule Bonfire.Social.Posts do
           reply_to
           |> info()
           |> ActivityPub.Object.get_cached_by_ap_id()
-          |> e(:pointer_id, nil)
+          ~> e(:pointer_id, nil)
 
     tags =
       (List.wrap(activity_data["tag"]) ++

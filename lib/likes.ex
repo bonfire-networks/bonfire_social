@@ -130,7 +130,7 @@ defmodule Bonfire.Social.Likes do
     # |> Activities.query_object_preload_activity(:like, :liked_id, opts)
     # |> Activities.as_permitted_for(opts, [:see])
     # |> debug()
-    |> Bonfire.Common.Repo.many_paginated(opts)
+    |> repo().many_paginated(opts)
   end
 
   @doc "List the current user's likes"
@@ -195,7 +195,7 @@ defmodule Bonfire.Social.Likes do
         %{data: %{"type" => "Undo"}} = _activity,
         %{data: %{"object" => liked_object}} = _object
       ) do
-    with object when not is_nil(object) <-
+    with {:ok, object} <-
            ActivityPub.Object.get_cached_by_ap_id(liked_object),
          {:ok, liked} <-
            Bonfire.Common.Pointers.get(object.pointer_id, current_user: creator),

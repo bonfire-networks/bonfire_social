@@ -48,7 +48,7 @@ defmodule Bonfire.Social.Boundaries.InstanceWideSilenceActorFeedsPerUserTest do
 
     # Bonfire.Boundaries.Blocks.instance_wide_circles([:silence_me])
     # |> Bonfire.Boundaries.Circles.list_by_ids()
-    # |> Bonfire.Common.Repo.maybe_preload(caretaker: [:profile], encircles: [subject: [:profile]])
+    # |> repo().maybe_preload(caretaker: [:profile], encircles: [subject: [:profile]])
     # |> info("silenced details")
 
     assert {:ok, post} =
@@ -71,7 +71,7 @@ defmodule Bonfire.Social.Boundaries.InstanceWideSilenceActorFeedsPerUserTest do
     bob = fake_user!(@other_name)
     # Bonfire.Boundaries.Blocks.instance_wide_circles([:silence_me])
     # |> Bonfire.Boundaries.Circles.list_by_ids()
-    # |> Bonfire.Common.Repo.maybe_preload(caretaker: [:profile], encircles: [subject: [:profile]])
+    # |> repo().maybe_preload(caretaker: [:profile], encircles: [subject: [:profile]])
     # |> info("silenced details")
     assert {:ok, post} =
              Posts.publish(

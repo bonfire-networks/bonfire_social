@@ -12,7 +12,7 @@ defmodule Bonfire.Social.Acts.Feeds do
   use Bonfire.Common.Utils
   alias Bonfire.Epics
   alias Bonfire.Epics.Epic
-  alias Bonfire.Common.Repo
+
   alias Bonfire.Social.Feeds
   alias Ecto.Changeset
   alias Pointers.Changesets

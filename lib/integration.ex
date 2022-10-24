@@ -5,7 +5,7 @@ defmodule Bonfire.Social.Integration do
   alias Bonfire.Data.Social.Follow
   import Untangle
 
-  def repo, do: Config.get!(:repo_module)
+  def repo, do: Config.repo()
 
   def mailer, do: Config.get!(:mailer_module)
 

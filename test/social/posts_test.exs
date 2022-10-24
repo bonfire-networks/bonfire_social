@@ -6,6 +6,7 @@ defmodule Bonfire.Social.PostsTest do
   alias Bonfire.Social.Posts
 
   alias Bonfire.Me.Fake
+  import Bonfire.Social.Fake
   use Bonfire.Common.Utils
 
   test "creation works" do
@@ -51,8 +52,8 @@ defmodule Bonfire.Social.PostsTest do
 
     post = fake_post!(user, "public")
 
-    # post = Bonfire.Common.Repo.preload(post, [:caretaker, controlled: [acl: [:named, :caretaker]]])
-    # user = Bonfire.Common.Repo.preload(user, encircles: [circle: [:named]])
+    # post = repo().preload(post, [:caretaker, controlled: [acl: [:named, :caretaker]]])
+    # user = repo().preload(user, encircles: [circle: [:named]])
     # debug(post, "post")
     # debug(user, "user")
     assert {:ok, read} = Posts.read(post.id, current_user: user)
