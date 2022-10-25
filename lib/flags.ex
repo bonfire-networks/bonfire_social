@@ -190,7 +190,7 @@ defmodule Bonfire.Social.Flags do
 
             %{
               statuses: [
-                ActivityPub.Object.get_cached_by_pointer_id(flagged.id)
+                ActivityPub.Object.get_cached_by_pointer_id!(ulid(flagged))
               ],
               account: account
             }

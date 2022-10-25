@@ -24,6 +24,7 @@ defmodule Bonfire.Social.ChannelCase do
       # Import conveniences for testing with channels
       import Phoenix.ChannelTest
       import Bonfire.Social.ChannelCase
+      import Bonfire.Social.Integration
 
       # The default endpoint for testing
       @endpoint Application.compile_env!(:bonfire, :endpoint_module)

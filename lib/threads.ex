@@ -134,9 +134,18 @@ defmodule Bonfire.Social.Threads do
     Changesets.update_data(changeset, &Map.put(&1, :replied, replied))
   end
 
-  defp start_new_thread(changeset) do
+  defp start_new_thread(%Changeset{} = changeset) do
     Changeset.get_field(changeset, :id)
     |> Changesets.put_assoc(changeset, :replied, %{
+      reply_to_id: nil,
+      thread_id: ...
+    })
+  end
+
+  defp start_new_thread(object) do
+    # TODO: support threading non-changesets
+    e(object, :id, nil)
+    |> Changesets.put_assoc(object, :replied, %{
       reply_to_id: nil,
       thread_id: ...
     })

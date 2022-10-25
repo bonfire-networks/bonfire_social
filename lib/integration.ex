@@ -63,14 +63,20 @@ defmodule Bonfire.Social.Integration do
         object
       ) do
     activity = repo().maybe_preload(activity, [:verb, :object])
+    object = object || activity.object
 
-    verb =
-      verb ||
-        Utils.e(activity, :verb, :verb, "Create")
-        |> String.downcase()
-        |> String.to_existing_atom()
+    if is_local?(object) do
+      verb =
+        verb ||
+          Utils.e(activity, :verb, :verb, "Create")
+          |> String.downcase()
+          |> String.to_existing_atom()
 
-    activity_ap_publish(subject_id, verb, object || activity.object, activity)
+      activity_ap_publish(subject_id, verb, object, activity)
+    else
+      info("ActivityPub: Skipping remote object")
+    end
+
     object
   end
 

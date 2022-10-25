@@ -13,6 +13,8 @@ defmodule Bonfire.Social.Acts.ActivityPub do
   alias Bonfire.Epics.Act
   alias Bonfire.Epics.Epic
 
+  alias Bonfire.Common.Utils
+
   alias Bonfire.Data.Social.Post
   alias Bonfire.Social.Integration
   alias Ecto.Changeset
@@ -24,6 +26,7 @@ defmodule Bonfire.Social.Acts.ActivityPub do
     object = epic.assigns[on]
     action = Keyword.get(epic.assigns[:options], :action, :insert)
     current_user = epic.assigns[:options][:current_user]
+    current_user_id = Utils.ulid(current_user)
 
     cond do
       epic.errors != [] ->
@@ -40,19 +43,23 @@ defmodule Bonfire.Social.Acts.ActivityPub do
         maybe_debug(epic, act, on, "ActivityPub: Skipping due to `on` option")
         epic
 
-      not (is_struct(current_user) or is_binary(current_user)) ->
+      not is_binary(current_user_id) ->
         warn(current_user, "ActivityPub: Skipping due to missing current_user")
+        epic
+
+      not Integration.is_local?(current_user) or not Integration.is_local?(object) ->
+        warn(current_user, "ActivityPub: Skipping remote object")
         epic
 
       action in [:insert] ->
         maybe_debug(epic, act, action, "Queue for federated")
-        Bonfire.Social.Integration.ap_push_activity(current_user.id, object)
+        Bonfire.Social.Integration.ap_push_activity(current_user_id, object)
 
       action in [:update] ->
         maybe_debug(epic, act, action, "Queue for federated")
 
         Bonfire.Social.Integration.ap_push_activity(
-          current_user.id,
+          current_user_id,
           object,
           :update
         )
@@ -62,7 +69,7 @@ defmodule Bonfire.Social.Acts.ActivityPub do
         maybe_debug(epic, act, action, "Queue for federated")
 
         Bonfire.Social.Integration.ap_push_activity(
-          current_user.id,
+          current_user_id,
           object,
           :delete
         )

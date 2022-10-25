@@ -50,7 +50,7 @@ defmodule Bonfire.Social.Likes do
     end
   end
 
-  def like(%User{} = liker, liked) when is_binary(liked) do
+  def like(%{} = liker, liked) when is_binary(liked) do
     with {:ok, object} <-
            Bonfire.Common.Pointers.get(liked,
              current_user: liker,
@@ -64,7 +64,7 @@ defmodule Bonfire.Social.Likes do
     end
   end
 
-  defp do_like(%User{} = liker, %{} = liked) do
+  defp do_like(%{} = liker, %{} = liked) do
     liked = Objects.preload_creator(liked)
     liked_creator = Objects.object_creator(liked)
 
@@ -93,7 +93,7 @@ defmodule Bonfire.Social.Likes do
     end
   end
 
-  def unlike(%User{} = liker, %{} = liked) do
+  def unlike(%{} = liker, %{} = liked) do
     # delete the Like
     Edges.delete_by_both(liker, Like, liked)
     # delete the like activity & feed entries
@@ -102,7 +102,7 @@ defmodule Bonfire.Social.Likes do
     # Note: the like count is automatically decremented by DB triggers
   end
 
-  def unlike(%User{} = liker, liked) when is_binary(liked) do
+  def unlike(%{} = liker, liked) when is_binary(liked) do
     with {:ok, liked} <- Bonfire.Common.Pointers.get(liked, current_user: liker) do
       unlike(liker, liked)
     end

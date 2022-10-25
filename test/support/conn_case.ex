@@ -33,6 +33,7 @@ defmodule Bonfire.Social.ConnCase do
       # import Bonfire.Social.Fake
 
       use Bonfire.Common.Utils
+      import Bonfire.Social.Integration
 
       # The default endpoint for testing
       @endpoint Application.compile_env!(:bonfire, :endpoint_module)
