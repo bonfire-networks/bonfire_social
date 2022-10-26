@@ -410,6 +410,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   @doc """
   Creates a new local activity and publishes to appropriate feeds
+  TODO: make this re-use the changeset-based code like in Epics instead of duplicating logic (currently it is only used in VF extension anyway)
   """
   def publish(subject, verb_or_activity, object, opts \\ [])
 
@@ -429,7 +430,7 @@ defmodule Bonfire.Social.FeedActivities do
   @doc """
   Records a remote activity and puts in appropriate feeds
   """
-  def save_fediverse_incoming_activity(subject, verb, object)
+  defp save_fediverse_incoming_activity(subject, verb, object)
       when is_atom(verb) and not is_nil(subject) do
     # TODO: use the appropriate preset (eg "public" for public activities?)
     publish(subject, verb, object, boundary: "federated")
@@ -438,10 +439,10 @@ defmodule Bonfire.Social.FeedActivities do
   @doc """
   Takes or creates an activity and publishes to object creator's inbox
   """
-  def maybe_notify_creator(subject, %{activity: %{id: _} = activity}, object),
+  defp maybe_notify_creator(subject, %{activity: %{id: _} = activity}, object),
     do: maybe_notify_creator(subject, activity, object)
 
-  def maybe_notify_creator(subject, verb_or_activity, object) do
+  defp maybe_notify_creator(subject, verb_or_activity, object) do
     the_object = Objects.preload_creator(the_object(object))
     object_creator = Objects.object_creator(the_object)
 
@@ -578,7 +579,7 @@ defmodule Bonfire.Social.FeedActivities do
   Creates a new local activity or takes an existing one and publishes
   to object's notifications (if object is an actor)
   """
-  def notify_characters(subject, verb_or_activity, object, characters) do
+  defp notify_characters(subject, verb_or_activity, object, characters) do
     # TODO: notify remote users via AP?
     # debug(characters)
     Feeds.feed_ids(:notifications, characters)
@@ -589,20 +590,20 @@ defmodule Bonfire.Social.FeedActivities do
   @doc """
   Creates a new local activity or takes an existing one and publishes to object's inbox (assuming object is a character)
   """
-  def notify_object(subject, verb_or_activity, object) do
+  defp notify_object(subject, verb_or_activity, object) do
     notify_characters(subject, verb_or_activity, object, [the_object(object)])
   end
 
   @doc """
   Creates a new local activity or takes an existing one and publishes to creator's inbox
   """
-  def notify_admins(subject, verb_or_activity, object) do
+  defp notify_admins(subject, verb_or_activity, object) do
     inboxes = Feeds.admins_notifications()
     # |> debug()
     notify_to_feed_ids(subject, verb_or_activity, object, inboxes)
   end
 
-  def notify_to_feed_ids(subject, verb_or_activity, object, feed_ids) do
+  defp notify_to_feed_ids(subject, verb_or_activity, object, feed_ids) do
     # debug(feed_ids)
     # |> debug("notify_to_feed_ids")
     ret = publish(subject, verb_or_activity, object, to_feeds: feed_ids)
@@ -719,12 +720,11 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp create_and_put_in_feeds(subject, verb, object, _, opts)
        when is_map(object) do
-    # for activities with no target feed, still create the activity and push it to AP
+    # fallback for activities with no target feed, still create the activity and push it to AP
     ret = Activities.create(subject, verb, object, e(opts, :activity_id, nil))
 
     try do
       # FIXME only run if ActivityPub is a target circle/feed?
-      # TODO: only run for non-local activity
       {:ok, activity} = ret
       maybe_federate_activity(verb, object, activity, opts)
 
@@ -826,12 +826,7 @@ defmodule Bonfire.Social.FeedActivities do
   defp maybe_federate_activity(verb, object, activity, opts) do
     if e(opts, :boundary, nil) != "federated",
       do:
-        Bonfire.Social.Integration.activity_ap_publish(
-          activity.subject_id,
-          verb,
-          object,
-          activity
-        )
+      Bonfire.Social.Integration.ap_push_activity(activity.subject || activity.subject_id, activity, verb, object)
   end
 
   def unseen_query(feed_id, opts) do
@@ -868,6 +863,6 @@ defmodule Bonfire.Social.FeedActivities do
     unseen_query(feed_id, opts)
     ~> select([c], %{id: c.id})
     |> repo().all()
-    |> Bonfire.Social.Seen.mark_seen(current_user_required(opts), ...)
+    |> Bonfire.Social.Seen.mark_seen(current_user_required!(opts), ...)
   end
 end

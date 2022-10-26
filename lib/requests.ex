@@ -67,7 +67,7 @@ defmodule Bonfire.Social.Requests do
 
   def requested(request, opts \\ [])
   def requested(%Request{id: _} = request, _opts), do: {:ok, request}
-  def requested(request, opts), do: get([id: ulid(request)], opts)
+  def requested(request, opts), do: get([id: ulid(request), object: current_user(opts)], opts ++ [skip_boundary_check: true])
 
   # TODO: abstract the next few functions into Edges
   def all_by_subject(user, type, opts \\ []) do
@@ -124,10 +124,10 @@ defmodule Bonfire.Social.Requests do
   end
 
   def query([my: :object], type, opts),
-    do: query([subject: current_user_required(opts)], type, opts)
+    do: query([subject: current_user_required!(opts)], type, opts)
 
   def query([my: :requesters], type, opts),
-    do: query([object: current_user_required(opts)], type, opts)
+    do: query([object: current_user_required!(opts)], type, opts)
 
   def query(filters, type \\ nil, opts) do
     query_base(filters, type, opts)
@@ -136,7 +136,7 @@ defmodule Bonfire.Social.Requests do
   end
 
   def list_my_requested(type, opts, with_profile_only \\ true),
-    do: list_requested(type, current_user_required(opts), opts, with_profile_only)
+    do: list_requested(type, current_user_required!(opts), opts, with_profile_only)
 
   def list_requested(
         %{id: user_id} = _user,
@@ -151,7 +151,7 @@ defmodule Bonfire.Social.Requests do
   end
 
   def list_my_requesters(opts, type, with_profile_only \\ true),
-    do: list_requesters(current_user_required(opts), type, opts, with_profile_only)
+    do: list_requesters(current_user_required!(opts), type, opts, with_profile_only)
 
   def list_requesters(
         %{id: user_id} = _user,
@@ -201,7 +201,7 @@ defmodule Bonfire.Social.Requests do
 
     case create(requester, type, object, opts) do
       {:ok, request} ->
-        Integration.ap_push_activity(requester.id, request)
+        Integration.ap_push_activity(requester, request)
         {:ok, request}
 
       e ->
@@ -241,7 +241,7 @@ defmodule Bonfire.Social.Requests do
 
   # publish follow requests
   def ap_publish_activity(
-        "create",
+        _verb,
         %{edge: %{table_id: "70110WTHE1EADER1EADER1EADE"}} = request
       ) do
     # info(request)
@@ -253,7 +253,7 @@ defmodule Bonfire.Social.Requests do
     end
   end
 
-  def ap_publish_activity("create", request) do
+  def ap_publish_activity(_verb, request) do
     # TODO
     error(request, "unhandled request type")
   end

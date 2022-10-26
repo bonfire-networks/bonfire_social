@@ -115,7 +115,7 @@ defmodule Bonfire.Social.Flags do
   end
 
   @doc "List current user's flags, which are in their outbox"
-  def list_my(opts), do: list_by(current_user_required(opts), opts)
+  def list_my(opts), do: list_by(current_user_required!(opts), opts)
 
   @doc "List flags by the user and which are in their outbox"
   def list_by(by_user, opts \\ [])
@@ -153,7 +153,7 @@ defmodule Bonfire.Social.Flags do
   end
 
   def query([:all], opts), do: query([], opts)
-  def query([my: :flags], opts), do: query([subject: current_user_required(opts)], opts)
+  def query([my: :flags], opts), do: query([subject: current_user_required!(opts)], opts)
 
   def query(filters, opts) do
     query_base(filters, opts)
@@ -164,7 +164,7 @@ defmodule Bonfire.Social.Flags do
     |> repo().insert()
   end
 
-  def ap_publish_activity("create", %Flag{} = flag) do
+  def ap_publish_activity(_verb, %Flag{} = flag) do
     flag = repo().preload(flag, flagged: [])
 
     with {:ok, flagger} <-

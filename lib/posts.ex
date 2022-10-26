@@ -200,7 +200,8 @@ defmodule Bonfire.Social.Posts do
     )
   end
 
-  def ap_publish_activity("create", post) do
+  # TODO: federated delete
+  def ap_publish_activity(_verb, post) do
     attrs = ap_publish_activity_object("create", post)
     ActivityPub.create(attrs, post.id)
   end

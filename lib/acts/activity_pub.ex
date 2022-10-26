@@ -53,13 +53,13 @@ defmodule Bonfire.Social.Acts.ActivityPub do
 
       action in [:insert] ->
         maybe_debug(epic, act, action, "Queue for federated")
-        Bonfire.Social.Integration.ap_push_activity(current_user_id, object)
+        Bonfire.Social.Integration.ap_push_activity(current_user, object)
 
       action in [:update] ->
         maybe_debug(epic, act, action, "Queue for federated")
 
         Bonfire.Social.Integration.ap_push_activity(
-          current_user_id,
+          current_user,
           object,
           :update
         )
@@ -69,7 +69,7 @@ defmodule Bonfire.Social.Acts.ActivityPub do
         maybe_debug(epic, act, action, "Queue for federated")
 
         Bonfire.Social.Integration.ap_push_activity(
-          current_user_id,
+          current_user,
           object,
           :delete
         )

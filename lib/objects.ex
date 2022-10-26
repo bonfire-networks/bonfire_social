@@ -322,63 +322,64 @@ defmodule Bonfire.Social.Objects do
     {:error, error}
   end
 
-  def publish(creator, verb, thing, attrs \\ nil, for_module \\ __MODULE__)
 
-  def publish(
-        %{id: creator_id} = creator,
-        verb,
-        %{id: thing_id} = thing,
-        attrs,
-        for_module
-      ) do
-    # this sets permissions & returns recipients in opts to be used for publishing
-    opts = set_boundaries(creator, thing, attrs, for_module)
+  # def publish(creator, verb, thing, attrs \\ nil, for_module \\ __MODULE__)
 
-    # add to activity feed + maybe federate
-    Bonfire.Social.FeedActivities.publish(creator, verb, thing, opts)
-  end
+  # def publish(
+  #       %{id: creator_id} = creator,
+  #       verb,
+  #       %{id: thing_id} = thing,
+  #       attrs,
+  #       for_module
+  #     ) do
+  #   # this sets permissions & returns recipients in opts to be used for publishing
+  #   opts = set_boundaries(creator, thing, attrs, for_module)
 
-  def publish(_creator, verb, %{id: thing_id} = thing, attrs, for_module) do
-    debug("No creator for object so we can't publish it")
+  #   # add to activity feed + maybe federate
+  #   Bonfire.Social.FeedActivities.publish(creator, verb, thing, opts)
+  # end
 
-    # make visible anyway
-    set_boundaries(
-      e(thing, :creator, e(thing, :provider, nil)),
-      thing,
-      attrs,
-      for_module
-    )
+  # def publish(_creator, verb, %{id: thing_id} = thing, attrs, for_module) do
+  #   debug("No creator for object so we can't publish it")
 
-    {:ok, nil}
-  end
+  #   # make visible anyway
+  #   set_boundaries(
+  #     e(thing, :creator, e(thing, :provider, nil)),
+  #     thing,
+  #     attrs,
+  #     for_module
+  #   )
 
-  def set_boundaries(creator, thing, attrs \\ nil, for_module \\ __MODULE__) do
-    # TODO: make default audience configurable & per object audience selectable by user in API and UI (note: also in `Federation.ap_prepare_activity`)
-    preset_boundary =
-      e(attrs, :to_boundaries, nil) ||
-        Bonfire.Common.Config.get_ext(for_module, :preset_boundary, "public")
+  #   {:ok, nil}
+  # end
 
-    to_circles = Bonfire.Common.Config.get_ext(for_module, :publish_to_default_circles, [])
+  # def set_boundaries(creator, thing, attrs \\ nil, for_module \\ __MODULE__) do
+  #   # TODO: make default audience configurable & per object audience selectable by user in API and UI (note: also in `Federation.ap_prepare_activity`)
+  #   preset_boundary =
+  #     e(attrs, :to_boundaries, nil) ||
+  #       Bonfire.Common.Config.get_ext(for_module, :preset_boundary, "public")
 
-    to_feeds =
-      Bonfire.Social.Feeds.feed_ids(:notifications, [
-        e(thing, :context_id, nil)
-      ])
+  #   to_circles = Bonfire.Common.Config.get_ext(for_module, :publish_to_default_circles, [])
 
-    opts = [
-      boundary: preset_boundary,
-      to_circles: to_circles,
-      to_feeds: to_feeds
-    ]
+  #   to_feeds =
+  #     Bonfire.Social.Feeds.feed_ids(:notifications, [
+  #       e(thing, :context_id, nil)
+  #     ])
 
-    debug(
-      opts,
-      "boundaries to set & recipients to include (should include scope, provider, and receiver if any)"
-    )
+  #   opts = [
+  #     boundary: preset_boundary,
+  #     to_circles: to_circles,
+  #     to_feeds: to_feeds
+  #   ]
 
-    if module_enabled?(Bonfire.Boundaries),
-      do: Bonfire.Boundaries.set_boundaries(creator, thing, opts)
+  #   debug(
+  #     opts,
+  #     "boundaries to set & recipients to include (should include scope, provider, and receiver if any)"
+  #   )
 
-    opts
-  end
+  #   if module_enabled?(Bonfire.Boundaries),
+  #     do: Bonfire.Boundaries.set_boundaries(creator, thing, opts)
+
+  #   opts
+  # end
 end

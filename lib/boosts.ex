@@ -85,7 +85,7 @@ defmodule Bonfire.Social.Boosts do
           ]
         )
 
-      Integration.ap_push_activity(booster.id, boost)
+      Integration.ap_push_activity(booster, boost)
       # Also livepush, which will need a list of feed IDs we published to
       feed_ids = for fp <- boost.feed_publishes, do: fp.feed_id
 
@@ -115,7 +115,7 @@ defmodule Bonfire.Social.Boosts do
 
   @doc "List current user's boosts"
   def list_my(opts) do
-    list_by(current_user_required(opts), opts)
+    list_by(current_user_required!(opts), opts)
   end
 
   @doc "List boosts by the user "
@@ -153,7 +153,7 @@ defmodule Bonfire.Social.Boosts do
   end
 
   def query([my: :boosts], opts),
-    do: query([subject: current_user_required(opts)], opts)
+    do: query([subject: current_user_required!(opts)], opts)
 
   def query(filters, opts) do
     query_base(filters, opts)
@@ -164,14 +164,6 @@ defmodule Bonfire.Social.Boosts do
     |> repo().insert()
   end
 
-  def ap_publish_activity("create", boost) do
-    with {:ok, booster} <-
-           ActivityPub.Actor.get_cached_by_local_id(boost.edge.subject_id),
-         object when not is_nil(object) <-
-           Bonfire.Federate.ActivityPub.Utils.get_object(boost.edge.object) do
-      ActivityPub.announce(booster, object)
-    end
-  end
 
   def ap_publish_activity("delete", boost) do
     with {:ok, booster} <-
@@ -179,6 +171,15 @@ defmodule Bonfire.Social.Boosts do
          object when not is_nil(object) <-
            Bonfire.Federate.ActivityPub.Utils.get_object(boost.edge.object) do
       ActivityPub.unannounce(booster, object)
+    end
+  end
+
+  def ap_publish_activity(_verb, boost) do
+    with {:ok, booster} <-
+           ActivityPub.Actor.get_cached_by_local_id(boost.edge.subject_id),
+         object when not is_nil(object) <-
+           Bonfire.Federate.ActivityPub.Utils.get_object(boost.edge.object) do
+      ActivityPub.announce(booster, object)
     end
   end
 

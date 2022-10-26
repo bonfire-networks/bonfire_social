@@ -77,7 +77,7 @@ defmodule Bonfire.Social.Likes do
 
     case create(liker, liked, opts) do
       {:ok, like} ->
-        Integration.ap_push_activity(liker.id, like)
+        Integration.ap_push_activity(liker, like)
         {:ok, like}
 
       {:error, e} ->
@@ -119,7 +119,7 @@ defmodule Bonfire.Social.Likes do
   end
 
   def query([my: :likes], opts),
-    do: query([subject: current_user_required(opts)], opts)
+    do: query([subject: current_user_required!(opts)], opts)
 
   def query(filters, opts) do
     query_base(filters, opts)
@@ -135,7 +135,7 @@ defmodule Bonfire.Social.Likes do
 
   @doc "List the current user's likes"
   def list_my(opts) when is_list(opts) do
-    list_by(current_user_required(opts), opts)
+    list_by(current_user_required!(opts), opts)
   end
 
   @doc "List likes by a user"
@@ -159,7 +159,16 @@ defmodule Bonfire.Social.Likes do
     # |> repo().maybe_preload(edge: [:object])
   end
 
-  def ap_publish_activity("create", like) do
+  def ap_publish_activity("delete", like) do
+    with {:ok, liker} <-
+           ActivityPub.Actor.get_cached_by_local_id(like.edge.subject_id),
+         object when not is_nil(object) <-
+           Bonfire.Federate.ActivityPub.Utils.get_object(like.edge.object) do
+      ActivityPub.unlike(liker, object)
+    end
+  end
+
+  def ap_publish_activity(_verb, like) do
     info(like)
 
     with {:ok, liker} <-
@@ -167,15 +176,6 @@ defmodule Bonfire.Social.Likes do
          object when not is_nil(object) <-
            Bonfire.Federate.ActivityPub.Utils.get_object(like.edge.object) do
       ActivityPub.like(liker, object)
-    end
-  end
-
-  def ap_publish_activity("delete", like) do
-    with {:ok, liker} <-
-           ActivityPub.Actor.get_cached_by_local_id(like.edge.subject_id),
-         object when not is_nil(object) <-
-           Bonfire.Federate.ActivityPub.Utils.get_object(like.edge.object) do
-      ActivityPub.unlike(liker, object)
     end
   end
 

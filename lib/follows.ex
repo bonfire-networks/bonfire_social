@@ -89,31 +89,46 @@ defmodule Bonfire.Social.Follows do
   end
 
   @doc """
-  Accepts a follow request, poblishes to feeds and federates.
+  Accepts a follow request, publishes to feeds and federates.
+  Parameters are the requester plus the subject as current_user
   """
-  def accept(request, opts) do
-    with {:ok, %{edge: %{object: object, subject: subject}} = request} <-
-           Requests.accept(request, opts)
-           |> repo().maybe_preload(edge: [:subject, :object]),
-         # remove the Edge so we can recreate one linked to the Follow, because of the unique key on subject/object/table_id
-         _ <- Edges.delete_by_both(subject, Follow, object),
-         # remove the Request Activity from notifications
-         _ <-
-           Activities.delete_by_subject_verb_object(subject, :request, object),
-         {:ok, follow} <- do_follow(subject, object, opts) do
-      maybe_publish_accept(request, follow)
-      {:ok, follow}
-    end
+  def accept_from(subject, opts) do
+    Requests.get(subject, Follow, current_user_required!(opts), opts)
+    ~> accept(opts)
   end
 
-  def maybe_publish_accept(request, follow) do
-    with true <- Integration.is_local?(follow.edge.subject),
+  @doc """
+  Accepts a follow request, publishes to feeds and federates.
+  Parameter are a Request (or its ID) plus the subject as current_user
+  """
+  def accept(request, opts) do
+    repo().transact_with(fn ->
+      with {:ok, %{edge: %{object: object, subject: subject}} = request} <-
+            Requests.accept(request, opts)
+            |> repo().maybe_preload(edge: [:subject, :object]),
+          # remove the Edge so we can recreate one linked to the Follow, because of the unique key on subject/object/table_id
+          _ <- Edges.delete_by_both(subject, Follow, object),
+          # remove the Request Activity from notifications
+          _ <-
+            Activities.delete_by_subject_verb_object(subject, :request, object),
+          {:ok, follow} <- do_follow(subject, object, opts),
+          :ok <- maybe_federate_accept(request |> info, follow) do
+
+        {:ok, follow}
+          else e ->
+            error(e, l "An error occurred while accepting the follow request")
+      end
+    end)
+  end
+
+  def maybe_federate_accept(request, follow) do
+    with false <- Integration.is_local?(follow.edge.subject),
          {:ok, object_actor} <-
            ActivityPub.Adapter.get_actor_by_id(follow.edge.object_id),
          {:ok, subject_actor} <-
-           ActivityPub.Adapter.get_actor_by_id(follow.edge.subject_id),
+           ActivityPub.Adapter.get_actor_by_id(follow.edge.subject_id) |> info,
          %ActivityPub.Object{} = follow_ap_object <-
-           ActivityPub.Object.get_by_pointer_id(request.id),
+           ActivityPub.Object.get_by_pointer_id(ulid(request)) |> info,
          {:ok, _} <-
            ActivityPub.accept(%{
              actor: object_actor,
@@ -122,6 +137,12 @@ defmodule Bonfire.Social.Follows do
              local: true
            }) do
       :ok
+           else
+          true ->
+            info("the subject is local")
+            :ok
+          e ->
+            error(e, "Could not push the acceptation")
     end
   end
 
@@ -190,10 +211,10 @@ defmodule Bonfire.Social.Follows do
   end
 
   def query([my: :object], opts),
-    do: query([subject: current_user_required(opts)], opts)
+    do: query([subject: current_user_required!(opts)], opts)
 
   def query([my: :followers], opts),
-    do: query([object: current_user_required(opts)], opts)
+    do: query([object: current_user_required!(opts)], opts)
 
   def query(filters, opts) do
     query_base(filters, opts)
@@ -351,7 +372,7 @@ defmodule Bonfire.Social.Follows do
               )
             )
 
-        Integration.ap_push_activity(user.id, follow)
+        Integration.ap_push_activity(user, follow)
 
         {:ok, follow}
 
@@ -390,7 +411,7 @@ defmodule Bonfire.Social.Follows do
     Bonfire.Boundaries.Circles.get_stereotype_circles(object, :followers)
     ~> Bonfire.Boundaries.Circles.remove_from_circles(user, ...)
 
-    # Integration.ap_push_activity(user.id, undo_follow) # TODO!
+    # Integration.ap_push_activity(user, undo_follow) # TODO!
 
     # end
   end
@@ -412,21 +433,21 @@ defmodule Bonfire.Social.Follows do
 
   ### ActivityPub integration
 
-  def ap_publish_activity("create", follow) do
-    with {:ok, follower} <-
-           ActivityPub.Adapter.get_actor_by_id(follow.edge.subject_id),
-         {:ok, object} <-
-           ActivityPub.Adapter.get_actor_by_id(follow.edge.object_id) do
-      ActivityPub.follow(follower, object, nil, true)
-    end
-  end
-
   def ap_publish_activity("delete", follow) do
     with {:ok, follower} <-
            ActivityPub.Adapter.get_actor_by_id(follow.edge.subject.id),
          {:ok, object} <-
            ActivityPub.Adapter.get_actor_by_id(follow.edge.object_id) do
       ActivityPub.unfollow(follower, object, nil, true)
+    end
+  end
+
+  def ap_publish_activity(_verb, follow) do
+    with {:ok, follower} <-
+           ActivityPub.Adapter.get_actor_by_id(follow.edge.subject_id),
+         {:ok, object} <-
+           ActivityPub.Adapter.get_actor_by_id(follow.edge.object_id) do
+      ActivityPub.follow(follower, object, nil, true)
     end
   end
 

@@ -18,160 +18,124 @@ defmodule Bonfire.Social.Integration do
     end
   end
 
-  # This should return the same type it accepts
-  def ap_push_activity(subject_id, activity, verb \\ nil, object \\ nil)
 
-  def ap_push_activity(%{id: subject_id}, activity, verb, object),
-    do: ap_push_activity(subject_id, activity, verb, object)
+  def ap_push_activity(subject, activity_or_object, verb_override \\ nil, object_override \\ nil)
 
   def ap_push_activity(
-        subject_id,
-        %{activity: %{id: _} = activity} = object,
+        subject,
+        %{activity: %{object: %{id: _} = inner_object} = activity} = outer_object,
         verb,
-        _object
+        object_override
+      ), # NOTE: we need the outer object for Edges like Follow or Like
+      do: ap_push_activity_with_object(subject, activity, verb, object_override || outer_object, inner_object) |> info
+
+  def ap_push_activity(
+        subject,
+        %{activity: %{id: _} = activity} = activity_object,
+        verb,
+        object_override
       ),
-      do: ap_push_activity_with_object(subject_id, activity, verb, object)
+      do: ap_push_activity_with_object(subject, activity, verb, object_override, activity_object)
 
   def ap_push_activity(
-        subject_id,
-        %Bonfire.Data.Social.Activity{} = activity,
+        subject,
+        %Bonfire.Data.Social.Activity{object: %{id: _} = activity_object} = activity,
         verb,
-        object
+        object_override
       ) do
-    ap_push_activity_with_object(subject_id, activity, verb, object)
-    activity
+    ap_push_activity_with_object(subject, activity, verb, object_override, activity_object)
   end
 
-  def ap_push_activity(subject_id, %{activity: %{}} = object, verb, _object),
+  def ap_push_activity(subject, %Bonfire.Data.Social.Activity{object: activity_object} = activity, verb, object_override) when not is_nil(activity_object),
     do:
-      repo().maybe_preload(object, activity: [:verb])
-      |> ap_push_activity(subject_id, ..., verb, object)
+      repo().maybe_preload(activity, [:object, :verb])
+      |> ap_push_activity(subject, ..., verb, object_override)
+
+  def ap_push_activity(subject, %{activity: activity} = activity_object, verb, object_override) when not is_nil(activity),
+    do:
+      repo().maybe_preload(activity_object, activity: [:verb])
+      |> ap_push_activity(subject, ..., verb, object_override)
 
   def ap_push_activity(_subject_id, activity, _verb, _object) do
     error(
       activity,
-      "Cannot federate: Expected an Activity, or an object containing one, but got"
+      "Cannot federate: Expected an Activity, or an object containing one"
     )
 
-    activity
+    # activity
   end
 
-  def ap_push_activity_with_object(
-        subject_id,
+  defp ap_push_activity_with_object(
+        subject,
         %Bonfire.Data.Social.Activity{} = activity,
         verb,
-        object
+        object_override,
+        activity_object \\ nil
       ) do
-    activity = repo().maybe_preload(activity, [:verb, :object])
-    object = object || activity.object
 
-    if is_local?(object) do
-      verb =
-        verb ||
-          Utils.e(activity, :verb, :verb, "Create")
-          |> String.downcase()
-          |> String.to_existing_atom()
+    # activity = repo().maybe_preload(activity, [:verb, :object])
+    object = object_override || activity_object
+    verb =
+      verb ||
+        Utils.e(activity, :verb, :verb, "Create")
+        |> String.downcase()
+        |> String.to_existing_atom()
 
-      activity_ap_publish(subject_id, verb, object, activity)
-    else
-      info("ActivityPub: Skipping remote object")
-    end
+    activity_ap_publish(subject, verb, object, activity)
 
-    object
+    # object
   end
 
   # TODO: clean up the following patterns
 
-  def activity_ap_publish(subject_id, :create, object, activity) do
-    ap_publish(
+  defp activity_ap_publish(subject, verb, object, activity) when verb in [:create, "create"] do
+    maybe_enqueue(
       "create",
-      Utils.e(activity, :object_id, Utils.ulid(object)),
-      subject_id
+      Utils.ulid(object) || Utils.e(activity, :object_id, nil),
+      subject
     )
   end
 
-  def activity_ap_publish(subject_id, :update, object, activity) do
-    ap_publish(
+  defp activity_ap_publish(subject, :update, object, activity) do
+    maybe_enqueue(
       "update",
-      Utils.e(activity, :object_id, Utils.ulid(object)),
-      subject_id
+      Utils.ulid(object) || Utils.e(activity, :object_id, nil),
+      subject
     )
   end
 
-  def activity_ap_publish(subject_id, :delete, object, activity) do
-    ap_publish(
+  defp activity_ap_publish(subject, :delete, object, activity) do
+    maybe_enqueue(
       "delete",
-      Utils.e(activity, :object_id, Utils.ulid(object)),
-      subject_id
+      Utils.ulid(object) || Utils.e(activity, :object_id, nil),
+      subject
     )
   end
 
-  def activity_ap_publish(subject_id, :follow, _object, activity) do
-    follow =
-      Bonfire.Social.Follows.get!(subject_id, activity.object_id, skip_boundary_check: true)
+  defp activity_ap_publish(subject, verb, object, activity) do
+    verb = to_string(verb || "create")
+    info(verb, "outgoing federation verb")
 
-    ap_publish("create", follow.id, subject_id)
-  end
-
-  def activity_ap_publish(subject_id, :like, _object, activity) do
-    activity = repo().preload(activity, [:subject, :object])
-
-    like = Bonfire.Social.Likes.get!(activity.subject, activity.object, skip_boundary_check: true)
-
-    ap_publish("create", like.id, subject_id)
-  end
-
-  def activity_ap_publish(subject_id, :boost, _object, activity) do
-    activity = repo().preload(activity, [:subject, :object])
-
-    boost =
-      Bonfire.Social.Boosts.get!(activity.subject, activity.object, skip_boundary_check: true)
-
-    ap_publish("create", boost.id, subject_id)
-  end
-
-  def activity_ap_publish(subject_id, :request, object, activity) do
-    # info(object)
-    # FIXME: we're just assuming that all requests are for follow for now
-    activity = repo().preload(activity, [:subject, :object])
-
-    request =
-      Bonfire.Social.Requests.get!(
-        activity.subject,
-        Follow,
-        object || activity.object,
-        skip_boundary_check: true
-      )
-
-    ap_publish("create", object.id, activity.subject_id)
-  end
-
-  def activity_ap_publish(subject_id, verb, object, activity) do
-    warn(verb, "unhandled outgoing federation verb (fallback to create)")
-
-    ap_publish(
-      "create",
-      Utils.e(activity, :object_id, Utils.ulid(object)),
-      subject_id
+    maybe_enqueue(
+      verb,
+      Utils.ulid(object) || Utils.e(activity, :object_id, nil),
+      subject
     )
   end
 
-  def ap_publish(verb, thing_id, user_id) do
-    if Bonfire.Common.Extend.module_enabled?(
-         Bonfire.Federate.ActivityPub.APPublishWorker,
-         user_id
-       ) do
-      Bonfire.Federate.ActivityPub.APPublishWorker.enqueue(
-        verb,
-        %{
-          "context_id" => thing_id,
-          "user_id" => user_id
-        },
-        unique: [period: 5]
-      )
+  defp maybe_enqueue(verb, thing, subject) do
+      if Bonfire.Common.Extend.module_enabled?(
+          Bonfire.Federate.ActivityPub.APPublishWorker,
+          subject
+        ) do
+
+        Bonfire.Federate.ActivityPub.APPublishWorker.maybe_enqueue(verb, thing, subject)
+
+    else
+      # TODO: do not enqueue if federation is disabled in Settings
+      info("Federation is disabled or an adapter is not available")
+      :skip
     end
-
-    :ok
   end
 
   def is_local?(thing) do

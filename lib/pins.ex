@@ -96,7 +96,7 @@ defmodule Bonfire.Social.Pins do
 
     case create(pinner, pinned, opts) do
       {:ok, pin} ->
-        Integration.ap_push_activity(ulid(pinner), pin)
+        Integration.ap_push_activity(pinner, pin)
         {:ok, pin}
 
       {:error, e} ->
@@ -178,7 +178,7 @@ defmodule Bonfire.Social.Pins do
   end
 
   def query([my: :pins], opts),
-    do: query([subject: current_user_required(opts)], opts)
+    do: query([subject: current_user_required!(opts)], opts)
 
   def query(filters, opts) do
     query_base(filters, opts)
@@ -200,7 +200,7 @@ defmodule Bonfire.Social.Pins do
 
   @doc "List the current user's pins"
   def list_my(opts) when is_list(opts) do
-    list_by(current_user_required(opts), opts)
+    list_by(current_user_required!(opts), opts)
   end
 
   def list_instance_pins(opts) when is_list(opts) do
@@ -229,7 +229,16 @@ defmodule Bonfire.Social.Pins do
     # |> repo().maybe_preload(edge: [:object])
   end
 
-  def ap_publish_activity("create", pin) do
+  # def ap_publish_activity("delete", pin) do
+  #   with {:ok, pinner} <-
+  #          ActivityPub.Actor.get_cached_by_local_id(pin.edge.subject_id),
+  #        object when not is_nil(object) <-
+  #          Bonfire.Federate.ActivityPub.Utils.get_object(pin.edge.object) do
+  #     ActivityPub.unlike(pinner, object)
+  #   end
+  # end
+
+  def ap_publish_activity(_verb, pin) do
     info(pin)
 
     with {:ok, pinner} <-
@@ -239,15 +248,6 @@ defmodule Bonfire.Social.Pins do
       ActivityPub.like(pinner, object)
     end
   end
-
-  # def ap_publish_activity("delete", pin) do
-  #   with {:ok, pinner} <-
-  #          ActivityPub.Actor.get_cached_by_local_id(pin.edge.subject_id),
-  #        object when not is_nil(object) <-
-  #          Bonfire.Federate.ActivityPub.Utils.get_object(pin.edge.object) do
-  #     ActivityPub.unlike(pinner, object)
-  #   end
-  # end
 
   # def ap_receive_activity(
   #       creator,

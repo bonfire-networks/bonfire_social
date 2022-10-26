@@ -77,7 +77,7 @@ defmodule Bonfire.Social.Messages do
         with {:ok, message} <- create(creator, attrs, opts) do
           # debug(message)
           LivePush.notify_of_message(creator, :message, message, to)
-          Bonfire.Social.Integration.ap_push_activity(creator.id, message)
+          Bonfire.Social.Integration.ap_push_activity(creator, message)
           {:ok, message}
         end
       end)
@@ -277,7 +277,7 @@ defmodule Bonfire.Social.Messages do
     query
   end
 
-  def ap_publish_activity("create", message) do
+  def ap_publish_activity(_verb, message) do
     message = repo().preload(message, activity: [:tags])
 
     {:ok, actor} =
