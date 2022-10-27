@@ -136,7 +136,17 @@ defmodule Bonfire.Social.Edges do
   defp filter(query, filters, opts) when is_list(filters) do
     # debug(filters, "filters")
     Enum.reduce(filters, query, &filter(&2, &1, opts))
-    |> query_filter(Keyword.drop(filters, [:object, :subject, :type, :object_type, :current_user, :current_account]))
+    |> query_filter(
+      Keyword.drop(filters, [
+        :object,
+        :subject,
+        :type,
+        :object_type,
+        :current_user,
+        :current_account
+      ])
+    )
+
     # |> info()
   end
 
@@ -196,7 +206,8 @@ defmodule Bonfire.Social.Edges do
     end
   end
 
-  defp filter(query, {common, _}, _opts) when common in [:id, :current_user, :current_account, :table_id] do
+  defp filter(query, {common, _}, _opts)
+       when common in [:id, :current_user, :current_account, :table_id] do
     query
   end
 

@@ -322,7 +322,6 @@ defmodule Bonfire.Social.Objects do
     {:error, error}
   end
 
-
   # def publish(creator, verb, thing, attrs \\ nil, for_module \\ __MODULE__)
 
   # def publish(

@@ -67,7 +67,9 @@ defmodule Bonfire.Social.Requests do
 
   def requested(request, opts \\ [])
   def requested(%Request{id: _} = request, _opts), do: {:ok, request}
-  def requested(request, opts), do: get([id: ulid(request), object: current_user(opts)], opts ++ [skip_boundary_check: true])
+
+  def requested(request, opts),
+    do: get([id: ulid(request), object: current_user(opts)], opts ++ [skip_boundary_check: true])
 
   # TODO: abstract the next few functions into Edges
   def all_by_subject(user, type, opts \\ []) do

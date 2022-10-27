@@ -18,7 +18,6 @@ defmodule Bonfire.Social.Integration do
     end
   end
 
-
   def ap_push_activity(subject, activity_or_object, verb_override \\ nil, object_override \\ nil)
 
   def ap_push_activity(
@@ -26,8 +25,17 @@ defmodule Bonfire.Social.Integration do
         %{activity: %{object: %{id: _} = inner_object} = activity} = outer_object,
         verb,
         object_override
-      ), # NOTE: we need the outer object for Edges like Follow or Like
-      do: ap_push_activity_with_object(subject, activity, verb, object_override || outer_object, inner_object) |> info
+      ),
+      # NOTE: we need the outer object for Edges like Follow or Like
+      do:
+        ap_push_activity_with_object(
+          subject,
+          activity,
+          verb,
+          object_override || outer_object,
+          inner_object
+        )
+        |> info
 
   def ap_push_activity(
         subject,
@@ -46,15 +54,22 @@ defmodule Bonfire.Social.Integration do
     ap_push_activity_with_object(subject, activity, verb, object_override, activity_object)
   end
 
-  def ap_push_activity(subject, %Bonfire.Data.Social.Activity{object: activity_object} = activity, verb, object_override) when not is_nil(activity_object),
-    do:
-      repo().maybe_preload(activity, [:object, :verb])
-      |> ap_push_activity(subject, ..., verb, object_override)
+  def ap_push_activity(
+        subject,
+        %Bonfire.Data.Social.Activity{object: activity_object} = activity,
+        verb,
+        object_override
+      )
+      when not is_nil(activity_object),
+      do:
+        repo().maybe_preload(activity, [:object, :verb])
+        |> ap_push_activity(subject, ..., verb, object_override)
 
-  def ap_push_activity(subject, %{activity: activity} = activity_object, verb, object_override) when not is_nil(activity),
-    do:
-      repo().maybe_preload(activity_object, activity: [:verb])
-      |> ap_push_activity(subject, ..., verb, object_override)
+  def ap_push_activity(subject, %{activity: activity} = activity_object, verb, object_override)
+      when not is_nil(activity),
+      do:
+        repo().maybe_preload(activity_object, activity: [:verb])
+        |> ap_push_activity(subject, ..., verb, object_override)
 
   def ap_push_activity(_subject_id, activity, _verb, _object) do
     error(
@@ -66,15 +81,15 @@ defmodule Bonfire.Social.Integration do
   end
 
   defp ap_push_activity_with_object(
-        subject,
-        %Bonfire.Data.Social.Activity{} = activity,
-        verb,
-        object_override,
-        activity_object \\ nil
-      ) do
-
+         subject,
+         %Bonfire.Data.Social.Activity{} = activity,
+         verb,
+         object_override,
+         activity_object \\ nil
+       ) do
     # activity = repo().maybe_preload(activity, [:verb, :object])
     object = object_override || activity_object
+
     verb =
       verb ||
         Utils.e(activity, :verb, :verb, "Create")
@@ -124,13 +139,11 @@ defmodule Bonfire.Social.Integration do
   end
 
   defp maybe_enqueue(verb, thing, subject) do
-      if Bonfire.Common.Extend.module_enabled?(
-          Bonfire.Federate.ActivityPub.APPublishWorker,
-          subject
-        ) do
-
-        Bonfire.Federate.ActivityPub.APPublishWorker.maybe_enqueue(verb, thing, subject)
-
+    if Bonfire.Common.Extend.module_enabled?(
+         Bonfire.Federate.ActivityPub.APPublishWorker,
+         subject
+       ) do
+      Bonfire.Federate.ActivityPub.APPublishWorker.maybe_enqueue(verb, thing, subject)
     else
       # TODO: do not enqueue if federation is disabled in Settings
       info("Federation is disabled or an adapter is not available")

@@ -164,7 +164,6 @@ defmodule Bonfire.Social.Boosts do
     |> repo().insert()
   end
 
-
   def ap_publish_activity("delete", boost) do
     with {:ok, booster} <-
            ActivityPub.Actor.get_cached_by_local_id(boost.edge.subject_id),

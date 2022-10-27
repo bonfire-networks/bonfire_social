@@ -104,19 +104,19 @@ defmodule Bonfire.Social.Follows do
   def accept(request, opts) do
     repo().transact_with(fn ->
       with {:ok, %{edge: %{object: object, subject: subject}} = request} <-
-            Requests.accept(request, opts)
-            |> repo().maybe_preload(edge: [:subject, :object]),
-          # remove the Edge so we can recreate one linked to the Follow, because of the unique key on subject/object/table_id
-          _ <- Edges.delete_by_both(subject, Follow, object),
-          # remove the Request Activity from notifications
-          _ <-
-            Activities.delete_by_subject_verb_object(subject, :request, object),
-          {:ok, follow} <- do_follow(subject, object, opts),
-          :ok <- maybe_federate_accept(request |> info, follow) do
-
+             Requests.accept(request, opts)
+             |> repo().maybe_preload(edge: [:subject, :object]),
+           # remove the Edge so we can recreate one linked to the Follow, because of the unique key on subject/object/table_id
+           _ <- Edges.delete_by_both(subject, Follow, object),
+           # remove the Request Activity from notifications
+           _ <-
+             Activities.delete_by_subject_verb_object(subject, :request, object),
+           {:ok, follow} <- do_follow(subject, object, opts),
+           :ok <- maybe_federate_accept(request |> info, follow) do
         {:ok, follow}
-          else e ->
-            error(e, l "An error occurred while accepting the follow request")
+      else
+        e ->
+          error(e, l("An error occurred while accepting the follow request"))
       end
     end)
   end
@@ -137,12 +137,13 @@ defmodule Bonfire.Social.Follows do
              local: true
            }) do
       :ok
-           else
-          true ->
-            info("the subject is local")
-            :ok
-          e ->
-            error(e, "Could not push the acceptation")
+    else
+      true ->
+        info("the subject is local")
+        :ok
+
+      e ->
+        error(e, "Could not push the acceptation")
     end
   end
 

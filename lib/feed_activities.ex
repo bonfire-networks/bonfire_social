@@ -431,7 +431,7 @@ defmodule Bonfire.Social.FeedActivities do
   Records a remote activity and puts in appropriate feeds
   """
   defp save_fediverse_incoming_activity(subject, verb, object)
-      when is_atom(verb) and not is_nil(subject) do
+       when is_atom(verb) and not is_nil(subject) do
     # TODO: use the appropriate preset (eg "public" for public activities?)
     publish(subject, verb, object, boundary: "federated")
   end
@@ -826,7 +826,12 @@ defmodule Bonfire.Social.FeedActivities do
   defp maybe_federate_activity(verb, object, activity, opts) do
     if e(opts, :boundary, nil) != "federated",
       do:
-      Bonfire.Social.Integration.ap_push_activity(activity.subject || activity.subject_id, activity, verb, object)
+        Bonfire.Social.Integration.ap_push_activity(
+          activity.subject || activity.subject_id,
+          activity,
+          verb,
+          object
+        )
   end
 
   def unseen_query(feed_id, opts) do
