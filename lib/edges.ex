@@ -18,10 +18,13 @@ defmodule Bonfire.Social.Edges do
 
   def put_edge_assoc(changeset, schema, subject, object) do
     %{
+      subject: subject,
       subject_id: ulid(subject),
+      object: object,
       object_id: ulid(object),
       table_id: Bonfire.Common.Types.table_id(schema)
     }
+    |> info()
     # |> Changesets.put_assoc(changeset, :edge, ...)
     |> Ecto.Changeset.cast(changeset, %{edge: ...}, [])
     |> Ecto.Changeset.cast_assoc(:edge, with: &Edge.changeset/2)

@@ -160,7 +160,9 @@ defmodule Bonfire.Social.Boosts do
 
   defp create(booster, boosted, opts) do
     Edges.changeset(Boost, booster, :boost, boosted, opts)
+    |> info
     |> repo().insert()
+    |> info
   end
 
   def ap_publish_activity(subject, :delete, boost) do
