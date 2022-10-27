@@ -3,6 +3,7 @@ defmodule Bonfire.Social.Messages do
   use Bonfire.Common.Repo
   use Bonfire.Common.Utils
   import Untangle
+  alias Bonfire.Social.Integration
 
   alias Bonfire.Data.Social.Message
   alias Bonfire.Data.Social.PostContent
@@ -77,8 +78,8 @@ defmodule Bonfire.Social.Messages do
         with {:ok, message} <- create(creator, attrs, opts) do
           # debug(message)
           LivePush.notify_of_message(creator, :message, message, to)
-          Bonfire.Social.Integration.ap_push_activity(creator, message)
-          {:ok, message}
+
+          Integration.maybe_federate_and_gift_wrap_activity(creator, message)
         end
       end)
     else
@@ -277,11 +278,10 @@ defmodule Bonfire.Social.Messages do
     query
   end
 
-  def ap_publish_activity(_verb, message) do
+  def ap_publish_activity(subject, _verb, message) do
     message = repo().preload(message, activity: [:tags])
 
-    {:ok, actor} =
-      ActivityPub.Adapter.get_actor_by_id(Utils.e(message, :created, :creator_id, nil))
+    {:ok, actor} = ActivityPub.Actor.get_cached_by_local_id(subject)
 
     # debug(message.activity.tags)
 

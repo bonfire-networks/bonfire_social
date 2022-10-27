@@ -77,8 +77,7 @@ defmodule Bonfire.Social.Likes do
 
     case create(liker, liked, opts) do
       {:ok, like} ->
-        Integration.ap_push_activity(liker, like)
-        {:ok, like}
+        Integration.maybe_federate_and_gift_wrap_activity(liker, like)
 
       {:error, e} ->
         case get(liker, liked) do
@@ -159,22 +158,26 @@ defmodule Bonfire.Social.Likes do
     # |> repo().maybe_preload(edge: [:object])
   end
 
-  def ap_publish_activity("delete", like) do
+  def ap_publish_activity(subject, :delete, like) do
     with {:ok, liker} <-
-           ActivityPub.Actor.get_cached_by_local_id(like.edge.subject_id),
+           ActivityPub.Actor.get_cached_by_local_id(subject || like.edge.subject_id),
          object when not is_nil(object) <-
-           Bonfire.Federate.ActivityPub.Utils.get_object(like.edge.object) do
+           Bonfire.Federate.ActivityPub.Utils.get_object(
+             e(like.edge, :object, nil) || like.edge.object_id
+           ) do
       ActivityPub.unlike(liker, object)
     end
   end
 
-  def ap_publish_activity(_verb, like) do
+  def ap_publish_activity(subject, _verb, like) do
     info(like)
 
     with {:ok, liker} <-
-           ActivityPub.Actor.get_cached_by_local_id(like.edge.subject_id),
+           ActivityPub.Actor.get_cached_by_local_id(subject || like.edge.subject_id),
          object when not is_nil(object) <-
-           Bonfire.Federate.ActivityPub.Utils.get_object(like.edge.object) do
+           Bonfire.Federate.ActivityPub.Utils.get_object(
+             e(like.edge, :object, nil) || like.edge.object_id
+           ) do
       ActivityPub.like(liker, object)
     end
   end

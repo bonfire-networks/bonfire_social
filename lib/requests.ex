@@ -203,8 +203,7 @@ defmodule Bonfire.Social.Requests do
 
     case create(requester, type, object, opts) do
       {:ok, request} ->
-        Integration.ap_push_activity(requester, request)
-        {:ok, request}
+        Integration.maybe_federate_and_gift_wrap_activity(requester, request)
 
       e ->
         case get(requester, type, object) do
@@ -243,19 +242,24 @@ defmodule Bonfire.Social.Requests do
 
   # publish follow requests
   def ap_publish_activity(
+        subject,
         _verb,
         %{edge: %{table_id: "70110WTHE1EADER1EADER1EADE"}} = request
       ) do
     # info(request)
     with {:ok, follower} <-
-           ActivityPub.Adapter.get_actor_by_id(request.edge.subject_id),
+           ActivityPub.Actor.get_cached_by_local_id(
+             subject || e(request.edge, :object, nil) || request.edge.subject_id
+           ),
          {:ok, object} <-
-           ActivityPub.Adapter.get_actor_by_id(request.edge.object_id) do
+           ActivityPub.Actor.get_cached_by_local_id(
+             e(request.edge, :object, nil) || request.edge.object_id
+           ) do
       ActivityPub.follow(follower, object, nil, true)
     end
   end
 
-  def ap_publish_activity(_verb, request) do
+  def ap_publish_activity(_, _verb, request) do
     # TODO
     error(request, "unhandled request type")
   end

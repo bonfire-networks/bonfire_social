@@ -164,11 +164,11 @@ defmodule Bonfire.Social.Flags do
     |> repo().insert()
   end
 
-  def ap_publish_activity(_verb, %Flag{} = flag) do
+  def ap_publish_activity(subject, _verb, %Flag{} = flag) do
     flag = repo().preload(flag, flagged: [])
 
     with {:ok, flagger} <-
-           ActivityPub.Actor.get_cached_by_local_id(flag.flagger_id) do
+           ActivityPub.Actor.get_cached_by_local_id(subject || flag.flagger_id) do
       flagged = Common.Pointers.get(flag.context)
 
       # FIXME: only works for flagged posts and users

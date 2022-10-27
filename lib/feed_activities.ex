@@ -726,7 +726,7 @@ defmodule Bonfire.Social.FeedActivities do
     try do
       # FIXME only run if ActivityPub is a target circle/feed?
       {:ok, activity} = ret
-      maybe_federate_activity(verb, object, activity, opts)
+      do_maybe_federate_activity(verb, object, activity, opts)
 
       ret
     rescue
@@ -752,7 +752,7 @@ defmodule Bonfire.Social.FeedActivities do
     try do
       # FIXME only run if ActivityPub is a target circle/feed?
       # TODO: only run for non-local activity
-      maybe_federate_activity(verb, object, activity, opts)
+      do_maybe_federate_activity(verb, object, activity, opts)
       ret
     rescue
       e ->
@@ -823,10 +823,10 @@ defmodule Bonfire.Social.FeedActivities do
     |> elem(0)
   end
 
-  defp maybe_federate_activity(verb, object, activity, opts) do
+  defp do_maybe_federate_activity(verb, object, activity, opts) do
     if e(opts, :boundary, nil) != "federated",
       do:
-        Bonfire.Social.Integration.ap_push_activity(
+        Bonfire.Social.Integration.maybe_federate_activity(
           activity.subject || activity.subject_id,
           activity,
           verb,

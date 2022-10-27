@@ -112,7 +112,7 @@ defmodule Bonfire.Social.Follows do
            _ <-
              Activities.delete_by_subject_verb_object(subject, :request, object),
            {:ok, follow} <- do_follow(subject, object, opts),
-           :ok <- maybe_federate_accept(request |> info, follow) do
+           :ok <- maybe_federate_accept(subject, request |> info, follow) do
         {:ok, follow}
       else
         e ->
@@ -121,12 +121,14 @@ defmodule Bonfire.Social.Follows do
     end)
   end
 
-  def maybe_federate_accept(request, follow) do
-    with false <- Integration.is_local?(follow.edge.subject),
+  def maybe_federate_accept(subject, request, follow) do
+    with false <- Integration.is_local?(e(follow.edge, :subject, nil)),
          {:ok, object_actor} <-
-           ActivityPub.Adapter.get_actor_by_id(follow.edge.object_id),
+           ActivityPub.Actor.get_cached_by_local_id(
+             e(follow.edge, :object, nil) || follow.edge.object_id
+           ),
          {:ok, subject_actor} <-
-           ActivityPub.Adapter.get_actor_by_id(follow.edge.subject_id) |> info,
+           ActivityPub.Actor.get_cached_by_local_id(subject),
          %ActivityPub.Object{} = follow_ap_object <-
            ActivityPub.Object.get_by_pointer_id(ulid(request)) |> info,
          {:ok, _} <-
@@ -373,9 +375,7 @@ defmodule Bonfire.Social.Follows do
               )
             )
 
-        Integration.ap_push_activity(user, follow)
-
-        {:ok, follow}
+        Integration.maybe_federate_and_gift_wrap_activity(user, follow)
 
       {:error, e} ->
         error(e)
@@ -412,8 +412,8 @@ defmodule Bonfire.Social.Follows do
     Bonfire.Boundaries.Circles.get_stereotype_circles(object, :followers)
     ~> Bonfire.Boundaries.Circles.remove_from_circles(user, ...)
 
-    # Integration.ap_push_activity(user, undo_follow) # TODO!
-
+    # TODO!
+    # Integration.maybe_federate_and_gift_wrap_activity(user, follow)
     # end
   end
 
@@ -434,20 +434,26 @@ defmodule Bonfire.Social.Follows do
 
   ### ActivityPub integration
 
-  def ap_publish_activity("delete", follow) do
+  def ap_publish_activity(subject, :delete, follow) do
     with {:ok, follower} <-
-           ActivityPub.Adapter.get_actor_by_id(follow.edge.subject.id),
+           ActivityPub.Actor.get_cached_by_local_id(
+             subject || e(follow.edge, :subject, nil) || follow.edge.subject_id
+           ),
          {:ok, object} <-
-           ActivityPub.Adapter.get_actor_by_id(follow.edge.object_id) do
+           ActivityPub.Actor.get_cached_by_local_id(
+             e(follow.edge, :object, nil) || follow.edge.object_id
+           ) do
       ActivityPub.unfollow(follower, object, nil, true)
     end
   end
 
-  def ap_publish_activity(_verb, follow) do
+  def ap_publish_activity(subject, _verb, follow) do
     with {:ok, follower} <-
-           ActivityPub.Adapter.get_actor_by_id(follow.edge.subject_id),
+           ActivityPub.Actor.get_cached_by_local_id(subject || follow.edge.subject_id),
          {:ok, object} <-
-           ActivityPub.Adapter.get_actor_by_id(follow.edge.object_id) do
+           ActivityPub.Actor.get_cached_by_local_id(
+             e(follow.edge, :object, nil) || follow.edge.object_id
+           ) do
       ActivityPub.follow(follower, object, nil, true)
     end
   end

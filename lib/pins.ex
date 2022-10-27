@@ -96,8 +96,7 @@ defmodule Bonfire.Social.Pins do
 
     case create(pinner, pinned, opts) do
       {:ok, pin} ->
-        Integration.ap_push_activity(pinner, pin)
-        {:ok, pin}
+        Integration.maybe_federate_and_gift_wrap_activity(pinner, pin)
 
       {:error, e} ->
         case get(pinner, pinned) do
@@ -229,22 +228,24 @@ defmodule Bonfire.Social.Pins do
     # |> repo().maybe_preload(edge: [:object])
   end
 
-  # def ap_publish_activity("delete", pin) do
+  # def ap_publish_activity(subject, :delete, pin) do
   #   with {:ok, pinner} <-
-  #          ActivityPub.Actor.get_cached_by_local_id(pin.edge.subject_id),
+  #          ActivityPub.Actor.get_cached_by_local_id(subject || pin.edge.subject_id),
   #        object when not is_nil(object) <-
-  #          Bonfire.Federate.ActivityPub.Utils.get_object(pin.edge.object) do
+  #          Bonfire.Federate.ActivityPub.Utils.get_object(e(pin.edge, :object, nil)) do
   #     ActivityPub.unlike(pinner, object)
   #   end
   # end
 
-  def ap_publish_activity(_verb, pin) do
+  def ap_publish_activity(subject, _verb, pin) do
     info(pin)
 
     with {:ok, pinner} <-
-           ActivityPub.Actor.get_cached_by_local_id(pin.edge.subject_id),
+           ActivityPub.Actor.get_cached_by_local_id(subject || pin.edge.subject_id),
          object when not is_nil(object) <-
-           Bonfire.Federate.ActivityPub.Utils.get_object(pin.edge.object) do
+           Bonfire.Federate.ActivityPub.Utils.get_object(
+             e(pin.edge, :object, nil) || pin.edge.object_id
+           ) do
       ActivityPub.like(pinner, object)
     end
   end

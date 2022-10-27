@@ -18,9 +18,31 @@ defmodule Bonfire.Social.Integration do
     end
   end
 
-  def ap_push_activity(subject, activity_or_object, verb_override \\ nil, object_override \\ nil)
+  def maybe_federate_and_gift_wrap_activity(
+        subject,
+        object,
+        verb_override \\ nil,
+        object_override \\ nil
+      ) do
+    {:ok,
+     Utils.deep_merge(object, %{
+       activity: %{
+         federate_activity_pub:
+           Utils.ok_unwrap(
+             maybe_federate_activity(subject, object, verb_override, object_override)
+           )
+       }
+     })}
+  end
 
-  def ap_push_activity(
+  def maybe_federate_activity(
+        subject,
+        activity_or_object,
+        verb_override \\ nil,
+        object_override \\ nil
+      )
+
+  def maybe_federate_activity(
         subject,
         %{activity: %{object: %{id: _} = inner_object} = activity} = outer_object,
         verb,
@@ -28,7 +50,7 @@ defmodule Bonfire.Social.Integration do
       ),
       # NOTE: we need the outer object for Edges like Follow or Like
       do:
-        ap_push_activity_with_object(
+        maybe_federate_activity_with_object(
           subject,
           activity,
           verb,
@@ -37,24 +59,31 @@ defmodule Bonfire.Social.Integration do
         )
         |> info
 
-  def ap_push_activity(
+  def maybe_federate_activity(
         subject,
         %{activity: %{id: _} = activity} = activity_object,
         verb,
         object_override
       ),
-      do: ap_push_activity_with_object(subject, activity, verb, object_override, activity_object)
+      do:
+        maybe_federate_activity_with_object(
+          subject,
+          activity,
+          verb,
+          object_override,
+          activity_object
+        )
 
-  def ap_push_activity(
+  def maybe_federate_activity(
         subject,
         %Bonfire.Data.Social.Activity{object: %{id: _} = activity_object} = activity,
         verb,
         object_override
       ) do
-    ap_push_activity_with_object(subject, activity, verb, object_override, activity_object)
+    maybe_federate_activity_with_object(subject, activity, verb, object_override, activity_object)
   end
 
-  def ap_push_activity(
+  def maybe_federate_activity(
         subject,
         %Bonfire.Data.Social.Activity{object: activity_object} = activity,
         verb,
@@ -63,15 +92,20 @@ defmodule Bonfire.Social.Integration do
       when not is_nil(activity_object),
       do:
         repo().maybe_preload(activity, [:object, :verb])
-        |> ap_push_activity(subject, ..., verb, object_override)
+        |> maybe_federate_activity(subject, ..., verb, object_override)
 
-  def ap_push_activity(subject, %{activity: activity} = activity_object, verb, object_override)
+  def maybe_federate_activity(
+        subject,
+        %{activity: activity} = activity_object,
+        verb,
+        object_override
+      )
       when not is_nil(activity),
       do:
         repo().maybe_preload(activity_object, activity: [:verb])
-        |> ap_push_activity(subject, ..., verb, object_override)
+        |> maybe_federate_activity(subject, ..., verb, object_override)
 
-  def ap_push_activity(_subject_id, activity, _verb, _object) do
+  def maybe_federate_activity(_subject_id, activity, _verb, _object) do
     error(
       activity,
       "Cannot federate: Expected an Activity, or an object containing one"
@@ -80,7 +114,7 @@ defmodule Bonfire.Social.Integration do
     # activity
   end
 
-  defp ap_push_activity_with_object(
+  defp maybe_federate_activity_with_object(
          subject,
          %Bonfire.Data.Social.Activity{} = activity,
          verb,
@@ -94,56 +128,27 @@ defmodule Bonfire.Social.Integration do
       verb ||
         Utils.e(activity, :verb, :verb, "Create")
         |> String.downcase()
-        |> String.to_existing_atom()
+        |> Utils.maybe_to_atom()
 
-    activity_ap_publish(subject, verb, object, activity)
+    maybe_federate(subject, verb, object, activity)
 
     # object
   end
 
   # TODO: clean up the following patterns
 
-  defp activity_ap_publish(subject, verb, object, activity) when verb in [:create, "create"] do
-    maybe_enqueue(
-      "create",
-      Utils.ulid(object) || Utils.e(activity, :object_id, nil),
-      subject
-    )
-  end
-
-  defp activity_ap_publish(subject, :update, object, activity) do
-    maybe_enqueue(
-      "update",
-      Utils.ulid(object) || Utils.e(activity, :object_id, nil),
-      subject
-    )
-  end
-
-  defp activity_ap_publish(subject, :delete, object, activity) do
-    maybe_enqueue(
-      "delete",
-      Utils.ulid(object) || Utils.e(activity, :object_id, nil),
-      subject
-    )
-  end
-
-  defp activity_ap_publish(subject, verb, object, activity) do
-    verb = to_string(verb || "create")
-    info(verb, "outgoing federation verb")
-
-    maybe_enqueue(
-      verb,
-      Utils.ulid(object) || Utils.e(activity, :object_id, nil),
-      subject
-    )
-  end
-
-  defp maybe_enqueue(verb, thing, subject) do
+  defp maybe_federate(subject, verb, object, activity) do
     if Bonfire.Common.Extend.module_enabled?(
-         Bonfire.Federate.ActivityPub.APPublishWorker,
+         Bonfire.Federate.ActivityPub.Outgoing,
          subject
        ) do
-      Bonfire.Federate.ActivityPub.APPublishWorker.maybe_enqueue(verb, thing, subject)
+      info(verb, "maybe prepare outgoing federation with verb...")
+
+      Bonfire.Federate.ActivityPub.Outgoing.maybe_federate(
+        subject,
+        verb,
+        object || Utils.e(activity, :object, nil) || Utils.e(activity, :object_id, nil)
+      )
     else
       # TODO: do not enqueue if federation is disabled in Settings
       info("Federation is disabled or an adapter is not available")

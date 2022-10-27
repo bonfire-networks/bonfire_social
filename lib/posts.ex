@@ -200,101 +200,95 @@ defmodule Bonfire.Social.Posts do
     )
   end
 
-  # TODO: federated delete
-  def ap_publish_activity(_verb, post) do
-    attrs = ap_publish_activity_object("create", post)
-    ActivityPub.create(attrs, post.id)
-  end
+  # TODO: federated delete, in addition to create:
+  def ap_publish_activity(subject, _verb, post) do
+    with post <-
+           post
+           |> repo().maybe_preload([
+             :replied,
+             :post_content,
+             :media,
+             :created,
+             tags: [:character]
+           ])
+           |> Activities.object_preload_create_activity(),
+         subject <-
+           subject || Utils.e(post, :created, :creator, nil) ||
+             Utils.e(post, :created, :creator_id, nil) || Utils.e(post, :activity, :subject, nil) ||
+             Utils.e(post, :activity, :subject_id, nil),
+         {:ok, actor} <-
+           ActivityPub.Actor.get_cached_by_local_id(info(subject, "subject"))
+           |> info("subject_actor"),
+         published_in_feeds <-
+           Bonfire.Social.FeedActivities.feeds_for_activity(post.activity)
+           |> debug("published_in_feeds"),
 
-  # in an ideal world this would be able to work off the changeset, but for now, fuck it.
-  def ap_publish_activity_object("create", post) do
-    post =
-      post
-      |> repo().maybe_preload([
-        :created,
-        :replied,
-        :post_content,
-        :media,
-        tags: [:character]
-      ])
-      |> Activities.object_preload_create_activity()
+         # FIXME only publish to public URI if in a public enough cirlce
+         # Everything is public atm
+         to <-
+           (if Bonfire.Boundaries.Circles.get_id!(:guest) in published_in_feeds do
+              ["https://www.w3.org/ns/activitystreams#Public"]
+            else
+              []
+            end),
 
-    # |> info("ap_publish_activity post")
-
-    {:ok, actor} =
-      ActivityPub.Adapter.get_actor_by_id(
-        e(post, :activity, :subject_id, nil) ||
-          e(post, :created, :creator_id, nil)
-      )
-
-    published_in_feeds =
-      Bonfire.Social.FeedActivities.feeds_for_activity(post.activity)
-      |> debug("published_in_feeds")
-
-    # FIXME only publish to public URI if in a public enough cirlce
-    # Everything is public atm
-    to =
-      if Bonfire.Boundaries.Circles.get_id!(:guest) in published_in_feeds do
-        ["https://www.w3.org/ns/activitystreams#Public"]
-      else
-        []
-      end
-
-    # TODO: find a better way of deleting non actor entries from the list
-    # (or represent them in AP)
-    direct_recipients =
-      e(post, :tags, [])
-      |> Enum.reject(fn tag ->
-        is_nil(e(tag, :character, :id, nil)) or
-          tag.id == e(post, :activity, :subject_id, nil) or
-          tag.id == e(post, :created, :creator_id, nil)
-      end)
-      # |> debug("mentions")
-      |> Enum.map(fn tag -> ActivityPub.Actor.get_by_local_id!(tag.id) end)
-      |> filter_empty([])
-      |> Enum.map(fn actor -> actor.ap_id end)
-      |> debug("direct_recipients")
-
-    cc = [actor.data["followers"]]
-
-    object =
-      %{
-        "type" => "Note",
-        "actor" => actor.ap_id,
-        "attributedTo" => actor.ap_id,
-        "to" => to ++ direct_recipients,
-        "cc" => cc,
-        "name" => e(post, :post_content, :name, nil),
-        "summary" => e(post, :post_content, :summary, nil),
-        "content" => e(post, :post_content, :html_body, nil),
-        "attachment" => Bonfire.Files.ap_publish_activity(e(post, :media, nil))
-      }
-      |> Enum.filter(fn {_, v} -> not is_nil(v) end)
-      |> Enum.into(%{})
-
-    object =
-      if e(post, :replied, :reply_to_id, nil) do
-        with {:ok, ap_object} <-
-               ActivityPub.Object.get_cached_by_pointer_id(post.replied.reply_to_id) do
-          Map.put(object, "inReplyTo", ap_object.data["id"])
-        else
-          e ->
-            error(e, "Could not fetch what is being replied to")
-            object
-        end
-      else
-        object
-      end
-
-    %{
-      actor: actor,
-      context: ActivityPub.Utils.generate_context_id(),
-      object: object,
-      to: to ++ direct_recipients,
-      additional: %{
-        "cc" => cc
-      }
-    }
+         # TODO: find a better way of deleting non actor entries from the list
+         # (or represent them in AP)
+         direct_recipients <-
+           e(post, :tags, [])
+           |> Enum.reject(fn tag ->
+             is_nil(e(tag, :character, :id, nil)) or
+               tag.id == ulid(subject) or
+               tag.id == e(post, :created, :creator_id, nil)
+           end)
+           # |> debug("mentions")
+           |> Enum.map(fn tag -> ActivityPub.Actor.get_by_local_id!(tag.id) end)
+           |> filter_empty([])
+           |> Enum.map(fn actor -> actor.ap_id end)
+           |> debug("direct_recipients"),
+         cc <- List.wrap(actor.data["followers"]),
+         object <-
+           %{
+             "type" => "Note",
+             "actor" => actor.ap_id,
+             "attributedTo" => actor.ap_id,
+             "to" => to ++ direct_recipients,
+             "cc" => cc,
+             "name" => e(post, :post_content, :name, nil),
+             "summary" => e(post, :post_content, :summary, nil),
+             "content" => e(post, :post_content, :html_body, nil),
+             "attachment" => Bonfire.Files.ap_publish_activity(e(post, :media, nil))
+           }
+           |> Enum.filter(fn {_, v} -> not is_nil(v) end)
+           |> Enum.into(%{}),
+         object <-
+           (if e(post, :replied, :reply_to_id, nil) do
+              with {:ok, ap_object} <-
+                     ActivityPub.Object.get_cached_by_pointer_id(post.replied.reply_to_id) do
+                Map.put(object, "inReplyTo", ap_object.data["id"])
+              else
+                e ->
+                  error(e, "Could not fetch what is being replied to")
+                  object
+              end
+            else
+              object
+            end),
+         {:ok, activity} <-
+           ActivityPub.create(
+             %{
+               actor: actor,
+               context: ActivityPub.Utils.generate_context_id(),
+               object: object,
+               to: to ++ direct_recipients,
+               additional: %{
+                 "cc" => cc
+               }
+             },
+             ulid(post)
+           ) do
+      {:ok, activity}
+    end
   end
 
   @doc """

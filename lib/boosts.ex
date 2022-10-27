@@ -85,7 +85,6 @@ defmodule Bonfire.Social.Boosts do
           ]
         )
 
-      Integration.ap_push_activity(booster, boost)
       # Also livepush, which will need a list of feed IDs we published to
       feed_ids = for fp <- boost.feed_publishes, do: fp.feed_id
 
@@ -94,7 +93,7 @@ defmodule Bonfire.Social.Boosts do
         notify: true
       )
 
-      {:ok, boost}
+      Integration.maybe_federate_and_gift_wrap_activity(booster, boost)
     end
   end
 
@@ -164,20 +163,24 @@ defmodule Bonfire.Social.Boosts do
     |> repo().insert()
   end
 
-  def ap_publish_activity("delete", boost) do
+  def ap_publish_activity(subject, :delete, boost) do
     with {:ok, booster} <-
-           ActivityPub.Actor.get_cached_by_local_id(boost.edge.subject_id),
+           ActivityPub.Actor.get_cached_by_local_id(subject || boost.edge.subject_id),
          object when not is_nil(object) <-
-           Bonfire.Federate.ActivityPub.Utils.get_object(boost.edge.object) do
+           Bonfire.Federate.ActivityPub.Utils.get_object(
+             e(boost.edge, :object, nil) || boost.edge.object_id
+           ) do
       ActivityPub.unannounce(booster, object)
     end
   end
 
-  def ap_publish_activity(_verb, boost) do
+  def ap_publish_activity(subject, _verb, boost) do
     with {:ok, booster} <-
-           ActivityPub.Actor.get_cached_by_local_id(boost.edge.subject_id),
+           ActivityPub.Actor.get_cached_by_local_id(subject || boost.edge.subject_id),
          object when not is_nil(object) <-
-           Bonfire.Federate.ActivityPub.Utils.get_object(boost.edge.object) do
+           Bonfire.Federate.ActivityPub.Utils.get_object(
+             e(boost.edge, :object, nil) || boost.edge.object_id
+           ) do
       ActivityPub.announce(booster, object)
     end
   end
