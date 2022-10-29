@@ -217,7 +217,7 @@ defmodule Bonfire.Social.Posts do
              Utils.e(post, :created, :creator_id, nil) || Utils.e(post, :activity, :subject, nil) ||
              Utils.e(post, :activity, :subject_id, nil),
          {:ok, actor} <-
-           ActivityPub.Actor.get_cached_by_local_id(info(subject, "subject"))
+           ActivityPub.Actor.get_cached(pointer: info(subject, "subject"))
            |> info("subject_actor"),
          published_in_feeds <-
            Bonfire.Social.FeedActivities.feeds_for_activity(post.activity)
@@ -242,7 +242,7 @@ defmodule Bonfire.Social.Posts do
                tag.id == e(post, :created, :creator_id, nil)
            end)
            # |> debug("mentions")
-           |> Enum.map(fn tag -> ActivityPub.Actor.get_by_local_id!(tag.id) end)
+           |> Enum.map(fn tag -> ActivityPub.Actor.get_cached!(pointer: tag.id) end)
            |> filter_empty([])
            |> Enum.map(fn actor -> actor.ap_id end)
            |> debug("direct_recipients"),
@@ -264,7 +264,7 @@ defmodule Bonfire.Social.Posts do
          object <-
            (if e(post, :replied, :reply_to_id, nil) do
               with {:ok, ap_object} <-
-                     ActivityPub.Object.get_cached_by_pointer_id(post.replied.reply_to_id) do
+                     ActivityPub.Object.get_cached(pointer: post.replied.reply_to_id) do
                 Map.put(object, "inReplyTo", ap_object.data["id"])
               else
                 e ->
@@ -275,18 +275,17 @@ defmodule Bonfire.Social.Posts do
               object
             end),
          {:ok, activity} <-
-           ActivityPub.create(
-             %{
-               actor: actor,
-               context: ActivityPub.Utils.generate_context_id(),
-               object: object,
-               to: to ++ direct_recipients,
-               additional: %{
-                 "cc" => cc
-               }
-             },
-             ulid(post)
-           ) do
+           ActivityPub.create(%{
+             pointer: ulid(post),
+             local: true,
+             actor: actor,
+             context: ActivityPub.Utils.generate_context_id(),
+             object: object,
+             to: to ++ direct_recipients,
+             additional: %{
+               "cc" => cc
+             }
+           }) do
       {:ok, activity}
     end
   end
@@ -319,7 +318,7 @@ defmodule Bonfire.Social.Posts do
          List.wrap(post_data["cc"]) ++
          List.wrap(post_data["audience"]))
       |> filter_empty([])
-      |> List.delete(Bonfire.Federate.ActivityPub.Utils.public_uri())
+      |> List.delete(Bonfire.Federate.ActivityPub.AdapterUtils.public_uri())
       |> Enum.map(fn ap_id -> Bonfire.Me.Users.by_ap_id!(ap_id) end)
       |> ulid()
       |> filter_empty([])
@@ -331,8 +330,8 @@ defmodule Bonfire.Social.Posts do
         do:
           reply_to
           |> info()
-          |> ActivityPub.Object.get_cached_by_ap_id()
-          ~> e(:pointer_id, nil)
+          |> ActivityPub.Object.get_cached!(ap_id: ...)
+          |> e(:pointer_id, nil)
 
     tags =
       (List.wrap(activity_data["tag"]) ++
@@ -342,7 +341,7 @@ defmodule Bonfire.Social.Posts do
     mentions =
       for %{"type" => "Mention", "href" => mention} <- tags do
         with {:ok, character} <-
-               Bonfire.Federate.ActivityPub.Utils.get_character_by_ap_id(mention) do
+               Bonfire.Federate.ActivityPub.AdapterUtils.get_character_by_ap_id(mention) do
           character
         else
           _ ->

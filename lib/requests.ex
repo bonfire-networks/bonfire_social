@@ -25,7 +25,7 @@ defmodule Bonfire.Social.Requests do
   # def federation_module, do: ["Accept", "Reject"]
 
   def requested?(subject, type, object),
-    do: not is_nil(get!(subject, type, object, skip_boundary_check: true))
+    do: exists?(subject, type, object, skip_boundary_check: true)
 
   @doc """
   Request someone/something, and federate it
@@ -64,6 +64,9 @@ defmodule Bonfire.Social.Requests do
     do: Edges.get!({__MODULE__, type}, subject, object, opts)
 
   def get(filters, opts \\ []), do: Edges.get(__MODULE__, filters, opts)
+
+  def exists?(subject, type, object, opts \\ []),
+    do: Edges.exists?({__MODULE__, type}, subject, object, opts)
 
   def requested(request, opts \\ [])
   def requested(%Request{id: _} = request, _opts), do: {:ok, request}
@@ -234,29 +237,49 @@ defmodule Bonfire.Social.Requests do
   end
 
   defp create(requester, type, object, opts) do
-    Edges.changeset({Request, type}, requester, :request, object, opts)
-    |> repo().insert_or_ignore()
+    Edges.insert({Request, type}, requester, :request, object, opts)
   end
 
   ###
 
-  # publish follow requests
+  def ap_publish_activity(subject, {:accept, request}, follow) do
+    request_id = ulid(request)
+
+    with false <- Integration.is_local?(e(follow.edge, :subject, nil)),
+         {:ok, object_actor} <-
+           ActivityPub.Actor.get_cached(
+             pointer: e(follow.edge, :object, nil) || follow.edge.object_id
+           ),
+         {:ok, subject_actor} <-
+           ActivityPub.Actor.get_cached(pointer: subject),
+         {:ok, follow_ap_object} <-
+           ActivityPub.Object.get_cached(pointer: request_id) |> info,
+         {:ok, _} <-
+           ActivityPub.accept(%{
+             actor: object_actor,
+             to: [subject_actor.data],
+             object: follow_ap_object.data,
+             local: true
+           }) do
+      :ok
+    else
+      true ->
+        info("the subject is local")
+        :ok
+
+      e ->
+        error(e, "Could not push the acceptation of request #{request_id}")
+    end
+  end
+
+  # publish follow request
   def ap_publish_activity(
         subject,
-        _verb,
+        verb,
         %{edge: %{table_id: "70110WTHE1EADER1EADER1EADE"}} = request
       ) do
     # info(request)
-    with {:ok, follower} <-
-           ActivityPub.Actor.get_cached_by_local_id(
-             subject || e(request.edge, :object, nil) || request.edge.subject_id
-           ),
-         {:ok, object} <-
-           ActivityPub.Actor.get_cached_by_local_id(
-             e(request.edge, :object, nil) || request.edge.object_id
-           ) do
-      ActivityPub.follow(follower, object, nil, true)
-    end
+    Bonfire.Social.Follows.ap_publish_activity(subject, verb, request)
   end
 
   def ap_publish_activity(_, _verb, request) do

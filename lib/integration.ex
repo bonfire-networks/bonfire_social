@@ -30,6 +30,7 @@ defmodule Bonfire.Social.Integration do
          federate_activity_pub:
            Utils.ok_unwrap(
              maybe_federate_activity(subject, object, verb_override, object_override)
+             |> info()
            )
        }
      })}
@@ -57,7 +58,6 @@ defmodule Bonfire.Social.Integration do
           object_override || outer_object,
           inner_object
         )
-        |> info
 
   def maybe_federate_activity(
         subject,
@@ -157,8 +157,8 @@ defmodule Bonfire.Social.Integration do
   end
 
   def is_local?(thing) do
-    if Bonfire.Common.Extend.module_enabled?(Bonfire.Federate.ActivityPub.Utils) do
-      Bonfire.Federate.ActivityPub.Utils.is_local?(thing)
+    if Bonfire.Common.Extend.module_enabled?(Bonfire.Federate.ActivityPub.AdapterUtils) do
+      Bonfire.Federate.ActivityPub.AdapterUtils.is_local?(thing)
     else
       # if activitypub is disabled, it must be?
       true

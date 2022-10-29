@@ -32,7 +32,7 @@ defmodule Bonfire.Social.Boosts do
     ]
 
   def boosted?(%{} = user, object),
-    do: not is_nil(get!(user, object, skip_boundary_check: true))
+    do: Edges.exists?(__MODULE__, user, object, skip_boundary_check: true)
 
   def get(subject, object, opts \\ []),
     do: Edges.get(__MODULE__, subject, object, opts)
@@ -76,16 +76,7 @@ defmodule Bonfire.Social.Boosts do
     ]
 
     with {:ok, boost} <- create(booster, boosted, opts) do
-      # Push to AP, which will need to see the subject and object
-      boost =
-        repo().preload(boost,
-          edge: [
-            subject: fn _ -> [booster] end,
-            object: fn _ -> [boosted] end
-          ]
-        )
-
-      # Also livepush, which will need a list of feed IDs we published to
+      # livepush will need a list of feed IDs we published to
       feed_ids = for fp <- boost.feed_publishes, do: fp.feed_id
 
       LivePush.push_activity_object(feed_ids, boost, boosted,
@@ -159,31 +150,28 @@ defmodule Bonfire.Social.Boosts do
   end
 
   defp create(booster, boosted, opts) do
-    Edges.changeset(Boost, booster, :boost, boosted, opts)
-    |> info
-    |> repo().insert()
-    |> info
+    Edges.insert(Boost, booster, :boost, boosted, opts)
   end
 
   def ap_publish_activity(subject, :delete, boost) do
     with {:ok, booster} <-
-           ActivityPub.Actor.get_cached_by_local_id(subject || boost.edge.subject_id),
+           ActivityPub.Actor.get_cached(pointer: subject || boost.edge.subject_id),
          object when not is_nil(object) <-
-           Bonfire.Federate.ActivityPub.Utils.get_object(
+           Bonfire.Federate.ActivityPub.AdapterUtils.get_object(
              e(boost.edge, :object, nil) || boost.edge.object_id
            ) do
-      ActivityPub.unannounce(booster, object)
+      ActivityPub.unannounce(%{actor: booster, object: object})
     end
   end
 
   def ap_publish_activity(subject, _verb, boost) do
     with {:ok, booster} <-
-           ActivityPub.Actor.get_cached_by_local_id(subject || boost.edge.subject_id),
+           ActivityPub.Actor.get_cached(pointer: subject || boost.edge.subject_id),
          object when not is_nil(object) <-
-           Bonfire.Federate.ActivityPub.Utils.get_object(
+           Bonfire.Federate.ActivityPub.AdapterUtils.get_object(
              e(boost.edge, :object, nil) || boost.edge.object_id
            ) do
-      ActivityPub.announce(booster, object)
+      ActivityPub.announce(%{actor: booster, object: object, pointer: ulid(boost)})
     end
   end
 
@@ -204,7 +192,7 @@ defmodule Bonfire.Social.Boosts do
         %{data: %{"object" => boosted_object}} = _object
       ) do
     with {:ok, object} <-
-           ActivityPub.Object.get_cached_by_ap_id(boosted_object),
+           ActivityPub.Object.get_cached(ap_id: boosted_object),
          {:ok, boosted} <-
            Bonfire.Common.Pointers.get(object.pointer_id, current_user: creator),
          [id] <- unboost(creator, boosted) do

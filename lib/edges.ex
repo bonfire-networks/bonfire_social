@@ -13,21 +13,30 @@ defmodule Bonfire.Social.Edges do
   alias Pointers.Changesets
   alias Pointers.ULID
 
-  def put_edge_assoc(changeset, subject, object),
-    do: put_edge_assoc(changeset, changeset.data.__struct__, subject, object)
+  def insert(schema, subject, verb, object, options) do
+    changeset(schema, subject, verb, object, options)
+    |> Changeset.unique_constraint([:subject_id, :object_id, :table_id])
+    |> repo().insert()
+    |> repo().maybe_preload(
+      edge: [
+        subject: fn _ -> [subject] end,
+        object: fn _ -> [object] end
+      ],
+      activity: [
+        subject: fn _ -> [subject] end,
+        object: fn _ -> [object] end
+      ]
+    )
 
-  def put_edge_assoc(changeset, schema, subject, object) do
-    %{
-      subject: subject,
-      subject_id: ulid(subject),
-      object: object,
-      object_id: ulid(object),
-      table_id: Bonfire.Common.Types.table_id(schema)
-    }
-    |> info()
-    # |> Changesets.put_assoc(changeset, :edge, ...)
-    |> Ecto.Changeset.cast(changeset, %{edge: ...}, [])
-    |> Ecto.Changeset.cast_assoc(:edge, with: &Edge.changeset/2)
+    # |> repo().maybe_preload(edge: [:subject, :object])
+  end
+
+  def changeset(schema, subject, verb, object, options) do
+    changeset_base(schema, subject, object, options)
+    |> Objects.cast_creator_caretaker(subject)
+    |> Acls.cast(subject, options)
+    |> Activities.put_assoc(verb, subject, object)
+    |> FeedActivities.put_feed_publishes(Keyword.get(options, :to_feeds, []))
   end
 
   def changeset_base(schema, subject, object, options) when is_atom(schema),
@@ -38,12 +47,21 @@ defmodule Bonfire.Social.Edges do
     |> put_edge_assoc(type_schema, subject, object)
   end
 
-  def changeset(schema, subject, verb, object, options) do
-    changeset_base(schema, subject, object, options)
-    |> Objects.cast_creator_caretaker(subject)
-    |> Acls.cast(subject, options)
-    |> Activities.put_assoc(verb, subject, object)
-    |> FeedActivities.put_feed_publishes(Keyword.get(options, :to_feeds, []))
+  def put_edge_assoc(changeset, subject, object),
+    do: put_edge_assoc(changeset, changeset.data.__struct__, subject, object)
+
+  def put_edge_assoc(changeset, schema, subject, object) do
+    %{
+      # subject: subject,
+      subject_id: ulid(subject),
+      # object: object,
+      object_id: ulid(object),
+      table_id: Bonfire.Common.Types.table_id(schema)
+    }
+    |> info()
+    # |> Changesets.put_assoc(changeset, :edge, ...)
+    |> Ecto.Changeset.cast(changeset, %{edge: ...}, [])
+    |> Ecto.Changeset.cast_assoc(:edge, with: &Edge.changeset/2)
   end
 
   def get(type, subject, object, opts \\ [])
@@ -73,13 +91,17 @@ defmodule Bonfire.Social.Edges do
     |> repo().one()
   end
 
+  def exists?(type, subject, object, opts) do
+    do_query(type, subject, object, opts)
+    |> info()
+    |> repo().exists?()
+  end
+
   # defp do_query(type, subject, object, opts \\ [])
 
   defp do_query(type_context, filters, opts)
        when is_list(filters) and is_list(opts) do
     type_context.query(filters, opts)
-
-    # |> debug()
   end
 
   defp do_query({type_context, type}, subject, object, opts) do
@@ -88,8 +110,6 @@ defmodule Bonfire.Social.Edges do
       type,
       Keyword.put_new(opts, :current_user, subject)
     )
-
-    # |> debug()
   end
 
   defp do_query(type_context, subject, object, opts) do
@@ -97,8 +117,6 @@ defmodule Bonfire.Social.Edges do
       [subject: subject, object: object],
       Keyword.put_new(opts, :current_user, subject)
     )
-
-    # |> debug()
   end
 
   def query(filters, opts) do

@@ -28,7 +28,7 @@ defmodule Bonfire.Social.Likes do
     do: ["Like", {"Create", "Like"}, {"Undo", "Like"}, {"Delete", "Like"}]
 
   def liked?(%{} = user, object),
-    do: not is_nil(get!(user, object, skip_boundary_check: true))
+    do: Edges.exists?(__MODULE__, user, object, skip_boundary_check: true)
 
   def get(subject, object, opts \\ []),
     do: Edges.get(__MODULE__, subject, object, opts)
@@ -152,20 +152,17 @@ defmodule Bonfire.Social.Likes do
   end
 
   defp create(liker, liked, opts) do
-    Edges.changeset(Like, liker, :like, liked, opts)
-    |> repo().insert()
-
-    # |> repo().maybe_preload(edge: [:object])
+    Edges.insert(Like, liker, :like, liked, opts)
   end
 
   def ap_publish_activity(subject, :delete, like) do
     with {:ok, liker} <-
-           ActivityPub.Actor.get_cached_by_local_id(subject || like.edge.subject_id),
+           ActivityPub.Actor.get_cached(pointer: subject || like.edge.subject_id),
          object when not is_nil(object) <-
-           Bonfire.Federate.ActivityPub.Utils.get_object(
+           Bonfire.Federate.ActivityPub.AdapterUtils.get_object(
              e(like.edge, :object, nil) || like.edge.object_id
            ) do
-      ActivityPub.unlike(liker, object)
+      ActivityPub.unlike(%{actor: liker, object: object})
     end
   end
 
@@ -173,12 +170,12 @@ defmodule Bonfire.Social.Likes do
     info(like)
 
     with {:ok, liker} <-
-           ActivityPub.Actor.get_cached_by_local_id(subject || like.edge.subject_id),
+           ActivityPub.Actor.get_cached(pointer: subject || like.edge.subject_id),
          object when not is_nil(object) <-
-           Bonfire.Federate.ActivityPub.Utils.get_object(
+           Bonfire.Federate.ActivityPub.AdapterUtils.get_object(
              e(like.edge, :object, nil) || like.edge.object_id
            ) do
-      ActivityPub.like(liker, object)
+      ActivityPub.like(%{actor: liker, object: object, pointer: ulid(like)})
     end
   end
 
@@ -199,7 +196,7 @@ defmodule Bonfire.Social.Likes do
         %{data: %{"object" => liked_object}} = _object
       ) do
     with {:ok, object} <-
-           ActivityPub.Object.get_cached_by_ap_id(liked_object),
+           ActivityPub.Object.get_cached(ap_id: liked_object),
          {:ok, liked} <-
            Bonfire.Common.Pointers.get(object.pointer_id, current_user: creator),
          [id] <- unlike(creator, liked) do

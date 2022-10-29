@@ -39,7 +39,7 @@ defmodule Bonfire.Social.Follows do
 
   # TODO: privacy
   def following?(subject, object),
-    do: not is_nil(get!(subject, object, skip_boundary_check: true))
+    do: Edges.exists?(__MODULE__, subject, object, skip_boundary_check: true)
 
   def requested?(subject, object),
     do: Requests.requested?(subject, Follow, object)
@@ -88,12 +88,118 @@ defmodule Bonfire.Social.Follows do
     end
   end
 
+  # Notes for future refactor:
+  # * Make it pay attention to options passed in
+  # * When we start allowing to follow things that aren't users, we might need to adjust the circles.
+  # * Figure out how to avoid the advance lookup and ensuing race condition.
+  defp do_follow(%user_struct{} = user, %object_struct{} = object, opts) do
+    to = [
+      # we include follows in feeds, since user has control over whether or not they want to see them in settings
+      outbox: [user],
+      notifications: [object]
+    ]
+
+    opts =
+      Keyword.merge(
+        [
+          # TODO: make configurable (currently public is required so follows can be listed by AP adapter)
+          boundary: "public",
+          # also allow the followed user to see it
+          to_circles: [ulid(object)],
+          # put it in our outbox and their notifications
+          to_feeds: to
+        ],
+        opts
+      )
+
+    case create(user, object, opts) do
+      {:ok, follow} ->
+        Cache.remove("my_followed:#{ulid(user)}")
+
+        # FIXME: should not compute feed ids twice
+        LivePush.push_activity_object(
+          FeedActivities.get_feed_ids(opts[:to_feeds]),
+          follow,
+          object,
+          push_to_thread: false,
+          notify: true
+        )
+
+        if user_struct == Bonfire.Data.Identity.User,
+          do:
+            Bonfire.Boundaries.Circles.add_to_circles(
+              object,
+              Bonfire.Boundaries.Circles.get_stereotype_circles(user, :followed)
+            )
+
+        if object_struct == Bonfire.Data.Identity.User,
+          do:
+            Bonfire.Boundaries.Circles.add_to_circles(
+              user,
+              Bonfire.Boundaries.Circles.get_stereotype_circles(
+                object,
+                :followers
+              )
+            )
+
+        if info(opts[:incoming] != true, "Maybe outgoing follow?"),
+          do: Integration.maybe_federate_and_gift_wrap_activity(user, follow),
+          else: {:ok, follow}
+
+      {:error, e} ->
+        error(e)
+        maybe_already_followed(user, object)
+    end
+  rescue
+    e in Ecto.ConstraintError ->
+      error(e)
+      maybe_already_followed(user, object)
+  end
+
+  defp check_follow(follower, object, opts) do
+    skip? = skip_boundary_check?(opts, object)
+    skip? = (:admins == skip? && Users.is_admin?(follower)) || skip? == true
+
+    opts =
+      opts
+      |> Keyword.put_new(:verbs, [:follow])
+      |> Keyword.put_new(:current_user, follower)
+
+    if skip? do
+      info("skip boundary check")
+      local_or_remote_object(object)
+    else
+      case ulid(object) do
+        id when is_binary(id) ->
+          case Bonfire.Boundaries.load_pointers(id, opts) do
+            object when is_struct(object) ->
+              local_or_remote_object(object)
+
+            _ ->
+              :not_permitted
+          end
+
+        _ ->
+          error(object, "no object ID, attempting with username")
+
+          case maybe_apply(Characters, :by_username, [object, opts]) do
+            object when is_struct(object) ->
+              local_or_remote_object(object)
+
+            _ ->
+              :not_permitted
+          end
+      end
+    end
+  end
+
   @doc """
   Accepts a follow request, publishes to feeds and federates.
   Parameters are the requester plus the subject as current_user
   """
   def accept_from(subject, opts) do
     Requests.get(subject, Follow, current_user_required!(opts), opts)
+    |> info()
     ~> accept(opts)
   end
 
@@ -102,17 +208,24 @@ defmodule Bonfire.Social.Follows do
   Parameter are a Request (or its ID) plus the subject as current_user
   """
   def accept(request, opts) do
+    info(opts)
+
     repo().transact_with(fn ->
       with {:ok, %{edge: %{object: object, subject: subject}} = request} <-
              Requests.accept(request, opts)
-             |> repo().maybe_preload(edge: [:subject, :object]),
+             |> repo().maybe_preload(edge: [:subject, :object])
+             |> info("accepted"),
            # remove the Edge so we can recreate one linked to the Follow, because of the unique key on subject/object/table_id
            _ <- Edges.delete_by_both(subject, Follow, object),
            # remove the Request Activity from notifications
            _ <-
              Activities.delete_by_subject_verb_object(subject, :request, object),
-           {:ok, follow} <- do_follow(subject, object, opts),
-           :ok <- maybe_federate_accept(subject, request |> info, follow) do
+           {:ok, follow} <- do_follow(subject, object, opts) |> info("accept_do_follow"),
+           :ok <-
+             if(info(opts[:incoming] != true, "Maybe outgoing accept?"),
+               do: Requests.ap_publish_activity(subject, {:accept, request}, follow),
+               else: :ok
+             ) do
         {:ok, follow}
       else
         e ->
@@ -121,31 +234,32 @@ defmodule Bonfire.Social.Follows do
     end)
   end
 
-  def maybe_federate_accept(subject, request, follow) do
-    with false <- Integration.is_local?(e(follow.edge, :subject, nil)),
-         {:ok, object_actor} <-
-           ActivityPub.Actor.get_cached_by_local_id(
-             e(follow.edge, :object, nil) || follow.edge.object_id
-           ),
-         {:ok, subject_actor} <-
-           ActivityPub.Actor.get_cached_by_local_id(subject),
-         %ActivityPub.Object{} = follow_ap_object <-
-           ActivityPub.Object.get_by_pointer_id(ulid(request)) |> info,
-         {:ok, _} <-
-           ActivityPub.accept(%{
-             actor: object_actor,
-             to: [subject_actor.data],
-             object: follow_ap_object.data,
-             local: true
-           }) do
-      :ok
-    else
-      true ->
-        info("the subject is local")
-        :ok
+  def unfollow(user, %{} = object) do
+    un = Edges.delete_by_both(user, Follow, object)
+    # with [_id] <- un do
+    # delete the like activity & feed entries
+    Activities.delete_by_subject_verb_object(user, :follow, object)
 
-      e ->
-        error(e, "Could not push the acceptation")
+    Cache.remove("my_followed:#{ulid(user)}")
+
+    Bonfire.Boundaries.Circles.get_stereotype_circles(user, :followed)
+    ~> Bonfire.Boundaries.Circles.remove_from_circles(object, ...)
+
+    Bonfire.Boundaries.Circles.get_stereotype_circles(object, :followers)
+    ~> Bonfire.Boundaries.Circles.remove_from_circles(user, ...)
+
+    # TODO!
+    # Integration.maybe_federate_and_gift_wrap_activity(user, follow)
+    # end
+  end
+
+  def unfollow(%{} = user, object) when is_binary(object) do
+    with {:ok, object} <-
+           Bonfire.Common.Pointers.get(object,
+             current_user: user,
+             skip_boundary_check: true
+           ) do
+      unfollow(user, object)
     end
   end
 
@@ -272,43 +386,6 @@ defmodule Bonfire.Social.Follows do
   #   |> Edges.put_assoc(subject, object, :follow, boundary)
   # end
 
-  defp check_follow(follower, object, opts) do
-    skip? = skip_boundary_check?(opts, object)
-    skip? = (:admins == skip? && Users.is_admin?(follower)) || skip? == true
-
-    opts =
-      opts
-      |> Keyword.put_new(:verbs, [:follow])
-      |> Keyword.put_new(:current_user, follower)
-
-    if skip? do
-      info("skip boundary check")
-      local_or_remote_object(object)
-    else
-      case ulid(object) do
-        id when is_binary(id) ->
-          case Bonfire.Boundaries.load_pointers(id, opts) do
-            object when is_struct(object) ->
-              local_or_remote_object(object)
-
-            _ ->
-              :not_permitted
-          end
-
-        _ ->
-          error(object, "no object ID, attempting with username")
-
-          case maybe_apply(Characters, :by_username, [object, opts]) do
-            object when is_struct(object) ->
-              local_or_remote_object(object)
-
-            _ ->
-              :not_permitted
-          end
-      end
-    end
-  end
-
   defp local_or_remote_object(id) when is_binary(id) do
     Bonfire.Common.Pointers.get(id, skip_boundary_check: true)
     ~> local_or_remote_object()
@@ -325,68 +402,6 @@ defmodule Bonfire.Social.Follows do
     end
   end
 
-  # Notes for future refactor:
-  # * Make it pay attention to options passed in
-  # * When we start allowing to follow things that aren't users, we might need to adjust the circles.
-  # * Figure out how to avoid the advance lookup and ensuing race condition.
-  defp do_follow(%user_struct{} = user, %object_struct{} = object, _opts) do
-    to = [
-      # we include follows in feeds, since user has control over whether or not they want to see them in settings
-      outbox: [user],
-      notifications: [object]
-    ]
-
-    opts = [
-      # TODO: make configurable (currently public is required so follows can be listed by AP adapter)
-      boundary: "public",
-      # also allow the followed user to see it
-      to_circles: [ulid(object)],
-      # put it in our outbox and their notifications
-      to_feeds: to
-    ]
-
-    case create(user, object, opts) do
-      {:ok, follow} ->
-        Cache.remove("my_followed:#{ulid(user)}")
-
-        # FIXME: should not compute feed ids twice
-        LivePush.push_activity_object(
-          FeedActivities.get_feed_ids(opts[:to_feeds]),
-          follow,
-          object,
-          push_to_thread: false,
-          notify: true
-        )
-
-        if user_struct == Bonfire.Data.Identity.User,
-          do:
-            Bonfire.Boundaries.Circles.add_to_circles(
-              object,
-              Bonfire.Boundaries.Circles.get_stereotype_circles(user, :followed)
-            )
-
-        if object_struct == Bonfire.Data.Identity.User,
-          do:
-            Bonfire.Boundaries.Circles.add_to_circles(
-              user,
-              Bonfire.Boundaries.Circles.get_stereotype_circles(
-                object,
-                :followers
-              )
-            )
-
-        Integration.maybe_federate_and_gift_wrap_activity(user, follow)
-
-      {:error, e} ->
-        error(e)
-        maybe_already_followed(user, object)
-    end
-  rescue
-    e in Ecto.ConstraintError ->
-      error(e)
-      maybe_already_followed(user, object)
-  end
-
   defp maybe_already_followed(user, object) do
     case get(user, object, skip_boundary_check: true) do
       {:ok, follow} ->
@@ -398,63 +413,43 @@ defmodule Bonfire.Social.Follows do
     end
   end
 
-  def unfollow(user, %{} = object) do
-    un = Edges.delete_by_both(user, Follow, object)
-    # with [_id] <- un do
-    # delete the like activity & feed entries
-    Activities.delete_by_subject_verb_object(user, :follow, object)
-
-    Cache.remove("my_followed:#{ulid(user)}")
-
-    Bonfire.Boundaries.Circles.get_stereotype_circles(user, :followed)
-    ~> Bonfire.Boundaries.Circles.remove_from_circles(object, ...)
-
-    Bonfire.Boundaries.Circles.get_stereotype_circles(object, :followers)
-    ~> Bonfire.Boundaries.Circles.remove_from_circles(user, ...)
-
-    # TODO!
-    # Integration.maybe_federate_and_gift_wrap_activity(user, follow)
-    # end
-  end
-
-  def unfollow(%{} = user, object) when is_binary(object) do
-    with {:ok, object} <-
-           Bonfire.Common.Pointers.get(object,
-             current_user: user,
-             skip_boundary_check: true
-           ) do
-      unfollow(user, object)
-    end
-  end
-
   defp create(%{} = follower, object, opts) do
-    Edges.changeset(Follow, follower, :follow, object, opts)
-    |> repo().insert()
+    Edges.insert(Follow, follower, :follow, object, opts)
   end
 
   ### ActivityPub integration
 
   def ap_publish_activity(subject, :delete, follow) do
     with {:ok, follower} <-
-           ActivityPub.Actor.get_cached_by_local_id(
-             subject || e(follow.edge, :subject, nil) || follow.edge.subject_id
+           ActivityPub.Actor.get_cached(
+             pointer: subject || e(follow.edge, :subject, nil) || follow.edge.subject_id
            ),
          {:ok, object} <-
-           ActivityPub.Actor.get_cached_by_local_id(
-             e(follow.edge, :object, nil) || follow.edge.object_id
+           ActivityPub.Actor.get_cached(
+             pointer: e(follow.edge, :object, nil) || follow.edge.object_id
            ) do
-      ActivityPub.unfollow(follower, object, nil, true)
+      ActivityPub.unfollow(%{actor: follower, object: object, local: true})
     end
   end
 
-  def ap_publish_activity(subject, _verb, follow) do
+  def ap_publish_activity(subject, verb, follow) do
+    info(verb)
+
     with {:ok, follower} <-
-           ActivityPub.Actor.get_cached_by_local_id(subject || follow.edge.subject_id),
+           ActivityPub.Actor.get_cached(
+             pointer: subject || e(follow.edge, :subject, nil) || follow.edge.subject_id
+           )
+           |> info("follower actor"),
          {:ok, object} <-
-           ActivityPub.Actor.get_cached_by_local_id(
-             e(follow.edge, :object, nil) || follow.edge.object_id
-           ) do
-      ActivityPub.follow(follower, object, nil, true)
+           ActivityPub.Actor.get_cached(
+             pointer: e(follow.edge, :object, nil) || follow.edge.object_id
+           )
+           |> info("followed actor") do
+      ActivityPub.follow(%{actor: follower, object: object, local: true, pointer: ulid(follow)})
+    else
+      e ->
+        error(e, "Could not federate")
+        raise "Could not federate the follow"
     end
   end
 
@@ -464,10 +459,10 @@ defmodule Bonfire.Social.Follows do
         %{pointer_id: _followed_id} = object
       )
       when is_binary(follower) or is_struct(follower) do
-    warn("Follows: recording an incoming follow...")
+    info(data, "Follows: recording an incoming follow...")
 
     with {:ok, followed} <-
-           Bonfire.Federate.ActivityPub.Utils.get_character_by_ap_id(object),
+           Bonfire.Federate.ActivityPub.AdapterUtils.get_character_by_ap_id(object),
          # check if not already following
          false <- following?(follower, followed),
          {:ok, %Follow{} = follow} <-
@@ -507,12 +502,17 @@ defmodule Bonfire.Social.Follows do
         %{data: %{"type" => "Accept"} = _data} = _activity,
         %{data: %{"actor" => follower}} = _object
       ) do
+    info("Accept incoming accept")
+
     with {:ok, follower} <-
-           Bonfire.Federate.ActivityPub.Utils.get_character_by_ap_id(follower),
+           Bonfire.Federate.ActivityPub.AdapterUtils.get_character_by_ap_id(follower) |> info(),
          {:ok, request} <-
-           Requests.get(follower, Follow, followed, skip_boundary_check: true),
-         {:ok, request} <- accept(request, current_user: followed) do
+           Requests.get(follower, Follow, followed, skip_boundary_check: true) |> info(),
+         {:ok, request} <- accept(request, current_user: followed, incoming: true) |> info() do
       {:ok, request}
+    else
+      e ->
+        error(e)
     end
   end
 
@@ -522,7 +522,7 @@ defmodule Bonfire.Social.Follows do
         %{data: %{"actor" => follower}} = _object
       ) do
     with {:ok, follower} <-
-           Bonfire.Federate.ActivityPub.Utils.get_character_by_ap_id(follower),
+           Bonfire.Federate.ActivityPub.AdapterUtils.get_character_by_ap_id(follower),
          {:ok, request} <-
            Requests.get(follower, Follow, followed, skip_boundary_check: true),
          {:ok, request} <- ignore(request, current_user: followed) do
@@ -536,7 +536,7 @@ defmodule Bonfire.Social.Follows do
         %{data: %{"object" => followed_ap_id}} = _object
       ) do
     with {:ok, object} <-
-           Bonfire.Federate.ActivityPub.Utils.get_character_by_ap_id(followed_ap_id),
+           Bonfire.Federate.ActivityPub.AdapterUtils.get_character_by_ap_id(followed_ap_id),
          [id] <- unfollow(follower, object) do
       {:ok, id}
     end

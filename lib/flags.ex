@@ -27,8 +27,8 @@ defmodule Bonfire.Social.Flags do
   def federation_module,
     do: ["Flag", {"Create", "Flag"}, {"Undo", "Flag"}, {"Delete", "Flag"}]
 
-  def flagged?(%User{} = user, object),
-    do: not is_nil(get!(user, object, skip_boundary_check: true))
+  def flagged?(%{} = user, object),
+    do: Edges.exists?(__MODULE__, user, object, skip_boundary_check: true)
 
   def get(subject, object, opts \\ []),
     do: Edges.get(__MODULE__, subject, object, opts)
@@ -160,22 +160,21 @@ defmodule Bonfire.Social.Flags do
   end
 
   defp create(flagger, flagged, opts) do
-    Edges.changeset(Flag, flagger, :flag, flagged, opts)
-    |> repo().insert()
+    Edges.insert(Flag, flagger, :flag, flagged, opts)
   end
 
   def ap_publish_activity(subject, _verb, %Flag{} = flag) do
     flag = repo().preload(flag, flagged: [])
 
     with {:ok, flagger} <-
-           ActivityPub.Actor.get_cached_by_local_id(subject || flag.flagger_id) do
+           ActivityPub.Actor.get_cached(pointer: subject || flag.flagger_id) do
       flagged = Common.Pointers.get(flag.context)
 
       # FIXME: only works for flagged posts and users
       params =
         case flagged do
           %User{id: id} when not is_nil(id) ->
-            {:ok, account} = ActivityPub.Actor.get_by_local_id(id)
+            {:ok, account} = ActivityPub.Actor.get_cached(pointer: id)
 
             %{
               statuses: nil,
@@ -190,7 +189,7 @@ defmodule Bonfire.Social.Flags do
 
             %{
               statuses: [
-                ActivityPub.Object.get_cached_by_pointer_id!(ulid(flagged))
+                ActivityPub.Object.get_cached!(pointer: ulid(flagged))
               ],
               account: account
             }

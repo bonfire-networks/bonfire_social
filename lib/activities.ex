@@ -56,6 +56,9 @@ defmodule Bonfire.Social.Activities do
     |> Changesets.put_assoc(changeset, :activity, ...)
     # |> Changeset.update_change(:activity, &put_data(&1, :subject, maybe_to_struct(subject, Pointers.Pointer)))
     |> Changeset.update_change(:activity, &put_data(&1, :verb, verb))
+
+    # |> Changeset.update_change(:activity, &put_data(&1, :subject, subject))
+    # |> Changeset.update_change(:activity, &put_data(&1, :object, object))
   end
 
   def build_assoc(thing, verb, subject),

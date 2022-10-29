@@ -28,7 +28,7 @@ defmodule Bonfire.Social.Seen do
   def schema_module, do: Seen
 
   def seen?(%{} = user, object),
-    do: not is_nil(get!(user, object, skip_boundary_check: true))
+    do: Edges.exists?(__MODULE__, user, object, skip_boundary_check: true)
 
   def get(subject, object, opts \\ []),
     do: Edges.get(__MODULE__, subject, object, opts)

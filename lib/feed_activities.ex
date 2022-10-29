@@ -112,17 +112,21 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   # so we can show flags to admins in notifications
-  def feed(:notifications = feed_name, opts),
-    do:
-      named_feed(
-        feed_name,
-        opts ++
-          [
-            skip_boundary_check: :admins,
-            skip_dedup: true,
-            preload: :notifications
-          ]
-      )
+  def feed(:notifications = feed_name, opts) do
+    opts =
+      opts ++
+        [
+          skip_boundary_check: :admins,
+          skip_dedup: true,
+          preload: :notifications
+        ]
+
+    named_feed(
+      feed_name,
+      opts
+    )
+    ~> feed(opts)
+  end
 
   def feed(:flags, opts) do
     Bonfire.Social.Flags.list_paginated([], opts)
@@ -137,6 +141,7 @@ defmodule Bonfire.Social.FeedActivities do
   # eg: :local
   def feed(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
     named_feed(feed_name, opts)
+    ~> feed(opts)
   end
 
   def feed(%Ecto.Query{} = custom_query, opts) do
@@ -161,7 +166,7 @@ defmodule Bonfire.Social.FeedActivities do
         # debug(ulid(current_user(opts)), "current_user")
         # debug(feed_name, "feed_name")
         debug(feed, "feed id(s)")
-        feed(feed, opts)
+        {:ok, feed}
 
       e ->
         error("FeedActivities.feed: no known feed #{inspect(feed_name)} - #{inspect(e)}")
@@ -181,6 +186,35 @@ defmodule Bonfire.Social.FeedActivities do
   #   |> query_extras(opts)
   #   |> repo().many_paginated(paginate)
   # end
+
+  def feed_with_object(feed_name, object, opts \\ []) do
+    feed(
+      feed_name,
+      Keyword.put(
+        opts,
+        :feed_filters,
+        Map.merge(
+          e(opts, :feed_filters, %{}),
+          %{object: object}
+        )
+      )
+    )
+  end
+
+  def feed_contains?(feed_name, object, opts \\ []) do
+    feed_query(
+      feed_name,
+      Keyword.put(
+        opts,
+        :feed_filters,
+        Map.merge(
+          e(opts, :feed_filters, %{}),
+          %{object: object}
+        )
+      )
+    )
+    |> repo().exists?()
+  end
 
   @doc """
   Return a page of Feed Activities (reverse chronological) + pagination metadata
@@ -378,6 +412,19 @@ defmodule Bonfire.Social.FeedActivities do
     case Bonfire.Common.Types.table_types(object_type) do
       table_ids when is_list(table_ids) and table_ids != [] ->
         where(query, [object: object], object.table_id in ^table_ids)
+
+      _ ->
+        query
+    end
+  end
+
+  defp maybe_filter(query, %{object: object}) do
+    case ulid(object) do
+      id when is_binary(id) ->
+        where(query, [activity: activity], activity.object_id == ^id)
+
+      ids when is_list(ids) and ids != [] ->
+        where(query, [activity: activity], activity.object_id in ^ids)
 
       _ ->
         query

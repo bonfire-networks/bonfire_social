@@ -281,7 +281,7 @@ defmodule Bonfire.Social.Messages do
   def ap_publish_activity(subject, _verb, message) do
     message = repo().preload(message, activity: [:tags])
 
-    {:ok, actor} = ActivityPub.Actor.get_cached_by_local_id(subject)
+    {:ok, actor} = ActivityPub.Actor.get_cached(pointer: subject)
 
     # debug(message.activity.tags)
 
@@ -292,8 +292,16 @@ defmodule Bonfire.Social.Messages do
       Enum.filter(message.activity.tags, fn tag ->
         tag.table_id in recipient_types
       end)
-      |> Enum.map(fn tag -> ActivityPub.Actor.get_by_local_id!(tag.id) end)
-      |> Enum.map(fn actor -> actor.ap_id end)
+      |> Enum.map(fn %{id: id} ->
+        with %{ap_id: ap_id} <- ActivityPub.Actor.get_cached!(pointer: id) do
+          ap_id
+        else
+          e ->
+            warn(e, "Actor not found for recipient #{id}")
+            nil
+        end
+      end)
+      |> filter_empty([])
 
     object = %{
       # "ChatMessage", # TODO: use ChatMessage with peers that support it?
@@ -307,10 +315,11 @@ defmodule Bonfire.Social.Messages do
       actor: actor,
       context: ActivityPub.Utils.generate_context_id(),
       object: object,
-      to: recipients
+      to: recipients,
+      pointer: ulid(message)
     }
 
-    ActivityPub.create(attrs, message.id)
+    ActivityPub.create(attrs)
   end
 
   def ap_receive_activity(creator, activity, object) do

@@ -21,7 +21,7 @@ defmodule Bonfire.Social.APActivities do
              e(object, :data, "actor", "id", nil) ||
              e(object, :data, "actor", nil),
          {:ok, character} <-
-           Bonfire.Federate.ActivityPub.Utils.get_character_by_ap_id(actor_id) do
+           Bonfire.Federate.ActivityPub.AdapterUtils.get_character_by_ap_id(actor_id) do
       create(character, activity, object)
     else
       other ->
