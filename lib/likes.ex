@@ -133,7 +133,7 @@ defmodule Bonfire.Social.Likes do
   end
 
   @doc "List the current user's likes"
-  def list_my(opts) when is_list(opts) do
+  def list_my(opts) do
     list_by(current_user_required!(opts), opts)
   end
 
