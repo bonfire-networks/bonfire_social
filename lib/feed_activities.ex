@@ -90,7 +90,8 @@ defmodule Bonfire.Social.FeedActivities do
       |> Keyword.put(:exclude_verbs, exclude_verbs)
       |> Keyword.put(:exclude_replies, exclude_replies)
 
-    home_feed_ids = home_feed_ids || Feeds.my_home_feed_ids(opts)
+    home_feed_ids =
+      if is_list(home_feed_ids), do: home_feed_ids, else: Feeds.my_home_feed_ids(opts)
 
     feed(home_feed_ids, opts)
   end
@@ -152,9 +153,12 @@ defmodule Bonfire.Social.FeedActivities do
     |> repo().many_paginated(opts)
   end
 
+  def feed({feed_name, %{} = filters}, opts) do
+    feed(feed_name, [feed_filters: filters] ++ to_options(opts))
+  end
+
   def feed(other, _) do
-    error(other, "FeedActivities.feed: not a recognised feed query param")
-    nil
+    error(other, "Not a recognised feed to query")
   end
 
   defp named_feed(feed_name, opts)
@@ -293,8 +297,7 @@ defmodule Bonfire.Social.FeedActivities do
       true ->
         generic_feed_query(feed_ids, opts)
     end
-
-    # |> debug()
+    |> debug()
   end
 
   defp generic_feed_query(feed_ids, opts) do
@@ -357,6 +360,7 @@ defmodule Bonfire.Social.FeedActivities do
   # add assocs needed in timelines/feeds
   @doc false
   def query_extras(query, opts) do
+    opts = to_options(opts)
     # debug(opts)
     # eg. private messages should never appear in feeds
     exclude_object_types = [Message] ++ e(opts, :exclude_object_types, [])
@@ -374,6 +378,7 @@ defmodule Bonfire.Social.FeedActivities do
       |> List.wrap()
 
     # exclude_feed_ids = e(opts, :exclude_feed_ids, []) |> List.wrap() # WIP - to exclude activities that also appear in another feed
+    filters = filters_from_opts(opts)
 
     query
     |> proload([:activity])
@@ -385,9 +390,7 @@ defmodule Bonfire.Social.FeedActivities do
       as: :object,
       on: object.id == activity.object_id
     )
-    |> maybe_filter(
-      Enum.into(e(opts, :feed_filters, nil) || e(opts, :assigns, :feed_filters, %{}), %{})
-    )
+    |> maybe_filter(filters)
     # where: fp.feed_id not in ^exclude_feed_ids,
     # Don't show messages or anything deleted
     |> where(
@@ -403,12 +406,13 @@ defmodule Bonfire.Social.FeedActivities do
     # |> Activities.activity_preloads(e(opts, :preload, :with_object), opts) # if we want to preload the rest later to allow for caching
     # preload all things we commonly want in feeds
     |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
-    |> maybe_exclude_replies(opts)
+    |> maybe_exclude_replies(filters, opts)
+    |> maybe_only_replies(filters, opts)
     # |> debug("feed_paginated post-preloads")
     |> Activities.as_permitted_for(opts)
   end
 
-  defp maybe_filter(query, %{object_type: object_type}) do
+  defp maybe_filter(query, %{object_type: object_type}) when not is_nil(object_type) do
     case Bonfire.Common.Types.table_types(object_type) do
       table_ids when is_list(table_ids) and table_ids != [] ->
         where(query, [object: object], object.table_id in ^table_ids)
@@ -432,12 +436,16 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   defp maybe_filter(query, filters) do
-    debug(filters, "no known extra filters defined")
-    query
+    if Map.keys(filters) |> List.first() |> is_atom() do
+      warn(filters, "no known extra filters defined")
+      query
+    else
+      maybe_filter(query, input_to_atoms(filters))
+    end
   end
 
-  defp maybe_exclude_replies(query, opts) do
-    if e(opts, :exclude_replies, nil) do
+  defp maybe_exclude_replies(query, filters, opts) do
+    if e(opts, :exclude_replies, nil) == true or e(filters, :object_type, nil) == "posts" do
       query
       |> proload(activity: [object: {"object_", [:replied]}])
       |> where(
@@ -449,6 +457,32 @@ defmodule Bonfire.Social.FeedActivities do
     else
       query
     end
+  end
+
+  defp maybe_only_replies(query, filters, opts) do
+    debug(filters)
+
+    if e(opts, :only_replies, nil) == true or e(filters, :object_type, nil) == "discussions" do
+      query
+      |> proload(activity: [object: {"object_", [:replied]}])
+      |> where(
+        [object_replied: replied],
+        not is_nil(replied.reply_to_id)
+      )
+
+      # |> debug("exclude_replies")
+    else
+      query
+    end
+  end
+
+  def filters_from_opts(opts) do
+    input_to_atoms(
+      Enum.into(
+        e(opts, :feed_filters, nil) || e(opts, :__context__, :current_params, nil) || %{},
+        %{}
+      )
+    )
   end
 
   # def feed(%{feed_publishes: _} = feed_for, _) do

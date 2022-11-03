@@ -236,6 +236,7 @@ defmodule Bonfire.Social.Feeds do
     do: maybe_from_opts(preset_and_custom_boundary, :to_feeds, [])
 
   def named_feed_id(name, opts \\ [])
+  def named_feed_id(:fediverse, _), do: named_feed_id(:activity_pub)
   def named_feed_id(name, _) when is_atom(name), do: Bonfire.Boundaries.Circles.get_id(name)
 
   def named_feed_id(name, _) when is_binary(name) do
@@ -367,6 +368,7 @@ defmodule Bonfire.Social.Feeds do
   @typedoc "Names a predefined feed attached to a user"
   @type feed_name :: :inbox | :outbox | :notifications
 
+  defp feed_key(:my), do: :inbox_id
   defp feed_key(:inbox), do: :inbox_id
   defp feed_key(:outbox), do: :outbox_id
   defp feed_key(:notifications), do: :notifications_id

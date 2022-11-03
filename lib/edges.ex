@@ -154,8 +154,30 @@ defmodule Bonfire.Social.Edges do
     |> maybe_proload(:subject)
   end
 
-  defp filter(query, filters, opts) when is_list(filters) do
-    # debug(filters, "filters")
+  def filters_from_opts(%{assigns: assigns}) do
+    input_to_atoms(
+      e(assigns, :feed_filters, nil) || e(assigns, :__context__, :current_params, nil) || %{}
+    )
+  end
+
+  def filters_from_opts(%{__context__: _} = assigns) do
+    filters_from_opts(%{assigns: assigns})
+  end
+
+  def filters_from_opts(opts) when is_list(opts) do
+    Map.new(opts)
+    |> filters_from_opts()
+  end
+
+  def filters_from_opts(opts) do
+    Map.new(opts)
+  end
+
+  defp filter(query, filters, opts) when is_list(filters) or is_map(filters) do
+    filters =
+      Keyword.new(filters)
+      |> debug("filters")
+
     Enum.reduce(filters, query, &filter(&2, &1, opts))
     |> query_filter(
       Keyword.drop(filters, [
@@ -167,8 +189,7 @@ defmodule Bonfire.Social.Edges do
         :current_account
       ])
     )
-
-    # |> info()
+    |> debug()
   end
 
   defp filter(query, {:subject, subject}, opts) do
