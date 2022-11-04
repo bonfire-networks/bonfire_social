@@ -12,30 +12,35 @@ defmodule Bonfire.Social.APActivities do
   use Bonfire.Common.Utils
   import Bonfire.Common.Config, only: [repo: 0]
 
-  def create(nil, activity, object) when is_map(activity) or is_map(object) do
-    with actor_id when is_binary(actor_id) <-
-           e(activity, :data, "actor", "id", nil) ||
-             e(activity, :data, "actor", nil) ||
-             e(object, :data, "attributedTo", "id", nil) ||
-             e(object, :data, "attributedTo", nil) ||
-             e(object, :data, "actor", "id", nil) ||
-             e(object, :data, "actor", nil),
-         {:ok, character} <-
-           Bonfire.Federate.ActivityPub.AdapterUtils.get_character_by_ap_id(actor_id) do
-      create(character, activity, object)
-    else
-      other ->
-        error(
-          other,
-          "AP - cannot create a fallback activity with no valid character"
-        )
-    end
-  end
-
   def create(character, %{data: %{} = activity}, object), do: create(character, activity, object)
   def create(character, activity, %{data: %{} = object}), do: create(character, activity, object)
 
-  def create(character, activity, object) do
+  def create(character, activity, object) when is_map(activity) or is_map(object) do
+    if ulid(character) do
+      do_create(character, activity, object)
+    else
+      with actor_id when is_binary(actor_id) <-
+             e(activity, :data, "actor", "id", nil) ||
+               e(activity, :data, "actor", nil) ||
+               e(object, :data, "attributedTo", "id", nil) ||
+               e(object, :data, "attributedTo", nil) ||
+               e(object, :data, "actor", "id", nil) ||
+               e(object, :data, "actor", nil),
+           {:ok, character} <-
+             Bonfire.Federate.ActivityPub.AdapterUtils.get_character_by_ap_id(actor_id),
+           cid when is_binary(cid) <- ulid(character) do
+        do_create(character, activity, object)
+      else
+        other ->
+          error(
+            other,
+            "AP - cannot create a fallback activity with no valid character"
+          )
+      end
+    end
+  end
+
+  defp do_create(character, activity, object) do
     json =
       if is_map(object) do
         Enum.into(%{"object" => the_object(object)}, activity || %{})
