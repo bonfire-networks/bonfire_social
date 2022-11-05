@@ -156,9 +156,9 @@ defmodule Bonfire.Social.Boosts do
   def ap_publish_activity(subject, :delete, boost) do
     with {:ok, booster} <-
            ActivityPub.Actor.get_cached(pointer: subject || boost.edge.subject_id),
-         object when not is_nil(object) <-
-           Bonfire.Federate.ActivityPub.AdapterUtils.get_object(
-             e(boost.edge, :object, nil) || boost.edge.object_id
+         {:ok, object} <-
+           ActivityPub.Object.get_cached(
+             pointer: e(boost.edge, :object, nil) || boost.edge.object_id
            ) do
       ActivityPub.unannounce(%{actor: booster, object: object})
     end
@@ -167,9 +167,9 @@ defmodule Bonfire.Social.Boosts do
   def ap_publish_activity(subject, _verb, boost) do
     with {:ok, booster} <-
            ActivityPub.Actor.get_cached(pointer: subject || boost.edge.subject_id),
-         object when not is_nil(object) <-
-           Bonfire.Federate.ActivityPub.AdapterUtils.get_object(
-             e(boost.edge, :object, nil) || boost.edge.object_id
+         {:ok, object} <-
+           ActivityPub.Object.get_cached(
+             pointer: e(boost.edge, :object, nil) || boost.edge.object_id
            ) do
       ActivityPub.announce(%{actor: booster, object: object, pointer: ulid(boost)})
     end

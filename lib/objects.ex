@@ -110,7 +110,7 @@ defmodule Bonfire.Social.Objects do
   defp cast_creator(changeset, _creator, nil), do: changeset
 
   defp cast_creator(changeset, _creator, creator_id) do
-    Changesets.maybe_put_assoc(changeset, :created, %{creator_id: creator_id})
+    Changesets.put_assoc(changeset, :created, %{creator_id: creator_id})
   end
 
   def cast_caretaker(changeset, caretaker),
@@ -119,7 +119,7 @@ defmodule Bonfire.Social.Objects do
   defp cast_caretaker(changeset, _caretaker, nil), do: changeset
 
   defp cast_caretaker(changeset, _caretaker, caretaker_id) do
-    Changesets.maybe_put_assoc(changeset, :caretaker, %{caretaker_id: caretaker_id})
+    Changesets.put_assoc(changeset, :caretaker, %{caretaker_id: caretaker_id})
   end
 
   def cast_creator_caretaker(changeset, user) do
@@ -322,63 +322,64 @@ defmodule Bonfire.Social.Objects do
     {:error, error}
   end
 
-  # def publish(creator, verb, thing, attrs \\ nil, for_module \\ __MODULE__)
+  # used in Classify, Geolocate, etc
+  def publish(creator, verb, thing, attrs \\ nil, for_module \\ __MODULE__)
 
-  # def publish(
-  #       %{id: creator_id} = creator,
-  #       verb,
-  #       %{id: thing_id} = thing,
-  #       attrs,
-  #       for_module
-  #     ) do
-  #   # this sets permissions & returns recipients in opts to be used for publishing
-  #   opts = set_boundaries(creator, thing, attrs, for_module)
+  def publish(
+        %{id: _} = creator,
+        verb,
+        %{id: _} = thing,
+        attrs,
+        for_module
+      ) do
+    # this sets permissions & returns recipients in opts to be used for publishing
+    opts = set_boundaries(creator, thing, attrs, for_module)
 
-  #   # add to activity feed + maybe federate
-  #   Bonfire.Social.FeedActivities.publish(creator, verb, thing, opts)
-  # end
+    # add to activity feed + maybe federate
+    Bonfire.Social.FeedActivities.publish(creator, verb, thing, opts)
+  end
 
-  # def publish(_creator, verb, %{id: thing_id} = thing, attrs, for_module) do
-  #   debug("No creator for object so we can't publish it")
+  def publish(_creator, verb, %{id: _} = thing, attrs, for_module) do
+    debug("No creator for object so we can't publish it")
 
-  #   # make visible anyway
-  #   set_boundaries(
-  #     e(thing, :creator, e(thing, :provider, nil)),
-  #     thing,
-  #     attrs,
-  #     for_module
-  #   )
+    # make visible anyway
+    set_boundaries(
+      e(thing, :creator, e(thing, :provider, nil)),
+      thing,
+      attrs,
+      for_module
+    )
 
-  #   {:ok, nil}
-  # end
+    {:ok, nil}
+  end
 
-  # def set_boundaries(creator, thing, attrs \\ nil, for_module \\ __MODULE__) do
-  #   # TODO: make default audience configurable & per object audience selectable by user in API and UI (note: also in `Federation.ap_prepare_activity`)
-  #   preset_boundary =
-  #     e(attrs, :to_boundaries, nil) ||
-  #       Bonfire.Common.Config.get_ext(for_module, :preset_boundary, "public")
+  def set_boundaries(creator, thing, attrs \\ nil, for_module \\ __MODULE__) do
+    # TODO: make default audience configurable & per object audience selectable by user in API and UI (note: also in `Federation.ap_prepare_activity`)
+    preset_boundary =
+      e(attrs, :to_boundaries, nil) ||
+        Bonfire.Common.Config.get_ext(for_module, :preset_boundary, "public")
 
-  #   to_circles = Bonfire.Common.Config.get_ext(for_module, :publish_to_default_circles, [])
+    to_circles = Bonfire.Common.Config.get_ext(for_module, :publish_to_default_circles, [])
 
-  #   to_feeds =
-  #     Bonfire.Social.Feeds.feed_ids(:notifications, [
-  #       e(thing, :context_id, nil)
-  #     ])
+    to_feeds =
+      Bonfire.Social.Feeds.feed_ids(:notifications, [
+        e(thing, :context_id, nil)
+      ])
 
-  #   opts = [
-  #     boundary: preset_boundary,
-  #     to_circles: to_circles,
-  #     to_feeds: to_feeds
-  #   ]
+    opts = [
+      boundary: preset_boundary,
+      to_circles: to_circles,
+      to_feeds: to_feeds
+    ]
 
-  #   debug(
-  #     opts,
-  #     "boundaries to set & recipients to include (should include scope, provider, and receiver if any)"
-  #   )
+    debug(
+      opts,
+      "boundaries to set & recipients to include (should include scope, provider, and receiver if any)"
+    )
 
-  #   if module_enabled?(Bonfire.Boundaries),
-  #     do: Bonfire.Boundaries.set_boundaries(creator, thing, opts)
+    if module_enabled?(Bonfire.Boundaries),
+      do: Bonfire.Boundaries.set_boundaries(creator, thing, opts)
 
-  #   opts
-  # end
+    opts
+  end
 end

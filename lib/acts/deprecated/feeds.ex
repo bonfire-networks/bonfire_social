@@ -46,7 +46,7 @@ defmodule Bonfire.Social.Acts.Feeds do
 
             pubs = Enum.map(feed_ids, &%{feed_id: &1})
 
-            Changesets.put_assoc(changeset, :feed_publishes, pubs)
+            Changesets.put_assoc!(changeset, :feed_publishes, pubs)
             |> Epic.assign(epic, on, ...)
 
           %Changeset{valid?: false} = changeset ->

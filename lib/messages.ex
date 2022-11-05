@@ -313,7 +313,7 @@ defmodule Bonfire.Social.Messages do
 
     attrs = %{
       actor: actor,
-      context: ActivityPub.Utils.generate_context_id(),
+      # context: nil, # TODO: thread ID
       object: object,
       to: recipients,
       pointer: ulid(message)

@@ -32,7 +32,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   def cast(changeset, feed_ids) do
     Enum.map(feed_ids, &%{feed_id: &1})
-    |> Changesets.put_assoc(changeset, :feed_publishes, ...)
+    |> Changesets.put_assoc!(changeset, :feed_publishes, ...)
   end
 
   @doc """
@@ -279,30 +279,30 @@ defmodule Bonfire.Social.FeedActivities do
 
     cond do
       local_feed_id == feed_ids ->
-        base_query(opts)
-        |> query_extras(opts)
+        query_extras(opts)
         |> where(
           [fp, object_peered: object_peered],
           fp.feed_id in ^ulids(feed_ids) or is_nil(object_peered.id)
         )
 
       federated_feed_id == feed_ids ->
-        base_query(opts)
-        |> query_extras(opts)
+        query_extras(opts)
         |> where(
           [fp, object_peered: object_peered],
           fp.feed_id in ^ulids(feed_ids) or not is_nil(object_peered.id)
         )
 
-      true ->
+      is_list(feed_ids) or (is_binary(feed_ids) and feed_ids != []) ->
         generic_feed_query(feed_ids, opts)
+
+      true ->
+        query_extras(opts)
     end
     |> debug()
   end
 
   defp generic_feed_query(feed_ids, opts) do
-    base_query(opts)
-    |> query_extras(opts)
+    query_extras(opts)
     |> where([fp], fp.feed_id in ^ulids(feed_ids))
   end
 
@@ -359,7 +359,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   # add assocs needed in timelines/feeds
   @doc false
-  def query_extras(query, opts) do
+  def query_extras(query \\ nil, opts) do
     opts = to_options(opts)
     # debug(opts)
     # eg. private messages should never appear in feeds
@@ -380,7 +380,11 @@ defmodule Bonfire.Social.FeedActivities do
     # exclude_feed_ids = e(opts, :exclude_feed_ids, []) |> List.wrap() # WIP - to exclude activities that also appear in another feed
     filters = filters_from_opts(opts)
 
-    query
+    (query ||
+       case filters do
+         %Ecto.Query{} -> filters |> proload([:activity])
+         _ -> base_query(opts)
+       end)
     |> proload([:activity])
     |> reusable_join(:inner, [activity: activity], activity_pointer in Pointer,
       as: :activity_pointer,
@@ -478,10 +482,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   def filters_from_opts(opts) do
     input_to_atoms(
-      Enum.into(
-        e(opts, :feed_filters, nil) || e(opts, :__context__, :current_params, nil) || %{},
-        %{}
-      )
+      e(opts, :feed_filters, nil) || e(opts, :__context__, :current_params, nil) || %{}
     )
   end
 
@@ -545,7 +546,7 @@ defmodule Bonfire.Social.FeedActivities do
   def put_feed_publishes(changeset, options) do
     get_feed_publishes(options)
     |> info()
-    |> Changesets.put_assoc(changeset, :feed_publishes, ...)
+    |> Changesets.put_assoc!(changeset, :feed_publishes, ...)
   end
 
   @doc """
@@ -715,8 +716,6 @@ defmodule Bonfire.Social.FeedActivities do
       opts
     )
 
-    {:ok, activity}
-
     # TODO: notify remote users via AP
   end
 
@@ -768,7 +767,7 @@ defmodule Bonfire.Social.FeedActivities do
     with {:ok, activity} <- create_activity(subject, verb, object, e(opts, :activity_json, nil)) do
       # publish in specified feed
       # meh
-      with {:ok, _published} <-
+      with {:ok, published} <-
              put_in_feeds_and_maybe_federate(
                feed_id,
                subject,
@@ -778,13 +777,13 @@ defmodule Bonfire.Social.FeedActivities do
                opts
              ) do
         # debug(published, "create_and_put_in_feeds")
-        {:ok, activity}
+        {:ok, published}
       else
         publishes when is_list(publishes) and length(publishes) > 0 ->
           {:ok, activity}
 
-        _ ->
-          warn("did not create_and_put_in_feeds: #{inspect(feed_id)}")
+        e ->
+          warn(e, "did not put_in_feeds or federate: #{inspect(feed_id)}")
           {:ok, activity}
       end
     end
@@ -802,24 +801,21 @@ defmodule Bonfire.Social.FeedActivities do
   defp create_and_put_in_feeds(subject, verb, object, _, opts)
        when is_map(object) do
     # fallback for activities with no target feed, still create the activity and push it to AP
-    ret = Activities.create(subject, verb, object, e(opts, :activity_id, nil))
+    {:ok, activity} = Activities.create(subject, verb, object, e(opts, :activity_id, nil))
 
     try do
       # FIXME only run if ActivityPub is a target circle/feed?
-      {:ok, activity} = ret
-      do_maybe_federate_activity(verb, object, activity, opts)
-
-      ret
+      do_maybe_federate_activity(subject, verb, object, activity, opts)
     rescue
       e ->
         error(__STACKTRACE__, inspect(e))
-        ret
+        {:ok, activity}
     end
   end
 
   defp put_in_feeds_and_maybe_federate(
          feeds,
-         _subject,
+         subject,
          verb,
          object,
          activity,
@@ -833,12 +829,11 @@ defmodule Bonfire.Social.FeedActivities do
     try do
       # FIXME only run if ActivityPub is a target circle/feed?
       # TODO: only run for non-local activity
-      do_maybe_federate_activity(verb, object, activity, opts)
-      ret
+      do_maybe_federate_activity(subject, verb, object, activity, opts)
     rescue
       e ->
         error(__STACKTRACE__, inspect(e))
-        ret
+        {:ok, activity}
     end
   end
 
@@ -904,11 +899,11 @@ defmodule Bonfire.Social.FeedActivities do
     |> elem(0)
   end
 
-  defp do_maybe_federate_activity(verb, object, activity, opts) do
+  defp do_maybe_federate_activity(subject, verb, object, activity, opts) do
     if e(opts, :boundary, nil) != "federated",
       do:
-        Bonfire.Social.Integration.maybe_federate_activity(
-          activity.subject || activity.subject_id,
+        Bonfire.Social.Integration.maybe_federate_and_gift_wrap_activity(
+          subject || e(activity, :subject, nil) || e(activity, :subject_id, nil),
           activity,
           verb,
           object

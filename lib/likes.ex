@@ -166,9 +166,9 @@ defmodule Bonfire.Social.Likes do
   def ap_publish_activity(subject, :delete, like) do
     with {:ok, liker} <-
            ActivityPub.Actor.get_cached(pointer: subject || like.edge.subject_id),
-         object when not is_nil(object) <-
-           Bonfire.Federate.ActivityPub.AdapterUtils.get_object(
-             e(like.edge, :object, nil) || like.edge.object_id
+         {:ok, object} <-
+           ActivityPub.Object.get_cached(
+             pointer: e(like.edge, :object, nil) || like.edge.object_id
            ) do
       ActivityPub.unlike(%{actor: liker, object: object})
     end
@@ -179,9 +179,9 @@ defmodule Bonfire.Social.Likes do
 
     with {:ok, liker} <-
            ActivityPub.Actor.get_cached(pointer: subject || like.edge.subject_id),
-         object when not is_nil(object) <-
-           Bonfire.Federate.ActivityPub.AdapterUtils.get_object(
-             e(like.edge, :object, nil) || like.edge.object_id
+         {:ok, object} <-
+           ActivityPub.Object.get_cached(
+             pointer: e(like.edge, :object, nil) || like.edge.object_id
            ) do
       ActivityPub.like(%{actor: liker, object: object, pointer: ulid(like)})
     end

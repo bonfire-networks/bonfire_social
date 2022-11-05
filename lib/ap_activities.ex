@@ -15,6 +15,10 @@ defmodule Bonfire.Social.APActivities do
   def create(character, %{data: %{} = activity}, object), do: create(character, activity, object)
   def create(character, activity, %{data: %{} = object}), do: create(character, activity, object)
 
+  # def create(character, %{verb: verb} = activity, object) when verb in ["update", "Update", :update, :edit, "edit"] is_map(activity) or is_map(object) do
+  #   # TODO: store version history
+  # end
+
   def create(character, activity, object) when is_map(activity) or is_map(object) do
     if ulid(character) do
       do_create(character, activity, object)

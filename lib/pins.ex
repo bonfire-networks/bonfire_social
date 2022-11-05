@@ -235,8 +235,8 @@ defmodule Bonfire.Social.Pins do
   # def ap_publish_activity(subject, :delete, pin) do
   #   with {:ok, pinner} <-
   #          ActivityPub.Actor.get_cached(pointer: subject || pin.edge.subject_id),
-  #        object when not is_nil(object) <-
-  #          Bonfire.Federate.ActivityPub.AdapterUtils.get_object(e(pin.edge, :object, nil)) do
+  #        {:ok, object} <-
+  #  ActivityPub.Object.get_cached(pointer: e(pin.edge, :object, nil)) do
   #     ActivityPub.unlike(%{actor: pinner, object: object})
   #   end
   # end
@@ -246,10 +246,8 @@ defmodule Bonfire.Social.Pins do
 
     with {:ok, pinner} <-
            ActivityPub.Actor.get_cached(pointer: subject || pin.edge.subject_id),
-         object when not is_nil(object) <-
-           Bonfire.Federate.ActivityPub.AdapterUtils.get_object(
-             e(pin.edge, :object, nil) || pin.edge.object_id
-           ) do
+         {:ok, object} <-
+           ActivityPub.Object.get_cached(pointer: e(pin.edge, :object, nil) || pin.edge.object_id) do
       ActivityPub.like(%{actor: pinner, object: object, pointer: ulid(pin)})
     end
   end

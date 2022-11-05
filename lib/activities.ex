@@ -53,7 +53,7 @@ defmodule Bonfire.Social.Activities do
     verb_id = verb.id
 
     %{subject_id: ulid(subject), object_id: ulid(object), verb_id: verb_id}
-    |> Changesets.put_assoc(changeset, :activity, ...)
+    |> Changesets.put_assoc!(changeset, :activity, ...)
     # |> Changeset.update_change(:activity, &put_data(&1, :subject, maybe_to_struct(subject, Pointers.Pointer)))
     |> Changeset.update_change(:activity, &put_data(&1, :verb, verb))
 

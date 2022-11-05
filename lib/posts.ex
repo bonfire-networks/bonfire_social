@@ -202,7 +202,8 @@ defmodule Bonfire.Social.Posts do
 
   # TODO: federated delete, in addition to create:
   def ap_publish_activity(subject, _verb, post) do
-    with post <-
+    with id <- ulid!(post),
+         post <-
            post
            |> repo().maybe_preload([
              :replied,
@@ -247,6 +248,17 @@ defmodule Bonfire.Social.Posts do
            |> Enum.map(fn actor -> actor.ap_id end)
            |> debug("direct_recipients"),
          cc <- List.wrap(actor.data["followers"]),
+         context <-
+           (if e(post, :replied, :thread_id, nil) && post.replied.thread_id != id do
+              with {:ok, ap_object} <-
+                     ActivityPub.Object.get_cached(pointer: post.replied.thread_id) do
+                ap_object.data["id"]
+              else
+                e ->
+                  error(e, "Could not fetch the context (eg. thread)")
+                  nil
+              end
+            end),
          object <-
            %{
              "type" => "Note",
@@ -257,29 +269,29 @@ defmodule Bonfire.Social.Posts do
              "name" => e(post, :post_content, :name, nil),
              "summary" => e(post, :post_content, :summary, nil),
              "content" => e(post, :post_content, :html_body, nil),
-             "attachment" => Bonfire.Files.ap_publish_activity(e(post, :media, nil))
+             "attachment" => Bonfire.Files.ap_publish_activity(e(post, :media, nil)),
+             # TODO support replies and context for all object types, not just posts
+             "inReplyTo" =>
+               if e(post, :replied, :reply_to_id, nil) && post.replied.reply_to_id != id do
+                 with {:ok, ap_object} <-
+                        ActivityPub.Object.get_cached(pointer: post.replied.reply_to_id) do
+                   ap_object.data["id"]
+                 else
+                   e ->
+                     error(e, "Could not fetch what is being replied to")
+                     nil
+                 end
+               end,
+             "context" => context
            }
            |> Enum.filter(fn {_, v} -> not is_nil(v) end)
            |> Enum.into(%{}),
-         object <-
-           (if e(post, :replied, :reply_to_id, nil) do
-              with {:ok, ap_object} <-
-                     ActivityPub.Object.get_cached(pointer: post.replied.reply_to_id) do
-                Map.put(object, "inReplyTo", ap_object.data["id"])
-              else
-                e ->
-                  error(e, "Could not fetch what is being replied to")
-                  object
-              end
-            else
-              object
-            end),
          {:ok, activity} <-
            ActivityPub.create(%{
-             pointer: ulid(post),
+             pointer: id,
              local: true,
              actor: actor,
-             context: ActivityPub.Utils.generate_context_id(),
+             context: context,
              object: object,
              to: to ++ direct_recipients,
              additional: %{

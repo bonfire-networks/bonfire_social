@@ -177,7 +177,7 @@ defmodule Bonfire.Social.Flags do
             {:ok, account} = ActivityPub.Actor.get_cached(pointer: id)
 
             %{
-              statuses: nil,
+              statuses: [],
               account: account
             }
 
@@ -198,7 +198,6 @@ defmodule Bonfire.Social.Flags do
       ActivityPub.flag(
         %{
           actor: flagger,
-          context: ActivityPub.Utils.generate_context_id(),
           statuses: params.statuses,
           account: params.account,
           content: flag.message,
