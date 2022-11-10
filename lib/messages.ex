@@ -70,7 +70,7 @@ defmodule Bonfire.Social.Messages do
       opts = [
         boundary: "message",
         verbs_to_grant: Config.get([:verbs_to_grant, :message]),
-        to_circles: (to || []),
+        to_circles: to || [],
         to_feeds: [inbox: to]
       ]
 
