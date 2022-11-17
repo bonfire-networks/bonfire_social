@@ -140,16 +140,20 @@ defmodule Bonfire.Social.Tags do
   end
 
   def auto_boost(%{} = category, object) do
-    Bonfire.Social.Boosts.do_boost(category, object)
+    if e(category, :character, nil) do
+      Bonfire.Social.Boosts.do_boost(category, object)
 
-    inbox_id =
-      e(category, :character, :notifications_id, nil)
-      |> debug()
+      inbox_id =
+        e(category, :character, :notifications_id, nil)
+        |> debug()
 
-    # remove it from the "Submitted" tab
-    if inbox_id,
-      do: Bonfire.Social.FeedActivities.delete(feed_id: inbox_id, id: ulid(object)) |> debug(),
-      else: debug("no inbox ID")
+      # remove it from the "Submitted" tab
+      if inbox_id,
+        do: Bonfire.Social.FeedActivities.delete(feed_id: inbox_id, id: ulid(object)) |> debug(),
+        else: debug("no inbox ID")
+    else
+      debug("not a character")
+    end
   end
 
   def auto_boost(_, _), do: debug("not auto-boosting (invalid inputs)")
