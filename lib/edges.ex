@@ -121,7 +121,7 @@ defmodule Bonfire.Social.Edges do
 
   def query(filters, opts) do
     from(root in Edge, as: :edge)
-    |> boundarise(root.id, opts)
+    |> boundarise(root.object_id, opts)
     |> filter(filters, opts)
   end
 
@@ -129,7 +129,7 @@ defmodule Bonfire.Social.Edges do
     # debug(opts)
     from(root in query_schema)
     |> proload(:edge)
-    |> boundarise(id, opts)
+    |> boundarise(edge.object_id, opts)
     |> maybe_proload(e(opts, :preload, nil))
     |> filter(filters, opts)
   end

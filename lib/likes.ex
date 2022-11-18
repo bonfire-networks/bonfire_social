@@ -64,7 +64,7 @@ defmodule Bonfire.Social.Likes do
     end
   end
 
-  defp do_like(%{} = liker, %{} = liked) do
+  def do_like(%{} = liker, %{} = liked) do
     liked = Objects.preload_creator(liked)
     liked_creator = Objects.object_creator(liked)
 
@@ -129,7 +129,7 @@ defmodule Bonfire.Social.Likes do
     # |> Activities.query_object_preload_activity(:like, :liked_id, opts)
     # |> Activities.as_permitted_for(opts, [:see])
     # |> debug()
-    |> repo().many_paginated(opts)
+    |> Integration.many(opts[:paginate], opts[:pagination] || opts)
   end
 
   @doc "List the current user's likes"

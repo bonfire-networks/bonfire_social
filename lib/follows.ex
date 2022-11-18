@@ -352,7 +352,7 @@ defmodule Bonfire.Social.Follows do
     |> query(opts)
     |> where([object: object], object.id not in ^e(opts, :exclude_ids, []))
     # |> maybe_with_followed_profile_only(opts)
-    |> many(opts[:paginate], opts[:pagination] || opts)
+    |> Integration.many(opts[:paginate], opts[:pagination] || opts)
   end
 
   def list_my_followers(current_user, opts \\ []),
@@ -369,12 +369,8 @@ defmodule Bonfire.Social.Follows do
     |> query(opts)
     |> where([subject: subject], subject.id not in ^e(opts, :exclude_ids, []))
     # |> maybe_with_follower_profile_only(opts)
-    |> many(opts[:paginate], opts[:pagination] || opts)
+    |> Integration.many(opts[:paginate], opts[:pagination] || opts)
   end
-
-  defp many(query, paginate?, pagination \\ nil)
-  defp many(query, false, _), do: repo().many(query)
-  defp many(query, _, pagination), do: repo().many_paginated(query, pagination)
 
   defp maybe_with_follower_profile_only(q, true),
     do: where(q, [follower_profile: p], not is_nil(p.id))

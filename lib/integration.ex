@@ -197,4 +197,8 @@ defmodule Bonfire.Social.Integration do
       :ok
     end
   end
+
+  def many(query, paginate?, pagination \\ nil)
+  def many(query, false, _), do: repo().many(query)
+  def many(query, _, pagination), do: repo().many_paginated(query, pagination)
 end
