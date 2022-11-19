@@ -112,7 +112,8 @@ defmodule Bonfire.Social.PostContents do
       html_body: prepare_text(get_attr(attrs, :html_body), creator, opts),
       name: prepare_text(get_attr(attrs, :name), creator, opts),
       summary: prepare_text(get_attr(attrs, :summary), creator, opts),
-      languages: maybe_detect_languages(attrs)
+      languages: maybe_detect_languages(attrs),
+      mentions: e(attrs, :mentions, [])
     })
   end
 

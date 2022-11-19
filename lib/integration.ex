@@ -137,7 +137,7 @@ defmodule Bonfire.Social.Integration do
 
   # TODO: clean up the following patterns
 
-  defp maybe_federate(subject, verb, object, activity) do
+  def maybe_federate(subject, verb, object, activity \\ nil) do
     if Bonfire.Common.Extend.module_enabled?(
          Bonfire.Federate.ActivityPub.Outgoing,
          subject

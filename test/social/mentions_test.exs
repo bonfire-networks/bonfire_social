@@ -43,15 +43,10 @@ defmodule Bonfire.Social.MentionsTest do
                boundary: "mentions"
              )
 
-    assert %{edges: feed} =
-             FeedActivities.feed(:notifications,
-               current_user: me,
-               skip_boundary_check: true
-             )
-
-    # debug(feed)
-    assert %{} = fp = List.first(feed)
-    assert fp.activity.object_id == mention.id
+    assert FeedActivities.feed_contains?(:notifications, mention,
+             current_user: me,
+             skip_boundary_check: true
+           )
   end
 
   test "can see post mentioning me in my notifications (using the 'mentions' preset), with boundaries enforced" do
@@ -71,10 +66,7 @@ defmodule Bonfire.Social.MentionsTest do
                boundary: "mentions"
              )
 
-    assert %{edges: feed} = FeedActivities.feed(:notifications, current_user: me)
-
-    assert %{} = fp = List.first(feed)
-    assert fp.activity.object_id == mention.id
+    assert FeedActivities.feed_contains?(:notifications, mention, current_user: me)
   end
 
   test "mentioning someone does not appear in my own notifications" do
@@ -94,7 +86,7 @@ defmodule Bonfire.Social.MentionsTest do
                boundary: "mentions"
              )
 
-    assert %{edges: []} = FeedActivities.feed(:notifications, current_user: me)
+    refute FeedActivities.feed_contains?(:notifications, mention, current_user: me)
   end
 
   test "mentioning someone else does not appear in a 3rd party's notifications" do
@@ -116,7 +108,7 @@ defmodule Bonfire.Social.MentionsTest do
 
     third = Fake.fake_user!()
 
-    assert %{edges: []} = FeedActivities.feed(:notifications, current_user: third)
+    refute FeedActivities.feed_contains?(:notifications, mention, current_user: third)
   end
 
   test "mentioning someone appears in their notifications feed, if using the 'mentions' preset" do
@@ -136,12 +128,9 @@ defmodule Bonfire.Social.MentionsTest do
                boundary: "mentions"
              )
 
-    debug_my_grants_on(mentioned, mention)
+    # debug_my_grants_on(mentioned, mention)
 
-    assert %{edges: feed} = FeedActivities.feed(:notifications, current_user: mentioned)
-
-    assert %{} = fp = List.first(feed)
-    assert fp.activity.object_id == mention.id
+    assert FeedActivities.feed_contains?(:notifications, mention, current_user: mentioned)
   end
 
   test "mentioning someone does not appear in their home feed, if they don't follow me, and have disabled notifications in home feed" do
@@ -172,7 +161,7 @@ defmodule Bonfire.Social.MentionsTest do
                boundary: "mentions"
              )
 
-    assert %{edges: []} = FeedActivities.my_feed(mentioned)
+    refute FeedActivities.feed_contains?(:my, mention, current_user: mentioned)
   end
 
   test "mentioning someone appears in their home feed, if they don't follow me, and have enabled notifications in home feed" do
@@ -194,9 +183,7 @@ defmodule Bonfire.Social.MentionsTest do
                boundary: "mentions"
              )
 
-    assert %{edges: feed} = FeedActivities.my_feed(mentioned)
-    assert %{} = fp = List.first(feed)
-    assert fp.activity.object_id == mention.id
+    assert FeedActivities.feed_contains?(:my, mention, current_user: mentioned)
   end
 
   test "mentioning someone DOES NOT appear (if NOT using the preset 'mentions' boundary) in their instance feed" do
@@ -210,7 +197,7 @@ defmodule Bonfire.Social.MentionsTest do
     }
 
     assert {:ok, mention} = Posts.publish(current_user: me, post_attrs: attrs)
-    assert %{edges: []} = FeedActivities.feed(:local, current_user: mentioned)
+    refute FeedActivities.feed_contains?(:local, mention, current_user: mentioned)
   end
 
   test "mentioning someone appears in my instance feed (if using 'local' preset)" do
@@ -230,9 +217,7 @@ defmodule Bonfire.Social.MentionsTest do
                boundary: "local"
              )
 
-    assert %{edges: feed} = FeedActivities.feed(:local, current_user: me)
-    assert %{} = fp = List.first(feed)
-    assert fp.activity.object_id == mention.id
+    assert FeedActivities.feed_contains?(:local, mention, current_user: me)
   end
 
   test "mentioning someone does not appear in a 3rd party's instance feed (if not included in circles)" do
@@ -247,7 +232,7 @@ defmodule Bonfire.Social.MentionsTest do
 
     assert {:ok, mention} = Posts.publish(current_user: me, post_attrs: attrs)
     third = Fake.fake_user!()
-    assert %{edges: []} = FeedActivities.feed(:local, current_user: third)
+    refute = FeedActivities.feed_contains?(:local, mention, current_user: third)
   end
 
   test "mentioning someone with 'local' preset does not appear *publicly* in the instance feed" do
@@ -267,6 +252,6 @@ defmodule Bonfire.Social.MentionsTest do
                boundary: "local"
              )
 
-    assert %{edges: []} = FeedActivities.feed(:local)
+    refute FeedActivities.feed_contains?(:local, mention)
   end
 end

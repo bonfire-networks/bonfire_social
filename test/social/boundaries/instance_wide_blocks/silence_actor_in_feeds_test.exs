@@ -36,7 +36,7 @@ defmodule Bonfire.Social.Boundaries.InstanceWideSilenceActorFeedsPerUserTest do
                boundary: "public"
              )
 
-    assert %{edges: [feed_entry]} = Bonfire.Social.FeedActivities.feed(:local, current_user: me)
+    assert Bonfire.Social.FeedActivities.feed_contains?(:local, post, current_user: me)
   end
 
   @tag :TODO

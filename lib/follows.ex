@@ -248,8 +248,8 @@ defmodule Bonfire.Social.Follows do
     Bonfire.Boundaries.Circles.get_stereotype_circles(object, :followers)
     ~> Bonfire.Boundaries.Circles.remove_from_circles(user, ...)
 
-    # TODO!
-    # Integration.maybe_federate_and_gift_wrap_activity(user, follow)
+    # Integration.maybe_federate(user, :unfollow, object)
+    ap_publish_activity(user, :delete, object)
     # end
   end
 
@@ -415,16 +415,20 @@ defmodule Bonfire.Social.Follows do
 
   ### ActivityPub integration
 
-  def ap_publish_activity(subject, :delete, follow) do
+  def ap_publish_activity(subject, :delete, %Follow{edge: edge}) do
+    ap_publish_activity(
+      subject || e(edge, :subject, nil) || edge.subject_id,
+      :delete,
+      e(edge, :object, nil) || edge.object_id
+    )
+  end
+
+  def ap_publish_activity(subject, :delete, object) do
     with {:ok, follower} <-
-           ActivityPub.Actor.get_cached(
-             pointer: subject || e(follow.edge, :subject, nil) || follow.edge.subject_id
-           ),
-         {:ok, object} <-
-           ActivityPub.Actor.get_cached(
-             pointer: e(follow.edge, :object, nil) || follow.edge.object_id
-           ) do
-      ActivityPub.unfollow(%{actor: follower, object: object, local: true})
+           ActivityPub.Actor.get_cached(pointer: subject),
+         {:ok, ap_object} <-
+           ActivityPub.Actor.get_cached(pointer: object) do
+      ActivityPub.unfollow(%{actor: follower, object: ap_object, local: true})
     end
   end
 

@@ -195,16 +195,14 @@ defmodule Bonfire.Social.Flags do
             }
         end
 
-      ActivityPub.flag(
-        %{
-          actor: flagger,
-          statuses: params.statuses,
-          account: params.account,
-          content: flag.message,
-          forward: true
-        },
-        flag.id
-      )
+      ActivityPub.flag(%{
+        actor: flagger,
+        statuses: params.statuses,
+        account: params.account,
+        content: flag.message,
+        forward: true,
+        pointer: flag
+      })
     else
       e -> {:error, e}
     end

@@ -39,6 +39,7 @@ defmodule Bonfire.Social.Feeds do
     |> List.flatten()
     |> Enum.uniq()
     |> Utils.filter_empty([])
+    |> info()
   end
 
   def maybe_my_outbox_feed_id(me, boundary) do
@@ -65,15 +66,15 @@ defmodule Bonfire.Social.Feeds do
     my_notifications = feed_id(:notifications, me)
 
     # TODO: unravel the mentions parsing so we can deal with mentions properly
-    mentions = Map.get(assigns, :mentions, [])
+    mentions = e(assigns, :mentions, [])
     reply_to_creator = e(assigns, :reply_to, :created, :creator, nil)
 
     user_notifications_feeds([reply_to_creator | mentions], boundary)
     |> Utils.filter_empty([])
     |> Enum.uniq()
+    |> info()
     # avoid self-notifying
     |> Enum.reject(&(&1 == my_notifications))
-    |> debug()
   end
 
   defp user_notifications_feeds(users, boundary) do

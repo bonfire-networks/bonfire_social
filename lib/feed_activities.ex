@@ -51,10 +51,7 @@ defmodule Bonfire.Social.FeedActivities do
     []
   end
 
-  @doc """
-  Gets a user's home feed, a combination of all feeds the user is subscribed to.
-  """
-  def my_feed(opts, home_feed_ids \\ nil) do
+  def feed_ids_and_opts(:my, opts) do
     opts = to_options(opts)
 
     # TODO: clean up this code
@@ -91,9 +88,53 @@ defmodule Bonfire.Social.FeedActivities do
       |> Keyword.put(:exclude_replies, exclude_replies)
 
     home_feed_ids =
-      if is_list(home_feed_ids), do: home_feed_ids, else: Feeds.my_home_feed_ids(opts)
+      if is_list(opts[:home_feed_ids]),
+        do: opts[:home_feed_ids],
+        else: Feeds.my_home_feed_ids(opts)
 
-    feed(home_feed_ids, opts)
+    {home_feed_ids, opts}
+  end
+
+  def feed_ids_and_opts(:notifications = feed_name, opts) do
+    opts =
+      to_options(opts)
+      |> Keyword.merge(
+        # so we can show flags to admins in notifications
+        skip_boundary_check: :admins,
+        skip_dedup: true,
+        preload: :notifications
+      )
+
+    {named_feed(
+       feed_name,
+       opts
+     ), opts}
+  end
+
+  def feed_ids_and_opts(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
+    opts = to_options(opts)
+
+    {named_feed(
+       feed_name,
+       opts
+     ), opts}
+  end
+
+  def feed_ids_and_opts(feed, opts) when is_binary(feed) or is_list(feed) do
+    opts = to_options(opts)
+
+    {feed, opts}
+  end
+
+  @doc """
+  Gets a user's home feed, a combination of all feeds the user is subscribed to.
+  """
+  def my_feed(opts, home_feed_ids \\ nil) do
+    opts =
+      to_options(opts)
+      |> Keyword.put_new(:home_feed_ids, home_feed_ids)
+
+    feed(:my, opts)
   end
 
   @doc """
@@ -112,23 +153,6 @@ defmodule Bonfire.Social.FeedActivities do
     |> maybe_dedup_feed_objects(opts)
   end
 
-  # so we can show flags to admins in notifications
-  def feed(:notifications = feed_name, opts) do
-    opts =
-      opts ++
-        [
-          skip_boundary_check: :admins,
-          skip_dedup: true,
-          preload: :notifications
-        ]
-
-    named_feed(
-      feed_name,
-      opts
-    )
-    ~> feed(opts)
-  end
-
   def feed(:flags, opts) do
     Bonfire.Social.Flags.list_paginated([], opts)
     |> repo().maybe_preload(
@@ -139,10 +163,10 @@ defmodule Bonfire.Social.FeedActivities do
     # |> debug()
   end
 
-  # eg: :local
   def feed(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
-    named_feed(feed_name, opts)
-    ~> feed(opts)
+    {home_feed_ids, opts} = feed_ids_and_opts(feed_name, opts)
+
+    feed(home_feed_ids, opts)
   end
 
   def feed(%Ecto.Query{} = custom_query, opts) do
@@ -170,7 +194,7 @@ defmodule Bonfire.Social.FeedActivities do
         # debug(ulid(current_user(opts)), "current_user")
         # debug(feed_name, "feed_name")
         debug(feed, "feed id(s)")
-        {:ok, feed}
+        feed
 
       e ->
         error("FeedActivities.feed: no known feed #{inspect(feed_name)} - #{inspect(e)}")
@@ -206,8 +230,10 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed_contains?(feed_name, object, opts \\ []) do
+    {feed_ids, opts} = feed_ids_and_opts(feed_name, opts)
+
     feed_query(
-      feed_name,
+      feed_ids,
       Keyword.put(
         opts,
         :feed_filters,

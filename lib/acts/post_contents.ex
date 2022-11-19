@@ -60,6 +60,7 @@ defmodule Bonfire.Social.Acts.PostContents do
           |> PostContents.cast(attrs, current_user, boundary, epic.assigns.options)
           |> Epic.assign(epic, on, ...)
           |> assign_meta(act, on, :mentions)
+          |> assign_meta(act, on, :hashtags)
           |> assign_meta(act, on, :urls)
         else
           warn(attrs_key, "Skipping due to empty attrs on key:")

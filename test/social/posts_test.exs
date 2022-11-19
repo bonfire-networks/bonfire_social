@@ -166,29 +166,13 @@ defmodule Bonfire.Social.PostsTest do
     assert length(posts) == 3
   end
 
-  test "when i post, it appears in my outbox feed" do
+  test "when i post, it appears in my outbox feed, but not in my notifications or inbox" do
     user = Fake.fake_user!()
 
     post = fake_post!(user, "public")
 
-    assert %{edges: edges} = FeedActivities.feed(:outbox, current_user: user)
-    assert [post2] = edges
-    assert post2.id == post.id
-  end
-
-  test "when i post, it does not appear in my notifications feed" do
-    user = Fake.fake_user!()
-
-    post = fake_post!(user, "public")
-
-    assert %{edges: []} = FeedActivities.feed(:notifications, current_user: user)
-  end
-
-  test "when i post, it does not appear in my inbox feed" do
-    user = Fake.fake_user!()
-
-    post = fake_post!(user, "public")
-
-    assert %{edges: []} = FeedActivities.feed(:inbox, current_user: user)
+    assert FeedActivities.feed_contains?(:outbox, post, current_user: user)
+    refute FeedActivities.feed_contains?(:inbox, post, current_user: user)
+    refute FeedActivities.feed_contains?(:notifications, post, current_user: user)
   end
 end

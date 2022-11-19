@@ -74,14 +74,12 @@ defmodule Bonfire.Social.Messages do
         to_feeds: [inbox: to]
       ]
 
-      repo().transact_with(fn ->
-        with {:ok, message} <- create(creator, attrs, opts) do
-          # debug(message)
-          LivePush.notify_of_message(creator, :message, message, to)
+      with {:ok, message} <- create(creator, attrs, opts) do
+        # debug(message)
+        LivePush.notify_of_message(creator, :message, message, to)
 
-          Integration.maybe_federate_and_gift_wrap_activity(creator, message)
-        end
-      end)
+        Integration.maybe_federate_and_gift_wrap_activity(creator, message)
+      end
     else
       error("Could not find recipient.")
     end

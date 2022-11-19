@@ -235,18 +235,18 @@ defmodule Bonfire.Social.Posts do
 
          # TODO: find a better way of deleting non actor entries from the list
          # (or represent them in AP)
-         direct_recipients <-
+         mentions <-
            e(post, :tags, [])
+           #  |> info("tags")
            |> Enum.reject(fn tag ->
-             is_nil(e(tag, :character, :id, nil)) or
+             is_nil(e(tag, :character, nil)) or
                tag.id == ulid(subject) or
                tag.id == e(post, :created, :creator_id, nil)
            end)
-           # |> debug("mentions")
+           |> info("mentions to recipients")
            |> Enum.map(fn tag -> ActivityPub.Actor.get_cached!(pointer: tag.id) end)
            |> filter_empty([])
-           |> Enum.map(fn actor -> actor.ap_id end)
-           |> debug("direct_recipients"),
+           |> info("direct_recipients"),
          cc <- List.wrap(actor.data["followers"]),
          context <-
            (if e(post, :replied, :thread_id, nil) && post.replied.thread_id != id do
@@ -259,12 +259,13 @@ defmodule Bonfire.Social.Posts do
                   nil
               end
             end),
+         to <- to ++ Enum.map(mentions, fn actor -> actor.ap_id end),
          object <-
            %{
              "type" => "Note",
              "actor" => actor.ap_id,
              "attributedTo" => actor.ap_id,
-             "to" => to ++ direct_recipients,
+             "to" => to,
              "cc" => cc,
              "name" => e(post, :post_content, :name, nil),
              "summary" => e(post, :post_content, :summary, nil),
@@ -282,7 +283,15 @@ defmodule Bonfire.Social.Posts do
                      nil
                  end
                end,
-             "context" => context
+             "context" => context,
+             "tag" =>
+               Enum.map(mentions, fn actor ->
+                 %{
+                   "href" => actor.ap_id,
+                   "name" => actor.username,
+                   "type" => "Mention"
+                 }
+               end)
            }
            |> Enum.filter(fn {_, v} -> not is_nil(v) end)
            |> Enum.into(%{}),
@@ -293,7 +302,7 @@ defmodule Bonfire.Social.Posts do
              actor: actor,
              context: context,
              object: object,
-             to: to ++ direct_recipients,
+             to: to,
              additional: %{
                "cc" => cc
              }
@@ -331,7 +340,9 @@ defmodule Bonfire.Social.Posts do
          List.wrap(post_data["audience"]))
       |> filter_empty([])
       |> List.delete(Bonfire.Federate.ActivityPub.AdapterUtils.public_uri())
+      |> info("incoming recipients")
       |> Enum.map(fn ap_id -> Bonfire.Me.Users.by_ap_id!(ap_id) end)
+      |> info("incoming users")
       |> ulid()
       |> filter_empty([])
 
@@ -351,18 +362,20 @@ defmodule Bonfire.Social.Posts do
       |> Enum.uniq()
 
     mentions =
-      for %{"type" => "Mention", "href" => mention} <- tags do
+      for %{"type" => "Mention"} = mention <- tags do
         with {:ok, character} <-
-               Bonfire.Federate.ActivityPub.AdapterUtils.get_character_by_ap_id(mention) do
+               Bonfire.Federate.ActivityPub.AdapterUtils.get_character_by_ap_id(
+                 mention["href"] || mention["namne"]
+               ) do
           character
         else
-          _ ->
+          e ->
+            warn(e, "could not lookup incoming mention")
             nil
         end
       end
       |> filter_empty(nil)
-
-    # |> info("mentions")
+      |> info("incoming mentions")
 
     # FIXME?
     # TODO, in a mixin?
@@ -374,7 +387,7 @@ defmodule Bonfire.Social.Posts do
           local: false,
           canonical_url: nil,
           to_circles: circles ++ direct_recipients,
-          tags: mentions,
+          mentions: mentions,
           post_content: %{
             name: post_data["name"],
             html_body: post_data["content"]
