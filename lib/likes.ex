@@ -36,10 +36,10 @@ defmodule Bonfire.Social.Likes do
   def get!(subject, object, opts \\ []),
     do: Edges.get!(__MODULE__, subject, object, opts)
 
-  def by_liker(%{} = subject, opts \\ []),
+  def by_liker(subject, opts \\ []) when is_map(subject) or is_binary(subject),
     do: (opts ++ [subject: subject]) |> query([current_user: subject] ++ opts) |> repo().many()
 
-  def by_liked(%{} = object, opts \\ []),
+  def by_liked(object, opts \\ []) when is_map(object) or is_binary(object),
     do: (opts ++ [object: object]) |> query(opts) |> repo().many()
 
   def like(%{} = liker, %{} = object) do

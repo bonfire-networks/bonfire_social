@@ -240,12 +240,12 @@ defmodule Bonfire.Social.Threads do
     # add author of the message it was replying to
     # add all previously tagged people
     # add any other participants in the thread
+    # |> debug("tags")
     ([e(activity, :subject, nil)] ++
        [e(activity, :reply_to, :created, :creator, nil)] ++
        (e(activity, :tags, [])
         # no hashtags
-        |> Enum.reject(&(e(&1, :table_id, nil) == exclude_table_id))
-        |> debug("tags")) ++
+        |> Enum.reject(&(e(&1, :table_id, nil) == exclude_table_id))) ++
        if(thread_or_object_id,
          do:
            Bonfire.Social.Threads.fetch_participants(
@@ -259,8 +259,9 @@ defmodule Bonfire.Social.Threads do
     # |> debug("participants grab bag")
     |> filter_empty([])
     |> Enum.uniq_by(&e(&1, :character, :id, nil))
+
     # |> Enum.reject(&( e(&1, :character, :id, nil) == ulid(current_user) ))
-    |> debug("participants")
+    # |> debug("participants")
   end
 
   @doc "List participants in a thread (depending on user's boundaries)"
