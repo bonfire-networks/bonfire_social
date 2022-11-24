@@ -945,14 +945,16 @@ defmodule Bonfire.Social.FeedActivities do
         do: feed_id,
         else: Bonfire.Social.Feeds.my_feed_id(feed_id, current_user)
 
-    if current_user,
+    uid = ulid(current_user)
+
+    if uid && table_id,
       do:
         {:ok,
          from(fp in FeedPublish,
            left_join: seen_edge in Edge,
            on:
              fp.id == seen_edge.object_id and seen_edge.table_id == ^table_id and
-               seen_edge.subject_id == ^ulid(current_user),
+               seen_edge.subject_id == ^uid,
            where: fp.feed_id == ^feed_id,
            where: is_nil(seen_edge.id)
          )}
