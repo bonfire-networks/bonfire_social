@@ -553,7 +553,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   defp cased_maybe_repo_preload(example_object, objects, preloads, opts) do
-    debug(example_object)
+    # debug(example_object)
 
     case example_object || objects do
       %Bonfire.Data.Social.Activity{} ->
