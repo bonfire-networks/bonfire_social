@@ -1,6 +1,4 @@
 faker = "~> 0.14" # fake data generation
 flexto = "~> 0.2.1"
 jason = "~> 1.0"
-pointers_ulid = "~> 0.2"
-pointers = "~> 0.5.1"
 telemetry = "~> 1.1.0"
