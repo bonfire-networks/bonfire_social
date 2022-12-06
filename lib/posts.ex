@@ -88,7 +88,7 @@ defmodule Bonfire.Social.Posts do
   #         {:ok, r} <- get_replied(published.post.id) do
   #     reply = Map.merge(r, published)
   #     # |> IO.inspect
-  #     pubsub_broadcast(e(reply, :thread_id, nil), {{Bonfire.Social.Threads.LiveHandler, :new_reply}, reply}) # push to online users
+  #     PubSub.broadcast(e(reply, :thread_id, nil), {{Bonfire.Social.Threads.LiveHandler, :new_reply}, reply}) # push to online users
 
   #     {:ok, reply}
   #   end

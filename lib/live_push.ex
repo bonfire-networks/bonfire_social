@@ -16,7 +16,7 @@ defmodule Bonfire.Social.LivePush do
     debug(feed_ids, "push a :new_activity")
     activity = prepare_activity(activity, opts)
 
-    pubsub_broadcast(feed_ids, {
+    PubSub.broadcast(feed_ids, {
       {Bonfire.Social.Feeds, :new_activity},
       [
         feed_ids: feed_ids,
@@ -164,7 +164,7 @@ defmodule Bonfire.Social.LivePush do
   defp increment_counters(feed_ids, box) do
     feed_ids
     |> Enum.map(&"unseen_count:#{box}:#{&1}")
-    |> pubsub_broadcast({{Bonfire.Social.Feeds, :count_increment}, box})
+    |> PubSub.broadcast({{Bonfire.Social.Feeds, :count_increment}, box})
   end
 
   defp normalise_feed_ids(feed_ids) do
@@ -210,12 +210,12 @@ defmodule Bonfire.Social.LivePush do
     # debug(activity: activity)
     debug("maybe_push_thread: broadcasting to anyone currently viewing the thread")
 
-    pubsub_broadcast(
+    PubSub.broadcast(
       thread_id,
       {{Bonfire.Social.Threads.LiveHandler, :new_reply}, {thread_id, activity}}
     )
 
-    # pubsub_broadcast(reply_to_id, {{Bonfire.Social.Threads.LiveHandler, :new_reply}, {reply_to_id, activity}})
+    # PubSub.broadcast(reply_to_id, {{Bonfire.Social.Threads.LiveHandler, :new_reply}, {reply_to_id, activity}})
   end
 
   defp maybe_push_thread(replied, activity) do
