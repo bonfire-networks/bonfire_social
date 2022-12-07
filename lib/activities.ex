@@ -805,14 +805,14 @@ defmodule Bonfire.Social.Activities do
   def all_verb_names() do
     # Bonfire.Boundaries.Verbs.verbs()
     case Bonfire.Common.Config.get(:verbs) do
-      verbs when is_map(verbs) ->
+      verbs when is_map(verbs) or (is_list(verbs) and verbs != []) ->
         verbs
-        |> Map.values()
-        |> Enum.flat_map(fn v ->
-          [v[:verb]]
+        |> Enum.flat_map(fn {_key, data} ->
+          List.wrap(data[:verb])
         end)
 
-      _ ->
+      other ->
+        debug(other, ":verbs list not found in Config, fallback to :verb_names")
         Bonfire.Common.Config.get!(:verb_names)
     end
   end
