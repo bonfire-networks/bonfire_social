@@ -157,8 +157,8 @@ defmodule Bonfire.Social.PostContents do
     if String.contains?(text, "/crash!"), do: throw("User-triggered crash")
 
     text
-    # if not using an HTML-based WYSIWYG editor, then we convert any markdown to HTML # TODO: we should store the markdown instead
-    |> maybe_process_markdown(creator)
+    # if not using an HTML-based WYSIWYG editor, we store the raw markdown
+    # |> maybe_process_markdown(creator)
     # transform emoticons to emojis
     |> Text.maybe_emote()
     # maybe remove potentially dangerous or dirty markup
@@ -177,23 +177,25 @@ defmodule Bonfire.Social.PostContents do
     |> Text.maybe_sane_html()
   end
 
-  def maybe_process_markdown(text, creator) do
-    if Bonfire.Me.Settings.get(
-         [:ui, :rich_text_editor_disabled],
-         false,
-         creator
-       ) ||
-         maybe_apply(
-           Bonfire.Me.Settings.get([:ui, :rich_text_editor], nil, creator),
-           :output_format,
-           [],
-           &no_known_output/2
-         ) == :markdown do
-      Text.maybe_markdown_to_html(text)
-    else
-      text
-    end
-  end
+  # def maybe_process_markdown(text, creator) do
+  #   if Bonfire.Me.Settings.get(
+  #        [:ui, :rich_text_editor_disabled],
+  #        false,
+  #        creator
+  #      ) ||
+  #        maybe_apply(
+  #          Bonfire.Me.Settings.get([:ui, :rich_text_editor], nil, creator),
+  #          :output_format,
+  #          [],
+  #          &no_known_output/2
+  #        ) == :markdown do
+  #     debug("use md")
+  #     Text.maybe_markdown_to_html(text)
+  #   else
+  #     debug("use txt or html")
+  #     text
+  #   end
+  # end
 
   def no_known_output(error, args) do
     error(

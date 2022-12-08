@@ -75,12 +75,15 @@ defmodule Bonfire.Social.Posts do
   def run_epic(type, options \\ [], on \\ :post) do
     options = Keyword.merge(options, crash: true, debug: true, verbose: false)
 
-    epic =
-      Epic.from_config!(__MODULE__, type)
-      |> Epic.assign(:options, options)
-      |> Epic.run()
-
-    if epic.errors == [], do: {:ok, epic.assigns[on]}, else: {:error, epic}
+    with %{errors: []} = epic <-
+           Epic.from_config!(__MODULE__, type)
+           |> Epic.assign(:options, options)
+           |> Epic.run() do
+      {:ok, epic.assigns[on]}
+    else
+      e ->
+        error(e)
+    end
   end
 
   # def reply(creator, attrs) do
@@ -269,7 +272,7 @@ defmodule Bonfire.Social.Posts do
              "cc" => cc,
              "name" => e(post, :post_content, :name, nil),
              "summary" => e(post, :post_content, :summary, nil),
-             "content" => e(post, :post_content, :html_body, nil),
+             "content" => Text.maybe_markdown_to_html(e(post, :post_content, :html_body, nil)),
              "attachment" => Bonfire.Files.ap_publish_activity(e(post, :media, nil)),
              # TODO support replies and context for all object types, not just posts
              "inReplyTo" =>
@@ -479,12 +482,5 @@ defmodule Bonfire.Social.Posts do
       "created" => Bonfire.Me.Integration.indexing_format_created(profile, character),
       "tags" => Tags.indexing_format_tags(activity)
     })
-  end
-
-  def maybe_index(post, options \\ []) do
-    indexing_object_format(post, options)
-    |> Bonfire.Social.Integration.maybe_index()
-
-    {:ok, post}
   end
 end

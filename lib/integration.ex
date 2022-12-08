@@ -36,76 +36,76 @@ defmodule Bonfire.Social.Integration do
      })}
   end
 
-  def maybe_federate_activity(
-        subject,
-        activity_or_object,
-        verb_override \\ nil,
-        object_override \\ nil
-      )
+  defp maybe_federate_activity(
+         subject,
+         activity_or_object,
+         verb_override \\ nil,
+         object_override \\ nil
+       )
 
-  def maybe_federate_activity(
-        subject,
-        %{activity: %{object: %{id: _} = inner_object} = activity} = outer_object,
-        verb,
-        object_override
-      ),
-      # NOTE: we need the outer object for Edges like Follow or Like
-      do:
-        maybe_federate_activity_with_object(
-          subject,
-          activity,
-          verb,
-          object_override || outer_object,
-          inner_object
-        )
+  defp maybe_federate_activity(
+         subject,
+         %{activity: %{object: %{id: _} = inner_object} = activity} = outer_object,
+         verb,
+         object_override
+       ),
+       # NOTE: we need the outer object for Edges like Follow or Like
+       do:
+         maybe_federate_activity_with_object(
+           subject,
+           activity,
+           verb,
+           object_override || outer_object,
+           inner_object
+         )
 
-  def maybe_federate_activity(
-        subject,
-        %{activity: %{id: _} = activity} = activity_object,
-        verb,
-        object_override
-      ),
-      do:
-        maybe_federate_activity_with_object(
-          subject,
-          activity,
-          verb,
-          object_override,
-          activity_object
-        )
+  defp maybe_federate_activity(
+         subject,
+         %{activity: %{id: _} = activity} = activity_object,
+         verb,
+         object_override
+       ),
+       do:
+         maybe_federate_activity_with_object(
+           subject,
+           activity,
+           verb,
+           object_override,
+           activity_object
+         )
 
-  def maybe_federate_activity(
-        subject,
-        %Bonfire.Data.Social.Activity{object: %{id: _} = activity_object} = activity,
-        verb,
-        object_override
-      ) do
+  defp maybe_federate_activity(
+         subject,
+         %Bonfire.Data.Social.Activity{object: %{id: _} = activity_object} = activity,
+         verb,
+         object_override
+       ) do
     maybe_federate_activity_with_object(subject, activity, verb, object_override, activity_object)
   end
 
-  def maybe_federate_activity(
-        subject,
-        %Bonfire.Data.Social.Activity{object: activity_object} = activity,
-        verb,
-        object_override
-      )
-      when not is_nil(activity_object),
-      do:
-        repo().maybe_preload(activity, [:object, :verb])
-        |> maybe_federate_activity(subject, ..., verb, object_override)
+  defp maybe_federate_activity(
+         subject,
+         %Bonfire.Data.Social.Activity{object: activity_object} = activity,
+         verb,
+         object_override
+       )
+       when not is_nil(activity_object),
+       do:
+         repo().maybe_preload(activity, [:object, :verb])
+         |> maybe_federate_activity(subject, ..., verb, object_override)
 
-  def maybe_federate_activity(
-        subject,
-        %{activity: activity} = activity_object,
-        verb,
-        object_override
-      )
-      when not is_nil(activity),
-      do:
-        repo().maybe_preload(activity_object, activity: [:verb])
-        |> maybe_federate_activity(subject, ..., verb, object_override)
+  defp maybe_federate_activity(
+         subject,
+         %{activity: activity} = activity_object,
+         verb,
+         object_override
+       )
+       when not is_nil(activity),
+       do:
+         repo().maybe_preload(activity_object, activity: [:verb])
+         |> maybe_federate_activity(subject, ..., verb, object_override)
 
-  def maybe_federate_activity(_subject_id, activity, _verb, _object) do
+  defp maybe_federate_activity(_subject_id, activity, _verb, _object) do
     error(
       activity,
       "Cannot federate: Expected an Activity, or an object containing one"
@@ -162,39 +162,6 @@ defmodule Bonfire.Social.Integration do
     else
       # if activitypub is disabled, it must be?
       true
-    end
-  end
-
-  def maybe_indexable_object(object) do
-    if Bonfire.Common.Extend.module_enabled?(
-         Bonfire.Search.Indexer,
-         Utils.e(object, :creator, :id, nil) ||
-           Utils.e(object, :created, :creator_id, nil)
-       ),
-       do:
-         object
-         |> Bonfire.Social.Activities.activity_under_object()
-         |> Bonfire.Search.Indexer.maybe_indexable_object()
-  end
-
-  def maybe_index(object) do
-    if Bonfire.Common.Extend.module_enabled?(
-         Bonfire.Search.Indexer,
-         Utils.e(object, :creator, :id, nil) ||
-           Utils.e(object, :created, :creator_id, nil)
-       ) do
-      Bonfire.Search.Indexer.maybe_index_object(object)
-      |> debug()
-    else
-      :ok
-    end
-  end
-
-  def maybe_unindex(object) do
-    if Bonfire.Common.Extend.module_enabled?(Bonfire.Search.Indexer) do
-      Bonfire.Search.Indexer.maybe_delete_object(object)
-    else
-      :ok
     end
   end
 

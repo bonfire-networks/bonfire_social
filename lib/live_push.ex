@@ -2,9 +2,9 @@ defmodule Bonfire.Social.LivePush do
   # FIXME: dependency on ui_common should be optional
   use Bonfire.UI.Common
   import Untangle
+  import Bonfire.Social.Integration
   alias Bonfire.Social.Activities
   alias Bonfire.Social.FeedActivities
-
   alias Bonfire.Data.Social.Activity
 
   @doc """
@@ -42,7 +42,7 @@ defmodule Bonfire.Social.LivePush do
 
   def push_activity(
         feed_ids,
-        %{id: _, activity: %{id: _} = _activity} = object,
+        %{id: _, activity: _activity} = object,
         opts
       ) do
     debug(feed_ids, "push an object as :new_activity")
@@ -175,8 +175,19 @@ defmodule Bonfire.Social.LivePush do
     |> filter_empty([])
   end
 
-  defp activity_from_object(%{id: _, activity: %{id: _} = activity} = object) do
-    object = Map.drop(object, [:activity])
+  defp activity_from_object(%{id: _, activity: _activity} = object) do
+    # TODO: optimise and put elsewhere
+    object =
+      object
+      |> repo().maybe_preload(:activity)
+
+    activity =
+      object
+      |> Map.get(:activity)
+
+    object =
+      object
+      |> Map.drop([:activity])
 
     # add object assocs to the activity
     maybe_merge_to_struct(activity, object)

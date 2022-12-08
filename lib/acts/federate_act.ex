@@ -1,4 +1,4 @@
-defmodule Bonfire.Social.Acts.ActivityPub do
+defmodule Bonfire.Social.Acts.Federate do
   @moduledoc """
 
   An Act that translates a post or changeset into some jobs for the
