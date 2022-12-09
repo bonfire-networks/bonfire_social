@@ -6,54 +6,7 @@ defmodule Bonfire.Social.BoostsTest do
   alias Bonfire.Social.FeedActivities
   alias Bonfire.Me.Fake
 
-  test "boost works" do
-    me = Fake.fake_user!()
-
-    attrs = %{
-      post_content: %{
-        summary: "summary",
-        name: "name",
-        html_body: "<p>epic html message</p>"
-      }
-    }
-
-    assert {:ok, boosted} =
-             Posts.publish(
-               current_user: me,
-               post_attrs: attrs,
-               boundary: "public"
-             )
-
-    assert {:ok, %{edge: edge}} = Boosts.boost(me, boosted)
-    # debug(activity)
-    assert edge.subject_id == me.id
-    assert edge.object_id == boosted.id
-  end
-
-  test "can check if I boosted something" do
-    me = Fake.fake_user!()
-
-    attrs = %{
-      post_content: %{
-        summary: "summary",
-        name: "name",
-        html_body: "<p>epic html message</p>"
-      }
-    }
-
-    assert {:ok, boosted} =
-             Posts.publish(
-               current_user: me,
-               post_attrs: attrs,
-               boundary: "public"
-             )
-
-    assert {:ok, boost} = Boosts.boost(me, boosted)
-
-    assert true == Boosts.boosted?(me, boosted)
-  end
-
-  test "can check if I did not boost something" do
+  test "can boost, and check if I did or did not boosted something" do
     me = Fake.fake_user!()
 
     attrs = %{
@@ -72,6 +25,54 @@ defmodule Bonfire.Social.BoostsTest do
              )
 
     assert false == Boosts.boosted?(me, boosted)
+
+    assert {:ok, boost} = Boosts.boost(me, boosted)
+
+    assert boost.subject_id == me.id
+    assert boost.object_id == boosted.id
+
+    assert true == Boosts.boosted?(me, boosted)
+  end
+
+  test "cannot boost something repeatedly in a short time" do
+    Config.put([Bonfire.Social.Boosts, :can_reboost_after], true)
+    me = Fake.fake_user!()
+
+    attrs = %{
+      post_content: %{
+        summary: "summary",
+        name: "name",
+        html_body: "<p>epic html message</p>"
+      }
+    }
+
+    assert {:ok, boosted} =
+             Posts.publish(
+               current_user: me,
+               post_attrs: attrs,
+               boundary: "public"
+             )
+
+    assert {:ok, boost} = Boosts.boost(me, boosted)
+    assert true == Boosts.boosted?(me, boosted)
+
+    assert {:ok, boost} = Boosts.boost(me, boosted)
+    assert 2 == Boosts.count(me, boosted)
+
+    Config.put([Bonfire.Social.Boosts, :can_reboost_after], false)
+
+    assert {:error, _} = Boosts.boost(me, boosted)
+    assert 2 == Boosts.count(me, boosted)
+
+    Config.put([Bonfire.Social.Boosts, :can_reboost_after], 60)
+
+    assert {:error, _} = Boosts.boost(me, boosted)
+    assert 2 == Boosts.count(me, boosted)
+
+    Config.put([Bonfire.Social.Boosts, :can_reboost_after], 1)
+    Process.sleep(1000)
+    assert {:ok, boost} = Boosts.boost(me, boosted)
+    assert 3 == Boosts.count(me, boosted)
   end
 
   test "can unboost something" do

@@ -34,6 +34,12 @@ defmodule Bonfire.Social.Boosts do
   def boosted?(%{} = user, object),
     do: Edges.exists?(__MODULE__, user, object, skip_boundary_check: true)
 
+  def count(%{} = user, object),
+    do: Edges.count(__MODULE__, user, object, skip_boundary_check: true)
+
+  def date_last_boosted(%{} = user, object),
+    do: Edges.last_date(__MODULE__, user, object, skip_boundary_check: true)
+
   def get(subject, object, opts \\ []),
     do: Edges.get(__MODULE__, subject, object, opts)
 
@@ -42,7 +48,7 @@ defmodule Bonfire.Social.Boosts do
 
   def boost(%{} = booster, %{} = object) do
     if Bonfire.Boundaries.can?(booster, :boost, object) do
-      do_boost(booster, object)
+      maybe_boost(booster, object)
     else
       error(l("Sorry, you cannot boost this"))
     end
@@ -55,14 +61,40 @@ defmodule Bonfire.Social.Boosts do
              verbs: [:boost]
            ) do
       # debug(liked)
-      do_boost(booster, object)
+      maybe_boost(booster, object)
     else
       _ ->
         error(l("Sorry, you cannot boost this"))
     end
   end
 
-  def do_boost(%{} = booster, %{} = boosted) do
+  def maybe_boost(%{} = booster, %{} = boosted) do
+    case Config.get([Bonfire.Social.Boosts, :can_reboost_after], false)
+         |> info("can_reboost_after") do
+      # max 1 re-boost every X seconds
+      seconds when is_integer(seconds) ->
+        date_last_boosted =
+          date_last_boosted(booster, boosted)
+          |> info("date_last_boosted")
+
+        if DateTime.diff(DateTime.now!("Etc/UTC"), date_last_boosted, :second)
+           |> info("compared") > seconds,
+           do: do_boost(booster, boosted),
+           else: {:error, l("You already boosted this recently.")}
+
+      # unlimited re-boosts
+      true ->
+        do_boost(booster, boosted)
+
+      # do not allow re-boosts
+      _ ->
+        if !boosted?(booster, boosted),
+          do: do_boost(booster, boosted),
+          else: {:error, l("You already boosted this.")}
+    end
+  end
+
+  defp do_boost(%{} = booster, %{} = boosted) do
     boosted = Objects.preload_creator(boosted)
     boosted_creator = Objects.object_creator(boosted)
 

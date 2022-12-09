@@ -91,10 +91,27 @@ defmodule Bonfire.Social.Edges do
     |> repo().one()
   end
 
-  def exists?(type, subject, object, opts) do
+  def last(type, subject, object, opts) do
     do_query(type, subject, object, opts)
-    |> info()
+    |> limit(1)
+    |> repo().one()
+  end
+
+  def last_date(type, subject, object, opts) do
+    last(type, subject, object, Keyword.put(opts, :preload, false))
+    |> date_from_pointer()
+  end
+
+  def exists?(type, subject, object, opts) do
+    do_query(type, subject, object, Keyword.put(opts, :preload, false))
+    # |> info()
     |> repo().exists?()
+  end
+
+  def count(type, subject, object, opts) do
+    do_query(type, subject, object, Keyword.put(opts, :preload, false))
+    |> select([type, edge], count(edge))
+    |> repo().one()
   end
 
   # defp do_query(type, subject, object, opts \\ [])
@@ -128,24 +145,24 @@ defmodule Bonfire.Social.Edges do
   def query_parent(query_schema, filters, opts) do
     # debug(opts)
     from(root in query_schema)
-    |> proload(:edge)
+    |> reusable_join([root], edge in assoc(root, :edge), as: :edge)
     |> boundarise(edge.object_id, opts)
-    |> maybe_proload(e(opts, :preload, nil))
+    |> maybe_proload(opts[:preload] |> info)
     |> filter(filters, opts)
   end
 
-  defp maybe_proload(query, _skip_preload? = false), do: query
+  defp maybe_proload(query, _preload? = false), do: query
 
   defp maybe_proload(query, :subject) do
-    proload(query,
-      edge: [subject: {"subject_", [:profile, :character]}]
-    )
+    query
+    |> proload(:edge)
+    |> proload(edge: [subject: {"subject_", [:profile, :character]}])
   end
 
   defp maybe_proload(query, :object) do
-    proload(query,
-      edge: [object: {"object_", [:profile, :character, :post_content]}]
-    )
+    query
+    |> proload(:edge)
+    |> proload(edge: [object: {"object_", [:profile, :character, :post_content]}])
   end
 
   defp maybe_proload(query, _) do
