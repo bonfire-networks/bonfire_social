@@ -165,6 +165,29 @@ defmodule Bonfire.Social.Edges do
     |> proload(edge: [object: {"object_", [:profile, :character, :post_content]}])
   end
 
+  defp maybe_proload(query, :object_with_creator) do
+    query
+    |> proload(:edge)
+    |> proload(
+      edge: [
+        object:
+          {"object_",
+           [
+             :profile,
+             :character,
+             :post_content,
+             created: [creator: {"creator_", [:profile, :character]}]
+           ]}
+      ]
+    )
+  end
+
+  # defp maybe_proload(query, preloads) when is_list(preloads) do
+  #   Enum.reduce(preloads, query, fn preload, query ->
+  #     maybe_proload(query, preload)
+  #   end)
+  # end
+
   defp maybe_proload(query, _) do
     query
     |> maybe_proload(:object)
@@ -198,6 +221,7 @@ defmodule Bonfire.Social.Edges do
     Enum.reduce(filters, query, &filter(&2, &1, opts))
     |> query_filter(
       Keyword.drop(filters, [
+        :preload,
         :object,
         :subject,
         :type,
