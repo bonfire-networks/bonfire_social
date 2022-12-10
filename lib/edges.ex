@@ -51,6 +51,8 @@ defmodule Bonfire.Social.Edges do
     do: put_edge_assoc(changeset, changeset.data.__struct__, subject, object)
 
   def put_edge_assoc(changeset, schema, subject, object) do
+    table_name = schema.__schema__(:source)
+
     %{
       # subject: subject,
       subject_id: ulid(subject),
@@ -62,6 +64,9 @@ defmodule Bonfire.Social.Edges do
     # |> Changesets.put_assoc(changeset, :edge, ...)
     |> Ecto.Changeset.cast(changeset, %{edge: ...}, [])
     |> Ecto.Changeset.cast_assoc(:edge, with: &Edge.changeset/2)
+    |> Ecto.Changeset.unique_constraint([:subject_id, :object_id, :table_id],
+      name: "bonfire_data_edges_edge_#{table_name}_unique_index"
+    )
   end
 
   def get(type, subject, object, opts \\ [])
