@@ -156,7 +156,7 @@ defmodule Bonfire.Social.Edges do
     |> filter(filters, opts)
   end
 
-  defp maybe_proload(query, _preload? = false), do: query
+  defp maybe_proload(query, _preload? = false), do: query |> proload(:edge)
 
   defp maybe_proload(query, :subject) do
     query
