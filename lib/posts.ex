@@ -73,16 +73,13 @@ defmodule Bonfire.Social.Posts do
   end
 
   def run_epic(type, options \\ [], on \\ :post) do
-    options = Keyword.merge(options, crash: true, debug: true, verbose: false)
+    options = Keyword.merge(options, crash: false, debug: true, verbose: false)
 
     with %{errors: []} = epic <-
            Epic.from_config!(__MODULE__, type)
            |> Epic.assign(:options, options)
            |> Epic.run() do
       {:ok, epic.assigns[on]}
-    else
-      e ->
-        error(e)
     end
   end
 
@@ -475,12 +472,12 @@ defmodule Bonfire.Social.Posts do
 
   defp indexable(id, content, activity, profile, character) do
     # "url" => path(post),
-    debug(%{
+    %{
       "id" => id,
       "index_type" => "Bonfire.Data.Social.Post",
       "post_content" => PostContents.indexing_object_format(content),
       "created" => Bonfire.Me.Integration.indexing_format_created(profile, character),
       "tags" => Tags.indexing_format_tags(activity)
-    })
+    }
   end
 end

@@ -154,7 +154,7 @@ defmodule Bonfire.Social.PostContents do
 
   def prepare_text(text, creator, opts) when is_binary(text) and text != "" do
     # little trick to test error handling
-    if String.contains?(text, "/crash!"), do: throw("User-triggered crash")
+    if String.contains?(text, "/crash!"), do: raise("User-triggered crash")
 
     text
     # if not using an HTML-based WYSIWYG editor, we store the raw markdown
