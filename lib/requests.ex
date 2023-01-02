@@ -209,16 +209,23 @@ defmodule Bonfire.Social.Requests do
         Integration.maybe_federate_and_gift_wrap_activity(requester, request)
 
       e ->
-        case get(requester, type, object) do
-          {:ok, request} ->
-            debug("was already requested")
-            {:ok, request}
+        warn(e)
+        maybe_already(requester, type, object)
+    end
+  rescue
+    e in Ecto.ConstraintError ->
+      warn(e)
+      maybe_already(requester, type, object)
+  end
 
-          e2 ->
-            error(e)
-            error(e2)
-            {:error, e}
-        end
+  defp maybe_already(requester, type, object) do
+    case get(requester, type, object, skip_boundary_check: true) do
+      {:ok, request} ->
+        info("was already requested")
+        {:ok, request}
+
+      e ->
+        error(e, "Could not make the request")
     end
   end
 

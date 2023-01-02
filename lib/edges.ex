@@ -65,7 +65,7 @@ defmodule Bonfire.Social.Edges do
     |> Ecto.Changeset.cast(changeset, %{edge: ...}, [])
     |> Ecto.Changeset.cast_assoc(:edge, with: &Edge.changeset/2)
     |> Ecto.Changeset.unique_constraint([:subject_id, :object_id, :table_id],
-      name: "bonfire_data_edges_edge_#{table_name}_unique_index"
+      name: String.to_atom("bonfire_data_edges_edge_#{table_name}_unique_index")
     )
   end
 
