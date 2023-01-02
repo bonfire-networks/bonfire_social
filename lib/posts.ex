@@ -73,13 +73,19 @@ defmodule Bonfire.Social.Posts do
   end
 
   def run_epic(type, options \\ [], on \\ :post) do
-    options = Keyword.merge(options, crash: false, debug: true, verbose: false)
+    env = Config.get(:env)
+
+    options =
+      Keyword.merge(options, crash: env == :test, debug: env != :prod, verbose: env == :test)
 
     with %{errors: []} = epic <-
            Epic.from_config!(__MODULE__, type)
            |> Epic.assign(:options, options)
            |> Epic.run() do
       {:ok, epic.assigns[on]}
+    else
+      e ->
+        {:error, error_msg(e)}
     end
   end
 

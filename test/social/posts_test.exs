@@ -54,7 +54,7 @@ defmodule Bonfire.Social.PostsTest do
 
     # post = repo().preload(post, [:caretaker, controlled: [acl: [:named, :caretaker]]])
     # user = repo().preload(user, encircles: [circle: [:named]])
-    # debug(post, "post")
+    # debug(post, "post") 
     # debug(user, "user")
     assert {:ok, read} = Posts.read(post.id, current_user: user)
 

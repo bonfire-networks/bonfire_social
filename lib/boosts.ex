@@ -72,10 +72,16 @@ defmodule Bonfire.Social.Boosts do
     case Config.get([Bonfire.Social.Boosts, :can_reboost_after], false) do
       seconds when is_integer(seconds) ->
         # max 1 re-boost every X seconds
-        if DateTime.diff(DateTime.now!("Etc/UTC"), date_last_boosted(booster, boosted), :second) >
-             seconds,
-           do: do_boost(booster, boosted),
-           else: {:error, l("You already boosted this recently.")}
+        case date_last_boosted(booster, boosted) do
+          nil ->
+            do_boost(booster, boosted)
+
+          date_last_boosted ->
+            if DateTime.diff(DateTime.now!("Etc/UTC"), date_last_boosted, :second) >
+                 seconds,
+               do: do_boost(booster, boosted),
+               else: {:error, l("You already boosted this recently.")}
+        end
 
       true ->
         # unlimited re-boosts

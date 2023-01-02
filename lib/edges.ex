@@ -114,7 +114,7 @@ defmodule Bonfire.Social.Edges do
   end
 
   def count(type, subject, object, opts) do
-    do_query(type, subject, object, Keyword.put(opts, :preload, false))
+    do_query(type, subject, object, Keyword.put(opts, :preload, :skip))
     |> select([type, edge], count(edge))
     |> repo().one()
   end
@@ -156,6 +156,7 @@ defmodule Bonfire.Social.Edges do
     |> filter(filters, opts)
   end
 
+  defp maybe_proload(query, _preload? = :skip), do: query
   defp maybe_proload(query, _preload? = false), do: query |> proload(:edge)
 
   defp maybe_proload(query, :subject) do

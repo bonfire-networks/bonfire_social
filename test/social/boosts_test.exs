@@ -28,8 +28,8 @@ defmodule Bonfire.Social.BoostsTest do
 
     assert {:ok, boost} = Boosts.boost(me, boosted)
 
-    assert boost.subject_id == me.id
-    assert boost.object_id == boosted.id
+    assert boost.edge.subject_id == me.id
+    assert boost.edge.object_id == boosted.id
 
     assert true == Boosts.boosted?(me, boosted)
   end

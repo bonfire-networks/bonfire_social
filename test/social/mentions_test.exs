@@ -150,9 +150,9 @@ defmodule Bonfire.Social.MentionsTest do
         current_user: mentioned
       )
 
-    # |> info("change settings")
-    # user with updated settings
-    mentioned = assigns[:current_user] || mentioned
+    mentioned =
+      (assigns[:current_user] || mentioned)
+      |> info("user with updated settings")
 
     assert {:ok, mention} =
              Posts.publish(
