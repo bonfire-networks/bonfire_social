@@ -8,6 +8,7 @@ defmodule Bonfire.Social.PostsTest do
   alias Bonfire.Me.Fake
   import Bonfire.Social.Fake
   use Bonfire.Common.Utils
+  import Tesla.Mock
 
   test "creation works" do
     user = Fake.fake_user!()
@@ -17,11 +18,11 @@ defmodule Bonfire.Social.PostsTest do
         post_content: %{
           summary: "summary",
           name: "name",
-          html_body: "<p>epic html message</p>"
+          html_body: "epic html"
         }
       })
 
-    assert String.contains?(post.post_content.html_body, "epic html message")
+    assert String.contains?(post.post_content.html_body, "epic html")
     assert post.post_content.name =~ "name"
     assert post.post_content.summary =~ "summary"
     assert post.created.creator_id == user.id

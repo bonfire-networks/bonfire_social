@@ -70,12 +70,14 @@ defmodule Bonfire.Social.PostContents do
             }} <-
              Bonfire.Social.Tags.maybe_process(
                creator,
-               prepare_text(get_attr(attrs, :html_body), creator, opts)
+               prepare_text(get_attr(attrs, :html_body), creator, opts),
+               opts
              ),
            {:ok, %{text: name, mentions: mentions2, hashtags: hashtags2, urls: urls2}} <-
              Bonfire.Social.Tags.maybe_process(
                creator,
-               prepare_text(get_attr(attrs, :name), creator, opts)
+               prepare_text(get_attr(attrs, :name), creator, opts),
+               opts
              ),
            {:ok,
             %{
@@ -86,7 +88,8 @@ defmodule Bonfire.Social.PostContents do
             }} <-
              Bonfire.Social.Tags.maybe_process(
                creator,
-               prepare_text(get_attr(attrs, :summary), creator, opts)
+               prepare_text(get_attr(attrs, :summary), creator, opts),
+               opts
              ) do
         merge_with_body_or_nil(
           attrs,
@@ -177,18 +180,33 @@ defmodule Bonfire.Social.PostContents do
     |> Text.maybe_sane_html()
   end
 
+  def editor_output_content_type(user) do
+    if Bonfire.Me.Settings.get(
+         [:ui, :rich_text_editor_disabled],
+         nil,
+         user
+       ) do
+      :markdown
+    else
+      Bonfire.Common.Utils.maybe_apply(
+        Bonfire.Me.Settings.get([:ui, :rich_text_editor], nil, user),
+        :output_format,
+        [],
+        &no_known_output/2
+      )
+    end
+  end
+
+  def no_known_output(error, args) do
+    warn(
+      "#{error} - don't know what editor is being used or what output format it uses (expect a module configured under [:bonfire, :ui, :rich_text_editor] which should have an output_format/0 function returning an atom (eg. :markdown, :html)"
+    )
+
+    :markdown
+  end
+
   # def maybe_process_markdown(text, creator) do
-  #   if Bonfire.Me.Settings.get(
-  #        [:ui, :rich_text_editor_disabled],
-  #        false,
-  #        creator
-  #      ) ||
-  #        maybe_apply(
-  #          Bonfire.Me.Settings.get([:ui, :rich_text_editor], nil, creator),
-  #          :output_format,
-  #          [],
-  #          &no_known_output/2
-  #        ) == :markdown do
+  #   if editor_output_content_type(creator) == :markdown do
   #     debug("use md")
   #     Text.maybe_markdown_to_html(text)
   #   else
@@ -196,14 +214,6 @@ defmodule Bonfire.Social.PostContents do
   #     text
   #   end
   # end
-
-  def no_known_output(error, args) do
-    error(
-      "maybe_process_markdown: #{error} - don't know what editor is being used or what output format it uses (expect a module configured under [:bonfire, :ui, :rich_text_editor] which should have an output_format/0 function returning an atom (eg. :markdown, :html)"
-    )
-
-    nil
-  end
 
   def indexing_object_format(%{post_content: obj}),
     do: indexing_object_format(obj)

@@ -31,7 +31,7 @@ defmodule Bonfire.Social.Tags do
     # |> debug("changeset")
   end
 
-  def maybe_process(creator, text) do
+  def maybe_process(creator, text, opts) do
     # debug(text)
     with true <- is_binary(text) and text != "",
          true <- module_enabled?(Bonfire.Tag, creator),
@@ -39,7 +39,7 @@ defmodule Bonfire.Social.Tags do
            Bonfire.Tag.TextContent.Process.process(
              creator,
              text,
-             editor_output_content_type(creator)
+             opts[:output_format] || PostContents.editor_output_content_type(creator)
            ) do
       {:ok,
        %{
@@ -88,23 +88,6 @@ defmodule Bonfire.Social.Tags do
   def maybe_boostable_categories(_, mention) do
     debug(mention, "not a category?")
     nil
-  end
-
-  def editor_output_content_type(user) do
-    Bonfire.Common.Utils.maybe_apply(
-      Bonfire.Me.Settings.get([:ui, :rich_text_editor], nil, user),
-      :output_format,
-      [],
-      &no_known_output/2
-    )
-  end
-
-  def no_known_output(error, args) do
-    warn(
-      "#{error} - don't know what editor is being used or what output format it uses (expect a module configured under [:bonfire, :ui, :rich_text_editor] which should have an output_format/0 function returning an atom (eg. :markdown, :html)"
-    )
-
-    @default_content_type
   end
 
   defp tags_preloads(mentions, _preset_or_custom_boundary) do

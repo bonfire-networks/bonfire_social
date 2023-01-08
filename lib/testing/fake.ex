@@ -5,22 +5,24 @@ defmodule Bonfire.Social.Fake do
   alias Bonfire.Social.Posts
   alias Bonfire.Social.Follows
 
-  def fake_post!(user, boundary \\ nil, attrs \\ nil) do
+  def fake_post!(user, boundary \\ nil, attrs \\ nil, opts \\ []) do
     {:ok, post} =
       Posts.publish(
-        current_user: user,
-        post_attrs:
-          attrs ||
-            %{
-              post_content: %{
-                name: title(),
-                # summary: summary(),
-                html_body: markdown()
-              }
-            },
-        boundary: boundary || "public",
-        debug: true,
-        crash: true
+        [
+          current_user: user,
+          post_attrs:
+            attrs ||
+              %{
+                post_content: %{
+                  name: title(),
+                  # summary: summary(),
+                  html_body: markdown()
+                }
+              },
+          boundary: boundary || "public",
+          debug: true,
+          crash: true
+        ] ++ opts
       )
 
     post
