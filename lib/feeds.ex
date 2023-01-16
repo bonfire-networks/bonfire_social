@@ -1,7 +1,7 @@
 defmodule Bonfire.Social.Feeds do
   use Bonfire.Common.Utils
   use Arrows
-  import Untangle
+  use Untangle
   import Ecto.Query
   import Bonfire.Social.Integration
   import Untangle
@@ -251,6 +251,7 @@ defmodule Bonfire.Social.Feeds do
     end
   end
 
+  @decorate time()
   def my_home_feed_ids(socket_or_opts, extra_feeds \\ [])
   # TODO: make configurable if user wants notifications included in home feed
 

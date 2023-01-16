@@ -1,13 +1,13 @@
 defmodule Bonfire.Social.Activities do
   use Arrows
+  use Untangle
+  use Bonfire.Common.Utils
 
   use Bonfire.Common.Repo,
     schema: Activity,
     searchable_fields: [:id, :subject_id, :verb_id, :object_id],
     sortable_fields: [:id, :subject_id, :verb_id, :object_id]
 
-  import Untangle
-  use Bonfire.Common.Utils
   import Bonfire.Boundaries.Queries
   import Ecto.Query
   alias Bonfire.Data.Social.Activity
@@ -663,6 +663,9 @@ defmodule Bonfire.Social.Activities do
     Map.put(object, :activity, activity)
   end
 
+  @decorate time()
+  def object_from_activity(activity)
+
   # special case for edges (eg. Boost) coming to us via LivePush - FIXME: do this somewhere else and use Feed preload functions
   def object_from_activity(%{object: %{edge: %{object: %{id: _} = object}}}),
     do: repo().maybe_preload(object, [:post_content, :profile, :character])
@@ -709,6 +712,9 @@ defmodule Bonfire.Social.Activities do
   def verb_name(%{verb: %{verb: verb}}), do: verb
   def verb_name(%{verb_id: id}), do: Bonfire.Boundaries.Verbs.get(id)[:verb]
   def verb_name(%{verb: verb}) when is_binary(verb), do: verb
+
+  @decorate time()
+  def verb_maybe_modify(verb, activity)
 
   # FIXME: temporary as we may later request other things
   def verb_maybe_modify("Request", _), do: "Request to Follow"
@@ -770,6 +776,7 @@ defmodule Bonfire.Social.Activities do
 
   # |> String.downcase()
 
+  @decorate time()
   def verb_display(verb) do
     verb = maybe_to_string(verb)
 

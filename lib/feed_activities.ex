@@ -1,9 +1,9 @@
 defmodule Bonfire.Social.FeedActivities do
   use Arrows
+  use Untangle
   use Bonfire.Common.Utils
   use Bonfire.Common.Repo
   import Ecto.Query
-  import Untangle
   # alias Bonfire.Boundaries
   alias Bonfire.Boundaries.Circles
   alias Bonfire.Data.Social.Activity
@@ -50,6 +50,9 @@ defmodule Bonfire.Social.FeedActivities do
     error("feeds_for_activity: dunno how to get feeds for #{inspect(activity)}")
     []
   end
+
+  @decorate time()
+  def feed_ids_and_opts(feed_name, opts)
 
   def feed_ids_and_opts(:my, opts) do
     opts = to_options(opts)
@@ -266,6 +269,7 @@ defmodule Bonfire.Social.FeedActivities do
     # |> debug()
   end
 
+  @decorate time()
   defp maybe_dedup_feed_objects(%{edges: edges} = result, opts)
        when is_list(edges) and length(edges) > 0 do
     if e(opts, :skip_dedup, nil) do
@@ -299,6 +303,7 @@ defmodule Bonfire.Social.FeedActivities do
     )
   end
 
+  @decorate time()
   defp feed_query(feed_ids, opts) do
     local_feed_id = Feeds.named_feed_id(:local)
     federated_feed_id = Feeds.named_feed_id(:activity_pub)
