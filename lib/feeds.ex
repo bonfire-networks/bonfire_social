@@ -39,7 +39,7 @@ defmodule Bonfire.Social.Feeds do
     |> List.flatten()
     |> Enum.uniq()
     |> Utils.filter_empty([])
-    |> info()
+    |> debug()
   end
 
   def maybe_my_outbox_feed_id(me, boundary) do
@@ -72,7 +72,7 @@ defmodule Bonfire.Social.Feeds do
     user_notifications_feeds([reply_to_creator | mentions], boundary)
     |> Utils.filter_empty([])
     |> Enum.uniq()
-    |> info()
+    |> debug()
     # avoid self-notifying
     |> Enum.reject(&(&1 == my_notifications))
   end

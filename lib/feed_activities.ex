@@ -149,9 +149,11 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed(id_or_ids, opts)
       when is_binary(id_or_ids) or (is_list(id_or_ids) and id_or_ids != []) do
+    # debug(opts, "feed_opts")
+
     ulid(id_or_ids)
     |> feed_query(opts)
-    |> repo().many_paginated(opts)
+    |> repo().many_paginated(Enum.into(opts[:feed_filters] || [], opts))
     # |> debug()
     |> maybe_dedup_feed_objects(opts)
   end
@@ -177,11 +179,11 @@ defmodule Bonfire.Social.FeedActivities do
     |> proload([:activity])
     |> query_extras(opts)
     # |> debug()
-    |> repo().many_paginated(opts)
+    |> repo().many_paginated(Enum.into(opts[:feed_filters] || [], opts))
   end
 
   def feed({feed_name, %{} = filters}, opts) do
-    feed(feed_name, [feed_filters: filters] ++ to_options(opts))
+    feed(feed_name, [feed_filters: input_to_atoms(filters)] ++ to_options(opts))
   end
 
   def feed(other, _) do
@@ -576,7 +578,7 @@ defmodule Bonfire.Social.FeedActivities do
   """
   def put_feed_publishes(changeset, options) do
     get_feed_publishes(options)
-    |> info()
+    # |> debug()
     |> Changesets.put_assoc!(changeset, :feed_publishes, ...)
   end
 
