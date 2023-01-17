@@ -149,7 +149,8 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed(id_or_ids, opts)
       when is_binary(id_or_ids) or (is_list(id_or_ids) and id_or_ids != []) do
-    # debug(opts, "feed_opts")
+    opts = to_options(opts)
+    # |> debug("feed_opts")
 
     ulid(id_or_ids)
     |> feed_query(opts)
@@ -175,6 +176,8 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed(%Ecto.Query{} = custom_query, opts) do
+    opts = to_options(opts)
+
     custom_query
     |> proload([:activity])
     |> query_extras(opts)
