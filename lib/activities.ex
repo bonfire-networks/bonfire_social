@@ -696,8 +696,7 @@ defmodule Bonfire.Social.Activities do
     # |> repo().maybe_preload([created: [:creator_profile, :creator_character]])
     # |> repo().maybe_preload([:profile, :character])
     with {:ok, obj} <-
-           Bonfire.Common.Pointers.get(id_or_pointer, skip_boundary_check: true)
-           |> debug() do
+           Bonfire.Common.Pointers.get(id_or_pointer, skip_boundary_check: true) do
       obj
     else
       # {:ok, obj} -> obj
