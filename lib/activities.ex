@@ -15,6 +15,7 @@ defmodule Bonfire.Social.Activities do
   alias Bonfire.Data.Social.Boost
   alias Bonfire.Data.Social.Flag
   alias Bonfire.Data.Social.PostContent
+  alias Bonfire.Data.Social.Replied
   alias Bonfire.Data.Social.Seen
 
   alias Bonfire.Data.Edges.Edge
@@ -84,6 +85,12 @@ defmodule Bonfire.Social.Activities do
     to_options(opts)
     |> Keyword.put_new(:verbs, verbs)
     |> boundarise(q, activity.object_id, ...)
+  end
+
+  def reply_to_as_permitted_for(q, opts \\ [], verbs \\ [:see, :read]) do
+    to_options(opts)
+    |> Keyword.put_new(:verbs, verbs)
+    |> boundarise(q, replied.reply_to_id, ...)
   end
 
   @doc """
@@ -454,20 +461,49 @@ defmodule Bonfire.Social.Activities do
           # If the root replied to anything, fetch that and its creator too. e.g.
           # * Alice's post that replied to Bob's post
           # * Bob liked alice's post
-          proload(query,
-            activity: [
-              replied: [
-                reply_to:
-                  {"reply_",
-                   [
-                     :post_content,
-                     created: [
-                       creator: {"reply_to_creator_", [:character, profile: :icon]}
-                     ]
-                   ]}
-              ]
-            ]
-          )
+
+          # reply_query = fn reply_to_ids -> Bonfire.Common.Pointers.list!(reply_to_ids, opts ++ [preload: [
+          #            :post_content,
+          #            :creator_of_reply_to
+          #          ]]) end
+
+          warn("reply_to should be preloaded after the query so boundaries can be applied")
+
+          query
+          |> proload(activity: [:replied])
+
+        # |> Ecto.Query.preload([activity: {activity, [replied: ^reply_query]}])
+        # |> proload(
+        #   activity: [
+        #     replied: [
+        #       reply_to:
+        #         {"reply_",
+        #          [
+        #            :post_content,
+        #            created: [
+        #              creator: {"reply_to_creator_", [:character, profile: :icon]}
+        #            ]
+        #          ]}
+        #     ]
+        #   ]
+        # )
+        # |> Ecto.Query.preload([activity: {activity, [replied: {replied, [reply_to: ^reply_query]}]}])
+        # |> proload(activity: [replied: [reply_to: ^reply_query]] )
+
+        # proload(query,
+        #   activity: [
+        #     replied: [
+        #       reply_to:
+        #         {"reply_",
+        #          [
+        #            :post_content,
+        #            created: [
+        #              creator: {"reply_to_creator_", [:character, profile: :icon]}
+        #            ]
+        #          ]}
+        #     ]
+        #   ]
+        # )
 
         :with_media ->
           query
@@ -520,12 +556,28 @@ defmodule Bonfire.Social.Activities do
           # If the root replied to anything, fetch that and its creator too. e.g.
           # * Alice's post that replied to Bob's post
           # * Bob liked alice's post
+
+          reply_query =
+            Common.Pointers.pointer_query(
+              [],
+              opts ++ [skip_boundary_check: false, preload: [:post_content, :creator]]
+            )
+
+          # |> debug("reply_query subquery that applies boundaries")
+
+          # reply_query = (from reply_to in Pointer)
+          # |> proload([
+          #            :post_content,
+          #            created: [
+          #              creator: {"reply_to_creator_", [:character, profile: :icon]}
+          #            ]
+          #     ] 
+          # )
+          # |> Activities.reply_to_as_permitted_for(opts)
+
           [
             replied: [
-              reply_to: [
-                :post_content,
-                created: [creator: [:character, profile: :icon]]
-              ]
+              reply_to: reply_query
             ]
           ]
 
@@ -677,7 +729,9 @@ defmodule Bonfire.Social.Activities do
       do: object
 
   # get other pointable objects (only as fallback for unknown object types, most objects should already be preloaded by `Bonfire.Social.Feeds.LiveHandler.preload/2`)
-  def object_from_activity(%{object: %Pointers.Pointer{id: _} = object}), do: load_object(object)
+  def object_from_activity(%{object: %Pointers.Pointer{id: _} = object}),
+    do: load_object(object, skip_boundary_check: true)
+
   # any other preloaded object
   def object_from_activity(%{object: %{id: _} = object}), do: object
 
@@ -685,18 +739,18 @@ defmodule Bonfire.Social.Activities do
     do: object_from_activity(activity)
 
   # last fallback, load any non-preloaded pointable object
-  def object_from_activity(%{object_id: id}), do: load_object(id)
+  def object_from_activity(%{object_id: id}), do: load_object(id, skip_boundary_check: true)
 
-  # def object_from_activity(%Pointers.Pointer{id: _} = object), do: load_object(object) # get other pointable objects (only as fallback, should normally already be preloaded)
+  # def object_from_activity(%Pointers.Pointer{id: _} = object), do: load_object(object, skip_boundary_check: true) # get other pointable objects (only as fallback, should normally already be preloaded)
   def object_from_activity(object_or_activity), do: object_or_activity
 
-  def load_object(id_or_pointer) do
+  def load_object(id_or_pointer, opts \\ []) do
     # TODO: avoid so many queries
     # |> repo().maybe_preload([:post_content])
     # |> repo().maybe_preload([created: [:creator_profile, :creator_character]])
     # |> repo().maybe_preload([:profile, :character])
     with {:ok, obj} <-
-           Bonfire.Common.Pointers.get(id_or_pointer, skip_boundary_check: true) do
+           Bonfire.Common.Pointers.get(id_or_pointer, opts) do
       obj
     else
       # {:ok, obj} -> obj

@@ -156,7 +156,7 @@ defmodule Bonfire.Social.FeedActivities do
     |> feed_query(opts)
     |> repo().many_paginated(Enum.into(opts[:feed_filters] || [], opts))
     # |> debug()
-    |> maybe_dedup_feed_objects(opts)
+    |> prepare_feed(opts)
   end
 
   def feed(:flags, opts) do
@@ -183,6 +183,7 @@ defmodule Bonfire.Social.FeedActivities do
     |> query_extras(opts)
     # |> debug()
     |> repo().many_paginated(Enum.into(opts[:feed_filters] || [], opts))
+    |> prepare_feed(opts)
   end
 
   def feed({feed_name, %{} = filters}, opts) do
@@ -269,26 +270,40 @@ defmodule Bonfire.Social.FeedActivities do
     query_paginated(filters, opts, query)
     # |> debug
     |> repo().many_paginated(paginate)
-    |> maybe_dedup_feed_objects(opts)
+    |> prepare_feed(opts)
 
     # |> debug()
   end
 
   @decorate time()
-  defp maybe_dedup_feed_objects(%{edges: edges} = result, opts)
-       when is_list(edges) and length(edges) > 0 do
-    if e(opts, :skip_dedup, nil) do
-      result
-    else
-      Map.put(
-        result,
-        :edges,
-        Enum.uniq_by(edges, &e(&1, :activity, :object_id, nil))
-      )
-    end
+  defp prepare_feed(result, opts)
+
+  defp prepare_feed(%{edges: edges} = result, opts)
+       when is_list(edges) and edges != [] do
+    # post_preloads = (if Enum.any?(List.wrap(e(opts, :preload, :feed)), fn p -> p in [:feed, :with_reply_to, :posts_with_reply_to, :feed_metadata] end), do: :with_reply_to, else: [])
+    # info("this will be preloaded now (after the query, so boundaries can be applied)") # NOTE: not needed because preloads are also done in FeedLive
+
+    Map.put(
+      result,
+      :edges,
+      edges
+      |> maybe_dedup_feed_objects(opts)
+      # |> Activities.activity_preloads(post_preloads, opts)
+    )
   end
 
-  defp maybe_dedup_feed_objects(result, _opts), do: result
+  defp prepare_feed(result, _opts) do
+    debug(result, "seems like empty feed")
+    result
+  end
+
+  defp maybe_dedup_feed_objects(edges, opts) do
+    if e(opts, :skip_dedup, nil) do
+      edges
+    else
+      Enum.uniq_by(edges, &e(&1, :activity, :object_id, nil))
+    end
+  end
 
   defp default_query(), do: select(Pointers.query_base(), [p], p)
 
@@ -418,7 +433,8 @@ defmodule Bonfire.Social.FeedActivities do
 
     (query ||
        case filters do
-         %Ecto.Query{} -> filters |> proload([:activity])
+         # |> proload([:activity])
+         %Ecto.Query{} -> filters
          _ -> base_query(opts)
        end)
     |> proload([:activity])
