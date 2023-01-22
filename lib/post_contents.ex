@@ -163,7 +163,9 @@ defmodule Bonfire.Social.PostContents do
     # if not using an HTML-based WYSIWYG editor, we store the raw markdown
     # |> maybe_process_markdown(creator)
     # transform emoticons to emojis
+    |> debug()
     |> Text.maybe_emote()
+    |> debug()
     # maybe remove potentially dangerous or dirty markup
     |> maybe_sane_html(e(opts, :do_not_strip_html, nil))
     # make sure we end up with valid HTML
@@ -178,6 +180,7 @@ defmodule Bonfire.Social.PostContents do
   defp maybe_sane_html(text, _) do
     text
     |> Text.maybe_sane_html()
+    |> debug()
   end
 
   def editor_output_content_type(user) do
