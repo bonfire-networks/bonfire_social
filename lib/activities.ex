@@ -328,9 +328,9 @@ defmodule Bonfire.Social.Activities do
             :with_creator,
             :with_verb,
             :with_object_more,
-            :with_reply_to,
-            :with_thread_name,
-            :with_media
+            # :with_reply_to,
+            :with_thread_name
+            # :with_media
           ],
           opts
         )
@@ -342,9 +342,9 @@ defmodule Bonfire.Social.Activities do
             :with_subject,
             :with_creator,
             :with_verb,
-            :with_reply_to,
-            :with_thread_name,
-            :with_media
+            # :with_reply_to,
+            :with_thread_name
+            # :with_media
           ],
           opts
         )
@@ -364,8 +364,8 @@ defmodule Bonfire.Social.Activities do
           query,
           [
             :with_subject,
-            :with_object_posts,
-            :with_reply_to
+            :with_object_posts
+            # :with_reply_to
           ],
           opts
         )
@@ -397,7 +397,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   defp do_activity_preloads(query, preload, opts) when is_atom(preload) do
-    debug(preload)
+    # debug(preload)
 
     if not is_nil(query) and Ecto.Queryable.impl_for(query) do
       case preload do
@@ -593,15 +593,21 @@ defmodule Bonfire.Social.Activities do
 
   defp maybe_repo_preload(%{edges: list} = page, preloads, opts)
        when is_list(list) do
+    # pages
     cased_maybe_repo_preload(List.first(list), page, preloads, opts)
   end
 
-  defp maybe_repo_preload(list, preloads, opts) when is_list(list) do
+  defp maybe_repo_preload(list, preloads, opts) when is_list(list) and list != [] do
     cased_maybe_repo_preload(List.first(list), list, preloads, opts)
   end
 
-  defp maybe_repo_preload(object, preloads, opts) do
+  defp maybe_repo_preload(%{} = object, preloads, opts) do
     cased_maybe_repo_preload(nil, object, preloads, opts)
+  end
+
+  defp maybe_repo_preload(object, _preloads, _opts) do
+    warn(object, "Could not preload activity data")
+    object
   end
 
   defp cased_maybe_repo_preload(example_object, objects, preloads, opts) do
@@ -609,13 +615,25 @@ defmodule Bonfire.Social.Activities do
 
     case example_object || objects do
       %Bonfire.Data.Social.Activity{} ->
+        debug("preload with Activity")
         do_maybe_repo_preload(objects, List.wrap(preloads), opts)
 
-      %{activity: _} ->
+      %{activity: _, __struct__: _} = _map ->
+        debug("activity within a parent struct")
         do_maybe_repo_preload(objects, [activity: preloads], opts)
 
+      %{activity: %{__struct__: _} = activity} = _map ->
+        if is_list(objects) do
+          debug("list of maps with activities")
+          do_maybe_repo_preload(objects, [activity: preloads], opts)
+        else
+          debug("activity within a map")
+          do_maybe_repo_preload(objects, [activity: preloads], opts)
+          # Map.put(map, :activity, do_maybe_repo_preload(activity, List.wrap(preloads), opts))
+        end
+
       _ ->
-        error(objects, "Could not preload activity data")
+        warn(objects, "Could not preload activity data")
         objects
     end
   end
