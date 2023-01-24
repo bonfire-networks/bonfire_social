@@ -717,7 +717,6 @@ defmodule Bonfire.Social.Activities do
   end
 
   def activity_under_object(%Activity{object: activity_object} = activity) do
-    # ugly, but heh
     Map.put(activity_object, :activity, Map.drop(activity, [:object]))
   end
 
@@ -725,18 +724,92 @@ defmodule Bonfire.Social.Activities do
     Map.put(object_without_activity, :activity, %{})
   end
 
+  def activity_under_object(%Activity{} = activity, %{} = object) do
+    Map.put(object, :activity, activity)
+  end
+
   def activity_under_object({:ok, %{} = object}) do
     {:ok, activity_under_object(object)}
   end
 
-  def activity_under_object(%Activity{} = activity, %{} = object) do
-    Map.put(object, :activity, activity)
+  def assigns_with_object_under_activity(%{activity: %{object: %{id: _}} = _activity} = assigns) do
+    assigns
+  end
+
+  def assigns_with_object_under_activity(
+        %{activity: %{} = _activity, object: %{id: _} = _object} = assigns
+      ) do
+    debug("Activity with both an activity and object")
+
+    assigns
+    |> Map.put(
+      :activity,
+      Map.put(
+        assigns[:activity],
+        :object,
+        assigns[:object]
+      )
+    )
+  end
+
+  def assigns_with_object_under_activity(%{activity: %{} = activity} = assigns) do
+    debug("Activity without :object as assoc")
+
+    assigns
+    |> Map.put(
+      :activity,
+      object_under_activity(activity, assigns[:object])
+    )
+  end
+
+  def assigns_with_object_under_activity(%{object: %{} = _object} = assigns) do
+    debug("Activity with only an object")
+
+    assigns
+    |> Map.put(
+      :activity,
+      e(assigns[:object], :activity, nil) ||
+        %Activity{
+          subject:
+            e(assigns[:object], :created, :creator, nil) || e(assigns[:object], :creator, nil),
+          object: assigns[:object]
+        }
+    )
+  end
+
+  def assigns_with_object_under_activity(assigns), do: assigns
+
+  def assigns_with_object_under_activity(assigns), do: assigns
+
+  def object_under_activity(%{object: %{id: _}} = activity, nil) do
+    activity
+  end
+
+  def object_under_activity(activity, nil) do
+    activity
+    # |> Map.put(
+    #   :object,
+    #   Activities.object_from_activity(activity) # risk of n+1
+    # )
+  end
+
+  def object_under_activity(activity, object) do
+    activity
+    |> Map.put(
+      :object,
+      object
+    )
+  end
+
+  def object_under_activity(activity, _) do
+    activity
   end
 
   @decorate time()
   def object_from_activity(activity)
 
-  # special case for edges (eg. Boost) coming to us via LivePush - FIXME: do this somewhere else and use Feed preload functions
+  # special case for edges (eg. Boost) coming to us via LivePush 
+  # FIXME: do this somewhere else and use Feed preload functions
   def object_from_activity(%{object: %{edge: %{object: %{id: _} = object}}}),
     do: repo().maybe_preload(object, [:post_content, :profile, :character])
 
