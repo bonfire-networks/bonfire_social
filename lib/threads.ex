@@ -423,7 +423,7 @@ defmodule Bonfire.Social.Threads do
   #           acc
   #           |> put_in(
   #               [reply_to_id, :direct_replies],
-  #               Bonfire.Common.Utils.maybe_get(acc[reply_to_id], :direct_replies, []) ++ [reply_with_id]
+  #               Bonfire.Common.Enums.maybe_get(acc[reply_to_id], :direct_replies, []) ++ [reply_with_id]
   #             )
   #           # |> IO.inspect
   #           # |> Map.delete(id)

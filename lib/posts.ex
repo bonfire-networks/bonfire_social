@@ -85,7 +85,7 @@ defmodule Bonfire.Social.Posts do
       {:ok, epic.assigns[on]}
     else
       e ->
-        {:error, error_msg(e)}
+        {:error, Errors.error_msg(e)}
     end
   end
 

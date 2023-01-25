@@ -20,13 +20,15 @@ defmodule Bonfire.Social.Acts.Federate do
   alias Bonfire.Data.Social.Post
   alias Bonfire.Social.Integration
   alias Ecto.Changeset
+  alias Bonfire.Common
+  alias Common.Types
 
   def run(epic, act) do
     on = Keyword.get(act.options, :on, :post)
     object = epic.assigns[on]
     action = Keyword.get(epic.assigns[:options], :action, :insert)
     current_user = epic.assigns[:options][:current_user]
-    current_user_id = Utils.ulid(current_user)
+    current_user_id = Types.ulid(current_user)
 
     cond do
       epic.errors != [] ->

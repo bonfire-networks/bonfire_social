@@ -104,7 +104,7 @@ defmodule Bonfire.Social.Edges do
 
   def last_date(type, subject, object, opts) do
     last(type, subject, object, Keyword.put(opts, :preload, false))
-    |> date_from_pointer()
+    |> DatesTimes.date_from_pointer()
   end
 
   def exists?(type, subject, object, opts) do

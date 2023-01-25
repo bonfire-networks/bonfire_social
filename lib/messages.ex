@@ -139,7 +139,7 @@ defmodule Bonfire.Social.Messages do
       )
       |> debug("opts")
 
-    with_user_id = Utils.ulid(with_user)
+    with_user_id = Types.ulid(with_user)
 
     if with_user_id && with_user_id != current_user_id do
       # |> debug("list message filters")

@@ -717,7 +717,7 @@ defmodule Bonfire.Social.FeedActivities do
     # TODO: notify remote users via AP?
     # debug(characters)
     Feeds.feed_ids(:notifications, characters)
-    |> Utils.filter_empty([])
+    |> Enums.filter_empty([])
     |> notify_to_feed_ids(subject, verb_or_activity, object, ...)
   end
 
@@ -875,7 +875,7 @@ defmodule Bonfire.Social.FeedActivities do
        ) do
     # This makes sure it gets put in feed even if the
     # federation hook fails
-    feeds = Utils.filter_empty(feeds, [])
+    feeds = Enums.filter_empty(feeds, [])
     ret = put_in_feeds(feeds, activity)
     # TODO: add ActivityPub feed for remote activities
     try do

@@ -4,6 +4,8 @@ defmodule Bonfire.Social.Fake do
   alias Bonfire.Common.Utils
   alias Bonfire.Social.Posts
   alias Bonfire.Social.Follows
+  alias Bonfire.Common
+  alias Common.Types
 
   def fake_post!(user, boundary \\ nil, attrs \\ nil, opts \\ []) do
     {:ok, post} =
@@ -35,7 +37,7 @@ defmodule Bonfire.Social.Fake do
         post_attrs:
           attrs ||
             %{
-              reply_to_id: Utils.ulid(reply_to),
+              reply_to_id: Types.ulid(reply_to),
               post_content: %{
                 summary: "summary",
                 name: "name",

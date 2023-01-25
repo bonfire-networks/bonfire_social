@@ -126,11 +126,11 @@ defmodule Bonfire.Social.LivePush do
       Bonfire.Social.Activities.verb_name(verb)
       |> Bonfire.Social.Activities.verb_display()
 
-    avatar = avatar_url(subject)
+    avatar = Media.avatar_url(subject)
 
     icon =
       cond do
-        is_binary(avatar) and avatar != avatar_fallback() -> avatar
+        is_binary(avatar) and avatar != Media.avatar_fallback() -> avatar
         true -> Config.get([:ui, :theme, :instance_icon], "/images/bonfire-icon.png")
       end
 

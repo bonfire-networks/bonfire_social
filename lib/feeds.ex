@@ -38,7 +38,7 @@ defmodule Bonfire.Social.Feeds do
     ]
     |> List.flatten()
     |> Enum.uniq()
-    |> Utils.filter_empty([])
+    |> Enums.filter_empty([])
     |> debug()
   end
 
@@ -70,7 +70,7 @@ defmodule Bonfire.Social.Feeds do
     reply_to_creator = e(assigns, :reply_to, :created, :creator, nil)
 
     user_notifications_feeds([reply_to_creator | mentions], boundary)
-    |> Utils.filter_empty([])
+    |> Enums.filter_empty([])
     |> Enum.uniq()
     |> debug()
     # avoid self-notifying
@@ -229,7 +229,7 @@ defmodule Bonfire.Social.Feeds do
     |> Enum.uniq()
     # avoid self-notifying
     |> Enum.reject(&(&1 == creator_notifications))
-    |> Utils.filter_empty([])
+    |> Enums.filter_empty([])
     |> debug("target feeds")
   end
 
@@ -292,7 +292,7 @@ defmodule Bonfire.Social.Feeds do
         # debug(e: e)
         extra_feeds
     end
-    |> Utils.filter_empty([])
+    |> Enums.filter_empty([])
     |> Enum.uniq()
 
     # |> debug("all")

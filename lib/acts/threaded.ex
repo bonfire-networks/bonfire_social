@@ -11,6 +11,8 @@ defmodule Bonfire.Social.Acts.Threaded do
   import Epics
   import Untangle
   use Arrows
+  alias Bonfire.Common
+  alias Common.Types
 
   def run(epic, act) do
     on = Keyword.get(act.options, :on, :post)
@@ -74,7 +76,7 @@ defmodule Bonfire.Social.Acts.Threaded do
       {:ok, %{replied: %{thread_id: thread_id, thread: %{}}} = reply_to} ->
         # we are permitted to both reply to the thing and the thread root.
         # for thread forking
-        thread_id = Utils.ulid(custom_thread) || thread_id
+        thread_id = Types.ulid(custom_thread) || thread_id
         maybe_debug(epic, act, thread_id, "threading under parent thread root or custom thread")
 
         changeset
@@ -85,7 +87,7 @@ defmodule Bonfire.Social.Acts.Threaded do
       {:ok, %{replied: %{thread_id: thread_id}} = reply_to}
       when is_binary(thread_id) ->
         # we're permitted to reply to the thing, but not the thread root
-        thread_id = Utils.ulid(custom_thread) || reply_to.id
+        thread_id = Types.ulid(custom_thread) || reply_to.id
         smart(epic, act, reply_to, "threading under parent or custom thread")
 
         changeset
@@ -95,7 +97,7 @@ defmodule Bonfire.Social.Acts.Threaded do
 
       {:ok, %{} = reply_to} ->
         # we're permitted to reply to the parent, but it appears to have no threading information.
-        thread_id = Utils.ulid(custom_thread) || reply_to.id
+        thread_id = Types.ulid(custom_thread) || reply_to.id
         maybe_debug(epic, act, "parent missing threading, creating as root or custom")
 
         reply_to = init_replied(reply_to)
@@ -112,7 +114,7 @@ defmodule Bonfire.Social.Acts.Threaded do
           "does not reply to anything or not permitted to reply to, so starting new thread (or using custom if specified)"
         )
 
-        thread_id = Utils.ulid(custom_thread) || Changeset.get_field(changeset, :id)
+        thread_id = Types.ulid(custom_thread) || Changeset.get_field(changeset, :id)
 
         changeset
         |> put_replied(thread_id, nil)

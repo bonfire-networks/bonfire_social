@@ -1,7 +1,7 @@
 defmodule Bonfire.Social.Integration do
   use Arrows
   alias Bonfire.Common.Config
-  alias Bonfire.Common.Utils
+  use Bonfire.Common.Utils
   alias Bonfire.Data.Social.Follow
   import Untangle
 
@@ -25,7 +25,7 @@ defmodule Bonfire.Social.Integration do
         object_override \\ nil
       ) do
     {:ok,
-     Utils.deep_merge(object, %{
+     Enums.deep_merge(object, %{
        activity: %{
          federate_activity_pub:
            Utils.ok_unwrap(
@@ -128,7 +128,7 @@ defmodule Bonfire.Social.Integration do
       verb ||
         Utils.e(activity, :verb, :verb, "Create")
         |> String.downcase()
-        |> Utils.maybe_to_atom()
+        |> Types.maybe_to_atom()
 
     maybe_federate(subject, verb, object, activity)
 

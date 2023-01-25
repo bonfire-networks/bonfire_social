@@ -18,7 +18,7 @@ defmodule Bonfire.Social.Tags do
               e(changeset, :changes, :post_content, :changes, :hashtags, []) ++
               e(attrs, :tags, []))
            |> filter_empty([])
-           |> uniq_by_id()
+           |> Enums.uniq_by_id()
            |> debug("cast tags") do
       changeset
       |> Changeset.cast(%{tagged: tags_preloads(tags, opts)}, [])
