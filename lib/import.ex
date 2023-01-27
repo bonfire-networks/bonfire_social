@@ -12,6 +12,7 @@ defmodule Bonfire.Social.Import do
 
   def follows_from_csv_file(user, path) do
     follows_from_csv(user, File.read!(path))
+    # TODO: delete file
   end
 
   def follows_from_csv(user, list) when is_binary(list) do
@@ -20,6 +21,7 @@ defmodule Bonfire.Social.Import do
 
   def ghosts_from_csv_file(user, path) do
     ghosts_from_csv_file(user, File.read!(path))
+    # TODO: delete file
   end
 
   def ghosts_from_csv(user, list) when is_binary(list) do
@@ -28,6 +30,7 @@ defmodule Bonfire.Social.Import do
 
   def silences_from_csv_file(user, path) do
     silences_from_csv(user, File.read!(path))
+    # TODO: delete file
   end
 
   def silences_from_csv(user, list) when is_binary(list) do
@@ -81,37 +84,36 @@ defmodule Bonfire.Social.Import do
   end
 
   @spec perform(atom(), User.t(), list()) :: :ok | list() | {:error, any()}
-  def perform("silences_import", %User{} = user, identifier) do
+  def perform("silences_import" = op, %User{} = user, identifier) do
     with {:ok, %{} = silence} <- AdapterUtils.get_by_url_ap_id_or_username(identifier),
          {:ok, _} <- Blocks.block(silence, [:silence], current_user: user) do
       silence
     else
-      error -> handle_error(:silences_import, identifier, error)
+      error -> handle_error(op, identifier, error)
     end
   end
 
-  def perform("ghosts_import", %User{} = user, identifier) do
+  def perform("ghosts_import" = op, %User{} = user, identifier) do
     with {:ok, %{} = ghost} <- AdapterUtils.get_by_url_ap_id_or_username(identifier),
          {:ok, _ghost} <- Blocks.block(ghost, [:ghost], current_user: user) do
       ghost
     else
-      error -> handle_error(:ghosts_import, identifier, error)
+      error -> handle_error(op, identifier, error)
     end
   end
 
-  def perform("follows_import", %User{} = user, identifier) do
+  def perform("follows_import" = op, %User{} = user, identifier) do
     with {:ok, %{} = followed} <- AdapterUtils.get_by_url_ap_id_or_username(identifier),
          {:ok, _} <- Follows.follow(user, followed) do
       followed
     else
-      error -> handle_error(:follows_import, identifier, error)
+      error -> handle_error(op, identifier, error)
     end
   end
 
   def perform(_, _, _), do: :ok
 
-  defp handle_error(op, user_id, error) do
-    error("#{op} failed for #{user_id} with: #{inspect(error)}")
-    error
+  defp handle_error(op, identifier, error) do
+    error(error, "#{op} failed for #{identifier}")
   end
 end
