@@ -140,33 +140,33 @@ defmodule Bonfire.Social.Requests do
     # |> info("requests query")
   end
 
-  def list_my_requested(type, opts, with_profile_only \\ true),
-    do: list_requested(type, current_user_required!(opts), opts, with_profile_only)
+  def list_my_requested(opts),
+    do: list_requested(current_user_required!(opts), opts)
 
   def list_requested(
         %{id: user_id} = _user,
-        type,
-        opts \\ [],
-        with_profile_only \\ true
+        opts \\ []
       )
       when is_binary(user_id) do
-    query([subject: user_id], type, opts)
-    # |> maybe_with_requested_profile_only(with_profile_only)
+    opts = to_options(opts)
+
+    query([subject: user_id], opts[:type], opts)
+    # |> maybe_with_requested_profile_only(opts[:with_profile_only])
     |> many(opts)
   end
 
-  def list_my_requesters(opts, type, with_profile_only \\ true),
-    do: list_requesters(current_user_required!(opts), type, opts, with_profile_only)
+  def list_my_requesters(opts),
+    do: list_requesters(current_user_required!(opts), opts)
 
   def list_requesters(
         %{id: user_id} = _user,
-        type,
-        opts \\ [],
-        with_profile_only \\ true
+        opts \\ []
       )
       when is_binary(user_id) do
-    query([object: user_id], type, opts)
-    # |> maybe_with_requester_profile_only(with_profile_only)
+    opts = to_options(opts)
+
+    query([object: user_id], opts[:type], opts)
+    # |> maybe_with_requester_profile_only(opts[:with_profile_only])
     |> many(opts)
   end
 
