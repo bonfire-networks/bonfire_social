@@ -1,5 +1,7 @@
 defmodule Bonfire.Social.Import do
   use Oban.Worker,
+    #  TODO: sort out queue vs op
+    queue: :import,
     max_attempts: 1
 
   import Untangle
