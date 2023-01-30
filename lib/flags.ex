@@ -1,5 +1,14 @@
 defmodule Bonfire.Social.Flags do
   use Arrows
+  use Bonfire.Common.Utils
+
+  use Bonfire.Common.Repo,
+    schema: Flag,
+    searchable_fields: [:flagger_id, :flagged_id]
+
+  alias Bonfire.Social.Integration
+  import Bonfire.Boundaries.Queries
+
   alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Flag
   alias Bonfire.Boundaries.Verbs
@@ -11,14 +20,6 @@ defmodule Bonfire.Social.Flags do
 
   alias Bonfire.Social.Edges
   alias Bonfire.Social.Objects
-  use Arrows
-  use Bonfire.Common.Utils
-
-  use Bonfire.Common.Repo,
-    schema: Flag,
-    searchable_fields: [:flagger_id, :flagged_id]
-
-  import Bonfire.Boundaries.Queries
 
   @behaviour Bonfire.Common.QueryModule
   @behaviour Bonfire.Common.ContextModule
@@ -97,14 +98,24 @@ defmodule Bonfire.Social.Flags do
     end
   end
 
-  def list_paginated(filters, opts \\ []) do
-    # mediators and admins should see all flagged objects
+  def list(opts) do
     opts =
-      Keyword.put_new(
-        to_options(opts),
+      to_options(opts)
+      |> Keyword.put_new(
         :skip_boundary_check,
         Bonfire.Boundaries.can?(opts, :mediate, :instance) || :admins
       )
+
+    if opts[:scope] == :instance and
+         (opts[:skip_boundary_check] == true or Integration.is_admin?(opts)) do
+      list_paginated([], opts)
+    else
+      list_my(opts)
+    end
+  end
+
+  def list_paginated(filters, opts) do
+    # mediators and admins should see all flagged objects
 
     filters
     |> query(opts)

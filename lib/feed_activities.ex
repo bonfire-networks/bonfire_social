@@ -51,6 +51,9 @@ defmodule Bonfire.Social.FeedActivities do
     []
   end
 
+  # TODO: put in config
+  def skip_verbs_default, do: [:flag]
+
   @decorate time()
   def feed_ids_and_opts(feed_name, opts)
 
@@ -65,7 +68,7 @@ defmodule Bonfire.Social.FeedActivities do
            opts
          ),
          do: [:boost],
-         else: []
+         else: opts[:exclude_verbs] || skip_verbs_default()
 
     exclude_verbs =
       if !Bonfire.Me.Settings.get(
@@ -115,7 +118,9 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed_ids_and_opts(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
-    opts = to_options(opts)
+    opts =
+      to_options(opts)
+      |> Keyword.put_new_lazy(:exclude_verbs, &skip_verbs_default/0)
 
     {named_feed(
        feed_name,
@@ -124,7 +129,9 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed_ids_and_opts(feed, opts) when is_binary(feed) or is_list(feed) do
-    opts = to_options(opts)
+    opts =
+      to_options(opts)
+      |> Keyword.put_new_lazy(:exclude_verbs, &skip_verbs_default/0)
 
     {feed, opts}
   end
@@ -138,6 +145,14 @@ defmodule Bonfire.Social.FeedActivities do
       |> Keyword.put_new(:home_feed_ids, home_feed_ids)
 
     feed(:my, opts)
+  end
+
+  defp maybe_merge_filters(filters, opts) when is_struct(filters) or is_nil(filters) do
+    opts
+  end
+
+  defp maybe_merge_filters(filters, opts) do
+    Enum.into(filters, opts)
   end
 
   @doc """
@@ -154,13 +169,13 @@ defmodule Bonfire.Social.FeedActivities do
 
     ulid(id_or_ids)
     |> feed_query(opts)
-    |> repo().many_paginated(Enum.into(opts[:feed_filters] || [], opts))
+    |> repo().many_paginated(maybe_merge_filters(opts[:feed_filters], opts))
     # |> debug()
     |> prepare_feed(opts)
   end
 
   def feed(:flags, opts) do
-    Bonfire.Social.Flags.list_paginated([], opts)
+    Bonfire.Social.Flags.list(opts)
     |> repo().maybe_preload(
       [edge: [object: [created: [creator: [:profile, :character]]]]],
       follow_pointers: false

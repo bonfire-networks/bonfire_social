@@ -146,7 +146,7 @@ defmodule Bonfire.Social.Follows do
           do: Integration.maybe_federate_and_gift_wrap_activity(user, follow),
           else: {:ok, follow}
 
-      {:error, e} ->
+      e ->
         error(e)
         maybe_already_followed(user, object)
     end
@@ -157,8 +157,12 @@ defmodule Bonfire.Social.Follows do
   end
 
   defp check_follow(follower, object, opts) do
+    debug(opts)
+    debug(id(follower))
+    debug(id(object))
     skip? = skip_boundary_check?(opts, object)
-    skip? = (:admins == skip? && Users.is_admin?(follower)) || skip? == true
+    debug(skip?)
+    skip? = skip? == true || (skip? == :admins and Users.is_admin?(follower))
 
     opts =
       opts
@@ -166,12 +170,12 @@ defmodule Bonfire.Social.Follows do
       |> Keyword.put_new(:current_user, follower)
 
     if skip? do
-      info("skip boundary check")
+      info(skip?, "skip boundary check")
       local_or_remote_object(object)
     else
       case ulid(object) do
         id when is_binary(id) ->
-          case Bonfire.Boundaries.load_pointers(id, opts) do
+          case Bonfire.Boundaries.load_pointer(id, opts) do
             object when is_struct(object) ->
               local_or_remote_object(object)
 
@@ -235,22 +239,30 @@ defmodule Bonfire.Social.Follows do
   end
 
   def unfollow(user, %{} = object) do
-    un = Edges.delete_by_both(user, Follow, object)
-    # with [_id] <- un do
-    # delete the like activity & feed entries
-    Activities.delete_by_subject_verb_object(user, :follow, object)
+    if following?(user, object) do
+      un = Edges.delete_by_both(user, Follow, object)
+      # with [_id] <- un do
+      # delete the like activity & feed entries
+      Activities.delete_by_subject_verb_object(user, :follow, object)
 
-    Cache.remove("my_followed:#{ulid(user)}")
+      Cache.remove("my_followed:#{ulid(user)}")
 
-    Bonfire.Boundaries.Circles.get_stereotype_circles(user, :followed)
-    ~> Bonfire.Boundaries.Circles.remove_from_circles(object, ...)
+      Bonfire.Boundaries.Circles.get_stereotype_circles(user, :followed)
+      ~> Bonfire.Boundaries.Circles.remove_from_circles(object, ...)
 
-    Bonfire.Boundaries.Circles.get_stereotype_circles(object, :followers)
-    ~> Bonfire.Boundaries.Circles.remove_from_circles(user, ...)
+      Bonfire.Boundaries.Circles.get_stereotype_circles(object, :followers)
+      ~> Bonfire.Boundaries.Circles.remove_from_circles(user, ...)
 
-    # Integration.maybe_federate(user, :unfollow, object)
-    ap_publish_activity(user, :delete, object)
-    # end
+      # Integration.maybe_federate(user, :unfollow, object)
+      ap_publish_activity(user, :delete, object)
+      # end
+    else
+      if requested?(user, object) do
+        Requests.unrequest(user, Follow, object)
+      else
+        error("Not following")
+      end
+    end
   end
 
   def unfollow(%{} = user, object) when is_binary(object) do

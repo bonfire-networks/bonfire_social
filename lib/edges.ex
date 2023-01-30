@@ -17,6 +17,11 @@ defmodule Bonfire.Social.Edges do
     changeset(schema, subject, verb, object, options)
     |> Changeset.unique_constraint([:subject_id, :object_id, :table_id])
     |> repo().insert()
+    |> preload_inserted(subject, object)
+  end
+
+  defp preload_inserted(inserted, %{} = subject, %{} = object) do
+    inserted
     |> repo().maybe_preload(
       edge: [
         subject: fn _ -> [subject] end,
@@ -27,8 +32,25 @@ defmodule Bonfire.Social.Edges do
         object: fn _ -> [object] end
       ]
     )
+  end
 
-    # |> repo().maybe_preload(edge: [:subject, :object])
+  defp preload_inserted(inserted, %{} = subject, _object) do
+    inserted
+    |> repo().maybe_preload(
+      edge: [
+        :object,
+        subject: fn _ -> [subject] end
+      ],
+      activity: [
+        :object,
+        subject: fn _ -> [subject] end
+      ]
+    )
+  end
+
+  defp preload_inserted(inserted, _subject, _object) do
+    inserted
+    |> repo().maybe_preload(edge: [:subject, :object], activity: [:subject, :object])
   end
 
   def changeset(schema, subject, verb, object, options) do
