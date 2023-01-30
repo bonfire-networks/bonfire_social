@@ -13,7 +13,7 @@ defmodule Bonfire.Social.LivePush do
   def push_activity(feed_ids, activity, opts \\ [])
 
   def push_activity(feed_ids, %Activity{} = activity, opts) do
-    debug(feed_ids, "push a :new_activity")
+    debug(feed_ids, "push a :new_activity to feed_ids")
     activity = prepare_activity(activity, opts)
 
     PubSub.broadcast(feed_ids, {
@@ -135,7 +135,7 @@ defmodule Bonfire.Social.LivePush do
       end
 
     feed_ids
-    |> debug("feed_ids")
+    |> debug("to feed_ids")
     |> Bonfire.UI.Common.Notifications.notify_feeds(
       e(subject, :profile, :name, e(subject, :character, :username, "")) <>
         " " <>
@@ -169,10 +169,12 @@ defmodule Bonfire.Social.LivePush do
 
   defp normalise_feed_ids(feed_ids) do
     feed_ids
-    |> debug("feed_ids")
+    # |> debug("input")
     |> ulid()
     |> List.wrap()
     |> filter_empty([])
+
+    # |> debug("normalised")
   end
 
   defp activity_from_object(%{id: _, activity: _activity} = object) do
@@ -205,7 +207,7 @@ defmodule Bonfire.Social.LivePush do
   end
 
   defp maybe_push_thread(activity) do
-    debug(activity, "maybe_push_thread: no replied info found}")
+    debug(activity, "no replied info found}")
     nil
   end
 
@@ -215,11 +217,9 @@ defmodule Bonfire.Social.LivePush do
        )
        when is_binary(thread_id) do
     debug(
-      "maybe_push_thread: put in thread feed for anyone following the thread: #{inspect(thread_id)}"
+      thread_id,
+      "broadcasting to anyone currently viewing the thread"
     )
-
-    # debug(activity: activity)
-    debug("maybe_push_thread: broadcasting to anyone currently viewing the thread")
 
     PubSub.broadcast(
       thread_id,
