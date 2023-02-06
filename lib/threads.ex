@@ -235,6 +235,7 @@ defmodule Bonfire.Social.Threads do
         [:with_subject, :with_reply_to, :tags],
         opts
       )
+      |> debug("activity")
 
     # add author of root message
     # add author of the message it was replying to
@@ -242,6 +243,7 @@ defmodule Bonfire.Social.Threads do
     # add any other participants in the thread
     # |> debug("tags")
     ([e(activity, :subject, nil)] ++
+       [e(activity, :object, :created, :creator, nil)] ++
        [e(activity, :reply_to, :created, :creator, nil)] ++
        (e(activity, :tags, [])
         # no hashtags
@@ -260,7 +262,6 @@ defmodule Bonfire.Social.Threads do
     |> filter_empty([])
     |> Enum.uniq_by(&e(&1, :character, :id, nil))
 
-    # |> Enum.reject(&( e(&1, :character, :id, nil) == ulid(current_user) ))
     # |> debug("participants")
   end
 
