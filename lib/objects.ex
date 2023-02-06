@@ -227,60 +227,69 @@ defmodule Bonfire.Social.Objects do
     opts = to_options(opts)
 
     # load & check permission
-    with %{__struct__: type} = object <-
+    with %{__struct__: _type} = object <-
            Bonfire.Common.Pointers.get(object, opts ++ [verbs: [:delete]])
            ~> debug("WIP: deletion") do
-      opts =
-        opts
-        |> Keyword.put(:action, :delete)
-        # generic assocs to delete from all object types if they exist
-        |> Keyword.put(:delete_associations, [
-          :created,
-          :caretaker,
-          :activities,
-          :peered,
-          :controlled
-        ])
-
-      with {:error, _} <-
-             Bonfire.Common.ContextModule.maybe_apply(
-               object,
-               :delete,
-               [object, opts],
-               &delete_apply_error/2
-             ),
-           {:error, _} <-
-             Bonfire.Common.ContextModule.maybe_apply(
-               object,
-               :soft_delete,
-               [object, opts],
-               &delete_apply_error/2
-             ),
-           {:error, _} <-
-             Bonfire.Common.ContextModule.maybe_apply(
-               object,
-               :soft_delete,
-               [object],
-               &delete_apply_error/2
-             ) do
-        warn("there's no per-type delete functions, try with generic_delete anyway")
-
-        maybe_generic_delete(type, object, opts)
-      else
-        {:ok, _} ->
-          debug("Delete it from feeds too")
-          id = ulid(object)
-          Bonfire.Social.Activities.delete({:object_id, id})
-      end
+      do_delete(object, opts)
     else
       _ ->
-        error(l("No permission to delete this"))
+        error("No permission to delete this")
+    end
+  end
+
+  # for internal use, please call `delete/2` which checks for permissiom
+  def do_delete(%{__struct__: type} = object, opts) do
+    opts =
+      opts
+      |> to_options()
+      |> Keyword.put(:action, :delete)
+      # generic assocs to delete from all object types if they exist
+      |> Keyword.put(:delete_associations, [
+        :created,
+        :caretaker,
+        :activities,
+        :peered,
+        :controlled
+      ])
+
+    with {:error, _} <-
+           Bonfire.Common.ContextModule.maybe_apply(
+             object,
+             :delete,
+             [object, opts],
+             &delete_apply_error/2
+           ),
+         {:error, _} <-
+           Bonfire.Common.ContextModule.maybe_apply(
+             object,
+             :soft_delete,
+             [object, opts],
+             &delete_apply_error/2
+           ),
+         {:error, _} <-
+           Bonfire.Common.ContextModule.maybe_apply(
+             object,
+             :soft_delete,
+             [object],
+             &delete_apply_error/2
+           ),
+         {:error, e} <- maybe_generic_delete(type, object, opts) do
+      error(e, "Unable to delete this")
+    else
+      {:ok, _} ->
+        debug("Delete it from feeds too")
+        Bonfire.Social.Activities.delete({:object_id, ulid!(object)})
     end
   end
 
   def maybe_generic_delete(type, object, options \\ [])
 
   def maybe_generic_delete(type, object, options) do
+    warn(
+      type,
+      "there's no delete function defined for this type, try with generic deletion anyway"
+    )
+
     options =
       to_options(options)
       |> Keyword.put(:object, object)

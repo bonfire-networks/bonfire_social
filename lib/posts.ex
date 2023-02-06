@@ -55,6 +55,7 @@ defmodule Bonfire.Social.Posts do
     run_epic(:publish, options)
   end
 
+  @doc "You should call `Objects.delete/2` instead"
   def delete(object, opts \\ []) do
     opts =
       to_options(opts)
@@ -64,7 +65,7 @@ defmodule Bonfire.Social.Posts do
     |> Keyword.put(
       :delete_associations,
       # adds per-type assocs
-      opts[:delete_associations] ++
+      (opts[:delete_associations] || []) ++
         [
           :post_content
         ]
