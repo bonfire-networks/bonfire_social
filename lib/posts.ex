@@ -38,6 +38,7 @@ defmodule Bonfire.Social.Posts do
 
   def federation_module,
     do: [
+      "Note",
       {"Create", "Note"},
       {"Update", "Note"},
       {"Create", "Article"},
@@ -51,8 +52,8 @@ defmodule Bonfire.Social.Posts do
     # end
   end
 
-  def publish(options \\ []) do
-    run_epic(:publish, options)
+  def publish(opts \\ []) do
+    run_epic(:publish, to_options(opts))
   end
 
   @doc "You should call `Objects.delete/2` instead"
@@ -254,10 +255,21 @@ defmodule Bonfire.Social.Posts do
                tag.id == ulid(subject) or
                tag.id == e(post, :created, :creator_id, nil)
            end)
-           |> info("mentions to recipients")
-           |> Enum.map(fn tag -> ActivityPub.Actor.get_cached!(pointer: tag.id) end)
+           |> debug("mentions to recipients")
+           |> Enum.map(&ActivityPub.Actor.get_cached!(pointer: &1))
            |> filter_empty([])
-           |> info("direct_recipients"),
+           |> debug("direct_recipients"),
+         # TODO: put somewhere reusable by objects other than Post
+         bcc <-
+           Bonfire.Boundaries.list_grants_on(post, [:see, :read])
+           #  only positive grants
+           |> Enum.filter(& &1.value)
+           #  TODO: for circles also add the circle members to bcc
+           |> Enum.map(&Map.take(&1, [:subject_id, :subject]))
+           |> debug("post_grants")
+           |> Enum.map(&ActivityPub.Actor.get_cached!(pointer: &1.subject))
+           |> filter_empty([])
+           |> debug("bcc actors based on grants"),
          cc <- List.wrap(actor.data["followers"]),
          context <-
            (if e(post, :replied, :thread_id, nil) && post.replied.thread_id != id do
@@ -307,17 +319,21 @@ defmodule Bonfire.Social.Posts do
            |> Enum.filter(fn {_, v} -> not is_nil(v) end)
            |> Enum.into(%{}),
          {:ok, activity} <-
-           ActivityPub.create(%{
-             pointer: id,
-             local: true,
-             actor: actor,
-             context: context,
-             object: object,
-             to: to,
-             additional: %{
-               "cc" => cc
+           ActivityPub.create(
+             %{
+               pointer: id,
+               local: true,
+               actor: actor,
+               context: context,
+               object: object,
+               to: to,
+               additional: %{
+                 "cc" => cc,
+                 "bcc" => bcc
+               }
              }
-           }) do
+             |> debug("params for ActivityPub.create")
+           ) do
       {:ok, activity}
     end
   end

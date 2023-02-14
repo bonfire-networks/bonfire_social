@@ -30,7 +30,7 @@ defmodule Bonfire.Social.Integration do
          federate_activity_pub:
            Utils.ok_unwrap(
              maybe_federate_activity(subject, object, verb_override, object_override)
-             |> info()
+             |> debug("result of maybe_federate_activity")
            )
        }
      })}

@@ -39,7 +39,8 @@ defmodule Bonfire.Social.Follows do
 
   # TODO: privacy
   def following?(subject, object),
-    do: Edges.exists?(__MODULE__, subject, object, skip_boundary_check: true)
+    # skip_boundary_check: true)
+    do: Edges.exists?(__MODULE__, subject, object, verbs: [:follow], current_user: subject)
 
   def requested?(subject, object),
     do: Requests.requested?(subject, Follow, object)
@@ -65,20 +66,23 @@ defmodule Bonfire.Social.Follows do
 
     case check_follow(follower, object, opts) do
       {:local, object} ->
-        if Integration.is_local?(follower) do
-          info("local following local, attempting follow")
-          do_follow(follower, object, opts)
-        else
-          info("remote following local, attempting a request")
-          Requests.request(follower, Follow, object, opts)
-        end
+        do_follow(follower, object, opts)
+
+      # Note: we now rely on Boundaries instead of making an arbitrary difference here
+      # if Integration.is_local?(follower) do
+      # info("remote following local, attempting a request")
+      # Requests.request(follower, Follow, object, opts)
+      # else
+      #   info("local following local, attempting follow")
+      #   do_follow(follower, object, opts)
+      # end
 
       {:remote, object} ->
         if Integration.is_local?(follower) do
           info("local following remote, attempting a request")
           Requests.request(follower, Follow, object, opts)
         else
-          info("remote following remote, should not be possible!")
+          warn("remote following remote, should not be possible!")
           {:error, :not_permitted}
         end
 
@@ -203,7 +207,7 @@ defmodule Bonfire.Social.Follows do
   """
   def accept_from(subject, opts) do
     Requests.get(subject, Follow, current_user_required!(opts), opts)
-    |> info()
+    |> debug()
     ~> accept(opts)
   end
 
@@ -212,21 +216,21 @@ defmodule Bonfire.Social.Follows do
   Parameter are a Request (or its ID) plus the subject as current_user
   """
   def accept(request, opts) do
-    info(opts)
+    debug(opts, "opts")
 
     repo().transact_with(fn ->
       with {:ok, %{edge: %{object: object, subject: subject}} = request} <-
              Requests.accept(request, opts)
              |> repo().maybe_preload(edge: [:subject, :object])
-             |> info("accepted"),
+             |> debug("accepted"),
            # remove the Edge so we can recreate one linked to the Follow, because of the unique key on subject/object/table_id
            _ <- Edges.delete_by_both(subject, Follow, object),
            # remove the Request Activity from notifications
            _ <-
              Activities.delete_by_subject_verb_object(subject, :request, object),
-           {:ok, follow} <- do_follow(subject, object, opts) |> info("accept_do_follow"),
+           {:ok, follow} <- do_follow(subject, object, opts) |> debug("accept_do_follow"),
            :ok <-
-             if(info(opts[:incoming] != true, "Maybe outgoing accept?"),
+             if(debug(opts[:incoming] != true, "Maybe outgoing accept?"),
                do: Requests.ap_publish_activity(subject, {:accept, request}, follow),
                else: :ok
              ) do
@@ -514,7 +518,7 @@ defmodule Bonfire.Social.Follows do
         %{data: %{"type" => "Accept"} = _data} = _activity,
         %{data: %{"actor" => follower}} = _object
       ) do
-    info("Accept incoming accept")
+    info("Accept incoming request")
 
     with {:ok, follower} <-
            Bonfire.Federate.ActivityPub.AdapterUtils.get_character_by_ap_id(follower) |> info(),

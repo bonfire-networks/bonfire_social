@@ -66,9 +66,8 @@ defmodule Bonfire.Social.Acts.Threaded do
     boundary = epic.assigns[:options][:boundary]
     attrs_key = Keyword.get(act.options, :attrs, :post_attrs)
 
-    attrs =
-      Keyword.get(epic.assigns[:options], attrs_key, %{})
-      |> debug("attrs")
+    attrs = Keyword.get(epic.assigns[:options], attrs_key, %{})
+    # |> debug("attrs")
 
     custom_thread = Threads.find_thread(attrs, current_user)
 
