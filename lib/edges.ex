@@ -11,7 +11,7 @@ defmodule Bonfire.Social.Edges do
   alias Bonfire.Social.Objects
 
   alias Pointers.Changesets
-  alias Pointers.ULID
+  # alias Pointers.ULID
 
   def insert(schema, subject, verb, object, options) do
     changeset(schema, subject, verb, object, options)
@@ -64,7 +64,7 @@ defmodule Bonfire.Social.Edges do
   def changeset_base(schema, subject, object, options) when is_atom(schema),
     do: changeset_base({schema, schema}, subject, object, options)
 
-  def changeset_base({insert_schema, type_schema}, subject, object, options) do
+  def changeset_base({insert_schema, type_schema}, subject, object, _options) do
     Changesets.cast(struct(insert_schema), %{}, [])
     |> put_edge_assoc(type_schema, subject, object)
   end
@@ -105,7 +105,7 @@ defmodule Bonfire.Social.Edges do
   end
 
   def get!(type, subject, objects, opts \\ [])
-  def get!(type, subject, [], opts), do: []
+  def get!(_type, _subject, [], _opts), do: []
 
   def get!(type, subject, objects, opts) when is_list(objects) do
     do_query(type, subject, objects, opts)
@@ -287,7 +287,7 @@ defmodule Bonfire.Social.Edges do
     end
   end
 
-  defp filter(query, {:type, types}, opts) do
+  defp filter(query, {:type, types}, _opts) do
     case Bonfire.Common.Types.table_types(types) do
       table_ids when is_list(table_ids) and table_ids != [] ->
         where(query, [edge: edge], edge.table_id in ^table_ids)
@@ -297,7 +297,7 @@ defmodule Bonfire.Social.Edges do
     end
   end
 
-  defp filter(query, {:subject_type, types}, opts) do
+  defp filter(query, {:subject_type, types}, _opts) do
     case Bonfire.Common.Types.table_types(types) do
       table_ids when is_list(table_ids) and table_ids != [] ->
         where(query, [subject: subject], subject.table_id in ^table_ids)
@@ -307,7 +307,7 @@ defmodule Bonfire.Social.Edges do
     end
   end
 
-  defp filter(query, {:object_type, types}, opts) do
+  defp filter(query, {:object_type, types}, _opts) do
     case Bonfire.Common.Types.table_types(types) do
       table_ids when is_list(table_ids) and table_ids != [] ->
         where(query, [object: object], object.table_id in ^table_ids)

@@ -155,7 +155,7 @@ defmodule Bonfire.Social.PostContents do
       e(attrs, :post_content, key, nil) || e(attrs, :post, key, nil)
   end
 
-  def prepare_text(text, creator, opts) when is_binary(text) and text != "" do
+  def prepare_text(text, _creator, opts) when is_binary(text) and text != "" do
     # little trick to test error handling
     if String.contains?(text, "/crash!"), do: raise("User-triggered crash")
 
@@ -200,7 +200,7 @@ defmodule Bonfire.Social.PostContents do
     end
   end
 
-  def no_known_output(error, args) do
+  def no_known_output(error, _args) do
     warn(
       "#{error} - don't know what editor is being used or what output format it uses (expect a module configured under [:bonfire, :ui, :rich_text_editor] which should have an output_format/0 function returning an atom (eg. :markdown, :html)"
     )

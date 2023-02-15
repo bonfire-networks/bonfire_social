@@ -229,7 +229,7 @@ defmodule Bonfire.Social.LivePush do
     # PubSub.broadcast(reply_to_id, {{Bonfire.Social.Threads.LiveHandler, :new_reply}, {reply_to_id, activity}})
   end
 
-  defp maybe_push_thread(replied, activity) do
+  defp maybe_push_thread(replied, _activity) do
     debug(replied, "maybe_push_thread: no reply_to info found}")
     nil
   end

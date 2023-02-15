@@ -2,21 +2,21 @@ defmodule Bonfire.Social.Follows do
   alias Bonfire.Data.Social.Follow
   alias Bonfire.Data.Social.Request
 
-  alias Bonfire.Me.Boundaries
+  # alias Bonfire.Me.Boundaries
   alias Bonfire.Me.Characters
   alias Bonfire.Me.Users
 
   alias Bonfire.Social.Activities
   alias Bonfire.Social.Edges
   alias Bonfire.Social.FeedActivities
-  alias Bonfire.Social.Feeds
+  # alias Bonfire.Social.Feeds
   alias Bonfire.Social.Integration
   alias Bonfire.Social.Requests
 
   alias Bonfire.Social.LivePush
-  alias Bonfire.Data.Identity.User
-  alias Ecto.Changeset
-  alias Pointers.Changesets
+  # alias Bonfire.Data.Identity.User
+  # alias Ecto.Changeset
+  # alias Pointers.Changesets
   import Bonfire.Boundaries.Queries
   import Untangle
   use Arrows
@@ -244,7 +244,7 @@ defmodule Bonfire.Social.Follows do
 
   def unfollow(user, %{} = object) do
     if following?(user, object) do
-      un = Edges.delete_by_both(user, Follow, object)
+      # un = Edges.delete_by_both(user, Follow, object)
       # with [_id] <- un do
       # delete the like activity & feed entries
       Activities.delete_by_subject_verb_object(user, :follow, object)

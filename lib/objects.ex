@@ -10,7 +10,7 @@ defmodule Bonfire.Social.Objects do
   import Untangle
 
   alias Bonfire.Common
-  alias Bonfire.Data.Identity.Character
+  # alias Bonfire.Data.Identity.Character
   alias Bonfire.Boundaries.Acls
   alias Bonfire.Social.Activities
   alias Bonfire.Social.FeedActivities
@@ -18,7 +18,7 @@ defmodule Bonfire.Social.Objects do
   alias Bonfire.Social.Threads
 
   alias Pointers.Changesets
-  alias Pointers.Pointer
+  # alias Pointers.Pointer
 
   alias Bonfire.Epics.Epic
 
@@ -52,7 +52,7 @@ defmodule Bonfire.Social.Objects do
   * Caretaker
   * Acls
   """
-  def cast_basic(changeset, attrs, creator, opts) do
+  def cast_basic(changeset, _attrs, creator, opts) do
     changeset
     |> cast_creator_caretaker(creator)
     |> cast_acl(creator, opts)
@@ -64,7 +64,7 @@ defmodule Bonfire.Social.Objects do
   Handles casting:
   * Acls
   """
-  def cast_mini(changeset, attrs, creator, opts) do
+  def cast_mini(changeset, _attrs, creator, opts) do
     # apply boundaries on all objects, uses data preloaded by `Threads` and `PostContents`
     cast_acl(changeset, creator, opts)
 
@@ -309,10 +309,10 @@ defmodule Bonfire.Social.Objects do
     |> run_epic(:delete, ..., :object)
   end
 
-  def maybe_generic_delete(type, _object, _options) do
-    warn(type, "Deletion not implemented for")
-    nil
-  end
+  # def maybe_generic_delete(type, _object, _options) do
+  #   warn(type, "Deletion not implemented for")
+  #   nil
+  # end
 
   def run_epic(type, options \\ [], on \\ :object) do
     options = Keyword.merge(options, crash: true, debug: true, verbose: false)
@@ -348,7 +348,7 @@ defmodule Bonfire.Social.Objects do
     Bonfire.Social.FeedActivities.publish(creator, verb, thing, opts)
   end
 
-  def publish(_creator, verb, %{id: _} = thing, attrs, for_module) do
+  def publish(_creator, _verb, %{id: _} = thing, attrs, for_module) do
     debug("No creator for object so we can't publish it")
 
     # make visible anyway

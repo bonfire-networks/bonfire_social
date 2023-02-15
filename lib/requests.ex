@@ -1,18 +1,18 @@
 defmodule Bonfire.Social.Requests do
   alias Bonfire.Data.Social.Request
-  alias Bonfire.Me.Boundaries
-  alias Bonfire.Me.Characters
-  alias Bonfire.Me.Users
+  # alias Bonfire.Me.Boundaries
+  # alias Bonfire.Me.Characters
+  # alias Bonfire.Me.Users
 
   alias Bonfire.Social.Activities
   alias Bonfire.Social.Edges
-  alias Bonfire.Social.FeedActivities
-  alias Bonfire.Social.Feeds
+  # alias Bonfire.Social.FeedActivities
+  # alias Bonfire.Social.Feeds
   alias Bonfire.Social.Integration
 
-  alias Bonfire.Data.Identity.User
-  alias Ecto.Changeset
-  import Bonfire.Boundaries.Queries
+  # alias Bonfire.Data.Identity.User
+  # alias Ecto.Changeset
+  # import Bonfire.Boundaries.Queries
   import Untangle
   use Arrows
   use Bonfire.Common.Utils
@@ -197,7 +197,7 @@ defmodule Bonfire.Social.Requests do
   #   end
   # end
 
-  defp do_request(requester, type, object, opts) do
+  defp do_request(requester, type, object, _opts) do
     opts = [
       boundary: "mentions",
       to_circles: [ulid(object)],

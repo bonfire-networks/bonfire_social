@@ -3,10 +3,10 @@ defmodule Bonfire.Social.Tags do
   use Arrows
   use Bonfire.Common.Utils
 
-  alias Bonfire.Common.Config
-  alias Bonfire.Tag.Tags
+  # alias Bonfire.Common.Config
+  # alias Bonfire.Tag.Tags
   alias Bonfire.Social.PostContents
-  alias Bonfire.Data.Social.PostContent
+  # alias Bonfire.Data.Social.PostContent
   alias Ecto.Changeset
 
   def cast(changeset, attrs, creator, opts) do

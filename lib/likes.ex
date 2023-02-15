@@ -1,13 +1,13 @@
 defmodule Bonfire.Social.Likes do
-  alias Bonfire.Data.Identity.User
+  # alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Like
   # alias Bonfire.Data.Social.LikeCount
-  alias Bonfire.Boundaries.Verbs
+  # alias Bonfire.Boundaries.Verbs
 
   alias Bonfire.Social.Activities
   alias Bonfire.Social.Edges
   alias Bonfire.Social.Feeds
-  alias Bonfire.Social.FeedActivities
+  # alias Bonfire.Social.FeedActivities
   alias Bonfire.Social.Integration
   alias Bonfire.Social.Objects
 

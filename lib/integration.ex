@@ -2,7 +2,7 @@ defmodule Bonfire.Social.Integration do
   use Arrows
   alias Bonfire.Common.Config
   use Bonfire.Common.Utils
-  alias Bonfire.Data.Social.Follow
+  # alias Bonfire.Data.Social.Follow
   import Untangle
 
   def repo, do: Config.repo()

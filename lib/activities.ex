@@ -11,33 +11,33 @@ defmodule Bonfire.Social.Activities do
   import Bonfire.Boundaries.Queries
   import Ecto.Query
   alias Bonfire.Data.Social.Activity
-  alias Bonfire.Data.Social.Like
-  alias Bonfire.Data.Social.Boost
-  alias Bonfire.Data.Social.Flag
-  alias Bonfire.Data.Social.PostContent
-  alias Bonfire.Data.Social.Replied
+  # alias Bonfire.Data.Social.Like
+  # alias Bonfire.Data.Social.Boost
+  # alias Bonfire.Data.Social.Flag
+  # alias Bonfire.Data.Social.PostContent
+  # alias Bonfire.Data.Social.Replied
   alias Bonfire.Data.Social.Seen
 
   alias Bonfire.Data.Edges.Edge
   alias Bonfire.Data.AccessControl.Verb
   alias Bonfire.Data.Identity.User
-  alias Bonfire.Boundaries
+  # alias Bonfire.Boundaries
   alias Bonfire.Boundaries.Verbs
   alias Ecto.Changeset
-  alias Bonfire.Social.Edges
-  alias Bonfire.Social.Feeds
+  # alias Bonfire.Social.Edges
+  # alias Bonfire.Social.Feeds
   alias Bonfire.Social.FeedActivities
 
   alias Pointers.Changesets
-  alias Pointers.Pointer
-  alias Pointers.ULID
+  # alias Pointers.Pointer
+  # alias Pointers.ULID
 
   @behaviour Bonfire.Common.QueryModule
   @behaviour Bonfire.Common.ContextModule
   def schema_module, do: Activity
 
   def cast(changeset, verb, creator, opts) do
-    verb_id = verb_id(verb)
+    # verb_id = verb_id(verb)
     creator = repo().maybe_preload(creator, :character)
     # |> debug("creator")
     # debug(changeset)
@@ -122,7 +122,7 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
-  def create(subject, verb, {object, %{id: id} = mixin_object}, _) do
+  def create(subject, verb, {object, %{id: id} = _mixin_object}, _) do
     # info(mixin_object, "mixin_object")
     create(subject, verb, object, id)
   end
@@ -571,7 +571,7 @@ defmodule Bonfire.Social.Activities do
           #            created: [
           #              creator: {"reply_to_creator_", [:character, profile: :icon]}
           #            ]
-          #     ] 
+          #     ]
           # )
           # |> Activities.reply_to_as_permitted_for(opts)
 
@@ -622,7 +622,7 @@ defmodule Bonfire.Social.Activities do
         debug("activity within a parent struct")
         do_maybe_repo_preload(objects, [activity: preloads], opts)
 
-      %{activity: %{__struct__: _} = activity} = _map ->
+      %{activity: %{__struct__: _} = _activity} = _map ->
         if is_list(objects) do
           debug("list of maps with activities")
           do_maybe_repo_preload(objects, [activity: preloads], opts)
@@ -678,7 +678,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   def read(filters, opts) when is_map(filters) or is_list(filters) do
-    current_user = current_user(opts)
+    # current_user = current_user(opts)
 
     Activity
     |> query_filter(filters)
@@ -808,7 +808,7 @@ defmodule Bonfire.Social.Activities do
   @decorate time()
   def object_from_activity(activity)
 
-  # special case for edges (eg. Boost) coming to us via LivePush 
+  # special case for edges (eg. Boost) coming to us via LivePush
   # FIXME: do this somewhere else and use Feed preload functions
   def object_from_activity(%{object: %{edge: %{object: %{id: _} = object}}}),
     do: repo().maybe_preload(object, [:post_content, :profile, :character])

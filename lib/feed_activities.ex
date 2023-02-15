@@ -13,7 +13,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   alias Bonfire.Data.Edges.Edge
   alias Bonfire.Social.Activities
-  alias Bonfire.Social.Edges
+  # alias Bonfire.Social.Edges
   alias Bonfire.Social.Feeds
   alias Bonfire.Social.Objects
 
@@ -322,7 +322,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp default_query(), do: select(Pointers.query_base(), [p], p)
 
-  defp base_query(opts) do
+  defp base_query(_opts) do
     # feeds = from fp in FeedPublish, # why the subquery?..
     #   where: fp.feed_id in ^feed_ids,
     #   group_by: fp.id,

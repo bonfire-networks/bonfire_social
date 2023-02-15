@@ -1,11 +1,11 @@
 defmodule Bonfire.Social.APActivities do
   alias Bonfire.Data.Social.APActivity
   alias Bonfire.Social.Activities
-  alias Bonfire.Social.FeedActivities
+  # alias Bonfire.Social.FeedActivities
   alias Bonfire.Social.Objects
 
   alias Ecto.Changeset
-  alias Pointers.Changesets
+  # alias Pointers.Changesets
 
   import Untangle
 

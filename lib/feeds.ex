@@ -2,7 +2,7 @@ defmodule Bonfire.Social.Feeds do
   use Bonfire.Common.Utils
   use Arrows
   use Untangle
-  import Ecto.Query
+  # import Ecto.Query
   import Bonfire.Social.Integration
   import Untangle
   alias Bonfire.Data.Identity.Character
@@ -434,7 +434,7 @@ defmodule Bonfire.Social.Feeds do
          {:ok, character} <- save_box_feed(type, character, feed_id) do
       feed_id
     else
-      e ->
+      _e ->
         debug("Social.Feeds: could not create_box for #{inspect(character)}")
         nil
     end
@@ -471,9 +471,9 @@ defmodule Bonfire.Social.Feeds do
   @doc """
   Create a new feed with a specific ID
   """
-  defp create(%{id: id}) do
-    do_create(%{id: id})
-  end
+  # defp create(%{id: id}) do
+  #   do_create(%{id: id})
+  # end
 
   defp do_create(attrs) do
     repo().put(changeset(attrs))

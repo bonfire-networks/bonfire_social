@@ -16,7 +16,7 @@ defmodule Bonfire.Social.Threads do
   alias Bonfire.Boundaries.Verbs
   alias Pointers.Changesets
   alias Pointers.Pointer
-  alias Pointers.ULID
+  # alias Pointers.ULID
 
   @behaviour Bonfire.Common.ContextModule
   @behaviour Bonfire.Common.QueryModule
@@ -207,12 +207,12 @@ defmodule Bonfire.Social.Threads do
     |> repo().one()
   end
 
-  defp create(attrs) do
-    repo().put(changeset(attrs))
-  end
+  # defp create(attrs) do
+  #   repo().put(changeset(attrs))
+  # end
 
   def read(object_id, socket_or_current_user) when is_binary(object_id) do
-    current_user = current_user(socket_or_current_user)
+    # current_user = current_user(socket_or_current_user)
 
     with {:ok, object} <-
            Replied
@@ -309,7 +309,7 @@ defmodule Bonfire.Social.Threads do
 
   @doc "re-order distinct threads after DISTINCT ON ordered them by thread_id - Note: this results in (Ecto.QueryError) cannot preload associations in subquery in query"
   #
-  def re_order_using_subquery(query, opts) do
+  def re_order_using_subquery(query, _opts) do
     from(all in subquery(query),
       # select: %{all | thread_id: all.thread_id},
       order_by: [desc: all.id]

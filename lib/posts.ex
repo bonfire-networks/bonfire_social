@@ -3,25 +3,25 @@ defmodule Bonfire.Social.Posts do
   import Untangle
   import Bonfire.Boundaries.Queries
   alias Bonfire.Data.Social.Post
-  alias Bonfire.Data.Social.PostContent
-  alias Bonfire.Data.Social.Replied
-  alias Bonfire.Data.Social.Activity
+  # alias Bonfire.Data.Social.PostContent
+  # alias Bonfire.Data.Social.Replied
+  # alias Bonfire.Data.Social.Activity
 
   alias Bonfire.Social.Activities
-  alias Bonfire.Social.FeedActivities
-  alias Bonfire.Social.Feeds
+  # alias Bonfire.Social.FeedActivities
+  # alias Bonfire.Social.Feeds
   alias Bonfire.Social.Objects
 
-  alias Bonfire.Boundaries.Circles
+  # alias Bonfire.Boundaries.Circles
   alias Bonfire.Boundaries.Verbs
 
   alias Bonfire.Epics.Epic
-  alias Bonfire.Social.Integration
+  # alias Bonfire.Social.Integration
   alias Bonfire.Social.PostContents
   alias Bonfire.Social.Tags
-  alias Bonfire.Social.Threads
+  # alias Bonfire.Social.Threads
 
-  alias Ecto.Changeset
+  # alias Ecto.Changeset
 
   use Bonfire.Common.Repo,
     schema: Post,
@@ -45,7 +45,7 @@ defmodule Bonfire.Social.Posts do
       {"Update", "Article"}
     ]
 
-  def draft(creator, attrs) do
+  def draft(_creator, _attrs) do
     # TODO: create as private
     # with {:ok, post} <- create(creator, attrs) do
     #   {:ok, post}
@@ -113,7 +113,7 @@ defmodule Bonfire.Social.Posts do
     Post.changeset(%Post{}, attrs)
   end
 
-  def changeset(:create, attrs, creator, preset_or_custom_boundary) do
+  def changeset(:create, attrs, _creator, _preset_or_custom_boundary) do
     attrs
     |> prepare_post_attrs()
     |> debug("post_attrs")
@@ -192,7 +192,7 @@ defmodule Bonfire.Social.Posts do
     |> boundarise(main_object.id, opts)
   end
 
-  defp base_query(filters, opts) when is_list(filters) or is_tuple(filters) do
+  defp base_query(filters, _opts) when is_list(filters) or is_tuple(filters) do
     from(p in Post, as: :main_object)
     |> query_filter(filters, nil, nil)
   end
@@ -447,7 +447,7 @@ defmodule Bonfire.Social.Posts do
 
   # TODO: rewrite to take a post instead of an activity?
   def indexing_object_format(post, opts \\ []) do
-    current_user = current_user(opts)
+    # current_user = current_user(opts)
 
     case post do
       %{

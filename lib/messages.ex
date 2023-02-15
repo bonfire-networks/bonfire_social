@@ -6,23 +6,23 @@ defmodule Bonfire.Social.Messages do
   alias Bonfire.Social.Integration
 
   alias Bonfire.Data.Social.Message
-  alias Bonfire.Data.Social.PostContent
-  alias Bonfire.Data.Social.Replied
+  # alias Bonfire.Data.Social.PostContent
+  # alias Bonfire.Data.Social.Replied
 
   alias Bonfire.Social.Activities
   alias Bonfire.Social.FeedActivities
-  alias Bonfire.Social.Feeds
+  # alias Bonfire.Social.Feeds
   alias Bonfire.Social.Objects
 
-  alias Bonfire.Me.Characters
+  # alias Bonfire.Me.Characters
   # alias Bonfire.Boundaries.Verbs
-  alias Ecto.Changeset
+  # alias Ecto.Changeset
   # import Bonfire.Boundaries.Queries
   alias Bonfire.Social.Threads
   alias Bonfire.Social.PostContents
   alias Bonfire.Social.Tags
   alias Bonfire.Boundaries
-  alias Bzonfire.Boundaries.Verbs
+  # alias Bzonfire.Boundaries.Verbs
   alias Bonfire.Social.LivePush
 
   @behaviour Bonfire.Common.ContextModule
@@ -52,7 +52,7 @@ defmodule Bonfire.Social.Messages do
   @doc """
   TODO: check boundaries, right now anyone can message anyone :/
   """
-  def send(%{id: creator_id} = creator, attrs, to \\ nil) do
+  def send(%{id: _creator_id} = creator, attrs, to \\ nil) do
     opts = [current_user: creator]
 
     to =
@@ -85,7 +85,7 @@ defmodule Bonfire.Social.Messages do
     end
   end
 
-  defp create(%{id: creator_id} = creator, attrs, opts \\ []) do
+  defp create(%{id: _creator_id} = creator, attrs, opts \\ []) do
     # we attempt to avoid entering the transaction as long as possible.
     changeset = changeset(:create, attrs, creator, opts)
     # |> info

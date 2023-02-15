@@ -1,17 +1,17 @@
 defmodule Bonfire.Social.Boosts do
-  alias Bonfire.Data.Identity.User
+  # alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Boost
-  alias Bonfire.Boundaries.Verbs
+  # alias Bonfire.Boundaries.Verbs
 
   alias Bonfire.Social.Activities
   alias Bonfire.Social.Edges
   alias Bonfire.Social.Feeds
-  alias Bonfire.Social.FeedActivities
+  # alias Bonfire.Social.FeedActivities
   alias Bonfire.Social.Integration
   alias Bonfire.Social.LivePush
   alias Bonfire.Social.Objects
 
-  alias Bonfire.Data.Edges.Edge
+  # alias Bonfire.Data.Edges.Edge
 
   use Bonfire.Common.Repo,
     searchable_fields: [:booster_id, :boosted_id]
