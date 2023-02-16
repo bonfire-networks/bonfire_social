@@ -1,10 +1,10 @@
 defmodule Bonfire.Social.Acts.Threaded do
   alias Bonfire.Data.Social.Replied
   alias Bonfire.Epics
-  alias Bonfire.Epics.Act
+  # alias Bonfire.Epics.Act
   alias Bonfire.Epics.Epic
 
-  alias Bonfire.Common.Utils
+  # alias Bonfire.Common.Utils
   alias Bonfire.Social.Threads
   alias Ecto.Changeset
   alias Pointers.Changesets

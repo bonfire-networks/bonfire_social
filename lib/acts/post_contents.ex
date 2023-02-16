@@ -1,7 +1,7 @@
 defmodule Bonfire.Social.Acts.PostContents do
   alias Bonfire.Common.Utils
-  alias Bonfire.Epics
-  alias Bonfire.Epics.Act
+  # alias Bonfire.Epics
+  # alias Bonfire.Epics.Act
   alias Bonfire.Epics.Epic
 
   alias Bonfire.Social.PostContents

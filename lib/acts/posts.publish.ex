@@ -15,14 +15,14 @@ defmodule Bonfire.Social.Acts.Posts.Publish do
   """
 
   alias Bonfire.Ecto.Acts.Work
-  alias Bonfire.Epics.Act
+  # alias Bonfire.Epics.Act
   alias Bonfire.Epics.Epic
 
   alias Bonfire.Social.Posts
   alias Ecto.Changeset
   use Arrows
   import Bonfire.Epics
-  import Untangle
+  # import Untangle
 
   # see module documentation
   @doc false

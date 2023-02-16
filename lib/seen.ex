@@ -12,11 +12,11 @@ defmodule Bonfire.Social.Seen do
   alias Bonfire.Social.Feeds
   # alias Bonfire.Social.FeedActivities
   # alias Bonfire.Social.Integration
-  alias Bonfire.Social.Objects
+  # alias Bonfire.Social.Objects
 
   alias Bonfire.Social.Edges
   # alias Bonfire.Social.Objects
-  alias Bonfire.Social.Feeds
+  # alias Bonfire.Social.Feeds
 
   # import Ecto.Query
   # import Bonfire.Social.Integration

@@ -3,15 +3,15 @@ defmodule Bonfire.Social.Acts.Objects.Delete do
   Delete something + specified associations with a changeset
   """
 
-  alias Bonfire.Ecto.Acts.Work
-  alias Bonfire.Epics.Act
+  # alias Bonfire.Ecto.Acts.Work
+  # alias Bonfire.Epics.Act
   alias Bonfire.Epics.Epic
 
-  alias Bonfire.Social.Posts
-  alias Ecto.Changeset
+  # alias Bonfire.Social.Posts
+  # alias Ecto.Changeset
   use Arrows
   import Bonfire.Epics
-  import Untangle
+  # import Untangle
 
   # see module documentation
   @doc false
