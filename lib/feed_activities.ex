@@ -576,34 +576,30 @@ defmodule Bonfire.Social.FeedActivities do
     publish(subject, :create, object, opts)
   end
 
-  @doc """
-  Records a remote activity and puts in appropriate feeds
-  """
-  defp save_fediverse_incoming_activity(subject, verb, object)
-       when is_atom(verb) and not is_nil(subject) do
-    # TODO: use the appropriate preset (eg "public" for public activities?)
-    publish(subject, verb, object, boundary: "federated")
-  end
+  # @doc "Records a remote activity and puts in appropriate feeds"
+  # defp save_fediverse_incoming_activity(subject, verb, object)
+  #      when is_atom(verb) and not is_nil(subject) do
+  #   # TODO: use the appropriate preset (eg "public" for public activities?)
+  #   publish(subject, verb, object, boundary: "federated")
+  # end
 
-  @doc """
-  Takes or creates an activity and publishes to object creator's inbox
-  """
-  defp maybe_notify_creator(subject, %{activity: %{id: _} = activity}, object),
-    do: maybe_notify_creator(subject, activity, object)
+  # @doc "Takes or creates an activity and publishes to object creator's inbox"
+  # defp maybe_notify_creator(subject, %{activity: %{id: _} = activity}, object),
+  #   do: maybe_notify_creator(subject, activity, object)
 
-  defp maybe_notify_creator(subject, verb_or_activity, object) do
-    the_object = Objects.preload_creator(the_object(object))
-    object_creator = Objects.object_creator(the_object)
+  # defp maybe_notify_creator(subject, verb_or_activity, object) do
+  #   the_object = Objects.preload_creator(the_object(object))
+  #   object_creator = Objects.object_creator(the_object)
 
-    if ulid(object_creator) && ulid(subject) != ulid(object_creator) do
-      notify_characters(subject, verb_or_activity, object, [object_creator])
-    else
-      debug("no creator found, just creating an activity")
-      publish(subject, verb_or_activity, object)
-    end
+  #   if ulid(object_creator) && ulid(subject) != ulid(object_creator) do
+  #     notify_characters(subject, verb_or_activity, object, [object_creator])
+  #   else
+  #     debug("no creator found, just creating an activity")
+  #     publish(subject, verb_or_activity, object)
+  #   end
 
-    # TODO: notify remote users via AP
-  end
+  #   # TODO: notify remote users via AP
+  # end
 
   @doc """
   Arranges for an insert changeset to also publish to feeds related to some objects.
@@ -724,44 +720,37 @@ defmodule Bonfire.Social.FeedActivities do
     end
   end
 
-  @doc """
-  Creates a new local activity or takes an existing one and publishes
-  to object's notifications (if object is an actor)
-  """
-  defp notify_characters(subject, verb_or_activity, object, characters) do
-    # TODO: notify remote users via AP?
-    # debug(characters)
-    Feeds.feed_ids(:notifications, characters)
-    |> Enums.filter_empty([])
-    |> notify_to_feed_ids(subject, verb_or_activity, object, ...)
-  end
+  # @doc "Creates a new local activity or takes an existing one and publishes to object's notifications (if object is an actor)"
+  # defp notify_characters(subject, verb_or_activity, object, characters) do
+  #   # TODO: notify remote users via AP?
+  #   # debug(characters)
+  #   Feeds.feed_ids(:notifications, characters)
+  #   |> Enums.filter_empty([])
+  #   |> notify_to_feed_ids(subject, verb_or_activity, object, ...)
+  # end
 
-  @doc """
-  Creates a new local activity or takes an existing one and publishes to object's inbox (assuming object is a character)
-  """
-  defp notify_object(subject, verb_or_activity, object) do
-    notify_characters(subject, verb_or_activity, object, [the_object(object)])
-  end
+  # @doc "Creates a new local activity or takes an existing one and publishes to object's inbox (assuming object is a character)"
+  # defp notify_object(subject, verb_or_activity, object) do
+  #   notify_characters(subject, verb_or_activity, object, [the_object(object)])
+  # end
 
-  @doc """
-  Creates a new local activity or takes an existing one and publishes to creator's inbox
-  """
-  defp notify_admins(subject, verb_or_activity, object) do
-    inboxes = Feeds.admins_notifications()
-    # |> debug()
-    notify_to_feed_ids(subject, verb_or_activity, object, inboxes)
-  end
+  # @doc "Creates a new local activity or takes an existing one and publishes to creator's inbox"
+  # defp notify_admins(subject, verb_or_activity, object) do
+  #   inboxes = Feeds.admins_notifications()
+  #   # |> debug()
+  #   notify_to_feed_ids(subject, verb_or_activity, object, inboxes)
+  # end
 
-  defp notify_to_feed_ids(subject, verb_or_activity, object, feed_ids) do
-    # debug(feed_ids)
-    # |> debug("notify_to_feed_ids")
-    ret = publish(subject, verb_or_activity, object, to_feeds: feed_ids)
-    Bonfire.Social.LivePush.notify(subject, verb_or_activity, object, feed_ids)
-    ret
-  end
+  # defp notify_to_feed_ids(subject, verb_or_activity, object, feed_ids) do
+  #   # debug(feed_ids)
+  #   # |> debug("notify_to_feed_ids")
+  #   ret = publish(subject, verb_or_activity, object, to_feeds: feed_ids)
+  #   Bonfire.Social.LivePush.notify(subject, verb_or_activity, object, feed_ids)
+  #   ret
+  # end
 
-  # doc "Creates a new local activity or takes an existing one and publishes to specified feeds"
-  defp maybe_feed_publish(subject, verb_or_activity, object, feeds, opts \\ [])
+  # @doc "Creates a new local activity or takes an existing one and publishes to specified feeds"
+  defp maybe_feed_publish(subject, verb_or_activity, object, feeds, opts)
 
   defp maybe_feed_publish(subject, verb, object, feeds, opts)
        when is_atom(verb),
@@ -891,7 +880,8 @@ defmodule Bonfire.Social.FeedActivities do
     # This makes sure it gets put in feed even if the
     # federation hook fails
     feeds = Enums.filter_empty(feeds, [])
-    ret = put_in_feeds(feeds, activity)
+    # ret = 
+    put_in_feeds(feeds, activity)
     # TODO: add ActivityPub feed for remote activities
     try do
       # FIXME only run if ActivityPub is a target circle/feed?

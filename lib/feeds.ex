@@ -425,9 +425,7 @@ defmodule Bonfire.Social.Feeds do
     end
   end
 
-  @doc """
-  Create an inbox or outbox for an existing Pointable (eg. User)
-  """
+  # @doc "Create an inbox or outbox for an existing Pointable (eg. User)"
   defp create_box(type, %Character{id: _} = character) do
     # TODO: optimise using cast_assoc?
     with {:ok, %{id: feed_id} = _feed} <- create(),
@@ -461,17 +459,12 @@ defmodule Bonfire.Social.Feeds do
     repo().update(Character.changeset(character, attrs, :update))
   end
 
-  @doc """
-  Create a new generic feed
-  """
+  # @doc "Create a new generic feed"
   defp create() do
     do_create(%{})
   end
 
-  @doc """
-  Create a new feed with a specific ID
-  """
-
+  # @doc "Create a new feed with a specific ID"
   # defp create(%{id: id}) do
   #   do_create(%{id: id})
   # end

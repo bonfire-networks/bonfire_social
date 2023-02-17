@@ -53,7 +53,7 @@ defmodule Bonfire.Social.Acts.Feeds do
             maybe_debug(epic, act, changeset, "invalid changeset")
             epic
 
-          other ->
+          _other ->
             maybe_debug(epic, act, changeset, "Skipping :#{on} due to changeset")
             epic
         end

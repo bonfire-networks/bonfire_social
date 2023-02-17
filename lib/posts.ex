@@ -446,7 +446,7 @@ defmodule Bonfire.Social.Posts do
   end
 
   # TODO: rewrite to take a post instead of an activity?
-  def indexing_object_format(post, opts \\ []) do
+  def indexing_object_format(post, _opts \\ []) do
     # current_user = current_user(opts)
 
     case post do

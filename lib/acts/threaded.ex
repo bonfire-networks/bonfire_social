@@ -63,7 +63,7 @@ defmodule Bonfire.Social.Acts.Threaded do
 
   defp handle_insert(epic, act, on, changeset, current_user) do
     # TODO: dedup with cast function in Threads
-    boundary = epic.assigns[:options][:boundary]
+    # boundary = epic.assigns[:options][:boundary]
     attrs_key = Keyword.get(act.options, :attrs, :post_attrs)
 
     attrs = Keyword.get(epic.assigns[:options], attrs_key, %{})

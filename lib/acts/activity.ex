@@ -58,7 +58,7 @@ defmodule Bonfire.Social.Acts.Activity do
 
         notify_feeds_key = Keyword.get(act.options, :notify_feeds, :notify_feeds)
 
-        attrs = Keyword.get(epic.assigns[:options], attrs_key, %{})
+        # attrs = Keyword.get(epic.assigns[:options], attrs_key, %{})
 
         notifications_feeds =
           Feeds.reply_and_or_mentions_notifications_feeds(

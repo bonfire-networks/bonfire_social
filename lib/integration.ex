@@ -39,8 +39,8 @@ defmodule Bonfire.Social.Integration do
   defp maybe_federate_activity(
          subject,
          activity_or_object,
-         verb_override \\ nil,
-         object_override \\ nil
+         verb_override,
+         object_override
        )
 
   defp maybe_federate_activity(
@@ -119,7 +119,7 @@ defmodule Bonfire.Social.Integration do
          %Bonfire.Data.Social.Activity{} = activity,
          verb,
          object_override,
-         activity_object \\ nil
+         activity_object
        ) do
     # activity = repo().maybe_preload(activity, [:verb, :object])
     object = object_override || activity_object

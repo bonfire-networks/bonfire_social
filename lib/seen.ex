@@ -9,7 +9,7 @@ defmodule Bonfire.Social.Seen do
 
   # alias Bonfire.Social.Activities
   alias Bonfire.Social.Edges
-  alias Bonfire.Social.Feeds
+  # alias Bonfire.Social.Feeds
   # alias Bonfire.Social.FeedActivities
   # alias Bonfire.Social.Integration
   # alias Bonfire.Social.Objects

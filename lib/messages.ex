@@ -85,7 +85,7 @@ defmodule Bonfire.Social.Messages do
     end
   end
 
-  defp create(%{id: _creator_id} = creator, attrs, opts \\ []) do
+  defp create(%{id: _creator_id} = creator, attrs, opts) do
     # we attempt to avoid entering the transaction as long as possible.
     changeset = changeset(:create, attrs, creator, opts)
     # |> info
@@ -182,8 +182,8 @@ defmodule Bonfire.Social.Messages do
 
   defp list_paginated(
          filters,
-         current_user \\ nil,
-         opts \\ [],
+         current_user,
+         opts,
          query \\ Message
        ) do
     opts =
@@ -199,9 +199,9 @@ defmodule Bonfire.Social.Messages do
 
   defp list_messages_paginated(
          filters,
-         current_user \\ nil,
-         opts \\ [],
-         query \\ Message
+         current_user,
+         opts,
+         query
        ) do
     query
     # add assocs needed in timelines/feeds
@@ -221,9 +221,9 @@ defmodule Bonfire.Social.Messages do
 
   defp list_threads_paginated(
          filters,
-         current_user \\ nil,
-         opts \\ [],
-         query \\ Message
+         current_user,
+         opts,
+         query
        ) do
     # paginate = if opts[:paginate], do: Keyword.new(opts[:paginate]), else: opts
 

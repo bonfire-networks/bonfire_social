@@ -6,7 +6,7 @@ defmodule Bonfire.Social.Import do
 
   import Untangle
   alias Bonfire.Data.Identity.User
-  alias Bonfire.Me.Characters
+  # alias Bonfire.Me.Characters
   alias Bonfire.Me.Users
   alias Bonfire.Social.Follows
   alias Bonfire.Boundaries.Blocks

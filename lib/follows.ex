@@ -324,7 +324,7 @@ defmodule Bonfire.Social.Follows do
     )
   end
 
-  defp fetch_all_followed_outboxes(user, opts \\ []) do
+  defp fetch_all_followed_outboxes(user, opts) do
     all_objects_by_subject(user, opts)
     |> Enum.map(&e(&1, :character, :outbox_id, nil))
   end
@@ -388,10 +388,10 @@ defmodule Bonfire.Social.Follows do
     |> Integration.many(opts[:paginate], opts[:pagination] || opts)
   end
 
-  defp maybe_with_follower_profile_only(q, true),
-    do: where(q, [follower_profile: p], not is_nil(p.id))
+  # defp maybe_with_follower_profile_only(q, true),
+  #   do: where(q, [follower_profile: p], not is_nil(p.id))
 
-  defp maybe_with_follower_profile_only(q, _), do: q
+  # defp maybe_with_follower_profile_only(q, _), do: q
 
   # def changeset(:create, subject, object, boundary) do
   #   Changesets.cast(%Follow{}, %{}, [])

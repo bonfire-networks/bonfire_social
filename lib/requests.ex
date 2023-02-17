@@ -128,13 +128,15 @@ defmodule Bonfire.Social.Requests do
     # |> proload(:request)
   end
 
+  def query(filters, type \\ nil, opts)
+
   def query([my: :object], type, opts),
     do: query([subject: current_user_required!(opts)], type, opts)
 
   def query([my: :requesters], type, opts),
     do: query([object: current_user_required!(opts)], type, opts)
 
-  def query(filters, type \\ nil, opts) do
+  def query(filters, type, opts) do
     query_base(filters, type, opts)
 
     # |> info("requests query")
@@ -172,10 +174,10 @@ defmodule Bonfire.Social.Requests do
 
   def many(query, opts), do: repo().many(query, opts)
 
-  defp maybe_with_requester_profile_only(q, true),
-    do: where(q, [requester_profile: p], not is_nil(p.id))
+  # defp maybe_with_requester_profile_only(q, true),
+  #   do: where(q, [requester_profile: p], not is_nil(p.id))
 
-  defp maybe_with_requester_profile_only(q, _), do: q
+  # defp maybe_with_requester_profile_only(q, _), do: q
 
   # defp check_request(requester, object, opts) do
   #   skip? = skip_boundary_check?(opts, object)

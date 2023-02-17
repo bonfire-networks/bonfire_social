@@ -724,12 +724,12 @@ defmodule Bonfire.Social.Activities do
     Map.put(object_without_activity, :activity, %{})
   end
 
-  def activity_under_object(%Activity{} = activity, %{} = object) do
-    Map.put(object, :activity, activity)
-  end
-
   def activity_under_object({:ok, %{} = object}) do
     {:ok, activity_under_object(object)}
+  end
+
+  def activity_under_object(%Activity{} = activity, %{} = object) do
+    Map.put(object, :activity, activity)
   end
 
   def assigns_with_object_under_activity(%{activity: %{object: %{id: _}} = _activity} = assigns) do
