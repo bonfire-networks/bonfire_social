@@ -779,8 +779,6 @@ defmodule Bonfire.Social.Activities do
 
   def assigns_with_object_under_activity(assigns), do: assigns
 
-  def assigns_with_object_under_activity(assigns), do: assigns
-
   def object_under_activity(%{object: %{id: _}} = activity, nil) do
     activity
   end
@@ -793,7 +791,7 @@ defmodule Bonfire.Social.Activities do
     # )
   end
 
-  def object_under_activity(activity, object) do
+  def object_under_activity(%{} = activity, object) do
     activity
     |> Map.put(
       :object,

@@ -259,7 +259,7 @@ defmodule Bonfire.Social.Posts do
            |> Enum.map(&ActivityPub.Actor.get_cached!(pointer: &1))
            |> filter_empty([])
            |> debug("direct_recipients"),
-         # TODO: put somewhere reusable by objects other than Post
+         # TODO: put somewhere reusable by objects other than Post, eg `Bonfire.Federate.ActivityPub.AdapterUtils.determine_recipients/4`
          bcc <-
            Bonfire.Boundaries.list_grants_on(post, [:see, :read])
            #  only positive grants

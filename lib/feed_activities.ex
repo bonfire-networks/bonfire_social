@@ -15,7 +15,7 @@ defmodule Bonfire.Social.FeedActivities do
   alias Bonfire.Social.Activities
   # alias Bonfire.Social.Edges
   alias Bonfire.Social.Feeds
-  alias Bonfire.Social.Objects
+  # alias Bonfire.Social.Objects
 
   alias Pointers
   alias Pointers.Pointer

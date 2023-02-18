@@ -429,17 +429,17 @@ defmodule Bonfire.Social.Feeds do
   defp create_box(type, %Character{id: _} = character) do
     # TODO: optimise using cast_assoc?
     with {:ok, %{id: feed_id} = _feed} <- create(),
-         {:ok, character} <- save_box_feed(type, character, feed_id) do
+         {:ok, _character} <- save_box_feed(type, character, feed_id) do
       feed_id
     else
-      _e ->
-        debug("Social.Feeds: could not create_box for #{inspect(character)}")
+      e ->
+        debug(e, "could not create_box")
         nil
     end
   end
 
   defp create_box(_type, other) do
-    debug("Social.Feeds: no clause match for function create_box with #{inspect(other)}")
+    debug(other, "no clause match for function create_box")
     nil
   end
 
