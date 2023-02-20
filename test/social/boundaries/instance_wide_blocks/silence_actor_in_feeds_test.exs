@@ -17,7 +17,7 @@ defmodule Bonfire.Social.Boundaries.InstanceWideSilenceActorFeedsPerUserTest do
     }
   }
 
-  setup do
+  setup_all do
     # TODO: move this into fixtures
     mock(fn
       %{method: :get, url: @remote_actor} ->
