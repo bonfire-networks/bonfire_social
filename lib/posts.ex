@@ -232,6 +232,7 @@ defmodule Bonfire.Social.Posts do
          {:ok, actor} <-
            ActivityPub.Actor.get_cached(pointer: info(subject, "subject"))
            |> info("subject_actor"),
+         public_circle_id <- Bonfire.Boundaries.Circles.get_id!(:guest),
          published_in_feeds <-
            Bonfire.Social.FeedActivities.feeds_for_activity(post.activity)
            |> debug("published_in_feeds"),
@@ -239,12 +240,17 @@ defmodule Bonfire.Social.Posts do
          # FIXME only publish to public URI if in a public enough cirlce
          # Everything is public atm
          to <-
-           (if Bonfire.Boundaries.Circles.get_id!(:guest) in published_in_feeds do
+           (if public_circle_id in published_in_feeds do
               ["https://www.w3.org/ns/activitystreams#Public"]
             else
               []
             end),
-
+         cc <-
+           (if public_circle_id in published_in_feeds do
+              List.wrap(actor.data["followers"])
+            else
+              []
+            end),
          # TODO: find a better way of deleting non actor entries from the list
          # (or represent them in AP)
          mentions <-
@@ -252,8 +258,7 @@ defmodule Bonfire.Social.Posts do
            #  |> info("tags")
            |> Enum.reject(fn tag ->
              is_nil(e(tag, :character, nil)) or
-               tag.id == ulid(subject) or
-               tag.id == e(post, :created, :creator_id, nil)
+               tag.id == id(subject)
            end)
            |> debug("mentions to recipients")
            |> Enum.map(&ActivityPub.Actor.get_cached!(pointer: &1))
@@ -265,12 +270,14 @@ defmodule Bonfire.Social.Posts do
            #  only positive grants
            |> Enum.filter(& &1.value)
            #  TODO: for circles also add the circle members to bcc
+           |> Enum.reject(fn g ->
+             g.subject_id == id(subject)
+           end)
            |> Enum.map(&Map.take(&1, [:subject_id, :subject]))
            |> debug("post_grants")
            |> Enum.map(&ActivityPub.Actor.get_cached!(pointer: &1.subject))
            |> filter_empty([])
            |> debug("bcc actors based on grants"),
-         cc <- List.wrap(actor.data["followers"]),
          context <-
            (if e(post, :replied, :thread_id, nil) && post.replied.thread_id != id do
               with {:ok, ap_object} <-

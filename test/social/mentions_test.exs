@@ -69,6 +69,29 @@ defmodule Bonfire.Social.MentionsTest do
     assert FeedActivities.feed_contains?(:notifications, mention, current_user: me)
   end
 
+  # duplicate of previous test
+  #  test "mentioning someone appears in their notifications feed, if using the 'mentions' preset" do
+  #   me = Fake.fake_user!()
+  #   mentioned = Fake.fake_user!()
+
+  #   attrs = %{
+  #     post_content: %{
+  #       html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"
+  #     }
+  #   }
+
+  #   assert {:ok, mention} =
+  #            Posts.publish(
+  #              current_user: me,
+  #              post_attrs: attrs,
+  #              boundary: "mentions"
+  #            )
+
+  #   # debug_my_grants_on(mentioned, mention)
+
+  #   assert FeedActivities.feed_contains?(:notifications, mention, current_user: mentioned)
+  # end
+
   test "mentioning someone does not appear in my own notifications" do
     me = Fake.fake_user!()
     mentioned = Fake.fake_user!()
@@ -109,28 +132,6 @@ defmodule Bonfire.Social.MentionsTest do
     third = Fake.fake_user!()
 
     refute FeedActivities.feed_contains?(:notifications, mention, current_user: third)
-  end
-
-  test "mentioning someone appears in their notifications feed, if using the 'mentions' preset" do
-    me = Fake.fake_user!()
-    mentioned = Fake.fake_user!()
-
-    attrs = %{
-      post_content: %{
-        html_body: "<p>hey @#{mentioned.character.username} you have an epic html message</p>"
-      }
-    }
-
-    assert {:ok, mention} =
-             Posts.publish(
-               current_user: me,
-               post_attrs: attrs,
-               boundary: "mentions"
-             )
-
-    # debug_my_grants_on(mentioned, mention)
-
-    assert FeedActivities.feed_contains?(:notifications, mention, current_user: mentioned)
   end
 
   test "mentioning someone does not appear in their home feed, if they don't follow me, and have disabled notifications in home feed" do

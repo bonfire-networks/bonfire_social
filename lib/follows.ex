@@ -244,8 +244,9 @@ defmodule Bonfire.Social.Follows do
 
   def unfollow(user, %{} = object) do
     if following?(user, object) do
-      # un = Edges.delete_by_both(user, Follow, object)
-      # with [_id] <- un do
+      Edges.delete_by_both(user, Follow, object)
+      # with [_id] <- Edges.delete_by_both(user, Follow, object) do
+
       # delete the like activity & feed entries
       Activities.delete_by_subject_verb_object(user, :follow, object)
 
@@ -259,6 +260,7 @@ defmodule Bonfire.Social.Follows do
 
       # Integration.maybe_federate(user, :unfollow, object)
       ap_publish_activity(user, :delete, object)
+
       # end
     else
       if requested?(user, object) do
@@ -472,7 +474,7 @@ defmodule Bonfire.Social.Follows do
   def ap_receive_activity(
         follower,
         %{data: %{"type" => "Follow"} = data} = _activity,
-        %{pointer_id: _followed_id} = object
+        object
       )
       when is_binary(follower) or is_struct(follower) do
     info(data, "Follows: recording an incoming follow...")
@@ -521,7 +523,8 @@ defmodule Bonfire.Social.Follows do
     info("Accept incoming request")
 
     with {:ok, follower} <-
-           Bonfire.Federate.ActivityPub.AdapterUtils.get_character_by_ap_id(follower) |> info(),
+           Bonfire.Federate.ActivityPub.AdapterUtils.get_character_by_ap_id(follower)
+           |> info(),
          {:ok, request} <-
            Requests.get(follower, Follow, followed, skip_boundary_check: true) |> info(),
          {:ok, request} <- accept(request, current_user: followed, incoming: true) |> info() do

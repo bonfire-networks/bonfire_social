@@ -120,7 +120,7 @@ defmodule Bonfire.Social.PostContents do
     })
   end
 
-  def all_text_content(attrs, creator, opts) do
+  def all_text_content(attrs) do
     "#{get_attr(attrs, :name)}\n#{get_attr(attrs, :summary)}\n#{get_attr(attrs, :html_body)}\n#{get_attr(attrs, :note)}"
   end
 
