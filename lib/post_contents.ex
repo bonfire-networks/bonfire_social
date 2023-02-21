@@ -46,7 +46,10 @@ defmodule Bonfire.Social.PostContents do
   #   end
 
   def maybe_prepare_contents(%{local: false} = attrs, creator, _boundary, opts) do
-    debug("do not process remote contents or messages for tags/mentions")
+    debug(
+      "do not process remote contents or messages markdown tags/mentions - TODO: insteaf should find mentions with `[...] mention` class, and hashtags with `class=\"[...] hashtag\" rel=\"tag\"` and rewrite the URLs to point to local instance OR use the `tags` AS field to know what hashtag/user URLs are likely to be found in the body and just find and replace those?"
+    )
+
     only_prepare_content(attrs, creator, opts)
   end
 
