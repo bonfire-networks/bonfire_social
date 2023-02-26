@@ -121,18 +121,22 @@ defmodule Bonfire.Social.PostContents do
 
     merge_with_body_or_nil(attrs, %{
       html_body:
-        prepare_text(get_attr(attrs, :html_body), creator, opts)
-        |> rewrite_remote_links(mentions, hashtags),
+        get_attr(attrs, :html_body)
+        |> rewrite_remote_links(mentions, hashtags)
+        |> prepare_text(creator, opts),
       name:
-        prepare_text(get_attr(attrs, :name), creator, opts)
-        |> rewrite_remote_links(mentions, hashtags),
+        get_attr(attrs, :name)
+        |> rewrite_remote_links(mentions, hashtags)
+        |> prepare_text(creator, opts),
       summary:
-        prepare_text(get_attr(attrs, :summary), creator, opts)
-        |> rewrite_remote_links(mentions, hashtags),
+        get_attr(attrs, :summary)
+        |> rewrite_remote_links(mentions, hashtags)
+        |> prepare_text(creator, opts),
       languages: maybe_detect_languages(attrs),
-      mentions: Map.values(mentions) || [],
-      hashtags: Map.values(hashtags) || []
+      mentions: Types.ulids(Map.values(mentions)) || [],
+      hashtags: Types.ulids(Map.values(hashtags)) || []
     })
+    # |> debug()
   end
 
   defp only_prepare_content(attrs, creator, opts) do
@@ -214,7 +218,10 @@ defmodule Bonfire.Social.PostContents do
     |> maybe_sane_html(e(opts, :do_not_strip_html, nil))
     # make sure we end up with valid HTML
     |> Text.maybe_normalize_html()
-    |> debug()
+    #  open remote links in new tab
+    |> Text.normalise_links()
+
+    # |> debug()
   end
 
   def prepare_text("", _, _opts), do: nil
