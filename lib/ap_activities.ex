@@ -31,7 +31,7 @@ defmodule Bonfire.Social.APActivities do
                e(object, :data, "actor", "id", nil) ||
                e(object, :data, "actor", nil),
            {:ok, character} <-
-             Bonfire.Federate.ActivityPub.AdapterUtils.get_character_by_ap_id(actor_id),
+             Bonfire.Federate.ActivityPub.AdapterUtils.fetch_character_by_ap_id(actor_id),
            cid when is_binary(cid) <- ulid(character) do
         do_create(character, activity, object)
       else

@@ -46,11 +46,9 @@ defmodule Bonfire.Social.PostContents do
   #   end
 
   def maybe_prepare_contents(%{local: false} = attrs, creator, _boundary, opts) do
-    debug(
-      "do not process remote contents or messages markdown tags/mentions - TODO: insteaf should find mentions with `[...] mention` class, and hashtags with `class=\"[...] hashtag\" rel=\"tag\"` and rewrite the URLs to point to local instance OR use the `tags` AS field to know what hashtag/user URLs are likely to be found in the body and just find and replace those?"
-    )
+    debug("remote contents")
 
-    only_prepare_content(attrs, creator, opts)
+    prepare_remote_content(attrs, creator, opts)
   end
 
   def maybe_prepare_contents(attrs, creator, boundary, opts)
@@ -113,7 +111,31 @@ defmodule Bonfire.Social.PostContents do
     end
   end
 
-  def only_prepare_content(attrs, creator, opts) do
+  defp prepare_remote_content(attrs, creator, opts) do
+    debug(
+      "WIP: find mentions with `[...] mention` class, and hashtags with `class=\"[...] hashtag\" rel=\"tag\"` and rewrite the URLs to point to local instance OR use the `tags` AS field to know what hashtag/user URLs are likely to be found in the body and just find and replace those?"
+    )
+
+    mentions = e(attrs, :mentions, %{})
+    hashtags = e(attrs, :hashtags, %{})
+
+    merge_with_body_or_nil(attrs, %{
+      html_body:
+        prepare_text(get_attr(attrs, :html_body), creator, opts)
+        |> rewrite_remote_links(mentions, hashtags),
+      name:
+        prepare_text(get_attr(attrs, :name), creator, opts)
+        |> rewrite_remote_links(mentions, hashtags),
+      summary:
+        prepare_text(get_attr(attrs, :summary), creator, opts)
+        |> rewrite_remote_links(mentions, hashtags),
+      languages: maybe_detect_languages(attrs),
+      mentions: Map.values(mentions) || [],
+      hashtags: Map.values(hashtags) || []
+    })
+  end
+
+  defp only_prepare_content(attrs, creator, opts) do
     merge_with_body_or_nil(attrs, %{
       html_body: prepare_text(get_attr(attrs, :html_body), creator, opts),
       name: prepare_text(get_attr(attrs, :name), creator, opts),
@@ -122,6 +144,21 @@ defmodule Bonfire.Social.PostContents do
       mentions: e(attrs, :mentions, [])
     })
   end
+
+  defp rewrite_remote_links(text, mentions, hashtags)
+       when is_binary(text) and (mentions != %{} or hashtags != %{}) do
+    mention_urls = Map.keys(mentions |> debug)
+    hashtag_urls = Map.keys(hashtags |> debug)
+
+    text
+    |> String.replace(
+      mention_urls,
+      &path(e(mentions, &1, nil) || ActivityPub.Actor.format_username(&1))
+    )
+    |> String.replace(hashtag_urls, &path(e(hashtags, &1, nil)))
+  end
+
+  defp rewrite_remote_links(text, _, _), do: text
 
   def all_text_content(attrs) do
     "#{get_attr(attrs, :name)}\n#{get_attr(attrs, :summary)}\n#{get_attr(attrs, :html_body)}\n#{get_attr(attrs, :note)}"

@@ -365,6 +365,7 @@ defmodule Bonfire.Social.Posts do
     # debug(creator: creator)
     # debug(object: object)
 
+    #  TODO: put somewhere reusable by other types
     direct_recipients =
       (List.wrap(activity_data["to"]) ++
          List.wrap(activity_data["cc"]) ++
@@ -382,6 +383,7 @@ defmodule Bonfire.Social.Posts do
 
     reply_to = post_data["inReplyTo"] || activity_data["inReplyTo"]
 
+    #  TODO: put somewhere reusable by other types
     reply_to_id =
       if reply_to,
         do:
@@ -395,21 +397,50 @@ defmodule Bonfire.Social.Posts do
          List.wrap(post_data["tag"]))
       |> Enum.uniq()
 
+    #  TODO: put somewhere reusable by other types
     mentions =
       for %{"type" => "Mention"} = mention <- tags do
+        url =
+          (mention["href"] || "")
+          # workaround for Mastodon using different URLs in text 
+          |> String.replace("/users/", "/@")
+
         with {:ok, character} <-
                Bonfire.Federate.ActivityPub.AdapterUtils.get_character_by_ap_id(
-                 mention["href"] || mention["namne"]
+                 mention["href"] || mention["name"]
                ) do
-          character
+          {
+            url,
+            character
+          }
         else
           e ->
-            warn(e, "could not lookup incoming mention")
+            info(e, "could not find known actor for incoming mention")
+
+            {
+              url,
+              mention["name"]
+            }
+        end
+      end
+      |> filter_empty([])
+      |> Map.new()
+      |> info("incoming mentions")
+
+    #  TODO: put somewhere reusable by other types
+    hashtags =
+      for %{"type" => "Hashtag"} = tag <- tags do
+        with {:ok, hashtag} <- Bonfire.Tag.Hashtag.get_or_create_by_name(tag["name"]) do
+          {tag["href"], hashtag}
+        else
+          none ->
+            warn(none, "could not create Hashtag for #{tag["name"]}")
             nil
         end
       end
-      |> filter_empty(nil)
-      |> info("incoming mentions")
+      |> filter_empty([])
+      |> Map.new()
+      |> info("incoming hashtags")
 
     # FIXME?
     # TODO, in a mixin?
@@ -422,6 +453,7 @@ defmodule Bonfire.Social.Posts do
           canonical_url: nil,
           to_circles: circles ++ direct_recipients,
           mentions: mentions,
+          hashtags: hashtags,
           post_content: %{
             name: post_data["name"],
             html_body: post_data["content"]
