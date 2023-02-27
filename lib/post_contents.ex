@@ -133,9 +133,10 @@ defmodule Bonfire.Social.PostContents do
         |> rewrite_remote_links(mentions, hashtags)
         |> prepare_text(creator, opts),
       languages: maybe_detect_languages(attrs),
-      mentions: Types.ulids(Map.values(mentions)) || [],
-      hashtags: Types.ulids(Map.values(hashtags)) || []
+      mentions: Map.values(mentions) || [],
+      hashtags: Map.values(hashtags) || []
     })
+
     # |> debug()
   end
 

@@ -232,27 +232,29 @@ defmodule Bonfire.Social.Posts do
          {:ok, actor} <-
            ActivityPub.Actor.get_cached(pointer: info(subject, "subject"))
            |> info("subject_actor"),
-         public_circle_id <- Bonfire.Boundaries.Circles.get_id!(:guest),
-         published_in_feeds <-
-           Bonfire.Social.FeedActivities.feeds_for_activity(post.activity)
-           |> debug("published_in_feeds"),
-
+         public_acl_ids <- ["5REM0TEPE0P1E1NTERACTREACT", "5REM0TEPE0P1E1NTERACTREP1Y"],
+         acls <-
+           Bonfire.Boundaries.list_object_acls(post)
+           |> debug("acls"),
+         is_public <- Enum.any?(acls, fn %{id: acl_id} -> acl_id in public_acl_ids end),
          # FIXME only publish to public URI if in a public enough cirlce
          # Everything is public atm
          to <-
-           (if public_circle_id in published_in_feeds do
+           (if is_public do
               ["https://www.w3.org/ns/activitystreams#Public"]
             else
               []
             end),
+         # TODO: followers-only preset?
          cc <-
-           (if public_circle_id in published_in_feeds do
+           (if is_public do
               List.wrap(actor.data["followers"])
             else
               []
             end),
          # TODO: find a better way of deleting non actor entries from the list
          # (or represent them in AP)
+         # Note: `mentions` preset should add grants to mentioned people which should trigger the boundaries-based logic in bcc, so we use this only for tagging and not for addressing
          mentions <-
            e(post, :tags, [])
            #  |> info("tags")
@@ -289,7 +291,7 @@ defmodule Bonfire.Social.Posts do
                   nil
               end
             end),
-         to <- to ++ Enum.map(mentions, fn actor -> actor.ap_id end),
+         #  to <- to ++ Enum.map(mentions, fn actor -> actor.ap_id end),
          object <-
            %{
              "type" => "Note",

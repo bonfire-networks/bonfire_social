@@ -39,8 +39,8 @@ defmodule Bonfire.Social.Follows do
 
   # TODO: privacy
   def following?(subject, object),
-    # skip_boundary_check: true)
-    do: Edges.exists?(__MODULE__, subject, object, verbs: [:follow], current_user: subject)
+    # current_user: subject)
+    do: Edges.exists?(__MODULE__, subject, object, verbs: [:follow], skip_boundary_check: true)
 
   def requested?(subject, object),
     do: Requests.requested?(subject, Follow, object)
@@ -66,6 +66,7 @@ defmodule Bonfire.Social.Follows do
 
     case check_follow(follower, object, opts) do
       {:local, object} ->
+        info("following local, do the follow")
         do_follow(follower, object, opts)
 
       # Note: we now rely on Boundaries instead of making an arbitrary difference here
@@ -79,7 +80,7 @@ defmodule Bonfire.Social.Follows do
 
       {:remote, object} ->
         if Integration.is_local?(follower) do
-          info("local following remote, attempting a request")
+          info("local following remote, attempting a request instead of follow")
           Requests.request(follower, Follow, object, opts)
         else
           warn("remote following remote, should not be possible!")

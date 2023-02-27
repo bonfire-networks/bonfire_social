@@ -17,18 +17,29 @@ defmodule Bonfire.Social.Tags do
            (e(changeset, :changes, :post_content, :changes, :mentions, []) ++
               e(changeset, :changes, :post_content, :changes, :hashtags, []) ++
               e(attrs, :tags, []))
+           |> Enum.map(fn
+             %{} = obj ->
+               obj
+
+             id when is_binary(id) ->
+               %{id: id}
+
+             other ->
+               warn(other, "unsupported")
+               nil
+           end)
            |> filter_empty([])
            |> Enums.uniq_by_id()
+           #  |> tags_preloads(opts)
            |> debug("cast tags") do
       changeset
-      |> Changeset.cast(%{tagged: tags_preloads(tags, opts)}, [])
-      # |> debug("before cast assoc")
+      |> Changeset.cast(%{tagged: tags}, [])
+      |> debug("before cast assoc")
       |> Changeset.cast_assoc(:tagged, with: &Bonfire.Tag.Tagged.changeset/2)
     else
       _ -> changeset
     end
-
-    # |> debug("changeset")
+    |> debug("changeset")
   end
 
   def maybe_process(creator, text, opts) do
