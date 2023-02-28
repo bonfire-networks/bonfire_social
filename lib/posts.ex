@@ -75,7 +75,7 @@ defmodule Bonfire.Social.Posts do
   end
 
   def run_epic(type, options \\ [], on \\ :post) do
-    env = Config.get(:env)
+    env = Config.env()
 
     options =
       Keyword.merge(options, crash: env == :test, debug: env != :prod, verbose: env == :test)
