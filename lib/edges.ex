@@ -174,28 +174,40 @@ defmodule Bonfire.Social.Edges do
     from(root in query_schema)
     |> reusable_join([root], edge in assoc(root, :edge), as: :edge)
     |> boundarise(edge.object_id, opts)
-    |> maybe_proload(opts[:preload] |> info)
+    |> maybe_proload(opts[:preload], filters[:object_type] |> debug)
     |> filter(filters, opts)
   end
 
-  defp maybe_proload(query, _preload? = :skip), do: query
-  defp maybe_proload(query, _preload? = false), do: query |> proload(:edge)
+  defp maybe_proload(query, _preload?, object_type \\ nil)
+  defp maybe_proload(query, _preload? = :skip, _object_type), do: query
+  defp maybe_proload(query, _preload? = false, _object_type), do: query |> proload(:edge)
 
-  defp maybe_proload(query, :subject) do
+  defp maybe_proload(query, :subject, _object_type) do
     query
     |> proload(:edge)
     |> proload(edge: [subject: {"subject_", [:profile, :character]}])
   end
 
-  defp maybe_proload(query, :object) do
+  defp maybe_proload(query, :object, object_type)
+       when is_atom(object_type) and not is_nil(object_type) do
+    query
+    |> proload(:edge)
+    |> join(:left, [edge: edge], object in ^object_type,
+      as: :object,
+      on: edge.object_id == object.id
+    )
+    |> proload(edge: [object: {"object_", [:profile, :character]}])
+  end
+
+  defp maybe_proload(query, :object, _object_type) do
     query
     |> proload(:edge)
     |> proload(edge: [object: {"object_", [:profile, :character, :post_content]}])
   end
 
-  defp maybe_proload(query, :object_with_creator) do
+  defp maybe_proload(query, :object_with_creator, object_type) do
     query
-    |> proload(:edge)
+    |> maybe_proload(:object, object_type)
     |> proload(
       edge: [
         object:
@@ -210,15 +222,15 @@ defmodule Bonfire.Social.Edges do
     )
   end
 
-  # defp maybe_proload(query, preloads) when is_list(preloads) do
+  # defp maybe_proload(query, preloads, _object_type) when is_list(preloads) do
   #   Enum.reduce(preloads, query, fn preload, query ->
   #     maybe_proload(query, preload)
   #   end)
   # end
 
-  defp maybe_proload(query, _) do
+  defp maybe_proload(query, _, object_type) do
     query
-    |> maybe_proload(:object)
+    |> maybe_proload(:object, object_type)
     |> maybe_proload(:subject)
   end
 
@@ -307,7 +319,7 @@ defmodule Bonfire.Social.Edges do
     end
   end
 
-  defp filter(query, {:object_type, types}, _opts) do
+  defp filter(query, {:object_type, types}, _opts) when is_list(types) do
     case Bonfire.Common.Types.table_types(types) do
       table_ids when is_list(table_ids) and table_ids != [] ->
         where(query, [object: object], object.table_id in ^table_ids)

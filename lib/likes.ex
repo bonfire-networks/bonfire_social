@@ -129,7 +129,7 @@ defmodule Bonfire.Social.Likes do
     # |> Activities.query_object_preload_activity(:like, :liked_id, opts)
     # |> Activities.as_permitted_for(opts, [:see])
     # |> debug()
-    |> Integration.many(opts[:paginate], opts[:pagination] || opts)
+    |> Integration.many(opts[:paginate], opts)
   end
 
   @doc "List the current user's likes"

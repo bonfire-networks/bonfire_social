@@ -365,13 +365,13 @@ defmodule Bonfire.Social.Follows do
 
   def list_followed(user, opts \\ []) do
     # TODO: configurable boundaries for follows
-    opts = to_options(opts) ++ [skip_boundary_check: true]
+    opts = to_options(opts) ++ [skip_boundary_check: true, preload: :object]
 
     [subject: ulid(user), object_type: opts[:type]]
     |> query(opts)
     |> where([object: object], object.id not in ^e(opts, :exclude_ids, []))
     # |> maybe_with_followed_profile_only(opts)
-    |> Integration.many(opts[:paginate], opts[:pagination] || opts)
+    |> Integration.many(opts[:paginate], opts)
   end
 
   def list_my_followers(current_user, opts \\ []),
@@ -382,13 +382,13 @@ defmodule Bonfire.Social.Follows do
       )
 
   def list_followers(user, opts \\ []) do
-    opts = to_options(opts) ++ [skip_boundary_check: true]
+    opts = to_options(opts) ++ [skip_boundary_check: true, preload: :subject]
 
     [object: ulid(user), subject_type: opts[:type]]
     |> query(opts)
     |> where([subject: subject], subject.id not in ^e(opts, :exclude_ids, []))
     # |> maybe_with_follower_profile_only(opts)
-    |> Integration.many(opts[:paginate], opts[:pagination] || opts)
+    |> Integration.many(opts[:paginate], opts)
   end
 
   # defp maybe_with_follower_profile_only(q, true),
