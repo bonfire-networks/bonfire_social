@@ -267,19 +267,21 @@ defmodule Bonfire.Social.Posts do
            |> filter_empty([])
            |> debug("direct_recipients"),
          # TODO: put somewhere reusable by objects other than Post, eg `Bonfire.Federate.ActivityPub.AdapterUtils.determine_recipients/4`
-         bcc <-
-           Bonfire.Boundaries.list_grants_on(post, [:see, :read])
-           #  only positive grants
-           |> Enum.filter(& &1.value)
-           #  TODO: for circles also add the circle members to bcc
-           |> Enum.reject(fn g ->
-             g.subject_id == id(subject)
-           end)
-           |> Enum.map(&Map.take(&1, [:subject_id, :subject]))
-           |> debug("post_grants")
-           |> Enum.map(&ActivityPub.Actor.get_cached!(pointer: &1.subject))
-           |> filter_empty([])
-           |> debug("bcc actors based on grants"),
+         # FIXME: this seems to return ALL known users for public posts? 
+         #  bcc <-
+         #    Bonfire.Boundaries.list_grants_on(post, [:see, :read])
+         #    #  only positive grants
+         #    |> Enum.filter(& &1.value)
+         #    #  TODO: for circles also add the circle members to bcc
+         #    |> Enum.reject(fn g ->
+         #      g.subject_id == id(subject)
+         #    end)
+         #    |> Enum.map(&Map.take(&1, [:subject_id, :subject]))
+         #    |> debug("post_grants")
+         #    |> Enum.map(&ActivityPub.Actor.get_cached!(pointer: &1.subject))
+         #    |> filter_empty([])
+         #    |> debug("bcc actors based on grants"),
+         bcc <- [],
          context <-
            (if e(post, :replied, :thread_id, nil) && post.replied.thread_id != id do
               with {:ok, ap_object} <-

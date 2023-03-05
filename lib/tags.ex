@@ -130,7 +130,8 @@ defmodule Bonfire.Social.Tags do
   end
 
   def auto_boost(categories_auto_boost, object) when is_list(categories_auto_boost) do
-    Enum.each(categories_auto_boost, &auto_boost(&1, object))
+    categories_auto_boost
+    |> Enum.each(&auto_boost(&1, object))
   end
 
   def auto_boost(%{} = category, object) do

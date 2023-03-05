@@ -368,11 +368,13 @@ defmodule Bonfire.Social.Objects do
       e(attrs, :to_boundaries, nil) ||
         Bonfire.Common.Config.get_ext(for_module, :preset_boundary, "public")
 
-    to_circles = Bonfire.Common.Config.get_ext(for_module, :publish_to_default_circles, [])
+    to_circles =
+      e(attrs, :to_circles, nil) ||
+        Bonfire.Common.Config.get_ext(for_module, :publish_to_default_circles, [])
 
     to_feeds =
       Bonfire.Social.Feeds.feed_ids(:notifications, [
-        e(thing, :context_id, nil)
+        e(thing, :context_id, nil) || e(attrs, :context_id, nil)
       ])
 
     opts = [

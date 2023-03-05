@@ -61,7 +61,7 @@ defmodule Bonfire.Social.Follows do
   end
 
   defp maybe_follow_or_request(follower, object, opts) do
-    opts = Keyword.put_new(opts, :current_user, follower)
+    opts = Keyword.put_new(to_options(opts), :current_user, follower)
     follower = repo().preload(follower, :peered)
 
     case check_follow(follower, object, opts) do
