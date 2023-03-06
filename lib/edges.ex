@@ -266,6 +266,7 @@ defmodule Bonfire.Social.Edges do
         :subject,
         :type,
         :object_type,
+        :subject_type,
         :current_user,
         :current_account
       ])
