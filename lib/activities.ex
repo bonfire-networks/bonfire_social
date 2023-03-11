@@ -457,6 +457,9 @@ defmodule Bonfire.Social.Activities do
         :with_thread_name ->
           proload(query, activity: [replied: [thread: [:named]]])
 
+        :with_parent ->
+          proload(query, activity: [tree: [parent: [:profile, :character]]])
+
         :with_reply_to ->
           # If the root replied to anything, fetch that and its creator too. e.g.
           # * Alice's post that replied to Bob's post
@@ -551,6 +554,9 @@ defmodule Bonfire.Social.Activities do
 
         :with_thread_name ->
           [replied: [thread: [:named]]]
+
+        :with_parent ->
+          [tree: [parent: [:profile, :character]]]
 
         :with_reply_to ->
           # If the root replied to anything, fetch that and its creator too. e.g.
@@ -666,7 +672,7 @@ defmodule Bonfire.Social.Activities do
     query
     # |> debug("base query")
     |> query_object_preload_create_activity(
-      opts ++ [preload: [:default, :with_media, :with_reply_to]]
+      opts ++ [preload: [:default, :with_media, :with_reply_to, :with_parent]]
     )
     # |> debug("activity query")
     |> as_permitted_for(opts, [:read])

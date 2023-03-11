@@ -67,11 +67,19 @@ defmodule Bonfire.Social.Tags do
 
   def maybe_boostable_categories(creator, categories) when is_list(categories) do
     # TODO: optimise, maybe using Bonfire.Boundaries.load_pointers ?
-    Enum.map(categories, &maybe_boostable_categories(creator, &1))
+    Enum.map(categories, &maybe_boostable_category(creator, &1))
     |> filter_empty([])
+    |> repo().maybe_preload(:tree)
   end
 
-  def maybe_boostable_categories(creator, %{table_id: "2AGSCANBECATEG0RY0RHASHTAG"} = category) do
+  def maybe_boostable_categories(creator, category) do
+    maybe_boostable_category(creator, category)
+    |> filter_empty([])
+    |> repo().maybe_preload(:tree)
+  end
+
+  defp maybe_boostable_category(creator, %{__struct__: schema} = category)
+       when schema == Bonfire.Classify.Category do
     if Bonfire.Boundaries.can?(creator, :tag, category) do
       debug(category, "boostable :-)")
       category
@@ -81,11 +89,21 @@ defmodule Bonfire.Social.Tags do
     end
   end
 
-  # def maybe_boostable_categories(creator, {"+"<> _name, character}) do
+  defp maybe_boostable_category(creator, %{table_id: "2AGSCANBECATEG0RY0RHASHTAG"} = category) do
+    if Bonfire.Boundaries.can?(creator, :tag, category) do
+      debug(category, "boostable :-)")
+      category
+    else
+      debug("we don't have tag permission, so category auto-boosting will be skipped")
+      nil
+    end
+  end
+
+  # defp maybe_boostable_category(creator, {"+"<> _name, character}) do
   #   debug(character, "boostable")
   #   character
   # end
-  def maybe_boostable_categories(creator, id) when is_binary(id) do
+  defp maybe_boostable_category(creator, id) when is_binary(id) do
     with {:ok, category} <- Bonfire.Common.Pointers.get(id, current_user: creator, verbs: [:tag]) do
       debug(category, "queried as boostable :-)")
       category
@@ -96,7 +114,7 @@ defmodule Bonfire.Social.Tags do
     end
   end
 
-  def maybe_boostable_categories(_, mention) do
+  defp maybe_boostable_category(_, mention) do
     debug(mention, "not a category?")
     nil
   end
@@ -136,13 +154,16 @@ defmodule Bonfire.Social.Tags do
 
   def auto_boost(%{} = category, object) do
     if e(category, :character, nil) do
+      # category
+      # |> debug("auto_boost_object")
+
       Bonfire.Social.Boosts.maybe_boost(category, object)
 
       inbox_id =
         e(category, :character, :notifications_id, nil)
         |> debug()
 
-      # remove it from the "Submitted" tab
+      # remove it from the inbox ("Submitted" tab)
       if inbox_id,
         do: Bonfire.Social.FeedActivities.delete(feed_id: inbox_id, id: ulid(object)) |> debug(),
         else: debug("no inbox ID")
