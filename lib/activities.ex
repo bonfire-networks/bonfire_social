@@ -458,7 +458,10 @@ defmodule Bonfire.Social.Activities do
           proload(query, activity: [replied: [thread: [:named]]])
 
         :with_parent ->
-          proload(query, activity: [tree: [parent: [:profile, :character]]])
+          # TODO: make proload check if the schema module of an assoc is enabled to avoid having to add conditionals like this?
+          if Extend.module_enabled?(Bonfire.Classify.Tree),
+            do: proload(query, activity: [tree: [parent: [:profile, :character]]]),
+            else: query
 
         :with_reply_to ->
           # If the root replied to anything, fetch that and its creator too. e.g.
@@ -556,7 +559,9 @@ defmodule Bonfire.Social.Activities do
           [replied: [thread: [:named]]]
 
         :with_parent ->
-          [tree: [parent: [:profile, :character]]]
+          if Extend.module_enabled?(Bonfire.Classify.Tree),
+            do: [tree: [parent: [:profile, :character]]],
+            else: []
 
         :with_reply_to ->
           # If the root replied to anything, fetch that and its creator too. e.g.
@@ -670,11 +675,11 @@ defmodule Bonfire.Social.Activities do
     opts = to_options(opts)
     # debug(opts, "opts")
     query
-    # |> debug("base query")
+    |> debug("base query")
     |> query_object_preload_create_activity(
       opts ++ [preload: [:default, :with_media, :with_reply_to, :with_parent]]
     )
-    # |> debug("activity query")
+    |> debug("activity query")
     |> as_permitted_for(opts, [:read])
     # |> debug("permitted query")
     |> repo().single()
