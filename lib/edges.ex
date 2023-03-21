@@ -118,12 +118,14 @@ defmodule Bonfire.Social.Edges do
     |> repo().one()
   end
 
+  @doc "retrieves the last edge of a given type, subject, and object from the database"
   def last(type, subject, object, opts) do
     do_query(type, subject, object, opts)
     |> limit(1)
     |> repo().one()
   end
 
+  @doc "retrieves the date of the last edge of a given type, subject, and object from the database"
   def last_date(type, subject, object, opts) do
     last(type, subject, object, Keyword.put(opts, :preload, false))
     |> DatesTimes.date_from_pointer()

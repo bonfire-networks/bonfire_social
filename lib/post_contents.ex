@@ -1,4 +1,7 @@
 defmodule Bonfire.Social.PostContents do
+  @moduledoc """
+  Query and manipulate post contents 
+  """
   use Arrows
 
   alias Bonfire.Data.Social.PostContent
@@ -6,20 +9,24 @@ defmodule Bonfire.Social.PostContents do
   use Bonfire.Common.Utils
   use Bonfire.Common.Repo
 
+  @doc "Given a set of filters, returns an Ecto.Query for matching post contents."
   def query(filters, _opts \\ []) do
     PostContent
     |> query_filter(filters)
   end
 
+  @doc "Given a set of filters, returns a single post content matching those filters"
   def one(filters, opts \\ []) do
     query(filters, opts)
     |> repo().single()
   end
 
+  @doc "Given a post content ID, returns the corresponding post content"
   def get(id, opts \\ []) do
     if is_ulid?(id), do: one([id: id], opts)
   end
 
+  @doc "Given a changeset, post content attributes, creator, boundary and options, returns a changeset prepared with relevant attributes and associations"
   def cast(changeset, attrs, creator, boundary, opts) do
     has_images = is_list(attrs[:uploaded_media]) and length(attrs[:uploaded_media]) > 0
 
@@ -45,6 +52,7 @@ defmodule Bonfire.Social.PostContents do
   #     |> Map.put(:action, :update)
   #   end
 
+  @doc "Given post content attributes, creator, boundary, and options, prepares the post contents for processing by detecting languages, mentions, hashtags, and urls."
   def maybe_prepare_contents(%{local: false} = attrs, creator, _boundary, opts) do
     debug("remote contents")
 
@@ -111,6 +119,7 @@ defmodule Bonfire.Social.PostContents do
     end
   end
 
+  @doc "Given attributes of a remote post, prepares it for processing by detecting languages, and rewriting mentions, hashtags, and urls"
   defp prepare_remote_content(attrs, creator, opts) do
     debug(
       "WIP: find mentions with `[...] mention` class, and hashtags with `class=\"[...] hashtag\" rel=\"tag\"` and rewrite the URLs to point to local instance OR use the `tags` AS field to know what hashtag/user URLs are likely to be found in the body and just find and replace those?"
@@ -140,6 +149,7 @@ defmodule Bonfire.Social.PostContents do
     # |> debug()
   end
 
+  @doc "Given post content attributes, prepares it for processing by just cleaning up the text and detecting languages."
   defp only_prepare_content(attrs, creator, opts) do
     merge_with_body_or_nil(attrs, %{
       html_body: prepare_text(get_attr(attrs, :html_body), creator, opts),
