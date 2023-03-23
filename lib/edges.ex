@@ -299,6 +299,10 @@ defmodule Bonfire.Social.Edges do
 
       _ when is_map(object) or is_binary(object) ->
         where(query, [edge: edge], edge.object_id == ^ulid(object))
+
+      _ ->
+        warn(object, "unrecognised object")
+        query
     end
   end
 

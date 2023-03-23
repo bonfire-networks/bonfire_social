@@ -478,7 +478,7 @@ defmodule Bonfire.Social.Follows do
         object
       )
       when is_binary(follower) or is_struct(follower) do
-    info(data, "Follows: recording an incoming follow...")
+    info(data, "Follows: attempt to record an incoming follow...")
 
     with {:ok, followed} <-
            Bonfire.Federate.ActivityPub.AdapterUtils.fetch_character_by_ap_id(object),
@@ -486,18 +486,25 @@ defmodule Bonfire.Social.Follows do
          false <- following?(follower, followed),
          {:ok, %Follow{} = follow} <-
            follow(follower, followed, current_user: follower) do
-      ActivityPub.accept(%{
-        actor: object,
-        to: [data["actor"]],
-        object: data,
-        local: true
-      })
+      with {:ok, _accept_activity, _adapter_object, accepted_activity} <-
+             ActivityPub.accept_activity(%{
+               actor: object,
+               to: [data["actor"]],
+               object: data,
+               local: true
+             }) do
+        debug("Follow was auto-accepted")
 
-      {:ok, follow}
+        {:ok, follow}
+      else
+        e ->
+          error(e, "Unable to auto-accept the follow")
+          {:ok, follow}
+      end
     else
       true ->
+        warn("Federated follow already exists")
         # reaffirm that the follow has gone through when following? was already == true
-        warn("Follows: federated follow already exists")
 
         ActivityPub.accept(%{
           actor: object,
@@ -531,6 +538,16 @@ defmodule Bonfire.Social.Follows do
          {:ok, request} <- accept(request, current_user: followed, incoming: true) |> info() do
       {:ok, request}
     else
+      {:error, :not_found} ->
+        case following?(follower, followed) do
+          false ->
+            error("No such Follow")
+
+          true ->
+            # already followed
+            {:ok, nil}
+        end
+
       e ->
         error(e)
     end
@@ -542,8 +559,28 @@ defmodule Bonfire.Social.Follows do
         %{data: %{"actor" => follower}} = _object
       ) do
     with {:ok, follower} <-
-           Bonfire.Federate.ActivityPub.AdapterUtils.fetch_character_by_ap_id(follower),
-         {:ok, request} <-
+           Bonfire.Federate.ActivityPub.AdapterUtils.fetch_character_by_ap_id(follower) do
+      case following?(follower, followed) do
+        false ->
+          reject(follower, followed)
+
+        true ->
+          request =
+            with {:ok, request} <- reject(follower, followed) do
+              request
+              |> debug("rejected previously accepted request")
+            end
+
+          unfollow(follower, followed)
+          |> debug("unfollow rejected follow")
+
+          {:ok, request}
+      end
+    end
+  end
+
+  defp reject(follower, followed) do
+    with {:ok, request} <-
            Requests.get(follower, Follow, followed, skip_boundary_check: true),
          {:ok, request} <- ignore(request, current_user: followed) do
       {:ok, request}
