@@ -71,7 +71,7 @@ defmodule Bonfire.Social.Likes do
     opts = [
       # TODO: make configurable
       boundary: "mentions",
-      to_circles: [ulid(liked_creator)],
+      to_circles: [id(liked_creator)],
       to_feeds: Feeds.maybe_creator_notification(liker, liked_creator)
     ]
 

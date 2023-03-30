@@ -102,7 +102,7 @@ defmodule Bonfire.Social.Boosts do
     opts = [
       # TODO: get the preset for boosting from config and/or user's settings
       boundary: "public",
-      to_circles: [ulid(boosted_creator)],
+      to_circles: [id(boosted_creator)],
       to_feeds:
         [outbox: booster] ++
           Feeds.maybe_creator_notification(booster, boosted_creator)

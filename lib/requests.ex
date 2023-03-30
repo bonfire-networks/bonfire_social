@@ -202,7 +202,7 @@ defmodule Bonfire.Social.Requests do
   defp do_request(requester, type, object, _opts) do
     opts = [
       boundary: "mentions",
-      to_circles: [ulid(object)],
+      to_circles: [id(object)],
       to_feeds: [notifications: object]
     ]
 
