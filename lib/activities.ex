@@ -571,8 +571,12 @@ defmodule Bonfire.Social.Activities do
           reply_query =
             Common.Pointers.pointer_query(
               [],
-              opts ++ [skip_boundary_check: false, preload: [:post_content, :creator]]
+              Enums.merge_uniq(opts,
+                skip_boundary_check: false,
+                preload: [:post_content, :creator]
+              )
             )
+            |> debug("query to attempt loading reply_to")
 
           # |> debug("reply_query subquery that applies boundaries")
 
