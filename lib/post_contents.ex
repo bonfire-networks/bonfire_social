@@ -189,19 +189,21 @@ defmodule Bonfire.Social.PostContents do
   end
 
   def maybe_detect_languages(attrs, fields \\ [:name, :summary, :html_body]) do
-    if module_enabled?(Elixir.Text) do
-      fields
-      |> Enum.map(&get_attr(attrs, &1))
-      |> Enum.join("\n\n")
-      |> Text.text_only()
-      |> String.trim()
-      |> do_maybe_detect_languages()
-      |> debug()
-    end
+    # TODO
+    # if module_enabled?(Elixir.Text.Language) do
+    #   fields
+    #   |> Enum.map(&get_attr(attrs, &1))
+    #   |> Enum.join("\n\n")
+    #   |> Text.text_only()
+    #   |> String.trim()
+    #   |> do_maybe_detect_languages()
+    #   |> debug()
+    # end
   end
 
   defp do_maybe_detect_languages(text)
        when is_binary(text) and text != "" and byte_size(text) > 5 do
+    # FIXME: seems to crash when text contains emoji, eg. 🔥
     Elixir.Text.Language.classify(text)
   end
 
