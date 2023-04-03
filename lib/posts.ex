@@ -245,13 +245,7 @@ defmodule Bonfire.Social.Posts do
             else
               []
             end),
-         # TODO: followers-only preset?
-         cc <-
-           (if is_public do
-              List.wrap(actor.data["followers"])
-            else
-              []
-            end),
+
          # TODO: find a better way of deleting non actor entries from the list
          # (or represent them in AP)
          # Note: `mentions` preset should add grants to mentioned people which should trigger the boundaries-based logic in bcc, so we use this only for tagging and not for addressing
@@ -267,20 +261,14 @@ defmodule Bonfire.Social.Posts do
            |> filter_empty([])
            |> debug("direct_recipients"),
          # TODO: put somewhere reusable by objects other than Post, eg `Bonfire.Federate.ActivityPub.AdapterUtils.determine_recipients/4`
-         # FIXME: this seems to return ALL known users for public posts? 
-         #  bcc <-
-         #    Bonfire.Boundaries.list_grants_on(post, [:see, :read])
-         #    #  only positive grants
-         #    |> Enum.filter(& &1.value)
-         #    #  TODO: for circles also add the circle members to bcc
-         #    |> Enum.reject(fn g ->
-         #      g.subject_id == id(subject)
-         #    end)
-         #    |> Enum.map(&Map.take(&1, [:subject_id, :subject]))
-         #    |> debug("post_grants")
-         #    |> Enum.map(&ActivityPub.Actor.get_cached!(pointer: &1.subject))
-         #    |> filter_empty([])
-         #    |> debug("bcc actors based on grants"),
+         # TODO: add a followers-only preset?
+         #  (if is_public do
+         #     mentions ++ List.wrap(actor.data["followers"])
+         #   else
+         cc <-
+           mentions,
+         # end),
+         # FIXME: the below seems to return ALL known users for public posts? 
          bcc <- [],
          context <-
            (if e(post, :replied, :thread_id, nil) && post.replied.thread_id != id do
