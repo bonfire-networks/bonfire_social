@@ -6,7 +6,6 @@ defmodule Bonfire.Social.PostBoundariesTest do
   alias Bonfire.Social.FeedActivities
   alias Bonfire.Boundaries
 
-
   test "creating & then reading my own post" do
     user = fake_user!()
 

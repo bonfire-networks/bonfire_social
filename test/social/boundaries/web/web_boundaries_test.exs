@@ -29,6 +29,7 @@ defmodule Bonfire.Social.WebBoundariesTest do
         boundary: "public"
       }
     }
+
     {:ok, post} = Posts.publish(current_user: bob, post_attrs: attrs)
 
     {:ok, view, _html} = live(conn, "/feed")
@@ -36,18 +37,14 @@ defmodule Bonfire.Social.WebBoundariesTest do
     # get the id of the <article> element
     id = element(view, "#post-#{post.id}") |> Floki.attribute("id") |> debug("id is this one:")
 
-
     # assign the created activity to element
     activity = element(view, "#activity-#{post.id}")
-
 
     # Then I should see the post in my feed
     assert view.assigns.feed_posts |> Enum.any?(&(&1.id == post.id))
     # Then I should like the post
     # Then I should boost the post
     # Then I should comment on the post
-
-
   end
 
   # test "creating a post with a 'local' boundary and verify that only users from that instance can see and interact with it." do
@@ -93,5 +90,4 @@ defmodule Bonfire.Social.WebBoundariesTest do
   # test "creating a post with a custom boundary, and verify that only users within the boundary can access the post according to their assigned roles." do
 
   # end
-
 end
