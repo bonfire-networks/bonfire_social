@@ -38,7 +38,7 @@ defmodule Bonfire.Social.WebBoundariesTest do
     id = element(view, "#post-#{post.id}") |> Floki.attribute("id") |> debug("id is this one:")
 
     # assign the created activity to element
-    activity = element(view, "#activity-#{post.id}")
+    # activity = element(view, "#activity-#{post.id}")
 
     # Then I should see the post in my feed
     assert view.assigns.feed_posts |> Enum.any?(&(&1.id == post.id))
