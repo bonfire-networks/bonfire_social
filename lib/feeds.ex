@@ -80,7 +80,7 @@ defmodule Bonfire.Social.Feeds do
   defp user_notifications_feeds(users, boundary) do
     # debug(epic, act, users, "users going in")
     cond do
-      boundary in ["public", "mentions", "federated"] ->
+      boundary in ["public", "mentions"] ->
         users
         |> filter_empty([])
         |> repo().maybe_preload([:character])

@@ -465,7 +465,9 @@ defmodule Bonfire.Social.Posts do
       info("treat as Message if private with @ mentions")
       Bonfire.Social.Messages.send(creator, attrs)
     else
-      boundary = if(is_public, do: "federated", else: "mentions") |> info("boundary")
+      boundary =
+        if(is_public, do: "public", else: "mentions")
+        |> debug("set boundary")
 
       publish(
         current_user: creator,

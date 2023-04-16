@@ -44,7 +44,7 @@ defmodule Bonfire.Social.APActivities do
     end
   end
 
-  defp do_create(character, activity, object) do
+  defp do_create(character, activity, %{public: is_public} = object) do
     json =
       if is_map(object) do
         Enum.into(%{"object" => the_object(object)}, activity || %{})
@@ -52,15 +52,23 @@ defmodule Bonfire.Social.APActivities do
         activity || %{}
       end
 
-    # TODO: reuse logic from Posts for targeting the audience, and handling public/private
+    boundary =
+      if(is_public, do: "public", else: "mentions")
+      |> debug("set boundary")
+
+    # TODO: reuse logic from Posts for targeting the audience
     opts =
-      [boundary: "federated", id: ulid(object), verb: e(activity, :verb, :create)]
+      [boundary: boundary, id: ulid(object), verb: e(activity, :verb, :create)]
       |> debug("ap_opts")
 
     with {:ok, apactivity} <- insert(character, json, opts) do
       #  {:ok, _} <- FeedActivities.save_fediverse_incoming_activity(character, :create, apactivity) do # Note: using `Activities.put_assoc/` instead
       {:ok, apactivity}
     end
+  end
+
+  defp do_create(character, activity, object) do
+    do_create(character, activity, Enum.into(object, %{public: false}))
   end
 
   defp the_object(object) do
