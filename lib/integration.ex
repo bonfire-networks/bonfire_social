@@ -138,10 +138,7 @@ defmodule Bonfire.Social.Integration do
   # TODO: clean up the following patterns
 
   def maybe_federate(subject, verb, object, activity \\ nil) do
-    if Bonfire.Common.Extend.module_enabled?(
-         Bonfire.Federate.ActivityPub.Outgoing,
-         subject
-       ) do
+    if federating?(subject) do
       info(verb, "maybe prepare outgoing federation with verb...")
 
       Bonfire.Federate.ActivityPub.Outgoing.maybe_federate(
@@ -154,6 +151,14 @@ defmodule Bonfire.Social.Integration do
       info("Federation is disabled or an adapter is not available")
       :skip
     end
+  end
+
+  def federating?(subject \\ nil) do
+    ActivityPub.Config.federating?() and
+      Bonfire.Common.Extend.module_enabled?(
+        Bonfire.Federate.ActivityPub.Outgoing,
+        subject
+      )
   end
 
   def is_local?(thing) do
