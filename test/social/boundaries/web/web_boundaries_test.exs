@@ -75,7 +75,7 @@ defmodule Bonfire.Social.WebBoundariesTest do
 
   # end
 
-  # test "adding a user with a 'caretaker' role and verify that the user can delete the post" do
+  # test "adding a user with a 'administer' role and verify that the user can delete the post" do
 
   # end
 
