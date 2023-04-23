@@ -307,6 +307,8 @@ defmodule Bonfire.Social.Edges do
   end
 
   defp filter(query, {:type, types}, _opts) do
+    debug(types, "filter by types")
+
     case Bonfire.Common.Types.table_types(types) do
       table_ids when is_list(table_ids) and table_ids != [] ->
         where(query, [edge: edge], edge.table_id in ^table_ids)
