@@ -117,44 +117,46 @@ defmodule Bonfire.Social.Follows do
         opts
       )
 
-    case create(user, object, opts) do
-      {:ok, follow} ->
-        Cache.remove("my_followed:#{ulid(user)}")
+    repo().transact_with(fn ->
+      case create(user, object, opts) do
+        {:ok, follow} ->
+          Cache.remove("my_followed:#{ulid(user)}")
 
-        # FIXME: should not compute feed ids twice
-        LivePush.push_activity_object(
-          FeedActivities.get_feed_ids(opts[:to_feeds]),
-          follow,
-          object,
-          push_to_thread: false,
-          notify: true
-        )
+          # FIXME: should not compute feed ids twice
+          LivePush.push_activity_object(
+            FeedActivities.get_feed_ids(opts[:to_feeds]),
+            follow,
+            object,
+            push_to_thread: false,
+            notify: true
+          )
 
-        if user_struct == Bonfire.Data.Identity.User,
-          do:
-            Bonfire.Boundaries.Circles.add_to_circles(
-              object,
-              Bonfire.Boundaries.Circles.get_stereotype_circles(user, :followed)
-            )
-
-        if object_struct == Bonfire.Data.Identity.User,
-          do:
-            Bonfire.Boundaries.Circles.add_to_circles(
-              user,
-              Bonfire.Boundaries.Circles.get_stereotype_circles(
+          if user_struct == Bonfire.Data.Identity.User,
+            do:
+              Bonfire.Boundaries.Circles.add_to_circles(
                 object,
-                :followers
+                Bonfire.Boundaries.Circles.get_stereotype_circles(user, :followed)
               )
-            )
 
-        if info(opts[:incoming] != true, "Maybe outgoing follow?"),
-          do: Integration.maybe_federate_and_gift_wrap_activity(user, follow),
-          else: {:ok, follow}
+          if object_struct == Bonfire.Data.Identity.User,
+            do:
+              Bonfire.Boundaries.Circles.add_to_circles(
+                user,
+                Bonfire.Boundaries.Circles.get_stereotype_circles(
+                  object,
+                  :followers
+                )
+              )
 
-      e ->
-        error(e)
-        maybe_already_followed(user, object)
-    end
+          if info(opts[:incoming] != true, "Maybe outgoing follow?"),
+            do: Integration.maybe_federate_and_gift_wrap_activity(user, follow),
+            else: {:ok, follow}
+
+        e ->
+          error(e)
+          maybe_already_followed(user, object)
+      end
+    end)
   rescue
     e in Ecto.ConstraintError ->
       error(e)

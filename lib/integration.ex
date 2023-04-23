@@ -24,16 +24,19 @@ defmodule Bonfire.Social.Integration do
         verb_override \\ nil,
         object_override \\ nil
       ) do
-    {:ok,
-     Enums.deep_merge(object, %{
-       activity: %{
-         federate_activity_pub:
-           Utils.ok_unwrap(
-             maybe_federate_activity(subject, object, verb_override, object_override)
-             |> debug("result of maybe_federate_activity")
-           )
-       }
-     })}
+    with {:ok, ap_activity} <-
+           maybe_federate_activity(subject, object, verb_override, object_override)
+           |> debug("result of maybe_federate_activity") do
+      {:ok,
+       Enums.deep_merge(object, %{
+         activity: %{
+           federate_activity_pub: ap_activity
+         }
+       })}
+    else
+      :ignore -> {:ok, object}
+      other -> other
+    end
   end
 
   defp maybe_federate_activity(
@@ -149,7 +152,7 @@ defmodule Bonfire.Social.Integration do
     else
       # TODO: do not enqueue if federation is disabled in Settings
       info("Federation is disabled or an adapter is not available")
-      :skip
+      :ignore
     end
   end
 
