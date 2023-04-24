@@ -533,12 +533,12 @@ defmodule Bonfire.Social.Follows do
     info("Accept incoming request")
 
     with {:ok, follower} <-
-           Bonfire.Federate.ActivityPub.AdapterUtils.fetch_character_by_ap_id(follower)
-           |> info(),
+           Bonfire.Federate.ActivityPub.AdapterUtils.fetch_character_by_ap_id(follower),
          {:ok, request} <-
-           Requests.get(follower, Follow, followed, skip_boundary_check: true) |> info(),
-         {:ok, request} <- accept(request, current_user: followed, incoming: true) |> info() do
-      {:ok, request}
+           Requests.get(follower, Follow, followed, skip_boundary_check: true),
+         {:ok, accepted} <- accept(request, current_user: followed, incoming: true) do
+      debug(accepted, "acccccepted")
+      {:ok, accepted}
     else
       {:error, :not_found} ->
         case following?(follower, followed) do
@@ -581,14 +581,6 @@ defmodule Bonfire.Social.Follows do
     end
   end
 
-  defp reject(follower, followed) do
-    with {:ok, request} <-
-           Requests.get(follower, Follow, followed, skip_boundary_check: true),
-         {:ok, request} <- ignore(request, current_user: followed) do
-      {:ok, request}
-    end
-  end
-
   def ap_receive_activity(
         follower,
         %{data: %{"type" => "Undo"} = _data} = _activity,
@@ -598,6 +590,14 @@ defmodule Bonfire.Social.Follows do
            Bonfire.Federate.ActivityPub.AdapterUtils.fetch_character_by_ap_id(followed_ap_id),
          [id] <- unfollow(follower, object) do
       {:ok, id}
+    end
+  end
+
+  defp reject(follower, followed) do
+    with {:ok, request} <-
+           Requests.get(follower, Follow, followed, skip_boundary_check: true),
+         {:ok, request} <- ignore(request, current_user: followed) do
+      {:ok, request}
     end
   end
 end
