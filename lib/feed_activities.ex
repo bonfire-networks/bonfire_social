@@ -175,7 +175,9 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed(:flags, opts) do
-    Bonfire.Social.Flags.list(opts)
+    opts = to_options(opts)
+
+    Bonfire.Social.Flags.list(opts ++ [include_flags: true])
     |> repo().maybe_preload(
       [edge: [object: [created: [creator: [:profile, :character]]]]],
       follow_pointers: false
@@ -427,11 +429,17 @@ defmodule Bonfire.Social.FeedActivities do
   @doc false
   def query_extras(query \\ nil, opts) do
     opts = to_options(opts)
+    current_user = current_user(opts)
     # debug(opts)
     # eg. private messages should never appear in feeds
     exclude_object_types = [Message] ++ e(opts, :exclude_object_types, [])
     # exclude certain activity types
-    exclude_verbs = [:message] ++ e(opts, :exclude_verbs, [])
+    exclude_verbs =
+      [:message] ++
+        e(opts, :exclude_verbs, []) ++
+        if e(opts, :include_flags, false) or Integration.is_admin?(current_user),
+          do: [],
+          else: [:flag]
 
     exclude_table_ids =
       exclude_object_types
