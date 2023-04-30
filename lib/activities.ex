@@ -929,7 +929,13 @@ defmodule Bonfire.Social.Activities do
   def verb_maybe_modify(verb, activity) when is_atom(verb),
     do: maybe_to_string(verb) |> verb_maybe_modify(activity)
 
-  def verb_maybe_modify(verb, _) when is_binary(verb), do: verb
+  def verb_maybe_modify(verb, activity) when is_binary(verb) do
+    if is_ulid?(verb) do
+      verb_maybe_modify(Bonfire.Boundaries.Verbs.get!(verb)[:verb], activity)
+    else
+      verb
+    end
+  end
 
   # |> String.downcase()
 
