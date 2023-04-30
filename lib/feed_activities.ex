@@ -10,7 +10,7 @@ defmodule Bonfire.Social.FeedActivities do
   alias Bonfire.Data.Social.FeedPublish
   alias Bonfire.Data.Social.Message
   alias Bonfire.Data.Social.Seen
-
+  alias Bonfire.Social.Integration
   alias Bonfire.Data.Edges.Edge
   alias Bonfire.Social.Activities
   # alias Bonfire.Social.Edges
