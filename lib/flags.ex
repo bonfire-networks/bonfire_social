@@ -99,19 +99,31 @@ defmodule Bonfire.Social.Flags do
   end
 
   def list(opts) do
+    opts = to_options(opts)
+
+    can_mediate? = Bonfire.Boundaries.can?(opts, :mediate, :instance)
+
     opts =
-      to_options(opts)
+      opts
       |> Keyword.put_new(
         :skip_boundary_check,
-        Bonfire.Boundaries.can?(opts, :mediate, :instance) || :admins
+        can_mediate? || :admins
       )
 
     if opts[:scope] == :instance and
-         (opts[:skip_boundary_check] == true or Integration.is_admin?(opts)) do
+         (can_mediate? or Integration.is_admin?(opts)) do
       list_paginated([], opts)
     else
       list_my(opts)
     end
+  end
+
+  def list_preloaded(opts) do
+    list(opts)
+    |> repo().maybe_preload(
+      [edge: [object: [created: [creator: [:profile, :character]]]]],
+      follow_pointers: false
+    )
   end
 
   def list_paginated(filters, opts) do
@@ -192,11 +204,16 @@ defmodule Bonfire.Social.Flags do
               account: account
             }
 
-          %Bonfire.Data.Social.Post{} = flagged ->
-            flagged = repo().preload(flagged, :created)
+          %{} = flagged ->
+            flagged =
+              flagged
+              |> repo().maybe_preload(:created)
+              |> repo().maybe_preload(:creator)
 
-            {:ok, account} =
-              ActivityPub.Actor.get_or_fetch_by_username(flagged.created.creator_id)
+            account =
+              ActivityPub.Actor.get_cached!(
+                pointer: e(flagged, :created, :creator_id, nil) || e(flagged, :creator, :id, nil)
+              )
 
             %{
               statuses: [
@@ -217,5 +234,58 @@ defmodule Bonfire.Social.Flags do
     else
       e -> {:error, e}
     end
+  end
+
+  def ap_receive_activity(
+        creator,
+        %{data: %{"type" => "Flag"}} = activity,
+        objects
+      )
+      when is_list(objects) do
+    case objects
+         |> Enum.map(&ap_receive_activity(creator, activity, &1))
+         # TODO: put this list of :ok / :error tuples logic somewhere reusable
+         |> Enum.group_by(
+           fn
+             {:ok, _} -> :ok
+             _ -> :error
+           end,
+           fn
+             {:ok, val} -> val
+             {:error, error} -> error
+             other -> other
+           end
+         ) do
+      %{ok: flags, error: errors} ->
+        warn(errors, "Could not flag all the objects, but continuing with the ones that worked")
+        {:ok, flags}
+
+      %{ok: flags} ->
+        {:ok, flags}
+
+      %{error: errors} ->
+        error(errors, "Could not flag any objects")
+        # {_flags, errors} -> error(errors, "Could not flag all the objects")
+    end
+  end
+
+  def ap_receive_activity(
+        creator,
+        %{data: %{"type" => "Flag"}} = _activity,
+        %{pointer_id: pointer_id}
+      )
+      when is_binary(pointer_id) do
+    with {:ok, object} <-
+           Bonfire.Common.Pointers.get(pointer_id, skip_boundary_check: true) do
+      flag(creator, object)
+    end
+  end
+
+  def ap_receive_activity(
+        _creator,
+        _activity,
+        other
+      ) do
+    error(other, "Could not find an object(s) to be flagged")
   end
 end

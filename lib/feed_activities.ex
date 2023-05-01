@@ -175,14 +175,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed(:flags, opts) do
-    opts = to_options(opts)
-
-    Bonfire.Social.Flags.list(opts ++ [include_flags: true])
-    # |> repo().maybe_preload(
-    #   [edge: [object: [created: [creator: [:profile, :character]]]]],
-    #   follow_pointers: false
-    # )
-
+    Bonfire.Social.Flags.list(to_options(opts) ++ [include_flags: true])
     # |> debug()
   end
 
@@ -437,9 +430,11 @@ defmodule Bonfire.Social.FeedActivities do
     exclude_verbs =
       [:message] ++
         e(opts, :exclude_verbs, []) ++
-        if e(opts, :include_flags, false) and Integration.is_admin?(current_user),
-          do: [],
-          else: [:flag]
+        if e(opts, :include_flags, false) and
+             (Bonfire.Boundaries.can?(current_user, :mediate, :instance) or
+                Integration.is_admin?(current_user)),
+           do: [],
+           else: [:flag]
 
     exclude_table_ids =
       exclude_object_types
