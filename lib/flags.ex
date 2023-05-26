@@ -53,20 +53,43 @@ defmodule Bonfire.Social.Flags do
       |> Keyword.put_new(:current_user, flagger)
       |> Keyword.put_new_lazy(:to_feeds, &flag_feeds/0)
 
-    check_flag(flagger, object, opts)
-    ~> create(flagger, ..., opts)
+    case check_flag(flagger, object, opts)
+         ~> create(flagger, ..., opts) do
+      {:ok, flag} ->
+        Integration.maybe_federate_and_gift_wrap_activity(flagger, flag)
+
+      e ->
+        maybe_dup(flagger, object, e)
+    end
   rescue
     e in Ecto.ConstraintError ->
-      warn(e)
-      {:ok, "Already flagged"}
+      maybe_dup(flagger, object, e)
+  end
+
+  defp maybe_dup(flagger, object, e) do
+    case get(flagger, object) do
+      {:ok, flag} ->
+        debug(flag, "the user already flagged this object")
+        {:ok, flag}
+
+      _ ->
+        error(e)
+    end
   end
 
   # determines the feeds a flag is published to
   defp flag_feeds(), do: [notifications: Bonfire.Me.Users.list_admins()]
 
   defp check_flag(flagger, object, opts) do
-    skip? = skip_boundary_check?(opts, object)
-    skip? = (:admins == skip? && Users.is_admin?(flagger)) || skip? == true
+    #  NOTE: currently allowing anyone to flag anything regardless of boundaries - TODO: make configurable?
+    skip? = true
+
+    opts =
+      opts
+      |> Keyword.put_new(:skip_boundary_check, true)
+
+    # skip? = skip_boundary_check?(opts, object)
+    # skip? = (:admins == skip? && Users.is_admin?(flagger)) || skip? == true
 
     case object do
       %{id: id} ->
@@ -187,50 +210,53 @@ defmodule Bonfire.Social.Flags do
   end
 
   def ap_publish_activity(subject, _verb, %Flag{} = flag) do
-    flag = repo().preload(flag, flagged: [])
+    flagger = subject || e(flag, :edge, :subject, nil) || e(flag, :activity, :subject, nil)
+    flagged = e(flag, :edge, :object, nil) || e(flag, :activity, :object, nil)
 
     with {:ok, flagger} <-
-           ActivityPub.Actor.get_cached(pointer: subject || flag.flagger_id) do
-      flagged = Common.Pointers.get(flag.context)
-
+           ActivityPub.Actor.get_cached(pointer: flagger) do
       # FIXME: only works for flagged posts and users
       params =
         case flagged do
-          %User{id: id} when not is_nil(id) ->
-            {:ok, account} = ActivityPub.Actor.get_cached(pointer: id)
+          %User{id: flagged_id} when not is_nil(flagged_id) ->
+            {:ok, account} = ActivityPub.Actor.get_cached(pointer: flagged_id)
 
             %{
               statuses: [],
               account: account
             }
 
-          %{} = flagged ->
+          %{id: flagged_id} = flagged ->
             flagged =
               flagged
               |> repo().maybe_preload(:created)
               |> repo().maybe_preload(:creator)
 
-            account =
-              ActivityPub.Actor.get_cached!(
-                pointer: e(flagged, :created, :creator_id, nil) || e(flagged, :creator, :id, nil)
-              )
+            creator =
+              e(flagged, :created, :creator_id, nil) || e(flagged, :creator, :id, nil) ||
+                e(flagged, :creator_id, nil) || e(flag, :activity, :created, :creator_id, nil)
+
+            account = if creator, do: ActivityPub.Actor.get_cached!(pointer: creator)
 
             %{
               statuses: [
-                ActivityPub.Object.get_cached!(pointer: ulid(flagged))
+                ActivityPub.Object.get_cached!(pointer: flagged_id)
               ],
               account: account
             }
         end
 
-      ActivityPub.flag(%{
-        actor: flagger,
-        statuses: params.statuses,
-        account: params.account,
-        content: flag.message,
-        forward: true,
-        pointer: flag
-      })
+      ActivityPub.flag(
+        %{
+          actor: flagger,
+          statuses: params.statuses,
+          account: params.account,
+          # content: flag.message, # TODO
+          forward: true,
+          pointer: flag
+        }
+        |> debug("tooo_flag")
+      )
     else
       e -> {:error, e}
     end

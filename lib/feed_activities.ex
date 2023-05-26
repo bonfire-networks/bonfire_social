@@ -107,6 +107,7 @@ defmodule Bonfire.Social.FeedActivities do
       |> Keyword.merge(
         # so we can show flags to admins in notifications
         skip_boundary_check: :admins,
+        include_flags: true,
         skip_dedup: true,
         preload: :notifications
       )
