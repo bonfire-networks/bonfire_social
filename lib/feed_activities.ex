@@ -188,7 +188,7 @@ defmodule Bonfire.Social.FeedActivities do
       |> repo().many_paginated(opts ++ [return: :query, multiply_limit: 3])
       |> subquery()
 
-    from(fp in FeedPublish)
+    base_query()
     |> join(:inner, [fp], ^query, on: [id: fp.id])
     |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
     # |> Activities.as_permitted_for_subqueried(opts)  
@@ -349,7 +349,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp default_query(), do: select(Pointers.query_base(), [p], p)
 
-  defp base_query(_opts) do
+  defp base_query(_opts \\ []) do
     # feeds = from fp in FeedPublish, # why the subquery?..
     #   where: fp.feed_id in ^feed_ids,
     #   group_by: fp.id,
