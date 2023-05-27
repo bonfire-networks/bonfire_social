@@ -87,6 +87,13 @@ defmodule Bonfire.Social.Activities do
     |> boundarise(q, activity.object_id, ...)
   end
 
+  def as_permitted_for_subqueried(q, opts \\ [], verbs \\ [:see, :read]) do
+    to_options(opts)
+    |> Keyword.put_new(:verbs, verbs)
+    |> Keyword.put_new(:parent_as, :activity)
+    |> boundarise(q, object_id, ...)
+  end
+
   def reply_to_as_permitted_for(q, opts \\ [], verbs \\ [:see, :read]) do
     to_options(opts)
     |> Keyword.put_new(:verbs, verbs)

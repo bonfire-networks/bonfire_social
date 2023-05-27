@@ -180,7 +180,7 @@ defmodule Bonfire.Social.Objects do
   def list_query(type_or_query \\ nil, opts)
 
   def list_query(%Ecto.Query{} = query, opts) do
-    FeedActivities.query_extras(query, opts)
+    FeedActivities.query_extras_boundarised(query, opts)
   end
 
   def list_query(type, opts) when is_atom(type) do

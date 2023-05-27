@@ -157,6 +157,68 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   @doc """
+  Return a page of Feed Activities (reverse chronological) + pagination metadata
+  TODO: consolidate with `feed/2`
+  """
+  def feed_paginated(filters \\ [], opts \\ []) do
+    feed_paginated(filters, opts, default_query())
+  end
+
+  def feed_paginated(filters, opts, query) do
+    debug(opts, "paginate")
+
+    query(filters, opts, query)
+    # |> debug
+    |> paginate_and_boundarise_feed(opts)
+    |> prepare_feed(opts)
+
+    # |> debug()
+  end
+
+  defp paginate_and_boundarise_feed(query, opts) do
+    paginate = e(opts, :paginate, nil) || e(opts, :after, nil) || opts
+
+    # WIP: BOUNDARISE with deferred join to speed up queries!
+
+    query =
+      query
+      |> select([:id])
+      # to avoid 'cannot preload in subquery' error
+      |> Ecto.Query.exclude(:preload)
+      |> repo().many_paginated(opts ++ [return: :query, multiply_limit: 3])
+      |> subquery()
+
+    from(fp in FeedPublish)
+    |> join(:inner, [fp], ^query, on: [id: fp.id])
+    |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
+    # |> Activities.as_permitted_for_subqueried(opts)  
+    |> Activities.as_permitted_for(opts)
+    |> debug()
+    |> repo().many_paginated(paginate)
+  end
+
+  # defp paginate_and_boundarise_feed(query, opts) do
+  #   paginate = e(opts, :paginate, nil) || e(opts, :after, nil) || opts
+
+  #   # WIP: BOUNDARISE with deferred join to speed up queries!
+
+  #   (from top_root in subquery(
+  #     query
+  #     # |> as(:root)
+  #     |> Ecto.Query.exclude(:preload) # to avoid 'cannot preload in subquery' error
+  #     |> repo().many_paginated(paginate ++ [return: :query])
+  #   ), as: :top_root)
+  #   # |> Activities.as_permitted_for_subqueried(opts)  
+  #   |> Activities.as_permitted_for(opts)  
+  #   |> select([:top_root])
+  #   |> debug()
+  #   # |> preload([top_root, activity], activity: activity)
+  #   # |> proload(top_root: :activity)
+  #   # |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
+  #   |> repo().many_paginated(paginate)
+  # end
+
+  @doc """
   Gets a feed by id or ids or a thing/things containing an id/ids.
   """
   def feed(feed, opts \\ [])
@@ -170,7 +232,7 @@ defmodule Bonfire.Social.FeedActivities do
 
     ulid(id_or_ids)
     |> feed_query(opts)
-    |> repo().many_paginated(maybe_merge_filters(opts[:feed_filters], opts))
+    |> paginate_and_boundarise_feed(maybe_merge_filters(opts[:feed_filters], opts))
     # |> debug()
     |> prepare_feed(opts)
   end
@@ -193,7 +255,7 @@ defmodule Bonfire.Social.FeedActivities do
     |> proload([:activity])
     |> query_extras(opts)
     # |> debug()
-    |> repo().many_paginated(Enum.into(opts[:feed_filters] || [], opts))
+    |> paginate_and_boundarise_feed(maybe_merge_filters(opts[:feed_filters], opts))
     |> prepare_feed(opts)
   end
 
@@ -224,17 +286,6 @@ defmodule Bonfire.Social.FeedActivities do
     end
   end
 
-  # TODO: is this needed for anything?
-  # def user_feed(user, feed_name, opts \\ []) do
-  #   paginate = e(opts, :paginate, nil) || e(opts, :after, nil)
-  #   opts = Keyword.put_new(opts, :current_user, user)
-  #   id = Feeds.named_feed_id(feed_name) ||
-  #     Bonfire.Social.Feeds.my_feed_id(feed_name, user)
-  #   feed_query(id, opts)
-  #   |> query_extras(opts)
-  #   |> repo().many_paginated(paginate)
-  # end
-
   def feed_with_object(feed_name, object, opts \\ []) do
     feed(
       feed_name,
@@ -264,26 +315,6 @@ defmodule Bonfire.Social.FeedActivities do
       )
     )
     |> repo().exists?()
-  end
-
-  @doc """
-  Return a page of Feed Activities (reverse chronological) + pagination metadata
-  """
-  def feed_paginated(filters \\ [], opts \\ []) do
-    feed_paginated(filters, opts, default_query())
-  end
-
-  def feed_paginated(filters, opts, query) do
-    paginate = e(opts, :paginate, nil) || e(opts, :after, nil)
-
-    debug("feed_paginated filters: #{inspect(filters)} paginate: #{inspect(paginate)}")
-
-    query_paginated(filters, opts, query)
-    # |> debug
-    |> repo().many_paginated(paginate)
-    |> prepare_feed(opts)
-
-    # |> debug()
   end
 
   @decorate time()
@@ -326,9 +357,9 @@ defmodule Bonfire.Social.FeedActivities do
 
     from(fp in FeedPublish,
       # join: fp in subquery(feeds), on: p.id == fp.id,
-      join: a in Activity,
+      join: activity in Activity,
       as: :activity,
-      on: a.id == fp.id,
+      on: activity.id == fp.id,
       distinct: [desc: fp.id],
       order_by: [desc: fp.id]
     )
@@ -342,6 +373,7 @@ defmodule Bonfire.Social.FeedActivities do
     cond do
       local_feed_id == feed_ids ->
         query_extras(opts)
+        |> proload(activity: [object: {"object_", [:peered]}])
         |> where(
           [fp, object_peered: object_peered],
           fp.feed_id in ^ulids(feed_ids) or is_nil(object_peered.id)
@@ -349,6 +381,7 @@ defmodule Bonfire.Social.FeedActivities do
 
       federated_feed_id == feed_ids ->
         query_extras(opts)
+        |> proload(activity: [object: {"object_", [:peered]}])
         |> where(
           [fp, object_peered: object_peered],
           fp.feed_id in ^ulids(feed_ids) or not is_nil(object_peered.id)
@@ -360,32 +393,13 @@ defmodule Bonfire.Social.FeedActivities do
       true ->
         query_extras(opts)
     end
-    |> debug()
+
+    # |> debug()
   end
 
   defp generic_feed_query(feed_ids, opts) do
     query_extras(opts)
     |> where([fp], fp.feed_id in ^ulids(feed_ids))
-  end
-
-  def query_paginated(query_or_filters \\ [], opts \\ [])
-
-  def query_paginated(filters, opts) when is_list(filters) do
-    #   feed_i
-    #   query_paginated(base_
-    query(filters, opts)
-  end
-
-  def query_paginated(filters, opts, query) when is_list(filters) do
-    # paginate = e(opts, :paginate, opts)
-    # TODO: actually return a query with pagination filters
-    query(filters, opts, query)
-  end
-
-  def query_paginated(query, _opts, _query) do
-    # paginate = e(opts, :paginate, opts)
-    # TODO: actually return a query with pagination filters
-    query
   end
 
   def query(filters \\ [], opts \\ []),
@@ -421,7 +435,12 @@ defmodule Bonfire.Social.FeedActivities do
 
   # add assocs needed in timelines/feeds
   @doc false
-  def query_extras(query \\ nil, opts) do
+  def query_extras_boundarised(query \\ nil, opts) do
+    query_extras(query, opts)
+    |> Activities.as_permitted_for(opts)
+  end
+
+  defp query_extras(query \\ nil, opts) do
     opts = to_options(opts)
     current_user = current_user(opts)
     # debug(opts)
@@ -456,12 +475,13 @@ defmodule Bonfire.Social.FeedActivities do
          %Ecto.Query{} -> filters
          _ -> base_query(opts)
        end)
-    |> proload([:activity])
-    |> reusable_join(:inner, [activity: activity], activity_pointer in Pointer,
+    # |> proload([:activity])
+    |> reusable_join(:left, [root], assoc(root, :activity), as: :activity)
+    |> reusable_join(:left, [activity: activity], activity_pointer in Pointer,
       as: :activity_pointer,
       on: activity_pointer.id == activity.id
     )
-    |> reusable_join(:inner, [activity: activity], object in Pointer,
+    |> reusable_join(:left, [activity: activity], object in Pointer,
       as: :object,
       on: object.id == activity.object_id
     )
@@ -476,15 +496,14 @@ defmodule Bonfire.Social.FeedActivities do
         activity_pointer.table_id not in ^exclude_table_ids and
         object.table_id not in ^exclude_table_ids
     )
-    # |> debug("feed_paginated pre-preloads")
-    # add assocs needed in timelines/feeds
-    # |> Activities.activity_preloads(e(opts, :preload, :with_object), opts) # if we want to preload the rest later to allow for caching
-    # preload all things we commonly want in feeds
-    |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
     |> maybe_exclude_replies(filters, opts)
     |> maybe_only_replies(filters, opts)
-    # |> debug("feed_paginated post-preloads")
-    |> Activities.as_permitted_for(opts)
+
+    # |> debug("pre-preloads")
+    # preload all things we commonly want in feeds
+    # |> Activities.activity_preloads(e(opts, :preload, :with_object), opts) # if we want to preload the rest later to allow for caching
+    # |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
+    # |> debug("post-preloads")
   end
 
   defp maybe_filter(query, %{object_type: object_type}) when not is_nil(object_type) do
@@ -1002,6 +1021,8 @@ defmodule Bonfire.Social.FeedActivities do
     ~> select(count())
     |> repo().one()
   end
+
+  def count_total(), do: repo().one(select(FeedPublish, [u], count(u.id)))
 
   def mark_all_seen(feed_id, opts) do
     unseen_query(feed_id, opts)

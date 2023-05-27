@@ -165,8 +165,6 @@ defmodule Bonfire.Social.Posts do
     # |> debug("filters")
     |> query_paginated(opts)
     |> repo().many_paginated(paginate)
-
-    # |> FeedActivities.feed_paginated(filters, opts)
   end
 
   @doc "Query posts with pagination"
@@ -540,4 +538,6 @@ defmodule Bonfire.Social.Posts do
       "tags" => Tags.indexing_format_tags(activity)
     }
   end
+
+  def count_total(), do: repo().one(select(Post, [u], count(u.id)))
 end
