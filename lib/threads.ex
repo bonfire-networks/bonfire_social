@@ -198,11 +198,14 @@ defmodule Bonfire.Social.Threads do
       [Bonfire.Classify.Category]
       |> Bonfire.Common.Types.table_types()
 
-    from(p in Pointer, as: :root, where: p.id == ^id and p.table_id not in ^exclude_pointables)
+    from(p in Pointer,
+      as: :main_object,
+      where: p.id == ^id and p.table_id not in ^exclude_pointables
+    )
     # load the reply_to's Replied and in particular its thread and that creator
     |> proload(replied: [thread: [created: [creator: [:character, :peered]]]])
     |> proload(created: [creator: [:character, :peered]])
-    |> boundarise(root.id, verbs: [:reply], current_user: user)
+    |> boundarise(main_object.id, verbs: [:reply], current_user: user)
     # |> boundarise(thread.id, verbs: [:reply], current_user: user) # FIMXE: including this fails when parent has no thread_id
     |> repo().one()
   end

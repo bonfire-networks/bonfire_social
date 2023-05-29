@@ -165,36 +165,64 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed_paginated(filters, opts, query) do
-    debug(opts, "paginate")
-
     query(filters, opts, query)
     # |> debug
     |> paginate_and_boundarise_feed(opts)
     |> prepare_feed(opts)
-
-    # |> debug()
   end
 
-  defp paginate_and_boundarise_feed(query, opts) do
-    paginate = e(opts, :paginate, nil) || e(opts, :after, nil) || opts
-
+  defp paginate_and_boundarise_feed_deferred_query(initial_query, opts) do
     # WIP: BOUNDARISE with deferred join to speed up queries!
 
-    query =
-      query
+    initial_query =
+      initial_query
       |> select([:id])
       # to avoid 'cannot preload in subquery' error
       |> Ecto.Query.exclude(:preload)
-      |> repo().many_paginated(opts ++ [return: :query, multiply_limit: 3])
+      |> repo().many_paginated(opts ++ [return: :query, multiply_limit: 2])
       |> subquery()
 
     base_query()
-    |> join(:inner, [fp], ^query, on: [id: fp.id])
+    |> join(:inner, [fp], ^initial_query, on: [id: fp.id])
     |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
-    # |> Activities.as_permitted_for_subqueried(opts)  
     |> Activities.as_permitted_for(opts)
     |> debug()
-    |> repo().many_paginated(paginate)
+  end
+
+  defp paginate_and_boundarise_feed(query, opts) do
+    paginate = e(opts, :paginate, nil) || opts
+
+    if opts[:return] == :explain do
+      paginate_and_boundarise_feed_deferred_query(query, opts)
+      |> Ecto.Adapters.SQL.explain(repo(), :all, ...,
+        analyze: true,
+        verbose: false,
+        costs: true,
+        timing: true,
+        summary: true,
+        format: :text
+      )
+      |> IO.puts()
+
+      throw("Explanation printed.")
+    else
+      # ^ tell Paginator to always give us and `after` cursor 
+      case paginate_and_boundarise_feed_deferred_query(query, opts)
+           |> repo().many_paginated(Keyword.new(paginate) ++ [infinite_pages: true]) do
+        %{edges: []} -> paginate_and_boundarise_feed_non_deferred_query(query, paginate, opts)
+        # ^ if there were no results, try without the deferred query in case some where missing because of boundaries
+        result -> result
+      end
+    end
+  end
+
+  defp paginate_and_boundarise_feed_non_deferred_query(query, paginate \\ nil, opts) do
+    query
+    |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
+    |> Activities.as_permitted_for(opts)
+    |> repo().many_paginated(paginate || opts)
+
+    # |> debug()
   end
 
   # defp paginate_and_boundarise_feed(query, opts) do
@@ -208,7 +236,6 @@ defmodule Bonfire.Social.FeedActivities do
   #     |> Ecto.Query.exclude(:preload) # to avoid 'cannot preload in subquery' error
   #     |> repo().many_paginated(paginate ++ [return: :query])
   #   ), as: :top_root)
-  #   # |> Activities.as_permitted_for_subqueried(opts)  
   #   |> Activities.as_permitted_for(opts)  
   #   |> select([:top_root])
   #   |> debug()
@@ -360,7 +387,7 @@ defmodule Bonfire.Social.FeedActivities do
       join: activity in Activity,
       as: :activity,
       on: activity.id == fp.id,
-      distinct: [desc: fp.id],
+      # distinct: [desc: fp.id],
       order_by: [desc: fp.id]
     )
   end
