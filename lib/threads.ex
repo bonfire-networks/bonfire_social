@@ -288,6 +288,7 @@ defmodule Bonfire.Social.Threads do
     verb_id = Verbs.get_id!(:create)
 
     query
+    |> proload(activity: [subject: {"subject_", [:character]}])
     |> distinct([fp, subject_character: subject_character],
       desc: subject_character.id
     )

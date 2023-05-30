@@ -52,7 +52,9 @@ defmodule Bonfire.Social.Messages do
   @doc """
   TODO: check boundaries, right now anyone can message anyone :/
   """
-  def send(%{id: _creator_id} = creator, attrs, to \\ nil) do
+  def send(creator_id, attrs, to \\ nil)
+
+  def send(%{id: _creator_id} = creator, attrs, to) do
     opts = [current_user: creator]
 
     to =
@@ -83,6 +85,11 @@ defmodule Bonfire.Social.Messages do
     else
       error("Could not find recipient.")
     end
+  end
+
+  def send(creator_id, attrs, to) when is_binary(creator_id) do
+    Bonfire.Me.Users.by_id(creator_id)
+    ~> send(attrs, to)
   end
 
   defp create(%{id: _creator_id} = creator, attrs, opts) do

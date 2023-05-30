@@ -232,7 +232,7 @@ defmodule Bonfire.Social.Posts do
          public_acl_ids <- ["5REM0TEPE0P1E1NTERACTREACT", "5REM0TEPE0P1E1NTERACTREP1Y"],
          acls <-
            Bonfire.Boundaries.list_object_acls(post),
-          #  |> debug("acls"),
+         #  |> debug("acls"),
          is_public <- Enum.any?(acls, fn %{id: acl_id} -> acl_id in public_acl_ids end),
          # FIXME only publish to public URI if in a public enough cirlce
          # Everything is public atm

@@ -256,9 +256,8 @@ defmodule Bonfire.Social.Edges do
   end
 
   defp filter(query, filters, opts) when is_list(filters) or is_map(filters) do
-    filters =
-      Keyword.new(filters)
-      # |> debug("filters")
+    filters = Keyword.new(filters)
+    # |> debug("filters")
 
     Enum.reduce(filters, query, &filter(&2, &1, opts))
     |> query_filter(
