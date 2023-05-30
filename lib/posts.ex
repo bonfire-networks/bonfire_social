@@ -228,12 +228,11 @@ defmodule Bonfire.Social.Posts do
              Utils.e(post, :created, :creator_id, nil) || Utils.e(post, :activity, :subject, nil) ||
              Utils.e(post, :activity, :subject_id, nil),
          {:ok, actor} <-
-           ActivityPub.Actor.get_cached(pointer: info(subject, "subject"))
-           |> info("subject_actor"),
+           ActivityPub.Actor.get_cached(pointer: subject),
          public_acl_ids <- ["5REM0TEPE0P1E1NTERACTREACT", "5REM0TEPE0P1E1NTERACTREP1Y"],
          acls <-
-           Bonfire.Boundaries.list_object_acls(post)
-           |> debug("acls"),
+           Bonfire.Boundaries.list_object_acls(post),
+          #  |> debug("acls"),
          is_public <- Enum.any?(acls, fn %{id: acl_id} -> acl_id in public_acl_ids end),
          # FIXME only publish to public URI if in a public enough cirlce
          # Everything is public atm
@@ -266,7 +265,7 @@ defmodule Bonfire.Social.Posts do
          cc <-
            mentions,
          # end),
-         # FIXME: the below seems to return ALL known users for public posts? 
+         # FIXME: the below seems to return ALL known users for public posts?
          bcc <- [],
          context <-
            (if e(post, :replied, :thread_id, nil) && post.replied.thread_id != id do
@@ -392,7 +391,7 @@ defmodule Bonfire.Social.Posts do
       for %{"type" => "Mention"} = mention <- tags do
         url =
           (mention["href"] || "")
-          # workaround for Mastodon using different URLs in text 
+          # workaround for Mastodon using different URLs in text
           |> String.replace("/users/", "/@")
 
         with {:ok, character} <-

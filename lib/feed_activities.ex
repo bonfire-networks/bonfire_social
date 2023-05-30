@@ -206,7 +206,7 @@ defmodule Bonfire.Social.FeedActivities do
 
       throw("Explanation printed.")
     else
-      # ^ tell Paginator to always give us and `after` cursor 
+      # ^ tell Paginator to always give us and `after` cursor
       case paginate_and_boundarise_feed_deferred_query(query, opts)
            |> repo().many_paginated(Keyword.new(paginate) ++ [infinite_pages: true]) do
         %{edges: []} -> paginate_and_boundarise_feed_non_deferred_query(query, paginate, opts)
@@ -236,7 +236,8 @@ defmodule Bonfire.Social.FeedActivities do
   #     |> Ecto.Query.exclude(:preload) # to avoid 'cannot preload in subquery' error
   #     |> repo().many_paginated(paginate ++ [return: :query])
   #   ), as: :top_root)
-  #   |> Activities.as_permitted_for(opts)  
+  #   # |> Activities.as_permitted_for_subqueried(opts)
+  #   |> Activities.as_permitted_for(opts)
   #   |> select([:top_root])
   #   |> debug()
   #   # |> preload([top_root, activity], activity: activity)
@@ -930,7 +931,7 @@ defmodule Bonfire.Social.FeedActivities do
     # This makes sure it gets put in feed even if the
     # federation hook fails
     feeds = Enums.filter_empty(feeds, [])
-    # ret = 
+    # ret =
     put_in_feeds(feeds, activity)
     # TODO: add ActivityPub feed for remote activities
     try do
