@@ -106,7 +106,7 @@ defmodule Bonfire.Social.PostContents do
             html_body: html_body,
             name: name,
             summary: summary,
-            mentions: mentions1 ++ mentions2 ++ mentions3,
+            mentions: e(attrs, :mentions, []) ++ mentions1 ++ mentions2 ++ mentions3,
             hashtags: hashtags1 ++ hashtags2 ++ hashtags3,
             urls: urls1 ++ urls2 ++ urls3,
             # TODO: show languages to user, then save the one they confirm

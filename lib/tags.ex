@@ -22,7 +22,7 @@ defmodule Bonfire.Social.Tags do
                obj
 
              id when is_binary(id) ->
-               %{id: id}
+               %{tag_id: id}
 
              other ->
                warn(other, "unsupported")
@@ -39,7 +39,7 @@ defmodule Bonfire.Social.Tags do
     else
       _ -> changeset
     end
-    |> debug("changeset")
+    |> debug("changeset with :tagged")
   end
 
   def maybe_process(creator, text, opts) do
