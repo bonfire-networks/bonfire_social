@@ -1,5 +1,5 @@
 defmodule Bonfire.Social.LivePush do
-  # FIXME: dependency on ui_common should be optional
+  # FIXME: dependency on ui_common should be optional, or should this be moved to a UI extension?
   use Bonfire.UI.Common
   import Untangle
   import Bonfire.Social.Integration

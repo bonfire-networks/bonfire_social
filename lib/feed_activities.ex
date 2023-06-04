@@ -57,6 +57,10 @@ defmodule Bonfire.Social.FeedActivities do
   @decorate time()
   def feed_ids_and_opts(feed_name, opts)
 
+  def feed_ids_and_opts({:my, feed_ids}, opts) do
+    feed_ids_and_opts(:my, to_options(opts) ++ [home_feed_ids: feed_ids])
+  end
+
   def feed_ids_and_opts(:my, opts) do
     opts = to_options(opts)
 
@@ -102,6 +106,17 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed_ids_and_opts(:notifications = feed_name, opts) do
+    feed_ids_and_opts(
+      {:notifications,
+       named_feed(
+         feed_name,
+         opts
+       )},
+      opts
+    )
+  end
+
+  def feed_ids_and_opts({:notifications, feed_id}, opts) do
     opts =
       to_options(opts)
       |> Keyword.merge(
@@ -112,10 +127,7 @@ defmodule Bonfire.Social.FeedActivities do
         preload: :notifications
       )
 
-    {named_feed(
-       feed_name,
-       opts
-     ), opts}
+    {feed_id, opts}
   end
 
   def feed_ids_and_opts(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
@@ -186,6 +198,7 @@ defmodule Bonfire.Social.FeedActivities do
     |> join(:inner, [fp], ^initial_query, on: [id: fp.id])
     |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
     |> Activities.as_permitted_for(opts)
+    |> distinct([activity: activity], desc: activity.id)
     |> debug()
   end
 
@@ -255,8 +268,9 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed(id_or_ids, opts)
       when is_binary(id_or_ids) or (is_list(id_or_ids) and id_or_ids != []) do
-    opts = to_options(opts)
-    # |> debug("feed_opts")
+    opts =
+      to_options(opts)
+      |> debug("feed_opts for #{id_or_ids}")
 
     ulid(id_or_ids)
     |> feed_query(opts)
@@ -266,14 +280,31 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed(:flags, opts) do
-    Bonfire.Social.Flags.list(to_options(opts) ++ [include_flags: true])
+    Bonfire.Social.Flags.list(to_options(opts) ++ [include_flags: :moderators])
     # |> debug()
   end
 
   def feed(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
-    {home_feed_ids, opts} = feed_ids_and_opts(feed_name, opts)
+    {feed_ids, opts} =
+      feed_ids_and_opts(feed_name, opts)
+      |> debug("feed_ids_and_opts")
 
-    feed(home_feed_ids, opts)
+    feed(feed_ids, opts)
+  end
+
+  def feed({feed_name, feed_id_or_ids}, opts)
+      when is_atom(feed_name) and not is_nil(feed_name) and
+             (is_binary(feed_id_or_ids) or is_list(feed_id_or_ids)) do
+    {feed_ids, opts} =
+      feed_ids_and_opts({feed_name, feed_id_or_ids}, opts)
+      |> debug("feed_ids_and_opts")
+
+    feed(feed_ids, opts)
+  end
+
+  def feed({feed_name, feed_name_again}, opts)
+      when is_atom(feed_name) and not is_nil(feed_name) and is_atom(feed_name_again) do
+    feed(feed_name, opts)
   end
 
   def feed(%Ecto.Query{} = custom_query, opts) do
@@ -478,11 +509,20 @@ defmodule Bonfire.Social.FeedActivities do
     exclude_verbs =
       [:message] ++
         e(opts, :exclude_verbs, []) ++
-        if e(opts, :include_flags, false) and
+        if opts[:include_flags] == :moderators and
              (Bonfire.Boundaries.can?(current_user, :mediate, :instance) or
-                Integration.is_admin?(current_user)),
-           do: [],
-           else: [:flag]
+                Integration.is_admin?(current_user)) do
+          debug("include flags for mods/admins")
+          []
+        else
+          if opts[:include_flags] do
+            debug("include flags for all")
+            []
+          else
+            debug("do not include flags")
+            [:flag]
+          end
+        end
 
     exclude_table_ids =
       exclude_object_types
@@ -800,20 +840,20 @@ defmodule Bonfire.Social.FeedActivities do
   #   ret
   # end
 
-  # @doc "Creates a new local activity or takes an existing one and publishes to specified feeds"
-  defp maybe_feed_publish(subject, verb_or_activity, object, feeds, opts)
+  @doc "Creates a new local activity or takes an existing one and publishes to specified feeds"
+  def maybe_feed_publish(subject, verb_or_activity, object, feeds, opts)
 
-  defp maybe_feed_publish(subject, verb, object, feeds, opts)
-       when is_atom(verb),
-       do: create_and_put_in_feeds(subject, verb, object, feeds, opts)
+  def maybe_feed_publish(subject, verb, object, feeds, opts)
+      when is_atom(verb),
+      do: create_and_put_in_feeds(subject, verb, object, feeds, opts)
 
-  defp maybe_feed_publish(
-         subject,
-         %Bonfire.Data.Social.Activity{} = activity,
-         object,
-         feeds,
-         opts
-       ) do
+  def maybe_feed_publish(
+        subject,
+        %Bonfire.Data.Social.Activity{} = activity,
+        object,
+        feeds,
+        opts
+      ) do
     put_in_feeds_and_maybe_federate(
       feeds,
       subject,
@@ -826,34 +866,35 @@ defmodule Bonfire.Social.FeedActivities do
     # TODO: notify remote users via AP
   end
 
-  defp maybe_feed_publish(
-         subject,
-         %{activity: %{id: _} = activity},
-         _,
-         feeds,
-         opts
-       ),
-       do: maybe_feed_publish(subject, activity, nil, feeds, opts)
+  def maybe_feed_publish(
+        subject,
+        %{activity: %{id: _} = activity},
+        _,
+        feeds,
+        opts
+      ),
+      do: maybe_feed_publish(subject, activity, nil, feeds, opts)
 
-  defp maybe_feed_publish(
-         subject,
-         %{activity: _activity_not_loaded} = parent,
-         _,
-         feeds,
-         opts
-       ),
-       do:
-         maybe_feed_publish(
-           subject,
-           parent |> repo().maybe_preload(:activity) |> e(:activity, nil),
-           nil,
-           feeds,
-           opts
-         )
+  def maybe_feed_publish(
+        subject,
+        %{activity: _activity_not_loaded} = parent,
+        _,
+        feeds,
+        opts
+      ),
+      do:
+        maybe_feed_publish(
+          subject,
+          parent |> repo().maybe_preload(:activity) |> e(:activity, nil),
+          nil,
+          feeds,
+          opts
+        )
 
-  defp maybe_feed_publish(_, activity, _, _, _) do
+  def maybe_feed_publish(_, activity, _, _, _) do
     error(
-      "maybe_feed_publish: did not put in feeds or federate, expected an Activity or a Verb+Object, got #{inspect(activity)}"
+      activity,
+      "maybe_feed_publish: did not put in feeds or federate, expected an Activity or a Verb+Object, but got"
     )
 
     {:ok, activity}

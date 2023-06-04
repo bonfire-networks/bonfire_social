@@ -337,6 +337,12 @@ defmodule Bonfire.Social.Edges do
     end
   end
 
+  defp filter(query, {:tree_parent, parent}, _opts) do
+    query
+    |> proload(edge: [:tree])
+    |> where([tree: tree], tree.parent_id == ^ulid(parent))
+  end
+
   defp filter(query, {common, _}, _opts)
        when common in [:id, :current_user, :current_account, :table_id] do
     query

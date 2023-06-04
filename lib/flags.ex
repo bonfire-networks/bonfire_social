@@ -51,7 +51,9 @@ defmodule Bonfire.Social.Flags do
     opts =
       opts
       |> Keyword.put_new(:current_user, flagger)
-      |> Keyword.put_new_lazy(:to_feeds, &flag_feeds/0)
+      |> Keyword.put_new_lazy(:to_feeds, fn -> flag_feeds(id(object), object_type(object)) end)
+
+    # TODO flag_feeds should be the group moderators if the object is in a group
 
     case check_flag(flagger, object, opts)
          ~> create(flagger, ..., opts) do
@@ -66,6 +68,11 @@ defmodule Bonfire.Social.Flags do
       maybe_dup(flagger, object, e)
   end
 
+  def moderators(object),
+    do: Bonfire.Boundaries.Controlleds.list_subjects_by_verb(object, :mediate)
+
+  # |> debug("modddds")
+
   defp maybe_dup(flagger, object, e) do
     case get(flagger, object) do
       {:ok, flag} ->
@@ -78,7 +85,16 @@ defmodule Bonfire.Social.Flags do
   end
 
   # determines the feeds a flag is published to
-  defp flag_feeds(), do: [notifications: Bonfire.Me.Users.list_admins()]
+  defp flag_feeds(object, :group),
+    do: [instance_moderators()] |> debug("send flag of actual groups to instance moderators")
+
+  defp flag_feeds(object, _),
+    do:
+      [notifications: e(moderators(object), nil) || instance_moderators()]
+      |> debug("send the flag to group moderators if any, otherwise instance moderators")
+
+  # FIXME: should user instance moderators rather than admins
+  def instance_moderators, do: Bonfire.Me.Users.list_admins()
 
   defp check_flag(flagger, object, opts) do
     #  NOTE: currently allowing anyone to flag anything regardless of boundaries - TODO: make configurable?
@@ -123,21 +139,31 @@ defmodule Bonfire.Social.Flags do
 
   def list(opts) do
     opts = to_options(opts)
-
-    can_mediate? = Bonfire.Boundaries.can?(opts, :mediate, :instance)
+    scope = opts[:scope]
+    can_mediate_instance? = Bonfire.Boundaries.can?(opts, :mediate, :instance)
 
     opts =
       opts
       |> Keyword.put_new(
         :skip_boundary_check,
-        can_mediate? || :admins
+        can_mediate_instance? || :admins
       )
 
-    if opts[:scope] == :instance and
-         (can_mediate? or Integration.is_admin?(opts)) do
+    if scope == :instance and
+         (can_mediate_instance? or Integration.is_admin?(opts)) do
       list_paginated([], opts)
     else
-      list_my(opts)
+      case id(scope) do
+        id when is_binary(id) ->
+          if Bonfire.Boundaries.can?(opts, :mediate, scope) do
+            list_paginated([tree_parent: id], opts)
+          else
+            error(:not_permitted)
+          end
+
+        _ ->
+          list_my(opts)
+      end
     end
   end
 
