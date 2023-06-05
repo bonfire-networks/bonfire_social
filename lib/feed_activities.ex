@@ -141,6 +141,16 @@ defmodule Bonfire.Social.FeedActivities do
      ), opts}
   end
 
+  def feed_ids_and_opts({feed_name, feed_id}, opts)
+      when is_atom(feed_name) and not is_nil(feed_name) and
+             (is_binary(feed_id) or is_list(feed_id)) do
+    opts =
+      to_options(opts)
+      |> Keyword.put_new_lazy(:exclude_verbs, &skip_verbs_default/0)
+
+    {feed_id, opts}
+  end
+
   def feed_ids_and_opts(feed, opts) when is_binary(feed) or is_list(feed) do
     opts =
       to_options(opts)
