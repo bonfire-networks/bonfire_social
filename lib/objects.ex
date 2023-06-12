@@ -333,65 +333,99 @@ defmodule Bonfire.Social.Objects do
   end
 
   # used in Classify, Geolocate, etc
-  def publish(creator, verb, thing, attrs \\ nil, for_module \\ __MODULE__)
+  def publish(creator, verb, thing, opts_or_attrs \\ nil, for_module \\ __MODULE__)
 
   def publish(
         %{id: _} = creator,
         verb,
         %{id: _} = thing,
-        attrs,
+        opts_or_attrs,
         for_module
       ) do
     # this sets permissions & returns recipients in opts to be used for publishing
-    opts = set_boundaries(creator, thing, attrs, for_module)
+    opts = set_boundaries(creator, thing, opts_or_attrs, for_module)
 
     # add to activity feed + maybe federate
     Bonfire.Social.FeedActivities.publish(creator, verb, thing, opts)
   end
 
-  def publish(_creator, _verb, %{id: _} = thing, attrs, for_module) do
+  def publish(_creator, _verb, %{id: _} = thing, opts_or_attrs, for_module) do
     debug("No creator for object so we can't publish it")
 
     # make visible anyway
     set_boundaries(
       e(thing, :creator, e(thing, :provider, nil)),
       thing,
-      attrs,
+      opts_or_attrs,
       for_module
     )
 
     {:ok, nil}
   end
 
-  def set_boundaries(creator, thing, attrs \\ nil, for_module \\ __MODULE__) do
+  def set_boundaries(creator, thing, opts_or_attrs \\ [], for_module \\ __MODULE__) do
     # TODO: make default audience configurable & per object audience selectable by user in API and UI (note: also in `Federation.ap_prepare_activity`)
     preset_boundary =
-      e(attrs, :to_boundaries, nil) ||
+      e(opts_or_attrs, :attrs, :to_boundaries, nil) || e(opts_or_attrs, :to_boundaries, nil) ||
         Bonfire.Common.Config.get_ext(for_module, :preset_boundary, "public")
 
     to_circles =
-      e(attrs, :to_circles, nil) ||
+      e(opts_or_attrs, :attrs, :to_circles, nil) || e(opts_or_attrs, :to_circles, nil) ||
         Bonfire.Common.Config.get_ext(for_module, :publish_to_default_circles, [])
 
     to_feeds =
       Bonfire.Social.Feeds.feed_ids(:notifications, [
-        e(thing, :context_id, nil) || e(attrs, :context_id, nil)
+        e(thing, :context_id, nil) || e(opts_or_attrs, :attrs, :context_id, nil) ||
+          e(opts_or_attrs, :context_id, nil)
       ])
 
-    opts = [
-      boundary: preset_boundary,
-      to_circles: to_circles,
-      to_feeds: to_feeds
-    ]
+    opts =
+      to_options(opts_or_attrs) ++
+        [
+          boundary: preset_boundary,
+          to_circles: to_circles,
+          to_feeds: to_feeds
+        ]
 
-    debug(
-      opts,
-      "boundaries to set & recipients to include (should include scope, provider, and receiver if any)"
+    (opts ++
+       [
+         boundaries_as_set:
+           if(module_enabled?(Bonfire.Boundaries),
+             do:
+               Bonfire.Boundaries.set_boundaries(
+                 opts[:boundaries_caretaker] || creator,
+                 thing,
+                 opts
+               )
+           )
+       ])
+    |> debug(
+      "boundaries set & recipients to include (should include scope, provider, and receiver if any)"
     )
+  end
 
-    if module_enabled?(Bonfire.Boundaries),
-      do: Bonfire.Boundaries.set_boundaries(creator, thing, opts)
+  def reset_preset_boundary(
+        creator,
+        thing,
+        previous_preset,
+        opts_or_attrs \\ [],
+        for_module \\ nil
+      ) do
+    # debug(thing, "reset boundary of")
+    set_opts =
+      [
+        remove_previous_preset: previous_preset,
+        to_boundaries:
+          e(opts_or_attrs, :attrs, :to_boundaries, nil) || e(opts_or_attrs, :to_boundaries, nil),
+        to_circles:
+          e(opts_or_attrs, :attrs, :to_circles, nil) || e(opts_or_attrs, :to_circles, nil),
+        context_id:
+          e(thing, :context_id, nil) || e(opts_or_attrs, :attrs, :context_id, nil) ||
+            e(opts_or_attrs, :context_id, nil)
+      ]
+      |> debug("opts")
+      |> set_boundaries(creator, thing, ..., for_module || object_type(thing) || __MODULE__)
 
-    opts
+    set_opts[:boundaries_as_set] || error("Boundaries not enabled")
   end
 end
