@@ -265,6 +265,11 @@ defmodule Bonfire.Social.Activities do
     activity_preloads(query, opts[:preload], opts)
   end
 
+  def activity_preloads([], _, _) do
+    debug("skip because we have an empty list")
+    []
+  end
+
   def activity_preloads(query, preloads, opts) when is_list(preloads) do
     # debug(query, "query or data")
     debug(preloads, "preloads")
@@ -559,6 +564,8 @@ defmodule Bonfire.Social.Activities do
           [replied: [thread: [:named]]]
 
         :with_parent ->
+          debug("with_parent!")
+
           if Extend.module_enabled?(Bonfire.Classify.Tree),
             do: [tree: [parent: [:profile, :character]]],
             else: []
@@ -621,7 +628,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   defp maybe_repo_preload(object, _preloads, _opts) do
-    warn(object, "Could not preload activity data")
+    warn(object, "Could not recognise activity object(s) to preload activity assoc")
     object
   end
 
