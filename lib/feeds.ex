@@ -287,7 +287,15 @@ defmodule Bonfire.Social.Feeds do
     # include outboxes of everyone I follow
     with _ when not is_nil(current_user) <- current_user,
          followings when is_list(followings) <-
-           Follows.all_followed_outboxes(current_user, skip_boundary_check: true) do
+           Follows.all_followed_outboxes(current_user,
+             include_followed_categories:
+               Bonfire.Me.Settings.get(
+                 [Bonfire.Social.Feeds, :my_feed_includes, :followed_categories],
+                 true,
+                 socket_or_opts
+               ),
+             skip_boundary_check: true
+           ) do
       # debug(followings, "followings")
       extra_feeds ++ followings
     else

@@ -83,19 +83,19 @@ defmodule Bonfire.Social.FeedActivities do
          do: exclude_verbs ++ [:follow],
          else: exclude_verbs
 
-    exclude_replies =
-      !Bonfire.Me.Settings.get(
-        [Bonfire.Social.Feeds, :my_feed_includes, :reply],
-        true,
-        opts
-      )
-
     # |> debug("exclude_replies")
 
     opts =
       opts
-      |> Keyword.put(:exclude_verbs, exclude_verbs)
-      |> Keyword.put(:exclude_replies, exclude_replies)
+      |> Keyword.merge(
+        exclude_verbs: exclude_verbs,
+        exclude_replies:
+          !Bonfire.Me.Settings.get(
+            [Bonfire.Social.Feeds, :my_feed_includes, :reply],
+            true,
+            opts
+          )
+      )
 
     home_feed_ids =
       if is_list(opts[:home_feed_ids]),

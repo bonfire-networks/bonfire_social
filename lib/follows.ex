@@ -120,7 +120,7 @@ defmodule Bonfire.Social.Follows do
     repo().transact_with(fn ->
       case create(user, object, opts) do
         {:ok, follow} ->
-          Cache.remove("my_followed:#{ulid(user)}")
+          invalidate_followed_outboxes_cache(id(user))
 
           # FIXME: should not compute feed ids twice
           LivePush.push_activity_object(
@@ -253,7 +253,7 @@ defmodule Bonfire.Social.Follows do
       # delete the like activity & feed entries
       Activities.delete_by_subject_verb_object(user, :follow, object)
 
-      Cache.remove("my_followed:#{ulid(user)}")
+      invalidate_followed_outboxes_cache(id(user))
 
       Bonfire.Boundaries.Circles.get_stereotype_circles(user, :followed)
       ~> Bonfire.Boundaries.Circles.remove_from_circles(object, ...)
@@ -322,15 +322,27 @@ defmodule Bonfire.Social.Follows do
   end
 
   def all_followed_outboxes(user, opts \\ []) do
+    include_followed_categories = opts[:include_followed_categories]
+
     Cache.maybe_apply_cached(
-      &fetch_all_followed_outboxes/2,
-      [user, opts],
-      opts ++ [cache_key: "my_followed:#{ulid(user)}"]
+      &fetch_all_followed_outboxes/3,
+      [user, include_followed_categories, opts],
+      opts ++ [cache_key: "my_followed:#{include_followed_categories == true}:#{id(user)}"]
     )
   end
 
-  defp fetch_all_followed_outboxes(user, opts) do
-    all_objects_by_subject(user, opts)
+  def invalidate_followed_outboxes_cache(user) do
+    Cache.remove("my_followed:true:#{id(user)}")
+    Cache.remove("my_followed:false:#{id(user)}")
+  end
+
+  defp fetch_all_followed_outboxes(user, include_categories, opts) do
+    if(include_categories != true,
+      do: opts ++ [filters: [exclude_object_type: Bonfire.Classify.Category]],
+      else: opts
+    )
+    |> all_objects_by_subject(user, ...)
+    |> debug()
     |> Enum.map(&e(&1, :character, :outbox_id, nil))
   end
 
@@ -342,6 +354,8 @@ defmodule Bonfire.Social.Follows do
   # end
 
   defp query_base(filters, opts) do
+    filters = e(opts, :filters, []) ++ filters
+
     Edges.query_parent(Follow, filters, opts)
     |> query_filter(Keyword.drop(filters, [:object, :subject]))
 

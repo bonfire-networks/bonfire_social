@@ -327,6 +327,16 @@ defmodule Bonfire.Social.Edges do
     end
   end
 
+  defp filter(query, {:exclude_subject_type, types}, _opts) do
+    case Bonfire.Common.Types.table_types(types) do
+      table_ids when is_list(table_ids) and table_ids != [] ->
+        where(query, [subject: subject], subject.table_id not in ^table_ids)
+
+      _ ->
+        query
+    end
+  end
+
   defp filter(query, {:object_type, types}, _opts) when is_list(types) do
     case Bonfire.Common.Types.table_types(types) do
       table_ids when is_list(table_ids) and table_ids != [] ->
@@ -337,10 +347,20 @@ defmodule Bonfire.Social.Edges do
     end
   end
 
-  defp filter(query, {:tree_parent, parent}, _opts) do
+  defp filter(query, {:exclude_object_type, types}, _opts) do
+    case Bonfire.Common.Types.table_types(types) |> debug("exclude_object_type") do
+      table_ids when is_list(table_ids) and table_ids != [] ->
+        where(query, [object: object], object.table_id not in ^table_ids)
+
+      _ ->
+        query
+    end
+  end
+
+  defp filter(query, {:tree_parent, parents}, _opts) do
     query
     |> proload(edge: [:tree])
-    |> where([tree: tree], tree.parent_id == ^ulid(parent))
+    |> where([tree: tree], tree.parent_id in ^ulids(parents))
   end
 
   defp filter(query, {common, _}, _opts)
