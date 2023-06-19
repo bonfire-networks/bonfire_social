@@ -436,19 +436,27 @@ defmodule Bonfire.Social.FeedActivities do
 
   @decorate time()
   defp feed_query(feed_ids, opts) do
+    opts = to_options(opts)
     local_feed_id = Feeds.named_feed_id(:local)
     federated_feed_id = Feeds.named_feed_id(:activity_pub)
 
     cond do
-      local_feed_id == feed_ids ->
-        query_extras(opts)
+      :local == feed_ids or local_feed_id == feed_ids ->
+        debug("local feed")
+
+        # excludes likes/follows from local feed - TODO: configurable
+        (opts ++ [exclude_verbs: [:like, :follow]])
+        |> debug()
+        |> query_extras()
         |> proload(activity: [object: {"object_", [:peered]}])
         |> where(
-          [fp, object_peered: object_peered],
+          [fp, activity: activity, object_peered: object_peered],
           fp.feed_id in ^ulids(feed_ids) or is_nil(object_peered.id)
         )
 
-      federated_feed_id == feed_ids ->
+      :activity_pub == feed_ids or federated_feed_id == feed_ids ->
+        debug("federated feed")
+
         query_extras(opts)
         |> proload(activity: [object: {"object_", [:peered]}])
         |> where(
@@ -457,9 +465,11 @@ defmodule Bonfire.Social.FeedActivities do
         )
 
       is_list(feed_ids) or (is_binary(feed_ids) and feed_ids != []) ->
+        debug("specific feed(s)")
         generic_feed_query(feed_ids, opts)
 
       true ->
+        debug("unknown feed")
         query_extras(opts)
     end
 
@@ -517,8 +527,8 @@ defmodule Bonfire.Social.FeedActivities do
     exclude_object_types = [Message] ++ e(opts, :exclude_object_types, [])
     # exclude certain activity types
     exclude_verbs =
-      [:message] ++
-        e(opts, :exclude_verbs, []) ++
+      e(opts, :exclude_verbs, []) ++
+        [:message] ++
         if opts[:include_flags] == :moderators and
              (Bonfire.Boundaries.can?(current_user, :mediate, :instance) or
                 Integration.is_admin?(current_user)) do
@@ -541,6 +551,7 @@ defmodule Bonfire.Social.FeedActivities do
 
     exclude_verb_ids =
       exclude_verbs
+      |> debug("exxclude_verbs")
       |> Enum.map(&Bonfire.Social.Activities.verb_id(&1))
       |> List.wrap()
 
