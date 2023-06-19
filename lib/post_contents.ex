@@ -217,7 +217,7 @@ defmodule Bonfire.Social.PostContents do
   end
 
   def prepare_text(text, _creator, opts) when is_binary(text) and text != "" do
-    # little trick to test error handling
+    # little easter egg to test error handling
     if String.contains?(text, "/crash!"), do: raise("User-triggered crash")
 
     text
@@ -245,8 +245,6 @@ defmodule Bonfire.Social.PostContents do
   defp maybe_sane_html(text, _) do
     text
     |> Text.maybe_sane_html()
-
-    # |> debug()
   end
 
   def editor_output_content_type(user) do
