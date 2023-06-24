@@ -170,7 +170,12 @@ defmodule Bonfire.Social.FeedActivities do
     feed(:my, opts)
   end
 
-  defp maybe_merge_filters(filters, opts) when is_struct(filters) or is_nil(filters) do
+  defp maybe_merge_filters(filters, opts) when is_struct(filters) do
+    warn(filters, "did we filter?")
+    opts
+  end
+
+  defp maybe_merge_filters(filters, opts) when is_nil(filters) or filters == [] do
     opts
   end
 
@@ -204,7 +209,7 @@ defmodule Bonfire.Social.FeedActivities do
       |> repo().many_paginated(opts ++ [return: :query, multiply_limit: 2])
       |> subquery()
 
-    base_query()
+    base_or_filtered_query(opts)
     |> join(:inner, [fp], ^initial_query, on: [id: fp.id])
     |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
     |> Activities.as_permitted_for(opts)
@@ -434,7 +439,14 @@ defmodule Bonfire.Social.FeedActivities do
     )
   end
 
-  @decorate time()
+  defp base_or_filtered_query(filters \\ nil, opts) do
+    case filters || e(opts, :feed_filters, nil) do
+      %Ecto.Query{} = query -> query
+      _ -> base_query(opts)
+    end
+  end
+
+  # @decorate time()
   defp feed_query(feed_ids, opts) do
     opts = to_options(opts)
     local_feed_id = Feeds.named_feed_id(:local)
@@ -464,8 +476,9 @@ defmodule Bonfire.Social.FeedActivities do
           fp.feed_id in ^ulids(feed_ids) or not is_nil(object_peered.id)
         )
 
-      is_list(feed_ids) or (is_binary(feed_ids) and feed_ids != []) ->
-        debug("specific feed(s)")
+      (is_list(feed_ids) or is_binary(feed_ids)) and feed_ids != [] and not is_nil(feed_ids) and
+          not is_struct(e(opts, :feed_filters, nil)) ->
+        debug(feed_ids, "specific feed(s)")
         generic_feed_query(feed_ids, opts)
 
       true ->
@@ -479,6 +492,7 @@ defmodule Bonfire.Social.FeedActivities do
   defp generic_feed_query(feed_ids, opts) do
     query_extras(opts)
     |> where([fp], fp.feed_id in ^ulids(feed_ids))
+    |> debug("generic")
   end
 
   def query(filters \\ [], opts \\ []),
@@ -558,12 +572,7 @@ defmodule Bonfire.Social.FeedActivities do
     # exclude_feed_ids = e(opts, :exclude_feed_ids, []) |> List.wrap() # WIP - to exclude activities that also appear in another feed
     filters = filters_from_opts(opts)
 
-    (query ||
-       case filters do
-         # |> proload([:activity])
-         %Ecto.Query{} -> filters
-         _ -> base_query(opts)
-       end)
+    (query || base_or_filtered_query(filters, opts))
     # |> proload([:activity])
     |> reusable_join(:left, [root], assoc(root, :activity), as: :activity)
     |> reusable_join(:left, [activity: activity], activity_pointer in Pointer,
