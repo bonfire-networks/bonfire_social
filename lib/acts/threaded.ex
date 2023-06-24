@@ -4,7 +4,7 @@ defmodule Bonfire.Social.Acts.Threaded do
   # alias Bonfire.Epics.Act
   alias Bonfire.Epics.Epic
 
-  # alias Bonfire.Common.Utils
+  alias Bonfire.Common.Utils
   alias Bonfire.Social.Threads
   alias Ecto.Changeset
   alias Pointers.Changesets
@@ -71,6 +71,8 @@ defmodule Bonfire.Social.Acts.Threaded do
 
     custom_thread = Threads.find_thread(attrs, current_user)
 
+    thread_title = Utils.e(attrs, :thread_title, nil)
+
     case Threads.find_reply_to(attrs, current_user) |> debug("find_reply_to") do
       {:ok, %{replied: %{thread_id: thread_id, thread: %{}}} = reply_to} ->
         # we are permitted to both reply to the thing and the thread root.
@@ -79,7 +81,7 @@ defmodule Bonfire.Social.Acts.Threaded do
         maybe_debug(epic, act, thread_id, "threading under parent thread root or custom thread")
 
         changeset
-        |> put_replied(thread_id, reply_to)
+        |> put_replied(thread_id, reply_to, thread_title)
         |> Epic.assign(epic, on, ...)
         |> Epic.assign(:reply_to, reply_to)
 
@@ -90,7 +92,7 @@ defmodule Bonfire.Social.Acts.Threaded do
         smart(epic, act, reply_to, "threading under parent or custom thread")
 
         changeset
-        |> put_replied(thread_id, reply_to)
+        |> put_replied(thread_id, reply_to, thread_title)
         |> Epic.assign(epic, on, ...)
         |> Epic.assign(:reply_to, reply_to)
 
@@ -102,7 +104,7 @@ defmodule Bonfire.Social.Acts.Threaded do
         reply_to = init_replied(reply_to)
 
         changeset
-        |> put_replied(thread_id, reply_to)
+        |> put_replied(thread_id, reply_to, thread_title)
         |> Epic.assign(epic, on, ...)
         |> Epic.assign(:reply_to, reply_to)
 
@@ -116,22 +118,24 @@ defmodule Bonfire.Social.Acts.Threaded do
         thread_id = Types.ulid(custom_thread) || Changeset.get_field(changeset, :id)
 
         changeset
-        |> put_replied(thread_id, nil)
+        |> put_replied(thread_id, nil, thread_title)
         |> Epic.assign(epic, on, ...)
     end
   end
 
-  defp put_replied(changeset, thread_id, nil),
-    # |> maybe_debug()
-    do:
-      Changesets.put_assoc(changeset, :replied, %{
-        thread_id: thread_id,
-        reply_to_id: nil
-      })
+  defp put_replied(changeset, thread_id, nil, thread_title) do
+    changeset
+    |> Changesets.put_assoc(:named, %{name: thread_title})
+    |> Changesets.put_assoc(:replied, %{
+      thread_id: thread_id,
+      reply_to_id: nil
+    })
+  end
 
-  defp put_replied(changeset, thread_id, %{} = reply_to) do
+  defp put_replied(changeset, thread_id, %{} = reply_to, thread_title) do
     changeset
     # |> maybe_debug()
+    |> Changesets.put_assoc(:named, %{name: thread_title})
     |> Changesets.put_assoc(:replied, %{
       thread_id: thread_id,
       reply_to_id: reply_to.id
