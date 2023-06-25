@@ -139,6 +139,28 @@ defmodule Bonfire.Social.Edges do
 
   def count(type, subject, object, opts) do
     do_query(type, subject, object, Keyword.put(opts, :preload, :skip))
+    |> Ecto.Query.exclude(:select)
+    # |> Ecto.Query.exclude(:distinct)
+    |> Ecto.Query.exclude(:preload)
+    |> Ecto.Query.exclude(:order_by)
+    |> select([type, edge], count(edge))
+    |> repo().one()
+  end
+
+  def count(type, object, opts) when is_struct(object) do
+    field_name = maybe_to_atom("#{type}_count")
+
+    object
+    |> repo().maybe_preload(field_name, follow_pointers: false)
+    |> e(field_name, :object_count, nil)
+  end
+
+  def count(type, filters \\ [], opts \\ []) do
+    do_query(type, filters, Keyword.put(opts, :preload, :skip))
+    |> Ecto.Query.exclude(:select)
+    # |> Ecto.Query.exclude(:distinct)
+    |> Ecto.Query.exclude(:preload)
+    |> Ecto.Query.exclude(:order_by)
     |> select([type, edge], count(edge))
     |> repo().one()
   end
@@ -355,6 +377,12 @@ defmodule Bonfire.Social.Edges do
       _ ->
         query
     end
+  end
+
+  defp filter(query, {:in_thread, thread_ids}, _opts) do
+    query
+    |> proload(edge: [:replied])
+    |> Bonfire.Social.Threads.filter(:in_thread, thread_ids, ...)
   end
 
   defp filter(query, {:tree_parent, parents}, _opts) do

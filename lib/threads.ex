@@ -22,6 +22,8 @@ defmodule Bonfire.Social.Threads do
   @behaviour Bonfire.Common.QueryModule
   def schema_module, do: Replied
 
+  def base_query, do: from(Replied, as: :replied)
+
   @doc """
   Handles casting related to the reply and threading.
   If it's not a reply or the user is not permitted to reply to the thing, a new thread will be created.
@@ -218,7 +220,7 @@ defmodule Bonfire.Social.Threads do
     # current_user = current_user(socket_or_current_user)
 
     with {:ok, object} <-
-           Replied
+           base_query()
            |> query_filter(id: object_id)
            |> Activities.read(socket_or_current_user) do
       {:ok, object}
@@ -226,35 +228,41 @@ defmodule Bonfire.Social.Threads do
   end
 
   @doc "List participants of an activity or thread (depending on user's boundaries)"
-  def list_participants(activity, thread_or_object_id \\ nil, opts \\ []) do
+  def list_participants(activity_or_object, thread_or_object_id \\ nil, opts \\ []) do
     opts = to_options(opts)
     current_user = current_user(opts)
 
     exclude_table_id = maybe_apply(Bonfire.Tag.Hashtag, :__pointers__, :table_id)
 
-    activity =
+    activity_or_object =
       Activities.activity_preloads(
-        activity,
+        activity_or_object,
         [:with_subject, :with_reply_to, :tags],
         opts
       )
-      |> debug("activity")
+      |> debug("activity_or_object")
 
     # add author of root message
     # add author of the message it was replying to
     # add all previously tagged people
     # add any other participants in the thread
     # |> debug("tags")
-    ([e(activity, :subject, nil)] ++
-       [e(activity, :object, :created, :creator, nil)] ++
-       [e(activity, :reply_to, :created, :creator, nil)] ++
-       (e(activity, :tags, [])
+    ([e(activity_or_object, :subject, nil)] ++
+       [e(activity_or_object, :created, :creator, nil)] ++
+       [e(activity_or_object, :object, :created, :creator, nil)] ++
+       [e(activity_or_object, :reply_to, :created, :creator, nil)] ++
+       [e(activity_or_object, :object, :reply_to, :created, :creator, nil)] ++
+       (e(activity_or_object, :tags, [])
         # no hashtags
         |> Enum.reject(&(e(&1, :table_id, nil) == exclude_table_id))) ++
        if(thread_or_object_id,
          do:
-           Bonfire.Social.Threads.fetch_participants(
-             [ulid(activity.object_id), thread_or_object_id],
+           fetch_participants(
+             [
+               id(e(activity_or_object, :object_id, nil) || e(activity_or_object, :object, nil)),
+               id(activity_or_object),
+               thread_or_object_id
+             ],
              current_user: current_user
            )
            |> e(:edges, [])
@@ -270,34 +278,77 @@ defmodule Bonfire.Social.Threads do
 
   @doc "List participants in a thread (depending on user's boundaries)"
   def fetch_participants(thread_id, opts \\ [])
-      when is_binary(thread_id) or
-             (is_list(thread_id) and length(thread_id) > 0) do
-    opts = to_options(opts)
 
+  def fetch_participants(thread_id, opts)
+      when is_binary(thread_id) or
+             (is_list(thread_id) and thread_id != []) do
     FeedActivities.feed_paginated(
-      [participants_in: {thread_id, &filter/3}],
+      [in_thread: {thread_id, &filter/3}],
       opts ++ [preload: :with_subject],
-      Replied
+      q_subjects()
     )
   end
 
-  def filter(:participants_in, thread_id, query) when not is_list(thread_id),
-    do: filter(:participants_in, [thread_id], query)
+  def fetch_participants(_, _), do: []
 
-  def filter(:participants_in, thread_ids, query) do
-    verb_id = Verbs.get_id!(:create)
+  @doc "Count participants in a thread (depending on user's boundaries)"
+  def count_participants(thread_id, opts \\ [])
+
+  def count_participants(thread_id, opts)
+      when is_binary(thread_id) or
+             (is_list(thread_id) and thread_id != []) do
+    FeedActivities.count_subjects(
+      [in_thread: {thread_id, &filter/3}],
+      opts ++ [query: q_subjects()]
+    )
+  end
+
+  def count_participants(_, _), do: []
+
+  # @doc "Count boosts/likes/etc of all items a thread"
+  # def count_edges(thread_id, type \\ Bonfire.Social.Boosts, opts \\ [])
+  # def count_edges(thread_id, type_context, opts)
+  #     when is_binary(thread_id) or
+  #            (is_list(thread_id) and (thread_id) !=[]) do
+
+  #   type_context.count(
+  #     [in_thread: {thread_id, &filter/3}],
+  #     opts 
+  #   )
+  # end
+  # def count_edges(_, _, _), do: []
+
+  defp q_subjects(verb \\ :create, query \\ base_query()) do
+    verb_id = Verbs.get_id!(verb)
+
+    q_by_verb(verb, query)
+    |> proload(activity: [:subject])
+    |> distinct([subject: subject],
+      desc: subject.id
+    )
+  end
+
+  defp q_by_verb(verb \\ :create, query \\ base_query()) do
+    verb_id = Verbs.get_id!(verb)
 
     query
-    |> proload(activity: [subject: {"subject_", [:character]}])
-    |> distinct([fp, subject_character: subject_character],
-      desc: subject_character.id
-    )
+    |> proload(:activity)
     |> where(
-      [replied, activity: activity],
-      activity.verb_id == ^verb_id and
-        (replied.thread_id in ^thread_ids or
-           replied.id in ^thread_ids or
-           replied.reply_to_id in ^thread_ids)
+      [activity: activity],
+      activity.verb_id == ^verb_id
+    )
+  end
+
+  def filter(:in_thread, thread_id, query) when not is_list(thread_id),
+    do: filter(:in_thread, [thread_id], query)
+
+  def filter(:in_thread, thread_ids, query) do
+    query
+    |> where(
+      [replied: replied],
+      replied.thread_id in ^thread_ids or
+        replied.id in ^thread_ids or
+        replied.reply_to_id in ^thread_ids
     )
   end
 
@@ -390,7 +441,7 @@ defmodule Bonfire.Social.Threads do
   end
 
   def query(filter, opts) do
-    Replied
+    base_query()
     |> query_filter(filter)
     |> Activities.query_object_preload_create_activity(opts)
     |> Activities.as_permitted_for(opts, [:see])

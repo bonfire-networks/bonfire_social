@@ -42,6 +42,11 @@ defmodule Bonfire.Social.Likes do
   def by_liked(object, opts \\ []) when is_map(object) or is_binary(object),
     do: (opts ++ [object: object]) |> query(opts) |> repo().many()
 
+  def count(%{} = user, object),
+    do: Edges.count(__MODULE__, user, object, skip_boundary_check: true)
+
+  def count(%{} = object), do: Edges.count(:like, object)
+
   def like(%{} = liker, %{} = object) do
     if Bonfire.Boundaries.can?(liker, :like, object) do
       do_like(liker, object)

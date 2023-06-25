@@ -1121,6 +1121,28 @@ defmodule Bonfire.Social.FeedActivities do
     |> repo().one()
   end
 
+  def count(filters \\ [], opts \\ []) do
+    query(filters, opts, opts[:query] || default_query())
+    |> Ecto.Query.exclude(:select)
+    # |> Ecto.Query.exclude(:distinct)
+    |> Ecto.Query.exclude(:preload)
+    |> Ecto.Query.exclude(:order_by)
+    ~> select(count())
+    |> debug()
+    |> repo().one()
+  end
+
+  def count_subjects(filters \\ [], opts \\ []) do
+    query(filters, opts, opts[:query] || default_query())
+    |> Ecto.Query.exclude(:select)
+    |> Ecto.Query.exclude(:distinct)
+    |> Ecto.Query.exclude(:preload)
+    |> Ecto.Query.exclude(:order_by)
+    ~> select([subject: subject], count(subject.id, :distinct))
+    |> debug()
+    |> repo().one()
+  end
+
   def count_total(), do: repo().one(select(FeedPublish, [u], count(u.id)))
 
   def mark_all_seen(feed_id, opts) do

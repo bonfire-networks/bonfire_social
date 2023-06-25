@@ -34,8 +34,16 @@ defmodule Bonfire.Social.Boosts do
   def boosted?(%{} = user, object),
     do: Edges.exists?(__MODULE__, user, object, skip_boundary_check: true)
 
-  def count(%{} = user, object),
+  def count(filters \\ [], opts \\ [])
+
+  def count(filters, opts) when is_list(filters) and is_list(opts) do
+    Edges.count(__MODULE__, filters, opts)
+  end
+
+  def count(%{} = user, object) when is_struct(object) or is_binary(object),
     do: Edges.count(__MODULE__, user, object, skip_boundary_check: true)
+
+  def count(object, _) when is_struct(object), do: Edges.count(:boost, object)
 
   def date_last_boosted(%{} = user, object),
     do: Edges.last_date(__MODULE__, user, object, skip_boundary_check: true)
