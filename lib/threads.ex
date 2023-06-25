@@ -231,6 +231,7 @@ defmodule Bonfire.Social.Threads do
   def list_participants(activity_or_object, thread_or_object_id \\ nil, opts \\ []) do
     opts = to_options(opts)
     current_user = current_user(opts)
+    limit = opts[:limit] || 500
 
     exclude_table_id = maybe_apply(Bonfire.Tag.Hashtag, :__pointers__, :table_id)
 
@@ -246,32 +247,33 @@ defmodule Bonfire.Social.Threads do
     # add author of the message it was replying to
     # add all previously tagged people
     # add any other participants in the thread
-    # |> debug("tags")
-    ([e(activity_or_object, :subject, nil)] ++
+    (if(thread_or_object_id,
+       do:
+         fetch_participants(
+           [
+             id(e(activity_or_object, :object_id, nil) || e(activity_or_object, :object, nil)),
+             id(activity_or_object),
+             thread_or_object_id
+           ],
+           current_user: current_user,
+           limit: limit
+         )
+         |> e(:edges, [])
+         |> Enum.map(&e(&1, :activity, :subject, nil)),
+       else: []
+     ) ++
+       [e(activity_or_object, :subject, nil)] ++
        [e(activity_or_object, :created, :creator, nil)] ++
        [e(activity_or_object, :object, :created, :creator, nil)] ++
        [e(activity_or_object, :reply_to, :created, :creator, nil)] ++
        [e(activity_or_object, :object, :reply_to, :created, :creator, nil)] ++
-       (e(activity_or_object, :tags, [])
-        # no hashtags
-        |> Enum.reject(&(e(&1, :table_id, nil) == exclude_table_id))) ++
-       if(thread_or_object_id,
-         do:
-           fetch_participants(
-             [
-               id(e(activity_or_object, :object_id, nil) || e(activity_or_object, :object, nil)),
-               id(activity_or_object),
-               thread_or_object_id
-             ],
-             current_user: current_user
-           )
-           |> e(:edges, [])
-           |> Enum.map(&e(&1, :activity, :subject, nil)),
-         else: []
-       ))
+       e(activity_or_object, :tags, []))
     # |> debug("participants grab bag")
     |> filter_empty([])
+    # no hashtags
+    |> Enum.reject(&(e(&1, :table_id, nil) == exclude_table_id))
     |> Enum.uniq_by(&e(&1, :character, :id, nil))
+    |> Enum.take(limit)
 
     # |> debug("participants")
   end
