@@ -264,6 +264,51 @@ defmodule Bonfire.Social.PostContents do
     end
   end
 
+  def edit(current_user, id, attrs) do
+    # post_content = repo().get!(PostContent, id)
+    # if Bonfire.Boundaries.can?(current_user, :edit, post_content) do
+    with %PostContent{} = post_content <-
+           Bonfire.Boundaries.load_pointer(id,
+             verbs: [:edit],
+             from: query_base(),
+             current_user: current_user
+           ) do
+      #  TODO: use ecto exists to avoid actually querying
+      with nil <- PaperTrail.get_version(post_content) |> debug do
+        # add the original version to the history (thus avoids storing twice if not edited)
+        insert_in_version_history(post_content)
+        # FIXME: can this be an update op?
+        |> debug
+      end
+
+      edit_changeset =
+        PostContent.changeset(post_content, attrs)
+        |> debug
+
+      PaperTrail.update(edit_changeset, user: current_user)
+      |> debug
+    end
+  end
+
+  def insert_in_version_history(%{id: _id} = record) do
+    creator = record |> repo().maybe_preload(:created) |> e(:created, :creator_id, nil) |> debug
+
+    # item_type \\ "PostContent", fields \\ [:name, :summary, :html_body]) do
+    # %PaperTrail.Version{
+    #     event: "insert",
+    #     item_type: item_type,
+    #     item_id: id,
+    #     item_changes: Map.take(record, fields ++ [:id, :inserted_at, :updated_at]),
+    #     origin: "backfill"
+    #   }
+
+    PaperTrail.make_version_struct(%{event: "insert"}, record, user: %{id: creator})
+    |> debug()
+    |> repo().insert()
+  end
+
+  def query_base(), do: from(p in PostContent, as: :main_object)
+
   def no_known_output(error, _args) do
     warn(
       "#{error} - don't know what editor is being used or what output format it uses (expect a module configured under [:bonfire, :ui, :rich_text_editor] which should have an output_format/0 function returning an atom (eg. :markdown, :html)"
