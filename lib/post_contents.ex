@@ -264,6 +264,27 @@ defmodule Bonfire.Social.PostContents do
     end
   end
 
+  def get_versions(post_content) do
+    PaperTrail.get_versions(post_content)
+    |> repo().maybe_preload(user: [:profile, :character])
+    |> Enum.map_reduce(nil, fn
+      current, nil ->
+        {current, current}
+
+      current, previous ->
+        current = %{
+          current
+          | item_changes: Map.merge(previous.item_changes, current.item_changes),
+            # abuse meta field to pass previous version to UI
+            meta: previous.item_changes
+        }
+
+        {current, current}
+    end)
+    |> elem(0)
+    |> debug("vvv")
+  end
+
   def edit(current_user, id, attrs) do
     # post_content = repo().get!(PostContent, id)
     # if Bonfire.Boundaries.can?(current_user, :edit, post_content) do
