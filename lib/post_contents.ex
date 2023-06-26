@@ -294,38 +294,18 @@ defmodule Bonfire.Social.PostContents do
              from: query_base(),
              current_user: current_user
            ) do
-      #  TODO: use ecto exists to avoid actually querying
-      with nil <- PaperTrail.get_version(post_content) |> debug do
-        # add the original version to the history (thus avoids storing twice if not edited)
-        insert_in_version_history(post_content)
-        # FIXME: can this be an update op?
+      creator =
+        post_content |> repo().maybe_preload(:created) |> e(:created, :creator_id, nil) |> debug
+
+      with :ok <- PaperTrail.initialise(post_content, user: %{id: creator}) |> debug do
+        edit_changeset =
+          PostContent.changeset(post_content, attrs)
+          |> debug
+
+        PaperTrail.update(edit_changeset, user: current_user)
         |> debug
       end
-
-      edit_changeset =
-        PostContent.changeset(post_content, attrs)
-        |> debug
-
-      PaperTrail.update(edit_changeset, user: current_user)
-      |> debug
     end
-  end
-
-  def insert_in_version_history(%{id: _id} = record) do
-    creator = record |> repo().maybe_preload(:created) |> e(:created, :creator_id, nil) |> debug
-
-    # item_type \\ "PostContent", fields \\ [:name, :summary, :html_body]) do
-    # %PaperTrail.Version{
-    #     event: "insert",
-    #     item_type: item_type,
-    #     item_id: id,
-    #     item_changes: Map.take(record, fields ++ [:id, :inserted_at, :updated_at]),
-    #     origin: "backfill"
-    #   }
-
-    PaperTrail.make_version_struct(%{event: "insert"}, record, user: %{id: creator})
-    |> debug()
-    |> repo().insert()
   end
 
   def query_base(), do: from(p in PostContent, as: :main_object)
