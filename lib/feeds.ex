@@ -63,31 +63,39 @@ defmodule Bonfire.Social.Feeds do
     do: Map.get(@global_feeds, boundary, []) |> Enum.map(&named_feed_id/1)
 
   def reply_and_or_mentions_notifications_feeds(me, assigns, boundary) do
+    debug(assigns)
     my_notifications = feed_id(:notifications, me)
 
     # TODO: unravel the mentions parsing so we can deal with mentions properly
     mentions = e(assigns, :mentions, [])
     reply_to_creator = e(assigns, :reply_to, :created, :creator, nil)
 
-    user_notifications_feeds([reply_to_creator | mentions], boundary)
+    (user_notifications_feeds([reply_to_creator], boundary) ++
+       user_notifications_feeds(
+         mentions,
+         boundary,
+         e(assigns, :options, :post_attrs, :to_circles, [])
+       ))
     |> Enums.filter_empty([])
     |> Enum.uniq()
-    |> debug()
     # avoid self-notifying
     |> Enum.reject(&(&1 == my_notifications))
+    |> debug()
   end
 
-  defp user_notifications_feeds(users, boundary) do
+  defp user_notifications_feeds(users, boundary, to_circles \\ []) do
     # debug(epic, act, users, "users going in")
     cond do
       boundary in ["public", "mentions"] ->
         users
+        |> debug()
         |> filter_empty([])
         |> repo().maybe_preload([:character])
         |> Enum.map(&feed_id(:notifications, &1))
 
       boundary == "local" ->
         users
+        |> debug()
         |> filter_empty([])
         |> repo().maybe_preload([:character, :peered])
         # only local
@@ -95,8 +103,17 @@ defmodule Bonfire.Social.Feeds do
         |> Enum.map(&feed_id(:notifications, &1))
 
       true ->
-        # TODO: we should notify mentions & reply_to_creator IF they are included in the object's boundaries
-        nil
+        # WIP: we should notify mentions & reply_to_creator IF they are included in the object's boundaries
+
+        users
+        |> filter_empty([])
+        |> Enum.filter(&(id(&1) in to_circles))
+        |> repo().maybe_preload([:character])
+        |> debug()
+        # only local
+        |> Enum.map(&feed_id(:notifications, &1))
+
+        []
     end
   end
 

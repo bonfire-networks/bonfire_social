@@ -212,65 +212,94 @@ defmodule Bonfire.Social.Posts do
 
   # TODO: federated delete, in addition to create:
   def ap_publish_activity(subject, _verb, post) do
-    with id <- ulid!(post),
-         post <-
-           post
-           |> repo().maybe_preload([
-             :replied,
-             :post_content,
-             :media,
-             :created,
-             tags: [:character]
-           ])
-           |> Activities.object_preload_create_activity(),
-         subject <-
-           subject || Utils.e(post, :created, :creator, nil) ||
-             Utils.e(post, :created, :creator_id, nil) || Utils.e(post, :activity, :subject, nil) ||
-             Utils.e(post, :activity, :subject_id, nil),
-         {:ok, actor} <-
-           ActivityPub.Actor.get_cached(pointer: subject),
-         public_acl_ids <- ["5REM0TEPE0P1E1NTERACTREACT", "5REM0TEPE0P1E1NTERACTREP1Y"],
-         acls <-
-           Bonfire.Boundaries.list_object_acls(post),
-         #  |> debug("acls"),
-         is_public <- Enum.any?(acls, fn %{id: acl_id} -> acl_id in public_acl_ids end),
-         # FIXME only publish to public URI if in a public enough cirlce
-         # Everything is public atm
-         to <-
-           (if is_public do
-              ["https://www.w3.org/ns/activitystreams#Public"]
-            else
-              []
-            end),
+    # TODO: get from config
+    public_acl_ids = ["5REM0TEPE0P1E1NTERACTREACT", "5REM0TEPE0P1E1NTERACTREP1Y"]
 
-         # TODO: find a better way of deleting non actor entries from the list
-         # (or represent them in AP)
-         # Note: `mentions` preset should add grants to mentioned people which should trigger the boundaries-based logic in bcc, so we use this only for tagging and not for addressing
+    id = ulid!(post)
+
+    post =
+      post
+      |> repo().maybe_preload([
+        :post_content,
+        :media,
+        :created,
+        replied: [thread: [:created], reply_to: [:created]],
+        tags: [:character]
+      ])
+      |> Activities.object_preload_create_activity()
+
+    subject =
+      subject ||
+        Utils.e(post, :created, :creator, nil) ||
+        Utils.e(post, :created, :creator_id, nil) || Utils.e(post, :activity, :subject, nil) ||
+        Utils.e(post, :activity, :subject_id, nil)
+
+    thread_id = e(post, :replied, :thread_id, nil)
+
+    thread_creator =
+      e(post, :replied, :thread, :created, :creator, nil) ||
+        e(post, :replied, :thread, :created, :creator_id, nil)
+
+    reply_to_creator =
+      (e(post, :replied, :reply_to, :created, :creator, nil) ||
+         e(post, :replied, :reply_to, :created, :creator_id, nil))
+      |> debug("reply_to_creator")
+
+    # TODO: should we just include ALL thread participants? ^
+
+    acls = Bonfire.Boundaries.list_object_acls(post)
+    # |> debug("acls")
+
+    is_public = Enum.any?(acls, fn %{id: acl_id} -> acl_id in public_acl_ids end)
+
+    to =
+      if is_public do
+        ["https://www.w3.org/ns/activitystreams#Public"]
+      else
+        []
+      end
+
+    with {:ok, actor} <-
+           ActivityPub.Actor.get_cached(pointer: subject),
+
+         # TODO: find a better way of deleting non-actor entries from the list
+         # (or better: represent them in AP)
+         # Note: `mentions` preset adds grants to mentioned people which should trigger the boundaries-based logic in `Adapter.external_followers_for_activity`, so should we use this only for tagging and not for addressing (if we expand the scope of that function beyond followers)? 
          mentions <-
            e(post, :tags, [])
            #  |> info("tags")
            |> Enum.reject(fn tag ->
-             is_nil(e(tag, :character, nil)) or
-               tag.id == id(subject)
+             is_nil(e(tag, :character, nil)) or id(tag) == id(subject)
            end)
-           |> debug("mentions to recipients")
+           |> debug("mentions to tags")
            |> Enum.map(&ActivityPub.Actor.get_cached!(pointer: &1))
            |> filter_empty([])
-           |> debug("direct_recipients"),
-         # TODO: put somewhere reusable by objects other than Post, eg `Bonfire.Federate.ActivityPub.AdapterUtils.determine_recipients/4`
+           |> debug("include_as_tags"),
+         # TODO: put much of this logic somewhere reusable by objects other than Post, eg `Bonfire.Federate.ActivityPub.AdapterUtils.determine_recipients/4`
          # TODO: add a followers-only preset?
          #  (if is_public do
          #     mentions ++ List.wrap(actor.data["followers"])
          #   else
          cc <-
-           mentions,
+           [reply_to_creator, thread_creator]
+           #  |> info("tags")
+           |> Enums.uniq_by_id()
+           |> Enum.reject(fn u ->
+             id(u) == id(subject)
+           end)
+           |> Enum.map(&ActivityPub.Actor.get_cached!(pointer: &1))
+           |> Enum.concat(mentions)
+           |> Enums.uniq_by_id()
+           |> debug("mentions to recipients")
+           |> Enum.map(& &1.ap_id)
+           |> debug("direct_recipients"),
          # end),
          # FIXME: the below seems to return ALL known users for public posts?
          bcc <- [],
          context <-
-           (if e(post, :replied, :thread_id, nil) && post.replied.thread_id != id do
+           (if thread_id && thread_id != id do
               with {:ok, ap_object} <-
-                     ActivityPub.Object.get_cached(pointer: post.replied.thread_id) do
+                     ActivityPub.Object.get_cached(pointer: thread_id) do
                 ap_object.data["id"]
               else
                 e ->
@@ -462,8 +491,9 @@ defmodule Bonfire.Social.Posts do
       info("treat as Message if private with @ mentions")
       Bonfire.Social.Messages.send(creator, attrs)
     else
+      # FIXME: should this use mentions for remote rather than custom?
       boundary =
-        if(is_public, do: "public", else: "mentions")
+        if(is_public, do: "public", else: "custom")
         |> debug("set boundary")
 
       publish(

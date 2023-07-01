@@ -374,7 +374,17 @@ defmodule Bonfire.Social.FeedActivities do
     )
   end
 
-  def feed_contains?(feed_name, object, opts \\ []) do
+  def feed_contains?(feed_name, object, opts \\ [])
+
+  def feed_contains?(feed, html_body, _opts) when is_binary(html_body) and is_list(feed) do
+    Enum.find_value(feed, fn fi -> fi.activity.object.post_content.html_body =~ html_body end)
+  end
+
+  def feed_contains?(%{edges: feed}, html_body, opts) do
+    feed_contains?(feed, html_body, opts)
+  end
+
+  def feed_contains?(feed_name, object, opts) do
     {feed_ids, opts} = feed_ids_and_opts(feed_name, opts)
 
     feed_query(
