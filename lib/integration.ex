@@ -174,11 +174,31 @@ defmodule Bonfire.Social.Integration do
   end
 
   def many(query, paginate?, opts \\ [])
-  def many(query, false, opts), do: repo().many(query, opts)
+
+  def many(query, false, opts) do
+    case opts[:return] do
+      :query ->
+        query
+
+      :stream ->
+        repo().transaction(fn ->
+          opts[:stream_callback].(repo().stream(Ecto.Query.exclude(query, :preload)))
+        end)
+
+      _ ->
+        repo().many(query, opts)
+    end
+  end
 
   def many(query, _, opts) do
-    if opts[:return] == :query,
-      do: query,
-      else: repo().many_paginated(query, opts[:pagination] || opts)
+    case opts[:return] do
+      :query ->
+        query
+
+      # :csv ->
+      # query
+      _ ->
+        repo().many_paginated(query, opts[:pagination] || opts)
+    end
   end
 end

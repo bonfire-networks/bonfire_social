@@ -4,6 +4,10 @@ defmodule Bonfire.Social.Import do
     queue: :import,
     max_attempts: 1
 
+  use Arrows
+
+  alias NimbleCSV.RFC4180, as: CSV
+
   import Untangle
   alias Bonfire.Data.Identity.User
   # alias Bonfire.Me.Characters
@@ -19,73 +23,102 @@ defmodule Bonfire.Social.Import do
   def import_from_csv_file(other, user, path), do: error("Please select a valid type of import")
 
   def follows_from_csv_file(user, path) do
-    follows_from_csv(user, File.read!(path))
+    follows_from_csv(user, read_file(path))
     # TODO: delete file
   end
 
-  def follows_from_csv(user, list) when is_binary(list) do
-    follows_from_list(user, prepare_csv(list))
+  def follows_from_csv(user, csv) do
+    process_csv("follows_import", user, csv)
   end
 
   def ghosts_from_csv_file(user, path) do
-    ghosts_from_csv(user, File.read!(path))
+    ghosts_from_csv(user, read_file(path))
     # TODO: delete file
   end
 
-  def ghosts_from_csv(user, list) when is_binary(list) do
-    ghosts_from_list(user, prepare_csv(list))
+  def ghosts_from_csv(user, csv) do
+    process_csv("ghosts_import", user, csv)
   end
 
   def silences_from_csv_file(user, path) do
-    silences_from_csv(user, File.read!(path))
+    silences_from_csv(user, read_file(path))
     # TODO: delete file
   end
 
-  def silences_from_csv(user, list) when is_binary(list) do
-    silences_from_list(user, prepare_csv(list))
+  def silences_from_csv(user, csv) do
+    process_csv("silences_import", user, csv)
   end
 
   def blocks_from_csv_file(user, path) do
-    blocks_from_csv(user, File.read!(path))
+    blocks_from_csv(user, read_file(path))
     # TODO: delete file
   end
 
-  def blocks_from_csv(user, list) when is_binary(list) do
-    blocks_from_list(user, prepare_csv(list))
+  def blocks_from_csv(user, csv) do
+    process_csv("blocks_import", user, csv)
   end
 
-  defp prepare_csv(list) do
-    list
-    |> String.split("\n")
-    |> Enum.map(&(&1 |> String.split(",") |> List.first()))
-    |> List.delete("Account address")
-    |> Enum.map(&(&1 |> String.trim() |> String.trim_leading("@")))
+  defp read_file(path) do
+    path
+    # |> File.read!()
+    |> File.stream!(read_ahead: 100_000)
+  end
+
+  defp process_csv(type, user, csv) when is_binary(csv) do
+    csv
+    |> CSV.parse_string()
+    |> debug()
+    # |> List.delete("Account address")
+    |> Enum.map(&(&1 |> List.first() |> String.trim() |> String.trim_leading("@")))
     |> Enum.reject(&(&1 == ""))
+    |> enqueue_many(type, user, ...)
   end
 
-  def follows_from_list(%User{} = follower, [_ | _] = identifiers) do
-    enqueue_many("follows_import", follower, identifiers)
+  defp process_csv(type, user, csv) do
+    # using Stream
+    csv
+    |> CSV.parse_stream()
+    |> Stream.map(fn data_cols ->
+      enqueue_many(
+        type,
+        user,
+        data_cols
+        |> List.first()
+        |> String.trim()
+        |> String.trim_leading("@")
+      )
+    end)
+    |> Enum.frequencies_by(fn
+      {:ok, %Oban.Job{}} ->
+        :ok
+
+      other ->
+        error(other)
+        :error
+    end)
   end
 
-  def ghosts_from_list(%User{} = ghoster, [_ | _] = identifiers) do
-    enqueue_many("ghosts_import", ghoster, identifiers)
-  end
+  # def follows_from_list(%User{} = follower, [_ | _] = identifiers) do
+  #   enqueue_many("follows_import", follower, identifiers)
+  # end
 
-  def silences_from_list(%User{} = user, [_ | _] = identifiers) do
-    enqueue_many("silences_import", user, identifiers)
-  end
+  # def ghosts_from_list(%User{} = ghoster, [_ | _] = identifiers) do
+  #   enqueue_many("ghosts_import", ghoster, identifiers)
+  # end
 
-  def blocks_from_list(%User{} = user, [_ | _] = identifiers) do
-    enqueue_many("blocks_import", user, identifiers)
-  end
+  # def silences_from_list(%User{} = user, [_ | _] = identifiers) do
+  #   enqueue_many("silences_import", user, identifiers)
+  # end
 
-  defp enqueue_many(op, user, identifiers) do
-    Enum.map(
-      identifiers,
-      fn identifier ->
-        enqueue([queue: :import], %{"op" => op, "user_id" => user.id, "identifier" => identifier})
-      end
-    )
+  # def blocks_from_list(%User{} = user, [_ | _] = identifiers) do
+  #   enqueue_many("blocks_import", user, identifiers)
+  # end
+
+  defp enqueue_many(op, user, identifiers) when is_list(identifiers) do
+    identifiers
+    |> Enum.map(fn identifier ->
+      enqueue_many(op, user, identifier)
+    end)
     |> debug()
     |> Enum.frequencies_by(fn
       {:ok, %Oban.Job{}} -> :ok
@@ -93,9 +126,13 @@ defmodule Bonfire.Social.Import do
     end)
   end
 
-  def enqueue(spec, worker_args \\ []), do: Oban.insert(job(spec, worker_args))
+  defp enqueue_many(op, user, identifier) do
+    enqueue([queue: :import], %{"op" => op, "user_id" => user.id, "identifier" => identifier})
+  end
 
-  def job(spec, worker_args \\ []), do: new(worker_args, spec)
+  defp enqueue(spec, worker_args \\ []), do: Oban.insert(job(spec, worker_args))
+
+  defp job(spec, worker_args \\ []), do: new(worker_args, spec)
 
   def perform(%{args: %{"op" => op, "user_id" => user_id, "identifier" => identifier} = _args}) do
     # debug(args, op)
