@@ -239,6 +239,10 @@ defmodule Bonfire.Social.Objects do
   end
 
   # for internal use, please call `delete/2` which checks for permissiom
+  def do_delete(objects, opts) when is_list(objects) do
+    Enum.map(objects, &do_delete(&1, opts))
+  end
+
   def do_delete(%{__struct__: type} = object, opts) do
     opts =
       opts
@@ -252,6 +256,27 @@ defmodule Bonfire.Social.Objects do
         :peered,
         :controlled
       ])
+
+    # TODO? these mixins should be deleted if their associated pointer is deleted
+    # [
+    #   Bonfire.Data.AccessControl.InstanceAdmin,
+    #   Bonfire.Data.Identity.Email,
+    #   Bonfire.Data.Identity.Accounted,
+    #   Bonfire.Data.Identity.Named,
+    #   Bonfire.Data.Identity.ExtraInfo,
+    #   Bonfire.Data.Social.Inbox,
+    #   Bonfire.Data.Social.Profile,
+    #   Bonfire.Data.ActivityPub.Peered,
+    #   Bonfire.Data.Social.Created,
+    #   Bonfire.Data.ActivityPub.Actor,
+    #   Bonfire.Data.Identity.Credential,
+    #   Bonfire.Boundaries.Stereotype,
+    #   Bonfire.Data.Social.Replied,
+    #   Bonfire.Tag.Tagged,
+    #   Bonfire.Data.Identity.Caretaker,
+    #   Bonfire.Data.Identity.Self,
+    #   Bonfire.Data.Social.PostContent
+    # ]
 
     with {:error, _} <-
            Bonfire.Common.ContextModule.maybe_apply(
@@ -274,23 +299,28 @@ defmodule Bonfire.Social.Objects do
              [object],
              &delete_apply_error/2
            ),
-         {:error, e} <- maybe_generic_delete(type, object, opts) do
+         {:error, e} <- try_generic_delete(type, object, opts) do
       error(e, "Unable to delete this")
     else
-      {:ok, _} ->
+      {:ok, del} ->
         debug("Delete it from feeds too")
-        Bonfire.Social.Activities.delete({:object_id, ulid!(object)})
+        Bonfire.Social.Activities.delete_object(ulid!(object))
+        {:ok, del}
     end
+  end
+
+  defp try_generic_delete(type, object, options) do
+    warn(
+      type,
+      "there's no delete function defined for this type, so try with generic deletion"
+    )
+
+    maybe_generic_delete(type, object, options)
   end
 
   def maybe_generic_delete(type, object, options \\ [])
 
   def maybe_generic_delete(type, object, options) do
-    warn(
-      type,
-      "there's no delete function defined for this type, try with generic deletion anyway"
-    )
-
     options =
       to_options(options)
       |> Keyword.put(:object, object)

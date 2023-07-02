@@ -24,16 +24,16 @@ defmodule Bonfire.Social.Acts.Objects.Delete do
         maybe_debug(epic, act, length(epic.errors), "Skipping due to epic errors")
         epic
 
-      not (is_struct(current_user) or is_binary(current_user) or is_struct(current_account) or
-               is_binary(current_account)) ->
-        maybe_debug(
-          epic,
-          act,
-          [current_account: current_account, current_user: current_user],
-          "Skipping due to missing current account or user"
-        )
+      # not (is_struct(current_user) or is_binary(current_user) or is_struct(current_account) or
+      #          is_binary(current_account)) ->
+      #   maybe_debug(
+      #     epic,
+      #     act,
+      #     [current_account: current_account, current_user: current_user],
+      #     "Skipping due to missing current account or user"
+      #   )
 
-        epic
+      #   epic
 
       true ->
         as = Keyword.get(act.options, :as, :object)

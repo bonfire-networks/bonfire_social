@@ -101,7 +101,7 @@ defmodule Bonfire.Social.Migrations do
   defmacro migrate_social(dir), do: ms(dir)
 
   def add_paper_trail do
-    create table(:versions) do
+    create_if_not_exists table(:versions) do
       add(:event, :string, null: false, size: 10)
       add(:item_type, :string, null: false)
       add(:item_id, :uuid)
@@ -114,10 +114,10 @@ defmodule Bonfire.Social.Migrations do
       add(:inserted_at, :utc_datetime, null: false)
     end
 
-    create(index(:versions, [:originator_id]))
-    create(index(:versions, [:item_id, :item_type]))
+    create_if_not_exists(index(:versions, [:originator_id]))
+    create_if_not_exists(index(:versions, [:item_id, :item_type]))
     # Uncomment if you want to add the following indexes to speed up special queries:
-    # create index(:versions, [:event, :item_type])
-    # create index(:versions, [:item_type, :inserted_at])
+    # create_if_not_exists index(:versions, [:event, :item_type])
+    # create_if_not_exists index(:versions, [:item_type, :inserted_at])
   end
 end

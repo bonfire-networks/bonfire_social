@@ -11,6 +11,7 @@ defmodule Bonfire.Social.Activities do
   import Bonfire.Boundaries.Queries
   import Ecto.Query
   alias Bonfire.Data.Social.Activity
+  alias Bonfire.Data.Social.FeedPublish
   # alias Bonfire.Data.Social.Like
   # alias Bonfire.Data.Social.Boost
   # alias Bonfire.Data.Social.Flag
@@ -146,18 +147,26 @@ defmodule Bonfire.Social.Activities do
   end
 
   @doc "Delete activities, using specific filters"
+  def delete(id) when is_binary(id) or is_struct(id) do
+    delete({:id, id})
+  end
+
   def delete(filters) when is_list(filters) or is_tuple(filters) do
     q =
-      FeedPublish
+      Activity
       |> query_filter(filters)
-      |> debug()
+      |> debug("gonna delete")
 
     # TODO: see why cascading delete doesn't take care of this
-    FeedActivities.delete(repo().many(q), :id)
+    # FeedActivities.delete(repo().many(q), :id)
 
     q
     |> repo().delete_many()
     |> elem(0)
+  end
+
+  def delete_object(id) when is_binary(id) or is_struct(id) do
+    delete({:object_id, id})
   end
 
   def by_subject_verb_object_q(subject, verb, object)
