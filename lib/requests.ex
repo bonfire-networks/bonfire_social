@@ -172,7 +172,7 @@ defmodule Bonfire.Social.Requests do
     |> many(opts)
   end
 
-  def many(query, opts), do: Integration.many(query, opts[:paginate], opts)
+  def many(query, opts), do: Integration.many(query, opts[:paginate] || false, opts)
 
   # defp maybe_with_requester_profile_only(q, true),
   #   do: where(q, [requester_profile: p], not is_nil(p.id))
