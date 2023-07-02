@@ -180,7 +180,7 @@ defmodule Bonfire.Social.Likes do
   end
 
   def ap_publish_activity(subject, _verb, like) do
-    info(like)
+    like = repo().maybe_preload(like, :edge)
 
     with {:ok, liker} <-
            ActivityPub.Actor.get_cached(pointer: subject || like.edge.subject_id),

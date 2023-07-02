@@ -468,16 +468,17 @@ defmodule Bonfire.Social.Follows do
   end
 
   def ap_publish_activity(subject, verb, follow) do
-    info(verb)
+    follow = repo().maybe_preload(follow, :edge)
 
     with {:ok, follower} <-
            ActivityPub.Actor.get_cached(
-             pointer: subject || e(follow.edge, :subject, nil) || follow.edge.subject_id
+             pointer:
+               subject || e(follow, :edge, :subject, nil) || e(follow, :edge, :subject_id, nil)
            )
            |> info("follower actor"),
          {:ok, object} <-
            ActivityPub.Actor.get_cached(
-             pointer: e(follow.edge, :object, nil) || follow.edge.object_id
+             pointer: e(follow.edge, :object, nil) || e(follow, :edge, :object_id, nil)
            )
            |> info("followed actor") do
       ActivityPub.follow(%{actor: follower, object: object, local: true, pointer: ulid(follow)})

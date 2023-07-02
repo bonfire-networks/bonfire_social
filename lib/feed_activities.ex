@@ -220,27 +220,36 @@ defmodule Bonfire.Social.FeedActivities do
   defp paginate_and_boundarise_feed(query, opts) do
     paginate = e(opts, :paginate, nil) || opts
 
-    if opts[:return] == :explain do
-      paginate_and_boundarise_feed_deferred_query(query, opts)
-      |> Ecto.Adapters.SQL.explain(repo(), :all, ...,
-        analyze: true,
-        verbose: false,
-        costs: true,
-        timing: true,
-        summary: true,
-        format: :text
-      )
-      |> IO.puts()
+    case opts[:return] do
+      :explain ->
+        paginate_and_boundarise_feed_deferred_query(query, opts)
+        |> Ecto.Adapters.SQL.explain(repo(), :all, ...,
+          analyze: true,
+          verbose: false,
+          costs: true,
+          timing: true,
+          summary: true,
+          format: :text
+        )
+        |> IO.puts()
 
-      throw("Explanation printed.")
-    else
-      # ^ tell Paginator to always give us and `after` cursor
-      case paginate_and_boundarise_feed_deferred_query(query, opts)
-           |> repo().many_paginated(Keyword.new(paginate) ++ [infinite_pages: true]) do
-        %{edges: []} -> paginate_and_boundarise_feed_non_deferred_query(query, paginate, opts)
-        # ^ if there were no results, try without the deferred query in case some where missing because of boundaries
-        result -> result
-      end
+        throw("Explanation printed.")
+
+      :stream ->
+        repo().transaction(fn ->
+          opts[:stream_callback].(
+            repo().stream(Ecto.Query.exclude(query, :preload), max_rows: 100)
+          )
+        end)
+
+      _ ->
+        # ^ tell Paginator to always give us and `after` cursor
+        case paginate_and_boundarise_feed_deferred_query(query, opts)
+             |> repo().many_paginated(Keyword.new(paginate) ++ [infinite_pages: true]) do
+          %{edges: []} -> paginate_and_boundarise_feed_non_deferred_query(query, paginate, opts)
+          # ^ if there were no results, try without the deferred query in case some where missing because of boundaries
+          result -> result
+        end
     end
   end
 
