@@ -16,7 +16,7 @@ defmodule Bonfire.Social.Posts do
   alias Bonfire.Boundaries.Verbs
 
   alias Bonfire.Epics.Epic
-  # alias Bonfire.Social.Integration
+  alias Bonfire.Social.Integration
   alias Bonfire.Social.PostContents
   alias Bonfire.Social.Tags
   # alias Bonfire.Social.Threads
@@ -158,13 +158,12 @@ defmodule Bonfire.Social.Posts do
 
   def list_paginated(filters, opts)
       when is_list(filters) or is_struct(filters) do
-    paginate = e(opts, :paginate, opts)
+    paginate = e(opts, :paginate, nil)
 
     filters
-    # |> Keyword.drop([:paginate])
     # |> debug("filters")
     |> query_paginated(opts)
-    |> repo().many_paginated(paginate)
+    |> Integration.many(paginate, opts)
   end
 
   @doc "Query posts with pagination"

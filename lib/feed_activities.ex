@@ -502,7 +502,8 @@ defmodule Bonfire.Social.FeedActivities do
   defp generic_feed_query(feed_ids, opts) do
     query_extras(opts)
     |> where([fp], fp.feed_id in ^ulids(feed_ids))
-    |> debug("generic")
+
+    # |> debug("generic")
   end
 
   def query(filters \\ [], opts \\ []),

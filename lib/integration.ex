@@ -182,7 +182,9 @@ defmodule Bonfire.Social.Integration do
 
       :stream ->
         repo().transaction(fn ->
-          opts[:stream_callback].(repo().stream(Ecto.Query.exclude(query, :preload)))
+          opts[:stream_callback].(
+            repo().stream(Ecto.Query.exclude(query, :preload), max_rows: 100)
+          )
         end)
 
       _ ->
@@ -198,7 +200,7 @@ defmodule Bonfire.Social.Integration do
       # :csv ->
       # query
       _ ->
-        repo().many_paginated(query, opts[:pagination] || opts)
+        repo().many_paginated(query, opts[:pagination] || opts[:paginate] || opts)
     end
   end
 end
