@@ -34,17 +34,30 @@ defmodule Bonfire.Social.Aliases do
   # TODO: privacy
   def exists?(subject, target),
     # current_user: subject)
-    do: Edges.exists?(__MODULE__, subject, target, verbs: [:add], skip_boundary_check: true)
+    do: Edges.exists?(__MODULE__, subject, target, skip_boundary_check: true)
+
+  def get(subject, object, opts \\ []),
+    do: Edges.get(__MODULE__, subject, object, opts)
+
+  def get!(subject, object, opts \\ []),
+    do: Edges.get!(__MODULE__, subject, object, opts)
 
   @doc """
   Alias someone/something. 
   """
   def add(user, target, opts \\ [])
 
-  def add(%{} = user, target, opts) do
+  def add(%{} = user, %{} = target, opts) do
     with {:ok, result} <- do_add(user, target, opts) do
       # debug(result, "add or request result")
       {:ok, result}
+    end
+  end
+
+  def add(%{} = user, target, opts) do
+    with {:ok, target} <-
+           Bonfire.Federate.ActivityPub.AdapterUtils.get_by_url_ap_id_or_username(target) do
+      add(user, target, opts)
     end
   end
 
@@ -52,7 +65,7 @@ defmodule Bonfire.Social.Aliases do
   # * Make it pay attention to options passed in
   # * When we start allowing to add things that aren't users, we might need to adjust the circles.
   # * Figure out how to avoid the advance lookup and ensuing race condition.
-  defp do_add(%user_struct{} = user, %object_struct{} = target, opts) do
+  defp do_add(%user_struct{} = user, %{} = target, opts) do
     repo().transact_with(fn ->
       case create(user, target, opts) do
         {:ok, add} ->
@@ -68,6 +81,7 @@ defmodule Bonfire.Social.Aliases do
   rescue
     e in Ecto.ConstraintError ->
       error(e)
+      get(user, target, skip_boundary_check: true)
   end
 
   def remove(user, %{} = target) do
@@ -128,12 +142,6 @@ defmodule Bonfire.Social.Aliases do
     # |> debug("follows query")
   end
 
-  def query([my: :target], opts),
-    do: query([subject: current_user_required!(opts)], opts)
-
-  def query([my: :aliases], opts),
-    do: query([target: current_user_required!(opts)], opts)
-
   def query(filters, opts) do
     query_base(filters, opts)
   end
@@ -147,11 +155,11 @@ defmodule Bonfire.Social.Aliases do
 
   def list_aliases(user, opts \\ []) do
     # TODO: configurable boundaries for follows
-    opts = to_options(opts) ++ [skip_boundary_check: true, preload: :target]
+    opts = to_options(opts) ++ [skip_boundary_check: true, preload: :object]
 
     [subject: ulid(user), object_type: opts[:type]]
     |> query(opts)
-    |> where([target: target], target.id not in ^e(opts, :exclude_ids, []))
+    |> where([object: object], object.id not in ^e(opts, :exclude_ids, []))
     |> Integration.many(opts[:paginate], opts)
   end
 
@@ -165,7 +173,7 @@ defmodule Bonfire.Social.Aliases do
   def list_aliased(user, opts \\ []) do
     opts = to_options(opts) ++ [skip_boundary_check: true, preload: :subject]
 
-    [target: ulid(user), subject_type: opts[:type]]
+    [object: ulid(user), subject_type: opts[:type]]
     |> query(opts)
     |> where([subject: subject], subject.id not in ^e(opts, :exclude_ids, []))
     # |> maybe_with_user_profile_only(opts)
@@ -193,60 +201,82 @@ defmodule Bonfire.Social.Aliases do
 
   ### ActivityPub integration
 
-  # def ap_publish_activity(subject, verb, add) do
-  #   add = repo().maybe_preload(add, :edge)
+  def move(subject, %ActivityPub.Actor{} = target) do
+    target = repo().maybe_preload(target, :edge)
 
-  #   with {:ok, actor} <-
-  #          ActivityPub.Actor.get_cached(
-  #            pointer:
-  #              subject || e(add, :edge, :subject, nil) || e(add, :edge, :subject_id, nil)
-  #          )
-  #          |> debug("aliasing actor"),
-  #        {:ok, target} <-
-  #          ActivityPub.Actor.get_cached(
-  #            pointer: e(add.edge, :target, nil) || e(add, :edge, :object_id, nil)
-  #          )
-  #          |> debug("aliased actor") do
-  #     ActivityPub.move(actor, target)
-  #   else
-  #     e ->
-  #       error(e, "Could not federate")
-  #       raise "Could not federate the add"
-  #   end
-  # end
+    with {:ok, actor} <-
+           ActivityPub.Actor.get_cached(pointer: subject)
+           |> debug("from actor") do
+      ActivityPub.move(actor, target)
+    else
+      e ->
+        error(e, "Could not federate")
+        raise "Could not federate the move"
+    end
+  end
+
+  def move(subject, %Alias{} = target) do
+    target = repo().maybe_preload(target, :edge)
+
+    move(
+      subject || e(target, :edge, :subject, nil) || e(target, :edge, :subject_id, nil),
+      e(target.edge, :object, nil) || e(target, :edge, :object_id, nil)
+    )
+  end
+
+  def move(subject, target) do
+    with {:ok, target} <-
+           ActivityPub.Actor.get_cached(pointer: target)
+           |> debug("aliased actor") do
+      move(subject, target)
+    end
+  end
+
+  def ap_publish_activity(subject, :move, target) do
+    move(subject, target)
+  end
 
   def ap_receive_activity(
-        user,
-        %{data: %{"type" => "Move"} = data} = _activity,
-        target
+        subject,
+        %{data: %{"type" => "Move", "target" => target} = data} = _activity,
+        origin_object
       ) do
-    info(data, "Follows: attempt to process an incoming move activity...")
+    info(data, "Follows: attempt to process an incoming Move activity...")
 
-    debug(target, "user")
-    debug(target, "user")
+    debug(origin_object, "origin")
+    debug(target, "target")
 
-    error("TODO")
-    {:ok, "TODO"}
+    with {:ok, origin_character} <-
+           Bonfire.Federate.ActivityPub.AdapterUtils.fetch_character_by_ap_id(origin_object),
+         true <- id(origin_character) == id(subject),
+         [:ok] <- move_following(origin_character, target) |> Enum.uniq() do
+      {:ok, :moved}
+    else
+      result when is_list(result) ->
+        if result
+           |> debug("move_result")
+           |> Enum.uniq() == [:error],
+           do: {:error, :move_failed},
+           else: {:ok, :moved_partially}
 
-    # __MODULE__
-    # |> join(:inner, [r], f in assoc(r, :user))
-    # |> where(following_id: ^origin.id)
-    # |> where([r, f], f.allow_following_move == true)
-    # |> where([r, f], f.local == true)
-    # |> limit(50)
-    # |> preload([:user])
-    # |> Repo.all()
-    # |> Enum.map(fn following_relationship ->
-    #   add(following_relationship.user, target)
-    #   remove(following_relationship.user, origin)
-    # end)
-    # |> case do
-    #   [] ->
-    #     User.update_user_count(origin)
-    #     :ok
+      false ->
+        error("Invalid move activity, subject and object don't match")
+    end
+  end
 
-    #   _ ->
-    #     move_following(origin, target)
-    # end
+  def move_following(origin, target) do
+    Follows.all_subjects_by_object(origin)
+    # |> repo().maybe_preload(character: :peered)
+    # |> Enum.filter(&Integration.is_local?/1)
+    |> Enum.map(fn third_party_subject ->
+      with {:ok, _} <- Follows.follow(third_party_subject, target),
+           {:ok, _} <- Follows.unfollow(third_party_subject, origin) do
+        :ok
+      else
+        e ->
+          error(e)
+          :error
+      end
+    end)
   end
 end

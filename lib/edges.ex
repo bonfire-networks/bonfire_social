@@ -87,13 +87,14 @@ defmodule Bonfire.Social.Edges do
       object_id: ulid(object),
       table_id: Bonfire.Common.Types.table_id(schema)
     }
-    |> info()
+    |> debug()
     # |> Changesets.put_assoc(changeset, :edge, ...)
     |> Ecto.Changeset.cast(changeset, %{edge: ...}, [])
     |> Ecto.Changeset.cast_assoc(:edge, with: &Edge.changeset/2)
     |> Ecto.Changeset.unique_constraint([:subject_id, :object_id, :table_id],
       name: String.to_atom("bonfire_data_edges_edge_#{table_name}_unique_index")
     )
+    |> debug()
   end
 
   def get(type, subject, object, opts \\ [])
