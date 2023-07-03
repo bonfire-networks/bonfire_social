@@ -15,9 +15,14 @@ defmodule Bonfire.Social.Edges do
 
   def insert(schema, subject, verb, object, options) do
     changeset(schema, subject, verb, object, options)
+    |> insert()
+    |> preload_inserted(subject, object)
+  end
+
+  def insert(changeset, subject \\ nil, object \\ nil) do
+    changeset
     |> Changeset.unique_constraint([:subject_id, :object_id, :table_id])
     |> repo().insert()
-    |> preload_inserted(subject, object)
   end
 
   defp preload_inserted(inserted, %{} = subject, %{} = object) do

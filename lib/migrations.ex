@@ -5,7 +5,7 @@ defmodule Bonfire.Social.Migrations do
 
   def ms(:up) do
     quote do
-      require Bonfire.Data.Social.Block.Migration
+      # require Bonfire.Data.Social.Block.Migration
       require Bonfire.Data.Social.Bookmark.Migration
       require Bonfire.Data.Social.Follow.Migration
       require Bonfire.Data.Social.Like.Migration
@@ -24,7 +24,7 @@ defmodule Bonfire.Social.Migrations do
       require Bonfire.Data.Social.Seen.Migration
       require Bonfire.Data.Social.Pin.Migration
 
-      Bonfire.Data.Social.Block.Migration.migrate_block()
+      # Bonfire.Data.Social.Block.Migration.migrate_block()
       Bonfire.Data.Social.Bookmark.Migration.migrate_bookmark()
       Bonfire.Data.Social.Follow.Migration.migrate_follow()
       Bonfire.Data.Social.Like.Migration.migrate_like()
@@ -49,7 +49,7 @@ defmodule Bonfire.Social.Migrations do
 
   def ms(:down) do
     quote do
-      require Bonfire.Data.Social.Block.Migration
+      # require Bonfire.Data.Social.Block.Migration
       require Bonfire.Data.Social.Bookmark.Migration
       require Bonfire.Data.Social.Follow.Migration
       require Bonfire.Data.Social.Like.Migration
@@ -83,7 +83,7 @@ defmodule Bonfire.Social.Migrations do
       Bonfire.Data.Social.Like.Migration.migrate_like()
       Bonfire.Data.Social.Follow.Migration.migrate_follow()
       Bonfire.Data.Social.Bookmark.Migration.migrate_bookmark()
-      Bonfire.Data.Social.Block.Migration.migrate_block()
+      # Bonfire.Data.Social.Block.Migration.migrate_block()
       Bonfire.Data.Social.Created.Migration.migrate_created()
       Bonfire.Data.Social.Activity.Migration.migrate_activity()
       Bonfire.Data.Social.Feed.Migration.migrate_feed()
