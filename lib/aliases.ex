@@ -69,9 +69,8 @@ defmodule Bonfire.Social.Aliases do
     repo().transact_with(fn ->
       case create(user, target, opts) do
         {:ok, add} ->
-          # if info(opts[:incoming] != true, "Maybe outgoing add?"),
-          #   do: Integration.maybe_federate_and_gift_wrap_activity(user, add),
-          #   else: 
+          Integration.maybe_federate(user, :update, add)
+
           {:ok, add}
 
         e ->
@@ -89,7 +88,7 @@ defmodule Bonfire.Social.Aliases do
       Edges.delete_by_both(user, Alias, target)
 
       # TODO: update AP user?
-      # Integration.maybe_federate(user, :remove, target)
+      Integration.maybe_federate(user, :update, nil)
       # ap_publish_activity(user, :update, target)
     else
       error("Does not exist")
@@ -234,6 +233,13 @@ defmodule Bonfire.Social.Aliases do
 
   def ap_publish_activity(subject, :move, target) do
     move(subject, target)
+  end
+
+  def ap_publish_activity(subject, _, _target) do
+    ActivityPub.Actor.get_cached(pointer: subject)
+    ~> ActivityPub.Actor.invalidate_cache()
+
+    # TODO: send an Update activity to target
   end
 
   def ap_receive_activity(
