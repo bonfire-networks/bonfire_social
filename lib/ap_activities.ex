@@ -12,16 +12,25 @@ defmodule Bonfire.Social.APActivities do
   use Bonfire.Common.Utils
   import Bonfire.Common.Config, only: [repo: 0]
 
-  def create(character, %{data: %{} = activity}, object), do: create(character, activity, object)
-  def create(character, activity, %{data: %{} = object}), do: create(character, activity, object)
+  def ap_receive_activity(creator, activity, object) do
+    create(creator, activity, object)
+  end
+
+  def create(character, activity, object, public \\ nil)
+
+  def create(character, %{data: %{} = activity, public: public}, object, public_initial),
+    do: create(character, activity, object, public_initial || public)
+
+  def create(character, activity, %{data: %{} = object, public: public}, public_initial),
+    do: create(character, activity, object, public_initial || public)
 
   # def create(character, %{verb: verb} = activity, object) when verb in ["update", "Update", :update, :edit, "edit"] is_map(activity) or is_map(object) do
   #   # TODO: store version history
   # end
 
-  def create(character, activity, object) when is_map(activity) or is_map(object) do
+  def create(character, activity, object, public) when is_map(activity) or is_map(object) do
     if ulid(character) do
-      do_create(character, activity, object)
+      do_create(character, activity, object, public)
     else
       with actor_id when is_binary(actor_id) <-
              e(activity, :data, "actor", "id", nil) ||
@@ -33,7 +42,7 @@ defmodule Bonfire.Social.APActivities do
            {:ok, character} <-
              Bonfire.Federate.ActivityPub.AdapterUtils.fetch_character_by_ap_id(actor_id),
            cid when is_binary(cid) <- ulid(character) do
-        do_create(character, activity, object)
+        do_create(character, activity, object, public)
       else
         other ->
           error(
@@ -44,7 +53,7 @@ defmodule Bonfire.Social.APActivities do
     end
   end
 
-  defp do_create(character, activity, %{public: is_public} = object) do
+  defp do_create(character, activity, object, public) do
     json =
       if is_map(object) do
         Enum.into(%{"object" => the_object(object)}, activity || %{})
@@ -52,8 +61,10 @@ defmodule Bonfire.Social.APActivities do
         activity || %{}
       end
 
+    debug(activity)
+
     boundary =
-      if(is_public, do: "public", else: "mentions")
+      if(public, do: "public", else: "mentions")
       |> debug("set boundary")
 
     # TODO: reuse logic from Posts for targeting the audience
@@ -62,6 +73,7 @@ defmodule Bonfire.Social.APActivities do
       |> debug("ap_opts")
 
     with {:ok, apactivity} <- insert(character, json, opts) do
+      # TODO: set pointer_id on AP Object
       #  {:ok, _} <- FeedActivities.save_fediverse_incoming_activity(character, :create, apactivity) do # Note: using `Activities.put_assoc/` instead
       {:ok, apactivity}
     end
