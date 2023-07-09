@@ -42,8 +42,8 @@ defmodule Bonfire.Social.Threads do
         thread_id = ulid(custom_thread) || thread_id
 
         debug(
-          thread_id,
-          "threading under the reply_to's thread (or using custom thread if specified)"
+          reply_to,
+          "threading under the reply_to's thread (or using custom thread if specified): #{thread_id}, with reply_to"
         )
 
         make_threaded(changeset, thread_id, reply_to)
@@ -161,11 +161,22 @@ defmodule Bonfire.Social.Threads do
     )
   end
 
-  defp make_child_of(reply_to = %{id: id}, attrs) do
+  defp make_child_of(%{id: id, replied: %{path: path}}, attrs) when is_list(path) do
+    make_child_of(%{id: id, path: path}, attrs)
+  end
+
+  defp make_child_of(%{id: id, path: path}, attrs) when is_list(path) do
     #  Reimplementation of a function from EctoMaterializedPath to work with our nested changesets
-    (Map.get(reply_to, :path, []) ++
-       [id])
+    (path ++ [id])
     |> Map.put(attrs, :path, ...)
+    |> debug()
+  end
+
+  defp make_child_of(%{id: id}, attrs) do
+    #  Reimplementation of a function from EctoMaterializedPath to work with our nested changesets
+    [id]
+    |> Map.put(attrs, :path, ...)
+    |> debug()
   end
 
   # defp do_cast_replied(changeset, attrs) do
