@@ -430,18 +430,18 @@ defmodule Bonfire.Social.Threads do
 
     opts =
       to_options(opts)
-      |> Keyword.put_new(:max_depth, Config.get(:thread_default_max_depth, 3))
+      |> Keyword.put_new_lazy(:max_depth, fn -> Config.get(:thread_default_max_depth, 3) end)
       |> Keyword.put_new(:preload, preloads)
 
     # |> debug("thread opts")
 
     %Replied{id: Bonfire.Common.Pointers.id_binary(thread_id)}
     |> Replied.descendants()
-    |> maybe_max_depth(opts[:max_depth])
     |> or_where(
       [replied],
       replied.thread_id == ^thread_id or replied.reply_to_id == ^thread_id
     )
+    |> maybe_max_depth(opts[:max_depth])
     |> where([replied], replied.id != ^thread_id)
     |> Activities.query_object_preload_create_activity(opts)
     |> Activities.as_permitted_for(opts, [:see, :read])
