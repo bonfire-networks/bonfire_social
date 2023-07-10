@@ -62,6 +62,8 @@ defmodule Bonfire.Social.Posts do
       to_options(opts)
       |> Keyword.put(:object, object)
 
+    # TODO: should we only delete the PostContent and the activity? so as to preserve thread and nesting integrity 
+
     opts
     |> Keyword.put(
       :delete_associations,

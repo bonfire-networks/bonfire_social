@@ -325,18 +325,23 @@ defmodule Bonfire.Social.Objects do
       to_options(options)
       |> Keyword.put(:object, object)
 
-    options
-    |> Keyword.put(
-      :delete_associations,
-      # cover our bases with some more common mixins
-      options[:delete_associations] ++
+    # cover our bases with some more common mixins
+    delete_extras =
+      Bonfire.Common.Repo.Preload.schema_mixins(object) ++
         [
           :post_content,
           :profile,
           :character,
           :named
         ]
+
+    options
+    |> Keyword.update(
+      :delete_associations,
+      delete_extras,
+      &(&1 ++ delete_extras)
     )
+    |> debug("deletion opts")
     |> run_epic(:delete, ..., :object)
   end
 
