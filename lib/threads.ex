@@ -469,7 +469,10 @@ defmodule Bonfire.Social.Threads do
   defp maybe_max_depth(query, _max_depth), do: query
 
   # uses https://github.com/bonfire-networks/ecto_materialized_path
+  # equivalent of `EctoMaterializedPath.arrange(replies, :path)`
   def arrange_replies_tree(replies), do: Replied.arrange(replies)
+
+  def arrange_replies(replies), do: EctoMaterializedPath.arrange_nodes(replies, :path)
 
   # Deprecated:
   # def arrange_replies_tree(replies) do
