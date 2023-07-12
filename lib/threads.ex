@@ -130,14 +130,19 @@ defmodule Bonfire.Social.Threads do
   end
 
   @doc false
-  def create_parent_replied(changeset, replied, replied_attrs) do
+  def create_parent_replied(%Changeset{} = changeset, replied, replied_attrs) do
     changeset.repo.insert_all(Replied, [replied_attrs], on_conflict: :nothing)
 
     Changesets.update_data(changeset, &Map.put(&1, :replied, replied))
   end
 
+  def create_parent_replied(object, replied, replied_attrs) do
+    Changeset.cast(object, %{}, [])
+    |> create_parent_replied(replied, replied_attrs)
+  end
+
   defp start_new_thread(%Changeset{} = changeset) do
-    Changeset.get_field(changeset, :id)
+    Pointers.Changesets.get_field(changeset, :id)
     |> Changesets.put_assoc(changeset, :replied, %{
       reply_to_id: nil,
       thread_id: ...
@@ -146,19 +151,24 @@ defmodule Bonfire.Social.Threads do
 
   defp start_new_thread(object) do
     # TODO: support threading non-changesets
-    e(object, :id, nil)
-    |> Changesets.put_assoc(object, :replied, %{
+    id(object)
+    |> Changesets.put_assoc(Changeset.cast(object, %{}, []), :replied, %{
       reply_to_id: nil,
       thread_id: ...
     })
   end
 
-  defp make_threaded(changeset, thread, reply_to) do
+  defp make_threaded(%Changeset{} = changeset, thread, reply_to) do
     Changesets.put_assoc(
       changeset,
       :replied,
       make_child_of(reply_to, %{thread_id: ulid(thread), reply_to: reply_to})
     )
+  end
+
+  defp make_threaded(object, thread, reply_to) do
+    Changeset.cast(object, %{}, [])
+    |> make_threaded(thread, reply_to)
   end
 
   defp make_child_of(%{id: id, replied: %{path: path}}, attrs) when is_list(path) do

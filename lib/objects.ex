@@ -419,7 +419,8 @@ defmodule Bonfire.Social.Objects do
         [
           boundary: preset_boundary,
           to_circles: to_circles,
-          to_feeds: to_feeds
+          to_feeds: to_feeds,
+          for_module: for_module
         ]
 
     (opts ++
