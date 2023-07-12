@@ -1031,6 +1031,7 @@ defmodule Bonfire.Social.FeedActivities do
       do_maybe_federate_activity(subject, verb, object, activity, opts)
     rescue
       e ->
+        error("Error occurred when trying to federate, skip...")
         error(__STACKTRACE__, inspect(e))
         {:ok, activity}
     end
