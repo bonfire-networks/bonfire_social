@@ -214,7 +214,7 @@ defmodule Bonfire.Social.Posts do
   # TODO: federated delete, in addition to create:
   def ap_publish_activity(subject, _verb, post) do
     # TODO: get from config
-    public_acl_ids = ["5REM0TEPE0P1E1NTERACTREACT", "5REM0TEPE0P1E1NTERACTREP1Y"]
+    public_acl_ids = Bonfire.Boundaries.Acls.remote_public_acl_ids()
 
     id = ulid!(post)
 
@@ -248,6 +248,7 @@ defmodule Bonfire.Social.Posts do
 
     # TODO: should we just include ALL thread participants? ^
 
+    # FIXME: use `get_preset_on_object` instead of loading them all
     acls = Bonfire.Boundaries.list_object_acls(post)
     # |> debug("acls")
 
