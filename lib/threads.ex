@@ -455,10 +455,10 @@ defmodule Bonfire.Social.Threads do
     |> where([replied], replied.id != ^thread_id)
     |> Activities.query_object_preload_create_activity(opts)
     |> Activities.as_permitted_for(opts, [:see, :read])
-    |> if opts[:reverse_order] do
+    |> if opts[:sort_order] == :asc do
       order_by(..., [root], root.id)
     else
-      ...
+      order_by(..., [root], desc: root.id)
     end
     |> debug("Thread nested query")
   end
