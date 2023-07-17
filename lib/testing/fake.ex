@@ -24,7 +24,7 @@ defmodule Bonfire.Social.Fake do
           boundary: boundary || "public",
           debug: true,
           crash: true
-        ] ++ opts
+        ] ++ List.wrap(opts)
       )
 
     post

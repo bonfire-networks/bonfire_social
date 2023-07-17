@@ -468,6 +468,8 @@ defmodule Bonfire.Social.Follows do
   end
 
   def ap_publish_activity(subject, verb, follow) do
+    error_msg = l("Could not federate the follow")
+
     follow = repo().maybe_preload(follow, :edge)
 
     with {:ok, follower} <-
@@ -480,12 +482,23 @@ defmodule Bonfire.Social.Follows do
            ActivityPub.Actor.get_cached(
              pointer: e(follow.edge, :object, nil) || e(follow, :edge, :object_id, nil)
            )
-           |> info("followed actor") do
-      ActivityPub.follow(%{actor: follower, object: object, local: true, pointer: ulid(follow)})
+           |> info("followed actor"),
+         {:ok, activity} <-
+           ActivityPub.follow(%{
+             actor: follower,
+             object: object,
+             local: true,
+             pointer: ulid(follow)
+           }) do
+      {:ok, activity}
     else
+      {:error, :not_found} ->
+        error("Actor not found", error_msg)
+        {:ok, :ignore}
+
       e ->
-        error(e, "Could not federate")
-        raise "Could not federate the follow"
+        error(e, error_msg)
+        raise error_msg
     end
   end
 

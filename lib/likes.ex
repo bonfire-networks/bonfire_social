@@ -37,7 +37,10 @@ defmodule Bonfire.Social.Likes do
     do: Edges.get!(__MODULE__, subject, object, opts)
 
   def by_liker(subject, opts \\ []) when is_map(subject) or is_binary(subject),
-    do: (opts ++ [subject: subject]) |> query([current_user: subject] ++ opts) |> repo().many()
+    do:
+      (opts ++ [subject: subject])
+      |> query([current_user: subject] ++ List.wrap(opts))
+      |> repo().many()
 
   def by_liked(object, opts \\ []) when is_map(object) or is_binary(object),
     do: (opts ++ [object: object]) |> query(opts) |> repo().many()
@@ -69,16 +72,17 @@ defmodule Bonfire.Social.Likes do
     end
   end
 
-  def do_like(%{} = liker, %{} = liked) do
+  def do_like(%{} = liker, %{} = liked, opts \\ []) do
     liked = Objects.preload_creator(liked)
     liked_creator = Objects.object_creator(liked)
 
-    opts = [
-      # TODO: make configurable
-      boundary: "mentions",
-      to_circles: [id(liked_creator)],
-      to_feeds: Feeds.maybe_creator_notification(liker, liked_creator)
-    ]
+    opts =
+      [
+        # TODO: make configurable
+        boundary: "mentions",
+        to_circles: [id(liked_creator)],
+        to_feeds: Feeds.maybe_creator_notification(liker, liked_creator)
+      ] ++ List.wrap(opts)
 
     case create(liker, liked, opts) do
       {:ok, like} ->

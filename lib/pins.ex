@@ -46,7 +46,10 @@ defmodule Bonfire.Social.Pins do
     do: Edges.get!(__MODULE__, subject, object, opts)
 
   def by_pinner(%{} = subject, opts \\ []),
-    do: (opts ++ [subject: subject]) |> query([current_user: subject] ++ opts) |> repo().many()
+    do:
+      (opts ++ [subject: subject])
+      |> query([current_user: subject] ++ List.wrap(opts))
+      |> repo().many()
 
   def by_pinned(%{} = object, opts \\ []),
     do: (opts ++ [object: object]) |> query(opts) |> repo().many()

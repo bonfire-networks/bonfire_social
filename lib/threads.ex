@@ -254,7 +254,11 @@ defmodule Bonfire.Social.Threads do
     current_user = current_user(opts)
     limit = opts[:limit] || 500
 
-    exclude_table_id = maybe_apply(Bonfire.Tag.Hashtag, :__pointers__, :table_id)
+    # no groups or hashtags
+    exclude_table_ids = [
+      maybe_apply(Bonfire.Tag.Hashtag, :__pointers__, :table_id),
+      maybe_apply(Bonfire.Classify.Category, :__pointers__, :table_id)
+    ]
 
     activity_or_object =
       Activities.activity_preloads(
@@ -277,7 +281,8 @@ defmodule Bonfire.Social.Threads do
              thread_or_object_id
            ],
            current_user: current_user,
-           limit: limit
+           limit: limit,
+           exclude_table_ids: exclude_table_ids
          )
          |> e(:edges, [])
          |> Enum.map(&e(&1, :activity, :subject, nil)),
@@ -291,8 +296,7 @@ defmodule Bonfire.Social.Threads do
        e(activity_or_object, :tags, []))
     # |> debug("participants grab bag")
     |> filter_empty([])
-    # no hashtags
-    |> Enum.reject(&(e(&1, :table_id, nil) == exclude_table_id))
+    |> Enum.reject(&(e(&1, :table_id, nil) in exclude_table_ids))
     |> Enum.uniq_by(&e(&1, :character, :id, nil))
     |> Enum.take(limit)
 
@@ -308,7 +312,7 @@ defmodule Bonfire.Social.Threads do
     FeedActivities.feed_paginated(
       [in_thread: {thread_id, &filter/3}],
       opts ++ [preload: :with_subject],
-      q_subjects()
+      q_subjects(opts)
     )
   end
 
@@ -341,20 +345,24 @@ defmodule Bonfire.Social.Threads do
   # end
   # def count_edges(_, _, _), do: []
 
-  defp q_subjects(verb \\ :create, query \\ base_query()) do
-    verb_id = Verbs.get_id!(verb)
+  defp q_subjects(opts \\ []) do
+    exclude_table_ids = opts[:exclude_table_ids] || []
 
-    q_by_verb(verb, query)
+    q_by_verb(opts)
     |> proload(activity: [:subject])
+    |> where(
+      [subject: subject],
+      subject.table_id not in ^exclude_table_ids
+    )
     |> distinct([subject: subject],
       desc: subject.id
     )
   end
 
-  defp q_by_verb(verb \\ :create, query \\ base_query()) do
-    verb_id = Verbs.get_id!(verb)
+  defp q_by_verb(opts) do
+    verb_id = Verbs.get_id!(opts[:verb] || :create)
 
-    query
+    (opts[:query] || base_query())
     |> proload(:activity)
     |> where(
       [activity: activity],
