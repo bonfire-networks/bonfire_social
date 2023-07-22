@@ -255,8 +255,9 @@ defmodule Bonfire.Social.Threads do
     limit = opts[:limit] || 500
 
     # no groups or hashtags
-    exclude_table_ids = [Bonfire.Tag.Hashtag, Bonfire.Classify.Category]
-    |> Bonfire.Common.Types.table_types()
+    exclude_table_ids =
+      [Bonfire.Tag.Hashtag, Bonfire.Classify.Category]
+      |> Bonfire.Common.Types.table_types()
 
     activity_or_object =
       Activities.activity_preloads(
