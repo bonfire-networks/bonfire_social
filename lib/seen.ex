@@ -68,6 +68,7 @@ defmodule Bonfire.Social.Seen do
     end
   end
 
+  # TODO: bulk with insert_all 
   def mark_seen(%User{} = subject, objects) do
     Enum.each(objects, &mark_seen(subject, &1))
     Enum.count(objects)

@@ -1110,7 +1110,7 @@ defmodule Bonfire.Social.FeedActivities do
         )
   end
 
-  def unseen_query(feed_id, opts) do
+  defp unseen_query(feed_id, opts) do
     table_id = Bonfire.Common.Types.table_id(Seen)
     current_user = current_user(opts)
 
@@ -1167,9 +1167,11 @@ defmodule Bonfire.Social.FeedActivities do
   def count_total(), do: repo().one(select(FeedPublish, [u], count(u.id)))
 
   def mark_all_seen(feed_id, opts) do
+    current_user = current_user_required!(opts)
+
     unseen_query(feed_id, opts)
     ~> select([c], %{id: c.id})
     |> repo().all()
-    |> Bonfire.Social.Seen.mark_seen(current_user_required!(opts), ...)
+    |> Bonfire.Social.Seen.mark_seen(current_user, ...)
   end
 end

@@ -17,6 +17,8 @@ defmodule Bonfire.Social.Threads do
   alias Pointers.Changesets
   alias Pointers.Pointer
   # alias Pointers.ULID
+  alias Bonfire.Data.Social.Seen
+  alias Bonfire.Data.Edges.Edge
 
   @behaviour Bonfire.Common.ContextModule
   @behaviour Bonfire.Common.QueryModule
@@ -477,6 +479,42 @@ defmodule Bonfire.Social.Threads do
     |> Activities.as_permitted_for(opts, [:see])
 
     # |> debug("Thread filtered query")
+  end
+
+  def unseen_query(filters, opts) do
+    table_id = Bonfire.Common.Types.table_id(Seen)
+    current_user = current_user_required!(opts)
+    uid = ulid(current_user)
+
+    if uid && table_id,
+      do:
+        {:ok,
+         query(filters, opts ++ [max_depth: 1000])
+         |> Ecto.Query.exclude(:preload)
+         |> join(:left, [activity: activity], seen_edge in Edge,
+           as: :seen_edge,
+           on:
+             activity.id == seen_edge.object_id and seen_edge.table_id == ^table_id and
+               seen_edge.subject_id == ^uid
+         )
+         |> where([seen_edge: seen_edge], is_nil(seen_edge.id))
+         |> debug()}
+  end
+
+  def unseen_count(filters, opts) do
+    unseen_query(filters, opts)
+    ~> select(count())
+    |> repo().one()
+  end
+
+  def mark_all_seen(filters, opts) do
+    current_user = current_user_required!(opts)
+
+    unseen_query(filters, opts)
+    ~> select([c], %{id: c.id})
+    |> repo().all()
+    |> debug("iddds")
+    |> Bonfire.Social.Seen.mark_seen(current_user, ...)
   end
 
   defp maybe_max_depth(query, max_depth) when is_integer(max_depth) do
