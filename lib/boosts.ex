@@ -54,56 +54,58 @@ defmodule Bonfire.Social.Boosts do
   def get!(subject, object, opts \\ []),
     do: Edges.get!(__MODULE__, subject, object, opts)
 
-  def boost(%{} = booster, %{} = object) do
+  def boost(booster, boosted, opts \\ [])
+
+  def boost(%{} = booster, %{} = object, opts) do
     if Bonfire.Boundaries.can?(booster, :boost, object) do
-      maybe_boost(booster, object)
+      maybe_boost(booster, object, opts)
     else
       error(l("Sorry, you cannot boost this"))
     end
   end
 
-  def boost(%{} = booster, boosted) when is_binary(boosted) do
+  def boost(%{} = booster, boosted, opts) when is_binary(boosted) do
     with {:ok, object} <-
            Bonfire.Common.Pointers.get(boosted,
              current_user: booster,
              verbs: [:boost]
            ) do
       # debug(liked)
-      maybe_boost(booster, object)
+      maybe_boost(booster, object, opts)
     else
       _ ->
         error(l("Sorry, you cannot boost this"))
     end
   end
 
-  def maybe_boost(%{} = booster, %{} = boosted) do
+  def maybe_boost(%{} = booster, %{} = boosted, opts \\ []) do
     case Config.get([Bonfire.Social.Boosts, :can_reboost_after], false) do
       seconds when is_integer(seconds) ->
         # max 1 re-boost every X seconds
         case date_last_boosted(booster, boosted) do
           nil ->
-            do_boost(booster, boosted)
+            do_boost(booster, boosted, opts)
 
           date_last_boosted ->
             if DateTime.diff(DateTime.now!("Etc/UTC"), date_last_boosted, :second) >
                  seconds,
-               do: do_boost(booster, boosted),
+               do: do_boost(booster, boosted, opts),
                else: {:error, l("You already boosted this recently.")}
         end
 
       true ->
         # unlimited re-boosts
-        do_boost(booster, boosted)
+        do_boost(booster, boosted, opts)
 
       _ ->
         # do not allow re-boosts
         if !boosted?(booster, boosted),
-          do: do_boost(booster, boosted),
+          do: do_boost(booster, boosted, opts),
           else: {:error, l("You already boosted this.")}
     end
   end
 
-  defp do_boost(%{} = booster, %{} = boosted) do
+  defp do_boost(%{} = booster, %{} = boosted, opts \\ []) do
     boosted = Objects.preload_creator(boosted)
     boosted_creator = Objects.object_creator(boosted)
 
@@ -113,7 +115,10 @@ defmodule Bonfire.Social.Boosts do
       to_circles: [id(boosted_creator)],
       to_feeds:
         [outbox: booster] ++
-          Feeds.maybe_creator_notification(booster, boosted_creator)
+          if(e(opts, :notify_creator, true),
+            do: Feeds.maybe_creator_notification(booster, boosted_creator),
+            else: []
+          )
     ]
 
     with {:ok, boost} <- create(booster, boosted, opts) do

@@ -157,7 +157,7 @@ defmodule Bonfire.Social.Tags do
       # category
       # |> debug("auto_boost_object")
 
-      Bonfire.Social.Boosts.maybe_boost(category, object)
+      Bonfire.Social.Boosts.maybe_boost(category, object, notify_creator: false)
 
       inbox_id =
         e(category, :character, :notifications_id, nil)
