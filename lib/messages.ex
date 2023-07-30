@@ -38,17 +38,6 @@ defmodule Bonfire.Social.Messages do
     end
   end
 
-  # attempts to get the optional parameter `to` first, falls back to the attributes
-  defp get_tos(nil, to_circles) when is_list(to_circles),
-    do: clean_tos(to_circles)
-
-  defp get_tos(nil, to_circles) when is_binary(to_circles),
-    do: String.split(to_circles, ",") |> clean_tos()
-
-  defp get_tos(to, _), do: clean_tos(to)
-
-  defp clean_tos(tos), do: List.wrap(tos) |> filter_empty(nil)
-
   @doc """
   TODO: check boundaries, right now anyone can message anyone :/
   """
@@ -58,15 +47,17 @@ defmodule Bonfire.Social.Messages do
     opts = [current_user: creator]
 
     to =
-      get_tos(to, Utils.e(attrs, :to_circles, nil))
+      (to || Utils.e(attrs, :to_circles, nil))
       |> debug("tos")
+      |> clean_tos()
+      |> debug("clean_tos")
       |> Boundaries.load_pointers(opts ++ [verb: :message])
       |> repo().maybe_preload(:character)
 
     # TODO: if not allowed to message, request to message?
     # |> debug("to pointers")
 
-    if is_list(to) and length(to) > 0 do
+    if is_list(to) and to != [] do
       attrs = Map.put(attrs, :tags, to)
       # |> debug("message attrs")
       opts = [
@@ -91,6 +82,19 @@ defmodule Bonfire.Social.Messages do
     Bonfire.Me.Users.by_id(creator_id)
     ~> send(attrs, to)
   end
+
+  defp clean_tos(tos) when is_binary(tos), do: String.split(tos, ",") |> clean_tos()
+
+  defp clean_tos(tos) when is_list(tos) or is_map(tos),
+    do:
+      tos
+      |> Enum.map(fn
+        {id, name} -> ulid(id) || ulid(name)
+        other -> ulid(other)
+      end)
+      |> filter_empty(nil)
+
+  defp clean_tos(tos), do: tos |> filter_empty(nil)
 
   defp create(%{id: _creator_id} = creator, attrs, opts) do
     # we attempt to avoid entering the transaction as long as possible.
