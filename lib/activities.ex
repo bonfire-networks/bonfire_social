@@ -317,6 +317,7 @@ defmodule Bonfire.Social.Activities do
               :feed_metadata,
               :notifications,
               :posts,
+              :posts_with_thread,
               :posts_with_reply_to,
               :default
             ] do
@@ -341,9 +342,9 @@ defmodule Bonfire.Social.Activities do
             :with_subject,
             :with_creator,
             :with_verb,
-            :with_object_more,
+            :with_object_more
             # :with_reply_to,
-            :with_thread_name
+            # :with_thread_name
             # :with_media
           ],
           opts
@@ -379,7 +380,19 @@ defmodule Bonfire.Social.Activities do
           [
             :with_subject,
             :with_object_posts
-            # :with_reply_to
+            # :with_reply_to # do not preload as part of query because will be preloaded async later
+          ],
+          opts
+        )
+
+      :posts_with_thread ->
+        do_activity_preloads(
+          query,
+          [
+            :with_subject,
+            :with_object_posts,
+            :with_replied,
+            :with_thread_name
           ],
           opts
         )
@@ -389,9 +402,7 @@ defmodule Bonfire.Social.Activities do
           query,
           [
             :with_subject,
-            :with_object_posts,
-            :with_replied,
-            :with_thread_name
+            :with_object_posts
           ],
           opts
         )
@@ -452,7 +463,7 @@ defmodule Bonfire.Social.Activities do
         :with_object_posts ->
           proload(query,
             activity: [
-              :replied,
+              # :replied,
               object: {"object_", [:post_content, :peered]}
             ]
           )
@@ -556,7 +567,7 @@ defmodule Bonfire.Social.Activities do
 
         :with_object_posts ->
           [
-            :replied,
+            # :replied,
             object: [:post_content, :peered]
           ]
 

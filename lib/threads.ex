@@ -462,23 +462,61 @@ defmodule Bonfire.Social.Threads do
     )
     |> maybe_max_depth(opts[:max_depth])
     |> where([replied], replied.id != ^thread_id)
-    |> Activities.query_object_preload_create_activity(opts)
-    |> Activities.as_permitted_for(opts, [:see, :read])
-    |> if opts[:sort_order] == :asc do
-      order_by(..., [root], root.id)
-    else
-      order_by(..., [root], desc: root.id)
-    end
+    |> query_extras(opts)
     |> debug("Thread nested query")
   end
 
   def query(filter, opts) do
     base_query()
     |> query_filter(filter)
-    |> Activities.query_object_preload_create_activity(opts)
-    |> Activities.as_permitted_for(opts, [:see])
+    |> query_extras(opts ++ [verbs: [:see]])
 
     # |> debug("Thread filtered query")
+  end
+
+  defp query_extras(query, opts) do
+    query
+    |> Activities.query_object_preload_create_activity(opts)
+    |> Activities.as_permitted_for(opts, opts[:verbs] || [:see, :read])
+    |> order(opts[:sort_by], opts[:sort_order])
+  end
+
+  defp order(query, :num_replies, sort_order) do
+    warn("TODO order")
+
+    if sort_order == :asc do
+      order_by(query, [replied], asc_nulls_first: replied.nested_replies_count, asc: replied.id)
+    else
+      order_by(
+        query,
+        [replied],
+        # [desc_nulls_last: replied.nested_replies_count, desc: replied.id]
+        fragment(
+          "?+? DESC, ? DESC",
+          replied.nested_replies_count,
+          replied.direct_replies_count,
+          replied.id
+        )
+      )
+    end
+  end
+
+  defp order(query, :num_boosts, sort_order) do
+    warn("TODO order")
+
+    if sort_order == :asc do
+      order_by(query, [replied], replied.id)
+    else
+      order_by(query, [replied], desc: replied.id)
+    end
+  end
+
+  defp order(query, _, sort_order) do
+    if sort_order == :asc do
+      order_by(query, [root], root.id)
+    else
+      order_by(query, [root], desc: root.id)
+    end
   end
 
   def unseen_query(filters, opts) do
@@ -525,7 +563,10 @@ defmodule Bonfire.Social.Threads do
 
   # uses https://github.com/bonfire-networks/ecto_materialized_path
   # equivalent of `EctoMaterializedPath.arrange(replies, :path)`
-  def arrange_replies_tree(replies), do: Replied.arrange(replies)
+  def arrange_replies_tree(replies),
+    do:
+      Replied.arrange(replies)
+      |> debug()
 
   def arrange_replies(replies), do: EctoMaterializedPath.arrange_nodes(replies, :path)
 
