@@ -44,6 +44,7 @@ defmodule Bonfire.Social.Migrations do
       Bonfire.Data.Social.Seen.Migration.migrate_seen()
       Bonfire.Data.Social.Pin.Migration.migrate_pin()
       add_paper_trail()
+      add_array_reverse_fn()
     end
   end
 
@@ -119,5 +120,15 @@ defmodule Bonfire.Social.Migrations do
     # Uncomment if you want to add the following indexes to speed up special queries:
     # create_if_not_exists index(:versions, [:event, :item_type])
     # create_if_not_exists index(:versions, [:item_type, :inserted_at])
+  end
+
+  def add_array_reverse_fn do
+    execute("CREATE OR REPLACE FUNCTION array_reverse(anyarray) RETURNS anyarray AS $$
+      SELECT ARRAY(
+          SELECT $1[i]
+          FROM generate_subscripts($1,1) AS s(i)
+          ORDER BY i DESC
+      );
+      $$ LANGUAGE 'sql' STRICT IMMUTABLE;")
   end
 end

@@ -481,11 +481,52 @@ defmodule Bonfire.Social.Threads do
     |> order(opts[:sort_by], opts[:sort_order])
   end
 
-  defp order(query, :num_replies, sort_order) do
-    warn("TODO order")
+  #   defp order(query, :latest_reply, sort_order) do
+  #     #  query = query
+  #     #   |> select([replied], %{
+  #     #  replied | path_depth: fragment("array_upper(?, 1) as path_depth", replied.path) 
+  #     #})
+  #     if sort_order == :asc do
+  #       order_by(
+  #         query,
+  #         [replied],
+  #         fragment(
+  #         "?[3] ASC NULLS FIRST, ?[2] ASC NULLS FIRST, ?[1] ASC NULLS FIRST, ? ASC",
+  #           #"(array_reverse(?)) ASC, ? ASC",
+  #           replied.path,
+  #           replied.path,
+  #           replied.path,
+  #           replied.id
+  #         )
+  #       )
+  #     else
+  #       order_by(
+  #         query,
+  #         [replied],
+  #         fragment(
+  #         "? DESC, (array_reverse(?))[0] DESC NULLS LAST, (array_reverse(?))[1] DESC NULLS LAST, (array_reverse(?))[2] DESC NULLS LAST",
+  #         #"?[3] DESC NULLS FIRST, ?[2] DESC NULLS FIRST, ?[1] DESC NULLS FIRST, ? DESC",
+  #           replied.id,
+  #           replied.path,
+  #           replied.path,
+  #           replied.path
+  #         )
+  #       )
+  #     end
+  #   end
 
+  defp order(query, :num_replies, sort_order) do
     if sort_order == :asc do
-      order_by(query, [replied], asc_nulls_first: replied.nested_replies_count, asc: replied.id)
+      order_by(
+        query,
+        [replied],
+        fragment(
+          "?+? ASC, ? ASC",
+          replied.nested_replies_count,
+          replied.direct_replies_count,
+          replied.id
+        )
+      )
     else
       order_by(
         query,
@@ -502,12 +543,38 @@ defmodule Bonfire.Social.Threads do
   end
 
   defp order(query, :num_boosts, sort_order) do
-    warn("TODO order")
-
     if sort_order == :asc do
-      order_by(query, [replied], replied.id)
+      query
+      |> proload(activity: [:boost_count])
+      |> order_by([replied, boost_count: boost_count],
+        asc_nulls_first: boost_count.object_count,
+        asc: replied.id
+      )
     else
-      order_by(query, [replied], desc: replied.id)
+      query
+      |> proload(activity: [:boost_count])
+      |> order_by([replied, boost_count: boost_count],
+        desc_nulls_last: boost_count.object_count,
+        desc: replied.id
+      )
+    end
+  end
+
+  defp order(query, :num_likes, sort_order) do
+    if sort_order == :asc do
+      query
+      |> proload(activity: [:like_count])
+      |> order_by([replied, like_count: like_count],
+        asc_nulls_first: like_count.object_count,
+        asc: replied.id
+      )
+    else
+      query
+      |> proload(activity: [:like_count])
+      |> order_by([replied, like_count: like_count],
+        desc_nulls_last: like_count.object_count,
+        desc: replied.id
+      )
     end
   end
 
@@ -563,12 +630,30 @@ defmodule Bonfire.Social.Threads do
 
   # uses https://github.com/bonfire-networks/ecto_materialized_path
   # equivalent of `EctoMaterializedPath.arrange(replies, :path)`
-  def arrange_replies_tree(replies),
-    do:
-      Replied.arrange(replies)
-      |> debug()
+  def arrange_replies_tree(replies, opts \\ []) do
+    replies
+    # |> debug()
+    |> Replied.arrange(arrange_opts(opts))
 
-  def arrange_replies(replies), do: EctoMaterializedPath.arrange_nodes(replies, :path)
+    # |> debug()
+  end
+
+  def arrange_replies(replies, opts \\ []),
+    do: EctoMaterializedPath.arrange_nodes(replies, :path, arrange_opts(opts))
+
+  defp arrange_opts(opts) do
+    if opts[:sort_by] == :latest_reply do
+      #  requires: `sort_order` (desc or asc), `struct_sort_key` (a virtual field on the struct that contains the path to store the data to sort by), and `sort_by_key` (defaults to :id)
+      Keyword.merge(opts,
+        sort_order: opts[:sort_order] || :desc,
+        struct_sort_key: :path_sorter,
+        sort_by_key: :id
+      )
+    else
+      opts
+    end
+    |> debug()
+  end
 
   # Deprecated:
   # def arrange_replies_tree(replies) do
