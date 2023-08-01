@@ -54,15 +54,20 @@ defmodule Bonfire.Social.FeedActivities do
   # TODO: put in config
   def skip_verbs_default, do: [:flag]
 
+  def to_feed_options(socket_or_opts) do
+    # debug(socket_or_opts)
+    to_options(socket_or_opts)
+  end
+
   @decorate time()
   def feed_ids_and_opts(feed_name, opts)
 
   def feed_ids_and_opts({:my, feed_ids}, opts) do
-    feed_ids_and_opts(:my, to_options(opts) ++ [home_feed_ids: feed_ids])
+    feed_ids_and_opts(:my, to_feed_options(opts) ++ [home_feed_ids: feed_ids])
   end
 
   def feed_ids_and_opts(:my, opts) do
-    opts = to_options(opts)
+    opts = to_feed_options(opts)
 
     # TODO: clean up this code
     exclude_verbs =
@@ -118,7 +123,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed_ids_and_opts({:notifications, feed_id}, opts) do
     opts =
-      to_options(opts)
+      to_feed_options(opts)
       |> Keyword.merge(
         # so we can show flags to admins in notifications
         skip_boundary_check: :admins,
@@ -132,7 +137,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed_ids_and_opts(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
     opts =
-      to_options(opts)
+      to_feed_options(opts)
       |> Keyword.put_new_lazy(:exclude_verbs, &skip_verbs_default/0)
 
     {named_feed(
@@ -145,7 +150,7 @@ defmodule Bonfire.Social.FeedActivities do
       when is_atom(feed_name) and not is_nil(feed_name) and
              (is_binary(feed_id) or is_list(feed_id)) do
     opts =
-      to_options(opts)
+      to_feed_options(opts)
       |> Keyword.put_new_lazy(:exclude_verbs, &skip_verbs_default/0)
 
     {feed_id, opts}
@@ -153,7 +158,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed_ids_and_opts(feed, opts) when is_binary(feed) or is_list(feed) do
     opts =
-      to_options(opts)
+      to_feed_options(opts)
       |> Keyword.put_new_lazy(:exclude_verbs, &skip_verbs_default/0)
 
     {feed, opts}
@@ -164,7 +169,7 @@ defmodule Bonfire.Social.FeedActivities do
   """
   def my_feed(opts, home_feed_ids \\ nil) do
     opts =
-      to_options(opts)
+      to_feed_options(opts)
       |> Keyword.put_new(:home_feed_ids, home_feed_ids)
 
     feed(:my, opts)
@@ -199,7 +204,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   defp paginate_and_boundarise_feed_deferred_query(initial_query, opts) do
-    # WIP: BOUNDARISE with deferred join to speed up queries!
+    # speeds up queries by applying filters (incl. pagination) in a deferred join before boundarising and extra joins/preloads 
 
     initial_query =
       initial_query
@@ -214,7 +219,7 @@ defmodule Bonfire.Social.FeedActivities do
     |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
     |> Activities.as_permitted_for(opts)
     |> distinct([activity: activity], desc: activity.id)
-    |> debug()
+    |> debug("full query with deferred join")
   end
 
   defp paginate_and_boundarise_feed(query, opts) do
@@ -293,7 +298,7 @@ defmodule Bonfire.Social.FeedActivities do
   def feed(id_or_ids, opts)
       when is_binary(id_or_ids) or (is_list(id_or_ids) and id_or_ids != []) do
     opts =
-      to_options(opts)
+      to_feed_options(opts)
       |> debug("feed_opts for #{id_or_ids}")
 
     ulid(id_or_ids)
@@ -304,7 +309,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed(:flags, opts) do
-    Bonfire.Social.Flags.list(to_options(opts) ++ [include_flags: :moderators])
+    Bonfire.Social.Flags.list(to_feed_options(opts) ++ [include_flags: :moderators])
     # |> debug()
   end
 
@@ -332,7 +337,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed(%Ecto.Query{} = custom_query, opts) do
-    opts = to_options(opts)
+    opts = to_feed_options(opts)
 
     custom_query
     |> proload([:activity])
@@ -343,7 +348,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed({feed_name, %{} = filters}, opts) do
-    feed(feed_name, [feed_filters: input_to_atoms(filters)] ++ to_options(opts))
+    feed(feed_name, [feed_filters: input_to_atoms(filters)] ++ to_feed_options(opts))
   end
 
   def feed(other, _) do
@@ -467,7 +472,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   # @decorate time()
   defp feed_query(feed_ids, opts) do
-    opts = to_options(opts)
+    opts = to_feed_options(opts)
     local_feed_id = Feeds.named_feed_id(:local)
     federated_feed_id = Feeds.named_feed_id(:activity_pub)
 
@@ -554,7 +559,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   defp query_extras(query \\ nil, opts) do
-    opts = to_options(opts)
+    opts = to_feed_options(opts)
     current_user = current_user(opts)
     # debug(opts)
     # eg. private messages should never appear in feeds
@@ -603,6 +608,7 @@ defmodule Bonfire.Social.FeedActivities do
       as: :object,
       on: object.id == activity.object_id
     )
+    # FIXME: are filters already applied in base_or_filtered_query above?
     |> maybe_filter(filters)
     # where: fp.feed_id not in ^exclude_feed_ids,
     # Don't show messages or anything deleted
@@ -616,6 +622,7 @@ defmodule Bonfire.Social.FeedActivities do
     )
     |> maybe_exclude_replies(filters, opts)
     |> maybe_only_replies(filters, opts)
+    |> maybe_time_limit(opts[:time_limit])
 
     # |> debug("pre-preloads")
     # preload all things we commonly want in feeds
@@ -623,6 +630,17 @@ defmodule Bonfire.Social.FeedActivities do
     # |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
     # |> debug("post-preloads")
   end
+
+  defp maybe_time_limit(query, x_days) when is_integer(x_days) do
+    limit_pointer =
+      DatesTimes.past(x_days, :day)
+      |> debug("from date")
+      |> Pointers.ULID.generate()
+
+    where(query, [activity: activity], activity.id > ^limit_pointer)
+  end
+
+  defp maybe_time_limit(query, _), do: query
 
   defp maybe_filter(query, %{object_type: object_type}) when not is_nil(object_type) do
     case Bonfire.Common.Types.table_types(object_type) do
