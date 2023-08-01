@@ -200,7 +200,15 @@ defmodule Bonfire.Social.FeedActivities do
     query(filters, opts, query)
     # |> debug
     |> paginate_and_boundarise_feed(opts)
-    |> prepare_feed(opts)
+
+    # |> prepare_feed(opts)
+  end
+
+  def feed_many_paginated(query, opts) do
+    repo().many_paginated(
+      query,
+      opts ++ Activities.order_pagination_opts(opts[:sort_by], opts[:sort_order])
+    )
   end
 
   defp paginate_and_boundarise_feed_deferred_query(initial_query, opts) do
@@ -210,21 +218,21 @@ defmodule Bonfire.Social.FeedActivities do
       initial_query
       |> select([:id])
       # to avoid 'cannot preload in subquery' error
-      |> Ecto.Query.exclude(:preload)
-      |> repo().many_paginated(opts ++ [return: :query, multiply_limit: 2])
-      |> subquery()
+      |> make_distinct(opts[:sort_order], opts[:sort_order], opts)
+      |> query_order(opts[:sort_by], opts[:sort_order])
+      |> feed_many_paginated(opts ++ [return: :query, multiply_limit: 2])
+      |> repo().make_subquery()
 
-    base_or_filtered_query(opts)
+    default_or_filtered_query(opts)
     |> join(:inner, [fp], ^initial_query, on: [id: fp.id])
     |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
     |> Activities.as_permitted_for(opts)
-    |> distinct([activity: activity], desc: activity.id)
-    |> debug("full query with deferred join")
+    |> query_order(opts[:sort_by], opts[:sort_order])
+
+    # |> debug("query with deferred join")
   end
 
   defp paginate_and_boundarise_feed(query, opts) do
-    paginate = e(opts, :paginate, nil) || opts
-
     case opts[:return] do
       :explain ->
         paginate_and_boundarise_feed_deferred_query(query, opts)
@@ -250,19 +258,20 @@ defmodule Bonfire.Social.FeedActivities do
       _ ->
         # ^ tell Paginator to always give us and `after` cursor
         case paginate_and_boundarise_feed_deferred_query(query, opts)
-             |> repo().many_paginated(Keyword.new(paginate) ++ [infinite_pages: true]) do
-          %{edges: []} -> paginate_and_boundarise_feed_non_deferred_query(query, paginate, opts)
+             |> feed_many_paginated(opts ++ [infinite_pages: true]) do
+          %{edges: []} -> paginate_and_boundarise_feed_non_deferred_query(query, opts)
           # ^ if there were no results, try without the deferred query in case some where missing because of boundaries
           result -> result
         end
     end
   end
 
-  defp paginate_and_boundarise_feed_non_deferred_query(query, paginate \\ nil, opts) do
+  defp paginate_and_boundarise_feed_non_deferred_query(query, opts) do
     query
     |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
     |> Activities.as_permitted_for(opts)
-    |> repo().many_paginated(paginate || opts)
+    |> query_order(opts[:sort_by], opts[:sort_order])
+    |> feed_many_paginated(opts)
 
     # |> debug()
   end
@@ -276,7 +285,7 @@ defmodule Bonfire.Social.FeedActivities do
   #     query
   #     # |> as(:root)
   #     |> Ecto.Query.exclude(:preload) # to avoid 'cannot preload in subquery' error
-  #     |> repo().many_paginated(paginate ++ [return: :query])
+  #     |> feed_many_paginated(paginate ++ [return: :query])
   #   ), as: :top_root)
   #   # |> Activities.as_permitted_for_subqueried(opts)
   #   |> Activities.as_permitted_for(opts)
@@ -285,7 +294,7 @@ defmodule Bonfire.Social.FeedActivities do
   #   # |> preload([top_root, activity], activity: activity)
   #   # |> proload(top_root: :activity)
   #   # |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
-  #   |> repo().many_paginated(paginate)
+  #   |> feed_many_paginated(paginate)
   # end
 
   @doc """
@@ -344,7 +353,8 @@ defmodule Bonfire.Social.FeedActivities do
     |> query_extras(opts)
     # |> debug()
     |> paginate_and_boundarise_feed(maybe_merge_filters(opts[:feed_filters], opts))
-    |> prepare_feed(opts)
+
+    # |> prepare_feed(opts)
   end
 
   def feed({feed_name, %{} = filters}, opts) do
@@ -438,35 +448,83 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   defp maybe_dedup_feed_objects(edges, opts) do
-    if e(opts, :skip_dedup, nil) do
-      edges
-    else
-      Enum.uniq_by(edges, &e(&1, :activity, :object_id, nil))
-    end
+    # if e(opts, :skip_dedup, nil) do
+    edges
+    # else
+    #  Enum.uniq_by(edges, &e(&1, :activity, :object_id, nil))
+    # end
   end
 
   defp default_query(), do: select(Pointers.query_base(), [p], p)
 
-  defp base_query(_opts \\ []) do
+  defp base_query(opts \\ []) do
     # feeds = from fp in FeedPublish, # why the subquery?..
     #   where: fp.feed_id in ^feed_ids,
     #   group_by: fp.id,
     #   select: %{id: fp.id, dummy: count(fp.feed_id)}
 
     from(fp in FeedPublish,
+      as: :main_object,
       # join: fp in subquery(feeds), on: p.id == fp.id,
       join: activity in Activity,
       as: :activity,
-      on: activity.id == fp.id,
-      # distinct: [desc: fp.id],
-      order_by: [desc: fp.id]
+      on: activity.id == fp.id
+      # distinct: [desc: activity.id],
+      # order_by: [desc: activity.id]
     )
+  end
+
+  # defp make_distinct(query, _) do
+  # query
+  # |> group_by([fp], fp.id)
+  # |> select([fp], max(fp.feed_id))
+  # end
+
+  defp make_distinct(query, nil, :asc, opts) do
+    distinct(query, [activity: activity], asc: activity.id)
+  end
+
+  defp make_distinct(query, nil, _, opts) do
+    distinct(query, [activity: activity], desc: activity.id)
+  end
+
+  defp make_distinct(query, _, :asc, opts) do
+    distinct(query, [activity: activity], asc: activity.id)
+    |> make_distinct_subquery(opts)
+  end
+
+  defp make_distinct(query, _, _, opts) do
+    distinct(query, [activity: activity], desc: activity.id)
+    |> make_distinct_subquery(opts)
+  end
+
+  defp make_distinct_subquery(query, opts) do
+    subquery =
+      query
+      |> repo().make_subquery()
+
+    default_or_filtered_query(opts)
+    |> join(:inner, [fp], ^subquery, on: [id: fp.id])
+  end
+
+  defp default_or_filtered_query(filters \\ nil, opts) do
+    case filters || e(opts, :feed_filters, nil) do
+      %Ecto.Query{} = query ->
+        query
+
+      _ ->
+        default_query()
+        |> proload(:activity)
+    end
   end
 
   defp base_or_filtered_query(filters \\ nil, opts) do
     case filters || e(opts, :feed_filters, nil) do
-      %Ecto.Query{} = query -> query
-      _ -> base_query(opts)
+      %Ecto.Query{} = query ->
+        query
+
+      _ ->
+        base_query(opts)
     end
   end
 
@@ -522,11 +580,6 @@ defmodule Bonfire.Social.FeedActivities do
 
   def query(filters \\ [], opts \\ []),
     do: query(filters, opts, default_query())
-
-  # def query(filters, opts, query, true = _distinct)  do
-  #   query(filters, opts, query, false)
-  #     |> distinct([activity: activity], [desc: activity.id])
-  # end
 
   # def query([feed_id: feed_id_or_ids], opts) when is_binary(feed_id_or_ids) or is_list(feed_id_or_ids) do
   #   # debug(feed_id_or_ids: feed_id_or_ids)
@@ -606,7 +659,8 @@ defmodule Bonfire.Social.FeedActivities do
     )
     |> reusable_join(:left, [activity: activity], object in Pointer,
       as: :object,
-      on: object.id == activity.object_id
+      #  only includes the object (for filtering purposes) for activities other than create
+      on: activity.id != activity.object_id and object.id == activity.object_id
     )
     # FIXME: are filters already applied in base_or_filtered_query above?
     |> maybe_filter(filters)
@@ -618,7 +672,7 @@ defmodule Bonfire.Social.FeedActivities do
         is_nil(object.deleted_at) and
         is_nil(activity_pointer.deleted_at) and
         activity_pointer.table_id not in ^exclude_table_ids and
-        object.table_id not in ^exclude_table_ids
+        (is_nil(object.id) or object.table_id not in ^exclude_table_ids)
     )
     |> maybe_exclude_replies(filters, opts)
     |> maybe_only_replies(filters, opts)
@@ -629,6 +683,16 @@ defmodule Bonfire.Social.FeedActivities do
     # |> Activities.activity_preloads(e(opts, :preload, :with_object), opts) # if we want to preload the rest later to allow for caching
     # |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
     # |> debug("post-preloads")
+  end
+
+  defp query_order(query, :num_replies = sort_by, sort_order) do
+    query
+    |> proload(activity: [:replied])
+    |> Activities.query_order(sort_by, sort_order)
+  end
+
+  defp query_order(query, sort_by, sort_order) do
+    Activities.query_order(query, sort_by, sort_order)
   end
 
   defp maybe_time_limit(query, x_days) when is_integer(x_days) do

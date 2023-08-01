@@ -434,7 +434,9 @@ defmodule Bonfire.Social.Threads do
     )
     # |> debug()
     # return a page of items + pagination metadata
-    |> repo().many_paginated(opts)
+    |> repo().many_paginated(
+      opts ++ Activities.order_pagination_opts(opts[:sort_by], opts[:sort_order])
+    )
     # preloaded after so we can get more than 1
     |> repo().maybe_preload(activity: [:media])
 
@@ -478,10 +480,10 @@ defmodule Bonfire.Social.Threads do
     query
     |> Activities.query_object_preload_create_activity(opts)
     |> Activities.as_permitted_for(opts, opts[:verbs] || [:see, :read])
-    |> order(opts[:sort_by], opts[:sort_order])
+    |> query_order(opts[:sort_by], opts[:sort_order])
   end
 
-  #   defp order(query, :latest_reply, sort_order) do
+  #   defp query_order(query, :latest_reply, sort_order) do
   #     #  query = query
   #     #   |> select([replied], %{
   #     #  replied | path_depth: fragment("array_upper(?, 1) as path_depth", replied.path) 
@@ -515,75 +517,13 @@ defmodule Bonfire.Social.Threads do
   #     end
   #   end
 
-  defp order(query, :num_replies, sort_order) do
-    if sort_order == :asc do
-      order_by(
-        query,
-        [replied],
-        fragment(
-          "?+? ASC, ? ASC",
-          replied.nested_replies_count,
-          replied.direct_replies_count,
-          replied.id
-        )
-      )
-    else
-      order_by(
-        query,
-        [replied],
-        # [desc_nulls_last: replied.nested_replies_count, desc: replied.id]
-        fragment(
-          "?+? DESC, ? DESC",
-          replied.nested_replies_count,
-          replied.direct_replies_count,
-          replied.id
-        )
-      )
-    end
+  defp query_order(query, :num_replies = sort_by, sort_order) do
+    from(query, as: :replied)
+    |> Activities.query_order(sort_by, sort_order)
   end
 
-  defp order(query, :num_boosts, sort_order) do
-    if sort_order == :asc do
-      query
-      |> proload(activity: [:boost_count])
-      |> order_by([replied, boost_count: boost_count],
-        asc_nulls_first: boost_count.object_count,
-        asc: replied.id
-      )
-    else
-      query
-      |> proload(activity: [:boost_count])
-      |> order_by([replied, boost_count: boost_count],
-        desc_nulls_last: boost_count.object_count,
-        desc: replied.id
-      )
-    end
-  end
-
-  defp order(query, :num_likes, sort_order) do
-    if sort_order == :asc do
-      query
-      |> proload(activity: [:like_count])
-      |> order_by([replied, like_count: like_count],
-        asc_nulls_first: like_count.object_count,
-        asc: replied.id
-      )
-    else
-      query
-      |> proload(activity: [:like_count])
-      |> order_by([replied, like_count: like_count],
-        desc_nulls_last: like_count.object_count,
-        desc: replied.id
-      )
-    end
-  end
-
-  defp order(query, _, sort_order) do
-    if sort_order == :asc do
-      order_by(query, [root], root.id)
-    else
-      order_by(query, [root], desc: root.id)
-    end
+  defp query_order(query, sort_by, sort_order) do
+    Activities.query_order(query, sort_by, sort_order)
   end
 
   def unseen_query(filters, opts) do

@@ -30,7 +30,7 @@ defmodule Bonfire.Social.Activities do
   alias Bonfire.Social.FeedActivities
 
   alias Pointers.Changesets
-  # alias Pointers.Pointer
+  alias Pointers.Pointer
   # alias Pointers.ULID
 
   @behaviour Bonfire.Common.QueryModule
@@ -431,14 +431,34 @@ defmodule Bonfire.Social.Activities do
           # * In the case of a post, creator of the post
           # * In the case of like of a post, creator of the post
           # TODO: in feeds, maybe load the creator with a where clause to skip it when creator==subject
-          proload(query,
-            # created:  [creator: [:character, profile: :icon]],
+          query
+          |> proload(
             activity: [
               object:
                 {"object_",
                  [
+                   :created
+                 ]}
+            ]
+          )
+          |> reusable_join(
+            :left,
+            [activity: activity, object_created: object_created],
+            creator in Pointer,
+            as: :object_creator,
+            #  only includes the creator if different than the subject
+            on:
+              object_created.creator_id != activity.subject_id and
+                object_created.creator_id == creator.id
+          )
+          |> proload(
+            activity: [
+              object:
+                {"object_",
+                 [
+                   # reusable_join should mean the above is respected and the creator mixins are only loaded when needed
                    created: [
-                     creator: {"object_creator_", [:character, profile: :icon]}
+                     creator: {"creator_", [:character, profile: :icon]}
                    ]
                  ]}
             ]
@@ -1038,4 +1058,128 @@ defmodule Bonfire.Social.Activities do
   defp sanitise_verb_name(verb), do: verb
 
   def count_total(), do: repo().one(select(Activity, [u], count(u.id)))
+
+  def query_order(query, :num_replies, sort_order) do
+    if sort_order == :asc do
+      query
+      |> proload(:activity)
+      |> order_by(
+        [activity: activity, replied: replied],
+        asc:
+          fragment(
+            "?+?",
+            replied.nested_replies_count,
+            replied.direct_replies_count
+          ),
+        asc: activity.id
+      )
+    else
+      query
+      |> proload(:activity)
+      |> order_by(
+        [activity: activity, replied: replied],
+        # [desc_nulls_last: replied.nested_replies_count, desc: replied.id]
+        desc:
+          fragment(
+            "?+?",
+            replied.nested_replies_count,
+            replied.direct_replies_count
+          ),
+        desc: activity.id
+      )
+    end
+  end
+
+  def query_order(query, :num_boosts, sort_order) do
+    if sort_order == :asc do
+      query
+      |> proload(activity: [:boost_count])
+      |> order_by([activity: activity, boost_count: boost_count],
+        asc_nulls_first: boost_count.object_count,
+        asc: activity.id
+      )
+    else
+      query
+      |> proload(activity: [:boost_count])
+      |> order_by([activity: activity, boost_count: boost_count],
+        desc_nulls_last: boost_count.object_count,
+        desc: activity.id
+      )
+    end
+  end
+
+  def query_order(query, :num_likes, sort_order) do
+    if sort_order == :asc do
+      query
+      |> proload(activity: [:like_count])
+      |> order_by([activity: activity, like_count: like_count],
+        asc_nulls_first: like_count.object_count,
+        asc: activity.id
+      )
+    else
+      query
+      |> proload(activity: [:like_count])
+      |> order_by([activity: activity, like_count: like_count],
+        desc_nulls_last: like_count.object_count,
+        desc: activity.id
+      )
+    end
+  end
+
+  def query_order(query, _, sort_order) do
+    if sort_order == :asc do
+      query
+      |> proload(:activity)
+      |> order_by([activity: activity], activity.id)
+    else
+      query
+      |> proload(:activity)
+      |> order_by([activity: activity], desc: activity.id)
+    end
+  end
+
+  def order_pagination_opts(sort_by, sort_order) do
+    # [cursor_fields: [{{:activity, :id}, sort_order}]]
+    [
+      cursor_fields: order_cursor_fields(sort_by, sort_order || :desc),
+      fetch_cursor_value_fun: &fetch_cursor_value_fun/2
+    ]
+  end
+
+  def fetch_cursor_value_fun(%{nested_replies_count: _} = replied, :num_replies) do
+    debug(:num_replies)
+    e(replied, :nested_replies_count, 0) + e(replied, :direct_replies_count, 0)
+  end
+
+  def fetch_cursor_value_fun(%{replied: %{id: _} = replied}, :num_replies) do
+    debug(:num_replies)
+    e(replied, :nested_replies_count, 0) + e(replied, :direct_replies_count, 0)
+  end
+
+  def fetch_cursor_value_fun(%{activity: %{replied: %{id: _} = replied}}, :num_replies) do
+    debug(:num_replies)
+    e(replied, :nested_replies_count, 0) + e(replied, :direct_replies_count, 0)
+  end
+
+  def fetch_cursor_value_fun(d, list) when is_tuple(list) do
+    debug(list, "with list")
+    apply(Utils, :e, [d] ++ Tuple.to_list(list) ++ [nil])
+  end
+
+  def fetch_cursor_value_fun(d, field) do
+    # debug(d)
+    debug(field)
+    Paginator.default_fetch_cursor_value(d, field)
+  end
+
+  def order_cursor_fields(:num_likes, sort_order),
+    do: [{{:activity, :like_count, :object_count}, sort_order}, {{:activity, :id}, sort_order}]
+
+  def order_cursor_fields(:num_boosts, sort_order),
+    do: [{{:activity, :boost_count, :object_count}, sort_order}, {{:activity, :id}, sort_order}]
+
+  # {:num_replies, sort_order},
+  def order_cursor_fields(:num_replies, sort_order), do: [{{:activity, :id}, sort_order}]
+
+  def order_cursor_fields(_, sort_order), do: [{{:activity, :id}, sort_order}]
 end
