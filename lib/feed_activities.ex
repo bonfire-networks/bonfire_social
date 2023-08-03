@@ -480,6 +480,12 @@ defmodule Bonfire.Social.FeedActivities do
   # |> select([fp], max(fp.feed_id))
   # end
 
+  defp make_distinct(%Ecto.Query{distinct: distinct} = query, _, _, _opts)
+       when not is_nil(distinct) do
+    debug("skip because we already have a distinct clause")
+    query
+  end
+
   defp make_distinct(query, nil, :asc, opts) do
     distinct(query, [activity: activity], asc: activity.id)
   end

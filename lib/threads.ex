@@ -355,6 +355,7 @@ defmodule Bonfire.Social.Threads do
       [subject: subject],
       subject.table_id not in ^exclude_table_ids
     )
+    |> Ecto.Query.exclude(:distinct)
     |> distinct([subject: subject],
       desc: subject.id
     )
@@ -389,6 +390,7 @@ defmodule Bonfire.Social.Threads do
     query
     |> reusable_join(:left, [root], assoc(root, :activity), as: :activity)
     |> reusable_join(:left, [root], assoc(root, :replied), as: :replied)
+    |> Ecto.Query.exclude(:distinct)
     |> distinct([replied: replied], desc: replied.thread_id)
     |> order_by([root], desc: root.id)
     |> select([root, replied: replied], %{root | thread_id: replied.thread_id})
