@@ -200,7 +200,7 @@ defmodule Bonfire.Social.Integration do
       # :csv ->
       # query
       _ ->
-        repo().many_paginated(query, opts[:pagination] || opts[:paginate] || opts)
+        repo().many_paginated(query, opts)
     end
   end
 end

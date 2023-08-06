@@ -26,6 +26,7 @@ defmodule Bonfire.Social.Follows do
   @behaviour Bonfire.Common.QueryModule
   @behaviour Bonfire.Common.ContextModule
   def schema_module, do: Follow
+  def query_module, do: Follow
 
   def federation_module,
     do: [
@@ -97,7 +98,16 @@ defmodule Bonfire.Social.Follows do
   # * Make it pay attention to options passed in
   # * When we start allowing to follow things that aren't users, we might need to adjust the circles.
   # * Figure out how to avoid the advance lookup and ensuing race condition.
-  defp do_follow(%user_struct{} = user, %object_struct{} = object, opts) do
+  defp do_follow(%{} = user, %{} = object, opts) do
+    # character is needed for boxes & graphDB
+    user =
+      user
+      |> repo().maybe_preload(:character)
+
+    object =
+      object
+      |> repo().maybe_preload(:character)
+
     to = [
       # we include follows in feeds, since user has control over whether or not they want to see them in settings
       outbox: [user],
@@ -131,14 +141,17 @@ defmodule Bonfire.Social.Follows do
             notify: true
           )
 
-          if user_struct == Bonfire.Data.Identity.User,
+          follower_type = Types.object_type(user)
+          object_type = Types.object_type(object)
+
+          if follower_type == Bonfire.Data.Identity.User,
             do:
               Bonfire.Boundaries.Circles.add_to_circles(
                 object,
                 Bonfire.Boundaries.Circles.get_stereotype_circles(user, :followed)
               )
 
-          if object_struct == Bonfire.Data.Identity.User,
+          if object_type == Bonfire.Data.Identity.User,
             do:
               Bonfire.Boundaries.Circles.add_to_circles(
                 user,
@@ -147,6 +160,10 @@ defmodule Bonfire.Social.Follows do
                   :followers
                 )
               )
+
+          if follower_type == Bonfire.Data.Identity.User and
+               object_type == Bonfire.Data.Identity.User,
+             do: Bonfire.Social.Graph.graph_add(user, object, Follow)
 
           if info(opts[:incoming] != true, "Maybe outgoing follow?"),
             do: Integration.maybe_federate_and_gift_wrap_activity(user, follow),
@@ -260,6 +277,8 @@ defmodule Bonfire.Social.Follows do
 
       Bonfire.Boundaries.Circles.get_stereotype_circles(object, :followers)
       ~> Bonfire.Boundaries.Circles.remove_from_circles(user, ...)
+
+      Bonfire.Social.Graph.graph_remove(user, object, Follow)
 
       # Integration.maybe_federate(user, :unfollow, object)
       ap_publish_activity(user, :delete, object)
