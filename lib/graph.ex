@@ -97,10 +97,10 @@ defmodule Bonfire.Social.Graph do
         graph_meta = graph_meta(subject)[type]
 
         "MERGE (a: Character {id: '#{id(subject)}'});
-    MERGE (b: Character {id: '#{id(object)}'});
-    MATCH (a: Character {id: '#{id(subject)}'}), (b: Character {id: '#{id(object)}'}) 
-    MERGE (a)-[r:#{graph_meta[:rel_name] || type} {rank: #{graph_meta[:rank] || 1}}]->(b) 
-    RETURN a.id, type(r), b.id;"
+        MERGE (b: Character {id: '#{id(object)}'});
+        MATCH (a: Character {id: '#{id(subject)}'}), (b: Character {id: '#{id(object)}'}) 
+        MERGE (a)-[r:#{graph_meta[:rel_name] || type} {rank: #{graph_meta[:rank] || 1}}]->(b) 
+        RETURN a.id, type(r), b.id;"
         |> debug()
         |> Bolt.Sips.query(graph_conn, ...)
         |> debug()
@@ -116,7 +116,7 @@ defmodule Bonfire.Social.Graph do
         graph_meta = graph_meta(subject)[type]
 
         "MATCH (a: Character {id: '#{id(subject)}'})-[r:#{graph_meta[:rel_name] || type}]->(b: Character {id: '#{id(object)}'}) 
-    DELETE r;"
+        DELETE r;"
         |> debug()
         |> Bolt.Sips.query(graph_conn, ...)
         |> debug()
@@ -130,9 +130,31 @@ defmodule Bonfire.Social.Graph do
 
       graph_conn ->
         case "MATCH (subject:Character {id: '#{id(subject)}'}) 
-    MATCH (object:Character {id: '#{id(object)}'}) 
-    CALL nxalg.shortest_path_length(subject, object, 'rank') YIELD * 
-    RETURN length;"
+        MATCH (object:Character {id: '#{id(object)}'}) 
+        CALL nxalg.shortest_path_length(subject, object, 'rank') YIELD * 
+        RETURN length;"
+             |> debug()
+             |> Bolt.Sips.query(graph_conn, ...)
+             |> debug() do
+          {:ok, %{records: [[length]]}} ->
+            length
+
+          other ->
+            error(other)
+            nil
+        end
+    end
+  end
+
+  def graph_distances(subject) do
+    case graph_conn() do
+      nil ->
+        false
+
+      graph_conn ->
+        case "MATCH (subject:Character {id: '#{id(subject)}'}) 
+        CALL nxalg.shortest_path_length(subject, NULL, 'rank') YIELD * 
+        RETURN target.id, length ORDER BY length;"
              |> debug()
              |> Bolt.Sips.query(graph_conn, ...)
              |> debug() do
