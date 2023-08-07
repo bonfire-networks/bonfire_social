@@ -117,6 +117,7 @@ defmodule Bonfire.Social.PostContents do
     else
       only_prepare_content(attrs, creator, opts)
     end
+    |> debug()
   end
 
   @doc "Given attributes of a remote post, prepares it for processing by detecting languages, and rewriting mentions, hashtags, and urls"
@@ -227,12 +228,12 @@ defmodule Bonfire.Social.PostContents do
     # |> debug()
     |> Text.maybe_emote()
     # |> debug()
+    #  open remote links in new tab
+    |> Text.normalise_links()
     # maybe remove potentially dangerous or dirty markup
     |> maybe_sane_html(e(opts, :do_not_strip_html, nil))
     # make sure we end up with valid HTML
     |> Text.maybe_normalize_html()
-    #  open remote links in new tab
-    |> Text.normalise_links()
 
     # |> debug()
   end

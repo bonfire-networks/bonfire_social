@@ -615,6 +615,7 @@ defmodule Bonfire.Social.FeedActivities do
   def query_extras_boundarised(query \\ nil, opts) do
     query_extras(query, opts)
     |> Activities.as_permitted_for(opts)
+    |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
   end
 
   defp query_extras(query \\ nil, opts) do

@@ -130,7 +130,7 @@ defmodule Bonfire.Social.Posts do
         post: %{
           post_content: %{
             html_body:
-              e(attrs, :post, :post_content, :html_body, nil) ||
+              e(attrs, :html_body, nil) || e(attrs, :post, :post_content, :html_body, nil) ||
                 e(attrs, :fallback_post, :post_content, :html_body, nil)
           }
         }
@@ -160,12 +160,10 @@ defmodule Bonfire.Social.Posts do
 
   def list_paginated(filters, opts)
       when is_list(filters) or is_struct(filters) do
-    paginate = e(opts, :paginate, nil)
-
     filters
     # |> debug("filters")
     |> query_paginated(opts)
-    |> Integration.many(paginate, opts)
+    |> Integration.many(e(opts, :paginate, nil), opts)
   end
 
   @doc "Query posts with pagination"
@@ -175,6 +173,7 @@ defmodule Bonfire.Social.Posts do
       when is_list(filters) or is_struct(filters) do
     # |> debug("filters")
     Objects.list_query(filters, opts)
+    # |> proload([:post_content])
 
     # |> FeedActivities.query_paginated(opts, Post)
     # |> debug("after FeedActivities.query_paginated")
@@ -187,12 +186,12 @@ defmodule Bonfire.Social.Posts do
 
   def query(filters, opts) when is_list(filters) or is_tuple(filters) do
     base_query(filters, opts)
-    |> proload([:post_content])
     |> boundarise(main_object.id, opts)
   end
 
   defp base_query(filters, _opts) when is_list(filters) or is_tuple(filters) do
     from(p in Post, as: :main_object)
+    |> proload([:post_content])
     |> query_filter(filters, nil, nil)
   end
 

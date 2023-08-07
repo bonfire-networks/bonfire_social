@@ -43,6 +43,12 @@ defmodule Bonfire.Social.Tags do
   end
 
   def maybe_process(creator, text, opts) do
+    output_format =
+      (opts[:output_format] || PostContents.editor_output_content_type(creator))
+      |> debug("output_format")
+
+    debug(text, "hmmmm")
+
     # debug(text)
     with true <- is_binary(text) and text != "",
          true <- module_enabled?(Bonfire.Tag, creator),
@@ -50,7 +56,7 @@ defmodule Bonfire.Social.Tags do
            Bonfire.Tag.TextContent.Process.process(
              creator,
              text,
-             opts[:output_format] || PostContents.editor_output_content_type(creator)
+             output_format
            ) do
       {:ok,
        %{
@@ -60,7 +66,7 @@ defmodule Bonfire.Social.Tags do
          urls: Keyword.values(urls)
        }}
     else
-      _ ->
+      other ->
         {:ok, %{text: text, mentions: [], hashtags: [], urls: []}}
     end
   end
