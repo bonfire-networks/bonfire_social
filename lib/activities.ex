@@ -315,6 +315,8 @@ defmodule Bonfire.Social.Activities do
               :all,
               :feed,
               :feed_metadata,
+              :feed_by_subject,
+              :feed_by_creator,
               :notifications,
               :posts,
               :posts_with_thread,
@@ -340,12 +342,7 @@ defmodule Bonfire.Social.Activities do
           query,
           [
             :with_subject,
-            :with_creator,
-            :with_verb,
-            :with_object_more
-            # :with_reply_to,
-            # :with_thread_name
-            # :with_media
+            :feed_by_subject
           ],
           opts
         )
@@ -359,6 +356,29 @@ defmodule Bonfire.Social.Activities do
             :with_verb,
             # :with_reply_to,
             :with_thread_name
+            # :with_media
+          ],
+          opts
+        )
+
+      :feed_by_subject ->
+        do_activity_preloads(
+          query,
+          [
+            :with_creator,
+            :with_verb,
+            :feed_by_creator
+          ],
+          opts
+        )
+
+      :feed_by_creator ->
+        do_activity_preloads(
+          query,
+          [
+            :with_object_more
+            # :with_reply_to,
+            # :with_thread_name
             # :with_media
           ],
           opts
