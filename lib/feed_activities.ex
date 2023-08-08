@@ -702,6 +702,8 @@ defmodule Bonfire.Social.FeedActivities do
     Activities.query_order(query, sort_by, sort_order)
   end
 
+  defp maybe_time_limit(query, 0), do: query
+
   defp maybe_time_limit(query, x_days) when is_integer(x_days) do
     limit_pointer =
       DatesTimes.past(x_days, :day)

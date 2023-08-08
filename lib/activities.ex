@@ -1085,7 +1085,7 @@ defmodule Bonfire.Social.Activities do
       |> proload(:activity)
       |> order_by(
         [activity: activity, replied: replied],
-        asc:
+        asc_nulls_first:
           fragment(
             "?+?",
             replied.nested_replies_count,
@@ -1099,7 +1099,7 @@ defmodule Bonfire.Social.Activities do
       |> order_by(
         [activity: activity, replied: replied],
         # [desc_nulls_last: replied.nested_replies_count, desc: replied.id]
-        desc:
+        desc_nulls_last:
           fragment(
             "?+?",
             replied.nested_replies_count,
