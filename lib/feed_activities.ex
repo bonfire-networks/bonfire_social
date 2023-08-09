@@ -353,8 +353,7 @@ defmodule Bonfire.Social.FeedActivities do
     |> query_extras(opts)
     # |> debug()
     |> paginate_and_boundarise_feed(maybe_merge_filters(opts[:feed_filters], opts))
-
-    # |> prepare_feed(opts)
+    |> prepare_feed(opts)
   end
 
   def feed({feed_name, %{} = filters}, opts) do
@@ -425,14 +424,11 @@ defmodule Bonfire.Social.FeedActivities do
     |> repo().exists?()
   end
 
-  @decorate time()
+  # @decorate time()
   defp prepare_feed(result, opts)
 
   defp prepare_feed(%{edges: edges} = result, opts)
        when is_list(edges) and edges != [] do
-    # post_preloads = (if Enum.any?(List.wrap(e(opts, :preload, :feed)), fn p -> p in [:feed, :with_reply_to, :posts_with_reply_to, :feed_metadata] end), do: :with_reply_to, else: [])
-    # info("this will be preloaded now (after the query, so boundaries can be applied)") # NOTE: not needed because preloads are also done in FeedLive
-
     Map.put(
       result,
       :edges,
@@ -448,11 +444,14 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   defp maybe_dedup_feed_objects(edges, opts) do
-    # if e(opts, :skip_dedup, nil) do
-    edges
-    # else
-    #  Enum.uniq_by(edges, &e(&1, :activity, :object_id, nil))
-    # end
+    if e(opts, :skip_dedup, nil) do
+      edges
+    else
+      # TODO: try doing this in queries in a way that it's not needed here?
+      edges
+      # |> Enum.uniq_by(&id(&1))
+      |> Enum.uniq_by(&e(&1, :activity, :object_id, nil))
+    end
   end
 
   defp default_query(), do: select(Pointers.query_base(), [p], p)
