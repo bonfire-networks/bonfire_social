@@ -157,10 +157,12 @@ defmodule Bonfire.Social.Boosts do
   @doc "List boosts by the user "
   def list_by(by_user, opts \\ [])
       when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
-    opts = to_options(opts)
     # query FeedPublish
     # [preload: [object: [created: [:creator]]]])
-    list_paginated([subject: by_user], opts ++ [preload: :object_with_creator])
+    list_paginated(
+      [subject: by_user],
+      to_options(opts) ++ [preload: :object_with_creator, subject_user: by_user]
+    )
   end
 
   @doc "List boost of an object"

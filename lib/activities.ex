@@ -445,6 +445,9 @@ defmodule Bonfire.Social.Activities do
     # debug(preload)
 
     if not is_nil(query) and Ecto.Queryable.impl_for(query) do
+      current_user_id = current_user_id(opts)
+      subject_user_id = id(opts[:subject_user])
+
       case preload do
         :with_creator ->
           # This actually loads the creator of the object:
@@ -469,6 +472,7 @@ defmodule Bonfire.Social.Activities do
             #  only includes the creator if different than the subject
             on:
               object_created.creator_id != activity.subject_id and
+                object_created.creator_id not in [^current_user_id, ^subject_user_id] and
                 object_created.creator_id == creator.id
           )
           |> proload(
@@ -489,10 +493,18 @@ defmodule Bonfire.Social.Activities do
         #   proload query,
         #     activity: [tags:  {"tag_", [:character, profile: :icon]}]
         :with_subject ->
-          # Subject here is standing in for the creator of the root. One day it may be replaced with it.
-          proload(query,
-            activity: [subject: {"subject_", [:character, profile: :icon]}]
+          query
+          |> reusable_join(
+            :left,
+            [activity: activity],
+            subject in Pointer,
+            as: :subject,
+            # optimisation: only includes the subject if different current_user
+            on:
+              activity.subject_id not in [^current_user_id, ^subject_user_id] and
+                activity.subject_id == subject.id
           )
+          |> proload(activity: [subject: {"subject_", [:character, profile: :icon]}])
 
         :with_verb ->
           proload(query, activity: [:verb])

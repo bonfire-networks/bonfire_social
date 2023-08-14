@@ -8,7 +8,7 @@ defmodule Bonfire.Social.Posts do
   # alias Bonfire.Data.Social.Activity
 
   alias Bonfire.Social.Activities
-  # alias Bonfire.Social.FeedActivities
+  alias Bonfire.Social.FeedActivities
   # alias Bonfire.Social.Feeds
   alias Bonfire.Social.Objects
 
@@ -152,7 +152,7 @@ defmodule Bonfire.Social.Posts do
     # query FeedPublish
     # [posts_by: {by_user, &filter/3}]
     filter(:posts_by, by_user, Post)
-    |> list_paginated(opts)
+    |> list_paginated(to_options(opts) ++ [subject_user: by_user])
   end
 
   @doc "List posts with pagination"
@@ -163,7 +163,7 @@ defmodule Bonfire.Social.Posts do
     filters
     # |> debug("filters")
     |> query_paginated(opts)
-    |> Integration.many(e(opts, :paginate, nil), opts)
+    |> FeedActivities.feed_many_paginated(opts)
   end
 
   @doc "Query posts with pagination"

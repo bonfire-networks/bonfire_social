@@ -153,7 +153,7 @@ defmodule Bonfire.Social.Likes do
 
     list_paginated(
       Edges.filters_from_opts(opts) |> Map.put(:subject, by_user),
-      Keyword.put_new(opts, :preload, :object)
+      opts ++ [preload: :object, subject_user: by_user]
     )
   end
 
