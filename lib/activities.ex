@@ -447,6 +447,7 @@ defmodule Bonfire.Social.Activities do
     if not is_nil(query) and Ecto.Queryable.impl_for(query) do
       current_user_id = current_user_id(opts)
       subject_user_id = id(opts[:subject_user])
+      exclude_user_ids = [current_user_id, subject_user_id] |> filter_empty([])
 
       case preload do
         :with_creator ->
@@ -464,17 +465,7 @@ defmodule Bonfire.Social.Activities do
                  ]}
             ]
           )
-          |> reusable_join(
-            :left,
-            [activity: activity, object_created: object_created],
-            creator in Pointer,
-            as: :object_creator,
-            #  only includes the creator if different than the subject
-            on:
-              object_created.creator_id != activity.subject_id and
-                object_created.creator_id not in [^current_user_id, ^subject_user_id] and
-                object_created.creator_id == creator.id
-          )
+          |> maybe_join_creator(exclude_user_ids)
           |> proload(
             activity: [
               object:
@@ -494,16 +485,7 @@ defmodule Bonfire.Social.Activities do
         #     activity: [tags:  {"tag_", [:character, profile: :icon]}]
         :with_subject ->
           query
-          |> reusable_join(
-            :left,
-            [activity: activity],
-            subject in Pointer,
-            as: :subject,
-            # optimisation: only includes the subject if different current_user
-            on:
-              activity.subject_id not in [^current_user_id, ^subject_user_id] and
-                activity.subject_id == subject.id
-          )
+          |> maybe_join_subject(exclude_user_ids)
           |> proload(activity: [subject: {"subject_", [:character, profile: :icon]}])
 
         :with_verb ->
@@ -683,6 +665,52 @@ defmodule Bonfire.Social.Activities do
           if subquery, do: [seen: subquery], else: []
       end
     end
+  end
+
+  def maybe_join_subject(query, []), do: query |> proload(activity: [:subject])
+
+  def maybe_join_subject(query, exclude_user_ids) do
+    # optimisation: only includes the subject if different current_user
+    query
+    |> reusable_join(
+      :left,
+      [activity: activity],
+      subject in Pointer,
+      as: :subject,
+      on:
+        activity.subject_id not in ^exclude_user_ids and
+          activity.subject_id == subject.id
+    )
+  end
+
+  def maybe_join_creator(query, []) do
+    query
+    |> reusable_join(
+      :left,
+      [activity: activity, object_created: object_created],
+      creator in Pointer,
+      as: :object_creator,
+      #  only includes the creator if different than the subject
+      on:
+        object_created.creator_id != activity.subject_id and
+          object_created.creator_id == creator.id
+    )
+  end
+
+  def maybe_join_creator(query, exclude_user_ids) do
+    # optimisation: only includes the subject if different current_user
+    query
+    |> reusable_join(
+      :left,
+      [activity: activity, object_created: object_created],
+      creator in Pointer,
+      as: :object_creator,
+      #  only includes the creator if different than the subject
+      on:
+        object_created.creator_id != activity.subject_id and
+          object_created.creator_id not in ^exclude_user_ids and
+          object_created.creator_id == creator.id
+    )
   end
 
   defp maybe_repo_preload(%{edges: list} = page, preloads, opts)
