@@ -180,7 +180,7 @@ defmodule Bonfire.Social.PostContents do
     "#{get_attr(attrs, :name)}\n#{get_attr(attrs, :summary)}\n#{get_attr(attrs, :html_body)}\n#{get_attr(attrs, :note)}"
   end
 
-  def merge_with_body_or_nil(_, %{html_body: html_body})
+  def merge_with_body_or_nil(_, %{html_body: html_body, name: nil, summary: nil})
       when is_nil(html_body) or html_body == "" do
     nil
   end
