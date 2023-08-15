@@ -782,10 +782,10 @@ defmodule Bonfire.Social.Activities do
   Get an activity by its object ID (usually a create activity)
   """
   def read(query, opts \\ []),
-    do: read_query(query, opts)
-    |> as_permitted_for(opts, [:read])
-    |> repo().single()
-
+    do:
+      read_query(query, opts)
+      |> as_permitted_for(opts, [:read])
+      |> repo().single()
 
   def read_query(query, opts \\ [])
 
@@ -804,6 +804,7 @@ defmodule Bonfire.Social.Activities do
       opts ++ [preload: [:default, :with_media, :with_reply_to, :with_parent]]
     )
     |> debug("activity query")
+
     # |> debug("permitted query")
 
     #  #|> repo().maybe_preload(controlled: [acl: [grants: [access: [:interacts]]]])
