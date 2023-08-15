@@ -102,6 +102,7 @@ defmodule Bonfire.Social.APActivities do
       |> APActivity.changeset(%{json: json})
       |> Objects.cast_caretaker(character)
       |> Objects.cast_acl(character, opts)
+      |> maybe_attach_video_oembed(json, character)
 
     id = opts[:id] || Changeset.get_change(activity, :id)
 
@@ -109,5 +110,25 @@ defmodule Bonfire.Social.APActivities do
     |> Activities.put_assoc(opts[:verb], character, id)
     |> repo().insert()
     |> debug()
+  end
+
+  def maybe_attach_video_oembed(
+        changeset,
+        %{"object" => %{"type" => "Video", "id" => url}},
+        current_user
+      ) do
+    # because Peertube doesn't give us details to play/embed the video in the AS JSON
+    Bonfire.Files.Acts.URLPreviews.maybe_fetch_and_save(current_user, url)
+    |> Bonfire.Files.Acts.AttachMedia.cast(changeset, ... || [])
+
+    # TODO clean up: we shouldn't be reaching into the Acts outside of Epics
+  end
+
+  def maybe_attach_video_oembed(
+        changeset,
+        %{"object" => %{"type" => "Video", "id" => url}},
+        current_user
+      ) do
+    changeset
   end
 end
