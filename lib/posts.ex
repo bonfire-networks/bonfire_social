@@ -141,8 +141,10 @@ defmodule Bonfire.Social.Posts do
   def read(post_id, opts_or_socket_or_current_user \\ [])
       when is_binary(post_id) do
     with {:ok, post} <-
-           base_query([id: post_id], opts_or_socket_or_current_user)
-           |> Activities.read(opts_or_socket_or_current_user) do
+           query([id: post_id], opts_or_socket_or_current_user)
+           |> Activities.read_query(opts_or_socket_or_current_user)
+           |> Objects.as_permitted_for(opts_or_socket_or_current_user)
+           |> repo().single() do
       {:ok, Activities.activity_under_object(post)}
     end
   end
@@ -190,7 +192,7 @@ defmodule Bonfire.Social.Posts do
   end
 
   defp base_query(filters, _opts) when is_list(filters) or is_tuple(filters) do
-    from(p in Post, as: :main_object)
+    from(main_object in Post, as: :main_object)
     |> proload([:post_content])
     |> query_filter(filters, nil, nil)
   end

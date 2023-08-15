@@ -781,15 +781,21 @@ defmodule Bonfire.Social.Activities do
   @doc """
   Get an activity by its object ID (usually a create activity)
   """
-  def read(query, opts \\ [])
+  def read(query, opts \\ []),
+    do: read_query(query, opts)
+    |> as_permitted_for(opts, [:read])
+    |> repo().single()
 
-  def read(object_id, opts) when is_binary(object_id),
-    do: read([object_id: object_id], opts)
 
-  def read(%Ecto.Query{} = query, %User{} = user),
-    do: read(query, current_user: user)
+  def read_query(query, opts \\ [])
 
-  def read(%Ecto.Query{} = query, opts) do
+  def read_query(object_id, opts) when is_binary(object_id),
+    do: read_query([object_id: object_id], opts)
+
+  def read_query(%Ecto.Query{} = query, %User{} = user),
+    do: read_query(query, current_user: user)
+
+  def read_query(%Ecto.Query{} = query, opts) do
     opts = to_options(opts)
     # debug(opts, "opts")
     query
@@ -798,20 +804,17 @@ defmodule Bonfire.Social.Activities do
       opts ++ [preload: [:default, :with_media, :with_reply_to, :with_parent]]
     )
     |> debug("activity query")
-    |> as_permitted_for(opts, [:read])
     # |> debug("permitted query")
-    |> repo().single()
 
     #  #|> repo().maybe_preload(controlled: [acl: [grants: [access: [:interacts]]]])
     # |> IO.inspect
   end
 
-  def read(filters, opts) when is_map(filters) or is_list(filters) do
+  def read_query(filters, opts) when is_map(filters) or is_list(filters) do
     # current_user = current_user(opts)
-
     Activity
     |> query_filter(filters)
-    |> read(opts)
+    |> read_query(opts)
   end
 
   def query(filters \\ [], opts_or_current_user \\ [])

@@ -8,6 +8,7 @@ defmodule Bonfire.Social.Objects do
 
   use Bonfire.Common.Utils
   import Untangle
+  import Bonfire.Boundaries.Queries
 
   alias Bonfire.Common
   # alias Bonfire.Data.Identity.Character
@@ -225,6 +226,12 @@ defmodule Bonfire.Social.Objects do
     Pointers.Changesets.cast(object, attrs, [])
     |> Pointers.Changesets.cast_assoc(:named, [])
     |> debug("cs")
+  end
+
+  def as_permitted_for(q, opts \\ [], verbs \\ [:see, :read]) do
+    to_options(opts)
+    |> Keyword.put_new(:verbs, verbs)
+    |> boundarise(q, main_object.id, ...)
   end
 
   def delete(object, opts) do
