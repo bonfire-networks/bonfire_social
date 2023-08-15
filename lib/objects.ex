@@ -281,6 +281,11 @@ defmodule Bonfire.Social.Objects do
     #   Bonfire.Data.Social.PostContent
     # ]
 
+    id = ulid!(object)
+
+    Activities.delete_object(id)
+    |> debug("Delete it from feeds first and foremost")
+
     with {:error, _} <-
            Bonfire.Common.ContextModule.maybe_apply(
              object,
@@ -306,9 +311,11 @@ defmodule Bonfire.Social.Objects do
       error(e, "Unable to delete this")
     else
       {:ok, del} ->
-        debug("Delete it from feeds too")
-        Bonfire.Social.Activities.delete_object(ulid!(object))
+        Activities.maybe_remove_for_deleters_feeds(id)
         {:ok, del}
+
+      other ->
+        error(other)
     end
   end
 

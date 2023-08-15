@@ -16,6 +16,7 @@ defmodule Bonfire.Social.FeedActivities do
   # alias Bonfire.Social.Edges
   alias Bonfire.Social.Feeds
   # alias Bonfire.Social.Objects
+  alias Bonfire.Social.LivePush
 
   alias Pointers
   alias Pointers.Pointer
@@ -978,7 +979,7 @@ defmodule Bonfire.Social.FeedActivities do
   #   # debug(feed_ids)
   #   # |> debug("notify_to_feed_ids")
   #   ret = publish(subject, verb_or_activity, object, to_feeds: feed_ids)
-  #   Bonfire.Social.LivePush.notify(subject, verb_or_activity, object, feed_ids)
+  #   LivePush.notify(subject, verb_or_activity, object, feed_ids)
   #   ret
   # end
 
@@ -1143,7 +1144,7 @@ defmodule Bonfire.Social.FeedActivities do
     with feed_id <- ulid(feed_or_subject),
          {:ok, published} <- do_put_in_feeds(feed_id, ulid(activity)) do
       # push to feeds of online users
-      Bonfire.Social.LivePush.push_activity(feed_id, activity)
+      LivePush.push_activity(feed_id, activity)
       {:ok, Map.put(published, :activity, activity)}
     else
       e ->
@@ -1184,11 +1185,24 @@ defmodule Bonfire.Social.FeedActivities do
 
   @doc "Remove activities from feeds, using specific filters"
   def delete(filters) when is_list(filters) or is_tuple(filters) do
-    FeedPublish
-    |> query_filter(filters)
-    # |> debug()
+    q =
+      FeedPublish
+      |> query_filter(filters)
+
+    q
+    |> repo().many()
+    |> hide_activities()
+    |> debug("pushed deletions to feeds")
+
+    q
     |> repo().delete_many()
     |> elem(0)
+  end
+
+  defp hide_activities(fp) when is_list(fp) do
+    for %{id: activity, feed_id: feed_id} <- fp do
+      LivePush.hide_activity(feed_id, activity)
+    end
   end
 
   defp do_maybe_federate_activity(subject, verb, object, activity, opts) do

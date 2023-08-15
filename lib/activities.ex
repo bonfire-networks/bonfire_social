@@ -141,13 +141,15 @@ defmodule Bonfire.Social.Activities do
   @doc "Delete an activity (usage by things like unlike)"
   def delete_by_subject_verb_object(subject, verb, object) do
     q = by_subject_verb_object_q(subject, Verbs.get_id!(verb), object)
-    # TODO: see why cascading delete doesn't take care of this
+    # FIXME? does cascading delete take care of this?
     FeedActivities.delete(repo().many(q), :id)
+    # TODO? maybe_remove_for_deleters_feeds(id)
     elem(repo().delete_all(q), 1)
   end
 
   @doc "Delete activities, using specific filters"
   def delete(id) when is_binary(id) or is_struct(id) do
+    # maybe_remove_for_deleters_feeds(id)
     delete({:id, id})
   end
 
@@ -157,8 +159,8 @@ defmodule Bonfire.Social.Activities do
       |> query_filter(filters)
       |> debug("gonna delete")
 
-    # TODO: see why cascading delete doesn't take care of this
-    # FeedActivities.delete(repo().many(q), :id)
+    # FIXME? does cascading delete take care of this?
+    FeedActivities.delete(repo().many(q), :id)
 
     q
     |> repo().delete_many()
@@ -166,7 +168,12 @@ defmodule Bonfire.Social.Activities do
   end
 
   def delete_object(id) when is_binary(id) or is_struct(id) do
+    # maybe_remove_for_deleters_feeds(id)
     delete({:object_id, id})
+  end
+
+  def maybe_remove_for_deleters_feeds(id) do
+    maybe_apply(Bonfire.Social.Feeds.LiveHandler, :remove_activity, id)
   end
 
   def by_subject_verb_object_q(subject, verb, object)

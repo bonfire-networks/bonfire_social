@@ -75,6 +75,23 @@ defmodule Bonfire.Social.LivePush do
     |> push_activity(feed_ids, ..., opts)
   end
 
+  def hide_activity(feed_id, activity_id) do
+    PubSub.broadcast(feed_id, {
+      {Bonfire.Social.Feeds, :hide_activity},
+      activity_id
+    })
+
+    # also send to the thread 
+    # TODO: only do this for thread roots, and otherwise notify the actual thread
+    PubSub.broadcast(activity_id, {
+      {Bonfire.Social.Feeds, :hide_activity},
+      activity_id
+    })
+
+    # TODO!
+    # if Keyword.get(opts, :push_to_thread, true), do: maybe_push_thread(activity)
+  end
+
   @doc """
   Sends a notification about an activity to a list of users, excluding the author/subject
   """
