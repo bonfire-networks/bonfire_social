@@ -97,6 +97,7 @@ defmodule Bonfire.Social.APActivities do
   end
 
   def insert(character, json, opts) do
+    # TODO: add type field(s) to the table to be able to quickly filter without JSONB?
     activity =
       %APActivity{}
       |> APActivity.changeset(%{json: json})
@@ -126,8 +127,8 @@ defmodule Bonfire.Social.APActivities do
 
   def maybe_attach_video_oembed(
         changeset,
-        %{"object" => %{"type" => "Video", "id" => url}},
-        current_user
+        _json,
+        _current_user
       ) do
     changeset
   end
