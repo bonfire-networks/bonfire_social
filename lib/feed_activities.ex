@@ -361,7 +361,9 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed(other, _) do
-    error(other, "Not a recognised feed to query")
+    e = l("Not a recognised feed to query")
+    error(other, e)
+    raise e
   end
 
   defp named_feed(feed_name, opts)
