@@ -298,6 +298,35 @@ defmodule Bonfire.Social.FeedActivities do
   #   |> feed_many_paginated(paginate)
   # end
 
+  def feed_name(name, current_user_or_socket) when is_nil(name) or name == :default do
+    debug(current_user_or_socket)
+    current = current_user_id(current_user_or_socket)
+    # || current_account(socket)
+
+    if not is_nil(current) do
+      # my feed
+      :my
+    else
+      # fallback to showing instance feed
+      :local
+    end
+    |> debug("default feed to load:")
+  end
+
+  def feed_name(name, socket) when is_atom(name) or is_binary(name) do
+    name
+  end
+
+  def feed_name(opts, socket) do
+    case e(opts, :feed_name, nil) || e(opts, :feed_id, nil) || e(opts, :id, nil) |> debug("fffff") do
+      nil ->
+        throw("Unexpected feed id(s)")
+
+      name ->
+        feed_name(name, socket)
+    end
+  end
+
   @doc """
   Gets a feed by id or ids or a thing/things containing an id/ids.
   """
@@ -307,15 +336,23 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed(id_or_ids, opts)
       when is_binary(id_or_ids) or (is_list(id_or_ids) and id_or_ids != []) do
-    opts =
-      to_feed_options(opts)
-      |> debug("feed_opts for #{id_or_ids}")
+    if Keyword.keyword?(id_or_ids) do
+      id_or_ids
+      |> debug("id_or_idsss")
+      |> feed_name(opts)
+      |> debug("kkkk")
+      |> feed(opts)
+    else
+      opts =
+        to_feed_options(opts)
+        |> debug("feed_opts for #{id_or_ids}")
 
-    ulid(id_or_ids)
-    |> feed_query(opts)
-    |> paginate_and_boundarise_feed(maybe_merge_filters(opts[:feed_filters], opts))
-    # |> debug()
-    |> prepare_feed(opts)
+      ulid(id_or_ids)
+      |> feed_query(opts)
+      |> paginate_and_boundarise_feed(maybe_merge_filters(opts[:feed_filters], opts))
+      # |> debug()
+      |> prepare_feed(opts)
+    end
   end
 
   def feed(:flags, opts) do
