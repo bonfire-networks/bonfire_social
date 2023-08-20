@@ -122,7 +122,9 @@ defmodule Bonfire.Social.PostContents do
 
   @doc "Given attributes of a remote post, prepares it for processing by detecting languages, and rewriting mentions, hashtags, and urls"
   defp prepare_remote_content(attrs, creator, opts) do
+    # debug(creator)
     debug(
+      # attrs,
       "WIP: find mentions with `[...] mention` class, and hashtags with `class=\"[...] hashtag\" rel=\"tag\"` and rewrite the URLs to point to local instance OR use the `tags` AS field to know what hashtag/user URLs are likely to be found in the body and just find and replace those?"
     )
 
@@ -146,8 +148,7 @@ defmodule Bonfire.Social.PostContents do
       mentions: Map.values(mentions) || [],
       hashtags: Map.values(hashtags) || []
     })
-
-    # |> debug()
+    |> debug()
   end
 
   @doc "Given post content attributes, prepares it for processing by just cleaning up the text and detecting languages."

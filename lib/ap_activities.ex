@@ -105,6 +105,8 @@ defmodule Bonfire.Social.APActivities do
       |> Objects.cast_acl(character, opts)
       |> maybe_attach_video_oembed(json, character)
 
+    # TODO: process and save mentions & hashtags
+
     id = opts[:id] || Changeset.get_change(activity, :id)
 
     activity
