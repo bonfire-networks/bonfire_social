@@ -321,6 +321,7 @@ defmodule Bonfire.Social.Activities do
        when preloads in [
               :all,
               :feed,
+              :feed_postload,
               :feed_metadata,
               :feed_by_subject,
               :feed_by_creator,
@@ -350,6 +351,18 @@ defmodule Bonfire.Social.Activities do
           [
             :with_subject,
             :feed_by_subject
+          ],
+          opts
+        )
+
+      :feed_postload ->
+        do_activity_preloads(
+          query,
+          [
+            :with_thread_name,
+            :with_reply_to,
+            :with_media,
+            :with_parent
           ],
           opts
         )

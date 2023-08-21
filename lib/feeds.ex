@@ -358,8 +358,13 @@ defmodule Bonfire.Social.Feeds do
   def feed_id(feed_name, for_subject) do
     cond do
       is_binary(for_subject) ->
-        Characters.get(for_subject)
-        ~> feed_id(feed_name, ...)
+        with {:ok, character} <- Characters.get(for_subject) do
+          feed_id(feed_name, character)
+        else
+          e ->
+            error(e, "character not found, so no feed")
+            nil
+        end
 
       is_atom(feed_name) and is_map(for_subject) ->
         # debug(for_subject, "subject before looking for feed")

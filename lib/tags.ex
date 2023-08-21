@@ -22,7 +22,7 @@ defmodule Bonfire.Social.Tags do
                obj
 
              id when is_binary(id) ->
-               %{tag_id: id}
+               if Types.is_ulid?(id), do: %{tag_id: id}
 
              other ->
                warn(other, "unsupported")

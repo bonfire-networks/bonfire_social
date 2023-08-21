@@ -121,7 +121,7 @@ defmodule Bonfire.Social.LivePush do
   end
 
   def prepare_activity(%Activity{} = activity, opts \\ []) do
-    Activities.activity_preloads(activity, :feed_metadata, opts)
+    Activities.activity_preloads(activity, [:feed_metadata, :feed_postload], opts)
 
     # |> debug("make sure that all needed assocs are preloaded without n+1")
   end
