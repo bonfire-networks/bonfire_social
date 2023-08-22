@@ -1149,12 +1149,7 @@ defmodule Bonfire.Social.Activities do
       |> proload(:activity)
       |> order_by(
         [activity: activity, replied: replied],
-        asc_nulls_first:
-          fragment(
-            "?+?",
-            replied.nested_replies_count,
-            replied.direct_replies_count
-          ),
+        asc_nulls_first: replied.total_replies_count,
         asc: activity.id
       )
     else
@@ -1163,16 +1158,42 @@ defmodule Bonfire.Social.Activities do
       |> order_by(
         [activity: activity, replied: replied],
         # [desc_nulls_last: replied.nested_replies_count, desc: replied.id]
-        desc_nulls_last:
-          fragment(
-            "?+?",
-            replied.nested_replies_count,
-            replied.direct_replies_count
-          ),
+        desc_nulls_last: replied.total_replies_count,
         desc: activity.id
       )
     end
   end
+
+  # def query_order(query, :num_replies, sort_order) do
+  #   if sort_order == :asc do
+  #     query
+  #     |> proload(:activity)
+  #     |> order_by(
+  #       [activity: activity, replied: replied],
+  #       asc_nulls_first:
+  #         fragment(
+  #           "?+?",
+  #           replied.nested_replies_count,
+  #           replied.direct_replies_count
+  #         ),
+  #       asc: activity.id
+  #     )
+  #   else
+  #     query
+  #     |> proload(:activity)
+  #     |> order_by(
+  #       [activity: activity, replied: replied],
+  #       # [desc_nulls_last: replied.nested_replies_count, desc: replied.id]
+  #       desc_nulls_last:
+  #         fragment(
+  #           "?+?",
+  #           replied.nested_replies_count,
+  #           replied.direct_replies_count
+  #         ),
+  #       desc: activity.id
+  #     )
+  #   end
+  # end
 
   def query_order(query, :num_boosts, sort_order) do
     if sort_order == :asc do
@@ -1262,8 +1283,14 @@ defmodule Bonfire.Social.Activities do
   def order_cursor_fields(:num_boosts, sort_order),
     do: [{{:activity, :boost_count, :object_count}, sort_order}, {{:activity, :id}, sort_order}]
 
+  def order_cursor_fields(:num_replies, sort_order),
+    do: [
+      {{:activity, :replied, :total_replies_count}, sort_order},
+      {{:activity, :id}, sort_order}
+    ]
+
   # {:num_replies, sort_order},
-  def order_cursor_fields(:num_replies, sort_order), do: [{{:activity, :id}, sort_order}]
+  # def order_cursor_fields(:num_replies, sort_order), do: [{{:activity, :id}, sort_order}]
 
   def order_cursor_fields(_, sort_order), do: [{{:activity, :id}, sort_order}]
 end
