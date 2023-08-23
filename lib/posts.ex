@@ -203,9 +203,10 @@ defmodule Bonfire.Social.Posts do
     verb_id = Verbs.get_id!(:create)
 
     query
-    |> proload(activity: [object: {"object_", [:replied]}])
+    |> proload(:activity)
+    |> Activities.join_replied()
     |> where(
-      [activity: activity, object_replied: replied],
+      [activity: activity, replied: replied],
       is_nil(replied.reply_to_id) and
         activity.verb_id == ^verb_id and
         activity.subject_id == ^ulid(user)

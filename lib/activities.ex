@@ -16,7 +16,6 @@ defmodule Bonfire.Social.Activities do
   # alias Bonfire.Data.Social.Boost
   # alias Bonfire.Data.Social.Flag
   # alias Bonfire.Data.Social.PostContent
-  # alias Bonfire.Data.Social.Replied
   alias Bonfire.Data.Social.Seen
 
   alias Bonfire.Data.Edges.Edge
@@ -396,7 +395,8 @@ defmodule Bonfire.Social.Activities do
         do_activity_preloads(
           query,
           [
-            :with_object_more
+            :with_object_more,
+            :with_replied
             # :with_reply_to,
             # :with_thread_name
             # :with_media
@@ -517,7 +517,6 @@ defmodule Bonfire.Social.Activities do
         :with_object_posts ->
           proload(query,
             activity: [
-              # :replied,
               object: {"object_", [:post_content, :peered]}
             ]
           )
@@ -525,13 +524,13 @@ defmodule Bonfire.Social.Activities do
         :with_object_more ->
           proload(query,
             activity: [
-              :replied,
               object: {"object_", [:post_content, :peered, :character, profile: :icon]}
             ]
           )
 
         :with_replied ->
-          proload(query, activity: [:replied])
+          proload(query, :activity)
+          |> join_replied()
 
         :with_thread_name ->
           proload(query, activity: [replied: [thread: [:named]]])
@@ -555,7 +554,8 @@ defmodule Bonfire.Social.Activities do
           warn("reply_to should be preloaded after the query so boundaries can be applied")
 
           query
-          |> proload(activity: [:replied])
+          |> proload(:activity)
+          |> join_replied()
 
         # |> Ecto.Query.preload([activity: {activity, [replied: ^reply_query]}])
         # |> proload(
@@ -627,7 +627,6 @@ defmodule Bonfire.Social.Activities do
 
         :with_object_more ->
           [
-            :replied,
             object: [:post_content, :peered, :character, profile: :icon]
           ]
 
@@ -685,6 +684,18 @@ defmodule Bonfire.Social.Activities do
           if subquery, do: [seen: subquery], else: []
       end
     end
+  end
+
+  def join_replied(query) do
+    query
+    |> reusable_join(
+      :left,
+      [activity: activity],
+      # NOTE: we join this special schema instead of `Replied` so we can use the generated field `total_replies_count`
+      replied in Bonfire.Data.Social.RepliedTotal,
+      as: :replied,
+      on: replied.id == activity.object_id
+    )
   end
 
   def maybe_join_subject(query, []), do: query |> proload(activity: [:subject])
