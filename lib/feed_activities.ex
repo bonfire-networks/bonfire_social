@@ -733,8 +733,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp query_order(query, :num_replies = sort_by, sort_order) do
     query
-    |> proload(:activity)
-    |> Activities.join_replied()
+    |> proload(activity: [:replied])
     |> Activities.query_order(sort_by, sort_order)
   end
 
@@ -790,10 +789,9 @@ defmodule Bonfire.Social.FeedActivities do
   defp maybe_exclude_replies(query, filters, opts) do
     if e(opts, :exclude_replies, nil) == true or e(filters, :object_type, nil) == "posts" do
       query
-      |> proload(:activity)
-      |> Activities.join_replied()
+      |> proload(activity: [object: {"object_", [:replied]}])
       |> where(
-        [replied: replied],
+        [object_replied: replied],
         is_nil(replied.reply_to_id)
       )
 
@@ -808,10 +806,9 @@ defmodule Bonfire.Social.FeedActivities do
 
     if e(opts, :only_replies, nil) == true or e(filters, :object_type, nil) == "discussions" do
       query
-      |> proload(:activity)
-      |> Activities.join_replied()
+      |> proload(activity: [object: {"object_", [:replied]}])
       |> where(
-        [replied: replied],
+        [object_replied: replied],
         not is_nil(replied.reply_to_id)
       )
 

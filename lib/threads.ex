@@ -24,7 +24,7 @@ defmodule Bonfire.Social.Threads do
   @behaviour Bonfire.Common.QueryModule
   def schema_module, do: Replied
 
-  def base_query, do: from(Bonfire.Data.Social.RepliedTotal, as: :replied)
+  def base_query, do: from(Replied, as: :replied)
 
   @doc """
   Handles casting related to the reply and threading.
@@ -389,8 +389,7 @@ defmodule Bonfire.Social.Threads do
   def filter(:distinct, :threads, query) do
     query
     |> reusable_join(:left, [root], assoc(root, :activity), as: :activity)
-    |> Activities.join_replied()
-    # |> reusable_join(:left, [root], assoc(root, :replied), as: :replied)
+    |> reusable_join(:left, [root], assoc(root, :replied), as: :replied)
     |> Ecto.Query.exclude(:distinct)
     |> distinct([replied: replied], desc: replied.thread_id)
     |> order_by([root], desc: root.id)
