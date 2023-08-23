@@ -789,9 +789,9 @@ defmodule Bonfire.Social.FeedActivities do
   defp maybe_exclude_replies(query, filters, opts) do
     if e(opts, :exclude_replies, nil) == true or e(filters, :object_type, nil) == "posts" do
       query
-      |> proload(activity: [object: {"object_", [:replied]}])
+      |> proload(activity: [:replied])
       |> where(
-        [object_replied: replied],
+        [replied: replied],
         is_nil(replied.reply_to_id)
       )
 
@@ -806,9 +806,9 @@ defmodule Bonfire.Social.FeedActivities do
 
     if e(opts, :only_replies, nil) == true or e(filters, :object_type, nil) == "discussions" do
       query
-      |> proload(activity: [object: {"object_", [:replied]}])
+      |> proload(activity: [:replied])
       |> where(
-        [object_replied: replied],
+        [replied: replied],
         not is_nil(replied.reply_to_id)
       )
 
