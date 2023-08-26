@@ -420,14 +420,7 @@ defmodule Bonfire.Social.Threads do
   def list_replies(%{id: thread_id}, opts), do: list_replies(thread_id, opts)
 
   def list_replies(thread_id, opts) when is_binary(thread_id) do
-    opts =
-      to_options(opts)
-      |> Keyword.put_new(
-        :limit,
-        Config.get(:thread_default_pagination_limit, 500)
-      )
-
-    # |> info("oooopts")
+    opts = to_options(opts)
 
     query(
       # note this won't query by thread_id but rather by path
@@ -437,7 +430,8 @@ defmodule Bonfire.Social.Threads do
     # |> debug()
     # return a page of items + pagination metadata
     |> repo().many_paginated(
-      opts ++ Activities.order_pagination_opts(opts[:sort_by], opts[:sort_order])
+      maybe_set_high_limit(opts, opts[:thread_mode]) ++
+        Activities.order_pagination_opts(opts[:sort_by], opts[:sort_order])
     )
     # preloaded after so we can get more than 1
     |> repo().maybe_preload(activity: [:media])
@@ -445,6 +439,16 @@ defmodule Bonfire.Social.Threads do
     # |> repo().many # without pagination
     # |> debug("thread")
   end
+
+  defp maybe_set_high_limit(opts, :flat), do: opts
+
+  defp maybe_set_high_limit(opts, _nested),
+    do:
+      opts
+      |> Keyword.put_new(
+        :limit,
+        Config.get(:pagination_hard_max_limit, 500)
+      )
 
   def query([thread_id: thread_id], opts) do
     preloads =
