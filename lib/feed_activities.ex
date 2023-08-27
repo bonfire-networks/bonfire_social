@@ -71,21 +71,25 @@ defmodule Bonfire.Social.FeedActivities do
     opts = to_feed_options(opts)
 
     # TODO: clean up this code
-    exclude_verbs =
-      if !Bonfire.Me.Settings.get(
-           [Bonfire.Social.Feeds, :my_feed_includes, :boost],
-           true,
-           opts
-         ),
-         do: [:boost],
-         else: opts[:exclude_verbs] || skip_verbs_default()
+    exclude_verbs = opts[:exclude_verbs] || skip_verbs_default()
 
     exclude_verbs =
-      if !Bonfire.Me.Settings.get(
-           [Bonfire.Social.Feeds, :my_feed_includes, :follow],
-           false,
-           opts
-         ),
+      if opts[:exclude_verbs] != false and
+           !Bonfire.Me.Settings.get(
+             [Bonfire.Social.Feeds, :my_feed_includes, :boost],
+             true,
+             opts
+           ),
+         do: exclude_verbs ++ [:boost],
+         else: exclude_verbs
+
+    exclude_verbs =
+      if opts[:exclude_verbs] != false and
+           !Bonfire.Me.Settings.get(
+             [Bonfire.Social.Feeds, :my_feed_includes, :follow],
+             false,
+             opts
+           ),
          do: exclude_verbs ++ [:follow],
          else: exclude_verbs
 
@@ -671,7 +675,7 @@ defmodule Bonfire.Social.FeedActivities do
     exclude_object_types = [Message] ++ e(opts, :exclude_object_types, [])
     # exclude certain activity types
     exclude_verbs =
-      e(opts, :exclude_verbs, []) ++
+      (e(opts, :exclude_verbs, nil) || []) ++
         [:message] ++
         if opts[:include_flags] == :moderators and
              (Bonfire.Boundaries.can?(current_user, :mediate, :instance) or
