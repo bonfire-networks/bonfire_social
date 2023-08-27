@@ -206,8 +206,9 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed_many_paginated(query, opts) do
-    repo().many_paginated(
+    Integration.many(
       query,
+      opts[:paginate],
       opts ++ Activities.order_pagination_opts(opts[:sort_by], opts[:sort_order])
     )
   end

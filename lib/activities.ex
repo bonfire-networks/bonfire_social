@@ -350,7 +350,8 @@ defmodule Bonfire.Social.Activities do
           query,
           [
             :with_subject,
-            :feed_by_subject
+            :feed_by_subject,
+            :with_replied
           ],
           opts
         )
