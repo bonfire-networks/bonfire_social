@@ -517,14 +517,14 @@ defmodule Bonfire.Social.Activities do
         :with_object_posts ->
           proload(query,
             activity: [
-              object: {"object_", [:post_content, :peered]}
+              object: {"object_", [:post_content]}
             ]
           )
 
         :with_object_more ->
           proload(query,
             activity: [
-              object: {"object_", [:post_content, :peered, :character, profile: :icon]}
+              object: {"object_", [:post_content, :character, profile: :icon]}
             ]
           )
 
@@ -620,7 +620,7 @@ defmodule Bonfire.Social.Activities do
         :with_object_posts ->
           [
             # :replied,
-            object: [:post_content, :peered]
+            object: [:post_content]
           ]
 
         :with_object_more ->

@@ -587,20 +587,25 @@ defmodule Bonfire.Social.FeedActivities do
         (opts ++ [exclude_verbs: [:like, :follow]])
         |> debug()
         |> query_extras()
-        |> proload(activity: [object: {"object_", [:peered]}])
+        |> proload(
+          activity: [subject: {"subject_", character: [:peered]}, object: {"object_", [:peered]}]
+        )
         |> where(
-          [fp, activity: activity, object_peered: object_peered],
-          fp.feed_id in ^ulids(feed_ids) or is_nil(object_peered.id)
+          [fp, subject_peered: subject_peered, object_peered: object_peered],
+          fp.feed_id == ^local_feed_id or is_nil(subject_peered.id) or is_nil(object_peered.id)
         )
 
       :activity_pub == feed_ids or federated_feed_id == feed_ids ->
         debug("federated feed")
 
         query_extras(opts)
-        |> proload(activity: [object: {"object_", [:peered]}])
+        |> proload(
+          activity: [subject: {"subject_", character: [:peered]}, object: {"object_", [:peered]}]
+        )
         |> where(
-          [fp, object_peered: object_peered],
-          fp.feed_id in ^ulids(feed_ids) or not is_nil(object_peered.id)
+          [fp, subject_peered: subject_peered, object_peered: object_peered],
+          fp.feed_id == ^federated_feed_id or not is_nil(subject_peered.id) or
+            not is_nil(object_peered.id)
         )
 
       (is_list(feed_ids) or is_binary(feed_ids)) and feed_ids != [] and not is_nil(feed_ids) and
@@ -718,7 +723,7 @@ defmodule Bonfire.Social.FeedActivities do
         is_nil(object.deleted_at) and
         is_nil(activity_pointer.deleted_at) and
         activity_pointer.table_id not in ^exclude_table_ids and
-        (is_nil(object.id) or object.table_id not in ^exclude_table_ids)
+        (is_nil(object.table_id) or object.table_id not in ^exclude_table_ids)
     )
     |> maybe_exclude_replies(filters, opts)
     |> maybe_only_replies(filters, opts)
