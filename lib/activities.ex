@@ -690,6 +690,7 @@ defmodule Bonfire.Social.Activities do
   def maybe_join_subject(query, exclude_user_ids) do
     # optimisation: only includes the subject if different current_user
     query
+    |> proload([:activity])
     |> reusable_join(
       :left,
       [activity: activity],
@@ -703,6 +704,15 @@ defmodule Bonfire.Social.Activities do
 
   def maybe_join_creator(query, []) do
     query
+    |> proload(
+      activity: [
+        object:
+          {"object_",
+           [
+             :created
+           ]}
+      ]
+    )
     |> reusable_join(
       :left,
       [activity: activity, object_created: object_created],
@@ -718,6 +728,15 @@ defmodule Bonfire.Social.Activities do
   def maybe_join_creator(query, exclude_user_ids) do
     # optimisation: only includes the subject if different current_user
     query
+    |> proload(
+      activity: [
+        object:
+          {"object_",
+           [
+             :created
+           ]}
+      ]
+    )
     |> reusable_join(
       :left,
       [activity: activity, object_created: object_created],
