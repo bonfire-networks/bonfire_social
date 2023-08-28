@@ -181,7 +181,7 @@ defmodule Bonfire.Social.Requests do
 
   # defp check_request(requester, object, opts) do
   #   skip? = skip_boundary_check?(opts, object)
-  #   skip? = (:admins == skip? && Users.is_admin?(requester)) || (skip? == true)
+  #   skip? = (:admins == skip? && Bonfire.Me.Accounts.is_admin?(requester)) || (skip? == true)
   #   opts = Keyword.put_new(opts, :verbs, [:request])
 
   #   if skip? do

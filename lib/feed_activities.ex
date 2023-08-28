@@ -678,8 +678,7 @@ defmodule Bonfire.Social.FeedActivities do
       (e(opts, :exclude_verbs, nil) || []) ++
         [:message] ++
         if opts[:include_flags] == :moderators and
-             (Bonfire.Boundaries.can?(current_user, :mediate, :instance) or
-                Integration.is_admin?(current_user)) do
+             Bonfire.Boundaries.can?(opts, :mediate, :instance) do
           debug("include flags for mods/admins")
           []
         else

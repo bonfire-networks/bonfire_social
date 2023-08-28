@@ -181,12 +181,14 @@ defmodule Bonfire.Social.Follows do
   end
 
   defp check_follow(follower, object, opts) do
-    debug(opts)
-    debug(id(follower))
-    debug(id(object))
+    # debug(opts)
+    # debug(id(follower))
+    # debug(id(object))
     skip? = skip_boundary_check?(opts, object)
-    debug(skip?)
-    skip? = skip? == true || (skip? == :admins and Users.is_admin?(follower))
+    # debug(skip?)
+    skip? =
+      skip? == true ||
+        (skip? == :admins and maybe_apply(Bonfire.Me.Accounts, :is_admin?, follower) == true)
 
     opts =
       opts

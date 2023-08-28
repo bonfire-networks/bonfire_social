@@ -57,7 +57,7 @@ defmodule Bonfire.Social.Pins do
   def pin(pinner, object, scope \\ nil)
 
   def pin(pinner, object, :instance) do
-    if Integration.is_admin?(pinner) or Bonfire.Boundaries.can?(pinner, :pin, :instance) do
+    if Bonfire.Boundaries.can?(pinner, :pin, :instance) do
       pin(instance_scope(), object, pinner)
     else
       error(l("Sorry, you cannot pin to the instance"))
@@ -117,7 +117,7 @@ defmodule Bonfire.Social.Pins do
   def unpin(user, object, scope \\ nil)
 
   def unpin(user, object, :instance) do
-    if Integration.is_admin?(user) or Bonfire.Boundaries.can?(user, :pin, :instance) do
+    if Bonfire.Boundaries.can?(user, :pin, :instance) do
       unpin(instance_scope(), object, user)
     else
       error(l("Sorry, you cannot pin to the instance"))

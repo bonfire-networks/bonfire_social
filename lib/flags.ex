@@ -105,7 +105,7 @@ defmodule Bonfire.Social.Flags do
       |> Keyword.put_new(:skip_boundary_check, true)
 
     # skip? = skip_boundary_check?(opts, object)
-    # skip? = (:admins == skip? && Users.is_admin?(flagger)) || skip? == true
+    # skip? = (:admins == skip? && Bonfire.Me.Accounts.is_admin?(flagger)) || skip? == true
 
     case object do
       %{id: id} ->
@@ -150,7 +150,7 @@ defmodule Bonfire.Social.Flags do
       )
 
     if scope == :instance and
-         (can_mediate_instance? or Integration.is_admin?(opts)) do
+         can_mediate_instance? do
       list_paginated([], opts)
     else
       case id(scope) do
