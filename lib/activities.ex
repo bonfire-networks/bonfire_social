@@ -518,6 +518,7 @@ defmodule Bonfire.Social.Activities do
         :with_object_posts ->
           proload(query,
             activity: [
+              :sensitive,
               object: {"object_", [:post_content]}
             ]
           )
@@ -525,6 +526,7 @@ defmodule Bonfire.Social.Activities do
         :with_object_more ->
           proload(query,
             activity: [
+              :sensitive,
               object: {"object_", [:post_content, :character, profile: :icon]}
             ]
           )
@@ -677,7 +679,7 @@ defmodule Bonfire.Social.Activities do
           ]
 
         :with_media ->
-          [:media]
+          [:media, :sensitive]
 
         :with_seen ->
           subquery = subquery_preload_seen(opts)

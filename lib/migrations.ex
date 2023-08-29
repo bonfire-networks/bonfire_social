@@ -23,6 +23,7 @@ defmodule Bonfire.Social.Migrations do
       require Bonfire.Data.Social.Request.Migration
       require Bonfire.Data.Social.Seen.Migration
       require Bonfire.Data.Social.Pin.Migration
+      require Bonfire.Data.Social.Sensitive.Migration
 
       # Bonfire.Data.Social.Block.Migration.migrate_block()
       Bonfire.Data.Social.Bookmark.Migration.migrate_bookmark()
@@ -44,6 +45,7 @@ defmodule Bonfire.Social.Migrations do
       Bonfire.Data.Social.Request.Migration.migrate_request()
       Bonfire.Data.Social.Seen.Migration.migrate_seen()
       Bonfire.Data.Social.Pin.Migration.migrate_pin()
+      Bonfire.Data.Social.Sensitive.Migration.migrate_sensitive()
       add_paper_trail()
       add_array_reverse_fn()
     end
@@ -69,7 +71,9 @@ defmodule Bonfire.Social.Migrations do
       require Bonfire.Data.Social.Request.Migration
       require Bonfire.Data.Social.Seen.Migration
       require Bonfire.Data.Social.Pin.Migration
+      require Bonfire.Data.Social.Sensitive.Migration
 
+      Bonfire.Data.Social.Sensitive.Migration.migrate_sensitive()
       Bonfire.Data.Social.Pin.Migration.migrate_pin()
       Bonfire.Data.Social.Seen.Migration.migrate_seen()
       Bonfire.Data.Social.Request.Migration.migrate_request()

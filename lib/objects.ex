@@ -481,4 +481,31 @@ defmodule Bonfire.Social.Objects do
 
     set_opts[:boundaries_as_set] || error("Boundaries not enabled")
   end
+
+  def cast_sensitivity(changeset, sensitive?) do
+    changeset
+    |> Changesets.put_assoc!(:sensitive, %{
+      is_sensitive: if(sensitive?, do: true)
+    })
+  end
+
+  # TODO: also support setting with an ID, or with an object that doesn't have a `sensitive` assoc
+  def set_sensitivity(%{sensitive: _} = pointer, true) do
+    pointer
+    |> repo().preload([:sensitive])
+    |> Changesets.put_assoc(:sensitive, %{
+      is_sensitive: true
+    })
+    |> debug()
+    |> repo().update()
+  end
+
+  def set_sensitivity(%{sensitive: _} = pointer, _) do
+    # delete mixin
+    pointer
+    |> repo().preload([:sensitive])
+    |> Map.get(:sensitive)
+    |> debug()
+    |> repo().delete()
+  end
 end

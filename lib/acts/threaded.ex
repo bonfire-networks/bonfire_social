@@ -71,7 +71,7 @@ defmodule Bonfire.Social.Acts.Threaded do
 
     custom_thread = Threads.find_thread(attrs, current_user)
 
-    thread_title = Utils.e(attrs, :thread_title, nil)
+    thread_title = Utils.e(attrs, :name, nil)
 
     case Threads.find_reply_to(attrs, current_user) |> debug("find_reply_to") do
       {:ok, %{replied: %{thread_id: thread_id, thread: %{}}} = reply_to} ->
