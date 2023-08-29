@@ -225,10 +225,13 @@ defmodule Bonfire.Social.Posts do
         :post_content,
         :media,
         :created,
+        :sensitive,
         replied: [thread: [:created], reply_to: [:created]],
         tags: [:character]
       ])
       |> Activities.object_preload_create_activity()
+
+    # |> debug("post to federate")
 
     subject =
       subject ||
@@ -318,6 +321,8 @@ defmodule Bonfire.Social.Posts do
              "attributedTo" => actor.ap_id,
              "to" => to,
              "cc" => cc,
+             # TODO: put somewhere reusable by other types?
+             "sensitive" => e(post, :sensitive, :is_sensitive, false),
              "name" => e(post, :post_content, :name, nil),
              "summary" => e(post, :post_content, :summary, nil),
              "content" => Text.maybe_markdown_to_html(e(post, :post_content, :html_body, nil)),
@@ -335,6 +340,7 @@ defmodule Bonfire.Social.Posts do
                  end
                end,
              "context" => context,
+             # TODO: add hashtags?
              "tag" =>
                Enum.map(mentions, fn actor ->
                  %{
