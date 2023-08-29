@@ -488,6 +488,7 @@ defmodule Bonfire.Social.Posts do
           created: %{
             date: post_data["published"]
           },
+          sensitive: post_data["sensitive"],
           reply_to_id: reply_to_id,
           uploaded_media: Bonfire.Files.ap_receive_attachments(creator, post_data["attachment"])
         },
@@ -506,6 +507,7 @@ defmodule Bonfire.Social.Posts do
         |> debug("set boundary")
 
       publish(
+        local: false,
         current_user: creator,
         post_attrs: attrs,
         boundary: boundary,
