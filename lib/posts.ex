@@ -62,7 +62,7 @@ defmodule Bonfire.Social.Posts do
       to_options(opts)
       |> Keyword.put(:object, object)
 
-    # TODO: should we only delete the PostContent and the activity? so as to preserve thread and nesting integrity 
+    # TODO: should we only delete the PostContent and the activity? so as to preserve thread and nesting integrity
 
     opts
     |> Keyword.put(
@@ -123,6 +123,7 @@ defmodule Bonfire.Social.Posts do
   end
 
   def prepare_post_attrs(attrs) do
+    debug(attrs, "IVAAAAAAA")
     # FIXME: find a less nasty way (this is to support graceful degradation with the textarea inside noscript)
     deep_merge(
       attrs,
@@ -270,7 +271,7 @@ defmodule Bonfire.Social.Posts do
 
          # TODO: find a better way of deleting non-actor entries from the list
          # (or better: represent them in AP)
-         # Note: `mentions` preset adds grants to mentioned people which should trigger the boundaries-based logic in `Adapter.external_followers_for_activity`, so should we use this only for tagging and not for addressing (if we expand the scope of that function beyond followers)? 
+         # Note: `mentions` preset adds grants to mentioned people which should trigger the boundaries-based logic in `Adapter.external_followers_for_activity`, so should we use this only for tagging and not for addressing (if we expand the scope of that function beyond followers)?
          mentions <-
            e(post, :tags, [])
            #  |> info("tags")
