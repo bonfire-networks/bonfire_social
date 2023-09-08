@@ -123,7 +123,6 @@ defmodule Bonfire.Social.Posts do
   end
 
   def prepare_post_attrs(attrs) do
-    debug(attrs, "IVAAAAAAA")
     # FIXME: find a less nasty way (this is to support graceful degradation with the textarea inside noscript)
     deep_merge(
       attrs,
