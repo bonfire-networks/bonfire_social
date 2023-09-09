@@ -23,20 +23,30 @@ defmodule Bonfire.Social.Graph do
   end
 
   def init(_) do
-    graph_conn = graph_conn()
+    
+    apply_task(:start, &init_and_load/0)
+    
+    {:ok, nil}
+  end
 
+  def init_and_load() do
+    
+    graph_conn = graph_conn()
+    case graph_conn() do
+      nil ->
+        nil
+      graph_conn ->  
     graph_conn
     |> Bolt.Sips.query("CREATE CONSTRAINT ON (n: Character) ASSERT EXISTS (n.id);
     CREATE CONSTRAINT ON (n: Character) ASSERT n.id IS UNIQUE;")
 
-    # TODO: async?
-    load()
+    load_from_db()
 
-    {:ok, nil}
+    end
   end
 
-  def load() do
-    warn("WIP: import from db")
+  def load_from_db() do
+    info("Copying graph data from DB into memgraph...")
 
     for {type, conf} <- graph_meta() do
       fetch_fun = conf[:fetch_fun] || (&fetch_edges_standard/2)
