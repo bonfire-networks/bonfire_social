@@ -23,25 +23,24 @@ defmodule Bonfire.Social.Graph do
   end
 
   def init(_) do
-    
     apply_task(:start, &init_and_load/0)
-    
+
     {:ok, nil}
   end
 
   def init_and_load() do
-    
     graph_conn = graph_conn()
+
     case graph_conn() do
       nil ->
         nil
-      graph_conn ->  
-    graph_conn
-    |> Bolt.Sips.query("CREATE CONSTRAINT ON (n: Character) ASSERT EXISTS (n.id);
+
+      graph_conn ->
+        graph_conn
+        |> Bolt.Sips.query("CREATE CONSTRAINT ON (n: Character) ASSERT EXISTS (n.id);
     CREATE CONSTRAINT ON (n: Character) ASSERT n.id IS UNIQUE;")
 
-    load_from_db()
-
+        load_from_db()
     end
   end
 
