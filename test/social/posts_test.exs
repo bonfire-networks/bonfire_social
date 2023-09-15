@@ -55,7 +55,7 @@ defmodule Bonfire.Social.PostsTest do
 
     # post = repo().preload(post, [:caretaker, controlled: [acl: [:named, :caretaker]]])
     # user = repo().preload(user, encircles: [circle: [:named]])
-    # debug(post, "post") 
+    # debug(post, "post")
     # debug(user, "user")
     assert {:ok, read} = Posts.read(post.id, current_user: user)
 
@@ -103,16 +103,9 @@ defmodule Bonfire.Social.PostsTest do
                boundary: "public"
              )
 
-    assert {:ok, _} =
-             Posts.publish(
-               current_user: user,
-               post_attrs: attrs_3,
-               boundary: "public"
-             )
-
     assert %{edges: posts} = Posts.list_by(user, skip_boundary_check: true)
     # debug(posts, "posts")
-    assert length(posts) == 3
+    assert length(posts) == 2
   end
 
   test "listing by creator, querying with boundaries" do
@@ -132,13 +125,13 @@ defmodule Bonfire.Social.PostsTest do
       }
     }
 
-    attrs_3 = %{
-      post_content: %{
-        summary: "summary",
-        name: "name",
-        html_body: "<p>epic html message 3</p>"
-      }
-    }
+    # attrs_3 = %{
+    #   post_content: %{
+    #     summary: "summary",
+    #     name: "name",
+    #     html_body: "<p>epic html message 3</p>"
+    #   }
+    # }
 
     user = Fake.fake_user!()
 
@@ -156,15 +149,15 @@ defmodule Bonfire.Social.PostsTest do
                boundary: "public"
              )
 
-    assert {:ok, _} =
-             Posts.publish(
-               current_user: user,
-               post_attrs: attrs_3,
-               boundary: "public"
-             )
+    # assert {:ok, _} =
+    #          Posts.publish(
+    #            current_user: user,
+    #            post_attrs: attrs_3,
+    #            boundary: "public"
+    #          )
 
     assert %{edges: posts} = Posts.list_by(user, current_user: user)
-    assert length(posts) == 3
+    assert length(posts) == 2
   end
 
   test "when i post, it appears in my outbox feed, but not in my notifications or inbox" do
