@@ -34,7 +34,6 @@ defmodule Bonfire.Social.BoostsTest do
     assert true == Boosts.boosted?(me, boosted)
   end
 
-
   # FIXME: this may not be the current behaviour
   test "cannot boost something repeatedly in a short time" do
     Config.put([Bonfire.Social.Boosts, :can_reboost_after], true)
