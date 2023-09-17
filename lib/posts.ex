@@ -503,7 +503,7 @@ defmodule Bonfire.Social.Posts do
     else
       # FIXME: should this use mentions for remote rather than custom?
       boundary =
-        if(is_public, do: "public", else: "custom")
+        if(is_public, do: "public_remote", else: "custom")
         |> debug("set boundary")
 
       publish(

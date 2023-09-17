@@ -51,7 +51,7 @@ defmodule Bonfire.Social.Acts.Activity do
 
       changeset.action in [:insert] ->
         boundary = epic.assigns[:options][:boundary]
-        boundary_name = Bonfire.Boundaries.preset_name(boundary)
+        boundary_name = Bonfire.Boundaries.preset_name(boundary, true)
 
         # attrs_key = Keyword.get(act.options, :attrs, :post_attrs)
         feeds_key = Keyword.get(act.options, :feeds, :feed_ids)

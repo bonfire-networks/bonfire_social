@@ -583,6 +583,7 @@ defmodule Bonfire.Social.FeedActivities do
     opts = to_feed_options(opts)
     local_feed_id = Feeds.named_feed_id(:local)
     federated_feed_id = Feeds.named_feed_id(:activity_pub)
+    fetcher_user_id = "1ACT1V1TYPVBREM0TESFETCHER"
 
     cond do
       :local == feed_ids or local_feed_id == feed_ids ->
@@ -597,7 +598,8 @@ defmodule Bonfire.Social.FeedActivities do
         )
         |> where(
           [fp, subject_peered: subject_peered, object_peered: object_peered],
-          fp.feed_id == ^local_feed_id or is_nil(subject_peered.id) or is_nil(object_peered.id)
+          subject_peered.id != ^fetcher_user_id and
+            (fp.feed_id == ^local_feed_id or is_nil(subject_peered.id) or is_nil(object_peered.id))
         )
 
       :activity_pub == feed_ids or federated_feed_id == feed_ids ->
@@ -610,7 +612,7 @@ defmodule Bonfire.Social.FeedActivities do
         |> where(
           [fp, subject_peered: subject_peered, object_peered: object_peered],
           fp.feed_id == ^federated_feed_id or not is_nil(subject_peered.id) or
-            not is_nil(object_peered.id)
+            not is_nil(object_peered.id) or subject_peered.id == ^fetcher_user_id
         )
 
       (is_list(feed_ids) or is_binary(feed_ids)) and feed_ids != [] and not is_nil(feed_ids) and
@@ -860,7 +862,7 @@ defmodule Bonfire.Social.FeedActivities do
   # defp save_fediverse_incoming_activity(subject, verb, object)
   #      when is_atom(verb) and not is_nil(subject) do
   #   # TODO: use the appropriate preset (eg "public" for public activities?)
-  #   publish(subject, verb, object, boundary: "federated")
+  #   publish(subject, verb, object, boundary: "public_remote")
   # end
 
   # @doc "Takes or creates an activity and publishes to object creator's inbox"
@@ -1252,7 +1254,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   defp do_maybe_federate_activity(subject, verb, object, activity, opts) do
-    if e(opts, :boundary, nil) != "federated",
+    if e(opts, :boundary, nil) != "public_remote",
       do:
         Bonfire.Social.Integration.maybe_federate_and_gift_wrap_activity(
           subject || e(activity, :subject, nil) || e(activity, :subject_id, nil),

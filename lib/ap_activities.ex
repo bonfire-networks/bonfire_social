@@ -64,7 +64,7 @@ defmodule Bonfire.Social.APActivities do
     debug(activity)
 
     boundary =
-      if(public, do: "public", else: "mentions")
+      if(public, do: "public_remote", else: "mentions")
       |> debug("set boundary")
 
     # TODO: reuse logic from Posts for targeting the audience

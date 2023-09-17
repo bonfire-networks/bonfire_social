@@ -40,7 +40,7 @@ defmodule Bonfire.Social.Acts.Feeds do
             feed_ids =
               Feeds.feed_ids_to_publish(
                 current_user,
-                Bonfire.Boundaries.preset_name(boundary),
+                Bonfire.Boundaries.preset_name(boundary, true),
                 epic.assigns
               )
 

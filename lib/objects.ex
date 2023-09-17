@@ -239,7 +239,10 @@ defmodule Bonfire.Social.Objects do
 
     # load & check permission
     with %{__struct__: _type} = object <-
-           Bonfire.Common.Pointers.get(object, opts ++ [verbs: [:delete]])
+           Bonfire.Common.Pointers.get(
+             object,
+             opts ++ [verbs: [:delete], skip_boundary_check: :admins]
+           )
            ~> debug("WIP: deletion") do
       do_delete(object, opts)
     else

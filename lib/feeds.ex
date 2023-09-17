@@ -14,7 +14,7 @@ defmodule Bonfire.Social.Feeds do
 
   @global_feeds %{
     "public" => [:guest, :local],
-    "federated" => [:activity_pub],
+    "public_remote" => [:guest, :activity_pub],
     "local" => [:local]
   }
 
@@ -118,7 +118,7 @@ defmodule Bonfire.Social.Feeds do
   end
 
   ## TODO: de-duplicate feed_ids_to_publish/3 and target_feeds/4 ##
-  def target_feeds(%Ecto.Changeset{} = changeset, creator, preset_or_custom_boundary) do
+  def target_feeds(%Ecto.Changeset{} = changeset, creator, opts) do
     # debug(changeset)
 
     # maybe include people, tags or other characters that were mentioned/tagged
@@ -136,10 +136,10 @@ defmodule Bonfire.Social.Feeds do
       Utils.e(changeset, :changes, :replied, :changes, :thread_id, nil) ||
         Utils.e(changeset, :changes, :replied, :changes, :replying_to, :thread_id, nil)
 
-    do_target_feeds(creator, preset_or_custom_boundary, mentions, reply_to_creator, thread_id)
+    do_target_feeds(creator, opts, mentions, reply_to_creator, thread_id)
   end
 
-  def target_feeds(%{} = object, creator, preset_or_custom_boundary) do
+  def target_feeds(%{} = object, creator, opts) do
     object =
       object
       |> repo().maybe_preload(replied: [reply_to: [created: :creator]])
@@ -159,15 +159,15 @@ defmodule Bonfire.Social.Feeds do
       Utils.e(object, :replied, :thread_id, nil) ||
         Utils.e(object, :replied, :reply_to, :thread_id, nil)
 
-    do_target_feeds(creator, preset_or_custom_boundary, tags, reply_to_creator, thread_id)
+    do_target_feeds(creator, opts, tags, reply_to_creator, thread_id)
   end
 
-  def target_feeds({_, %{} = object}, creator, preset_or_custom_boundary),
-    do: target_feeds(object, creator, preset_or_custom_boundary)
+  def target_feeds({_, %{} = object}, creator, opts),
+    do: target_feeds(object, creator, opts)
 
   def do_target_feeds(
         creator,
-        preset_or_custom_boundary,
+        opts,
         mentions \\ [],
         reply_to_creator \\ nil,
         thread_id \\ nil
@@ -178,14 +178,15 @@ defmodule Bonfire.Social.Feeds do
 
     # include any extra feeds specified in opts
     to_feeds_custom =
-      maybe_custom_feeds(preset_or_custom_boundary) ||
+      maybe_custom_feeds(opts) ||
         []
         |> debug("to_feeds_custom")
 
     ([] ++
        [to_feeds_custom] ++
        case Boundaries.preset_name(
-              maybe_from_opts(preset_or_custom_boundary, :boundary, preset_or_custom_boundary)
+              maybe_from_opts(opts, :boundary, opts),
+              true
             ) do
          # put in all reply_to creators and mentions inboxes + guest/local feeds
          "public" ->
@@ -202,9 +203,14 @@ defmodule Bonfire.Social.Feeds do
            |> debug("notify reply_to creator and/or mentions")
 
          # like public but put in remote/federated feed instead of guest and local
-         "federated" ->
+         "public_remote" ->
            # put in inboxes (notifications) of any users we're replying to and mentions
-           [named_feed_id(:activity_pub), thread_id, my_feed_id(:outbox, creator)] ++
+           [
+             named_feed_id(:guest),
+             named_feed_id(:activity_pub),
+             thread_id,
+             my_feed_id(:outbox, creator)
+           ] ++
              (([reply_to_creator] ++
                  mentions)
               |> feed_ids(:notifications, ...))
