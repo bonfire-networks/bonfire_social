@@ -597,9 +597,9 @@ defmodule Bonfire.Social.FeedActivities do
           activity: [subject: {"subject_", character: [:peered]}, object: {"object_", [:peered]}]
         )
         |> where(
-          [fp, subject_peered: subject_peered, object_peered: object_peered],
-          subject_peered.id != ^fetcher_user_id and
-            (fp.feed_id == ^local_feed_id or is_nil(subject_peered.id) or is_nil(object_peered.id))
+          [fp, activity: activity, subject_peered: subject_peered, object_peered: object_peered],
+          activity.subject_id != ^fetcher_user_id and
+            fp.feed_id == ^local_feed_id or (is_nil(subject_peered.id) or is_nil(object_peered.id))
         )
 
       :activity_pub == feed_ids or federated_feed_id == feed_ids ->
@@ -610,9 +610,9 @@ defmodule Bonfire.Social.FeedActivities do
           activity: [subject: {"subject_", character: [:peered]}, object: {"object_", [:peered]}]
         )
         |> where(
-          [fp, subject_peered: subject_peered, object_peered: object_peered],
+          [fp, activity: activity, subject_peered: subject_peered, object_peered: object_peered],
           fp.feed_id == ^federated_feed_id or not is_nil(subject_peered.id) or
-            not is_nil(object_peered.id) or subject_peered.id == ^fetcher_user_id
+            not is_nil(object_peered.id) or activity.subject_id == ^fetcher_user_id
         )
 
       (is_list(feed_ids) or is_binary(feed_ids)) and feed_ids != [] and not is_nil(feed_ids) and
