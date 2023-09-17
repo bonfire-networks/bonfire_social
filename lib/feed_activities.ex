@@ -598,8 +598,9 @@ defmodule Bonfire.Social.FeedActivities do
         )
         |> where(
           [fp, activity: activity, subject_peered: subject_peered, object_peered: object_peered],
-          activity.subject_id != ^fetcher_user_id and
-            fp.feed_id == ^local_feed_id or (is_nil(subject_peered.id) or is_nil(object_peered.id))
+          (activity.subject_id != ^fetcher_user_id and
+             fp.feed_id == ^local_feed_id) or
+            (is_nil(subject_peered.id) or is_nil(object_peered.id))
         )
 
       :activity_pub == feed_ids or federated_feed_id == feed_ids ->
