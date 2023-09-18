@@ -6,7 +6,7 @@ defmodule Bonfire.Social.PostLinkHTMLTest do
   use Bonfire.Common.Utils
   import Tesla.Mock
 
-  setup do
+  setup_all do
     mock_global(fn
       %{method: :get, url: "https://developer.mozilla.org/en-US/docs/Web/API/"} ->
         %Tesla.Env{status: 200, body: "<title>Web API</title>"}

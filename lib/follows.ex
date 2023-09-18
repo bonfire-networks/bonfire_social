@@ -81,7 +81,10 @@ defmodule Bonfire.Social.Follows do
 
       {:remote, object} ->
         if Integration.is_local?(follower) do
-          info("local following remote, attempting a request instead of follow")
+          info(
+            "local following remote, attempting a request instead of follow (which *may* be auto-accepted by the remote instance)"
+          )
+
           Requests.request(follower, Follow, object, opts)
         else
           warn("remote following remote, should not be possible!")

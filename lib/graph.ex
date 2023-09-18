@@ -83,10 +83,11 @@ defmodule Bonfire.Social.Graph do
   defp disabled?, do: !config()
 
   def graph_conn() do
-    # graph_conn = 
     if !disabled?(), do: Bolt.Sips.conn()
-
-    # graph_conn
+  catch
+    :exit, reason ->
+      error(reason)
+      nil
   end
 
   def graph_meta(_subject \\ nil) do

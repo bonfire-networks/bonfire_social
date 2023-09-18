@@ -17,7 +17,7 @@ defmodule Bonfire.Social.Boundaries.InstanceWideSilenceActorFeedsPerUserTest do
     }
   }
 
-  setup_all do
+  setup do
     # TODO: move this into fixtures
     mock(fn
       %{method: :get, url: @remote_actor} ->
@@ -25,65 +25,67 @@ defmodule Bonfire.Social.Boundaries.InstanceWideSilenceActorFeedsPerUserTest do
     end)
   end
 
-  test "shows in feeds a post with no instance-wide silencing" do
-    me = fake_user!(@my_name)
-    bob = fake_user!(@other_name)
+  describe "" do
+    test "shows in feeds a post with no instance-wide silencing" do
+      me = fake_user!(@my_name)
+      bob = fake_user!(@other_name)
 
-    assert {:ok, post} =
-             Posts.publish(
-               current_user: bob,
-               post_attrs: @attrs,
-               boundary: "public"
-             )
+      assert {:ok, post} =
+               Posts.publish(
+                 current_user: bob,
+                 post_attrs: @attrs,
+                 boundary: "public"
+               )
 
-    assert Bonfire.Social.FeedActivities.feed_contains?(:local, post, current_user: me)
-  end
+      assert Bonfire.Social.FeedActivities.feed_contains?(:local, post, current_user: me)
+    end
 
-  @tag :TODO
-  @tag skip: "TODO"
-  test "does not show in any feeds a post from a instance-wide silenced user" do
-    bob = fake_user!(@other_name)
+    @tag :TODO
+    @tag skip: "TODO"
+    test "does not show in any feeds a post from a instance-wide silenced user" do
+      bob = fake_user!(@other_name)
 
-    Bonfire.Boundaries.Blocks.block(bob, :silence, :instance_wide)
+      Bonfire.Boundaries.Blocks.block(bob, :silence, :instance_wide)
 
-    # Bonfire.Boundaries.Blocks.instance_wide_circles([:silence_me])
-    # |> Bonfire.Boundaries.Circles.list_by_ids()
-    # |> repo().maybe_preload(caretaker: [:profile], encircles: [subject: [:profile]])
-    # |> info("silenced details")
+      # Bonfire.Boundaries.Blocks.instance_wide_circles([:silence_me])
+      # |> Bonfire.Boundaries.Circles.list_by_ids()
+      # |> repo().maybe_preload(caretaker: [:profile], encircles: [subject: [:profile]])
+      # |> info("silenced details")
 
-    assert {:ok, post} =
-             Posts.publish(
-               current_user: bob,
-               post_attrs: @attrs,
-               boundary: "public"
-             )
+      assert {:ok, post} =
+               Posts.publish(
+                 current_user: bob,
+                 post_attrs: @attrs,
+                 boundary: "public"
+               )
 
-    # debug_object_acls(post)
-    assert %{edges: []} = Bonfire.Social.FeedActivities.feed(:local)
-    third_user = fake_user!()
-    # check that we do not show it to authenticated users either
-    assert %{edges: []} = Bonfire.Social.FeedActivities.feed(:local, current_user: third_user)
-  end
+      # debug_object_acls(post)
+      assert %{edges: []} = Bonfire.Social.FeedActivities.feed(:local)
+      third_user = fake_user!()
+      # check that we do not show it to authenticated users either
+      assert %{edges: []} = Bonfire.Social.FeedActivities.feed(:local, current_user: third_user)
+    end
 
-  @tag :TODO
-  @tag skip: "TODO"
-  test "does not show in any feeds a post from an user that was instance-wide silenced later on" do
-    bob = fake_user!(@other_name)
-    # Bonfire.Boundaries.Blocks.instance_wide_circles([:silence_me])
-    # |> Bonfire.Boundaries.Circles.list_by_ids()
-    # |> repo().maybe_preload(caretaker: [:profile], encircles: [subject: [:profile]])
-    # |> info("silenced details")
-    assert {:ok, post} =
-             Posts.publish(
-               current_user: bob,
-               post_attrs: @attrs,
-               boundary: "public"
-             )
+    @tag :TODO
+    @tag skip: "TODO"
+    test "does not show in any feeds a post from an user that was instance-wide silenced later on" do
+      bob = fake_user!(@other_name)
+      # Bonfire.Boundaries.Blocks.instance_wide_circles([:silence_me])
+      # |> Bonfire.Boundaries.Circles.list_by_ids()
+      # |> repo().maybe_preload(caretaker: [:profile], encircles: [subject: [:profile]])
+      # |> info("silenced details")
+      assert {:ok, post} =
+               Posts.publish(
+                 current_user: bob,
+                 post_attrs: @attrs,
+                 boundary: "public"
+               )
 
-    # debug_object_acls(post)
-    feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
-    assert %{edges: [_]} = Bonfire.Social.FeedActivities.feed(:local)
-    Bonfire.Boundaries.Blocks.block(bob, :silence, :instance_wide)
-    assert %{edges: []} = Bonfire.Social.FeedActivities.feed(:local)
+      # debug_object_acls(post)
+      feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
+      assert %{edges: [_]} = Bonfire.Social.FeedActivities.feed(:local)
+      Bonfire.Boundaries.Blocks.block(bob, :silence, :instance_wide)
+      assert %{edges: []} = Bonfire.Social.FeedActivities.feed(:local)
+    end
   end
 end
