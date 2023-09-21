@@ -295,14 +295,17 @@ defmodule Bonfire.Social.PostContents do
              verbs: [:edit],
              from: query_base(),
              current_user: current_user
-           ) do
-      creator =
-        post_content |> repo().maybe_preload(:created) |> e(:created, :creator_id, nil) |> debug
-
-      with :ok <- PaperTrail.initialise(post_content, user: %{id: creator}) |> debug do
+           )
+           |> repo().maybe_preload(:created) do
+      with :ok <-
+             PaperTrail.initialise(post_content,
+               user: %{id: e(post_content, :created, :creator_id, nil)}
+             ) do
         edit_changeset =
-          PostContent.changeset(post_content, attrs)
-          |> debug
+          attrs
+          |> debug()
+          |> PostContent.changeset(post_content, ...)
+          |> debug()
 
         PaperTrail.update(edit_changeset, user: current_user)
         |> debug
