@@ -227,7 +227,7 @@ defmodule Bonfire.Social.PostContents do
     # |> maybe_process_markdown(creator)
     # transform emoticons to emojis
     # |> debug()
-    |> Text.maybe_emote()
+    |> Text.maybe_emote(opts[:emoji])
     # |> debug()
     #  open remote links in new tab
     |> Text.normalise_links()

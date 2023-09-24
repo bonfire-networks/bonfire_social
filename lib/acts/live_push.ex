@@ -34,6 +34,7 @@ defmodule Bonfire.Social.Acts.LivePush do
           )
 
           LivePush.push_activity(feeds, activity, notify: notify_feeds)
+          |> debug("pushed")
           |> Epic.assign(epic, on, ...)
       end
     else

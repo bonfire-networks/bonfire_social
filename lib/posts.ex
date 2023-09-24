@@ -384,13 +384,16 @@ defmodule Bonfire.Social.Posts do
   # record an incoming post
   def ap_receive_activity(
         creator,
-        %{data: activity_data} = _activity,
+        activity,
         %{data: post_data, pointer_id: id, public: is_public} = _object,
         circles
-      ) do
+      )
+      when not is_nil(creator) do
     # debug(activity: activity)
     # debug(creator: creator)
     # debug(object: object)
+
+    activity_data = e(activity, :data, %{})
 
     #  TODO: put somewhere reusable by other types
     direct_recipients =
@@ -512,6 +515,7 @@ defmodule Bonfire.Social.Posts do
         post_attrs: attrs,
         boundary: boundary,
         post_id: id,
+        emoji: e(post_data, "emoji", nil),
         # to preserve MFM
         do_not_strip_html: e(post_data, "source", "mediaType", nil) == "text/x.misskeymarkdown"
       )
