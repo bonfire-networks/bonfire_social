@@ -511,7 +511,9 @@ defmodule Bonfire.Social.Posts do
         current_user: creator,
         post_attrs: attrs,
         boundary: boundary,
-        post_id: id
+        post_id: id,
+        # to preserve MFM
+        do_not_strip_html: e(post_data, "source", "mediaType", nil) == "text/x.misskeymarkdown"
       )
     end
   end
