@@ -396,7 +396,8 @@ defmodule Bonfire.Social.Objects do
         %{id: _} = thing,
         opts_or_attrs,
         for_module
-      ) do
+      )
+      when is_atom(verb) do
     # this sets permissions & returns recipients in opts to be used for publishing
     opts = set_boundaries(creator, thing, opts_or_attrs, for_module)
 
@@ -404,12 +405,13 @@ defmodule Bonfire.Social.Objects do
     Bonfire.Social.FeedActivities.publish(creator, verb, thing, opts)
   end
 
-  def publish(_creator, _verb, %{id: _} = thing, opts_or_attrs, for_module) do
+  def publish(creator, _verb, %{id: _} = thing, opts_or_attrs, for_module) do
     debug("No creator for object so we can't publish it")
 
-    # make visible anyway
+    # make visible but don't put in feeds
     set_boundaries(
-      e(thing, :creator, e(thing, :provider, nil)),
+      creator || e(thing, :creator, nil) || e(thing, :created, :creator, nil) ||
+        e(thing, :created, :creator_id, nil) || e(thing, :provider, nil),
       thing,
       opts_or_attrs,
       for_module
