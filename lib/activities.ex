@@ -291,13 +291,13 @@ defmodule Bonfire.Social.Activities do
     debug(preloads, "preloads")
 
     if not is_nil(query) and Ecto.Queryable.impl_for(query) do
-      Enum.reduce(preloads, query, &do_activity_preloads(&2, &1, opts))
+      do_activity_preloads(query, preloads, opts)
+      |> debug("accumulated proloads to include in query")
     else
-      all_preloads =
-        Enum.flat_map(preloads, &do_activity_preloads(nil, &1, opts))
-        |> debug("accumulated preloads to try")
+      do_activity_preloads(nil, preloads, opts)
+      |> debug("accumulated postloads to try")
+      |> maybe_repo_preload_activity(query, ..., opts)
 
-      maybe_repo_preload(query, all_preloads, opts)
       # |> debug()
     end
   end
@@ -307,13 +307,12 @@ defmodule Bonfire.Social.Activities do
   end
 
   defp do_activity_preloads(query, preloads, opts) when is_list(preloads) do
-    debug(preloads)
+    # debug(preloads)
 
     if not is_nil(query) and Ecto.Queryable.impl_for(query) do
       Enum.reduce(preloads, query, &do_activity_preloads(&2, &1, opts))
     else
       Enum.flat_map(preloads, &do_activity_preloads(nil, &1, opts))
-      |> debug("subset from preset")
     end
   end
 
@@ -332,7 +331,7 @@ defmodule Bonfire.Social.Activities do
               :default
             ] do
     # shorthand presets
-    debug(preloads)
+    # debug(preloads)
 
     case preloads do
       :all ->
@@ -374,7 +373,7 @@ defmodule Bonfire.Social.Activities do
           [
             :with_subject,
             :with_creator,
-            :with_verb,
+            # :with_verb,
             # :with_reply_to,
             :with_thread_name
             # :with_media
@@ -387,7 +386,7 @@ defmodule Bonfire.Social.Activities do
           query,
           [
             :with_creator,
-            :with_verb,
+            # :with_verb,
             :feed_by_creator
           ],
           opts
@@ -453,7 +452,7 @@ defmodule Bonfire.Social.Activities do
           query,
           [
             :with_subject,
-            :with_verb,
+            # :with_verb,
             :with_object_posts,
             :with_replied
           ],
@@ -753,26 +752,26 @@ defmodule Bonfire.Social.Activities do
     )
   end
 
-  defp maybe_repo_preload(%{edges: list} = page, preloads, opts)
+  defp maybe_repo_preload_activity(%{edges: list} = page, preloads, opts)
        when is_list(list) do
     # pages
-    cased_maybe_repo_preload(List.first(list), page, preloads, opts)
+    maybe_repo_preload_activity_cases(List.first(list), page, preloads, opts)
   end
 
-  defp maybe_repo_preload(list, preloads, opts) when is_list(list) and list != [] do
-    cased_maybe_repo_preload(List.first(list), list, preloads, opts)
+  defp maybe_repo_preload_activity(list, preloads, opts) when is_list(list) and list != [] do
+    maybe_repo_preload_activity_cases(List.first(list), list, preloads, opts)
   end
 
-  defp maybe_repo_preload(%{} = object, preloads, opts) do
-    cased_maybe_repo_preload(nil, object, preloads, opts)
+  defp maybe_repo_preload_activity(%{} = object, preloads, opts) do
+    maybe_repo_preload_activity_cases(nil, object, preloads, opts)
   end
 
-  defp maybe_repo_preload(object, _preloads, _opts) do
+  defp maybe_repo_preload_activity(object, _preloads, _opts) do
     warn(object, "Could not recognise activity object(s) to preload activity assoc")
     object
   end
 
-  defp cased_maybe_repo_preload(example_object, objects, preloads, opts) do
+  defp maybe_repo_preload_activity_cases(example_object, objects, preloads, opts) do
     # debug(example_object)
 
     case example_object || objects do
@@ -780,19 +779,27 @@ defmodule Bonfire.Social.Activities do
         debug("preload with Activity")
         do_maybe_repo_preload(objects, List.wrap(preloads), opts)
 
+      %Bonfire.Data.Edges.Edge{} ->
+        debug(
+          "preload with Edge (special case possible as long as we declare all the same assocs as Activity)"
+        )
+
+        do_maybe_repo_preload(objects, List.wrap(preloads), opts)
+
       %{activity: _, __struct__: _} = _map ->
         debug("activity within a parent struct")
         do_maybe_repo_preload(objects, [activity: preloads], opts)
 
       %{activity: %{__struct__: _} = _activity} = _map ->
-        if is_list(objects) do
-          debug("list of maps with activities")
-          do_maybe_repo_preload(objects, [activity: preloads], opts)
-        else
-          debug("activity within a map")
-          do_maybe_repo_preload(objects, [activity: preloads], opts)
-          # Map.put(map, :activity, do_maybe_repo_preload(activity, List.wrap(preloads), opts))
-        end
+        # if is_list(objects) do
+        debug("list of maps with activities")
+        do_maybe_repo_preload(objects, [activity: preloads], opts)
+
+      # else
+      #   debug("activity within a map")
+      #   do_maybe_repo_preload(objects, [activity: preloads], opts)
+      #   Map.put(map, :activity, do_maybe_repo_preload(activity, List.wrap(preloads), opts))
+      # end
 
       _ ->
         warn(objects, "Could not preload activity data")
