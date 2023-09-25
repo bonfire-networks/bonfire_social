@@ -45,6 +45,7 @@ defmodule Bonfire.Social.Activities do
     changeset
     |> put_assoc(verb, creator)
     |> FeedActivities.cast(opts[:feed_ids])
+    |> debug("csss")
   end
 
   def put_assoc(changeset, verb, subject),
@@ -340,6 +341,18 @@ defmodule Bonfire.Social.Activities do
           [
             :feed,
             :tags
+          ],
+          opts
+        )
+
+      :thread_postload ->
+        do_activity_preloads(
+          query,
+          [
+            # :with_subject,
+            # :feed_by_subject,
+            :with_replied,
+            :with_object_more
           ],
           opts
         )
