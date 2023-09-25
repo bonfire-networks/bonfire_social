@@ -598,13 +598,13 @@ defmodule Bonfire.Social.FeedActivities do
         )
         |> where(
           [fp, activity: activity, subject_peered: subject_peered, object_peered: object_peered],
-          (activity.subject_id != ^fetcher_user_id and
-             fp.feed_id == ^local_feed_id) or
-            (is_nil(subject_peered.id) or is_nil(object_peered.id))
+          (fp.feed_id == ^local_feed_id or
+             (is_nil(subject_peered.id) and is_nil(object_peered.id))) and
+            activity.subject_id != ^fetcher_user_id
         )
 
       :activity_pub == feed_ids or federated_feed_id == feed_ids ->
-        debug("federated feed")
+        debug("remote/federated feed")
 
         query_extras(opts)
         |> proload(
@@ -612,8 +612,9 @@ defmodule Bonfire.Social.FeedActivities do
         )
         |> where(
           [fp, activity: activity, subject_peered: subject_peered, object_peered: object_peered],
-          fp.feed_id == ^federated_feed_id or not is_nil(subject_peered.id) or
-            not is_nil(object_peered.id) or activity.subject_id == ^fetcher_user_id
+          fp.feed_id == ^federated_feed_id or
+            (not is_nil(subject_peered.id) or not is_nil(object_peered.id)) or
+            activity.subject_id == ^fetcher_user_id
         )
 
       (is_list(feed_ids) or is_binary(feed_ids)) and feed_ids != [] and not is_nil(feed_ids) and
