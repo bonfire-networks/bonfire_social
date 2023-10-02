@@ -260,6 +260,7 @@ defmodule Bonfire.Social.Feeds do
     do: maybe_from_opts(preset_and_custom_boundary, :to_feeds, [])
 
   def named_feed_id(name, opts \\ [])
+  def named_feed_id(:explore, _), do: nil
   def named_feed_id(:fediverse, _), do: named_feed_id(:activity_pub)
   def named_feed_id(:notifications, opts), do: my_feed_id(:notifications, current_user(opts))
 
@@ -415,7 +416,7 @@ defmodule Bonfire.Social.Feeds do
   defp feed_key(:notifications), do: :notifications_id
   # just in case
   defp feed_key(:notification), do: :notifications_id
-  defp feed_key(other), do: raise("Unknown user feed name: #{inspect(other)}")
+  defp feed_key(other), do: raise("Unknown feed name: #{inspect(other)}")
 
   def maybe_creator_notification(subject, object_creator) do
     if ulid(subject) != ulid(object_creator), do: [notifications: object_creator], else: []

@@ -60,7 +60,7 @@ defmodule Bonfire.Social.FeedActivities do
     to_options(socket_or_opts)
   end
 
-  @decorate time()
+  # @decorate time()
   def feed_ids_and_opts(feed_name, opts)
 
   def feed_ids_and_opts({:my, feed_ids}, opts) do
@@ -353,11 +353,13 @@ defmodule Bonfire.Social.FeedActivities do
         |> debug("feed_opts for #{id_or_ids}")
 
       ulid(id_or_ids)
-      |> feed_query(opts)
-      |> paginate_and_boundarise_feed(maybe_merge_filters(opts[:feed_filters], opts))
-      # |> debug()
-      |> prepare_feed(opts)
+      |> do_feed(opts)
     end
+  end
+
+  def feed(:explore, opts) do
+    do_feed(:explore, to_feed_options(opts))
+    |> debug("explore feed")
   end
 
   def feed(:flags, opts) do
@@ -408,6 +410,17 @@ defmodule Bonfire.Social.FeedActivities do
     error(other, e)
     raise e
   end
+
+  defp do_feed(feed, opts) do
+    feed
+    |> feed_query(opts)
+    |> paginate_and_boundarise_feed(maybe_merge_filters(opts[:feed_filters], opts))
+    # |> debug()
+    |> prepare_feed(opts)
+  end
+
+  defp named_feed(feed_name, opts \\ [])
+  defp named_feed(:explore, _opts), do: nil
 
   defp named_feed(feed_name, opts)
        when is_atom(feed_name) and not is_nil(feed_name) do
@@ -579,14 +592,19 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   # @decorate time()
-  defp feed_query(feed_ids, opts) do
+  defp feed_query(feed_id_or_ids, opts) do
     opts = to_feed_options(opts)
+
+    feed_ids = List.wrap(feed_id_or_ids)
+
+    specific_feeds? = is_binary(feed_id_or_ids) or (is_list(feed_id_or_ids) and feed_ids != [])
+
     local_feed_id = Feeds.named_feed_id(:local)
     federated_feed_id = Feeds.named_feed_id(:activity_pub)
     fetcher_user_id = "1ACT1V1TYPVBREM0TESFETCHER"
 
     cond do
-      :local == feed_ids or local_feed_id == feed_ids ->
+      :local in feed_ids or local_feed_id in feed_ids ->
         debug("local feed")
 
         # excludes likes/follows from local feed - TODO: configurable
@@ -603,7 +621,7 @@ defmodule Bonfire.Social.FeedActivities do
             activity.subject_id != ^fetcher_user_id
         )
 
-      :activity_pub == feed_ids or federated_feed_id == feed_ids ->
+      :activity_pub in feed_ids or federated_feed_id in feed_ids ->
         debug("remote/federated feed")
 
         query_extras(opts)
@@ -617,10 +635,10 @@ defmodule Bonfire.Social.FeedActivities do
             activity.subject_id == ^fetcher_user_id
         )
 
-      (is_list(feed_ids) or is_binary(feed_ids)) and feed_ids != [] and not is_nil(feed_ids) and
+      specific_feeds? and
           not is_struct(e(opts, :feed_filters, nil)) ->
-        debug(feed_ids, "specific feed(s)")
-        generic_feed_query(feed_ids, opts)
+        debug(feed_id_or_ids, "specific feed(s)")
+        generic_feed_query(feed_id_or_ids, opts)
 
       true ->
         debug("unknown feed")
