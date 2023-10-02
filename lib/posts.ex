@@ -463,7 +463,7 @@ defmodule Bonfire.Social.Posts do
                  Bonfire.Federate.ActivityPub.AdapterUtils.get_character_by_ap_id!(
                    mention["href"] || mention["name"]
                  ),
-             true <- Bonfire.Federate.ActivityPub.federating?(character) do
+             true <- Bonfire.Social.Integration.federating?(character) do
           {
             url,
             character
@@ -488,7 +488,7 @@ defmodule Bonfire.Social.Posts do
     to_circles =
       circles ++
         Enum.map(direct_recipients || [], fn {_, character} ->
-          if Bonfire.Federate.ActivityPub.federating?(character), do: id(character)
+          if Bonfire.Social.Integration.federating?(character), do: id(character)
         end)
 
     attrs =

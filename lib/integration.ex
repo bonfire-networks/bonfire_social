@@ -154,6 +154,11 @@ defmodule Bonfire.Social.Integration do
       Bonfire.Federate.ActivityPub.Outgoing.federate_outgoing?(subject)
   end
 
+  def federating?(subject \\ nil) do
+    Bonfire.Common.Extend.module_enabled?(Bonfire.Federate.ActivityPub) and
+      Bonfire.Federate.ActivityPub.federating?(subject)
+  end
+
   def is_local?(thing) do
     if Bonfire.Common.Extend.module_enabled?(Bonfire.Federate.ActivityPub.AdapterUtils) do
       Bonfire.Federate.ActivityPub.AdapterUtils.is_local?(thing)

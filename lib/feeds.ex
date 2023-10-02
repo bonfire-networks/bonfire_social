@@ -426,7 +426,7 @@ defmodule Bonfire.Social.Feeds do
 
   def maybe_creator_notification(subject, object_creator, opts \\ []) do
     if id(subject) != id(object_creator) and
-         (opts[:local] != false or Bonfire.Federate.ActivityPub.federating?(object_creator)) do
+         (opts[:local] != false or Bonfire.Social.Integration.federating?(object_creator)) do
       [notifications: object_creator]
     else
       []
