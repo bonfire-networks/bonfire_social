@@ -85,6 +85,8 @@ defmodule Bonfire.Social.Messages do
 
   defp clean_tos(tos) when is_binary(tos), do: String.split(tos, ",") |> clean_tos()
 
+  defp clean_tos(%{id: id}), do: id
+
   defp clean_tos(tos) when is_list(tos) or is_map(tos),
     do:
       tos
