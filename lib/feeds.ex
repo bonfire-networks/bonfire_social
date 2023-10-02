@@ -424,8 +424,13 @@ defmodule Bonfire.Social.Feeds do
   defp feed_key(:notification), do: :notifications_id
   defp feed_key(other), do: raise("Unknown feed name: #{inspect(other)}")
 
-  def maybe_creator_notification(subject, object_creator) do
-    if ulid(subject) != ulid(object_creator), do: [notifications: object_creator], else: []
+  def maybe_creator_notification(subject, object_creator, opts \\ []) do
+    if id(subject) != id(object_creator) and
+         (opts[:local] != false or Bonfire.Federate.ActivityPub.federating?(object_creator)) do
+      [notifications: object_creator]
+    else
+      []
+    end
   end
 
   def inbox_of_obj_creator(object) do

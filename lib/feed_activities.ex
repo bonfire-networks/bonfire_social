@@ -457,12 +457,20 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed_contains?(feed_name, object, opts \\ [])
 
-  def feed_contains?(feed, html_body, _opts) when is_binary(html_body) and is_list(feed) do
-    Enum.find_value(feed, fn fi -> fi.activity.object.post_content.html_body =~ html_body end)
+  def feed_contains?(%{edges: feed}, object, opts) do
+    feed_contains?(feed, object, opts)
   end
 
-  def feed_contains?(%{edges: feed}, html_body, opts) do
-    feed_contains?(feed, html_body, opts)
+  def feed_contains?(feed, id_or_html_body, _opts)
+      when (is_binary(id_or_html_body) or is_map(id_or_html_body)) and is_list(feed) do
+    Enum.find_value(feed, fn fi ->
+      fi.activity.object_id == id(id_or_html_body) or
+        fi.activity.object.post_content.html_body =~ id_or_html_body
+    end)
+  end
+
+  def feed_contains?(feed, object, opts) when is_map(object) or is_binary(object) do
+    feed_contains?(feed, %{object: object}, opts)
   end
 
   def feed_contains?(feed_name, object, opts) do
@@ -473,9 +481,9 @@ defmodule Bonfire.Social.FeedActivities do
       Keyword.put(
         opts,
         :feed_filters,
-        Map.merge(
-          e(opts, :feed_filters, %{}),
-          %{object: object}
+        Enum.into(
+          object,
+          e(opts, :feed_filters, %{})
         )
       )
     )

@@ -116,7 +116,7 @@ defmodule Bonfire.Social.Boosts do
       to_feeds:
         [outbox: booster] ++
           if(e(opts, :notify_creator, true),
-            do: Feeds.maybe_creator_notification(booster, boosted_creator),
+            do: Feeds.maybe_creator_notification(booster, boosted_creator, opts),
             else: []
           )
     ]
@@ -238,7 +238,7 @@ defmodule Bonfire.Social.Boosts do
       ) do
     with {:ok, boosted} <-
            Bonfire.Common.Pointers.get(object.pointer_id, current_user: creator) do
-      boost(creator, boosted)
+      boost(creator, boosted, local: false)
     end
   end
 

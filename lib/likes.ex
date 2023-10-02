@@ -50,22 +50,24 @@ defmodule Bonfire.Social.Likes do
 
   def count(%{} = object), do: Edges.count(:like, object)
 
-  def like(%{} = liker, %{} = object) do
+  def like(liker, object, opts \\ [])
+
+  def like(%{} = liker, %{} = object, opts) do
     if Bonfire.Boundaries.can?(liker, :like, object) do
-      do_like(liker, object)
+      do_like(liker, object, opts)
     else
       error(l("Sorry, you cannot react to this"))
     end
   end
 
-  def like(%{} = liker, liked) when is_binary(liked) do
+  def like(%{} = liker, liked, opts) when is_binary(liked) do
     with {:ok, object} <-
            Bonfire.Common.Pointers.get(liked,
              current_user: liker,
              verbs: [:like]
            ) do
       # debug(liked)
-      do_like(liker, object)
+      do_like(liker, object, opts)
     else
       _ ->
         error(l("Sorry, you cannot react to this"))
@@ -74,14 +76,14 @@ defmodule Bonfire.Social.Likes do
 
   def do_like(%{} = liker, %{} = liked, opts \\ []) do
     liked = Objects.preload_creator(liked)
-    liked_creator = Objects.object_creator(liked)
+    liked_object_creator = Objects.object_creator(liked)
 
     opts =
       [
         # TODO: make configurable
         boundary: "mentions",
-        to_circles: [id(liked_creator)],
-        to_feeds: Feeds.maybe_creator_notification(liker, liked_creator)
+        to_circles: [id(liked_object_creator)],
+        to_feeds: Feeds.maybe_creator_notification(liker, liked_object_creator, opts)
       ] ++ List.wrap(opts)
 
     case create(liker, liked, opts) do
@@ -101,7 +103,9 @@ defmodule Bonfire.Social.Likes do
     end
   end
 
-  def unlike(%{} = liker, %{} = liked) do
+  def unlike(liker, object, opts \\ [])
+
+  def unlike(%{} = liker, %{} = liked, _opts) do
     # delete the Like
     Edges.delete_by_both(liker, Like, liked)
     # delete the like activity & feed entries
@@ -110,9 +114,9 @@ defmodule Bonfire.Social.Likes do
     # Note: the like count is automatically decremented by DB triggers
   end
 
-  def unlike(%{} = liker, liked) when is_binary(liked) do
+  def unlike(%{} = liker, liked, opts) when is_binary(liked) do
     with {:ok, liked} <- Bonfire.Common.Pointers.get(liked, current_user: liker) do
-      unlike(liker, liked)
+      unlike(liker, liked, opts)
     end
   end
 
@@ -197,26 +201,26 @@ defmodule Bonfire.Social.Likes do
   end
 
   def ap_receive_activity(
-        creator,
+        liker,
         %{data: %{"type" => "Like"}} = _activity,
         object
       ) do
     with {:ok, liked} <-
-           Bonfire.Common.Pointers.get(object.pointer_id, current_user: creator) do
-      like(creator, liked)
+           Bonfire.Common.Pointers.get(object.pointer_id, current_user: liker) do
+      like(liker, liked, local: false)
     end
   end
 
   def ap_receive_activity(
-        creator,
+        liker,
         %{data: %{"type" => "Undo"}} = _activity,
         %{data: %{"object" => liked_object}} = _object
       ) do
     with {:ok, object} <-
            ActivityPub.Object.get_cached(ap_id: liked_object),
          {:ok, liked} <-
-           Bonfire.Common.Pointers.get(object.pointer_id, current_user: creator),
-         [id] <- unlike(creator, liked) do
+           Bonfire.Common.Pointers.get(object.pointer_id, current_user: liker),
+         [id] <- unlike(liker, liked) do
       {:ok, id}
     end
   end

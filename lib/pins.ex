@@ -54,39 +54,39 @@ defmodule Bonfire.Social.Pins do
   def by_pinned(%{} = object, opts \\ []),
     do: (opts ++ [object: object]) |> query(opts) |> repo().many()
 
-  def pin(pinner, object, scope \\ nil)
+  def pin(pinner, object, scope \\ nil, opts \\ [])
 
-  def pin(pinner, object, :instance) do
+  def pin(pinner, object, :instance, opts) do
     if Bonfire.Boundaries.can?(pinner, :pin, :instance) do
-      pin(instance_scope(), object, pinner)
+      pin(instance_scope(), object, pinner, opts)
     else
       error(l("Sorry, you cannot pin to the instance"))
     end
   end
 
-  def pin(pinner, %{} = object, user) do
+  def pin(pinner, %{} = object, user, opts) do
     if Bonfire.Boundaries.can?(user || pinner, @boundary_verb, object) do
-      do_pin(pinner, object)
+      do_pin(pinner, object, opts)
     else
       error(l("Sorry, you cannot pin this"))
     end
   end
 
-  def pin(pinner, pinned, user) when is_binary(pinned) do
+  def pin(pinner, pinned, user, opts) when is_binary(pinned) do
     with {:ok, object} <-
            Bonfire.Common.Pointers.get(pinned,
              current_user: user || pinner,
              verbs: [@boundary_verb]
            ) do
       # debug(pinned)
-      do_pin(pinner, object)
+      do_pin(pinner, object, opts)
     else
       _ ->
         error(l("Sorry, you cannot pin this"))
     end
   end
 
-  defp do_pin(pinner, %{} = pinned) do
+  defp do_pin(pinner, %{} = pinned, opts \\ []) do
     pinned = Objects.preload_creator(pinned)
     pinned_creator = Objects.object_creator(pinned)
 
@@ -94,7 +94,7 @@ defmodule Bonfire.Social.Pins do
       # TODO: make configurable
       boundary: "mentions",
       to_circles: [ulid(pinned_creator)],
-      to_feeds: Feeds.maybe_creator_notification(pinner, pinned_creator)
+      to_feeds: Feeds.maybe_creator_notification(pinner, pinned_creator, opts)
     ]
 
     case create(pinner, pinned, opts) do
@@ -262,7 +262,7 @@ defmodule Bonfire.Social.Pins do
   #     ) do
   #   with {:ok, pinned} <-
   #          Bonfire.Common.Pointers.get(object.pointer_id, current_user: creator) do
-  #     pin(creator, pinned)
+  #     pin(creator, pinned, local: false)
   #   end
   # end
 
