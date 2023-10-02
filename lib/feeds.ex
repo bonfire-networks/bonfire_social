@@ -34,7 +34,12 @@ defmodule Bonfire.Social.Feeds do
       maybe_my_outbox_feed_id(me, boundary),
       global_feed_ids(boundary),
       reply_and_or_mentions_notifications_feeds ||
-        reply_and_or_mentions_notifications_feeds(me, assigns, boundary)
+        reply_and_or_mentions_notifications_feeds(
+          me,
+          boundary,
+          e(assigns, :mentions, []),
+          e(assigns, :reply_to, :created, :creator, nil)
+        )
     ]
     |> List.flatten()
     |> Enum.uniq()
@@ -62,19 +67,20 @@ defmodule Bonfire.Social.Feeds do
   defp global_feed_ids(boundary),
     do: Map.get(@global_feeds, boundary, []) |> Enum.map(&named_feed_id/1)
 
-  def reply_and_or_mentions_notifications_feeds(me, assigns, boundary) do
-    debug(assigns)
+  def reply_and_or_mentions_notifications_feeds(
+        me,
+        boundary,
+        mentions,
+        reply_to_creator,
+        to_circles \\ []
+      ) do
     my_notifications = feed_id(:notifications, me)
-
-    # TODO: unravel the mentions parsing so we can deal with mentions properly
-    mentions = e(assigns, :mentions, [])
-    reply_to_creator = e(assigns, :reply_to, :created, :creator, nil)
 
     (user_notifications_feeds([reply_to_creator], boundary) ++
        user_notifications_feeds(
          mentions,
          boundary,
-         e(assigns, :options, :post_attrs, :to_circles, [])
+         to_circles
        ))
     |> Enums.filter_empty([])
     |> Enum.uniq()
@@ -103,17 +109,17 @@ defmodule Bonfire.Social.Feeds do
         |> Enum.map(&feed_id(:notifications, &1))
 
       true ->
-        # WIP: we should notify mentions & reply_to_creator IF they are included in the object's boundaries
+        # we should only notify mentions & reply_to_creator IF they are included in the object's boundaries
+
+        to_circles_ids = Enums.ids(to_circles)
 
         users
         |> filter_empty([])
-        |> Enum.filter(&(id(&1) in to_circles))
+        |> Enum.filter(&(id(&1) in to_circles_ids))
         |> repo().maybe_preload([:character])
         |> debug()
         # only local
         |> Enum.map(&feed_id(:notifications, &1))
-
-        []
     end
   end
 

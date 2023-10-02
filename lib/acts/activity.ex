@@ -9,6 +9,7 @@ defmodule Bonfire.Social.Acts.Activity do
   import Epics
   import Untangle, only: [warn: 2]
   use Arrows
+  alias Bonfire.Common.Utils
 
   def run(epic, act) do
     on = Keyword.get(act.options, :on, :post)
@@ -53,18 +54,20 @@ defmodule Bonfire.Social.Acts.Activity do
         boundary = epic.assigns[:options][:boundary]
         boundary_name = Bonfire.Boundaries.preset_name(boundary, true)
 
-        # attrs_key = Keyword.get(act.options, :attrs, :post_attrs)
+        attrs_key = Keyword.get(act.options, :attrs, :post_attrs)
         feeds_key = Keyword.get(act.options, :feeds, :feed_ids)
 
         notify_feeds_key = Keyword.get(act.options, :notify_feeds, :notify_feeds)
 
-        # attrs = Keyword.get(epic.assigns[:options], attrs_key, %{})
+        attrs = Keyword.get(epic.assigns[:options], attrs_key, %{})
 
         notifications_feeds =
           Feeds.reply_and_or_mentions_notifications_feeds(
             current_user,
-            epic.assigns,
-            boundary_name
+            boundary_name,
+            Utils.e(changeset.changes, :post_content, :changes, :mentions, []),
+            Utils.e(attrs, :reply_to, :created, :creator, nil),
+            Utils.e(attrs, :to_circles, [])
           )
 
         # CLEANUP: duplicate implementation of `Feeds.target_feeds`

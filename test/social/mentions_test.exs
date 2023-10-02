@@ -144,15 +144,16 @@ defmodule Bonfire.Social.MentionsTest do
       }
     }
 
-    {:ok, %{assign_context: assigns}} =
+    user_with_settings =
       Bonfire.Me.Settings.put(
         [Bonfire.Social.Feeds, :my_feed_includes, :notifications],
         false,
         current_user: mentioned
       )
+      ~> current_user()
 
     mentioned =
-      (assigns[:current_user] || mentioned)
+      (user_with_settings || mentioned)
       |> info("user with updated settings")
 
     assert {:ok, mention} =

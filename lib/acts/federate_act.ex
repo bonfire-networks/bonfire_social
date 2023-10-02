@@ -49,8 +49,12 @@ defmodule Bonfire.Social.Acts.Federate do
         warn(current_user, "ActivityPub: Skipping due to missing current_user")
         nil
 
-      Integration.federating?(current_user) != true ->
-        info("ActivityPub: Federation is disabled or an adapter is not available")
+      Integration.federate_outgoing?(current_user) != true ->
+        info(
+          "ActivityPub: Federation is disabled (possibly just for this user) or an adapter is not available"
+        )
+
+        nil
 
       not Integration.is_local?(current_user) or not Integration.is_local?(object) ->
         warn(current_user, "ActivityPub: Skip pushing remote object")

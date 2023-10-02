@@ -406,10 +406,18 @@ defmodule Bonfire.Social.Posts do
       |> filter_empty([])
       |> List.delete(Bonfire.Federate.ActivityPub.AdapterUtils.public_uri())
       |> info("incoming recipients")
-      |> Enum.map(fn ap_id -> Bonfire.Me.Users.by_ap_id!(ap_id) end)
-      |> info("incoming users")
-      |> ulid()
+      |> Enum.map(fn ap_id ->
+        with {:ok, user} <- Bonfire.Me.Users.by_ap_id(ap_id) do
+          {ap_id, user |> repo().maybe_preload(:settings)}
+        else
+          _ ->
+            nil
+        end
+      end)
       |> filter_empty([])
+      |> info("incoming users")
+
+    # |> ulid()
 
     reply_to = post_data["inReplyTo"] || activity_data["inReplyTo"]
 
@@ -428,36 +436,6 @@ defmodule Bonfire.Social.Posts do
       |> Enum.uniq()
 
     #  TODO: put somewhere reusable by other types
-    mentions =
-      for %{"type" => "Mention"} = mention <- tags do
-        url =
-          (mention["href"] || "")
-          # workaround for Mastodon using different URLs in text
-          |> String.replace("/users/", "/@")
-
-        with {:ok, character} <-
-               Bonfire.Federate.ActivityPub.AdapterUtils.get_character_by_ap_id(
-                 mention["href"] || mention["name"]
-               ) do
-          {
-            url,
-            character
-          }
-        else
-          e ->
-            info(e, "could not find known actor for incoming mention")
-
-            {
-              url,
-              mention["name"]
-            }
-        end
-      end
-      |> filter_empty([])
-      |> Map.new()
-      |> info("incoming mentions")
-
-    #  TODO: put somewhere reusable by other types
     hashtags =
       for %{"type" => "Hashtag"} = tag <- tags do
         with {:ok, hashtag} <- Bonfire.Tag.Hashtag.get_or_create_by_name(tag["name"]) do
@@ -472,16 +450,55 @@ defmodule Bonfire.Social.Posts do
       |> Map.new()
       |> info("incoming hashtags")
 
-    # FIXME?
-    # TODO, in a mixin?
-    # FIXME
+    #  TODO: put somewhere reusable by other types
+    mentions =
+      for %{"type" => "Mention"} = mention <- tags do
+        url =
+          (mention["href"] || "")
+          # workaround for Mastodon using different URLs in text
+          |> String.replace("/users/", "/@")
+
+        with %{} = character <-
+               e(direct_recipients, mention["href"], nil) ||
+                 Bonfire.Federate.ActivityPub.AdapterUtils.get_character_by_ap_id!(
+                   mention["href"] || mention["name"]
+                 ),
+             true <- Bonfire.Federate.ActivityPub.federating?(character) do
+          {
+            url,
+            character
+          }
+        else
+          e ->
+            info(
+              e,
+              "could not find known character for incoming mention, or they have federation disabled"
+            )
+
+            {
+              url,
+              mention["name"]
+            }
+        end
+      end
+      |> filter_empty([])
+      |> Map.new()
+      |> info("incoming mentions")
+
+    to_circles =
+      circles ++
+        Enum.map(direct_recipients || [], fn {_, character} ->
+          if Bonfire.Federate.ActivityPub.federating?(character), do: id(character)
+        end)
+
     attrs =
       info(
         %{
           id: id,
           local: false,
+          # huh?
           canonical_url: nil,
-          to_circles: circles ++ direct_recipients,
+          to_circles: to_circles,
           mentions: mentions,
           hashtags: hashtags,
           post_content: %{
@@ -495,12 +512,14 @@ defmodule Bonfire.Social.Posts do
           reply_to_id: reply_to_id,
           uploaded_media: Bonfire.Files.ap_receive_attachments(creator, post_data["attachment"])
         },
-        "post attrs"
+        "remote post attrs"
       )
 
     info(is_public, "is_public")
 
-    if is_public == false and is_list(mentions) and length(mentions) > 0 do
+    if is_public == false and
+         (is_list(mentions) or is_map(mentions)) and
+         mentions != [] and mentions != %{} do
       info("treat as Message if private with @ mentions")
       Bonfire.Social.Messages.send(creator, attrs)
     else
@@ -514,6 +533,7 @@ defmodule Bonfire.Social.Posts do
         current_user: creator,
         post_attrs: attrs,
         boundary: boundary,
+        to_circles: to_circles,
         post_id: id,
         emoji: e(post_data, "emoji", nil),
         # to preserve MFM
