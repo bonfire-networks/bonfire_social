@@ -277,7 +277,7 @@ defmodule Bonfire.Social.Posts do
            |> Enum.reject(fn tag ->
              is_nil(e(tag, :character, nil)) or id(tag) == id(subject)
            end)
-           |> debug("mentions to tags")
+           |> debug("mentions to actors")
            |> Enum.map(&ActivityPub.Actor.get_cached!(pointer: &1))
            |> filter_empty([])
            |> debug("include_as_tags"),
@@ -340,7 +340,7 @@ defmodule Bonfire.Social.Posts do
                  end
                end,
              "context" => context,
-             # TODO: add hashtags?
+             # TODO: add hashtags
              "tag" =>
                Enum.map(mentions, fn actor ->
                  %{

@@ -303,30 +303,34 @@ defmodule Bonfire.Social.Messages do
       Enum.filter(message.activity.tags, fn tag ->
         tag.table_id in recipient_types
       end)
-      |> Enum.map(fn %{id: id} ->
-        with %{ap_id: ap_id} <- ActivityPub.Actor.get_cached!(pointer: id) do
-          ap_id
-        else
-          e ->
-            warn(e, "Actor not found for recipient #{id}")
-            nil
-        end
+      |> Enum.map(fn pointer ->
+        ActivityPub.Actor.get_cached!(pointer: pointer)
       end)
       |> filter_empty([])
+
+    to = Enum.map(recipients, fn %{ap_id: ap_id} -> ap_id end)
 
     object = %{
       # "ChatMessage", # TODO: use ChatMessage with peers that support it?
       "type" => "Note",
       "actor" => actor.ap_id,
       "content" => Utils.e(message, :post_content, :html_body, nil),
-      "to" => recipients
+      "to" => to,
+      "tag" =>
+        Enum.map(recipients, fn actor ->
+          %{
+            "href" => actor.ap_id,
+            "name" => actor.username,
+            "type" => "Mention"
+          }
+        end)
     }
 
     attrs = %{
       actor: actor,
       # context: nil, # TODO: thread ID
       object: object,
-      to: recipients,
+      to: to,
       pointer: ulid(message)
     }
 
