@@ -290,7 +290,7 @@ defmodule Bonfire.Social.Messages do
   end
 
   def ap_publish_activity(subject, _verb, message) do
-    message = repo().preload(message, activity: [:tags])
+    message = repo().preload(message, [:replied, activity: [:tags]])
 
     {:ok, actor} = ActivityPub.Actor.get_cached(pointer: subject)
 
@@ -310,12 +310,16 @@ defmodule Bonfire.Social.Messages do
 
     to = Enum.map(recipients, fn %{ap_id: ap_id} -> ap_id end)
 
+    context = Threads.ap_prepare(Threads.ap_prepare(e(message, :replied, :thread_id, nil)))
+
     object = %{
       # "ChatMessage", # TODO: use ChatMessage with peers that support it?
       "type" => "Note",
       "actor" => actor.ap_id,
       "content" => Utils.e(message, :post_content, :html_body, nil),
       "to" => to,
+      "context" => context,
+      "inReplyTo" => Threads.ap_prepare(e(message, :replied, :reply_to_id, nil)),
       "tag" =>
         Enum.map(recipients, fn actor ->
           %{
@@ -328,7 +332,7 @@ defmodule Bonfire.Social.Messages do
 
     attrs = %{
       actor: actor,
-      # context: nil, # TODO: thread ID
+      context: context,
       object: object,
       to: to,
       pointer: ulid(message)

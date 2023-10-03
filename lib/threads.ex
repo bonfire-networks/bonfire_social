@@ -653,4 +653,28 @@ defmodule Bonfire.Social.Threads do
 
   #   end)
   # end
+
+  @doc "Key can be for eg. :thread_id or :reply_to_id"
+  def ap_prepare(object, key \\ :thread_id) when is_struct(object) do
+    object =
+      object
+      |> repo().maybe_preload([
+        :replied
+      ])
+      |> e(:replied, key, nil)
+      |> ap_prepare()
+  end
+
+  def ap_prepare(thread_or_reply_to_id, _) do
+    if thread_or_reply_to_id do
+      with {:ok, ap_object} <-
+             ActivityPub.Object.get_cached(pointer: thread_or_reply_to_id) do
+        ap_object.data["id"]
+      else
+        e ->
+          error(e, "Could not fetch the thread or reply AP object")
+          nil
+      end
+    end
+  end
 end

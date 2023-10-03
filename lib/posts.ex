@@ -239,8 +239,6 @@ defmodule Bonfire.Social.Posts do
         Utils.e(post, :created, :creator_id, nil) || Utils.e(post, :activity, :subject, nil) ||
         Utils.e(post, :activity, :subject_id, nil)
 
-    thread_id = e(post, :replied, :thread_id, nil)
-
     thread_creator =
       e(post, :replied, :thread, :created, :creator, nil) ||
         e(post, :replied, :thread, :created, :creator_id, nil)
@@ -302,17 +300,7 @@ defmodule Bonfire.Social.Posts do
          # end),
          # FIXME: the below seems to return ALL known users for public posts?
          bcc <- [],
-         context <-
-           (if thread_id && thread_id != id do
-              with {:ok, ap_object} <-
-                     ActivityPub.Object.get_cached(pointer: thread_id) do
-                ap_object.data["id"]
-              else
-                e ->
-                  error(e, "Could not fetch the context (eg. thread)")
-                  nil
-              end
-            end),
+         context <- Threads.ap_prepare(e(post, :replied, :thread_id, nil)),
          #  to <- to ++ Enum.map(mentions, fn actor -> actor.ap_id end),
          object <-
            %{
@@ -328,17 +316,7 @@ defmodule Bonfire.Social.Posts do
              "content" => Text.maybe_markdown_to_html(e(post, :post_content, :html_body, nil)),
              "attachment" => Bonfire.Files.ap_publish_activity(e(post, :media, nil)),
              # TODO support replies and context for all object types, not just posts
-             "inReplyTo" =>
-               if e(post, :replied, :reply_to_id, nil) && post.replied.reply_to_id != id do
-                 with {:ok, ap_object} <-
-                        ActivityPub.Object.get_cached(pointer: post.replied.reply_to_id) do
-                   ap_object.data["id"]
-                 else
-                   e ->
-                     error(e, "Could not fetch what is being replied to")
-                     nil
-                 end
-               end,
+             "inReplyTo" => Threads.ap_prepare(e(post, :replied, :reply_to_id, nil)),
              "context" => context,
              # TODO: add hashtags
              "tag" =>
