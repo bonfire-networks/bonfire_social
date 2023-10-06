@@ -75,7 +75,7 @@ defmodule Bonfire.Social.FeedActivities do
 
     exclude_verbs =
       if opts[:exclude_verbs] != false and
-           !Bonfire.Me.Settings.get(
+           !Bonfire.Common.Settings.get(
              [Bonfire.Social.Feeds, :my_feed_includes, :boost],
              true,
              opts
@@ -85,7 +85,7 @@ defmodule Bonfire.Social.FeedActivities do
 
     exclude_verbs =
       if opts[:exclude_verbs] != false and
-           !Bonfire.Me.Settings.get(
+           !Bonfire.Common.Settings.get(
              [Bonfire.Social.Feeds, :my_feed_includes, :follow],
              false,
              opts
@@ -100,7 +100,7 @@ defmodule Bonfire.Social.FeedActivities do
       |> Keyword.merge(
         exclude_verbs: exclude_verbs,
         exclude_replies:
-          !Bonfire.Me.Settings.get(
+          !Bonfire.Common.Settings.get(
             [Bonfire.Social.Feeds, :my_feed_includes, :reply],
             true,
             opts

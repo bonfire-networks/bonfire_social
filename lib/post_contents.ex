@@ -250,7 +250,7 @@ defmodule Bonfire.Social.PostContents do
   end
 
   def editor_output_content_type(user) do
-    if Bonfire.Me.Settings.get(
+    if Bonfire.Common.Settings.get(
          [:ui, :rich_text_editor_disabled],
          nil,
          user
@@ -258,7 +258,7 @@ defmodule Bonfire.Social.PostContents do
       :markdown
     else
       Bonfire.Common.Utils.maybe_apply(
-        Bonfire.Me.Settings.get([:ui, :rich_text_editor], nil, user),
+        Bonfire.Common.Settings.get([:ui, :rich_text_editor], nil, user),
         :output_format,
         [],
         &no_known_output/2

@@ -296,7 +296,7 @@ defmodule Bonfire.Social.Feeds do
     # include my outbox
     # |> debug("my_outbox_id")
     my_outbox_id =
-      if Bonfire.Me.Settings.get(
+      if Bonfire.Common.Settings.get(
            [Bonfire.Social.Feeds, :my_feed_includes, :outbox],
            true,
            socket_or_opts
@@ -305,7 +305,7 @@ defmodule Bonfire.Social.Feeds do
 
     # include my notifications?
     my_notifications_id =
-      if Bonfire.Me.Settings.get(
+      if Bonfire.Common.Settings.get(
            [Bonfire.Social.Feeds, :my_feed_includes, :notifications],
            true,
            socket_or_opts
@@ -319,7 +319,7 @@ defmodule Bonfire.Social.Feeds do
          followings when is_list(followings) <-
            Follows.all_followed_outboxes(current_user,
              include_followed_categories:
-               Bonfire.Me.Settings.get(
+               Bonfire.Common.Settings.get(
                  [Bonfire.Social.Feeds, :my_feed_includes, :followed_categories],
                  true,
                  socket_or_opts
