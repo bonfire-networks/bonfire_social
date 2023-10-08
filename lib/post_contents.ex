@@ -79,13 +79,14 @@ defmodule Bonfire.Social.PostContents do
             }} <-
              Bonfire.Social.Tags.maybe_process(
                creator,
-               prepare_text(get_attr(attrs, :html_body), creator, opts),
+               get_attr(attrs, :html_body)
+               |> maybe_sane_html(e(opts, :do_not_strip_html, nil)),
                opts
              ),
            {:ok, %{text: name, mentions: mentions2, hashtags: hashtags2, urls: urls2}} <-
              Bonfire.Social.Tags.maybe_process(
                creator,
-               prepare_text(get_attr(attrs, :name), creator, opts),
+               get_attr(attrs, :name) |> maybe_sane_html(e(opts, :do_not_strip_html, nil)),
                opts
              ),
            {:ok,
@@ -97,15 +98,15 @@ defmodule Bonfire.Social.PostContents do
             }} <-
              Bonfire.Social.Tags.maybe_process(
                creator,
-               prepare_text(get_attr(attrs, :summary), creator, opts),
+               get_attr(attrs, :summary) |> maybe_sane_html(e(opts, :do_not_strip_html, nil)),
                opts
              ) do
         merge_with_body_or_nil(
           attrs,
           %{
-            html_body: html_body,
-            name: name,
-            summary: summary,
+            name: prepare_text(name, creator, opts ++ [do_not_strip_html: true]),
+            summary: prepare_text(summary, creator, opts ++ [do_not_strip_html: true]),
+            html_body: prepare_text(html_body, creator, opts ++ [do_not_strip_html: true]),
             mentions: e(attrs, :mentions, []) ++ mentions1 ++ mentions2 ++ mentions3,
             hashtags: hashtags1 ++ hashtags2 ++ hashtags3,
             urls: urls1 ++ urls2 ++ urls3,
@@ -154,9 +155,9 @@ defmodule Bonfire.Social.PostContents do
   @doc "Given post content attributes, prepares it for processing by just cleaning up the text and detecting languages."
   defp only_prepare_content(attrs, creator, opts) do
     merge_with_body_or_nil(attrs, %{
-      html_body: prepare_text(get_attr(attrs, :html_body), creator, opts),
-      name: prepare_text(get_attr(attrs, :name), creator, opts),
-      summary: prepare_text(get_attr(attrs, :summary), creator, opts),
+      html_body: get_attr(attrs, :html_body) |> prepare_text(creator, opts),
+      name: get_attr(attrs, :name) |> prepare_text(creator, opts),
+      summary: get_attr(attrs, :summary) |> prepare_text(creator, opts),
       languages: maybe_detect_languages(attrs),
       mentions: e(attrs, :mentions, [])
     })
@@ -230,13 +231,13 @@ defmodule Bonfire.Social.PostContents do
     |> Text.maybe_emote(opts[:emoji])
     # |> debug()
     #  open remote links in new tab
-    |> Text.normalise_links()
-    # maybe remove potentially dangerous or dirty markup
+    # TODO: set format based on current editor
+    |> Text.normalise_links(:markdown)
+    # maybe remove potentially dangerous or dirty markup 
     |> maybe_sane_html(e(opts, :do_not_strip_html, nil))
     # make sure we end up with valid HTML
     |> Text.maybe_normalize_html()
-
-    # |> debug()
+    |> debug()
   end
 
   def prepare_text("", _, _opts), do: nil
