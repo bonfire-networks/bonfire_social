@@ -7,19 +7,19 @@ defmodule Bonfire.Social.Posts do
   # alias Bonfire.Data.Social.Replied
   # alias Bonfire.Data.Social.Activity
 
-  alias Bonfire.Social.Activities
-  alias Bonfire.Social.FeedActivities
-  # alias Bonfire.Social.Feeds
-  alias Bonfire.Social.Objects
-
   # alias Bonfire.Boundaries.Circles
   alias Bonfire.Boundaries.Verbs
 
   alias Bonfire.Epics.Epic
+
+  alias Bonfire.Social.Activities
+  alias Bonfire.Social.FeedActivities
+  # alias Bonfire.Social.Feeds
+  alias Bonfire.Social.Objects
   alias Bonfire.Social.Integration
   alias Bonfire.Social.PostContents
   alias Bonfire.Social.Tags
-  # alias Bonfire.Social.Threads
+  alias Bonfire.Social.Threads
 
   # alias Ecto.Changeset
 
@@ -348,6 +348,7 @@ defmodule Bonfire.Social.Posts do
            ) do
       {:ok, activity}
     end
+    |> debug("donzz")
   end
 
   @doc """
