@@ -124,18 +124,17 @@ defmodule Bonfire.Social.Posts do
 
   def prepare_post_attrs(attrs) do
     # FIXME: find a less nasty way (this is to support graceful degradation with the textarea inside noscript)
-    deep_merge(
-      attrs,
-      %{
-        post: %{
-          post_content: %{
-            html_body:
-              e(attrs, :html_body, nil) || e(attrs, :post, :post_content, :html_body, nil) ||
-                e(attrs, :fallback_post, :post_content, :html_body, nil)
-          }
+    attrs
+    |> debug("pre")
+    |> deep_merge(%{
+      post: %{
+        post_content: %{
+          html_body:
+            e(attrs, :html_body, nil) || e(attrs, :post, :post_content, :html_body, nil) ||
+              e(attrs, :fallback_post, :post_content, :html_body, nil)
         }
       }
-    )
+    })
   end
 
   def read(post_id, opts_or_socket_or_current_user \\ [])
