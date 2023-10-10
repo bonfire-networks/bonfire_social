@@ -230,9 +230,7 @@ defmodule Bonfire.Social.PostContents do
     # |> debug()
     |> Text.maybe_emote(opts[:emoji])
     # |> debug()
-    #  open remote links in new tab
-    # TODO: set format based on current editor
-    |> Text.normalise_links(:markdown)
+    # |> Text.normalise_links(:markdown)
     # maybe remove potentially dangerous or dirty markup 
     |> maybe_sane_html(e(opts, :do_not_strip_html, nil))
     # make sure we end up with valid HTML
@@ -243,10 +241,16 @@ defmodule Bonfire.Social.PostContents do
   def prepare_text("", _, _opts), do: nil
   def prepare_text(other, _, _opts), do: other
 
-  defp maybe_sane_html(text, true), do: text
+  defp maybe_sane_html(text, true),
+    do:
+      text
+      |> Text.normalise_links(:markdown)
 
   defp maybe_sane_html(text, _) do
     text
+    #  open remote links in new tab (need to do this before maybe_sane_html)
+    # TODO: set format based on current editor
+    |> Text.normalise_links(:markdown)
     |> Text.maybe_sane_html()
   end
 
