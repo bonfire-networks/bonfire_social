@@ -667,7 +667,7 @@ defmodule Bonfire.Social.Threads do
   def ap_prepare(thread_or_reply_to_id, _) do
     if thread_or_reply_to_id do
       with {:ok, ap_object} <-
-             ActivityPub.Object.get_cached(pointer: thread_or_reply_to_id) do
+             ActivityPub.Object.get_cached(thread_or_reply_to_id) do
         ap_object.data["id"]
       else
         e ->

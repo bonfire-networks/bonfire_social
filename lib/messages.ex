@@ -289,7 +289,7 @@ defmodule Bonfire.Social.Messages do
     query
   end
 
-  def ap_publish_activity(subject, _verb, message) do
+  def ap_publish_activity(subject, verb, message) do
     message = repo().preload(message, [:replied, activity: [:tags]])
 
     {:ok, actor} = ActivityPub.Actor.get_cached(pointer: subject)
@@ -310,16 +310,18 @@ defmodule Bonfire.Social.Messages do
 
     to = Enum.map(recipients, fn %{ap_id: ap_id} -> ap_id end)
 
-    context = Threads.ap_prepare(Threads.ap_prepare(e(message, :replied, :thread_id, nil)))
+    context = Threads.ap_prepare(Threads.ap_prepare(ulid(e(message, :replied, :thread_id, nil))))
 
     object = %{
       # "ChatMessage", # TODO: use ChatMessage with peers that support it?
       "type" => "Note",
       "actor" => actor.ap_id,
-      "content" => Utils.e(message, :post_content, :html_body, nil),
+      "name" => e(message, :post_content, :name, nil),
+      "summary" => e(message, :post_content, :summary, nil),
+      "content" => Text.maybe_markdown_to_html(e(message, :post_content, :html_body, nil)),
       "to" => to,
       "context" => context,
-      "inReplyTo" => Threads.ap_prepare(e(message, :replied, :reply_to_id, nil)),
+      "inReplyTo" => Threads.ap_prepare(ulid(e(message, :replied, :reply_to_id, nil))),
       "tag" =>
         Enum.map(recipients, fn actor ->
           %{
@@ -330,7 +332,7 @@ defmodule Bonfire.Social.Messages do
         end)
     }
 
-    attrs = %{
+    params = %{
       actor: actor,
       context: context,
       object: object,
@@ -338,7 +340,7 @@ defmodule Bonfire.Social.Messages do
       pointer: ulid(message)
     }
 
-    ActivityPub.create(attrs)
+    if verb == :edit, do: ActivityPub.update(params), else: ActivityPub.create(params)
   end
 
   def ap_receive_activity(creator, activity, object) do

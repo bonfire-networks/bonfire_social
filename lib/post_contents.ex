@@ -340,11 +340,15 @@ defmodule Bonfire.Social.PostContents do
            |> debug do
       if Integration.federate_outgoing?(current_user),
         do:
-          Integration.maybe_federate(
+          Bonfire.Common.Pointers.get(id(post_content),
+            current_user: current_user,
+            verbs: [:edit]
+          )
+          ~> Map.put(:post_content, updated)
+          |> Integration.maybe_federate(
             current_user,
             :edit,
-            Bonfire.Common.Pointers.get(id(post_content))
-            ~> Map.put(:post_content, updated)
+            ...
           )
 
       {:ok, updated}
@@ -452,6 +456,7 @@ defmodule Bonfire.Social.PostContents do
         hashtags: hashtags,
         post_content: %{
           name: post_data["name"],
+          summary: post_data["summary"],
           html_body: post_data["content"]
         },
         created: %{
