@@ -40,9 +40,9 @@ defmodule Bonfire.Social.Posts do
     do: [
       "Note",
       {"Create", "Note"},
-      {"Update", "Note"},
-      {"Create", "Article"},
-      {"Update", "Article"}
+      # {"Update", "Note"},
+      {"Create", "Article"}
+      # {"Update", "Article"}
     ]
 
   def draft(_creator, _attrs) do
@@ -212,7 +212,7 @@ defmodule Bonfire.Social.Posts do
   end
 
   # TODO: federated delete, in addition to create:
-  def ap_publish_activity(subject, _verb, post) do
+  def ap_publish_activity(subject, verb, post) do
     # TODO: get from config
     public_acl_ids = Bonfire.Boundaries.Acls.remote_public_acl_ids()
 
@@ -332,22 +332,22 @@ defmodule Bonfire.Social.Posts do
            }
            |> Enum.filter(fn {_, v} -> not is_nil(v) end)
            |> Enum.into(%{}),
-         {:ok, activity} <-
-           ActivityPub.create(
-             %{
-               pointer: id,
-               local: true,
-               actor: actor,
-               context: context,
-               object: object,
-               to: to,
-               additional: %{
-                 "cc" => cc,
-                 "bcc" => bcc
-               }
+         params <-
+           %{
+             pointer: id,
+             local: true,
+             actor: actor,
+             context: context,
+             object: object,
+             to: to,
+             additional: %{
+               "cc" => cc,
+               "bcc" => bcc
              }
-             |> debug("params for ActivityPub.create")
-           ) do
+           }
+           |> debug("params for ActivityPub / #{inspect(verb)}"),
+         {:ok, activity} <-
+           if(verb == :edit, do: ActivityPub.update(params), else: ActivityPub.create(params)) do
       {:ok, activity}
     end
     |> debug("donzz")
@@ -362,10 +362,14 @@ defmodule Bonfire.Social.Posts do
     ap_receive_activity(creator, activity, object, [:guest])
   end
 
-  # record an incoming post
+  def ap_receive_activity(creator, %{data: activity_data}, object, circles) do
+    ap_receive_activity(creator, activity_data, object, circles)
+  end
+
+  # create an incoming post
   def ap_receive_activity(
         creator,
-        activity,
+        activity_data,
         %{data: post_data, pointer_id: id, public: is_public} = _object,
         circles
       )
@@ -374,7 +378,7 @@ defmodule Bonfire.Social.Posts do
     # debug(creator: creator)
     # debug(object: object)
 
-    activity_data = e(activity, :data, %{})
+    activity_data = activity_data || %{}
 
     #  TODO: put somewhere reusable by other types
     direct_recipients =
@@ -411,61 +415,6 @@ defmodule Bonfire.Social.Posts do
           |> ActivityPub.Object.get_cached!(ap_id: ...)
           |> e(:pointer_id, nil)
 
-    tags =
-      (List.wrap(activity_data["tag"]) ++
-         List.wrap(post_data["tag"]))
-      |> Enum.uniq()
-
-    #  TODO: put somewhere reusable by other types
-    hashtags =
-      for %{"type" => "Hashtag"} = tag <- tags do
-        with {:ok, hashtag} <- Bonfire.Tag.Hashtag.get_or_create_by_name(tag["name"]) do
-          {tag["href"], hashtag}
-        else
-          none ->
-            warn(none, "could not create Hashtag for #{tag["name"]}")
-            nil
-        end
-      end
-      |> filter_empty([])
-      |> Map.new()
-      |> info("incoming hashtags")
-
-    #  TODO: put somewhere reusable by other types
-    mentions =
-      for %{"type" => "Mention"} = mention <- tags do
-        url =
-          (mention["href"] || "")
-          # workaround for Mastodon using different URLs in text
-          |> String.replace("/users/", "/@")
-
-        with %{} = character <-
-               e(direct_recipients, mention["href"], nil) ||
-                 Bonfire.Federate.ActivityPub.AdapterUtils.get_character_by_ap_id!(
-                   mention["href"] || mention["name"]
-                 ),
-             true <- Bonfire.Social.Integration.federating?(character) do
-          {
-            url,
-            character
-          }
-        else
-          e ->
-            info(
-              e,
-              "could not find known character for incoming mention, or they have federation disabled"
-            )
-
-            {
-              url,
-              mention["name"]
-            }
-        end
-      end
-      |> filter_empty([])
-      |> Map.new()
-      |> info("incoming mentions")
-
     to_circles =
       circles ++
         Enum.map(direct_recipients || [], fn {_, character} ->
@@ -473,34 +422,20 @@ defmodule Bonfire.Social.Posts do
         end)
 
     attrs =
-      info(
-        %{
-          id: id,
-          local: false,
-          # huh?
-          canonical_url: nil,
-          to_circles: to_circles,
-          mentions: mentions,
-          hashtags: hashtags,
-          post_content: %{
-            name: post_data["name"],
-            html_body: post_data["content"]
-          },
-          created: %{
-            date: post_data["published"]
-          },
-          sensitive: post_data["sensitive"],
-          reply_to_id: reply_to_id,
-          uploaded_media: Bonfire.Files.ap_receive_attachments(creator, post_data["attachment"])
-        },
-        "remote post attrs"
-      )
+      PostContents.ap_prepare_attrs(creator, activity_data, post_data, direct_recipients)
+      |> Enum.into(%{
+        id: id,
+        # huh?
+        canonical_url: nil,
+        to_circles: to_circles,
+        reply_to_id: reply_to_id
+      })
 
     info(is_public, "is_public")
 
     if is_public == false and
-         (is_list(mentions) or is_map(mentions)) and
-         mentions != [] and mentions != %{} do
+         (is_list(attrs[:mentions]) or is_map(attrs[:mentions])) and
+         attrs[:mentions] != [] and attrs[:mentions] != %{} do
       info("treat as Message if private with @ mentions")
       Bonfire.Social.Messages.send(creator, attrs)
     else

@@ -5,9 +5,17 @@ defmodule Bonfire.Social.PostContents do
   use Arrows
 
   alias Bonfire.Data.Social.PostContent
+  alias Bonfire.Social.Integration
   import Bonfire.Common.Extend
   use Bonfire.Common.Utils
   use Bonfire.Common.Repo
+
+  def federation_module,
+    do: [
+      {"Update", "Note"},
+      {"Update", "Article"},
+      {"Update", "ChatMessage"}
+    ]
 
   @doc "Given a set of filters, returns an Ecto.Query for matching post contents."
   def query(filters, _opts \\ []) do
@@ -292,7 +300,7 @@ defmodule Bonfire.Social.PostContents do
     |> debug("vvv")
   end
 
-  def edit(current_user, id, attrs) do
+  def edit(current_user, id, attrs) when is_binary(id) do
     # post_content = repo().get!(PostContent, id)
     # if Bonfire.Boundaries.can?(current_user, :edit, post_content) do
     with %PostContent{} = post_content <-
@@ -300,22 +308,160 @@ defmodule Bonfire.Social.PostContents do
              verbs: [:edit],
              from: query_base(),
              current_user: current_user
-           )
-           |> repo().maybe_preload(:created) do
-      with :ok <-
-             PaperTrail.initialise(post_content,
-               user: %{id: e(post_content, :created, :creator_id, nil)}
-             ) do
-        edit_changeset =
-          attrs
-          |> debug()
-          |> PostContent.changeset(post_content, ...)
-          |> debug()
-
-        PaperTrail.update(edit_changeset, user: current_user)
-        |> debug
-      end
+           ) do
+      edit(current_user, post_content, attrs)
     end
+  end
+
+  def edit(current_user, %{post_content: %PostContent{} = post_content}, attrs),
+    do: edit(current_user, post_content, attrs)
+
+  def edit(current_user, post_content, %{post_content: post_content_attrs}),
+    do: edit(current_user, post_content, post_content_attrs)
+
+  def edit(current_user, %PostContent{} = post_content, attrs) do
+    # post_content = repo().get!(PostContent, id)
+    # if Bonfire.Boundaries.can?(current_user, :edit, post_content) do
+    with post_content <-
+           post_content
+           |> repo().maybe_preload(:created),
+         #  create the v1 entry if this is the first edir
+         :ok <-
+           PaperTrail.initialise(post_content,
+             user: %{id: e(post_content, :created, :creator_id, nil)}
+           ),
+         {:ok, %{model: updated}} <-
+           attrs
+           # TODO: apply the preparation/sanitation functions?
+           |> debug()
+           |> PostContent.changeset(post_content, ...)
+           # |> debug()
+           |> PaperTrail.update(user: current_user)
+           |> debug do
+      if Integration.federate_outgoing?(current_user),
+        do:
+          Integration.maybe_federate(
+            current_user,
+            :edit,
+            Bonfire.Common.Pointers.get(id(post_content))
+            ~> Map.put(:post_content, updated)
+          )
+
+      {:ok, updated}
+    end
+  end
+
+  # edit an existing post
+  def ap_receive_activity(creator, %{data: activity_data}, object) do
+    ap_receive_activity(creator, activity_data, object)
+  end
+
+  def ap_receive_activity(creator, activity_data, %{data: post_data}) do
+    ap_receive_activity(creator, activity_data, post_data)
+  end
+
+  def ap_receive_activity(
+        creator,
+        %{"type" => "Update"} = activity_data,
+        post_data
+      ) do
+    debug(activity_data, "do_an_update")
+
+    #  with %{pointer_id: pointer_id} = _original_object when is_binary(pointer_id) <-
+    #    ActivityPub.Object.get_activity_for_object_ap_id(post_data) do
+    with {:ok, %{pointer_id: pointer_id} = _original_object} when is_binary(pointer_id) <-
+           ActivityPub.Object.get_cached(ap_id: post_data) do
+      debug(pointer_id, "original_object")
+
+      #  TODO: update metadata too:
+      #   sensitive
+      #   hashtags
+      #   mentions (and also notify?)
+      #   media
+
+      ap_prepare_attrs(creator, activity_data, post_data)
+      |> edit(creator, pointer_id, ...)
+    else
+      e ->
+        error(e, "Could not find the object being updated.")
+    end
+  end
+
+  def ap_prepare_attrs(creator, activity_data, post_data, direct_recipients \\ []) do
+    tags =
+      (List.wrap(activity_data["tag"]) ++
+         List.wrap(post_data["tag"]))
+      |> Enum.uniq()
+
+    #  TODO: put somewhere reusable by other types
+    hashtags =
+      for %{"type" => "Hashtag"} = tag <- tags do
+        with {:ok, hashtag} <- Bonfire.Tag.Hashtag.get_or_create_by_name(tag["name"]) do
+          {tag["href"], hashtag}
+        else
+          none ->
+            warn(none, "could not create Hashtag for #{tag["name"]}")
+            nil
+        end
+      end
+      |> filter_empty([])
+      |> Map.new()
+      |> info("incoming hashtags")
+
+    #  TODO: put somewhere reusable by other types
+    mentions =
+      for %{"type" => "Mention"} = mention <- tags do
+        url =
+          (mention["href"] || "")
+          # workaround for Mastodon using different URLs in text
+          |> String.replace("/users/", "/@")
+
+        with %{} = character <-
+               e(direct_recipients, mention["href"], nil) ||
+                 Bonfire.Federate.ActivityPub.AdapterUtils.get_character_by_ap_id!(
+                   mention["href"] || mention["name"]
+                 ),
+             true <- Bonfire.Social.Integration.federating?(character) do
+          {
+            url,
+            character
+          }
+        else
+          e ->
+            info(
+              e,
+              "could not find known character for incoming mention, or they have federation disabled"
+            )
+
+            {
+              url,
+              mention["name"]
+            }
+        end
+      end
+      |> filter_empty([])
+      |> Map.new()
+      |> info("incoming mentions")
+
+    info(
+      %{
+        local: false,
+        # huh?
+        canonical_url: nil,
+        mentions: mentions,
+        hashtags: hashtags,
+        post_content: %{
+          name: post_data["name"],
+          html_body: post_data["content"]
+        },
+        created: %{
+          date: post_data["published"]
+        },
+        sensitive: post_data["sensitive"],
+        uploaded_media: Bonfire.Files.ap_receive_attachments(creator, post_data["attachment"])
+      },
+      "remote post attrs"
+    )
   end
 
   def query_base(), do: from(p in PostContent, as: :main_object)
