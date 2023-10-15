@@ -308,7 +308,10 @@ defmodule Bonfire.Social.Posts do
              "attributedTo" => actor.ap_id,
              "to" => to,
              "cc" => cc,
-             # TODO: put somewhere reusable by other types?
+             # TODO: put somewhere reusable by other types:
+             "indexable" =>
+               Bonfire.Common.Extend.module_enabled?(Bonfire.Search.Indexer, subject),
+             # TODO: put somewhere reusable by other types:
              "sensitive" => e(post, :sensitive, :is_sensitive, false),
              "name" => e(post, :post_content, :name, nil),
              "summary" => e(post, :post_content, :summary, nil),
@@ -317,7 +320,7 @@ defmodule Bonfire.Social.Posts do
              # TODO support replies and context for all object types, not just posts
              "inReplyTo" => Threads.ap_prepare(e(post, :replied, :reply_to_id, nil)),
              "context" => context,
-             # TODO: add hashtags
+             # TODO: add hashtags too
              "tag" =>
                Enum.map(mentions, fn actor ->
                  %{
