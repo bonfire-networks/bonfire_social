@@ -25,8 +25,12 @@ defmodule Bonfire.Social.Integration do
          }
        })}
     else
-      :ignore -> {:ok, object}
-      other -> other
+      :ignore ->
+        {:ok, object}
+
+      other ->
+        warn(other, "Unexpected result")
+        other
     end
   end
 

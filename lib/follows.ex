@@ -168,7 +168,7 @@ defmodule Bonfire.Social.Follows do
                object_type == Bonfire.Data.Identity.User,
              do: Bonfire.Social.Graph.graph_add(user, object, Follow)
 
-          if info(opts[:incoming] != true, "Maybe outgoing follow?"),
+          if opts[:incoming] != true,
             do: Integration.maybe_federate_and_gift_wrap_activity(user, follow),
             else: {:ok, follow}
 
@@ -255,7 +255,7 @@ defmodule Bonfire.Social.Follows do
              Activities.delete_by_subject_verb_object(subject, :request, object),
            {:ok, follow} <- do_follow(subject, object, opts) |> debug("accept_do_follow"),
            :ok <-
-             if(debug(opts[:incoming] != true, "Maybe outgoing accept?"),
+             if(opts[:incoming] != true,
                do: Requests.ap_publish_activity(subject, {:accept, request}, follow),
                else: :ok
              ) do
@@ -267,7 +267,9 @@ defmodule Bonfire.Social.Follows do
     end)
   end
 
-  def unfollow(user, %{} = object) do
+  def unfollow(user, object, opts \\ [])
+
+  def unfollow(user, %{} = object, opts) do
     if following?(user, object) do
       Edges.delete_by_both(user, Follow, object)
       # with [_id] <- Edges.delete_by_both(user, Follow, object) do
@@ -285,8 +287,10 @@ defmodule Bonfire.Social.Follows do
 
       Bonfire.Social.Graph.graph_remove(user, object, Follow)
 
+      if opts[:incoming] != true,
+        do: ap_publish_activity(user, :delete, object)
+
       # Integration.maybe_federate(user, :unfollow, object)
-      ap_publish_activity(user, :delete, object)
 
       # end
     else
@@ -298,13 +302,13 @@ defmodule Bonfire.Social.Follows do
     end
   end
 
-  def unfollow(%{} = user, object) when is_binary(object) do
+  def unfollow(%{} = user, object, opts) when is_binary(object) do
     with {:ok, object} <-
            Bonfire.Common.Pointers.get(object,
              current_user: user,
              skip_boundary_check: true
            ) do
-      unfollow(user, object)
+      unfollow(user, object, opts)
     end
   end
 
@@ -539,7 +543,7 @@ defmodule Bonfire.Social.Follows do
          # check if not already following
          false <- following?(follower, followed),
          {:ok, %Follow{} = follow} <-
-           follow(follower, followed, current_user: follower) do
+           follow(follower, followed, current_user: follower, incoming: true) do
       with {:ok, _accept_activity, _adapter_object, accepted_activity} <-
              ActivityPub.accept_activity(%{
                actor: object,
@@ -616,16 +620,16 @@ defmodule Bonfire.Social.Follows do
            Bonfire.Federate.ActivityPub.AdapterUtils.fetch_character_by_ap_id(follower) do
       case following?(follower, followed) do
         false ->
-          reject(follower, followed)
+          reject(follower, followed, incoming: true)
 
         true ->
           request =
-            with {:ok, request} <- reject(follower, followed) do
+            with {:ok, request} <- reject(follower, followed, incoming: true) do
               request
               |> debug("rejected previously accepted request")
             end
 
-          unfollow(follower, followed)
+          unfollow(follower, followed, incoming: true)
           |> debug("unfollow rejected follow")
 
           {:ok, request}
@@ -640,15 +644,15 @@ defmodule Bonfire.Social.Follows do
       ) do
     with {:ok, object} <-
            Bonfire.Federate.ActivityPub.AdapterUtils.fetch_character_by_ap_id(followed_ap_id),
-         [id] <- unfollow(follower, object) do
+         [id] <- unfollow(follower, object, incoming: true) do
       {:ok, id}
     end
   end
 
-  defp reject(follower, followed) do
+  defp reject(follower, followed, opts \\ []) do
     with {:ok, request} <-
            Requests.get(follower, Follow, followed, skip_boundary_check: true),
-         {:ok, request} <- ignore(request, current_user: followed) do
+         {:ok, request} <- ignore(request, opts ++ [current_user: followed]) do
       {:ok, request}
     end
   end

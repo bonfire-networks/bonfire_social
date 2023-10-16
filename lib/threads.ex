@@ -655,7 +655,9 @@ defmodule Bonfire.Social.Threads do
   # end
 
   @doc "Key can be for eg. :thread_id or :reply_to_id"
-  def ap_prepare(object, key \\ :thread_id) when is_struct(object) do
+  def ap_prepare(object_or_thread_or_reply_to_id, key \\ :thread_id)
+
+  def ap_prepare(object, key) when is_struct(object) do
     object
     |> repo().maybe_preload([
       :replied

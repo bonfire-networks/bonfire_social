@@ -41,9 +41,10 @@ defmodule Bonfire.Social.Boosts do
   end
 
   def count(%{} = user, object) when is_struct(object) or is_binary(object),
-    do: Edges.count(__MODULE__, user, object, skip_boundary_check: true)
+    do: Edges.count_for_subject(__MODULE__, user, object, skip_boundary_check: true)
 
-  def count(object, _) when is_struct(object), do: Edges.count(:boost, object)
+  def count(object, _) when is_struct(object),
+    do: Edges.count(:boost, object, skip_boundary_check: true)
 
   def date_last_boosted(%{} = user, object),
     do: Edges.last_date(__MODULE__, user, object, skip_boundary_check: true)
@@ -131,6 +132,7 @@ defmodule Bonfire.Social.Boosts do
       )
 
       Integration.maybe_federate_and_gift_wrap_activity(booster, boost)
+      |> debug("maybe_federated the boost")
     end
   end
 
@@ -228,6 +230,9 @@ defmodule Bonfire.Social.Boosts do
              pointer: e(boost, :edge, :object, nil) || e(boost, :edge, :object_id, nil)
            ) do
       ActivityPub.announce(%{actor: booster, object: object, pointer: ulid(boost)})
+    else
+      e ->
+        error(e, "Could not find the federated actor or object to boost.")
     end
   end
 

@@ -495,19 +495,15 @@ defmodule Bonfire.Social.Feeds do
   end
 
   defp save_box_feed(:outbox, character, feed_id) do
-    update_character(character, %{outbox_id: feed_id})
+    Characters.update(character, %{outbox_id: feed_id})
   end
 
   defp save_box_feed(:inbox, character, feed_id) do
-    update_character(character, %{inbox_id: feed_id})
+    Characters.update(character, %{inbox_id: feed_id})
   end
 
   defp save_box_feed(:notifications, character, feed_id) do
-    update_character(character, %{notifications_id: feed_id})
-  end
-
-  defp update_character(%Character{} = character, attrs) do
-    repo().update(Character.changeset(character, attrs, :update))
+    Characters.update(character, %{notifications_id: feed_id})
   end
 
   # @doc "Create a new generic feed"

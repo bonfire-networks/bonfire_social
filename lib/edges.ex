@@ -143,8 +143,18 @@ defmodule Bonfire.Social.Edges do
     |> repo().exists?()
   end
 
-  def count(type, subject, object, opts) do
-    do_query(type, subject, object, Keyword.put(opts, :preload, :skip))
+  def count(type, filters_or_object, opts \\ [])
+
+  def count(type, object, _opts) when is_struct(object) do
+    field_name = maybe_to_atom("#{type}_count")
+
+    object
+    |> repo().maybe_preload(field_name, follow_pointers: false)
+    |> e(field_name, :object_count, nil)
+  end
+
+  def count(type, filters, opts) when is_list(filters) and is_list(opts) do
+    do_query(type, filters, Keyword.put(opts, :preload, :skip))
     |> Ecto.Query.exclude(:select)
     # |> Ecto.Query.exclude(:distinct)
     |> Ecto.Query.exclude(:preload)
@@ -153,16 +163,8 @@ defmodule Bonfire.Social.Edges do
     |> repo().one()
   end
 
-  def count(type, object, opts) when is_struct(object) do
-    field_name = maybe_to_atom("#{type}_count")
-
-    object
-    |> repo().maybe_preload(field_name, follow_pointers: false)
-    |> e(field_name, :object_count, nil)
-  end
-
-  def count(type, filters \\ [], opts \\ []) do
-    do_query(type, filters, Keyword.put(opts, :preload, :skip))
+  def count_for_subject(type, subject, object, opts) do
+    do_query(type, subject, object, Keyword.put(opts, :preload, :skip))
     |> Ecto.Query.exclude(:select)
     # |> Ecto.Query.exclude(:distinct)
     |> Ecto.Query.exclude(:preload)

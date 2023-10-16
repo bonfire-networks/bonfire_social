@@ -199,7 +199,7 @@ defmodule Bonfire.Social.Requests do
   #   end
   # end
 
-  defp do_request(requester, type, object, _opts) do
+  defp do_request(requester, type, object, opts) do
     opts = [
       boundary: "mentions",
       to_circles: [id(object)],
@@ -208,7 +208,9 @@ defmodule Bonfire.Social.Requests do
 
     case create(requester, type, object, opts) do
       {:ok, request} ->
-        Integration.maybe_federate_and_gift_wrap_activity(requester, request)
+        if opts[:incoming] != true,
+          do: Integration.maybe_federate_and_gift_wrap_activity(requester, request),
+          else: {:ok, request}
 
       e ->
         warn(e)

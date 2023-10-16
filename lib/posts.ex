@@ -249,9 +249,10 @@ defmodule Bonfire.Social.Posts do
 
     # TODO: should we just include ALL thread participants? ^
 
-    # FIXME: use `get_preset_on_object` instead of loading them all
-    acls = Bonfire.Boundaries.list_object_acls(post)
-    # |> debug("acls")
+    # FIXME: use `get_preset_on_object` instead of loading them all, or at least only load the IDs
+    acls =
+      Bonfire.Boundaries.list_object_acls(post)
+      |> debug("post_acls")
 
     is_public = Enum.any?(acls, fn %{id: acl_id} -> acl_id in public_acl_ids end)
 

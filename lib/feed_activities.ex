@@ -433,6 +433,13 @@ defmodule Bonfire.Social.FeedActivities do
         debug(feed, "feed id(s)")
         feed
 
+      itself when itself == feed_name ->
+        Feeds.my_feed_id(feed_name, opts) ||
+          (
+            error("FeedActivities.feed: no known feed #{inspect(feed_name)}")
+            nil
+          )
+
       e ->
         error("FeedActivities.feed: no known feed #{inspect(feed_name)} - #{inspect(e)}")
 

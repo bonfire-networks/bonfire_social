@@ -37,7 +37,7 @@ defmodule Bonfire.Social.Graph do
 
       graph_conn ->
         graph_conn
-        |> Bolt.Sips.query("CREATE CONSTRAINT ON (n: Character) ASSERT EXISTS (n.id);
+        |> graph_query("CREATE CONSTRAINT ON (n: Character) ASSERT EXISTS (n.id);
     CREATE CONSTRAINT ON (n: Character) ASSERT n.id IS UNIQUE;")
 
         load_from_db()
@@ -90,6 +90,20 @@ defmodule Bonfire.Social.Graph do
       nil
   end
 
+  def graph_query(graph_conn \\ graph_conn(), query) do
+    case graph_conn do
+      nil ->
+        nil
+
+      graph_conn ->
+        Bolt.Sips.query(graph_conn, query)
+    end
+  catch
+    :exit, reason ->
+      error(reason)
+      nil
+  end
+
   def graph_meta(_subject \\ nil) do
     # TODO: put in Settings
     [
@@ -112,7 +126,7 @@ defmodule Bonfire.Social.Graph do
         MERGE (a)-[r:#{graph_meta[:rel_name] || type} {rank: #{graph_meta[:rank] || 1}}]->(b) 
         RETURN a.id, type(r), b.id;"
         |> debug()
-        |> Bolt.Sips.query(graph_conn, ...)
+        |> graph_query(graph_conn, ...)
         |> debug()
     end
   end
@@ -128,7 +142,7 @@ defmodule Bonfire.Social.Graph do
         "MATCH (a: Character {id: '#{id(subject)}'})-[r:#{graph_meta[:rel_name] || type}]->(b: Character {id: '#{id(object)}'}) 
         DELETE r;"
         |> debug()
-        |> Bolt.Sips.query(graph_conn, ...)
+        |> graph_query(graph_conn, ...)
         |> debug()
     end
   end
@@ -144,7 +158,7 @@ defmodule Bonfire.Social.Graph do
         CALL nxalg.shortest_path_length(subject, object, 'rank') YIELD * 
         RETURN length;"
              |> debug()
-             |> Bolt.Sips.query(graph_conn, ...)
+             |> graph_query(graph_conn, ...)
              |> debug() do
           {:ok, %{records: [[length]]}} ->
             length
@@ -166,7 +180,7 @@ defmodule Bonfire.Social.Graph do
         CALL nxalg.shortest_path_length(subject, NULL, 'rank') YIELD * 
         RETURN target.id, length ORDER BY length;"
              |> debug()
-             |> Bolt.Sips.query(graph_conn, ...)
+             |> graph_query(graph_conn, ...)
              |> debug() do
           {:ok, %{records: [[length]]}} ->
             length
@@ -184,7 +198,7 @@ defmodule Bonfire.Social.Graph do
         nil
 
       graph_conn ->
-        Bolt.Sips.query(graph_conn, "MATCH (n) DETACH DELETE n;")
+        graph_query(graph_conn, "MATCH (n) DETACH DELETE n;")
         |> debug()
     end
   end
