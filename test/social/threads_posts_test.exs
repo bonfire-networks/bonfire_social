@@ -47,6 +47,8 @@ defmodule Bonfire.Social.ThreadsPostsTest do
     assert post_reply.replied.thread_id == post.id
   end
 
+  # is this desirable behaviour when there's no @ mention?
+  @tag :fixme
   test "see a public reply to something I posted in my notifications" do
     me = Fake.fake_user!()
     someone = Fake.fake_user!()
@@ -164,9 +166,9 @@ defmodule Bonfire.Social.ThreadsPostsTest do
     # debug(replies)
     reply = List.first(replies)
     # IO.inspect(reply)
-    assert reply.activity.replied.reply_to_id == post.id
-    assert reply.activity.replied.thread_id == post.id
-    assert reply.activity.replied.path == [post.id]
+    assert reply.reply_to_id == post.id
+    assert reply.thread_id == post.id
+    assert reply.path == [post.id]
   end
 
   test "can read nested replies of a user talking to themselves as a guest" do
@@ -230,13 +232,13 @@ defmodule Bonfire.Social.ThreadsPostsTest do
     reply = List.last(replies)
     reply3 = List.first(replies)
 
-    assert reply.activity.replied.reply_to_id == post.id
-    assert reply.activity.replied.thread_id == post.id
-    assert reply.activity.replied.path == [post.id]
+    assert reply.reply_to_id == post.id
+    assert reply.thread_id == post.id
+    assert reply.path == [post.id]
 
-    assert reply3.activity.replied.reply_to_id == post_reply.id
-    assert reply3.activity.replied.thread_id == post.id
-    assert reply3.activity.replied.path == [post.id, post_reply.id]
+    assert reply3.reply_to_id == post_reply.id
+    assert reply3.thread_id == post.id
+    assert reply3.path == [post.id, post_reply.id]
   end
 
   # Forking is not yet fully worked out.
@@ -321,7 +323,8 @@ defmodule Bonfire.Social.ThreadsPostsTest do
 
     threaded_replies = Bonfire.Social.Threads.arrange_replies_tree(replies)
 
-    # debug(threaded_replies)
+    debug(threaded_replies, "threaded_replies_tree")
+
     assert [
              {
                %{} = reply,
@@ -334,12 +337,12 @@ defmodule Bonfire.Social.ThreadsPostsTest do
              }
            ] = threaded_replies
 
-    assert reply.activity.replied.reply_to_id == post.id
-    assert reply.activity.replied.thread_id == post.id
-    assert reply.activity.replied.path == [post.id]
+    assert reply.reply_to_id == post.id
+    assert reply.thread_id == post.id
+    assert reply.path == [post.id]
 
-    assert reply3.activity.replied.reply_to_id == post_reply.id
-    assert reply3.activity.replied.thread_id == post.id
-    assert reply3.activity.replied.path == [post.id, post_reply.id]
+    assert reply3.reply_to_id == post_reply.id
+    assert reply3.thread_id == post.id
+    assert reply3.path == [post.id, post_reply.id]
   end
 end

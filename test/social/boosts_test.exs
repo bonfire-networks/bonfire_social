@@ -36,7 +36,6 @@ defmodule Bonfire.Social.BoostsTest do
 
   # FIXME: this may not be the current behaviour
   test "cannot boost something repeatedly in a short time" do
-    Config.put([Bonfire.Social.Boosts, :can_reboost_after], true)
     me = Fake.fake_user!()
 
     attrs = %{
@@ -56,6 +55,8 @@ defmodule Bonfire.Social.BoostsTest do
 
     assert {:ok, boost} = Boosts.boost(me, boosted)
     assert true == Boosts.boosted?(me, boosted)
+
+    Config.put([Bonfire.Social.Boosts, :can_reboost_after], true)
 
     assert {:ok, boost} = Boosts.boost(me, boosted)
     assert 2 == Boosts.count(me, boosted)

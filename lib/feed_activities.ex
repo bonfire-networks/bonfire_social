@@ -202,7 +202,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed_paginated(filters, opts, query) do
-    query(filters, opts, query)
+    do_query(filters, opts, query)
     # |> debug
     |> paginate_and_boundarise_feed(opts)
 
@@ -464,23 +464,19 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed_contains?(feed_name, object, opts \\ [])
 
-  def feed_contains?(%{edges: feed}, object, opts) do
-    feed_contains?(feed, object, opts)
+  def feed_contains?(%{edges: edges}, object, opts) do
+    feed_contains?(edges, object, opts)
   end
 
   def feed_contains?(feed, id_or_html_body, _opts)
-      when (is_binary(id_or_html_body) or is_map(id_or_html_body)) and is_list(feed) do
+      when is_list(feed) and (is_binary(id_or_html_body) or is_map(id_or_html_body)) do
     Enum.find_value(feed, fn fi ->
       fi.activity.object_id == id(id_or_html_body) or
         fi.activity.object.post_content.html_body =~ id_or_html_body
     end)
   end
 
-  def feed_contains?(feed, object, opts) when is_map(object) or is_binary(object) do
-    feed_contains?(feed, %{object: object}, opts)
-  end
-
-  def feed_contains?(feed_name, object, opts) do
+  def feed_contains?(feed_name, filters, opts) when is_list(filters) do
     {feed_ids, opts} = feed_ids_and_opts(feed_name, opts)
 
     feed_query(
@@ -489,12 +485,17 @@ defmodule Bonfire.Social.FeedActivities do
         opts,
         :feed_filters,
         Enum.into(
-          object,
+          filters,
           e(opts, :feed_filters, %{})
         )
       )
     )
+    |> Activities.as_permitted_for(opts)
     |> repo().exists?()
+  end
+
+  def feed_contains?(feed, object, opts) when is_map(object) or is_binary(object) do
+    feed_contains?(feed, [object: object], opts)
   end
 
   # @decorate time()
@@ -607,6 +608,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   # @decorate time()
+  # PLEASE: note this query is not boundarised, it is your responsibility to do so in the calling function!
   defp feed_query(feed_id_or_ids, opts) do
     opts = to_feed_options(opts)
 
@@ -670,16 +672,21 @@ defmodule Bonfire.Social.FeedActivities do
     # |> debug("generic")
   end
 
-  def query(filters \\ [], opts \\ []),
-    do: query(filters, opts, default_query())
+  @doc "Return a boundarised query for a feed"
+  def query(filters \\ [], opts \\ [], query \\ default_query()) do
+    do_query(filters, opts, query)
+    |> Activities.as_permitted_for(opts)
+  end
 
-  # def query([feed_id: feed_id_or_ids], opts) when is_binary(feed_id_or_ids) or is_list(feed_id_or_ids) do
+  # NOT boundarised!
+  defp do_query(filters \\ [], opts \\ [], query \\ default_query())
+
+  # defp do_query([feed_id: feed_id_or_ids], opts) when is_binary(feed_id_or_ids) or is_list(feed_id_or_ids) do
   #   # debug(feed_id_or_ids: feed_id_or_ids)
   #   feed_query(feed_id_or_ids, opts)
-  #   query([], opts, query)
+  #   do_query([], opts, query)
   # end
-
-  def query(filters, opts, query) when is_list(filters) do
+  defp do_query(filters, opts, query) when is_list(filters) do
     query
     |> query_extras(opts)
     |> query_filter(filters, nil, nil)
@@ -687,7 +694,7 @@ defmodule Bonfire.Social.FeedActivities do
     # |> debug("FeedActivities - query")
   end
 
-  def query(filters, _opts, query) do
+  defp do_query(filters, _opts, query) do
     # |> query_extras(current_user)
     # |> query_filter(filters, nil, nil)
     warn(
