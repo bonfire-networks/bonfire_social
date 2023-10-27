@@ -134,14 +134,13 @@ defmodule Bonfire.Social.Objects do
     current_user = current_user(socket_or_current_user)
 
     Common.Pointers.pointer_query([id: object_id], current_user: current_user)
-    |> debug()
-    |> Activities.read(current_user: socket_or_current_user, skip_opts_check: true)
+    # |> debug()
+    |> Activities.read(current_user: current_user, skip_opts_check: true)
     # |> debug("object with activity")
     ~> maybe_preload_activity_object(current_user)
     ~> Activities.activity_under_object(...)
     ~> to_ok()
-
-    # |> debug("final object")
+    |> debug("final object")
   end
 
   def maybe_preload_activity_object(

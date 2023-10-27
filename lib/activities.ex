@@ -279,6 +279,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   def activity_preloads(query, opts) do
+    opts = to_options(opts)
     activity_preloads(query, opts[:preload], opts)
   end
 
@@ -290,6 +291,7 @@ defmodule Bonfire.Social.Activities do
   def activity_preloads(query, preloads, opts) when is_list(preloads) do
     # debug(query, "query or data")
     debug(preloads, "preloads")
+    opts = to_options(opts)
 
     if not is_nil(query) and Ecto.Queryable.impl_for(query) do
       do_activity_preloads(query, preloads, opts)
