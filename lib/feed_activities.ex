@@ -210,6 +210,8 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed_many_paginated(query, opts) do
+    debug(opts)
+
     Integration.many(
       query,
       opts[:paginate],
@@ -226,8 +228,9 @@ defmodule Bonfire.Social.FeedActivities do
       # to avoid 'cannot preload in subquery' error
       |> make_distinct(opts[:sort_order], opts[:sort_order], opts)
       |> query_order(opts[:sort_by], opts[:sort_order])
-      |> feed_many_paginated(opts ++ [return: :query, multiply_limit: 2])
+      |> feed_many_paginated(opts ++ [paginate: true, return: :query, multiply_limit: 2])
       |> repo().make_subquery()
+      |> debug("deferred subquery")
 
     default_or_filtered_query(opts)
     |> join(:inner, [fp], ^initial_query, on: [id: fp.id])

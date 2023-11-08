@@ -191,10 +191,10 @@ defmodule Bonfire.Social.Integration do
     end
   end
 
-  def many(query, _, opts) do
+  def many(query, _true, opts) do
     case opts[:return] do
-      :query ->
-        query
+      # :query ->
+      #   query
 
       # :csv ->
       # query
