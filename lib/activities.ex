@@ -925,38 +925,32 @@ defmodule Bonfire.Social.Activities do
   end
 
   def activity_with_object_from_assigns(
-        %{activity: %{} = activity, object: %{id: _} =object} = _assigns
+        %{activity: %{} = activity, object: %{id: _} = object} = _assigns
       ) do
     debug("Activity with both an activity and object")
 
-
-      Map.put(
-        activity,
-        :object,
-        object
-      )
-    
+    Map.put(
+      activity,
+      :object,
+      object
+    )
   end
 
   def activity_with_object_from_assigns(%{activity: %{} = activity} = assigns) do
     debug("Activity without :object as assoc")
 
-
-      object_under_activity(activity, assigns[:object])
-    
+    object_under_activity(activity, assigns[:object])
   end
 
   def activity_with_object_from_assigns(%{object: %{} = _object} = assigns) do
     debug("Activity with only an object")
 
-
-      e(assigns[:object], :activity, nil) ||
-        %Activity{
-          subject:
-            e(assigns[:object], :created, :creator, nil) || e(assigns[:object], :creator, nil),
-          object: assigns[:object]
-        }
-    
+    e(assigns[:object], :activity, nil) ||
+      %Activity{
+        subject:
+          e(assigns[:object], :created, :creator, nil) || e(assigns[:object], :creator, nil),
+        object: assigns[:object]
+      }
   end
 
   def activity_with_object_from_assigns(_), do: nil
