@@ -235,10 +235,28 @@ defmodule Bonfire.Social.Objects do
     |> boundarise(q, main_object.id, ...)
   end
 
-  def delete(object, opts) do
+  def delete(object, opts) when is_map(object) do
     opts = to_options(opts)
 
     # load & check permission
+    with true <-
+           Bonfire.Boundaries.can?(
+             current_user(opts),
+             :delete,
+             object
+           ) do
+      do_delete(object, opts)
+    else
+      _ ->
+        error("No permission to delete this")
+    end
+  end
+
+  def delete(object, opts) when is_binary(object) do
+    opts = to_options(opts)
+
+    # load & check permission
+    # TODO: don't load if being passed an obj
     with %{__struct__: _type} = object <-
            Bonfire.Common.Pointers.get(
              object,
@@ -345,6 +363,7 @@ defmodule Bonfire.Social.Objects do
     options =
       to_options(options)
       |> Keyword.put(:object, object)
+      |> Keyword.put(:action, :delete)
 
     # cover our bases with some more common mixins
     delete_extras =
@@ -513,5 +532,20 @@ defmodule Bonfire.Social.Objects do
     |> Map.get(:sensitive)
     |> debug()
     |> repo().delete()
+  end
+
+  def ap_receive_activity(creator, activity, %ActivityPub.Object{} = object) do
+    debug(creator)
+    debug(object)
+    ap_maybe_delete(creator, e(object, :pointer, nil) || object.pointer_id)
+    # :todo
+  end
+
+  def ap_maybe_delete(creator, nil) do
+    {:ok, :none}
+  end
+
+  def ap_maybe_delete(creator, object) do
+    delete(object, creator)
   end
 end

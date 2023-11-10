@@ -103,7 +103,18 @@ defmodule Bonfire.Social.Integration do
          repo().maybe_preload(activity_object, activity: [:verb])
          |> maybe_federate_activity(subject, ..., verb, object_override)
 
-  defp maybe_federate_activity(_subject_id, activity, _verb, _object) do
+  defp maybe_federate_activity(subject, activity, :delete, object) do
+    debug(
+      object || activity,
+      "Federate deletion of an object"
+    )
+
+    # ActivityPub.delete(object || activity, true)
+
+    maybe_federate(subject, :delete, object || activity)
+  end
+
+  defp maybe_federate_activity(_subject, activity, _verb, _object) do
     error(
       activity,
       "Cannot federate: Expected an Activity, or an object containing one"
