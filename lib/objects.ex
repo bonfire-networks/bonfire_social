@@ -23,6 +23,8 @@ defmodule Bonfire.Social.Objects do
 
   alias Bonfire.Epics.Epic
 
+  def federation_module, do: "Delete"
+
   @doc """
   Handles casting:
   * Creator
