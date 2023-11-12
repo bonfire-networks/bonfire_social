@@ -53,31 +53,7 @@ defmodule Bonfire.Social.Bookmarks do
 
   def count(%{} = object, _), do: Edges.count(:bookmark, object, skip_boundary_check: true)
 
-  def bookmark(bookmarker, object, opts \\ [])
-
-  def bookmark(%{} = bookmarker, %{} = object, opts) do
-    if Bonfire.Boundaries.can?(bookmarker, :bookmark, object) do
-      do_bookmark(bookmarker, object, opts)
-    else
-      error(l("Sorry, you cannot react to this"))
-    end
-  end
-
-  def bookmark(%{} = bookmarker, bookmarked, opts) when is_binary(bookmarked) do
-    with {:ok, object} <-
-           Bonfire.Common.Pointers.get(bookmarked,
-             current_user: bookmarker,
-             verbs: [:bookmark]
-           ) do
-      # debug(bookmarked)
-      do_bookmark(bookmarker, object, opts)
-    else
-      _ ->
-        error(l("Sorry, you cannot react to this"))
-    end
-  end
-
-  def do_bookmark(%{} = bookmarker, %{} = bookmarked, opts \\ []) do
+  def bookmark(%{} = bookmarker, bookmarked, opts \\ []) do
     opts =
       [
         # TODO: make configurable
@@ -171,6 +147,11 @@ defmodule Bonfire.Social.Bookmarks do
   end
 
   defp create(bookmarker, bookmarked, opts) do
-    Edges.insert(Bookmark, bookmarker, :bookmark, bookmarked, opts)
+    insert(bookmarker, bookmarked, opts)
+  end
+
+  def insert(subject, object, options) do
+    Edges.changeset_base(Bookmark, subject, object, options)
+    |> Edges.insert()
   end
 end
