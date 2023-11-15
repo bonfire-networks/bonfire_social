@@ -567,10 +567,17 @@ defmodule Bonfire.Social.Activities do
           #            :creator_of_reply_to
           #          ]]) end
 
-          warn("reply_to should be preloaded after the query so boundaries can be applied")
+          debug("reply_to should be preloaded with custom query so boundaries can be applied")
 
           query
           |> proload(activity: [:replied])
+          |> preload(
+            activity: [
+              replied: [
+                reply_to: ^maybe_preload_reply_to(opts)
+              ]
+            ]
+          )
 
         # |> Ecto.Query.preload([activity: {activity, [replied: ^reply_query]}])
         # |> proload(
@@ -607,6 +614,12 @@ defmodule Bonfire.Social.Activities do
 
         :with_media ->
           query
+          |> proload(
+            activity: [
+              :sensitive
+            ]
+          )
+          |> preload(activity: [:media])
 
         # proload query, activity: [:media] # FYI: proloading media only queries one attachment
         :with_seen ->
@@ -660,35 +673,9 @@ defmodule Bonfire.Social.Activities do
             else: []
 
         :with_reply_to ->
-          # If the root replied to anything, fetch that and its creator too. e.g.
-          # * Alice's post that replied to Bob's post
-          # * Bob liked alice's post
-
-          reply_query =
-            Common.Pointers.pointer_query(
-              [],
-              Enums.merge_uniq(opts,
-                skip_boundary_check: false,
-                preload: [:post_content, :creator]
-              )
-            )
-            |> debug("query to attempt loading reply_to")
-
-          # |> debug("reply_query subquery that applies boundaries")
-
-          # reply_query = (from reply_to in Pointer)
-          # |> proload([
-          #            :post_content,
-          #            created: [
-          #              creator: {"reply_to_creator_", [:character, profile: :icon]}
-          #            ]
-          #     ]
-          # )
-          # |> Activities.reply_to_as_permitted_for(opts)
-
           [
             replied: [
-              reply_to: reply_query
+              reply_to: maybe_preload_reply_to(opts)
             ]
           ]
 
@@ -700,6 +687,33 @@ defmodule Bonfire.Social.Activities do
           if subquery, do: [seen: subquery], else: []
       end
     end
+  end
+
+  defp maybe_preload_reply_to(opts) do
+    # If the root replied to anything, fetch that and its creator too. e.g.
+    # * Alice's post that replied to Bob's post
+    # * Bob liked alice's post
+
+    Common.Pointers.pointer_query(
+      [],
+      Enums.merge_uniq(opts,
+        skip_boundary_check: false,
+        preload: [:post_content, :creator]
+      )
+    )
+    |> debug("query to attempt loading reply_to")
+
+    # |> debug("reply_query subquery that applies boundaries")
+
+    # (from reply_to in Pointer)
+    # |> proload([
+    #            :post_content,
+    #            created: [
+    #              creator: {"reply_to_creator_", [:character, profile: :icon]}
+    #            ]
+    #     ]
+    # )
+    # |> Activities.reply_to_as_permitted_for(opts)
   end
 
   def maybe_join_subject(query, []), do: query |> proload(activity: [:subject])
