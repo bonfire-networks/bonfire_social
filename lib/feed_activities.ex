@@ -789,7 +789,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp query_order(query, :num_replies = sort_by, sort_order) do
     query
-    |> proload(activity: [:replied])
+    |> maybe_preload_replied()
     |> Activities.query_order(sort_by, sort_order)
   end
 
@@ -855,10 +855,18 @@ defmodule Bonfire.Social.FeedActivities do
     end
   end
 
+  defp maybe_preload_replied(%{aliases: %{replied: _}} = query) do
+    query
+  end
+  defp maybe_preload_replied(query) do
+    query
+    |> proload(activity: [:replied])
+  end
+
   defp maybe_exclude_replies(query, filters, opts) do
     if e(opts, :exclude_replies, nil) == true or e(filters, :object_type, nil) == "posts" do
       query
-      |> proload(activity: [:replied])
+      |> maybe_preload_replied()
       |> where(
         [replied: replied],
         is_nil(replied.reply_to_id)
@@ -875,7 +883,7 @@ defmodule Bonfire.Social.FeedActivities do
 
     if e(opts, :only_replies, nil) == true or e(filters, :object_type, nil) == "discussions" do
       query
-      |> proload(activity: [:replied])
+      |> maybe_preload_replied()
       |> where(
         [replied: replied],
         not is_nil(replied.reply_to_id)
