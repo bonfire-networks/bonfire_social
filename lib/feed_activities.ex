@@ -858,6 +858,7 @@ defmodule Bonfire.Social.FeedActivities do
   defp maybe_preload_replied(%{aliases: %{replied: _}} = query) do
     query
   end
+
   defp maybe_preload_replied(query) do
     query
     |> proload(activity: [:replied])
