@@ -16,13 +16,17 @@ defmodule Bonfire.Social.LivePush do
     debug(feed_ids, "push a :new_activity to feed_ids")
     activity = prepare_activity(activity, opts)
 
-    PubSub.broadcast(feed_ids, {
-      {Bonfire.Social.Feeds, :new_activity},
-      [
-        feed_ids: feed_ids,
-        activity: activity
-      ]
-    })
+    has_feed_ids? = is_binary(feed_ids) or (is_list(feed_ids) and feed_ids != [])
+
+    if has_feed_ids?,
+      do:
+        PubSub.broadcast(feed_ids, {
+          {Bonfire.Social.Feeds, :new_activity},
+          [
+            feed_ids: feed_ids,
+            activity: activity
+          ]
+        })
 
     if Keyword.get(opts, :push_to_thread, true), do: maybe_push_thread(activity)
 
@@ -31,7 +35,7 @@ defmodule Bonfire.Social.LivePush do
         notify(activity, notify_feed_ids)
 
       true ->
-        notify(activity, feed_ids)
+        if has_feed_ids?, do: notify(activity, feed_ids)
 
       _ ->
         nil
@@ -51,6 +55,11 @@ defmodule Bonfire.Social.LivePush do
     |> push_activity(feed_ids, ..., opts)
     # returns the object + the preloaded activity
     |> Map.put(object, :activity, ...)
+  end
+
+  def push_activity(_feed_ids, activity, _opts) do
+    debug("skip")
+    activity
   end
 
   @doc """

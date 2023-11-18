@@ -57,7 +57,43 @@ defmodule Bonfire.Social.FeedActivities do
 
   def to_feed_options(socket_or_opts) do
     # debug(socket_or_opts)
-    to_options(socket_or_opts)
+    opts = to_options(socket_or_opts)
+
+    # TODO: clean up this code
+    exclude_verbs = opts[:exclude_verbs] || skip_verbs_default()
+
+    exclude_verbs =
+      if opts[:exclude_verbs] != false and
+           !Bonfire.Common.Settings.get(
+             [Bonfire.Social.Feeds, :include, :boost],
+             true,
+             opts
+           ),
+         do: exclude_verbs ++ [:boost],
+         else: exclude_verbs
+
+    exclude_verbs =
+      if opts[:exclude_verbs] != false and
+           !Bonfire.Common.Settings.get(
+             [Bonfire.Social.Feeds, :include, :follow],
+             false,
+             opts
+           ),
+         do: exclude_verbs ++ [:follow],
+         else: exclude_verbs
+
+    # |> debug("exclude_replies")
+
+    opts
+    |> Keyword.merge(
+      exclude_verbs: exclude_verbs,
+      exclude_replies:
+        !Bonfire.Common.Settings.get(
+          [Bonfire.Social.Feeds, :include, :reply],
+          true,
+          opts
+        )
+    )
   end
 
   # @decorate time()
@@ -69,43 +105,6 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed_ids_and_opts(:my, opts) do
     opts = to_feed_options(opts)
-
-    # TODO: clean up this code
-    exclude_verbs = opts[:exclude_verbs] || skip_verbs_default()
-
-    exclude_verbs =
-      if opts[:exclude_verbs] != false and
-           !Bonfire.Common.Settings.get(
-             [Bonfire.Social.Feeds, :my_feed_includes, :boost],
-             true,
-             opts
-           ),
-         do: exclude_verbs ++ [:boost],
-         else: exclude_verbs
-
-    exclude_verbs =
-      if opts[:exclude_verbs] != false and
-           !Bonfire.Common.Settings.get(
-             [Bonfire.Social.Feeds, :my_feed_includes, :follow],
-             false,
-             opts
-           ),
-         do: exclude_verbs ++ [:follow],
-         else: exclude_verbs
-
-    # |> debug("exclude_replies")
-
-    opts =
-      opts
-      |> Keyword.merge(
-        exclude_verbs: exclude_verbs,
-        exclude_replies:
-          !Bonfire.Common.Settings.get(
-            [Bonfire.Social.Feeds, :my_feed_includes, :reply],
-            true,
-            opts
-          )
-      )
 
     home_feed_ids =
       if is_list(opts[:home_feed_ids]),

@@ -146,7 +146,7 @@ defmodule Bonfire.Social.MentionsTest do
 
     user_with_settings =
       Bonfire.Common.Settings.put(
-        [Bonfire.Social.Feeds, :my_feed_includes, :notifications],
+        [Bonfire.Social.Feeds, :include, :notifications],
         false,
         current_user: mentioned
       )
@@ -176,7 +176,7 @@ defmodule Bonfire.Social.MentionsTest do
       }
     }
 
-    # Bonfire.Common.Settings.put([Bonfire.Social.Feeds, :my_feed_includes, :notifications], true, current_user: mentioned) # default anyway
+    # Bonfire.Common.Settings.put([Bonfire.Social.Feeds, :include, :notifications], true, current_user: mentioned) # default anyway
 
     assert {:ok, mention} =
              Posts.publish(

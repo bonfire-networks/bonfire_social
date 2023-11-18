@@ -501,18 +501,6 @@ defmodule Bonfire.Social.Activities do
             ]
           )
           |> maybe_join_creator(exclude_user_ids)
-          |> proload(
-            activity: [
-              object:
-                {"object_",
-                 [
-                   # reusable_join should mean the above is respected and the creator mixins are only loaded when needed
-                   created: [
-                     creator: {"creator_", [:character, profile: :icon]}
-                   ]
-                 ]}
-            ]
-          )
 
         # :tags ->
         #   # Tags/mentions (this actual needs to be done by Repo.preload to be able to list more than one)
@@ -521,7 +509,6 @@ defmodule Bonfire.Social.Activities do
         :with_subject ->
           query
           |> maybe_join_subject(exclude_user_ids)
-          |> proload(activity: [subject: {"subject_", [:character, profile: :icon]}])
 
         :with_verb ->
           proload(query, activity: [:verb])
@@ -611,6 +598,12 @@ defmodule Bonfire.Social.Activities do
         #     ]
         #   ]
         # )
+
+        :tags ->
+          query
+
+          query
+          |> proload(activity: [tags: [:character, profile: :icon]])
 
         :with_media ->
           query
@@ -716,7 +709,10 @@ defmodule Bonfire.Social.Activities do
     # |> Activities.reply_to_as_permitted_for(opts)
   end
 
-  def maybe_join_subject(query, []), do: query |> proload(activity: [:subject])
+  def maybe_join_subject(query, []),
+    do:
+      query
+      |> proload(activity: [subject: {"subject_", [character: [:peered], profile: :icon]}])
 
   def maybe_join_subject(query, exclude_user_ids) do
     # optimisation: only includes the subject if different current_user
@@ -731,10 +727,14 @@ defmodule Bonfire.Social.Activities do
         activity.subject_id not in ^exclude_user_ids and
           activity.subject_id == subject.id
     )
+    |> proload(activity: [subject: {"subject_", [character: [:peered], profile: :icon]}])
   end
 
+  @doc "query optimisation: only includes the subject if different from subject or current_user"
   def maybe_join_creator(query, []) do
     query
+    #  join subject, since creator will only be loaded if different from the subject
+    |> maybe_join_subject([])
     |> proload(
       activity: [
         object:
@@ -754,11 +754,24 @@ defmodule Bonfire.Social.Activities do
         object_created.creator_id != activity.subject_id and
           object_created.creator_id == creator.id
     )
+    |> proload(
+      activity: [
+        object:
+          {"object_",
+           [
+             # reusable_join should mean the above is respected and the creator mixins are only loaded when needed
+             created: [
+               creator: {"creator_", [character: [:peered], profile: :icon]}
+             ]
+           ]}
+      ]
+    )
   end
 
   def maybe_join_creator(query, exclude_user_ids) do
-    # optimisation: only includes the subject if different current_user
     query
+    #  join subject, since creator will only be loaded if different from the subject
+    |> maybe_join_subject(exclude_user_ids)
     |> proload(
       activity: [
         object:
@@ -778,6 +791,18 @@ defmodule Bonfire.Social.Activities do
         object_created.creator_id != activity.subject_id and
           object_created.creator_id not in ^exclude_user_ids and
           object_created.creator_id == creator.id
+    )
+    |> proload(
+      activity: [
+        object:
+          {"object_",
+           [
+             # reusable_join should mean the above is respected and the creator mixins are only loaded when needed
+             created: [
+               creator: {"creator_", [character: [:peered], profile: :icon]}
+             ]
+           ]}
+      ]
     )
   end
 
@@ -870,7 +895,7 @@ defmodule Bonfire.Social.Activities do
     query
     |> debug("base query")
     |> query_object_preload_create_activity(
-      opts ++ [preload: [:default, :with_media, :with_reply_to, :with_parent]]
+      Keyword.put_new(opts, :preload, [:default, :with_media, :with_reply_to, :with_parent])
     )
     |> debug("activity query")
 

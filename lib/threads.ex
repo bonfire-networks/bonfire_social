@@ -524,7 +524,12 @@ defmodule Bonfire.Social.Threads do
   #     end
   #   end
 
+  defp query_order(%{aliases: %{replied: _}} = query, sort_by, sort_order) do
+    Activities.query_order(query, sort_by, sort_order)
+  end
+
   defp query_order(query, :num_replies = sort_by, sort_order) do
+    # debug(query.aliases)
     from(query, as: :replied)
     |> Activities.query_order(sort_by, sort_order)
   end
