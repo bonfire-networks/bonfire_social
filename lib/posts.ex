@@ -269,6 +269,16 @@ defmodule Bonfire.Social.Posts do
          # TODO: find a better way of deleting non-actor entries from the list
          # (or better: represent them in AP)
          # Note: `mentions` preset adds grants to mentioned people which should trigger the boundaries-based logic in `Adapter.external_followers_for_activity`, so should we use this only for tagging and not for addressing (if we expand the scope of that function beyond followers)?
+         hashtags <-
+           e(post, :tags, [])
+           #  |> info("tags")
+           |> Enum.reject(fn tag ->
+             not is_nil(e(tag, :character, nil)) or id(tag) == id(subject)
+           end)
+           |> filter_empty([])
+           |> Bonfire.Common.Pointers.list!(skip_boundary_check: true)
+           #  |> repo().maybe_preload(:named)
+           |> debug("include_as_hashtags"),
          mentions <-
            e(post, :tags, [])
            #  |> info("tags")
@@ -329,7 +339,14 @@ defmodule Bonfire.Social.Posts do
                    "name" => actor.username,
                    "type" => "Mention"
                  }
-               end)
+               end) ++
+                 Enum.map(hashtags, fn tag ->
+                   %{
+                     "href" => URIs.canonical_url(tag),
+                     "name" => "##{e(tag, :name, nil) || e(tag, :named, :name, nil)}",
+                     "type" => "Hashtag"
+                   }
+                 end)
            }
            |> Enum.filter(fn {_, v} -> not is_nil(v) end)
            |> Enum.into(%{}),
