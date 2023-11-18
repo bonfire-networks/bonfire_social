@@ -331,7 +331,6 @@ defmodule Bonfire.Social.Posts do
              # TODO support replies and context for all object types, not just posts
              "inReplyTo" => Threads.ap_prepare(e(post, :replied, :reply_to_id, nil)),
              "context" => context,
-             # TODO: add hashtags too
              "tag" =>
                Enum.map(mentions, fn actor ->
                  %{
