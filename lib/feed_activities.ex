@@ -775,6 +775,7 @@ defmodule Bonfire.Social.FeedActivities do
         activity_pointer.table_id not in ^exclude_table_ids and
         (is_nil(object.table_id) or object.table_id not in ^exclude_table_ids)
     )
+    |> maybe_exclude_mine(current_user)
     |> maybe_exclude_replies(filters, opts)
     |> maybe_only_replies(filters, opts)
     |> maybe_time_limit(opts[:time_limit])
@@ -838,6 +839,19 @@ defmodule Bonfire.Social.FeedActivities do
       query
     else
       maybe_filter(query, input_to_atoms(filters))
+    end
+  end
+
+  defp maybe_exclude_mine(query, me) do
+    if not is_nil(me) and
+         !Bonfire.Common.Settings.get(
+           [Bonfire.Social.Feeds, :include, :outbox],
+           true,
+           me
+         ) do
+      where(query, [activity: activity], activity.subject_id != ^id(me))
+    else
+      query
     end
   end
 
