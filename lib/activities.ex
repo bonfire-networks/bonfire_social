@@ -411,10 +411,10 @@ defmodule Bonfire.Social.Activities do
         do_activity_preloads(
           query,
           [
-            :with_object_more
+            :with_object_more,
             # :with_reply_to,
-            # :with_thread_name
-            # :with_media
+            # :with_thread_name,
+            :with_media
           ],
           opts
         )
@@ -423,7 +423,8 @@ defmodule Bonfire.Social.Activities do
         do_activity_preloads(
           query,
           [
-            :feed,
+            :feed_by_subject,
+            :with_reply_to,
             :with_seen
           ],
           opts
