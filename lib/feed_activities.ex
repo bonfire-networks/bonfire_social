@@ -1342,7 +1342,7 @@ defmodule Bonfire.Social.FeedActivities do
 
     uid = ulid(current_user)
 
-    if uid && table_id,
+    if uid && table_id && feed_id,
       do:
         {:ok,
          from(fp in FeedPublish,

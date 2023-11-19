@@ -198,17 +198,23 @@ defmodule Bonfire.Social.Posts do
 
   # doc "List posts created by the user and which are in their outbox, which are not replies"
   def filter(:posts_by, user, query) do
-    # user = repo().maybe_preload(user, [:character])
-    verb_id = Verbs.get_id!(:create)
+    case ulid(user) do
+      nil ->
+        query
 
-    query
-    |> proload(activity: [:object, :replied])
-    |> where(
-      [activity: activity, replied: replied],
-      is_nil(replied.reply_to_id) and
-        activity.verb_id == ^verb_id and
-        activity.subject_id == ^ulid(user)
-    )
+      id ->
+        # user = repo().maybe_preload(user, [:character])
+        verb_id = Verbs.get_id!(:create)
+
+        query
+        |> proload(activity: [:object, :replied])
+        |> where(
+          [activity: activity, replied: replied],
+          is_nil(replied.reply_to_id) and
+            activity.verb_id == ^verb_id and
+            activity.subject_id == ^id
+        )
+    end
   end
 
   # TODO: federated delete, in addition to create:
