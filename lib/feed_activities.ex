@@ -360,8 +360,11 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed(:explore, opts) do
-    do_feed(:explore, to_feed_options(opts))
-    |> debug("explore feed")
+    to_feed_options(opts)
+    |> Enums.deep_merge(exclude_verbs: [:like])
+    |> do_feed(:explore, ...)
+
+    # |> debug("explore feed")
   end
 
   def feed(:flags, opts) do
@@ -627,8 +630,8 @@ defmodule Bonfire.Social.FeedActivities do
         debug("local feed")
 
         # excludes likes/follows from local feed - TODO: configurable
-        (opts ++ [exclude_verbs: [:like, :follow]])
-        |> debug()
+        Enums.deep_merge(opts, exclude_verbs: [:like])
+        # |> debug("local_opts")
         |> query_extras()
         |> proload(
           activity: [subject: {"subject_", character: [:peered]}, object: {"object_", [:peered]}]
@@ -643,7 +646,8 @@ defmodule Bonfire.Social.FeedActivities do
       :activity_pub in feed_ids or federated_feed_id in feed_ids ->
         debug("remote/federated feed")
 
-        query_extras(opts)
+        Enums.deep_merge(opts, exclude_verbs: [:like])
+        |> query_extras()
         |> proload(
           activity: [subject: {"subject_", character: [:peered]}, object: {"object_", [:peered]}]
         )
