@@ -97,6 +97,49 @@ defmodule Bonfire.Social.Follows do
     end
   end
 
+  defp check_follow(follower, object, opts) do
+    # debug(opts)
+    # debug(id(follower))
+    # debug(id(object))
+    skip? = skip_boundary_check?(opts, object)
+    # debug(skip?)
+    skip? =
+      skip? == true ||
+        (skip? == :admins and maybe_apply(Bonfire.Me.Accounts, :is_admin?, follower) == true)
+
+    opts =
+      opts
+      |> Keyword.put_new(:verbs, [:follow])
+      |> Keyword.put_new(:current_user, follower)
+
+    if skip? do
+      debug(skip?, "skip boundary check")
+      local_or_remote_object(object)
+    else
+      case ulid(object) do
+        id when is_binary(id) ->
+          case Bonfire.Boundaries.load_pointer(id, opts) |> debug("loaded_pointer") do
+            object when is_struct(object) ->
+              local_or_remote_object(object)
+
+            _ ->
+              :not_permitted
+          end
+
+        _ ->
+          error(object, "no object ID, attempting with username")
+
+          case maybe_apply(Characters, :by_username, [object, opts]) do
+            object when is_struct(object) ->
+              local_or_remote_object(object)
+
+            _ ->
+              :not_permitted
+          end
+      end
+    end
+  end
+
   # Notes for future refactor:
   # * Make it pay attention to options passed in
   # * When we start allowing to follow things that aren't users, we might need to adjust the circles.
@@ -181,49 +224,6 @@ defmodule Bonfire.Social.Follows do
     e in Ecto.ConstraintError ->
       error(e)
       maybe_already_followed(user, object)
-  end
-
-  defp check_follow(follower, object, opts) do
-    # debug(opts)
-    # debug(id(follower))
-    # debug(id(object))
-    skip? = skip_boundary_check?(opts, object)
-    # debug(skip?)
-    skip? =
-      skip? == true ||
-        (skip? == :admins and maybe_apply(Bonfire.Me.Accounts, :is_admin?, follower) == true)
-
-    opts =
-      opts
-      |> Keyword.put_new(:verbs, [:follow])
-      |> Keyword.put_new(:current_user, follower)
-
-    if skip? do
-      info(skip?, "skip boundary check")
-      local_or_remote_object(object)
-    else
-      case ulid(object) do
-        id when is_binary(id) ->
-          case Bonfire.Boundaries.load_pointer(id, opts) do
-            object when is_struct(object) ->
-              local_or_remote_object(object)
-
-            _ ->
-              :not_permitted
-          end
-
-        _ ->
-          error(object, "no object ID, attempting with username")
-
-          case maybe_apply(Characters, :by_username, [object, opts]) do
-            object when is_struct(object) ->
-              local_or_remote_object(object)
-
-            _ ->
-              :not_permitted
-          end
-      end
-    end
   end
 
   @doc """
@@ -445,11 +445,10 @@ defmodule Bonfire.Social.Follows do
   #   |> Edges.put_assoc(subject, object, :follow, boundary)
   # end
 
-  defp local_or_remote_object(id) when is_binary(id) do
-    Bonfire.Common.Pointers.get(id, skip_boundary_check: true)
-    ~> local_or_remote_object()
-  end
-
+  # defp local_or_remote_object(id) when is_binary(id) do
+  #   Bonfire.Common.Pointers.get(id, skip_boundary_check: true)
+  #   ~> local_or_remote_object()
+  # end
   defp local_or_remote_object(object) do
     object = repo().maybe_preload(object, [:peered, created: [creator: :peered]])
     # |> info()
@@ -544,14 +543,14 @@ defmodule Bonfire.Social.Follows do
          false <- following?(follower, followed),
          {:ok, %Follow{} = follow} <-
            follow(follower, followed, current_user: follower, incoming: true) do
-      with {:ok, _accept_activity, _adapter_object, accepted_activity} <-
+      with {:ok, _accept_activity, _adapter_object, _accepted_activity} = accept <-
              ActivityPub.accept_activity(%{
                actor: object,
                to: [data["actor"]],
                object: data,
                local: true
              }) do
-        debug("Follow was auto-accepted")
+        debug(accept, "Follow was auto-accepted")
 
         {:ok, follow}
       else

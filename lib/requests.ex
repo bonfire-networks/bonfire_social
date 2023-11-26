@@ -225,11 +225,18 @@ defmodule Bonfire.Social.Requests do
   defp maybe_already(requester, type, object) do
     case get(requester, type, object, skip_boundary_check: true) do
       {:ok, request} ->
-        info("was already requested")
+        debug("was already requested")
         {:ok, request}
 
       e ->
-        error(e, "Could not make the request")
+        case Edges.get(type, requester, object, skip_boundary_check: true) do
+          {:ok, object} ->
+            debug("request was already approved")
+            {:ok, object}
+
+          e ->
+            error(e, "Could not make the request")
+        end
     end
   end
 

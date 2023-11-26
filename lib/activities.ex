@@ -174,6 +174,8 @@ defmodule Bonfire.Social.Activities do
   end
 
   def maybe_remove_for_deleters_feeds(id) do
+    # TODO: use pubsub to send the deletion to all feeds / connected users, not just the current one
+    # FIXME: only if socket is connected
     maybe_apply(Bonfire.Social.Feeds.LiveHandler, :remove_activity, id)
   end
 

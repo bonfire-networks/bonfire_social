@@ -97,36 +97,36 @@ defmodule Bonfire.Social.Edges do
     |> debug()
   end
 
-  def get(type, subject, object, opts \\ [])
+  def get(schema_or_context, subject, object, opts \\ [])
 
-  def get(type, filters, opts, []) when is_list(filters) and is_list(opts) do
-    do_query(type, filters, opts)
+  def get(schema_or_context, filters, opts, []) when is_list(filters) and is_list(opts) do
+    do_query(schema_or_context, filters, opts)
     # |> debug
     |> repo().single()
   end
 
-  def get(type, subject, object, opts) do
-    do_query(type, subject, object, opts)
+  def get(schema_or_context, subject, object, opts) do
+    do_query(schema_or_context, subject, object, opts)
     |> repo().single()
   end
 
-  def get!(type, subject, objects, opts \\ [])
-  def get!(_type, _subject, [], _opts), do: []
+  def get!(schema_or_context, subject, objects, opts \\ [])
+  def get!(_, _subject, [], _opts), do: []
 
-  def get!(type, subject, objects, opts) when is_list(objects) do
-    do_query(type, subject, objects, opts)
+  def get!(schema_or_context, subject, objects, opts) when is_list(objects) do
+    do_query(schema_or_context, subject, objects, opts)
     |> repo().all()
   end
 
-  def get!(type, subject, object, opts) do
-    do_query(type, subject, object, opts)
+  def get!(schema_or_context, subject, object, opts) do
+    do_query(schema_or_context, subject, object, opts)
     |> limit(1)
     |> repo().one()
   end
 
   @doc "retrieves the last edge of a given type, subject, and object from the database"
-  def last(type, subject, object, opts) do
-    do_query(type, subject, object, opts)
+  def last(schema_or_context, subject, object, opts) do
+    do_query(schema_or_context, subject, object, opts)
     |> limit(1)
     |> repo().one()
   end
@@ -137,8 +137,8 @@ defmodule Bonfire.Social.Edges do
     |> DatesTimes.date_from_pointer()
   end
 
-  def exists?(type, subject, object, opts) do
-    do_query(type, subject, object, Keyword.put(opts, :preload, false))
+  def exists?(schema_or_context, subject, object, opts) do
+    do_query(schema_or_context, subject, object, Keyword.put(opts, :preload, false))
     # |> info()
     |> repo().exists?()
   end
@@ -175,24 +175,35 @@ defmodule Bonfire.Social.Edges do
 
   # defp do_query(type, subject, object, opts \\ [])
 
-  defp do_query(type_context, filters, opts)
+  defp do_query(schema_or_context, filters, opts)
        when is_list(filters) and is_list(opts) do
-    type_context.query(filters, opts)
+    edge_module_query(schema_or_context, [filters, opts])
   end
 
-  defp do_query({type_context, type}, subject, object, opts) do
-    type_context.query(
+  defp do_query({schema_or_context, type}, subject, object, opts) do
+    edge_module_query(schema_or_context, [
       [subject: subject, object: object],
       type,
       Keyword.put_new(opts, :current_user, subject)
+    ])
+  end
+
+  defp do_query(schema_or_context, subject, object, opts) do
+    edge_module_query(
+      schema_or_context,
+      [
+        [subject: subject, object: object],
+        Keyword.put_new(opts, :current_user, subject)
+      ]
     )
   end
 
-  defp do_query(type_context, subject, object, opts) do
-    type_context.query(
-      [subject: subject, object: object],
-      Keyword.put_new(opts, :current_user, subject)
-    )
+  def edge_module_query(schema_or_context, args) do
+    if function_exported?(schema_or_context, :query, length(args)) do
+      apply(schema_or_context, :query, args)
+    else
+      Bonfire.Common.QueryModule.maybe_query(schema_or_context, args)
+    end
   end
 
   def query(filters, opts) do

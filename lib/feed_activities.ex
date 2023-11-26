@@ -476,9 +476,15 @@ defmodule Bonfire.Social.FeedActivities do
   def feed_contains?(feed, id_or_html_body, _opts)
       when is_list(feed) and (is_binary(id_or_html_body) or is_map(id_or_html_body)) do
     Enum.find_value(feed, fn fi ->
-      fi.activity.object_id == id(id_or_html_body) or
-        fi.activity.object.post_content.html_body =~ id_or_html_body
-    end)
+      if fi.activity.object_id == id(id_or_html_body) or
+           e(fi.activity.object, :post_content, :html_body, "") =~ id_or_html_body do
+        debug(fi.activity.object, "object found in feed")
+      end
+    end) ||
+      (
+        debug(feed, "object not found in feed")
+        false
+      )
   end
 
   def feed_contains?(feed_name, filters, opts) when is_list(filters) do
@@ -500,7 +506,14 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed_contains?(feed, object, opts) when is_map(object) or is_binary(object) do
-    feed_contains?(feed, [object: object], opts)
+    case ulid(object) do
+      nil ->
+        do_feed(feed, opts)
+        |> feed_contains?(object, opts)
+
+      id ->
+        feed_contains?(feed, [object: id], opts)
+    end
   end
 
   # @decorate time()

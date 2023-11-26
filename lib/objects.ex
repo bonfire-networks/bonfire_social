@@ -537,8 +537,11 @@ defmodule Bonfire.Social.Objects do
   def ap_receive_activity(creator, activity, %ActivityPub.Object{} = object) do
     debug(creator)
     debug(object)
+
     ap_maybe_delete(creator, e(object, :pointer, nil) || object.pointer_id)
-    # :todo
+    |> debug("ap_maybe_deleted")
+
+    # todo - what to return? 
   end
 
   def ap_maybe_delete(creator, nil) do
