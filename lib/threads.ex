@@ -294,7 +294,8 @@ defmodule Bonfire.Social.Threads do
        [e(activity_or_object, :object, :created, :creator, nil)] ++
        [e(activity_or_object, :reply_to, :created, :creator, nil)] ++
        [e(activity_or_object, :object, :reply_to, :created, :creator, nil)] ++
-       e(activity_or_object, :tags, []))
+       e(activity_or_object, :tags, []) ++
+       e(activity_or_object, :activity, :tags, []))
     # |> debug("participants grab bag")
     |> filter_empty([])
     |> Enum.reject(&(e(&1, :table_id, nil) in exclude_table_ids))

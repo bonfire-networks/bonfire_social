@@ -140,17 +140,7 @@ defmodule Bonfire.Social.Messages do
              with_user != current_user_id and with_user != current_user do
     # all messages between two people
 
-    opts =
-      to_options(opts)
-      # TODO: only loads reply_to when displaying flat threads
-      |> Keyword.put(
-        :preload,
-        if(opts[:latest_in_threads],
-          do: [:posts, :with_seen],
-          else: [:posts_with_reply_to, :with_seen]
-        )
-      )
-      |> debug("opts")
+    opts = list_options(opts)
 
     with_user_id = Types.ulid(with_user)
 
@@ -174,9 +164,7 @@ defmodule Bonfire.Social.Messages do
   def list(%{id: current_user_id} = current_user, _, opts) do
     # all current_user's message
 
-    opts =
-      to_options(opts)
-      |> Keyword.put_new(:preload, [:posts, :with_seen])
+    opts = list_options(opts)
 
     # |> debug("my messages filters")
     list_paginated(
@@ -192,6 +180,19 @@ defmodule Bonfire.Social.Messages do
   end
 
   def list(_current_user, _with_user, _cursor_before, _preloads), do: []
+
+  defp list_options(opts) do
+    to_options(opts)
+    # TODO: only loads reply_to when displaying flat threads
+    |> Keyword.put_new(
+      :preload,
+      if(opts[:latest_in_threads],
+        do: [:posts, :with_seen],
+        else: [:posts_with_reply_to, :with_seen]
+      )
+    )
+    |> debug("opts")
+  end
 
   defp list_paginated(
          filters,
@@ -227,7 +228,7 @@ defmodule Bonfire.Social.Messages do
     |> debug("post preloads & permissions")
     # |> repo().many() # return all items
     # return a page of items (reverse chronological) + pagination metadata
-    |> repo().many_paginated(opts)
+    |> Integration.many(opts[:paginate], opts)
 
     # |> debug("result")
   end
