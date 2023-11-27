@@ -538,7 +538,7 @@ defmodule Bonfire.Social.Follows do
     info(data, "Follows: attempt to record an incoming follow...")
 
     with {:ok, followed} <-
-           Bonfire.Federate.ActivityPub.AdapterUtils.fetch_character_by_ap_id(object),
+           Bonfire.Federate.ActivityPub.AdapterUtils.get_or_fetch_character_by_ap_id(object),
          # check if not already following
          false <- following?(follower, followed),
          {:ok, %Follow{} = follow} <-
@@ -588,7 +588,7 @@ defmodule Bonfire.Social.Follows do
     info("Accept incoming request")
 
     with {:ok, follower} <-
-           Bonfire.Federate.ActivityPub.AdapterUtils.fetch_character_by_ap_id(follower),
+           Bonfire.Federate.ActivityPub.AdapterUtils.get_or_fetch_character_by_ap_id(follower),
          {:ok, request} <-
            Requests.get(follower, Follow, followed, skip_boundary_check: true),
          {:ok, accepted} <- accept(request, current_user: followed, incoming: true) do
@@ -616,7 +616,7 @@ defmodule Bonfire.Social.Follows do
         %{data: %{"actor" => follower}} = _object
       ) do
     with {:ok, follower} <-
-           Bonfire.Federate.ActivityPub.AdapterUtils.fetch_character_by_ap_id(follower) do
+           Bonfire.Federate.ActivityPub.AdapterUtils.get_or_fetch_character_by_ap_id(follower) do
       case following?(follower, followed) do
         false ->
           reject(follower, followed, incoming: true)
@@ -642,7 +642,9 @@ defmodule Bonfire.Social.Follows do
         %{data: %{"object" => followed_ap_id}} = _object
       ) do
     with {:ok, object} <-
-           Bonfire.Federate.ActivityPub.AdapterUtils.fetch_character_by_ap_id(followed_ap_id),
+           Bonfire.Federate.ActivityPub.AdapterUtils.get_or_fetch_character_by_ap_id(
+             followed_ap_id
+           ),
          [id] <- unfollow(follower, object, incoming: true) do
       {:ok, id}
     end

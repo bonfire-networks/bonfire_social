@@ -678,8 +678,12 @@ defmodule Bonfire.Social.Threads do
              ActivityPub.Object.get_cached(thread_or_reply_to_id) do
         ap_object.data["id"]
       else
+        {:error, :not_found} ->
+          error(thread_or_reply_to_id, "Did not find the thread or reply AP object")
+          nil
+
         e ->
-          error(e, "Could not fetch the thread or reply AP object")
+          error(e, "Error fetching the thread or reply AP object")
           nil
       end
     end

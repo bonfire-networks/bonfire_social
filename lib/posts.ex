@@ -278,8 +278,9 @@ defmodule Bonfire.Social.Posts do
          hashtags <-
            e(post, :tags, [])
            #  |> info("tags")
+           #  non-characters
            |> Enum.reject(fn tag ->
-             not is_nil(e(tag, :character, nil)) or id(tag) == id(subject)
+             not is_nil(e(tag, :character, nil))
            end)
            |> filter_empty([])
            |> Bonfire.Common.Pointers.list!(skip_boundary_check: true)
@@ -287,7 +288,8 @@ defmodule Bonfire.Social.Posts do
            |> debug("include_as_hashtags"),
          mentions <-
            e(post, :tags, [])
-           #  |> info("tags")
+           |> debug("tags")
+           #  characters except me
            |> Enum.reject(fn tag ->
              is_nil(e(tag, :character, nil)) or id(tag) == id(subject)
            end)
@@ -445,7 +447,7 @@ defmodule Bonfire.Social.Posts do
         end)
 
     attrs =
-      PostContents.ap_prepare_attrs(creator, activity_data, post_data, direct_recipients)
+      PostContents.ap_receive_attrs_prepare(creator, activity_data, post_data, direct_recipients)
       |> Enum.into(%{
         id: id,
         # huh?

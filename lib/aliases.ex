@@ -253,7 +253,9 @@ defmodule Bonfire.Social.Aliases do
     debug(target, "target")
 
     with {:ok, origin_character} <-
-           Bonfire.Federate.ActivityPub.AdapterUtils.fetch_character_by_ap_id(origin_object),
+           Bonfire.Federate.ActivityPub.AdapterUtils.get_or_fetch_character_by_ap_id(
+             origin_object
+           ),
          true <- id(origin_character) == id(subject),
          [:ok] <- move_following(origin_character, target) |> Enum.uniq() do
       {:ok, :moved}

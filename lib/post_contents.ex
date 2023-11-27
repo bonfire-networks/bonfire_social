@@ -383,7 +383,7 @@ defmodule Bonfire.Social.PostContents do
       #   mentions (and also notify?)
       #   media
 
-      ap_prepare_attrs(creator, activity_data, post_data)
+      ap_receive_attrs_prepare(creator, activity_data, post_data)
       |> edit(creator, pointer_id, ...)
     else
       e ->
@@ -391,7 +391,7 @@ defmodule Bonfire.Social.PostContents do
     end
   end
 
-  def ap_prepare_attrs(creator, activity_data, post_data, direct_recipients \\ []) do
+  def ap_receive_attrs_prepare(creator, activity_data, post_data, direct_recipients \\ []) do
     tags =
       (List.wrap(activity_data["tag"]) ++
          List.wrap(post_data["tag"]))
@@ -420,9 +420,9 @@ defmodule Bonfire.Social.PostContents do
           # workaround for Mastodon using different URLs in text
           |> String.replace("/users/", "/@")
 
-        with %{} = character <-
+        with {:ok, %{} = character} <-
                e(direct_recipients, mention["href"], nil) ||
-                 Bonfire.Federate.ActivityPub.AdapterUtils.get_character_by_ap_id!(
+                 Bonfire.Federate.ActivityPub.AdapterUtils.get_or_fetch_character_by_ap_id(
                    mention["href"] || mention["name"]
                  ),
              true <- Bonfire.Social.Integration.federating?(character) do
