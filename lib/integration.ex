@@ -193,11 +193,15 @@ defmodule Bonfire.Social.Integration do
         query
 
       :stream ->
-        repo().transaction(fn ->
-          opts[:stream_callback].(
-            repo().stream(Ecto.Query.exclude(query, :preload), max_rows: 100)
-          )
-        end)
+        repo().transaction(
+          fn ->
+            opts[:stream_callback].(
+              repo().stream(Ecto.Query.exclude(query, :preload), max_rows: 100)
+            )
+          end,
+          #   1h
+          timeout: 3_600_000
+        )
 
       _ ->
         repo().many(query, opts)
