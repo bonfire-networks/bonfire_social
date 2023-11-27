@@ -111,7 +111,8 @@ defmodule Bonfire.Social.Integration do
 
     # ActivityPub.delete(object || activity, true)
 
-    maybe_federate(subject, :delete, object || activity)
+    # , [return: :oban_prepared])
+    maybe_federate(subject, :delete, object || activity, nil)
   end
 
   defp maybe_federate_activity(_subject, activity, _verb, _object) do
@@ -146,7 +147,7 @@ defmodule Bonfire.Social.Integration do
 
   # TODO: clean up the following patterns
 
-  def maybe_federate(subject, verb, object, activity \\ nil) do
+  def maybe_federate(subject, verb, object, activity \\ nil, opts \\ []) do
     debug(subject, "subject")
 
     if federate_outgoing?(subject) |> debug("federate_outgoing?") do
@@ -155,7 +156,8 @@ defmodule Bonfire.Social.Integration do
       Bonfire.Federate.ActivityPub.Outgoing.maybe_federate(
         subject,
         verb,
-        object || Utils.e(activity, :object, nil) || Utils.e(activity, :object_id, nil)
+        object || Utils.e(activity, :object, nil) || Utils.e(activity, :object_id, nil),
+        opts
       )
     else
       # TODO: do not enqueue if federation is disabled in Settings
