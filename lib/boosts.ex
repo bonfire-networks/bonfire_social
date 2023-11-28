@@ -67,9 +67,13 @@ defmodule Bonfire.Social.Boosts do
 
   def boost(%{} = booster, boosted, opts) when is_binary(boosted) do
     with {:ok, object} <-
-           Bonfire.Common.Pointers.get(boosted,
-             current_user: booster,
-             verbs: [:boost]
+           Bonfire.Common.Pointers.get(
+             boosted,
+             opts ++
+               [
+                 current_user: booster,
+                 verbs: [:boost]
+               ]
            ) do
       # debug(liked)
       maybe_boost(booster, object, opts)
@@ -136,16 +140,18 @@ defmodule Bonfire.Social.Boosts do
     end
   end
 
-  def unboost(booster, %{} = boosted) do
+  def unboost(booster, boosted, opts \\ [])
+
+  def unboost(booster, %{} = boosted, _opts) do
     # delete the Boost
     Edges.delete_by_both(booster, Boost, boosted)
     # delete the boost activity & feed entries
     {:ok, Activities.delete_by_subject_verb_object(booster, :boost, boosted)}
   end
 
-  def unboost(booster, boosted) when is_binary(boosted) do
+  def unboost(booster, boosted, opts) when is_binary(boosted) do
     with {:ok, boosted} <-
-           Bonfire.Common.Pointers.get(boosted, current_user: booster) do
+           Bonfire.Common.Pointers.get(boosted, opts ++ [current_user: booster]) do
       # debug(liked)
       unboost(booster, boosted)
     end
@@ -241,10 +247,11 @@ defmodule Bonfire.Social.Boosts do
         %{data: %{"type" => "Announce"}} = _activity,
         object
       ) do
-    with {:ok, boosted} <-
-           Bonfire.Common.Pointers.get(object.pointer_id, current_user: creator) do
-      boost(creator, boosted, local: false)
-    end
+    Bonfire.Federate.ActivityPub.AdapterUtils.return_pointable(object,
+      current_user: creator,
+      verbs: [:boost]
+    )
+    ~> boost(creator, ..., local: false, skip_boundary_check: true)
   end
 
   def ap_receive_activity(
@@ -254,9 +261,12 @@ defmodule Bonfire.Social.Boosts do
       ) do
     with {:ok, object} <-
            ActivityPub.Object.get_cached(ap_id: boosted_object),
-         {:ok, boosted} <-
-           Bonfire.Common.Pointers.get(object.pointer_id, current_user: creator),
-         [id] <- unboost(creator, boosted) do
+         {:ok, pointable} <-
+           Bonfire.Federate.ActivityPub.AdapterUtils.return_pointable(object,
+             current_user: creator,
+             verbs: [:boost]
+           ),
+         [id] <- unboost(creator, pointable, skip_boundary_check: true) do
       {:ok, id}
     end
   end

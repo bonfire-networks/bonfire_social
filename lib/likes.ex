@@ -68,9 +68,13 @@ defmodule Bonfire.Social.Likes do
 
   def like(%{} = liker, liked, opts) when is_binary(liked) do
     with {:ok, object} <-
-           Bonfire.Common.Pointers.get(liked,
-             current_user: liker,
-             verbs: [:like]
+           Bonfire.Common.Pointers.get(
+             liked,
+             opts ++
+               [
+                 current_user: liker,
+                 verbs: [:like]
+               ]
            ) do
       # debug(liked)
       do_like(liker, object, opts)
@@ -121,7 +125,7 @@ defmodule Bonfire.Social.Likes do
   end
 
   def unlike(%{} = liker, liked, opts) when is_binary(liked) do
-    with {:ok, liked} <- Bonfire.Common.Pointers.get(liked, current_user: liker) do
+    with {:ok, liked} <- Bonfire.Common.Pointers.get(liked, opts ++ [current_user: liker]) do
       unlike(liker, liked, opts)
     end
   end
@@ -211,10 +215,11 @@ defmodule Bonfire.Social.Likes do
         %{data: %{"type" => "Like"}} = _activity,
         object
       ) do
-    with {:ok, liked} <-
-           Bonfire.Common.Pointers.get(object.pointer_id, current_user: liker) do
-      like(liker, liked, local: false)
-    end
+    Bonfire.Federate.ActivityPub.AdapterUtils.return_pointable(object,
+      current_user: liker,
+      verbs: [:like]
+    )
+    ~> like(liker, ..., local: false, skip_boundary_check: true)
   end
 
   def ap_receive_activity(
@@ -224,9 +229,12 @@ defmodule Bonfire.Social.Likes do
       ) do
     with {:ok, object} <-
            ActivityPub.Object.get_cached(ap_id: liked_object),
-         {:ok, liked} <-
-           Bonfire.Common.Pointers.get(object.pointer_id, current_user: liker),
-         [id] <- unlike(liker, liked) do
+         {:ok, pointable} <-
+           Bonfire.Federate.ActivityPub.AdapterUtils.return_pointable(object,
+             current_user: liker,
+             verbs: [:like]
+           ),
+         [id] <- unlike(liker, pointable, skip_boundary_check: true) do
       {:ok, id}
     end
   end
