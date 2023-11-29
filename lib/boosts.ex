@@ -251,7 +251,7 @@ defmodule Bonfire.Social.Boosts do
       current_user: creator,
       verbs: [:boost]
     )
-    ~> boost(creator, ..., local: false, skip_boundary_check: true)
+    ~> boost(creator, ..., local: false)
   end
 
   def ap_receive_activity(

@@ -219,7 +219,7 @@ defmodule Bonfire.Social.Likes do
       current_user: liker,
       verbs: [:like]
     )
-    ~> like(liker, ..., local: false, skip_boundary_check: true)
+    ~> like(liker, ..., local: false)
   end
 
   def ap_receive_activity(
