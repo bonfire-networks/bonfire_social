@@ -431,10 +431,21 @@ defmodule Bonfire.Social.PostContents do
             character
           }
         else
+          false ->
+            info(
+              e,
+              "mentioned character has federation disabled, so skip them"
+            )
+
+            {
+              url,
+              mention["name"]
+            }
+
           e ->
             info(
               e,
-              "could not find known character for incoming mention, or they have federation disabled"
+              "could not find known character for incoming mention"
             )
 
             {
