@@ -1,6 +1,6 @@
 defmodule Bonfire.Social.PostContents do
   @moduledoc """
-  Query and manipulate post contents 
+  Query and manipulate post contents
   """
   use Arrows
 
@@ -239,7 +239,7 @@ defmodule Bonfire.Social.PostContents do
     |> Text.maybe_emote(opts[:emoji])
     # |> debug()
     # |> Text.normalise_links(:markdown)
-    # maybe remove potentially dangerous or dirty markup 
+    # maybe remove potentially dangerous or dirty markup
     |> maybe_sane_html(e(opts, :do_not_strip_html, nil))
     # make sure we end up with valid HTML
     |> Text.maybe_normalize_html()
@@ -420,11 +420,18 @@ defmodule Bonfire.Social.PostContents do
           # workaround for Mastodon using different URLs in text
           |> String.replace("/users/", "/@")
 
-        with {:ok, %{} = character} <-
+        with %{} = character <-
                e(direct_recipients, mention["href"], nil) ||
-                 Bonfire.Federate.ActivityPub.AdapterUtils.get_or_fetch_character_by_ap_id(
-                   mention["href"] || mention["name"]
+                 ok_unwrap(
+                   Bonfire.Federate.ActivityPub.AdapterUtils.get_or_fetch_character_by_ap_id(
+                     mention["href"] || mention["name"]
+                   )
                  ),
+             # with {:ok, %{} = character} <-
+             #        e(direct_recipients, mention["href"], nil) ||
+             #          Bonfire.Federate.ActivityPub.AdapterUtils.get_or_fetch_character_by_ap_id(
+             #            mention["href"] || mention["name"]
+             #          ),
              true <- Bonfire.Social.Integration.federating?(character) do
           {
             url,

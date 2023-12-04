@@ -348,7 +348,7 @@ defmodule Bonfire.Social.Feeds do
         nil
 
       current_user ->
-        # debug(current_user, "looking up feed for user")
+        debug(current_user, "looking up feed for user")
         feed_id(type, current_user)
     end
   end

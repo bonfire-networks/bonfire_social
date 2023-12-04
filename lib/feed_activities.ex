@@ -58,7 +58,6 @@ defmodule Bonfire.Social.FeedActivities do
   def to_feed_options(socket_or_opts) do
     # debug(socket_or_opts)
     opts = to_options(socket_or_opts)
-
     # TODO: clean up this code
     exclude_verbs = opts[:exclude_verbs] || skip_verbs_default()
 
@@ -219,7 +218,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   defp paginate_and_boundarise_feed_deferred_query(initial_query, opts) do
-    # speeds up queries by applying filters (incl. pagination) in a deferred join before boundarising and extra joins/preloads 
+    # speeds up queries by applying filters (incl. pagination) in a deferred join before boundarising and extra joins/preloads
 
     initial_query =
       initial_query
@@ -430,8 +429,7 @@ defmodule Bonfire.Social.FeedActivities do
   defp named_feed(feed_name, opts)
        when is_atom(feed_name) and not is_nil(feed_name) do
     # current_user = current_user(current_user_or_socket)
-    # debug(opts)
-    case Feeds.named_feed_id(feed_name) || Feeds.my_feed_id(feed_name, opts) do
+    case Feeds.named_feed_id(feed_name, opts) || Feeds.my_feed_id(feed_name, opts) do
       feed when is_binary(feed) or is_list(feed) ->
         # debug(ulid(current_user(opts)), "current_user")
         # debug(feed_name, "feed_name")
