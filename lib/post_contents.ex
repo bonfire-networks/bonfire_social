@@ -440,7 +440,7 @@ defmodule Bonfire.Social.PostContents do
         else
           false ->
             info(
-              e,
+              mention["name"],
               "mentioned character has federation disabled, so skip them"
             )
 
