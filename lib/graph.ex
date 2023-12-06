@@ -79,7 +79,12 @@ defmodule Bonfire.Social.Graph do
     end)
   end
 
-  defp config, do: module_enabled?(Bonfire.Social.Graph) and Application.get_env(:bolt_sips, Bolt)
+  # FIXME: should also work in test env
+  defp config,
+    do:
+      module_enabled?(Bonfire.Social.Graph) and Config.get(:env) != :test and
+        Application.get_env(:bolt_sips, Bolt)
+
   defp disabled?, do: !config()
 
   def graph_conn() do
