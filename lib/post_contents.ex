@@ -284,20 +284,72 @@ defmodule Bonfire.Social.PostContents do
     |> repo().maybe_preload(user: [:profile, :character])
     |> Enum.map_reduce(nil, fn
       current, nil ->
+        current = %{
+          editor: current.user,
+          edited_at: current.inserted_at,
+          current_version: current.item_changes,
+          previous_version: %{}
+        }
+
         {current, current}
 
-      current, previous ->
+      current, %{current_version: previous_version} ->
         current = %{
-          current
-          | item_changes: Map.merge(previous.item_changes, current.item_changes),
-            # abuse meta field to pass previous version to UI
-            meta: previous.item_changes
+          editor: current.user,
+          edited_at: current.inserted_at,
+          current_version: Map.merge(previous_version, current.item_changes),
+          previous_version: previous_version
         }
 
         {current, current}
     end)
     |> elem(0)
     |> debug("vvv")
+  end
+
+  def get_versions_diffed(post_content) do
+    for %{} = version <- get_versions(post_content) do
+      # TODO: make more flexble so the fields aren't hardcoded and put somewhere reusable by other objects/mixins
+
+      prev_length =
+        version.previous_version
+        |> Map.take(["name", "summary", "html_body"])
+        |> Map.values()
+        |> Enum.join()
+        |> String.length()
+        |> debug("Sss")
+
+      diffed = %{
+        name: diff(e(version.previous_version, :name, ""), e(version.current_version, :name, "")),
+        summary:
+          diff(
+            e(version.previous_version, :summary, ""),
+            e(version.current_version, :summary, "")
+          ),
+        html_body:
+          diff(
+            e(version.previous_version, :html_body, ""),
+            e(version.current_version, :html_body, "")
+          )
+      }
+
+      diff_count = Enum.map(diffed, fn {_field, v} -> Map.get(v, :length) end) |> Enum.sum()
+
+      Map.merge(
+        %{
+          diffed: diffed,
+          diff_count: diff_count,
+          diff_percent: if(prev_length != 0, do: diff_count / prev_length)
+        },
+        version
+      )
+      |> debug("after_diff")
+    end
+  end
+
+  def diff(previous_version, current_version) do
+    # KinoDiff.new(previous_version, current_version, layout: :inline)
+    Exdiff.diff(previous_version, current_version, wrapper_tag: "span")
   end
 
   def edit(current_user, id, attrs) when is_binary(id) do
