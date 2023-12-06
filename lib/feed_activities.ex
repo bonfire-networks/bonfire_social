@@ -400,7 +400,6 @@ defmodule Bonfire.Social.FeedActivities do
     custom_query
     |> proload([:activity])
     |> query_extras(opts)
-    # |> debug()
     |> paginate_and_boundarise_feed(maybe_merge_filters(opts[:feed_filters], opts))
     |> prepare_feed(opts)
   end
