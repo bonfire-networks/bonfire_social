@@ -13,6 +13,23 @@ defmodule Bonfire.Social.Edges do
   alias Pointers.Changesets
   # alias Pointers.ULID
 
+  @skip_warn_filters [
+    :preload,
+    :object,
+    :subject,
+    :type,
+    :object_type,
+    :subject_type,
+    :current_user,
+    :current_account,
+    :id,
+    :table_id,
+    :after,
+    :before,
+    :paginate,
+    :paginate?
+  ]
+
   def insert(schema, subject, verb, object, options) do
     changeset(schema, subject, verb, object, options)
     |> insert()
@@ -301,18 +318,7 @@ defmodule Bonfire.Social.Edges do
     # |> debug("filters")
 
     Enum.reduce(filters, query, &filter(&2, &1, opts))
-    |> query_filter(
-      Keyword.drop(filters, [
-        :preload,
-        :object,
-        :subject,
-        :type,
-        :object_type,
-        :subject_type,
-        :current_user,
-        :current_account
-      ])
-    )
+    |> query_filter(Keyword.drop(filters, @skip_warn_filters))
     |> debug()
   end
 
@@ -411,7 +417,7 @@ defmodule Bonfire.Social.Edges do
   end
 
   defp filter(query, {common, _}, _opts)
-       when common in [:id, :current_user, :current_account, :table_id] do
+       when common in @skip_warn_filters do
     query
   end
 

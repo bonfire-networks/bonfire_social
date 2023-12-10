@@ -367,7 +367,12 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed(:likes, opts) do
-    Bonfire.Social.Likes.list_my(to_feed_options(opts))
+    Bonfire.Social.Likes.list_my(opts)
+    # |> debug()
+  end
+
+  def feed(:bookmarks, opts) do
+    Bonfire.Social.Bookmarks.list_my(opts)
     # |> debug()
   end
 
