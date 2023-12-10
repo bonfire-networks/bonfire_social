@@ -181,7 +181,7 @@ defmodule Bonfire.Social.Flags do
     filters
     |> query(opts)
     |> proload(:activity)
-    |> repo().many_paginated(opts)
+    |> repo().many_paginated(opts[:paginate?], opts)
 
     # TODO: activity preloads
   end
