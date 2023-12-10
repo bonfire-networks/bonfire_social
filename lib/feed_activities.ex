@@ -366,6 +366,11 @@ defmodule Bonfire.Social.FeedActivities do
     # |> debug("explore feed")
   end
 
+  def feed(:likes, opts) do
+    Bonfire.Social.Likes.list_my(to_feed_options(opts))
+    # |> debug()
+  end
+
   def feed(:flags, opts) do
     Bonfire.Social.Flags.list(to_feed_options(opts) ++ [include_flags: :moderators])
     # |> debug()
