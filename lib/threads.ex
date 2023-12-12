@@ -101,6 +101,7 @@ defmodule Bonfire.Social.Threads do
   """
   def find_reply_to(attrs, user) do
     find_reply_id(attrs)
+    |> debug()
     |> maybe_replyable(user)
   end
 
