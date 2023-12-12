@@ -377,7 +377,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed(:flags, opts) do
-    Bonfire.Social.Flags.list(to_feed_options(opts) ++ [include_flags: :moderators])
+    Bonfire.Social.Flags.list(opts ++ [include_flags: :moderators])
     # |> debug()
   end
 

@@ -162,7 +162,8 @@ defmodule Bonfire.Social.Flags do
           end
 
         _ ->
-          list_my(opts)
+          debug(opts, "CACCA222")
+          list_paginated([], opts)
       end
     end
   end
@@ -180,8 +181,8 @@ defmodule Bonfire.Social.Flags do
 
     filters
     |> query(opts)
-    |> proload(:activity)
-    |> repo().many_paginated(opts[:paginate?], opts)
+    # |> proload(:activity)
+    |> Integration.many(opts[:paginate?], opts)
 
     # TODO: activity preloads
   end
