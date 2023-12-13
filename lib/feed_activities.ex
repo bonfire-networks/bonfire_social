@@ -366,6 +366,11 @@ defmodule Bonfire.Social.FeedActivities do
     # |> debug("explore feed")
   end
 
+  def feed(:curated, opts) do
+    Bonfire.Social.Pins.list_instance_pins(opts)
+    # |> debug()
+  end
+
   def feed(:likes, opts) do
     Bonfire.Social.Likes.list_my(opts)
     # |> debug()
@@ -378,7 +383,6 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed(:flags, opts) do
     Bonfire.Social.Flags.list(opts ++ [include_flags: :moderators])
-    # |> debug()
   end
 
   def feed(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do

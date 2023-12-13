@@ -162,8 +162,13 @@ defmodule Bonfire.Social.Flags do
           end
 
         _ ->
-          debug(opts, "CACCA222")
-          list_paginated([], opts)
+          feed = list_paginated([], opts)
+
+          edges =
+            for %{edge: %{} = edge} <- e(feed, :edges, []),
+                do: %{activity: edge |> Map.put(:verb, %{verb: "Flag"})}
+
+          %{page_info: e(feed, :page_info, []), edges: edges}
       end
     end
   end

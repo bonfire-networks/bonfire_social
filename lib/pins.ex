@@ -188,11 +188,13 @@ defmodule Bonfire.Social.Pins do
 
   defp list_paginated(filters, opts) do
     query(filters, opts)
+    |> Integration.many(opts[:paginate?], opts)
+
     # |> Activities.query_object_preload_activity(:pin, :pinned_id, opts)
     # |> Activities.as_permitted_for(opts, [:see])
     # |> debug()
-    |> repo().many_paginated(opts)
-    |> maybe_load_pointer(opts[:load_pointer])
+    # |> repo().many_paginated(opts)
+    # |> maybe_load_pointer(opts[:load_pointer])
   end
 
   defp maybe_load_pointer(data, true),
@@ -216,7 +218,7 @@ defmodule Bonfire.Social.Pins do
 
     list_paginated(
       Edges.filters_from_opts(opts) |> Map.put(:subject, by_user),
-      opts ++ [preload: :object]
+      opts ++ [preload: [object: [created: [creator: [:profile, :character]]]]]
     )
   end
 
