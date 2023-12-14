@@ -166,7 +166,7 @@ defmodule Bonfire.Social.Flags do
 
           edges =
             for %{edge: %{} = edge} <- e(feed, :edges, []),
-                do: %{activity: edge |> Map.put(:verb, %{verb: "Flag"})}
+                do: edge |> Map.put(:verb, %{verb: "Flag"})
 
           %{page_info: e(feed, :page_info, []), edges: edges}
       end

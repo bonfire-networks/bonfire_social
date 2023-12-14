@@ -382,7 +382,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed(:flags, opts) do
-    Bonfire.Social.Flags.list(opts ++ [include_flags: :moderators])
+    Bonfire.Social.Flags.list_preloaded(opts ++ [include_flags: :moderators])
   end
 
   def feed(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
