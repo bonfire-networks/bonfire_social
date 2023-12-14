@@ -208,6 +208,7 @@ defmodule Bonfire.Social.Pins do
   end
 
   def list_instance_pins(opts) when is_list(opts) do
+    opts = opts ++ [preload: :object_with_creator]
     list_by(instance_scope(), opts)
   end
 
@@ -216,10 +217,17 @@ defmodule Bonfire.Social.Pins do
       when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
     opts = to_options(opts)
 
-    list_paginated(
-      Edges.filters_from_opts(opts) |> Map.put(:subject, by_user),
-      opts ++ [preload: [object: [created: [creator: [:profile, :character]]]]]
-    )
+    feed =
+      list_paginated(
+        Edges.filters_from_opts(opts) |> Map.put(:subject, by_user),
+        opts ++ [preload: [object: [created: [creator: [:profile, :character]]]]]
+      )
+
+    edges =
+      for %{edge: %{} = edge} <- e(feed, :edges, []),
+          do: edge |> Map.put(:verb, %{verb: "Pin"})
+
+    %{page_info: e(feed, :page_info, []), edges: edges}
   end
 
   @doc "List pinners of something(s)"

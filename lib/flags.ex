@@ -138,6 +138,7 @@ defmodule Bonfire.Social.Flags do
   end
 
   def list(opts) do
+    opts = opts ++ [preload: :object_with_creator]
     opts = to_options(opts)
     scope = opts[:scope]
     can_mediate_instance? = Bonfire.Boundaries.can?(opts, :mediate, :instance)
