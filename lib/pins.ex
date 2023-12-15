@@ -215,19 +215,12 @@ defmodule Bonfire.Social.Pins do
   @doc "List pins by a user"
   def list_by(by_user, opts \\ [])
       when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
-    opts = to_options(opts)
+    # opts = to_options(opts)
 
-    feed =
-      list_paginated(
-        Edges.filters_from_opts(opts) |> Map.put(:subject, by_user),
-        opts ++ [preload: [object: [created: [creator: [:profile, :character]]]]]
-      )
-
-    edges =
-      for %{edge: %{} = edge} <- e(feed, :edges, []),
-          do: edge |> Map.put(:verb, %{verb: "Pin"})
-
-    %{page_info: e(feed, :page_info, []), edges: edges}
+    list_paginated(
+      Edges.filters_from_opts(opts) |> Map.put(:subject, by_user),
+      opts ++ [preload: [object: [created: [creator: [:profile, :character]]]]]
+    )
   end
 
   @doc "List pinners of something(s)"

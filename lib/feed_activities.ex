@@ -208,8 +208,6 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed_many_paginated(query, opts) do
-    debug(opts)
-
     Integration.many(
       query,
       opts[:paginate],
@@ -386,6 +384,8 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
+    debug(opts, "CACCA")
+
     {feed_ids, opts} =
       feed_ids_and_opts(feed_name, opts)
       |> debug("feed_ids_and_opts")
@@ -396,6 +396,8 @@ defmodule Bonfire.Social.FeedActivities do
   def feed({feed_name, feed_id_or_ids}, opts)
       when is_atom(feed_name) and not is_nil(feed_name) and
              (is_binary(feed_id_or_ids) or is_list(feed_id_or_ids)) do
+    debug(opts, "CACCA")
+
     {feed_ids, opts} =
       feed_ids_and_opts({feed_name, feed_id_or_ids}, opts)
       |> debug("feed_ids_and_opts")
@@ -405,10 +407,12 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed({feed_name, feed_name_again}, opts)
       when is_atom(feed_name) and not is_nil(feed_name) and is_atom(feed_name_again) do
+    debug(opts, "CACCA")
     feed(feed_name, opts)
   end
 
   def feed(%Ecto.Query{} = custom_query, opts) do
+    debug(opts, "CACCA")
     opts = to_feed_options(opts)
 
     custom_query
