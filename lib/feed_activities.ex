@@ -358,7 +358,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed(:explore, opts) do
     to_feed_options(opts)
-    |> Enums.deep_merge(exclude_verbs: [:like])
+    |> Enums.deep_merge(exclude_verbs: [:like, :pin])
     |> do_feed(:explore, ...)
 
     # |> debug("explore feed")
@@ -384,8 +384,6 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
-    debug(opts, "CACCA")
-
     {feed_ids, opts} =
       feed_ids_and_opts(feed_name, opts)
       |> debug("feed_ids_and_opts")
@@ -396,8 +394,6 @@ defmodule Bonfire.Social.FeedActivities do
   def feed({feed_name, feed_id_or_ids}, opts)
       when is_atom(feed_name) and not is_nil(feed_name) and
              (is_binary(feed_id_or_ids) or is_list(feed_id_or_ids)) do
-    debug(opts, "CACCA")
-
     {feed_ids, opts} =
       feed_ids_and_opts({feed_name, feed_id_or_ids}, opts)
       |> debug("feed_ids_and_opts")
@@ -407,12 +403,10 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed({feed_name, feed_name_again}, opts)
       when is_atom(feed_name) and not is_nil(feed_name) and is_atom(feed_name_again) do
-    debug(opts, "CACCA")
     feed(feed_name, opts)
   end
 
   def feed(%Ecto.Query{} = custom_query, opts) do
-    debug(opts, "CACCA")
     opts = to_feed_options(opts)
 
     custom_query
@@ -658,7 +652,7 @@ defmodule Bonfire.Social.FeedActivities do
         debug("local feed")
 
         # excludes likes/follows from local feed - TODO: configurable
-        Enums.deep_merge(opts, exclude_verbs: [:like])
+        Enums.deep_merge(opts, exclude_verbs: [:like, :pin])
         # |> debug("local_opts")
         |> query_extras()
         |> proload(
@@ -674,7 +668,7 @@ defmodule Bonfire.Social.FeedActivities do
       :activity_pub in feed_ids or federated_feed_id in feed_ids ->
         debug("remote/federated feed")
 
-        Enums.deep_merge(opts, exclude_verbs: [:like])
+        Enums.deep_merge(opts, exclude_verbs: [:like, :pin])
         |> query_extras()
         |> proload(
           activity: [subject: {"subject_", character: [:peered]}, object: {"object_", [:peered]}]

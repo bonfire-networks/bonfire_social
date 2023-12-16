@@ -221,6 +221,12 @@ defmodule Bonfire.Social.Pins do
       Edges.filters_from_opts(opts) |> Map.put(:subject, by_user),
       opts ++ [preload: [object: [created: [creator: [:profile, :character]]]]]
     )
+
+    # edges =
+    #   for %{edge: %{} = edge} <- e(feed, :edges, []),
+    #       do: edge |> Map.put(:verb, %{verb: "Pin"})
+
+    # %{page_info: e(feed, :page_info, []), edges: edges}
   end
 
   @doc "List pinners of something(s)"
