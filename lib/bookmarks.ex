@@ -82,8 +82,9 @@ defmodule Bonfire.Social.Bookmarks do
   def unbookmark(%{} = bookmarker, %{} = bookmarked, _opts) do
     # delete the Bookmark
     Edges.delete_by_both(bookmarker, Bookmark, bookmarked)
-    # delete the bookmark activity & feed entries
-    Activities.delete_by_subject_verb_object(bookmarker, :bookmark, bookmarked)
+
+    # delete the bookmark activity & feed entries (NOTE: does not apply since Bookmark is not a declared verb or added to Feeds)
+    # Activities.delete_by_subject_verb_object(bookmarker, :bookmark, bookmarked)
 
     # Note: the bookmark count is automatically decremented by DB triggers
   end
