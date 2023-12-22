@@ -23,6 +23,7 @@ defmodule Bonfire.Social.Threads do
   @behaviour Bonfire.Common.ContextModule
   @behaviour Bonfire.Common.QueryModule
   def schema_module, do: Replied
+  def query_module, do: __MODULE__
 
   def base_query, do: from(Replied, as: :replied)
 

@@ -66,7 +66,7 @@ defmodule Bonfire.Social.Graph do
     prepare_fun = conf[:prepare_fun] || (&prepare_edges_standard/2)
 
     Bonfire.Common.Pointers.list_by_type!(type, [], skip_boundary_check: true, preload: false)
-    |> debug()
+    # |> debug()
     |> prepare_fun.(conf)
   end
 

@@ -25,6 +25,7 @@ defmodule Bonfire.Social.FeedActivities do
   @behaviour Bonfire.Common.QueryModule
   @behaviour Bonfire.Common.ContextModule
   def schema_module, do: FeedPublish
+  def query_module, do: __MODULE__
 
   def cast(changeset, creator, opts) do
     Feeds.target_feeds(changeset, creator, opts)

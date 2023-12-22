@@ -23,6 +23,7 @@ defmodule Bonfire.Social.Likes do
   @behaviour Bonfire.Common.QueryModule
   @behaviour Bonfire.Common.ContextModule
   def schema_module, do: Like
+  def query_module, do: __MODULE__
 
   @behaviour Bonfire.Federate.ActivityPub.FederationModules
   def federation_module,

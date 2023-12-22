@@ -23,6 +23,7 @@ defmodule Bonfire.Social.Bookmarks do
   @behaviour Bonfire.Common.QueryModule
   @behaviour Bonfire.Common.ContextModule
   def schema_module, do: Bookmark
+  def query_module, do: __MODULE__
 
   def bookmarked?(%{} = user, object),
     do: Edges.exists?(__MODULE__, user, object, skip_boundary_check: true)

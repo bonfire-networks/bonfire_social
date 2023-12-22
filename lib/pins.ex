@@ -26,6 +26,7 @@ defmodule Bonfire.Social.Pins do
   @behaviour Bonfire.Common.QueryModule
   @behaviour Bonfire.Common.ContextModule
   def schema_module, do: Pin
+  def query_module, do: __MODULE__
 
   @behaviour Bonfire.Federate.ActivityPub.FederationModules
   def federation_module,

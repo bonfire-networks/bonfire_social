@@ -26,6 +26,7 @@ defmodule Bonfire.Social.Seen do
   @behaviour Bonfire.Common.QueryModule
   @behaviour Bonfire.Common.ContextModule
   def schema_module, do: Seen
+  def query_module, do: __MODULE__
 
   def seen?(%{} = user, object),
     do: Edges.exists?(__MODULE__, user, object, skip_boundary_check: true)

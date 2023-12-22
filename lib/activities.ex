@@ -36,6 +36,7 @@ defmodule Bonfire.Social.Activities do
   @behaviour Bonfire.Common.QueryModule
   @behaviour Bonfire.Common.ContextModule
   def schema_module, do: Activity
+  def query_module, do: __MODULE__
 
   def cast(changeset, verb, creator, opts) do
     # verb_id = verb_id(verb)
