@@ -28,6 +28,7 @@ defmodule Bonfire.Social.Messages do
   @behaviour Bonfire.Common.ContextModule
   def schema_module, do: Message
 
+  @behaviour Bonfire.Federate.ActivityPub.FederationModules
   def federation_module,
     do: [{"Create", "ChatMessage"}, {"Delete", "ChatMessage"}]
 

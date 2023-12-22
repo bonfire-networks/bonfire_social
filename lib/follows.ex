@@ -28,6 +28,7 @@ defmodule Bonfire.Social.Follows do
   def schema_module, do: Follow
   def query_module, do: Follow
 
+  @behaviour Bonfire.Federate.ActivityPub.FederationModules
   def federation_module,
     do: [
       "Follow",

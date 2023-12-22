@@ -36,6 +36,7 @@ defmodule Bonfire.Social.Posts do
   @behaviour Bonfire.Common.ContextModule
   def schema_module, do: Post
 
+  @behaviour Bonfire.Federate.ActivityPub.FederationModules
   def federation_module,
     do: [
       "Note",

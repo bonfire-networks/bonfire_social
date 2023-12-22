@@ -26,6 +26,7 @@ defmodule Bonfire.Social.Aliases do
   @behaviour Bonfire.Common.ContextModule
   def schema_module, do: Alias
 
+  @behaviour Bonfire.Federate.ActivityPub.FederationModules
   def federation_module,
     do: [
       "Move"

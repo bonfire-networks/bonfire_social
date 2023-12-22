@@ -23,6 +23,7 @@ defmodule Bonfire.Social.Boosts do
   @behaviour Bonfire.Common.ContextModule
   def schema_module, do: Boost
 
+  @behaviour Bonfire.Federate.ActivityPub.FederationModules
   def federation_module,
     do: [
       "Announce",

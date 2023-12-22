@@ -24,6 +24,7 @@ defmodule Bonfire.Social.Likes do
   @behaviour Bonfire.Common.ContextModule
   def schema_module, do: Like
 
+  @behaviour Bonfire.Federate.ActivityPub.FederationModules
   def federation_module,
     do: ["Like", {"Create", "Like"}, {"Undo", "Like"}, {"Delete", "Like"}]
 

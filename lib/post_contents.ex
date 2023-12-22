@@ -10,6 +10,7 @@ defmodule Bonfire.Social.PostContents do
   use Bonfire.Common.Utils
   use Bonfire.Common.Repo
 
+  @behaviour Bonfire.Federate.ActivityPub.FederationModules
   def federation_module,
     do: [
       {"Update", "Note"},

@@ -22,6 +22,7 @@ defmodule Bonfire.Social.Requests do
   @behaviour Bonfire.Common.ContextModule
   def schema_module, do: Request
 
+  # @behaviour Bonfire.Federate.ActivityPub.FederationModules
   # def federation_module, do: ["Accept", "Reject"]
 
   def requested?(subject, type, object),

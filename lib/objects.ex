@@ -23,6 +23,7 @@ defmodule Bonfire.Social.Objects do
 
   alias Bonfire.Epics.Epic
 
+  @behaviour Bonfire.Federate.ActivityPub.FederationModules
   def federation_module, do: "Delete"
 
   @doc """

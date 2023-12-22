@@ -25,6 +25,7 @@ defmodule Bonfire.Social.Flags do
   @behaviour Bonfire.Common.ContextModule
   def schema_module, do: Flag
 
+  @behaviour Bonfire.Federate.ActivityPub.FederationModules
   def federation_module,
     do: ["Flag", {"Create", "Flag"}, {"Undo", "Flag"}, {"Delete", "Flag"}]
 
