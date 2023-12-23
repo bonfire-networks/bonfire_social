@@ -1203,7 +1203,7 @@ defmodule Bonfire.Social.Activities do
         "Request to " <> v,
         "Requested to " <> v,
         conjugated,
-        conjugated <> " by %{user}"
+        conjugated <> " by"
       ]
     end)
 
