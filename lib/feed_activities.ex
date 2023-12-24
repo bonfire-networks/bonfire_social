@@ -57,10 +57,16 @@ defmodule Bonfire.Social.FeedActivities do
   def skip_verbs_default, do: [:flag]
 
   def to_feed_options(socket_or_opts) do
-    # debug(socket_or_opts)
     opts = to_options(socket_or_opts)
     # TODO: clean up this code
-    exclude_verbs = opts[:exclude_verbs] || skip_verbs_default()
+    exclude_verbs =
+      if opts[:exclude_verbs] == false do
+        false
+      else
+        opts[:exclude_verbs] || skip_verbs_default()
+      end
+
+    # exclude_verbs = opts[:exclude_verbs] || skip_verbs_default()
 
     exclude_verbs =
       if opts[:exclude_verbs] != false and
@@ -82,8 +88,6 @@ defmodule Bonfire.Social.FeedActivities do
          do: exclude_verbs ++ [:follow],
          else: exclude_verbs
 
-    # |> debug("exclude_replies")
-
     opts
     |> Keyword.merge(
       exclude_verbs: exclude_verbs,
@@ -100,11 +104,11 @@ defmodule Bonfire.Social.FeedActivities do
   def feed_ids_and_opts(feed_name, opts)
 
   def feed_ids_and_opts({:my, feed_ids}, opts) do
-    feed_ids_and_opts(:my, to_feed_options(opts) ++ [home_feed_ids: feed_ids])
+    feed_ids_and_opts(:my, opts ++ [home_feed_ids: feed_ids])
   end
 
   def feed_ids_and_opts(:my, opts) do
-    opts = to_feed_options(opts)
+    # opts = to_feed_options(opts)
 
     home_feed_ids =
       if is_list(opts[:home_feed_ids]),
@@ -127,11 +131,12 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed_ids_and_opts({:notifications, feed_id}, opts) do
     opts =
-      to_feed_options(opts)
+      opts
       |> Keyword.merge(
         # so we can show flags to admins in notifications
         skip_boundary_check: :admins,
         include_flags: true,
+        exclude_verbs: false,
         skip_dedup: true,
         preload: :notifications
       )
@@ -141,7 +146,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed_ids_and_opts(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
     opts =
-      to_feed_options(opts)
+      opts
       |> Keyword.put_new_lazy(:exclude_verbs, &skip_verbs_default/0)
 
     {named_feed(
@@ -154,7 +159,7 @@ defmodule Bonfire.Social.FeedActivities do
       when is_atom(feed_name) and not is_nil(feed_name) and
              (is_binary(feed_id) or is_list(feed_id)) do
     opts =
-      to_feed_options(opts)
+      opts
       |> Keyword.put_new_lazy(:exclude_verbs, &skip_verbs_default/0)
 
     {feed_id, opts}
@@ -162,7 +167,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed_ids_and_opts(feed, opts) when is_binary(feed) or is_list(feed) do
     opts =
-      to_feed_options(opts)
+      opts
       |> Keyword.put_new_lazy(:exclude_verbs, &skip_verbs_default/0)
 
     {feed, opts}
@@ -173,7 +178,7 @@ defmodule Bonfire.Social.FeedActivities do
   """
   def my_feed(opts, home_feed_ids \\ nil) do
     opts =
-      to_feed_options(opts)
+      opts
       |> Keyword.put_new(:home_feed_ids, home_feed_ids)
 
     feed(:my, opts)
@@ -349,7 +354,7 @@ defmodule Bonfire.Social.FeedActivities do
       |> feed(opts)
     else
       opts =
-        to_feed_options(opts)
+        opts
         |> debug("feed_opts for #{id_or_ids}")
 
       ulid(id_or_ids)
@@ -358,7 +363,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed(:explore, opts) do
-    to_feed_options(opts)
+    opts
     |> Enums.deep_merge(exclude_verbs: [:like, :pin])
     |> do_feed(:explore, ...)
 
@@ -408,7 +413,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed(%Ecto.Query{} = custom_query, opts) do
-    opts = to_feed_options(opts)
+    # opts = to_feed_options(opts)
 
     custom_query
     |> proload([:activity])
@@ -418,7 +423,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed({feed_name, %{} = filters}, opts) do
-    feed(feed_name, [feed_filters: input_to_atoms(filters)] ++ to_feed_options(opts))
+    feed(feed_name, [feed_filters: input_to_atoms(filters)] ++ opts)
   end
 
   def feed(other, _) do
