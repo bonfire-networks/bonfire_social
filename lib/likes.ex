@@ -70,7 +70,7 @@ defmodule Bonfire.Social.Likes do
 
   def like(%{} = liker, liked, opts) when is_binary(liked) do
     with {:ok, object} <-
-           Bonfire.Common.Pointers.get(
+           Bonfire.Common.Needle.get(
              liked,
              opts ++
                [
@@ -127,7 +127,7 @@ defmodule Bonfire.Social.Likes do
   end
 
   def unlike(%{} = liker, liked, opts) when is_binary(liked) do
-    with {:ok, liked} <- Bonfire.Common.Pointers.get(liked, opts ++ [current_user: liker]) do
+    with {:ok, liked} <- Bonfire.Common.Needle.get(liked, opts ++ [current_user: liker]) do
       unlike(liker, liked, opts)
     end
   end

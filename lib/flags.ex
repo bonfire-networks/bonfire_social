@@ -113,11 +113,11 @@ defmodule Bonfire.Social.Flags do
       %{id: id} ->
         if skip?,
           do: {:ok, object},
-          else: Common.Pointers.one(id, opts)
+          else: Common.Needle.one(id, opts)
 
       _ when is_binary(object) ->
         if is_ulid?(object) do
-          Common.Pointers.one(object, opts)
+          Common.Needle.one(object, opts)
         else
           # try by username
           maybe_apply(Characters, :by_username, [object, opts])
@@ -134,7 +134,7 @@ defmodule Bonfire.Social.Flags do
   end
 
   def unflag(%User{} = user, object) when is_binary(object) do
-    with {:ok, object} <- Common.Pointers.get(object, current_user: user) do
+    with {:ok, object} <- Common.Needle.get(object, current_user: user) do
       unflag(user, object)
     end
   end
@@ -338,7 +338,7 @@ defmodule Bonfire.Social.Flags do
       )
       when is_binary(pointer_id) do
     with {:ok, object} <-
-           Bonfire.Common.Pointers.get(pointer_id, skip_boundary_check: true) do
+           Bonfire.Common.Needle.get(pointer_id, skip_boundary_check: true) do
       flag(creator, object)
     end
   end

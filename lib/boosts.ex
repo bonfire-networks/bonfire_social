@@ -69,7 +69,7 @@ defmodule Bonfire.Social.Boosts do
 
   def boost(%{} = booster, boosted, opts) when is_binary(boosted) do
     with {:ok, object} <-
-           Bonfire.Common.Pointers.get(
+           Bonfire.Common.Needle.get(
              boosted,
              opts ++
                [
@@ -153,7 +153,7 @@ defmodule Bonfire.Social.Boosts do
 
   def unboost(booster, boosted, opts) when is_binary(boosted) do
     with {:ok, boosted} <-
-           Bonfire.Common.Pointers.get(boosted, opts ++ [current_user: booster]) do
+           Bonfire.Common.Needle.get(boosted, opts ++ [current_user: booster]) do
       # debug(liked)
       unboost(booster, boosted)
     end

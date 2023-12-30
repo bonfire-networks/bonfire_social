@@ -18,9 +18,9 @@ defmodule Bonfire.Social.FeedActivities do
   # alias Bonfire.Social.Objects
   alias Bonfire.Social.LivePush
 
-  alias Pointers
-  alias Pointers.Pointer
-  alias Pointers.Changesets
+  alias Needle
+  alias Needle.Pointer
+  alias Needle.Changesets
 
   @behaviour Bonfire.Common.QueryModule
   @behaviour Bonfire.Common.ContextModule
@@ -561,7 +561,7 @@ defmodule Bonfire.Social.FeedActivities do
     end
   end
 
-  defp default_query(), do: select(Pointers.query_base(), [p], p)
+  defp default_query(), do: select(Needle.Pointers.query_base(), [p], p)
 
   defp base_query(opts \\ []) do
     # feeds = from fp in FeedPublish, # why the subquery?..
@@ -835,7 +835,7 @@ defmodule Bonfire.Social.FeedActivities do
     limit_pointer =
       DatesTimes.past(x_days, :day)
       |> debug("from date")
-      |> Pointers.ULID.generate()
+      |> Needle.ULID.generate()
 
     where(query, [activity: activity], activity.id > ^limit_pointer)
   end

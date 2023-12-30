@@ -5,7 +5,7 @@ defmodule Bonfire.Social.APActivities do
   alias Bonfire.Social.Objects
 
   alias Ecto.Changeset
-  # alias Pointers.Changesets
+  # alias Needle.Changesets
 
   import Untangle
 

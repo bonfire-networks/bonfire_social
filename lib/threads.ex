@@ -14,9 +14,9 @@ defmodule Bonfire.Social.Threads do
   alias Bonfire.Social.FeedActivities
 
   alias Bonfire.Boundaries.Verbs
-  alias Pointers.Changesets
-  alias Pointers.Pointer
-  # alias Pointers.ULID
+  alias Needle.Changesets
+  alias Needle.Pointer
+  # alias Needle.ULID
   alias Bonfire.Data.Social.Seen
   alias Bonfire.Data.Edges.Edge
 
@@ -146,7 +146,7 @@ defmodule Bonfire.Social.Threads do
   end
 
   defp start_new_thread(%Changeset{} = changeset) do
-    Pointers.Changesets.get_field(changeset, :id)
+    Needle.Changesets.get_field(changeset, :id)
     |> Changesets.put_assoc(changeset, :replied, %{
       reply_to_id: nil,
       thread_id: ...
@@ -465,7 +465,7 @@ defmodule Bonfire.Social.Threads do
 
     # |> debug("thread opts")
 
-    %Replied{id: Bonfire.Common.Pointers.id_binary(thread_id)}
+    %Replied{id: Bonfire.Common.Needle.id_binary(thread_id)}
     # TODO: change the order of the or_where to make the DB check the thread_id before the path
     |> Replied.descendants()
     |> or_where(

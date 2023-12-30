@@ -10,8 +10,8 @@ defmodule Bonfire.Social.Edges do
   alias Bonfire.Social.FeedActivities
   alias Bonfire.Social.Objects
 
-  alias Pointers.Changesets
-  # alias Pointers.ULID
+  alias Needle.Changesets
+  # alias Needle.ULID
 
   @skip_warn_filters [
     :preload,

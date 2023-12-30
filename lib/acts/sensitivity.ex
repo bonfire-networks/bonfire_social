@@ -7,7 +7,7 @@ defmodule Bonfire.Social.Acts.Sensitivity do
   alias Bonfire.Common.Utils
   alias Bonfire.Social.Objects
   alias Ecto.Changeset
-  alias Pointers.Changesets
+  alias Needle.Changesets
   import Epics
   import Untangle
   use Arrows

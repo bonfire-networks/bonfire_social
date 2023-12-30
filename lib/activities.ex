@@ -29,9 +29,9 @@ defmodule Bonfire.Social.Activities do
   # alias Bonfire.Social.Feeds
   alias Bonfire.Social.FeedActivities
 
-  alias Pointers.Changesets
-  alias Pointers.Pointer
-  # alias Pointers.ULID
+  alias Needle.Changesets
+  alias Needle.Pointer
+  # alias Needle.ULID
 
   @behaviour Bonfire.Common.QueryModule
   @behaviour Bonfire.Common.ContextModule
@@ -58,7 +58,7 @@ defmodule Bonfire.Social.Activities do
 
     %{subject_id: ulid(subject), object_id: ulid(object), verb_id: verb_id}
     |> Changesets.put_assoc!(changeset, :activity, ...)
-    # |> Changeset.update_change(:activity, &put_data(&1, :subject, maybe_to_struct(subject, Pointers.Pointer)))
+    # |> Changeset.update_change(:activity, &put_data(&1, :subject, maybe_to_struct(subject, Needle.Pointer)))
     |> Changeset.update_change(:activity, &put_data(&1, :verb, verb))
 
     # |> Changeset.update_change(:activity, &put_data(&1, :subject, subject))
@@ -553,7 +553,7 @@ defmodule Bonfire.Social.Activities do
           # * Alice's post that replied to Bob's post
           # * Bob liked alice's post
 
-          # reply_query = fn reply_to_ids -> Bonfire.Common.Pointers.list!(reply_to_ids, opts ++ [preload: [
+          # reply_query = fn reply_to_ids -> Bonfire.Common.Needle.list!(reply_to_ids, opts ++ [preload: [
           #            :post_content,
           #            :creator_of_reply_to
           #          ]]) end
@@ -691,7 +691,7 @@ defmodule Bonfire.Social.Activities do
     # * Alice's post that replied to Bob's post
     # * Bob liked alice's post
 
-    Common.Pointers.pointer_query(
+    Common.Needle.pointer_query(
       [],
       Enums.merge_uniq(opts,
         skip_boundary_check: false,
@@ -1037,7 +1037,7 @@ defmodule Bonfire.Social.Activities do
       do: object
 
   # get other pointable objects (only as fallback for unknown object types, most objects should already be preloaded by `Bonfire.Social.Feeds.LiveHandler.preload/2`)
-  def object_from_activity(%{object: %Pointers.Pointer{id: _} = object}),
+  def object_from_activity(%{object: %Needle.Pointer{id: _} = object}),
     do: load_object(object, skip_boundary_check: true)
 
   # any other preloaded object
@@ -1049,7 +1049,7 @@ defmodule Bonfire.Social.Activities do
   # last fallback, load any non-preloaded pointable object
   def object_from_activity(%{object_id: id}), do: load_object(id, skip_boundary_check: true)
 
-  # def object_from_activity(%Pointers.Pointer{id: _} = object), do: load_object(object, skip_boundary_check: true) # get other pointable objects (only as fallback, should normally already be preloaded)
+  # def object_from_activity(%Needle.Pointer{id: _} = object), do: load_object(object, skip_boundary_check: true) # get other pointable objects (only as fallback, should normally already be preloaded)
   def object_from_activity(object_or_activity), do: object_or_activity
 
   def load_object(id_or_pointer, opts \\ []) do
@@ -1058,7 +1058,7 @@ defmodule Bonfire.Social.Activities do
     # |> repo().maybe_preload([created: [:creator_profile, :creator_character]])
     # |> repo().maybe_preload([:profile, :character])
     with {:ok, obj} <-
-           Bonfire.Common.Pointers.get(id_or_pointer, opts) do
+           Bonfire.Common.Needle.get(id_or_pointer, opts) do
       obj
     else
       # {:ok, obj} -> obj

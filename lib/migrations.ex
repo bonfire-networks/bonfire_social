@@ -1,7 +1,7 @@
 defmodule Bonfire.Social.Migrations do
   @moduledoc false
   use Ecto.Migration
-  import Pointers.Migration
+  import Needle.Migration
 
   def ms(:up) do
     quote do

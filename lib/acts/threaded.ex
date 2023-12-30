@@ -7,7 +7,7 @@ defmodule Bonfire.Social.Acts.Threaded do
   alias Bonfire.Common.Utils
   alias Bonfire.Social.Threads
   alias Ecto.Changeset
-  alias Pointers.Changesets
+  alias Needle.Changesets
   import Epics
   import Untangle
   use Arrows
@@ -115,7 +115,7 @@ defmodule Bonfire.Social.Acts.Threaded do
           "does not reply to anything or not permitted to reply to, so starting new thread (or using custom if specified)"
         )
 
-        thread_id = Types.ulid(custom_thread) || Pointers.Changesets.get_field(changeset, :id)
+        thread_id = Types.ulid(custom_thread) || Needle.Changesets.get_field(changeset, :id)
 
         changeset
         |> put_replied(thread_id, nil, thread_title)

@@ -64,7 +64,7 @@ if Bonfire.Common.Extend.module_enabled?(Bonfire.API.GraphQL) and
         arg(:paginate, :paginate)
 
         # , args: %{my: :followed})
-        resolve(Absinthe.Resolution.Helpers.dataloader(Pointers.Pointer))
+        resolve(Absinthe.Resolution.Helpers.dataloader(Needle.Pointer))
       end
     end
 
@@ -95,7 +95,7 @@ if Bonfire.Common.Extend.module_enabled?(Bonfire.API.GraphQL) and
         arg(:paginate, :paginate)
 
         # , args: %{my: :followed})
-        resolve(Absinthe.Resolution.Helpers.dataloader(Pointers.Pointer))
+        resolve(Absinthe.Resolution.Helpers.dataloader(Needle.Pointer))
       end
     end
 

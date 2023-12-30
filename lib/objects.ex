@@ -2,7 +2,7 @@ defmodule Bonfire.Social.Objects do
   use Arrows
 
   use Bonfire.Common.Repo,
-    schema: Pointers.Pointer,
+    schema: Needle.Pointer,
     searchable_fields: [:id],
     sortable_fields: [:id]
 
@@ -18,8 +18,8 @@ defmodule Bonfire.Social.Objects do
   alias Bonfire.Social.Tags
   alias Bonfire.Social.Threads
 
-  alias Pointers.Changesets
-  # alias Pointers.Pointer
+  alias Needle.Changesets
+  # alias Needle.Pointer
 
   alias Bonfire.Epics.Epic
 
@@ -104,7 +104,7 @@ defmodule Bonfire.Social.Objects do
   end
 
   defp cast_activity(changeset, attrs, creator, opts) do
-    Map.put(attrs, :id, Pointers.ULID.generate())
+    Map.put(attrs, :id, Needle.ULID.generate())
     |> cast_activity(changeset, ..., creator, opts)
   end
 
@@ -136,7 +136,7 @@ defmodule Bonfire.Social.Objects do
     # |> debug
     current_user = current_user(socket_or_current_user)
 
-    Common.Pointers.pointer_query([id: object_id], current_user: current_user)
+    Common.Needle.pointer_query([id: object_id], current_user: current_user)
     # |> debug()
     |> Activities.read(current_user: current_user, skip_opts_check: true)
     # |> debug("object with activity")
@@ -150,7 +150,7 @@ defmodule Bonfire.Social.Objects do
         %{activity: %{object: _}} = pointer,
         current_user
       ) do
-    Common.Pointers.Preload.maybe_preload_nested_pointers(
+    Common.Needle.Preload.maybe_preload_nested_pointers(
       pointer,
       [activity: [:object]],
       current_user: current_user,
@@ -198,7 +198,7 @@ defmodule Bonfire.Social.Objects do
   Returns a basic query over undeleted pointable objects in the system,
   optionally limited to one or more types.
   """
-  def query_base(type \\ nil), do: Pointers.query_base(type)
+  def query_base(type \\ nil), do: Needle.Pointers.query_base(type)
 
   # @doc """
   # Modifies the query to exclude records of the provided type or types,
@@ -212,7 +212,7 @@ defmodule Bonfire.Social.Objects do
   # end
 
   def set_name(id, name, opts) when is_binary(id) do
-    Bonfire.Common.Pointers.one(id, opts)
+    Bonfire.Common.Needle.one(id, opts)
     ~> set_name(name, opts)
   end
 
@@ -225,8 +225,8 @@ defmodule Bonfire.Social.Objects do
   end
 
   def changeset_named(object \\ %{}, attrs) do
-    Pointers.Changesets.cast(object, attrs, [])
-    |> Pointers.Changesets.cast_assoc(:named, [])
+    Needle.Changesets.cast(object, attrs, [])
+    |> Needle.Changesets.cast_assoc(:named, [])
     |> debug("cs")
   end
 
@@ -259,7 +259,7 @@ defmodule Bonfire.Social.Objects do
     # load & check permission
     # TODO: don't load if being passed an obj
     with %{__struct__: _type} = object <-
-           Bonfire.Common.Pointers.get(
+           Bonfire.Common.Needle.get(
              object,
              opts ++ [verbs: [:delete], skip_boundary_check: :admins]
            )

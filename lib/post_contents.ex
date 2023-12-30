@@ -394,7 +394,7 @@ defmodule Bonfire.Social.PostContents do
            |> debug do
       if Integration.federate_outgoing?(current_user),
         do:
-          Bonfire.Common.Pointers.get(id(post_content),
+          Bonfire.Common.Needle.get(id(post_content),
             current_user: current_user,
             verbs: [:edit]
           )

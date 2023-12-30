@@ -7,7 +7,7 @@ config :bonfire_social,
 config :paper_trail, repo: Bonfire.Common.Repo
 
 config :paper_trail,
-  item_type: Pointers.ULID,
-  originator_type: Pointers.ULID,
+  item_type: Needle.ULID,
+  originator_type: Needle.ULID,
   originator_relationship_options: [references: :id],
   originator: [name: :user, model: Bonfire.Data.Identity.User]
