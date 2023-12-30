@@ -2,7 +2,7 @@ defmodule Bonfire.Social.BoostsTest do
   use Bonfire.Social.DataCase, async: true
 
   alias Bonfire.Social.Boosts
-  alias Bonfire.Social.Posts
+  alias Bonfire.Posts
   alias Bonfire.Social.FeedActivities
   alias Bonfire.Me.Fake
 

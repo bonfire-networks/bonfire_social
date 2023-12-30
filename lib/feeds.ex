@@ -7,7 +7,7 @@ defmodule Bonfire.Social.Feeds do
   import Untangle
   alias Bonfire.Data.Identity.Character
   alias Bonfire.Data.Social.Feed
-  alias Bonfire.Social.Follows
+  alias Bonfire.Social.Graph.Follows
   alias Bonfire.Social.Objects
   alias Bonfire.Me.Characters
   alias Bonfire.Boundaries

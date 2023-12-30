@@ -3,12 +3,13 @@ defmodule Bonfire.Social.DeleteTest do
   use Bonfire.Common.Utils
 
   alias Bonfire.Social.FeedActivities
-  alias Bonfire.Social.Posts
+  alias Bonfire.Posts
   alias Bonfire.Social.Objects
 
   alias Bonfire.Me.Users
   alias Bonfire.Me.Fake
   import Bonfire.Social.Fake
+  import Bonfire.Posts.Fake
   use Bonfire.Common.Utils
   import Tesla.Mock
 

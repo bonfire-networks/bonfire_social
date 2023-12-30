@@ -7,9 +7,9 @@ defmodule Bonfire.Social.Migrations do
     quote do
       # require Bonfire.Data.Social.Block.Migration
       require Bonfire.Data.Social.Bookmark.Migration
-      require Bonfire.Data.Social.Follow.Migration
+      # require Bonfire.Data.Social.Follow.Migration
       require Bonfire.Data.Social.Like.Migration
-      require Bonfire.Data.Social.Post.Migration
+      # require Bonfire.Data.Social.Post.Migration
       require Bonfire.Data.Social.PostContent.Migration
       require Bonfire.Data.Social.Profile.Migration
       require Bonfire.Data.Social.Created.Migration
@@ -19,17 +19,17 @@ defmodule Bonfire.Social.Migrations do
       require Bonfire.Data.Social.Replied.Migration
       require Bonfire.Data.Social.Boost.Migration
       require Bonfire.Data.Social.Flag.Migration
-      require Bonfire.Data.Social.Message.Migration
-      require Bonfire.Data.Social.Request.Migration
+      # require Bonfire.Data.Social.Message.Migration
+      # require Bonfire.Data.Social.Request.Migration
       require Bonfire.Data.Social.Seen.Migration
       require Bonfire.Data.Social.Pin.Migration
       require Bonfire.Data.Social.Sensitive.Migration
 
       # Bonfire.Data.Social.Block.Migration.migrate_block()
       Bonfire.Data.Social.Bookmark.Migration.migrate_bookmark()
-      Bonfire.Data.Social.Follow.Migration.migrate_follow()
+      # Bonfire.Data.Social.Follow.Migration.migrate_follow()
       Bonfire.Data.Social.Like.Migration.migrate_like()
-      Bonfire.Data.Social.Post.Migration.migrate_post()
+      # Bonfire.Data.Social.Post.Migration.migrate_post()
       Bonfire.Data.Social.PostContent.Migration.migrate_post_content()
       Bonfire.Data.Social.Profile.Migration.migrate_profile()
       Bonfire.Data.Social.Created.Migration.migrate_created()
@@ -41,8 +41,8 @@ defmodule Bonfire.Social.Migrations do
       Bonfire.Data.Social.Replied.Migration.add_generated_total_column()
       Bonfire.Data.Social.Boost.Migration.migrate_boost()
       Bonfire.Data.Social.Flag.Migration.migrate_flag()
-      Bonfire.Data.Social.Message.Migration.migrate_message()
-      Bonfire.Data.Social.Request.Migration.migrate_request()
+      # Bonfire.Data.Social.Message.Migration.migrate_message()
+      # Bonfire.Data.Social.Request.Migration.migrate_request()
       Bonfire.Data.Social.Seen.Migration.migrate_seen()
       Bonfire.Data.Social.Pin.Migration.migrate_pin()
       Bonfire.Data.Social.Sensitive.Migration.migrate_sensitive()

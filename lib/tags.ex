@@ -44,7 +44,7 @@ defmodule Bonfire.Social.Tags do
 
   def maybe_process(creator, text, opts) do
     output_format =
-      (opts[:output_format] || PostContents.editor_output_content_type(creator))
+      (opts[:output_format] || Bonfire.Social.PostContents.editor_output_content_type(creator))
       |> debug("output_format")
 
     debug(text, "hmmmm")

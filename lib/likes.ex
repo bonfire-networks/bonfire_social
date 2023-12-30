@@ -166,7 +166,7 @@ defmodule Bonfire.Social.Likes do
   @doc "List likes by a user"
   def list_by(by_user, opts \\ [])
       when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
-    # opts = to_options(opts)
+    opts = to_options(opts)
 
     list_paginated(
       Edges.filters_from_opts(opts) |> Map.put(:subject, by_user),
@@ -177,7 +177,7 @@ defmodule Bonfire.Social.Likes do
   @doc "List likers of something(s)"
   def list_of(object, opts \\ [])
       when is_binary(object) or is_list(object) or is_map(object) do
-    # opts = to_options(opts)
+    opts = to_options(opts)
 
     list_paginated(
       Edges.filters_from_opts(opts) |> Map.put(:object, object),

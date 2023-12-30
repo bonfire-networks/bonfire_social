@@ -183,11 +183,11 @@ if Bonfire.Common.Extend.module_enabled?(Bonfire.API.GraphQL) and
     end
 
     def list_posts(_parent, args, info) do
-      {:ok, Bonfire.Social.Posts.query(args, GraphQL.current_user(info))}
+      {:ok, Bonfire.Posts.query(args, GraphQL.current_user(info))}
     end
 
     def get_post(_parent, %{filter: %{id: id}} = _args, info) do
-      Bonfire.Social.Posts.read(id, GraphQL.current_user(info))
+      Bonfire.Posts.read(id, GraphQL.current_user(info))
     end
 
     def get_activity(_parent, %{filter: %{activity_id: id}} = _args, info) do
@@ -227,7 +227,7 @@ if Bonfire.Common.Extend.module_enabled?(Bonfire.API.GraphQL) and
       user = GraphQL.current_user(info)
 
       if user do
-        Bonfire.Social.Posts.publish(post_attrs: args, current_user: user)
+        Bonfire.Posts.publish(post_attrs: args, current_user: user)
       else
         {:error, "Not authenticated"}
       end
@@ -242,7 +242,7 @@ if Bonfire.Common.Extend.module_enabled?(Bonfire.API.GraphQL) and
       user = GraphQL.current_user(info)
 
       if user do
-        with {:ok, f} <- Bonfire.Social.Follows.follow(user, to_follow),
+        with {:ok, f} <- Bonfire.Social.Graph.Follows.follow(user, to_follow),
              do: {:ok, Utils.e(f, :activity, nil)}
       else
         {:error, "Not authenticated"}

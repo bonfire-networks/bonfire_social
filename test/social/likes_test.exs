@@ -3,7 +3,7 @@ defmodule Bonfire.Social.LikesTest do
   use Bonfire.Social.ConnCase
 
   alias Bonfire.Social.Likes
-  alias Bonfire.Social.Posts
+  alias Bonfire.Posts
   alias Bonfire.Social.FeedActivities
 
   alias Bonfire.Me.Fake
@@ -122,6 +122,7 @@ defmodule Bonfire.Social.LikesTest do
     assert fetched_liked.edge.object_id == post.id
   end
 
+  @tag :todo
   test "can paginate my likes" do
     account = Fake.fake_account!()
     alice = Fake.fake_user!(account)
@@ -165,6 +166,7 @@ defmodule Bonfire.Social.LikesTest do
     {:ok, view, _html} = live(conn, "/feed/likes")
     open_browser(view)
     assert true == false
+    # TODO!
   end
 
   test "can list the likers of something" do

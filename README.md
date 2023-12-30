@@ -2,10 +2,9 @@
 
 An extension for [Bonfire](https://bonfire.cafe/) that handles:
 
-- Posting
-- Following
 - Feeds / Timelines
-- Discussions
+- Activities
+- Threads
 - Boosting
 - Liking
 - Flagging
@@ -15,7 +14,7 @@ An extension for [Bonfire](https://bonfire.cafe/) that handles:
 
 ## Copyright and License
 
-Copyright (c) 2020 Bonfire Contributors
+Copyright (c) 2023 Bonfire Contributors
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as

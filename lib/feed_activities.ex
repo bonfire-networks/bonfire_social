@@ -503,7 +503,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed_contains?(feed_name, filters, opts) when is_list(filters) do
-    {feed_ids, opts} = feed_ids_and_opts(feed_name, opts)
+    {feed_ids, opts} = feed_ids_and_opts(feed_name, to_options(opts))
 
     feed_query(
       feed_ids,
