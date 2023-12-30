@@ -167,12 +167,12 @@ defmodule Bonfire.Social.Integration do
   end
 
   def federate_outgoing?(subject \\ nil) do
-    Bonfire.Common.Extend.module_enabled?(Bonfire.Federate.ActivityPub.Outgoing) and
+    Bonfire.Common.Extend.module_enabled?(Bonfire.Federate.ActivityPub.Outgoing, subject) and
       Bonfire.Federate.ActivityPub.Outgoing.federate_outgoing?(subject)
   end
 
   def federating?(subject \\ nil) do
-    Bonfire.Common.Extend.module_enabled?(Bonfire.Federate.ActivityPub) and
+    Bonfire.Common.Extend.module_enabled?(Bonfire.Federate.ActivityPub, subject) and
       Bonfire.Federate.ActivityPub.federating?(subject)
   end
 

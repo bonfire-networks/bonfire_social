@@ -275,7 +275,8 @@ defmodule Bonfire.Social.PostContents do
         Bonfire.Common.Settings.get([:ui, :rich_text_editor], nil, user),
         :output_format,
         [],
-        &no_known_output/2
+        fallback_fun: &no_known_output/2,
+        current_user: user
       )
     end
   end
