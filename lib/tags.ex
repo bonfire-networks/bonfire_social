@@ -110,7 +110,7 @@ defmodule Bonfire.Social.Tags do
   #   character
   # end
   defp maybe_boostable_category(creator, id) when is_binary(id) do
-    with {:ok, category} <- Bonfire.Common.Needle.get(id, current_user: creator, verbs: [:tag]) do
+    with {:ok, category} <- Bonfire.Common.Needles.get(id, current_user: creator, verbs: [:tag]) do
       debug(category, "queried as boostable :-)")
       category
     else

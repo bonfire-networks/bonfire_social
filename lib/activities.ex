@@ -553,7 +553,7 @@ defmodule Bonfire.Social.Activities do
           # * Alice's post that replied to Bob's post
           # * Bob liked alice's post
 
-          # reply_query = fn reply_to_ids -> Bonfire.Common.Needle.list!(reply_to_ids, opts ++ [preload: [
+          # reply_query = fn reply_to_ids -> Bonfire.Common.Needles.list!(reply_to_ids, opts ++ [preload: [
           #            :post_content,
           #            :creator_of_reply_to
           #          ]]) end
@@ -1058,7 +1058,7 @@ defmodule Bonfire.Social.Activities do
     # |> repo().maybe_preload([created: [:creator_profile, :creator_character]])
     # |> repo().maybe_preload([:profile, :character])
     with {:ok, obj} <-
-           Bonfire.Common.Needle.get(id_or_pointer, opts) do
+           Bonfire.Common.Needles.get(id_or_pointer, opts) do
       obj
     else
       # {:ok, obj} -> obj

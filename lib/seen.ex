@@ -63,7 +63,7 @@ defmodule Bonfire.Social.Seen do
 
   def mark_seen(%User{} = subject, object) when is_binary(object) do
     with {:ok, seen} <-
-           Bonfire.Common.Needle.get(object, current_user: subject, verb: :see) do
+           Bonfire.Common.Needles.get(object, current_user: subject, verb: :see) do
       # debug(seen)
       mark_seen(subject, seen)
     end
@@ -84,7 +84,7 @@ defmodule Bonfire.Social.Seen do
 
   def mark_unseen(%User{} = subject, object) when is_binary(object) do
     with {:ok, seen} <-
-           Bonfire.Common.Needle.get(object, current_user: subject) do
+           Bonfire.Common.Needles.get(object, current_user: subject) do
       mark_unseen(subject, seen)
     end
   end

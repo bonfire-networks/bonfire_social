@@ -76,7 +76,7 @@ defmodule Bonfire.Social.Pins do
 
   def pin(pinner, pinned, user, opts) when is_binary(pinned) do
     with {:ok, object} <-
-           Bonfire.Common.Needle.get(pinned,
+           Bonfire.Common.Needles.get(pinned,
              current_user: user || pinner,
              verbs: [@boundary_verb]
            ) do
@@ -136,7 +136,7 @@ defmodule Bonfire.Social.Pins do
   end
 
   def unpin(subject, pinned, user) when is_binary(pinned) do
-    with {:ok, pinned} <- Bonfire.Common.Needle.get(pinned, current_user: user || subject) do
+    with {:ok, pinned} <- Bonfire.Common.Needles.get(pinned, current_user: user || subject) do
       unpin(subject, pinned)
     end
   end
@@ -272,7 +272,7 @@ defmodule Bonfire.Social.Pins do
   #       object
   #     ) do
   #   with {:ok, pinned} <-
-  #          Bonfire.Common.Needle.get(object.pointer_id, current_user: creator) do
+  #          Bonfire.Common.Needles.get(object.pointer_id, current_user: creator) do
   #     pin(creator, pinned, local: false)
   #   end
   # end
@@ -285,7 +285,7 @@ defmodule Bonfire.Social.Pins do
   #   with {:ok, object} <-
   #          ActivityPub.Object.get_cached(ap_id: pinned_object),
   #        {:ok, pinned} <-
-  #          Bonfire.Common.Needle.get(object.pointer_id, current_user: creator),
+  #          Bonfire.Common.Needles.get(object.pointer_id, current_user: creator),
   #        [id] <- unpin(creator, pinned) do
   #     {:ok, id}
   #   end

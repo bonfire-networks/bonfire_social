@@ -91,7 +91,7 @@ defmodule Bonfire.Social.Bookmarks do
   end
 
   def unbookmark(%{} = bookmarker, bookmarked, opts) when is_binary(bookmarked) do
-    with {:ok, bookmarked} <- Bonfire.Common.Needle.get(bookmarked, current_user: bookmarker) do
+    with {:ok, bookmarked} <- Bonfire.Common.Needles.get(bookmarked, current_user: bookmarker) do
       unbookmark(bookmarker, bookmarked, opts)
     end
   end

@@ -338,7 +338,7 @@ defmodule Bonfire.Social.Flags do
       )
       when is_binary(pointer_id) do
     with {:ok, object} <-
-           Bonfire.Common.Needle.get(pointer_id, skip_boundary_check: true) do
+           Bonfire.Common.Needles.get(pointer_id, skip_boundary_check: true) do
       flag(creator, object)
     end
   end

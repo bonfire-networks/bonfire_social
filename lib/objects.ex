@@ -212,7 +212,7 @@ defmodule Bonfire.Social.Objects do
   # end
 
   def set_name(id, name, opts) when is_binary(id) do
-    Bonfire.Common.Needle.one(id, opts)
+    Bonfire.Common.Needles.one(id, opts)
     ~> set_name(name, opts)
   end
 
@@ -259,7 +259,7 @@ defmodule Bonfire.Social.Objects do
     # load & check permission
     # TODO: don't load if being passed an obj
     with %{__struct__: _type} = object <-
-           Bonfire.Common.Needle.get(
+           Bonfire.Common.Needles.get(
              object,
              opts ++ [verbs: [:delete], skip_boundary_check: :admins]
            )

@@ -465,7 +465,7 @@ defmodule Bonfire.Social.Threads do
 
     # |> debug("thread opts")
 
-    %Replied{id: Bonfire.Common.Needle.id_binary(thread_id)}
+    %Replied{id: Bonfire.Common.Needles.id_binary(thread_id)}
     # TODO: change the order of the or_where to make the DB check the thread_id before the path
     |> Replied.descendants()
     |> or_where(
