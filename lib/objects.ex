@@ -136,7 +136,7 @@ defmodule Bonfire.Social.Objects do
     # |> debug
     current_user = current_user(socket_or_current_user)
 
-    Common.Needle.pointer_query([id: object_id], current_user: current_user)
+    Common.Needles.pointer_query([id: object_id], current_user: current_user)
     # |> debug()
     |> Activities.read(current_user: current_user, skip_opts_check: true)
     # |> debug("object with activity")

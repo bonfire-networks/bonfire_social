@@ -691,7 +691,7 @@ defmodule Bonfire.Social.Activities do
     # * Alice's post that replied to Bob's post
     # * Bob liked alice's post
 
-    Common.Needle.pointer_query(
+    Common.Needles.pointer_query(
       [],
       Enums.merge_uniq(opts,
         skip_boundary_check: false,
