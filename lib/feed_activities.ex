@@ -179,6 +179,7 @@ defmodule Bonfire.Social.FeedActivities do
   def my_feed(opts, home_feed_ids \\ nil) do
     opts =
       opts
+      |> to_options()
       |> Keyword.put_new(:home_feed_ids, home_feed_ids)
 
     feed(:my, opts)

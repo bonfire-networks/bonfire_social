@@ -150,7 +150,7 @@ defmodule Bonfire.Social.Objects do
         %{activity: %{object: _}} = pointer,
         current_user
       ) do
-    Common.Needle.Preload.maybe_preload_nested_pointers(
+    Common.Needles.Preload.maybe_preload_nested_pointers(
       pointer,
       [activity: [:object]],
       current_user: current_user,
