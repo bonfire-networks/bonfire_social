@@ -11,7 +11,8 @@ defmodule Bonfire.Social.Objects do
   import Bonfire.Boundaries.Queries
 
   alias Bonfire.Common
-  # alias Bonfire.Data.Identity.Character
+  alias Bonfire.Data.Identity.Caretaker
+  alias Bonfire.Data.Identity.CareClosure
   alias Bonfire.Boundaries.Acls
   alias Bonfire.Social.Activities
   alias Bonfire.Social.FeedActivities
@@ -272,6 +273,8 @@ defmodule Bonfire.Social.Objects do
   end
 
   # for internal use, please call `delete/2` which checks for permissiom
+  def do_delete(objects, opts \\ [])
+
   def do_delete(objects, opts) when is_list(objects) do
     Enum.map(objects, &do_delete(&1, opts))
   end
@@ -341,7 +344,8 @@ defmodule Bonfire.Social.Objects do
       error(e, "Unable to delete this")
     else
       {:ok, del} ->
-        Activities.maybe_remove_for_deleters_feeds(id)
+        debug(del, "deleted!")
+        if opts[:socket_connected], do: Activities.maybe_remove_for_deleters_feeds(id)
         {:ok, del}
 
       other ->
@@ -376,6 +380,10 @@ defmodule Bonfire.Social.Objects do
           :named
         ]
 
+    if options[:delete_caretaken] do
+      delete_caretaken(object)
+    end
+
     options
     |> Keyword.update(
       :delete_associations,
@@ -391,6 +399,44 @@ defmodule Bonfire.Social.Objects do
   #   nil
   # end
 
+  def delete_caretaken(main) do
+    mains = List.wrap(main)
+    main_ids = Enums.ids(mains)
+
+    caretakers =
+      (care_closures(main) ++ mains)
+      |> Enums.uniq_by_id()
+      |> debug(
+        "First of all, we must collate a list of recursive caretakers, plus ID(s) provided"
+      )
+
+    care_taken(Types.ulids(caretakers))
+    |> debug("then delete list things they are caretaker of ")
+    |> do_delete(skip_boundary_check: true, skip_federation: true)
+    |> debug("deleted care_taken")
+
+    caretakers
+    |> Enum.reject(&(Enums.id(&1) in main_ids))
+    |> do_delete(skip_boundary_check: true, delete_caretaken: false)
+    |> debug(
+      "then delete the caretakers themselves (except the main one since that one should be handled by the caller)"
+    )
+
+    # Bonfire.Ecto.Acts.Delete.maybe_delete(main, repo())
+    # |> debug("double-check that main thing(s) is deleted too")
+  end
+
+  def care_closures(ids), do: repo().all(CareClosure.by_branch(Types.ulids(ids)))
+
+  def care_taken(ids),
+    do:
+      repo().all(
+        from(c in Caretaker, where: c.caretaker_id in ^Types.ulids(ids))
+        |> proload(:pointer)
+      )
+      |> repo().maybe_preload(:pointer)
+      |> Enum.map(&(Utils.e(&1, :pointer, nil) || Utils.id(&1)))
+
   def run_epic(type, options \\ [], on \\ :object) do
     options = Keyword.merge(options, crash: true, debug: true, verbose: false)
 
@@ -402,8 +448,8 @@ defmodule Bonfire.Social.Objects do
     if epic.errors == [], do: {:ok, epic.assigns[on]}, else: {:error, epic}
   end
 
-  def delete_apply_error(error, _args) do
-    # error("maybe_apply: #{error} - with args: (#{inspect args})")
+  def delete_apply_error(error, args) do
+    debug(error, "no delete function match for #{inspect(args)}")
 
     {:error, error}
   end

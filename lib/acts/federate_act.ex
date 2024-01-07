@@ -26,8 +26,9 @@ defmodule Bonfire.Social.Acts.Federate do
   def run(epic, act) do
     on = Keyword.get(act.options, :on, :post)
     object = epic.assigns[on]
-    action = Keyword.get(epic.assigns[:options], :action, :insert)
-    current_user = epic.assigns[:options][:current_user]
+    options = epic.assigns[:options]
+    action = Keyword.get(options, :action, :insert)
+    current_user = options[:current_user]
     current_user_id = Types.ulid(current_user)
 
     cond do

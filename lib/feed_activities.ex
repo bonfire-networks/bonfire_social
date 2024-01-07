@@ -494,7 +494,7 @@ defmodule Bonfire.Social.FeedActivities do
     Enum.find_value(feed, fn fi ->
       if fi.activity.object_id == id(id_or_html_body) or
            e(fi.activity.object, :post_content, :html_body, "") =~ id_or_html_body do
-        debug(fi.activity.object, "object found in feed")
+        id(fi.activity.object)
       end
     end) ||
       (
@@ -518,7 +518,8 @@ defmodule Bonfire.Social.FeedActivities do
       )
     )
     |> Activities.as_permitted_for(opts)
-    |> repo().exists?()
+    |> repo().one()
+    |> id()
   end
 
   def feed_contains?(feed, object, opts) when is_map(object) or is_binary(object) do
@@ -1323,7 +1324,7 @@ defmodule Bonfire.Social.FeedActivities do
       # is_list(id_or_ids) ->
       #   Enum.each(id_or_ids, fn x -> delete(x, by_field) end)
       nil ->
-        error("Nothing to delete")
+        error(objects, "Nothing to delete")
 
       objects ->
         debug(objects)
