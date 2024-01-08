@@ -249,20 +249,20 @@ defmodule Bonfire.Social.Edges do
   end
 
   defp maybe_proload(query, :object, object_type)
-       when is_atom(object_type) and not is_nil(object_type) do
-    query
-    |> proload(:edge)
-    |> join(:left, [edge: edge], object in ^object_type,
-      as: :object,
-      on: edge.object_id == object.id
-    )
+       #  TODO: autogenerate list of pointables with these assocs?, or find a way to check if it has these assocs in runtime
+       when object_type in [Bonfire.Data.Social.Post, Bonfire.Data.Social.Message] do
+    maybe_join_type(query, :object, object_type)
+    |> proload(edge: [object: {"object_", [:post_content]}])
+  end
+
+  defp maybe_proload(query, :object, object_type)
+       when object_type in [Bonfire.Data.Identity.User, Bonfire.Classify.Category] do
+    maybe_join_type(query, :object, object_type)
     |> proload(edge: [object: {"object_", [:profile, :character]}])
   end
 
-  defp maybe_proload(query, :object, _object_type) do
-    query
-    |> proload(:edge)
-    |> proload(edge: [object: {"object_", [:profile, :character, :post_content]}])
+  defp maybe_proload(query, :object, object_type) do
+    maybe_join_type(query, :object, object_type)
   end
 
   defp maybe_proload(query, :object_with_creator, object_type) do
@@ -273,9 +273,6 @@ defmodule Bonfire.Social.Edges do
         object:
           {"object_",
            [
-             :profile,
-             :character,
-             :post_content,
              created: [creator: {"creator_", [:profile, :character]}]
            ]}
       ]
@@ -288,10 +285,27 @@ defmodule Bonfire.Social.Edges do
   #   end)
   # end
 
+  # default
   defp maybe_proload(query, _, object_type) do
     query
     |> maybe_proload(:object, object_type)
     |> maybe_proload(:subject)
+  end
+
+  defp maybe_join_type(query, :object, object_type)
+       when is_atom(object_type) and not is_nil(object_type) do
+    query
+    |> proload(:edge)
+    |> join(:left, [edge: edge], object in ^object_type,
+      as: :object,
+      on: edge.object_id == object.id
+    )
+  end
+
+  defp maybe_join_type(query, :object, _object_type) do
+    query
+    |> proload(:edge)
+    |> proload(edge: [:object])
   end
 
   def filters_from_opts(%{assigns: assigns}) do
