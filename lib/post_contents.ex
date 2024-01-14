@@ -35,26 +35,26 @@ defmodule Bonfire.Social.PostContents do
     if is_ulid?(id), do: one([id: id], opts)
   end
 
-  def search_db(text, opts) do
-    from(p in Needle.Pointer,
-      as: :main_object,
-      join: c in assoc(p, :post_content),
-      as: :post_content,
-      where:
-        ilike(c.name, ^"#{text}%") or
-          ilike(c.name, ^"% #{text}%") or
-          ilike(c.summary, ^"#{text}%") or
-          ilike(c.summary, ^"% #{text}%") or
-          ilike(c.html_body, ^"#{text}%") or
-          ilike(c.html_body, ^"% #{text}%"),
-      order_by: [
-        {:desc, fragment("? % ?", ^text, c.name)},
-        {:desc, fragment("? % ?", ^text, c.summary)},
-        {:desc, fragment("? % ?", ^text, c.html_body)}
-      ]
+  def base_query do
+    Needle.Pointers.query_base()
+  end
+
+  def search_query(text, opts) do
+    (opts[:query] || base_query())
+    |> proload([:post_content])
+    |> or_where(
+      [post_content: c],
+      ilike(c.name, ^"#{text}%") or
+        ilike(c.name, ^"% #{text}%") or
+        ilike(c.summary, ^"#{text}%") or
+        ilike(c.summary, ^"% #{text}%")
+      # or
+      # ilike(c.html_body, ^"#{text}%") or
+      # ilike(c.html_body, ^"% #{text}%")
     )
-    |> Bonfire.Common.Needles.pointer_query(opts ++ [preload: [:post_content, :creator]])
-    |> Integration.many(opts[:paginate?], opts)
+    |> prepend_order_by([post_content: pc], [
+      {:desc, fragment("(? <% ?)::int + (? <% ?)::int", ^text, pc.name, ^text, pc.summary)}
+    ])
   end
 
   @doc "Given a changeset, post content attributes, creator, boundary and options, returns a changeset prepared with relevant attributes and associations"
