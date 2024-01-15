@@ -41,10 +41,12 @@ defmodule Bonfire.Social.PostContents do
 
   def search_query(text, opts) do
     (opts[:query] || base_query())
-    |> proload([:post_content])
+    |> proload([:post_content, :named])
     |> or_where(
-      [post_content: c],
-      ilike(c.name, ^"#{text}%") or
+      [post_content: c, named: n],
+      ilike(n.name, ^"#{text}%") or
+        ilike(n.name, ^"% #{text}%") or
+        ilike(c.name, ^"#{text}%") or
         ilike(c.name, ^"% #{text}%") or
         ilike(c.summary, ^"#{text}%") or
         ilike(c.summary, ^"% #{text}%")
@@ -52,8 +54,17 @@ defmodule Bonfire.Social.PostContents do
       # ilike(c.html_body, ^"#{text}%") or
       # ilike(c.html_body, ^"% #{text}%")
     )
-    |> prepend_order_by([post_content: pc], [
-      {:desc, fragment("(? <% ?)::int + (? <% ?)::int", ^text, pc.name, ^text, pc.summary)}
+    |> prepend_order_by([post_content: pc, named: n], [
+      {:desc,
+       fragment(
+         "(? <% ?)::int + (? <% ?)::int + (? <% ?)::int",
+         ^text,
+         n.name,
+         ^text,
+         pc.name,
+         ^text,
+         pc.summary
+       )}
     ])
   end
 
@@ -476,7 +487,7 @@ defmodule Bonfire.Social.PostContents do
     #  TODO: put somewhere reusable by other types
     hashtags =
       for %{"type" => "Hashtag"} = tag <- tags do
-        with {:ok, hashtag} <- Bonfire.Tag.Hashtag.get_or_create_by_name(tag["name"]) do
+        with {:ok, hashtag} <- Bonfire.Tag.Tags.get_or_create_hashtag(tag["name"]) do
           {tag["href"], hashtag}
         else
           none ->
