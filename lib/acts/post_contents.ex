@@ -62,6 +62,7 @@ defmodule Bonfire.Social.Acts.PostContents do
           |> assign_meta(act, on, :mentions)
           |> assign_meta(act, on, :hashtags)
           |> assign_meta(act, on, :urls)
+          |> assign_text(on)
         else
           warn(attrs_key, "Skipping due to empty attrs on key:")
         end
@@ -77,5 +78,13 @@ defmodule Bonfire.Social.Acts.PostContents do
 
     smart(epic, act, data, "found #{meta_key}")
     Epic.assign(epic, meta_key, data)
+  end
+
+  defp assign_text(epic, on, meta_key \\ :text) do
+    name = Utils.e(epic.assigns[on], :changes, :post_content, :changes, :name, nil)
+    summary = Utils.e(epic.assigns[on], :changes, :post_content, :changes, :summary, nil)
+    html_body = Utils.e(epic.assigns[on], :changes, :post_content, :changes, :html_body, nil)
+
+    Epic.assign(epic, meta_key, "#{name} #{summary} #{html_body}")
   end
 end
