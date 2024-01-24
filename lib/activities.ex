@@ -611,12 +611,15 @@ defmodule Bonfire.Social.Activities do
 
         :with_media ->
           query
-          |> proload(
-            activity: [
-              :sensitive
-            ]
-          )
+          |> proload(activity: [:sensitive])
+          # use preload instead of proload because there can be many media
           |> preload(activity: [:media])
+
+        :per_media ->
+          query
+          |> proload(activity: [:sensitive])
+          |> proload(:inner, activity: [:media])
+          |> distinct([media: media], desc: media.id)
 
         # proload query, activity: [:media] # FYI: proloading media only queries one attachment
         :with_seen ->

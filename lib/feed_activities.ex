@@ -138,7 +138,7 @@ defmodule Bonfire.Social.FeedActivities do
         include_flags: true,
         exclude_verbs: false,
         skip_dedup: true,
-        preload: :notifications
+        preload: List.wrap(e(opts, :preload, [])) ++ [:notifications]
       )
 
     {feed_id, opts}
@@ -388,6 +388,24 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed(:flags, opts) do
     Bonfire.Social.Flags.list_preloaded(opts ++ [include_flags: :moderators])
+  end
+
+  def feed(:media, opts) do
+    feed(
+      {:media, :all},
+      opts
+    )
+  end
+
+  def feed({:media, type}, opts) do
+    opts =
+      opts
+      |> Keyword.merge(
+        per_media_type: type,
+        preload: List.wrap(e(opts, :preload, [])) ++ [:per_media]
+      )
+
+    feed(:explore, opts)
   end
 
   def feed(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
