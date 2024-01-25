@@ -76,8 +76,17 @@ defmodule Bonfire.Social.Edges do
   end
 
   def changeset(schema, subject, verb, object, options) do
+    changeset_extra(schema, subject, verb, object, options)
+    |> Objects.cast_creator_caretaker(options[:current_user] || subject)
+  end
+
+  def changeset_without_caretaker(schema, subject, verb, object, options) do
+    changeset_extra(schema, subject, verb, object, options)
+    |> Objects.cast_creator(options[:current_user] || subject)
+  end
+
+  def changeset_extra(schema, subject, verb, object, options) do
     changeset_base(schema, subject, object, options)
-    |> Objects.cast_creator_caretaker(subject)
     |> Acls.cast(subject, options)
     |> Activities.put_assoc(verb, subject, object)
     |> FeedActivities.put_feed_publishes(Keyword.get(options, :to_feeds, []))
