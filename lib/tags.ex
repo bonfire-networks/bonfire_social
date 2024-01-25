@@ -9,37 +9,12 @@ defmodule Bonfire.Social.Tags do
   # alias Bonfire.Data.Social.PostContent
   alias Ecto.Changeset
 
-  def cast(changeset, attrs, creator, opts) do
-    with true <- module_enabled?(Bonfire.Tag, creator),
-         # tag any mentions that were found in the text and injected into the changeset by PostContents (NOTE: this doesn't necessarily mean they should be included in boundaries or notified)
-         # tag any hashtags that were found in the text and injected into the changeset by PostContents
-         tags when is_list(tags) and length(tags) > 0 <-
-           (e(changeset, :changes, :post_content, :changes, :mentions, []) ++
-              e(changeset, :changes, :post_content, :changes, :hashtags, []) ++
-              e(attrs, :tags, []))
-           |> Enum.map(fn
-             %{} = obj ->
-               obj
-
-             id when is_binary(id) ->
-               if Types.is_ulid?(id), do: %{tag_id: id}
-
-             other ->
-               warn(other, "unsupported")
-               nil
-           end)
-           |> filter_empty([])
-           |> Enums.uniq_by_id()
-           #  |> tags_preloads(opts)
-           |> debug("cast tags") do
-      changeset
-      |> Changeset.cast(%{tagged: tags}, [])
-      |> debug("before cast assoc")
-      |> Changeset.cast_assoc(:tagged, with: &Bonfire.Tag.Tagged.changeset/2)
+  def maybe_cast(changeset, attrs, creator, opts) do
+    with true <- module_enabled?(Bonfire.Tag.Tags, creator) do
+      Bonfire.Tag.Tags.cast(changeset, attrs, creator, opts)
     else
       _ -> changeset
     end
-    |> debug("changeset with :tagged")
   end
 
   def maybe_process(creator, text, opts) do
@@ -133,20 +108,6 @@ defmodule Bonfire.Social.Tags do
     |> if(preload?, do: repo().maybe_preload(..., [:character]), else: ...)
   end
 
-  def maybe_tag(creator, object, tags, mentions_are_private? \\ false) do
-    if module_enabled?(Bonfire.Tag.Tags, creator) do
-      boost_category_tags = !mentions_are_private?
-
-      Bonfire.Tag.Tags.maybe_tag(creator, object, tags, boost_category_tags)
-      |> debug()
-
-      # ~> maybe_boostable_categories(creator, e(..., :tags, [])) # done in Bonfire.Tag.Tags instead
-      # ~> auto_boost(..., object)
-    else
-      error("No tagging extension available.")
-    end
-  end
-
   def maybe_auto_boost(creator, category_or_categories, object) do
     maybe_boostable_categories(creator, category_or_categories)
     |> debug()
@@ -159,6 +120,10 @@ defmodule Bonfire.Social.Tags do
   end
 
   def auto_boost(%{} = category, object) do
+    category =
+      category
+      |> repo().maybe_preload(:character)
+
     if e(category, :character, nil) do
       # category
       # |> debug("auto_boost_object")
@@ -174,7 +139,7 @@ defmodule Bonfire.Social.Tags do
         do: Bonfire.Social.FeedActivities.delete(feed_id: inbox_id, id: ulid(object)) |> debug(),
         else: debug("no inbox ID")
     else
-      debug("not a character")
+      debug("skip boosting, because not a character")
     end
   end
 

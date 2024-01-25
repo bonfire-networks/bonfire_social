@@ -43,7 +43,7 @@ defmodule Bonfire.Social.Objects do
     # record replies & threads. preloads data that will be checked by `Acls`
     |> Threads.cast(attrs, creator, opts)
     # record tags & mentions. uses data preloaded by `PostContents`
-    |> Tags.cast(attrs, creator, opts)
+    |> Tags.maybe_cast(attrs, creator, opts)
     # apply boundaries on all objects, note that ORDER MATTERS, as it uses data preloaded by `Threads` and `PostContents`
     |> cast_acl(creator, opts)
 
