@@ -380,7 +380,8 @@ defmodule Bonfire.Social.Activities do
             :with_thread_name,
             :with_reply_to,
             :with_media,
-            :with_parent
+            :with_parent,
+            :maybe_with_labelled
           ],
           opts
         )
@@ -621,6 +622,15 @@ defmodule Bonfire.Social.Activities do
           |> proload(:inner, activity: [:media])
           |> distinct([media: media], desc: media.id)
 
+        :maybe_with_labelled ->
+          if Extend.module_enabled?(Bonfire.Label),
+            do:
+              query
+              |> proload(
+                activity: [labelled: {"labelled_", [:post_content, :media, subject: [:profile]]}]
+              ),
+            else: query
+
         # proload query, activity: [:media] # FYI: proloading media only queries one attachment
         :with_seen ->
           query_preload_seen(query, opts)
@@ -681,6 +691,11 @@ defmodule Bonfire.Social.Activities do
 
         :with_media ->
           [:media, :sensitive]
+
+        :maybe_with_labelled ->
+          if Extend.module_enabled?(Bonfire.Label),
+            do: [labelled: [:post_content, :media, subject: [:profile]]],
+            else: []
 
         :with_seen ->
           subquery = subquery_preload_seen(opts)

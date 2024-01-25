@@ -775,6 +775,13 @@ defmodule Bonfire.Social.FeedActivities do
     exclude_verbs =
       (e(opts, :exclude_verbs, nil) || []) ++
         [:message] ++
+        if opts[:include_labelling] do
+          debug("include labelling for all")
+          []
+        else
+          debug("do not include labelling")
+          [:label]
+        end ++
         if opts[:include_flags] == :moderators and
              Bonfire.Boundaries.can?(opts, :mediate, :instance) do
           debug("include flags for mods/admins")
