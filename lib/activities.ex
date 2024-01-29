@@ -561,15 +561,33 @@ defmodule Bonfire.Social.Activities do
 
           debug("reply_to should be preloaded with custom query so boundaries can be applied")
 
-          query
-          |> proload(activity: [:replied])
-          |> preload(
-            activity: [
-              replied: [
-                reply_to: ^maybe_preload_reply_to(opts)
+          if is_struct(query, Ecto.Query) and
+               Enum.any?(query.preloads, fn
+                 {:activity,
+                  [
+                    replied: [
+                      reply_to: _
+                    ]
+                  ]} ->
+                   true
+
+                 other ->
+                   debug(other)
+                   false
+               end) do
+            warn("reply_to is already being preloaded")
+            query
+          else
+            query
+            |> proload(activity: [:replied])
+            |> preload(
+              activity: [
+                replied: [
+                  reply_to: ^maybe_preload_reply_to(opts)
+                ]
               ]
-            ]
-          )
+            )
+          end
 
         # |> Ecto.Query.preload([activity: {activity, [replied: ^reply_query]}])
         # |> proload(
