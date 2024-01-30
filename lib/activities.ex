@@ -525,7 +525,7 @@ defmodule Bonfire.Social.Activities do
           proload(query,
             activity: [
               :sensitive,
-              object: {"object_", [:post_content]}
+              object: {"object_", [:post_content, :peered]}
             ]
           )
 
@@ -533,7 +533,7 @@ defmodule Bonfire.Social.Activities do
           proload(query,
             activity: [
               :sensitive,
-              object: {"object_", [:post_content, :character, profile: :icon]}
+              object: {"object_", [:post_content, :peered, :character, profile: :icon]}
             ]
           )
 
@@ -678,7 +678,7 @@ defmodule Bonfire.Social.Activities do
         :with_object_posts ->
           [
             # :replied,
-            object: [:post_content]
+            object: [:post_content, :peered]
           ]
 
         :with_object_more ->
@@ -752,7 +752,18 @@ defmodule Bonfire.Social.Activities do
   def maybe_join_subject(query, []),
     do:
       query
-      |> proload(activity: [subject: {"subject_", [character: [:peered], profile: :icon]}])
+      |> proload(
+        activity: [
+          subject:
+            {"subject_",
+             [
+               character: [
+                 # :peered
+               ],
+               profile: [:icon]
+             ]}
+        ]
+      )
 
   def maybe_join_subject(query, exclude_user_ids) do
     # optimisation: only includes the subject if different current_user
@@ -767,7 +778,18 @@ defmodule Bonfire.Social.Activities do
         activity.subject_id not in ^exclude_user_ids and
           activity.subject_id == subject.id
     )
-    |> proload(activity: [subject: {"subject_", [character: [:peered], profile: :icon]}])
+    |> proload(
+      activity: [
+        subject:
+          {"subject_",
+           [
+             character: [
+               # :peered
+             ],
+             profile: [:icon]
+           ]}
+      ]
+    )
   end
 
   @doc "query optimisation: only includes the subject if different from subject or current_user"
@@ -801,7 +823,14 @@ defmodule Bonfire.Social.Activities do
            [
              # reusable_join should mean the above is respected and the creator mixins are only loaded when needed
              created: [
-               creator: {"creator_", [character: [:peered], profile: :icon]}
+               creator:
+                 {"creator_",
+                  [
+                    character: [
+                      # :peered
+                    ],
+                    profile: [:icon]
+                  ]}
              ]
            ]}
       ]
@@ -839,7 +868,14 @@ defmodule Bonfire.Social.Activities do
            [
              # reusable_join should mean the above is respected and the creator mixins are only loaded when needed
              created: [
-               creator: {"creator_", [character: [:peered], profile: :icon]}
+               creator:
+                 {"creator_",
+                  [
+                    character: [
+                      # :peered
+                    ],
+                    profile: [:icon]
+                  ]}
              ]
            ]}
       ]

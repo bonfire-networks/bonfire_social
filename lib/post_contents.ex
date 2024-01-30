@@ -122,13 +122,13 @@ defmodule Bonfire.Social.PostContents do
              Bonfire.Social.Tags.maybe_process(
                creator,
                get_attr(attrs, :html_body)
-               |> maybe_sane_html(e(opts, :do_not_strip_html, nil)),
+               |> maybe_sane_html(e(opts, :do_not_strip_html, nil), true),
                opts
              ),
            {:ok, %{text: name, mentions: mentions2, hashtags: hashtags2, urls: urls2}} <-
              Bonfire.Social.Tags.maybe_process(
                creator,
-               get_attr(attrs, :name) |> maybe_sane_html(e(opts, :do_not_strip_html, nil)),
+               get_attr(attrs, :name) |> maybe_sane_html(e(opts, :do_not_strip_html, nil), true),
                opts
              ),
            {:ok,
@@ -140,7 +140,8 @@ defmodule Bonfire.Social.PostContents do
             }} <-
              Bonfire.Social.Tags.maybe_process(
                creator,
-               get_attr(attrs, :summary) |> maybe_sane_html(e(opts, :do_not_strip_html, nil)),
+               get_attr(attrs, :summary)
+               |> maybe_sane_html(e(opts, :do_not_strip_html, nil), true),
                opts
              ) do
         merge_with_body_or_nil(
@@ -283,12 +284,23 @@ defmodule Bonfire.Social.PostContents do
   def prepare_text("", _, _opts), do: nil
   def prepare_text(other, _, _opts), do: other
 
-  defp maybe_sane_html(text, true),
+  defp maybe_sane_html(text, do_not_strip_html \\ false, fix_wysiwyg_input \\ false)
+  defp maybe_sane_html(nil, _, _), do: nil
+
+  defp maybe_sane_html(text, do_not_strip_html, true) when is_binary(text),
+    do:
+      text
+      # special for MD links coming from milkdown
+      |> Regex.replace(~r/<(http[^>]+)>/U, ..., " \\1 ")
+      |> Regex.replace(~r/@<([^>]+)>/U, ..., " @\\1 ")
+      |> maybe_sane_html(do_not_strip_html, nil)
+
+  defp maybe_sane_html(text, true, _),
     do:
       text
       |> Text.normalise_links(:markdown)
 
-  defp maybe_sane_html(text, _) do
+  defp maybe_sane_html(text, _, _) do
     text
     #  open remote links in new tab (need to do this before maybe_sane_html)
     # TODO: set format based on current editor
