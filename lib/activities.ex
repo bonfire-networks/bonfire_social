@@ -587,6 +587,7 @@ defmodule Bonfire.Social.Activities do
                 ]
               ]
             )
+            |> debug("with reply_to")
           end
 
         # |> Ecto.Query.preload([activity: {activity, [replied: ^reply_query]}])
@@ -730,9 +731,20 @@ defmodule Bonfire.Social.Activities do
     Common.Needles.pointer_query(
       [],
       Enums.merge_uniq(opts,
-        skip_boundary_check: false,
-        preload: [:post_content, :creator]
+        skip_boundary_check: false
+        # preload: [:with_content, :creator_of_reply_to]
       )
+    )
+    |> preload(
+      # [{"reply_to_", 
+      [
+        :post_content,
+        :peered,
+        created: [
+          creator: [:character, profile: :icon]
+        ]
+      ]
+      # }]
     )
     |> debug("query to attempt loading reply_to")
 

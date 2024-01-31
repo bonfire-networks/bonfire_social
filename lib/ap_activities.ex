@@ -98,6 +98,7 @@ defmodule Bonfire.Social.APActivities do
 
   def insert(character, json, opts) do
     # TODO: add type field(s) to the table to be able to quickly filter without JSONB?
+    # TODO: add creator (to be used when showing in reply_to)
     activity =
       %APActivity{}
       |> APActivity.changeset(%{json: json})

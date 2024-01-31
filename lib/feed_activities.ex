@@ -233,7 +233,8 @@ defmodule Bonfire.Social.FeedActivities do
       |> query_order(opts[:sort_by], opts[:sort_order])
       |> feed_many_paginated(opts ++ [paginate: true, return: :query, multiply_limit: 2])
       |> repo().make_subquery()
-      |> debug("deferred subquery")
+
+    # |> debug("deferred subquery")
 
     default_or_filtered_query(opts)
     |> join(:inner, [fp], ^initial_query, on: [id: fp.id])
@@ -270,11 +271,23 @@ defmodule Bonfire.Social.FeedActivities do
       _ ->
         # ^ tell Paginator to always give us and `after` cursor
         case paginate_and_boundarise_feed_deferred_query(query, opts)
+             |> debug("final query")
              |> feed_many_paginated(opts ++ [infinite_pages: true]) do
-          %{edges: []} -> paginate_and_boundarise_feed_non_deferred_query(query, opts)
-          # ^ if there were no results, try without the deferred query in case some where missing because of boundaries
-          result -> result
+          %{edges: []} ->
+            # if there were no results, try without the deferred query in case some where missing because of boundaries
+            paginate_and_boundarise_feed_non_deferred_query(query, opts)
+
+          result ->
+            # we got results
+            result
         end
+        |> Bonfire.Common.Needles.Preload.maybe_preload_nested_pointers(
+          [activity: [replied: [:reply_to]]],
+          opts
+        )
+
+        # run post-preloads to follow pointers and catch anything else missing - TODO: only follow some pointers
+        # |> Activities.activity_preloads(e(opts, :preload, :feed), opts |> Keyword.put_new(:follow_pointers, true))
     end
   end
 
