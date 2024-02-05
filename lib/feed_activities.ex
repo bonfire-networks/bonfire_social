@@ -1398,8 +1398,8 @@ defmodule Bonfire.Social.FeedActivities do
         Bonfire.Social.Integration.maybe_federate_and_gift_wrap_activity(
           subject || e(activity, :subject, nil) || e(activity, :subject_id, nil),
           activity,
-          verb,
-          object
+          verb: verb,
+          object: object
         )
   end
 

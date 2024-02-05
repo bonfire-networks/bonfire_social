@@ -12,11 +12,10 @@ defmodule Bonfire.Social.Integration do
   def maybe_federate_and_gift_wrap_activity(
         subject,
         object,
-        verb_override \\ nil,
-        object_override \\ nil
+        opts \\ []
       ) do
     with {:ok, ap_activity} <-
-           maybe_federate_activity(subject, object, verb_override, object_override)
+           maybe_federate_activity(subject, object, opts[:verb], opts[:object], opts)
            |> debug("result of maybe_federate_activity") do
       {:ok,
        Enums.deep_merge(object, %{
@@ -38,14 +37,16 @@ defmodule Bonfire.Social.Integration do
          subject,
          activity_or_object,
          verb_override,
-         object_override
+         object_override,
+         opts
        )
 
   defp maybe_federate_activity(
          subject,
          %{activity: %{object: %{id: _} = inner_object} = activity} = outer_object,
          verb,
-         object_override
+         object_override,
+         opts
        ),
        # NOTE: we need the outer object for Edges like Follow or Like
        do:
@@ -54,14 +55,16 @@ defmodule Bonfire.Social.Integration do
            activity,
            verb,
            object_override || outer_object,
-           inner_object
+           inner_object,
+           opts
          )
 
   defp maybe_federate_activity(
          subject,
          %{activity: %{id: _} = activity} = activity_object,
          verb,
-         object_override
+         object_override,
+         opts
        ),
        do:
          maybe_federate_activity_with_object(
@@ -69,53 +72,62 @@ defmodule Bonfire.Social.Integration do
            activity,
            verb,
            object_override,
-           activity_object
+           activity_object,
+           opts
          )
 
   defp maybe_federate_activity(
          subject,
          %Bonfire.Data.Social.Activity{object: %{id: _} = activity_object} = activity,
          verb,
-         object_override
+         object_override,
+         opts
        ) do
-    maybe_federate_activity_with_object(subject, activity, verb, object_override, activity_object)
+    maybe_federate_activity_with_object(
+      subject,
+      activity,
+      verb,
+      object_override,
+      activity_object,
+      opts
+    )
   end
 
   defp maybe_federate_activity(
          subject,
          %Bonfire.Data.Social.Activity{object: activity_object} = activity,
          verb,
-         object_override
+         object_override,
+         opts
        )
        when not is_nil(activity_object),
        do:
          repo().maybe_preload(activity, [:object, :verb])
-         |> maybe_federate_activity(subject, ..., verb, object_override)
+         |> maybe_federate_activity(subject, ..., verb, object_override, opts)
 
   defp maybe_federate_activity(
          subject,
          %{activity: activity} = activity_object,
          verb,
-         object_override
+         object_override,
+         opts
        )
        when not is_nil(activity),
        do:
          repo().maybe_preload(activity_object, activity: [:verb])
-         |> maybe_federate_activity(subject, ..., verb, object_override)
+         |> maybe_federate_activity(subject, ..., verb, object_override, opts)
 
-  defp maybe_federate_activity(subject, activity, :delete, object) do
+  defp maybe_federate_activity(subject, activity, :delete, object, opts) do
     debug(
       object || activity,
       "Federate deletion of an object"
     )
 
     # ActivityPub.delete(object || activity, true)
-
-    # , [return: :oban_prepared])
-    maybe_federate(subject, :delete, object || activity, nil)
+    maybe_federate(subject, :delete, object || activity, nil, opts)
   end
 
-  defp maybe_federate_activity(_subject, activity, _verb, _object) do
+  defp maybe_federate_activity(_subject, activity, _verb, _object, _opts) do
     error(
       activity,
       "Cannot federate: Expected an Activity, or an object containing one"
@@ -129,7 +141,8 @@ defmodule Bonfire.Social.Integration do
          %Bonfire.Data.Social.Activity{} = activity,
          verb,
          object_override,
-         activity_object
+         activity_object,
+         opts
        ) do
     # activity = repo().maybe_preload(activity, [:verb, :object])
     object = object_override || activity_object
@@ -140,7 +153,7 @@ defmodule Bonfire.Social.Integration do
         |> String.downcase()
         |> Types.maybe_to_atom()
 
-    maybe_federate(subject, verb, object, activity)
+    maybe_federate(subject, verb, object, activity, opts)
 
     # object
   end

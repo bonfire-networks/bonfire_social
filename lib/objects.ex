@@ -392,6 +392,7 @@ defmodule Bonfire.Social.Objects do
     )
     |> debug("deletion opts")
     |> run_epic(:delete, ..., :object)
+    |> debug("fini")
   end
 
   # def maybe_generic_delete(type, _object, _options) do
@@ -410,17 +411,21 @@ defmodule Bonfire.Social.Objects do
         "First of all, we must collate a list of recursive caretakers, plus ID(s) provided"
       )
 
-    care_taken(Types.ulids(caretakers))
-    |> debug("then delete list things they are caretaker of ")
+    caretaker_ids = Types.ulids(caretakers)
+
+    care_taken(caretaker_ids)
+    |> Enum.reject(&(Enums.id(&1) in caretaker_ids))
+    |> debug("then delete list things they are caretaker of")
     |> do_delete(skip_boundary_check: true, skip_federation: true)
     |> debug("deleted care_taken")
 
     caretakers
     |> Enum.reject(&(Enums.id(&1) in main_ids))
-    |> do_delete(skip_boundary_check: true, delete_caretaken: false)
     |> debug(
       "then delete the caretakers themselves (except the main one since that one should be handled by the caller)"
     )
+    |> do_delete(skip_boundary_check: true, delete_caretaken: false)
+    |> debug("deleted caretakers")
 
     # Bonfire.Ecto.Acts.Delete.maybe_delete(main, repo())
     # |> debug("double-check that main thing(s) is deleted too")
@@ -438,7 +443,7 @@ defmodule Bonfire.Social.Objects do
       |> Enum.map(&(Utils.e(&1, :pointer, nil) || Utils.id(&1)))
 
   def run_epic(type, options \\ [], on \\ :object) do
-    options = Keyword.merge(options, crash: true, debug: true, verbose: false)
+    options = Keyword.merge(options, crash: true, debug: true, verbose: true)
 
     epic =
       Epic.from_config!(__MODULE__, type)

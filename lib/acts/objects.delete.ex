@@ -18,6 +18,7 @@ defmodule Bonfire.Social.Acts.Objects.Delete do
   def run(epic, act) do
     current_account = epic.assigns[:options][:current_account]
     current_user = epic.assigns[:options][:current_user]
+    ap_on = Keyword.get(act.options, :ap_on, :ap_object)
 
     cond do
       epic.errors != [] ->
@@ -46,9 +47,18 @@ defmodule Bonfire.Social.Acts.Objects.Delete do
 
         maybe_debug(epic, act, object, "Delete object")
 
-        object
-        |> Epic.assign(epic, as, ...)
+        id = Map.get(object, :id)
 
+        ap_object =
+          ActivityPub.Object.get_cached!(pointer: id) ||
+            ActivityPub.Actor.get_cached!(pointer: id)
+
+        epic
+        |> Epic.assign(as, object)
+        |> Epic.assign(ap_on, ap_object)
+        |> Epic.assign(:ap_bcc, ActivityPub.Actor.get_external_followers(ap_object))
+
+        # |> IO.inspect(label: "eppppic")
         # |> Work.add(:object)
     end
   end

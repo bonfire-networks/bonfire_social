@@ -447,7 +447,8 @@ defmodule Bonfire.Social.PostContents do
           |> Integration.maybe_federate(
             current_user,
             :edit,
-            ...
+            ...,
+            nil
           )
 
       {:ok, updated}

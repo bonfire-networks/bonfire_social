@@ -253,16 +253,16 @@ defmodule Bonfire.Social.Flags do
            ActivityPub.Actor.get_cached(pointer: flagger) do
       # FIXME: only works for flagged posts and users
       params =
-        case flagged do
-          %User{id: flagged_id} when not is_nil(flagged_id) ->
-            {:ok, account} = ActivityPub.Actor.get_cached(pointer: flagged_id)
+        case Types.object_type(flagged) do
+          User ->
+            {:ok, account} = ActivityPub.Actor.get_cached(pointer: flagged)
 
             %{
               statuses: [],
               account: account
             }
 
-          %{id: flagged_id} = flagged ->
+          _ ->
             flagged =
               flagged
               |> repo().maybe_preload(:created)
@@ -276,7 +276,7 @@ defmodule Bonfire.Social.Flags do
 
             %{
               statuses: [
-                ActivityPub.Object.get_cached!(pointer: flagged_id)
+                ActivityPub.Object.get_cached!(pointer: flagged)
               ],
               account: account
             }
@@ -284,10 +284,12 @@ defmodule Bonfire.Social.Flags do
 
       ActivityPub.flag(
         %{
-          actor: flagger,
+          # actor: flagger, # exclude actor so we send an anonymised flag instead (using a service actor)
           statuses: params.statuses,
           account: params.account,
-          # content: flag.message, # TODO
+          # TODO: ask the user if they want to forward the flag?
+          forward: true,
+          # content: flag.message, # TODO: add a comment
           forward: true,
           pointer: flag
         }

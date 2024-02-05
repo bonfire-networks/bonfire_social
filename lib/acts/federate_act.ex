@@ -24,7 +24,11 @@ defmodule Bonfire.Social.Acts.Federate do
   alias Common.Types
 
   def run(epic, act) do
+    epic.assigns
+    |> IO.inspect(label: "eppppic asss")
+
     on = Keyword.get(act.options, :on, :post)
+    ap_on = Keyword.get(act.options, :ap_on, :ap_object)
     object = epic.assigns[on]
     options = epic.assigns[:options]
     action = Keyword.get(options, :action, :insert)
@@ -46,8 +50,13 @@ defmodule Bonfire.Social.Acts.Federate do
         maybe_debug(epic, act, on, "ActivityPub: Skipping due to `on` option")
         nil
 
-      not is_binary(current_user_id) ->
-        warn(current_user, "ActivityPub: Skipping due to missing current_user")
+      # not is_binary(current_user_id) ->
+      #   warn(current_user, "ActivityPub: Skipping due to missing current_user")
+      #   nil
+
+      options[:skip_federation] ->
+        info("ActivityPub: skip_federation was set")
+
         nil
 
       Integration.federate_outgoing?(current_user) != true ->
@@ -63,7 +72,12 @@ defmodule Bonfire.Social.Acts.Federate do
 
       action in [:insert] ->
         maybe_debug(epic, act, action, "Maybe queue for federation")
-        Bonfire.Social.Integration.maybe_federate_and_gift_wrap_activity(current_user, object)
+
+        Bonfire.Social.Integration.maybe_federate_and_gift_wrap_activity(
+          current_user,
+          object,
+          options
+        )
 
       action in [:update] ->
         maybe_debug(epic, act, action, "Maybe queue update for federation")
@@ -71,7 +85,8 @@ defmodule Bonfire.Social.Acts.Federate do
         Bonfire.Social.Integration.maybe_federate_and_gift_wrap_activity(
           current_user,
           object,
-          :update
+          options ++
+            [verb: :update, ap_object: epic.assigns[ap_on], ap_bcc: epic.assigns[:ap_bcc]]
         )
 
       # TODO: deletion
@@ -81,7 +96,8 @@ defmodule Bonfire.Social.Acts.Federate do
         Bonfire.Social.Integration.maybe_federate_and_gift_wrap_activity(
           current_user,
           object,
-          :delete
+          options ++
+            [verb: :delete, ap_object: epic.assigns[ap_on], ap_bcc: epic.assigns[:ap_bcc]]
         )
 
       true ->
