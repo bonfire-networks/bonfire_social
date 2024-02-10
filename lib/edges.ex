@@ -18,6 +18,7 @@ defmodule Bonfire.Social.Edges do
     :object,
     :subject,
     :type,
+    :preload_type,
     :object_type,
     :subject_type,
     :current_user,
@@ -243,7 +244,7 @@ defmodule Bonfire.Social.Edges do
     from(root in query_schema)
     |> reusable_join([root], edge in assoc(root, :edge), as: :edge)
     |> boundarise(edge.object_id, opts)
-    |> maybe_proload(opts[:preload], filters[:object_type] |> debug)
+    |> maybe_proload(opts[:preload], filters[:object_type])
     |> filter(filters, opts)
   end
 
@@ -261,12 +262,22 @@ defmodule Bonfire.Social.Edges do
        #  TODO: autogenerate list of pointables with these assocs?, or find a way to check if it has these assocs in runtime
        when object_type in [Bonfire.Data.Social.Post, Bonfire.Data.Social.Message] do
     maybe_join_type(query, :object, object_type)
+    |> maybe_proload(:object_post_content, nil)
+  end
+
+  defp maybe_proload(query, :object_post_content, _object_type) do
+    query
     |> proload(edge: [object: {"object_", [:post_content]}])
   end
 
   defp maybe_proload(query, :object, object_type)
        when object_type in [Bonfire.Data.Identity.User, Bonfire.Classify.Category] do
     maybe_join_type(query, :object, object_type)
+    |> maybe_proload(:object_profile, nil)
+  end
+
+  defp maybe_proload(query, :object_profile, _object_type) do
+    query
     |> proload(edge: [object: {"object_", [:profile, :character]}])
   end
 
