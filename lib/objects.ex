@@ -133,15 +133,15 @@ defmodule Bonfire.Social.Objects do
     |> cast_caretaker(user)
   end
 
-  def read(object_id, socket_or_current_user) when is_binary(object_id) do
+  def read(object_id, opts) when is_binary(object_id) do
     # |> debug
-    current_user = current_user(socket_or_current_user)
+    opts = to_options(opts) ++ [skip_opts_check: true]
 
-    Common.Needles.pointer_query([id: object_id], current_user: current_user)
+    Common.Needles.pointer_query([id: object_id], opts)
     # |> debug()
-    |> Activities.read(current_user: current_user, skip_opts_check: true)
+    |> Activities.read()
     # |> debug("object with activity")
-    ~> maybe_preload_activity_object(current_user)
+    ~> maybe_preload_activity_object(opts)
     ~> Activities.activity_under_object(...)
     ~> to_ok()
     |> debug("final object")
@@ -149,13 +149,12 @@ defmodule Bonfire.Social.Objects do
 
   def maybe_preload_activity_object(
         %{activity: %{object: _}} = pointer,
-        current_user
+        opts
       ) do
     Common.Needles.Preload.maybe_preload_nested_pointers(
       pointer,
       [activity: [:object]],
-      current_user: current_user,
-      skip_opts_check: true
+      opts
     )
   end
 

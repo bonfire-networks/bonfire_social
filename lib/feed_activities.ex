@@ -1350,7 +1350,9 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp do_put_in_feeds(feed, activity)
        when is_binary(activity) and is_binary(feed) do
-    repo().insert(%FeedPublish{feed_id: feed, id: activity})
+    repo().upsert(
+      Ecto.Changeset.cast(%FeedPublish{}, %{feed_id: feed, id: activity}, [:feed_id, :id])
+    )
   end
 
   def the_object({%{} = object, _mixin_object}), do: object

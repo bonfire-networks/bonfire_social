@@ -98,7 +98,7 @@ defmodule Bonfire.Social.Activities do
 
   @doc """
   Create an Activity
-  NOTE: you will usually want to use `cast/3` instead
+  NOTE: you will usually want to use `cast/3` instead or maybe `Objects.publish/5`
   """
   def create(subject, verb, object, activity_id \\ nil)
 
@@ -120,9 +120,17 @@ defmodule Bonfire.Social.Activities do
         object_id: object_id
       })
 
-    with {:ok, activity} <- repo().put(changeset(attrs)) do
+    with {:ok, activity} <- repo().upsert(changeset(attrs)) do
       {:ok, %{activity | object: object, subject: subject, verb: verb}}
     end
+  rescue
+    e in Ecto.ConstraintError ->
+      error(e, "Could not save the Activity")
+      # TODO: get Activity instead?
+      {:ok, object}
+
+    e ->
+      error(e, "Could not save the Activity")
   end
 
   def create(subject, verb, {object, %{id: id} = _mixin_object}, _) do
