@@ -7,13 +7,13 @@ defmodule Bonfire.Social.Flags do
     searchable_fields: [:flagger_id, :flagged_id]
 
   alias Bonfire.Social.Integration
-  import Bonfire.Boundaries.Queries
+  # import Bonfire.Boundaries.Queries
 
   alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Flag
   # alias Bonfire.Boundaries.Verbs
   alias Bonfire.Common
-  alias Bonfire.Me.Users
+  # alias Bonfire.Me.Users
   # alias Bonfire.Data.Social.FlagCount
   alias Bonfire.Social.Activities
   # alias Bonfire.Social.FeedActivities

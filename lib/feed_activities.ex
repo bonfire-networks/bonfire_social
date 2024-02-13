@@ -337,7 +337,7 @@ defmodule Bonfire.Social.FeedActivities do
     |> debug("default feed to load:")
   end
 
-  def feed_name(name, socket) when is_atom(name) or is_binary(name) do
+  def feed_name(name, _socket) when is_atom(name) or is_binary(name) do
     name
   end
 
@@ -596,7 +596,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp default_query(), do: select(Needle.Pointers.query_base(), [p], p)
 
-  defp base_query(opts \\ []) do
+  defp base_query(_opts \\ []) do
     # feeds = from fp in FeedPublish, # why the subquery?..
     #   where: fp.feed_id in ^feed_ids,
     #   group_by: fp.id,
@@ -625,11 +625,11 @@ defmodule Bonfire.Social.FeedActivities do
     query
   end
 
-  defp make_distinct(query, nil, :asc, opts) do
+  defp make_distinct(query, nil, :asc, _opts) do
     distinct(query, [activity: activity], asc: activity.id)
   end
 
-  defp make_distinct(query, nil, _, opts) do
+  defp make_distinct(query, nil, _, _opts) do
     distinct(query, [activity: activity], desc: activity.id)
   end
 

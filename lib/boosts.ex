@@ -249,9 +249,10 @@ defmodule Bonfire.Social.Boosts do
         %{data: %{"type" => "Announce"}} = _activity,
         object
       ) do
-    Bonfire.Federate.ActivityPub.AdapterUtils.return_pointable(object,
-      current_user: creator,
-      verbs: [:boost]
+    Utils.maybe_apply(
+      Bonfire.Federate.ActivityPub.AdapterUtils,
+      :return_pointable,
+      [object, [current_user: creator, verbs: [:boost]]]
     )
     ~> boost(creator, ..., local: false)
   end
@@ -264,9 +265,10 @@ defmodule Bonfire.Social.Boosts do
     with {:ok, object} <-
            ActivityPub.Object.get_cached(ap_id: boosted_object),
          {:ok, pointable} <-
-           Bonfire.Federate.ActivityPub.AdapterUtils.return_pointable(object,
-             current_user: creator,
-             verbs: [:boost]
+           Utils.maybe_apply(
+             Bonfire.Federate.ActivityPub.AdapterUtils,
+             :return_pointable,
+             [object, [current_user: creator, verbs: [:boost]]]
            ),
          [id] <- unboost(creator, pointable, skip_boundary_check: true) do
       {:ok, id}

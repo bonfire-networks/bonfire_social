@@ -4,7 +4,7 @@ defmodule Bonfire.Social.Acts.PostContents do
   # alias Bonfire.Epics.Act
   alias Bonfire.Epics.Epic
 
-  alias Bonfire.Social.PostContents
+  # alias Bonfire.Social.PostContents
   alias Ecto.Changeset
   import Bonfire.Epics
   import Untangle, only: [warn: 2]

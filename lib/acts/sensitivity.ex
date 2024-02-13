@@ -1,5 +1,5 @@
 defmodule Bonfire.Social.Acts.Sensitivity do
-  alias Bonfire.Data.Social.Sensitive
+  # alias Bonfire.Data.Social.Sensitive
   alias Bonfire.Epics
   # alias Bonfire.Epics.Act
   alias Bonfire.Epics.Epic
@@ -7,12 +7,12 @@ defmodule Bonfire.Social.Acts.Sensitivity do
   alias Bonfire.Common.Utils
   alias Bonfire.Social.Objects
   alias Ecto.Changeset
-  alias Needle.Changesets
+  # alias Needle.Changesets
   import Epics
   import Untangle
   use Arrows
   alias Bonfire.Common
-  alias Common.Types
+  # alias Common.Types
 
   def run(epic, act) do
     on = Keyword.get(act.options, :on, :post)
