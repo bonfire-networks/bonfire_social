@@ -24,8 +24,8 @@ defmodule Bonfire.Social.Acts.Federate do
   alias Common.Types
 
   def run(epic, act) do
-    epic.assigns
-    |> IO.inspect(label: "eppppic asss")
+    # epic.assigns
+    # |> IO.inspect(label: "eppppic asss")
 
     on = Keyword.get(act.options, :on, :post)
     ap_on = Keyword.get(act.options, :ap_on, :ap_object)

@@ -164,7 +164,7 @@ defmodule Bonfire.Social.LikesTest do
     # assert %{edges: [fetched_liked]} = Likes.list_my(current_user: alice)
     conn = conn(user: alice, account: account)
     {:ok, view, _html} = live(conn, "/likes")
-    open_browser(view)
+    # open_browser(view)
     assert true == false
     # TODO!
   end
