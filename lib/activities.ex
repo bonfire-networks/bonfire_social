@@ -324,9 +324,13 @@ defmodule Bonfire.Social.Activities do
     # debug(preloads)
 
     if not is_nil(query) and Ecto.Queryable.impl_for(query) do
-      Enum.reduce(preloads, query, &do_activity_preloads(&2, &1, opts))
+      preloads
+      |> Enum.uniq()
+      |> Enum.reduce(query, &do_activity_preloads(&2, &1, opts))
     else
-      Enum.flat_map(preloads, &do_activity_preloads(nil, &1, opts))
+      preloads
+      |> Enum.uniq()
+      |> Enum.flat_map(&do_activity_preloads(nil, &1, opts))
     end
   end
 
