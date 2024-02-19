@@ -274,15 +274,23 @@ defmodule Bonfire.Social.FeedActivities do
              |> debug("final query")
              |> feed_many_paginated(opts ++ [infinite_pages: true]) do
           %{edges: []} ->
-            # if there were no results, try without the deferred query in case some where missing because of boundaries
+            debug(
+              "there were no results, try without the deferred query in case some where missing because of boundaries"
+            )
+
             paginate_and_boundarise_feed_non_deferred_query(query, opts)
 
           result ->
-            # we got results
+            debug("we got results")
+
             result
         end
         |> Bonfire.Common.Needles.Preload.maybe_preload_nested_pointers(
           [activity: [replied: [:reply_to]]],
+          opts
+        )
+        |> Bonfire.Common.Needles.Preload.maybe_preload_nested_pointers(
+          [activity: [:object]],
           opts
         )
 
