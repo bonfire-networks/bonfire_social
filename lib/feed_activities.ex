@@ -811,11 +811,13 @@ defmodule Bonfire.Social.FeedActivities do
 
     exclude_table_ids =
       exclude_object_types
+      |> Enum.dedup()
       |> Enum.map(&maybe_apply(&1, :__pointers__, :table_id))
       |> List.wrap()
 
     exclude_verb_ids =
       exclude_verbs
+      |> Enum.dedup()
       |> debug("exxclude_verbs")
       |> Enum.map(&Bonfire.Social.Activities.verb_id(&1))
       |> List.wrap()
@@ -825,27 +827,28 @@ defmodule Bonfire.Social.FeedActivities do
 
     (query || base_or_filtered_query(filters, opts))
     # |> proload([:activity])
-    |> reusable_join(:left, [root], assoc(root, :activity), as: :activity)
-    |> reusable_join(:left, [activity: activity], activity_pointer in Pointer,
+    |> reusable_join(:inner, [root], assoc(root, :activity), as: :activity)
+    |> reusable_join(:inner, [activity: activity], activity_pointer in Pointer,
       as: :activity_pointer,
-      on: activity_pointer.id == activity.id
+      on:
+        activity_pointer.id == activity.id and
+          is_nil(activity_pointer.deleted_at) and
+          activity_pointer.table_id not in ^exclude_table_ids
     )
-    |> reusable_join(:left, [activity: activity], object in Pointer,
+    |> reusable_join(:inner, [activity: activity], object in Pointer,
       as: :object,
-      #  only includes the object (for filtering purposes) for activities other than create
-      on: activity.id != activity.object_id and object.id == activity.object_id
+      on:
+        object.id == activity.object_id and
+          is_nil(object.deleted_at) and
+          (is_nil(object.table_id) or object.table_id not in ^exclude_table_ids)
     )
     # FIXME: are filters already applied in base_or_filtered_query above?
     |> maybe_filter(filters)
     # where: fp.feed_id not in ^exclude_feed_ids,
     # Don't show messages or anything deleted
     |> where(
-      [activity: activity, activity_pointer: activity_pointer, object: object],
-      activity.verb_id not in ^exclude_verb_ids and
-        is_nil(object.deleted_at) and
-        is_nil(activity_pointer.deleted_at) and
-        activity_pointer.table_id not in ^exclude_table_ids and
-        (is_nil(object.table_id) or object.table_id not in ^exclude_table_ids)
+      [activity: activity],
+      activity.verb_id not in ^exclude_verb_ids
     )
     |> maybe_exclude_mine(current_user)
     |> maybe_exclude_replies(filters, opts)
@@ -883,11 +886,12 @@ defmodule Bonfire.Social.FeedActivities do
   defp maybe_time_limit(query, _), do: query
 
   defp maybe_filter(query, %{object_type: object_type}) when not is_nil(object_type) do
-    case Bonfire.Common.Types.table_types(object_type) do
+    case Bonfire.Common.Types.table_types(object_type) |> debug() do
       table_ids when is_list(table_ids) and table_ids != [] ->
         where(query, [object: object], object.table_id in ^table_ids)
 
-      _ ->
+      other ->
+        warn(other, "Unrecognised object_type '#{object_type}'")
         query
     end
   end
@@ -1317,15 +1321,17 @@ defmodule Bonfire.Social.FeedActivities do
     end
   end
 
-  defp put_in_feeds(feeds, activity, push? \\ true) 
-  defp put_in_feeds(feeds, activity, push?) when is_list(feeds) and feeds !=[] do
-    fa = feeds
-    |> Circles.circle_ids()
-    |> Enum.map(fn x -> put_in_feeds(x, activity, false) end)
+  defp put_in_feeds(feeds, activity, push? \\ true)
+
+  defp put_in_feeds(feeds, activity, push?) when is_list(feeds) and feeds != [] do
+    fa =
+      feeds
+      |> Circles.circle_ids()
+      |> Enum.map(fn x -> put_in_feeds(x, activity, false) end)
 
     if push?, do: LivePush.push_activity(feeds, activity)
-
   end
+
   defp put_in_feeds(feed_or_subject, activity, push?)
        when is_map(feed_or_subject) or
               (is_binary(feed_or_subject) and feed_or_subject != "") do
@@ -1342,6 +1348,7 @@ defmodule Bonfire.Social.FeedActivities do
         nil
     end
   end
+
   defp put_in_feeds(_, _, _) do
     error("FeedActivities: did not put_in_feeds")
     nil
