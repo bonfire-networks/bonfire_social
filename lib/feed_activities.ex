@@ -1303,7 +1303,7 @@ defmodule Bonfire.Social.FeedActivities do
     # federation hook fails
     feeds = Enums.filter_empty(feeds, [])
     # ret =
-    put_in_feeds(feeds, activity)
+    activity = put_in_feeds(feeds, activity) || activity
     # TODO: add ActivityPub feed for remote activities
     try do
       # FIXME only run if ActivityPub is a target circle/feed?
@@ -1317,35 +1317,34 @@ defmodule Bonfire.Social.FeedActivities do
     end
   end
 
-  defp put_in_feeds(feeds, activity) when is_list(feeds) do
-    feeds
-    # ????
+  defp put_in_feeds(feeds, activity, push? \\ true) 
+  defp put_in_feeds(feeds, activity, push?) when is_list(feeds) and feeds !=[] do
+    fa = feeds
     |> Circles.circle_ids()
-    # TODO: optimise?
-    |> Enum.map(fn x -> put_in_feeds(x, activity) end)
-  end
+    |> Enum.map(fn x -> put_in_feeds(x, activity, false) end)
 
-  defp put_in_feeds(feed_or_subject, activity)
+    if push?, do: LivePush.push_activity(feeds, activity)
+
+  end
+  defp put_in_feeds(feed_or_subject, activity, push?)
        when is_map(feed_or_subject) or
               (is_binary(feed_or_subject) and feed_or_subject != "") do
     with feed_id <- ulid(feed_or_subject),
          {:ok, published} <- do_put_in_feeds(feed_id, ulid(activity)) do
       # push to feeds of online users
-      LivePush.push_activity(feed_id, activity)
-      {:ok, Map.put(published, :activity, activity)}
+      if push?, do: LivePush.push_activity(feed_id, activity)
     else
       e ->
         error(
           "FeedActivities.put_in_feeds: error when trying with feed_or_subject: #{inspect(e)}"
         )
 
-        {:ok, nil}
+        nil
     end
   end
-
-  defp put_in_feeds(_, _) do
+  defp put_in_feeds(_, _, _) do
     error("FeedActivities: did not put_in_feeds")
-    {:ok, nil}
+    nil
   end
 
   defp do_put_in_feeds(feed, activity)

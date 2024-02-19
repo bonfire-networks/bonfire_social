@@ -58,7 +58,7 @@ defmodule Bonfire.Social.LivePush do
   end
 
   def push_activity(_feed_ids, activity, _opts) do
-    debug("skip")
+    warn(activity, "skip invalid activity")
     activity
   end
 
