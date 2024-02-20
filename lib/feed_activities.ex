@@ -285,6 +285,7 @@ defmodule Bonfire.Social.FeedActivities do
 
             result
         end
+        # TODO: where best to do these postloads? and try to optimise into one call
         |> Bonfire.Common.Needles.Preload.maybe_preload_nested_pointers(
           [activity: [replied: [:reply_to]]],
           opts
