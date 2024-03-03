@@ -11,7 +11,7 @@ defmodule Bonfire.Social.Migrations do
       require Bonfire.Data.Social.Like.Migration
       # require Bonfire.Data.Social.Post.Migration
       require Bonfire.Data.Social.PostContent.Migration
-      require Bonfire.Data.Social.Profile.Migration
+      # require Bonfire.Data.Social.Profile.Migration
       require Bonfire.Data.Social.Created.Migration
       require Bonfire.Data.Social.Activity.Migration
       require Bonfire.Data.Social.Feed.Migration
@@ -31,7 +31,7 @@ defmodule Bonfire.Social.Migrations do
       Bonfire.Data.Social.Like.Migration.migrate_like()
       # Bonfire.Data.Social.Post.Migration.migrate_post()
       Bonfire.Data.Social.PostContent.Migration.migrate_post_content()
-      Bonfire.Data.Social.Profile.Migration.migrate_profile()
+      # Bonfire.Data.Social.Profile.Migration.migrate_profile()
       Bonfire.Data.Social.Created.Migration.migrate_created()
       Bonfire.Data.Social.Activity.Migration.migrate_activity()
       Bonfire.Data.Social.Feed.Migration.migrate_feed()
@@ -59,7 +59,7 @@ defmodule Bonfire.Social.Migrations do
       require Bonfire.Data.Social.Like.Migration
       require Bonfire.Data.Social.Post.Migration
       require Bonfire.Data.Social.PostContent.Migration
-      require Bonfire.Data.Social.Profile.Migration
+      # require Bonfire.Data.Social.Profile.Migration
       require Bonfire.Data.Social.Created.Migration
       require Bonfire.Data.Social.Activity.Migration
       require Bonfire.Data.Social.Feed.Migration
@@ -83,7 +83,7 @@ defmodule Bonfire.Social.Migrations do
       Bonfire.Data.Social.Replied.Migration.migrate_replied()
       Bonfire.Data.Social.Boost.Migration.migrate_boost()
       Bonfire.Data.Social.Flag.Migration.migrate_flag()
-      Bonfire.Data.Social.Profile.Migration.migrate_profile()
+      # Bonfire.Data.Social.Profile.Migration.migrate_profile()
       Bonfire.Data.Social.PostContent.Migration.migrate_post_content()
       Bonfire.Data.Social.Post.Migration.migrate_post()
       Bonfire.Data.Social.Like.Migration.migrate_like()
