@@ -473,8 +473,24 @@ defmodule Bonfire.Social.FeedActivities do
     raise e
   end
 
-  defp do_feed(feed, opts) do
-    feed
+  defp do_feed(feed_id_or_ids_or_name, opts) do
+    if opts[:cache] do
+      key = feed_id_or_ids_or_name
+
+      case Cache.get!(key) do
+        nil ->
+          Cache.put(key, actually_do_feed(feed_id_or_ids_or_name, opts))
+
+        feed ->
+          feed
+      end
+    else
+      actually_do_feed(feed_id_or_ids_or_name, opts)
+    end
+  end
+
+  defp actually_do_feed(feed_id_or_ids_or_name, opts) do
+    feed_id_or_ids_or_name
     |> feed_query(opts)
     |> paginate_and_boundarise_feed(maybe_merge_filters(opts[:feed_filters], opts))
     # |> debug()

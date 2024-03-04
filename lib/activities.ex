@@ -1170,7 +1170,7 @@ defmodule Bonfire.Social.Activities do
   def verb_name(%{verb_id: id}), do: Bonfire.Boundaries.Verbs.get(id)[:verb]
   def verb_name(%{verb: verb}) when is_binary(verb), do: verb
 
-  @decorate time()
+  # @decorate time()
   def verb_maybe_modify(verb, activity)
 
   # FIXME: temporary as we may later request other things
@@ -1239,7 +1239,7 @@ defmodule Bonfire.Social.Activities do
 
   # |> String.downcase()
 
-  @decorate time()
+  # @decorate time()
   def verb_display(verb) do
     verb = maybe_to_string(verb)
 
