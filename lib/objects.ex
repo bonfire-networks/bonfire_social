@@ -25,7 +25,10 @@ defmodule Bonfire.Social.Objects do
   alias Bonfire.Epics.Epic
 
   @behaviour Bonfire.Federate.ActivityPub.FederationModules
-  def federation_module, do: "Delete"
+  def federation_module, do: ["Delete", {"Create", "Tombstone"}]
+
+
+  @cannot_delete_msg "Object not found or you have no permission to delete it"
 
   @doc """
   Handles casting:
@@ -267,7 +270,7 @@ defmodule Bonfire.Social.Objects do
       do_delete(object, opts)
     else
       _ ->
-        error("No permission to delete this")
+        error(@cannot_delete_msg)
     end
   end
 
@@ -585,14 +588,14 @@ defmodule Bonfire.Social.Objects do
     |> repo().delete()
   end
 
-  def ap_receive_activity(creator, activity, %ActivityPub.Object{} = object) do
-    debug(creator)
-    debug(object)
-
-    ap_maybe_delete(creator, e(object, :pointer, nil) || object.pointer_id)
-    |> debug("ap_maybe_deleted")
-
-    # todo - what to return? 
+  def ap_receive_activity(creator, _activity, %{pointer: %{id: _} = pointer} = object) do
+    ap_maybe_delete(creator, pointer)
+  end
+  def ap_receive_activity(creator, _activity, %{pointer_id: pointer} = object) when is_binary(pointer) do
+    ap_maybe_delete(creator, pointer)
+  end
+  def ap_receive_activity(_creator, _activity, object) do
+    error(object, "dunno how to delete object")
   end
 
   def ap_maybe_delete(creator, nil) do
@@ -600,6 +603,11 @@ defmodule Bonfire.Social.Objects do
   end
 
   def ap_maybe_delete(creator, object) do
+    debug(creator)
+    debug(object)
+
     delete(object, creator)
+    |> debug("ap_maybe_deleted") 
+   
   end
 end
