@@ -208,23 +208,24 @@ defmodule Bonfire.Social.PostContents do
 
   defp rewrite_remote_links(text, mentions, hashtags)
        when is_binary(text) and (mentions != %{} or hashtags != %{}) do
+    mention_urls =
+      mentions
+      |> debug
+      |> Map.keys()
+      |> Enums.filter_empty([])
 
-    mention_urls = mentions 
-    |> debug
-    |> Map.keys()
-    |> Enums.filter_empty([])
-
-    hashtag_urls = hashtags
-    |> debug
-    |> Map.keys() 
-    |> Enums.filter_empty([])
+    hashtag_urls =
+      hashtags
+      |> debug
+      |> Map.keys()
+      |> Enums.filter_empty([])
 
     text
     |> String.replace(
       mention_urls,
       &path(e(mentions, &1, nil) || ActivityPub.Actor.format_username(&1) || &1)
-    )  
-    |> String.replace(hashtag_urls, &path(e(hashtags, &1, nil)) || &1)
+    )
+    |> String.replace(hashtag_urls, &(path(e(hashtags, &1, nil)) || &1))
   end
 
   defp rewrite_remote_links(text, _, _), do: text

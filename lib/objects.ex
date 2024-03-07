@@ -27,7 +27,6 @@ defmodule Bonfire.Social.Objects do
   @behaviour Bonfire.Federate.ActivityPub.FederationModules
   def federation_module, do: ["Delete", {"Create", "Tombstone"}]
 
-
   @cannot_delete_msg "Object not found or you have no permission to delete it"
 
   @doc """
@@ -591,9 +590,12 @@ defmodule Bonfire.Social.Objects do
   def ap_receive_activity(creator, _activity, %{pointer: %{id: _} = pointer} = object) do
     ap_maybe_delete(creator, pointer)
   end
-  def ap_receive_activity(creator, _activity, %{pointer_id: pointer} = object) when is_binary(pointer) do
+
+  def ap_receive_activity(creator, _activity, %{pointer_id: pointer} = object)
+      when is_binary(pointer) do
     ap_maybe_delete(creator, pointer)
   end
+
   def ap_receive_activity(_creator, _activity, object) do
     error(object, "dunno how to delete object")
   end
@@ -607,7 +609,6 @@ defmodule Bonfire.Social.Objects do
     debug(object)
 
     delete(object, creator)
-    |> debug("ap_maybe_deleted") 
-   
+    |> debug("ap_maybe_deleted")
   end
 end
