@@ -1171,7 +1171,7 @@ defmodule Bonfire.Social.Activities do
   def verb_name(%{verb: verb}) when is_binary(verb), do: verb
 
   # @decorate time()
-  def verb_maybe_modify(verb, activity)
+  def verb_maybe_modify(verb, activity \\ nil)
 
   # FIXME: temporary as we may later request other things
   def verb_maybe_modify("Request", _), do: "Request to Follow"

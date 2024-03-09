@@ -4,8 +4,10 @@ if Bonfire.Common.Extend.module_enabled?(Bonfire.API.GraphQL) and
     use Absinthe.Schema.Notation
     alias Absinthe.Resolution.Helpers
 
+    import Bonfire.Social.Integration
     alias Bonfire.API.GraphQL
     alias Bonfire.Common.Utils
+    alias Bonfire.Social.Activities
 
     object :post do
       field(:id, :id)
@@ -19,17 +21,28 @@ if Bonfire.Common.Extend.module_enabled?(Bonfire.API.GraphQL) and
       field :verb_display, :string do
         resolve(fn
           %{verb: verb}, _, _ ->
-            {:ok, Bonfire.Social.Activities.verb_display(verb)}
+            {:ok,
+             verb
+             |> Activities.verb_maybe_modify()
+             |> Activities.verb_display()}
         end)
       end
     end
 
     object :activity do
       field(:id, :id)
-      field(:object_id, :string)
-      field(:subject_id, :string)
 
+      field(:subject_id, :string)
       field(:subject, :any_character)
+
+      field(:object_id, :string)
+
+      field(:canonical_uri, :string) do
+        resolve(fn activity, _, _ ->
+          IO.inspect(activity)
+          {:ok, Bonfire.Common.URIs.canonical_url(activity)}
+        end)
+      end
 
       field(:verb, :verb) do
         resolve(fn
@@ -57,6 +70,22 @@ if Bonfire.Common.Extend.module_enabled?(Bonfire.API.GraphQL) and
         #     %{activity: %{object: %{id: _} = object}}, _, _ ->
         #       {:ok, object}
         #   end
+      end
+
+      field(:object_post_content, :post_content) do
+        resolve(fn
+          %{object: %{post_content: %{id: _} = post_content}}, _, _ ->
+            {:ok, post_content}
+
+          %{object: %Bonfire.Data.Social.Post{} = post}, _, _ ->
+            {:ok,
+             post
+             |> repo().maybe_preload(:post_content)
+             |> Map.get(:post_content)}
+
+          _, _, _ ->
+            {:ok, nil}
+        end)
       end
 
       field(:direct_replies, list_of(:replied)) do
@@ -207,15 +236,17 @@ if Bonfire.Common.Extend.module_enabled?(Bonfire.API.GraphQL) and
     end
 
     def activity_object(activity) do
-      {:ok, Bonfire.Social.Activities.object_from_activity(activity)}
-    end
-
-    defp feed(%{filter: filter}, info) do
-      feed(filter, info)
+      {:ok, Activities.object_from_activity(activity)}
     end
 
     defp feed(args, info) do
-      Bonfire.Social.FeedActivities.feed(args, info)
+      user = GraphQL.current_user(info)
+      IO.inspect(args)
+
+      Bonfire.Social.FeedActivities.feed(Utils.e(args, :filter, :feed_name, :local),
+        current_user: user,
+        paginate: Utils.e(args, :paginate, nil)
+      )
       |> feed()
     end
 
