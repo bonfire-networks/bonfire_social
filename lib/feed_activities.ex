@@ -479,12 +479,15 @@ defmodule Bonfire.Social.FeedActivities do
 
       case Cache.get!(key) do
         nil ->
+          debug(key, "querying and putting in cache")
           Cache.put(key, actually_do_feed(feed_id_or_ids_or_name, opts))
 
         feed ->
+          debug(key, "got from cache")
           feed
       end
     else
+      debug("do not cache")
       actually_do_feed(feed_id_or_ids_or_name, opts)
     end
   end
