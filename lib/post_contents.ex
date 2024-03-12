@@ -271,7 +271,7 @@ defmodule Bonfire.Social.PostContents do
       e(attrs, :post_content, key, nil) || e(attrs, :post, key, nil)
   end
 
-  def prepare_text(text, _creator, opts) when is_binary(text) and text != "" do
+  def prepare_text(text, creator, opts) when is_binary(text) and text != "" do
     # little easter egg to test error handling
     if String.contains?(text, "/crash!"), do: raise("User-triggered crash")
 
@@ -280,11 +280,11 @@ defmodule Bonfire.Social.PostContents do
     # |> maybe_process_markdown(creator)
     # transform emoticons to emojis
     # |> debug()
-    |> Text.maybe_emote(opts[:emoji])
     # |> debug()
     # |> Text.normalise_links(:markdown)
     # maybe remove potentially dangerous or dirty markup
     |> maybe_sane_html(e(opts, :do_not_strip_html, nil))
+    |> Text.maybe_emote(creator, opts[:emoji])
     # make sure we end up with valid HTML
     |> Text.maybe_normalize_html()
     |> debug()
@@ -313,8 +313,8 @@ defmodule Bonfire.Social.PostContents do
     text
     #  open remote links in new tab (need to do this before maybe_sane_html)
     # TODO: set format based on current editor
-    |> Text.normalise_links(:markdown)
     |> Text.maybe_sane_html()
+    |> Text.normalise_links(:markdown)
   end
 
   def editor_output_content_type(user) do
