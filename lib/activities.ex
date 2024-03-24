@@ -654,7 +654,7 @@ defmodule Bonfire.Social.Activities do
           |> distinct([media: media], desc: media.id)
 
         :maybe_with_labelled ->
-          if Extend.module_enabled?(Bonfire.Label),
+          if Extend.extension_enabled?(:bonfire_label),
             do:
               query
               |> proload(
