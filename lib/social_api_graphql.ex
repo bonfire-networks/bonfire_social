@@ -7,7 +7,10 @@ if Bonfire.Common.Extend.module_enabled?(Bonfire.API.GraphQL) and
     import Bonfire.Social.Integration
     alias Bonfire.API.GraphQL
     alias Bonfire.Common.Utils
+    alias Bonfire.Common.Types
     alias Bonfire.Social.Activities
+
+    import_types(Absinthe.Type.Custom)
 
     object :post do
       field(:id, :id)
@@ -32,6 +35,12 @@ if Bonfire.Common.Extend.module_enabled?(Bonfire.API.GraphQL) and
     object :activity do
       field(:id, :id)
 
+      field(:date, :datetime) do
+        resolve(fn %{id: id}, _, _ ->
+          {:ok, Bonfire.Common.DatesTimes.date_from_pointer(id)}
+        end)
+      end
+
       field(:subject_id, :string)
       field(:subject, :any_character)
 
@@ -39,7 +48,7 @@ if Bonfire.Common.Extend.module_enabled?(Bonfire.API.GraphQL) and
 
       field(:canonical_uri, :string) do
         resolve(fn activity, _, _ ->
-          IO.inspect(activity)
+          # IO.inspect(activity)
           {:ok, Bonfire.Common.URIs.canonical_url(activity)}
         end)
       end
@@ -243,7 +252,8 @@ if Bonfire.Common.Extend.module_enabled?(Bonfire.API.GraphQL) and
       user = GraphQL.current_user(info)
       IO.inspect(args)
 
-      Bonfire.Social.FeedActivities.feed(Utils.e(args, :filter, :feed_name, :local),
+      Bonfire.Social.FeedActivities.feed(
+        Types.maybe_to_atom(Utils.e(args, :filter, :feed_name, :local)),
         current_user: user,
         paginate: Utils.e(args, :paginate, nil)
       )
