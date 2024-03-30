@@ -58,14 +58,16 @@ defmodule Bonfire.Social.APActivities do
   end
 
   defp do_create(character, activity, object, public) do
+    debug(activity, "activity")
+    debug(object, "object")
+
     json =
       if is_map(object) do
-        Enum.into(%{"object" => the_object(object)}, activity || %{})
+        Enum.into(%{"object" => the_object(object) || object}, activity || %{})
       else
         activity || %{}
       end
-
-    debug(activity)
+      |> debug("json to store")
 
     boundary =
       if(public, do: "public_remote", else: "mentions")
