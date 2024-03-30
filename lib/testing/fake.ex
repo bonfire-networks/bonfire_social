@@ -1,6 +1,6 @@
 defmodule Bonfire.Social.Fake do
   import Bonfire.Common.Simulation
-  import Bonfire.Me.Fake
+  # import Bonfire.Me.Fake
   # alias Bonfire.Common.Utils
   alias Bonfire.Posts
   alias Bonfire.Social.Graph.Follows
