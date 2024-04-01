@@ -10,7 +10,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     alias Bonfire.Common.Types
     alias Bonfire.Social.Activities
 
-    import_types(Absinthe.Type.Custom)
+    # import_types(Absinthe.Type.Custom)
 
     object :post do
       field(:id, :id)
