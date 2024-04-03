@@ -5,6 +5,12 @@ defmodule Bonfire.Social.Integration do
   # alias Bonfire.Data.Social.Follow
   import Untangle
 
+  declare_extension("Social",
+    icon: "ph:rss-simple-bold",
+    # emoji: "📰",
+    description: l("Basic social networking functionality, such as feeds and discussions.")
+  )
+
   def repo, do: Config.repo()
 
   def mailer, do: Config.get!(:mailer_module)
