@@ -141,7 +141,7 @@ defmodule Bonfire.Social.Objects do
 
     Common.Needles.pointer_query([id: object_id], opts)
     # |> debug()
-    |> Activities.read()
+    |> Activities.read(skip_boundary_check: true)
     # |> debug("object with activity")
     ~> maybe_preload_activity_object(opts)
     ~> Activities.activity_under_object(...)
