@@ -33,14 +33,14 @@ defmodule Bonfire.Social.Edges do
 
   def insert(schema, subject, verb, object, options) do
     changeset(schema, subject, verb, object, options)
-    |> insert()
-    |> preload_inserted(subject, object)
+    |> insert(subject, object)
   end
 
-  def insert(changeset, _subject \\ nil, object \\ nil) do
+  def insert(changeset, subject \\ nil, object \\ nil) do
     changeset
     |> Changeset.unique_constraint([:subject_id, :object_id, :table_id])
     |> repo().insert()
+    |> preload_inserted(subject, object)
   end
 
   defp preload_inserted(inserted, %{} = subject, %{} = object) do
@@ -81,6 +81,7 @@ defmodule Bonfire.Social.Edges do
     |> Objects.cast_creator_caretaker(options[:current_user] || subject)
   end
 
+  @doc "Avoids it being deleted when subject is deleted"
   def changeset_without_caretaker(schema, subject, verb, object, options) do
     changeset_extra(schema, subject, verb, object, options)
     |> Objects.cast_creator(options[:current_user] || subject)
@@ -99,6 +100,12 @@ defmodule Bonfire.Social.Edges do
   def changeset_base({insert_schema, type_schema}, subject, object, _options) do
     Changesets.cast(struct(insert_schema), %{}, [])
     |> put_edge_assoc(type_schema, subject, object)
+  end
+
+  @doc "Avoids it being deleted when subject is deleted"
+  def changeset_base_with_creator(schema, subject, object, options) do
+    changeset_base(schema, subject, object, options)
+    |> Objects.cast_creator(options[:current_user] || subject)
   end
 
   def put_edge_assoc(changeset, subject, object),

@@ -154,6 +154,6 @@ defmodule Bonfire.Social.Bookmarks do
 
   def insert(subject, object, options) do
     Edges.changeset_base(Bookmark, subject, object, options)
-    |> Edges.insert()
+    |> Edges.insert(subject, object)
   end
 end

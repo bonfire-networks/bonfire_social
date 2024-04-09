@@ -179,7 +179,7 @@ defmodule Bonfire.Social.Objects do
       |> repo().maybe_preload(creator: [:character])
 
   def object_creator(object) do
-    e(object, :created, :creator, e(object, :creator, nil))
+    e(object, :created, :creator, nil) || e(object, :creator, nil)
   end
 
   def list_query(type_or_query \\ nil, opts)
