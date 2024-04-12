@@ -196,12 +196,7 @@ defmodule Bonfire.Social.Integration do
   end
 
   def is_local?(thing, opts \\ []) do
-    if Bonfire.Common.Extend.module_enabled?(Bonfire.Federate.ActivityPub.AdapterUtils) do
-      Bonfire.Federate.ActivityPub.AdapterUtils.is_local?(thing, opts)
-    else
-      # if activitypub is disabled, it must be?
-      true
-    end
+    maybe_apply(Bonfire.Federate.ActivityPub.AdapterUtils, :is_local?, [thing, opts], opts)
   end
 
   def many(query, paginate?, opts \\ [])

@@ -557,7 +557,7 @@ defmodule Bonfire.Social.Activities do
 
         :with_parent ->
           # TODO: make proload check if the schema module of an assoc is enabled to avoid having to add conditionals like this?
-          if Extend.module_enabled?(Bonfire.Classify.Tree),
+          if Extend.module_enabled?(Bonfire.Classify.Tree, opts),
             do: proload(query, activity: [tree: [parent: [:profile, :character]]]),
             else: query
 
@@ -709,7 +709,7 @@ defmodule Bonfire.Social.Activities do
         :with_parent ->
           debug("with_parent!")
 
-          if Extend.module_enabled?(Bonfire.Classify.Tree),
+          if Extend.module_enabled?(Bonfire.Classify.Tree, opts),
             do: [tree: [parent: [:profile, :character]]],
             else: []
 
@@ -724,7 +724,7 @@ defmodule Bonfire.Social.Activities do
           [:media, :sensitive]
 
         :maybe_with_labelled ->
-          if Extend.module_enabled?(Bonfire.Label),
+          if Extend.module_enabled?(Bonfire.Label, opts),
             do: [labelled: [:post_content, :media, subject: [:profile]]],
             else: []
 
