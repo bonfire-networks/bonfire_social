@@ -24,11 +24,11 @@ defmodule Bonfire.Social.MixProject do
         Mess.deps([
           {:bonfire_me,
            git: "https://github.com/bonfire-networks/bonfire_me",
-           branch: "main",
+           
            optional: true, runtime: false},
           {:bonfire_api_graphql,
            git: "https://github.com/bonfire-networks/bonfire_api_graphql",
-           branch: "main",
+           
            optional: true, runtime: false},
           {:absinthe, "~> 1.7", optional: true}
         ])
