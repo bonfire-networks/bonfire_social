@@ -2,10 +2,14 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
      Code.ensure_loaded?(Absinthe.Schema.Notation) do
   defmodule Bonfire.Social.API.GraphQL do
     use Absinthe.Schema.Notation
-    alias Absinthe.Resolution.Helpers
+    use Absinthe.Relay.Schema.Notation, :modern
 
     import Bonfire.Social.Integration
     import Untangle
+
+    alias Absinthe.Resolution.Helpers
+    alias Bonfire.API.GraphQL.Pagination
+
     alias Bonfire.API.GraphQL
     alias Bonfire.Common.Utils
     alias Bonfire.Common.Types
@@ -18,6 +22,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       field(:post_content, :post_content)
       field(:activity, :activity)
     end
+
+    connection(node_type: :post)
 
     object :verb do
       field(:verb, :string)
@@ -138,11 +144,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       end
     end
 
-    object :posts_page do
-      field(:page_info, non_null(:page_info))
-      field(:edges, non_null(list_of(non_null(:post))))
-      field(:total_count, non_null(:integer))
-    end
+    # object :posts_page do
+    #   field(:page_info, non_null(:page_info))
+    #   field(:edges, non_null(list_of(non_null(:post))))
+    #   field(:total_count, non_null(:integer))
+    # end
 
     input_object :activity_filters do
       field(:activity_id, :id)
@@ -159,10 +165,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
     object :social_queries do
       @desc "Get all posts"
-      field :posts, list_of(:post) do
-        # TODO
-        arg(:paginate, :paginate)
-
+      # field :posts, list_of(:post) do
+      #   arg(:paginate, :paginate)
+      #   resolve(&list_posts/3)
+      # end
+      connection field :posts, node_type: :post do
         resolve(&list_posts/3)
       end
 
@@ -225,13 +232,15 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     end
 
     def list_posts(_parent, args, info) do
-      {:ok,
-       Bonfire.Posts.list_paginated(Map.to_list(args), GraphQL.current_user(info))
-       |> prepare_list()}
-    end
+      {pagination_args, filters} =
+        Pagination.pagination_args_filter(args)
+        |> debug()
 
-    defp prepare_list(%{edges: items_page}) when is_list(items_page) do
-      items_page
+      Bonfire.Posts.list_paginated(filters,
+        current_user: GraphQL.current_user(info),
+        pagination: pagination_args
+      )
+      |> Pagination.connection_paginate(pagination_args)
     end
 
     def get_post(_parent, %{filter: %{id: id}} = _args, info) do
