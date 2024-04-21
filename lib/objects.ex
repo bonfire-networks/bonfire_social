@@ -18,6 +18,7 @@ defmodule Bonfire.Social.Objects do
   alias Bonfire.Social.FeedActivities
   alias Bonfire.Social.Tags
   alias Bonfire.Social.Threads
+  alias Bonfire.Boundaries.Verbs
 
   alias Needle.Changesets
   # alias Needle.Pointer
@@ -182,11 +183,31 @@ defmodule Bonfire.Social.Objects do
     e(object, :created, :creator, nil) || e(object, :creator, nil)
   end
 
+  def read(%Ecto.Query{} = query, opts_or_socket_or_current_user \\ []) do
+    with {:ok, object} <-
+           query
+           |> Activities.read_query(opts_or_socket_or_current_user)
+           |> as_permitted_for(opts_or_socket_or_current_user)
+           |> repo().single() do
+      {:ok, Activities.activity_under_object(object)}
+    end
+  end
+
+  def list_paginated(filters, opts \\ [])
+
+  def list_paginated(filters, opts)
+      when is_list(filters) or is_struct(filters) do
+    filters
+    # |> debug("filters")
+    # |> query_paginated(opts)
+    |> FeedActivities.feed_many_paginated(opts)
+  end
+
   def list_query(type_or_query \\ nil, opts)
 
   def list_query(%Ecto.Query{} = query, opts) do
     debug(query)
-    FeedActivities.query_extras_boundarised(query, opts)
+    FeedActivities.query_object_extras_boundarised(query, opts)
   end
 
   def list_query(type, opts) when is_atom(type) do
@@ -194,6 +215,27 @@ defmodule Bonfire.Social.Objects do
 
     query_base(type)
     |> list_query(opts)
+  end
+
+  # doc "List objects created by a user and which are in their outbox, which are not replies"
+  def filter(:by, user, query) do
+    case ulid(user) do
+      nil ->
+        query
+
+      id ->
+        # user = repo().maybe_preload(user, [:character])
+        verb_id = Verbs.get_id!(:create)
+
+        query
+        |> proload(activity: [:object, :replied])
+        |> where(
+          [activity: activity, replied: replied],
+          is_nil(replied.reply_to_id) and
+            activity.verb_id == ^verb_id and
+            activity.subject_id == ^id
+        )
+    end
   end
 
   @doc """

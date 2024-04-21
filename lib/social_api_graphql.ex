@@ -5,6 +5,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     alias Absinthe.Resolution.Helpers
 
     import Bonfire.Social.Integration
+    import Untangle
     alias Bonfire.API.GraphQL
     alias Bonfire.Common.Utils
     alias Bonfire.Common.Types
@@ -107,13 +108,13 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     end
 
     object :post_content do
-      field(:title, :string)
+      field(:name, :string)
       field(:summary, :string)
       field(:html_body, :string)
     end
 
     input_object :post_content_input do
-      field(:title, :string)
+      field(:name, :string)
       field(:summary, :string)
       field(:html_body, :string)
     end
@@ -159,6 +160,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     object :social_queries do
       @desc "Get all posts"
       field :posts, list_of(:post) do
+        # TODO
+        arg(:paginate, :paginate)
+
         resolve(&list_posts/3)
       end
 
@@ -221,7 +225,13 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     end
 
     def list_posts(_parent, args, info) do
-      {:ok, Bonfire.Posts.query(args, GraphQL.current_user(info))}
+      {:ok,
+       Bonfire.Posts.list_paginated(Map.to_list(args), GraphQL.current_user(info))
+       |> prepare_list()}
+    end
+
+    defp prepare_list(%{edges: items_page}) when is_list(items_page) do
+      items_page
     end
 
     def get_post(_parent, %{filter: %{id: id}} = _args, info) do
@@ -250,7 +260,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
     defp feed(args, info) do
       user = GraphQL.current_user(info)
-      IO.inspect(args)
+      debug(args)
 
       Bonfire.Social.FeedActivities.feed(
         Types.maybe_to_atom(Utils.e(args, :filter, :feed_name, :local)),

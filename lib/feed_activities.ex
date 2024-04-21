@@ -15,7 +15,7 @@ defmodule Bonfire.Social.FeedActivities do
   alias Bonfire.Social.Activities
   # alias Bonfire.Social.Edges
   alias Bonfire.Social.Feeds
-  # alias Bonfire.Social.Objects
+  alias Bonfire.Social.Objects
   alias Bonfire.Social.LivePush
 
   alias Needle
@@ -215,6 +215,8 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed_many_paginated(query, opts) do
+    opts = to_options(opts)
+
     Integration.many(
       query,
       opts[:paginate],
@@ -798,20 +800,55 @@ defmodule Bonfire.Social.FeedActivities do
     )
   end
 
-  # add assocs needed in timelines/feeds
-  @doc false
+  @doc "add assocs needed in timelines/feeds"
   def query_extras_boundarised(query \\ nil, opts) do
     query_extras(query, opts)
     |> Activities.as_permitted_for(opts)
     |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
   end
 
+  @doc "add assocs needed in lists of objects"
+  def query_object_extras_boundarised(query \\ nil, opts) do
+    opts = to_options(opts)
+    filters = filters_from_opts(opts)
+
+    (query || base_or_filtered_query(filters, opts))
+    |> proload([:activity])
+    # |> query_activity_extras(opts)
+    |> query_optional_extras(filters, opts)
+    |> maybe_filter(filters)
+    |> Objects.as_permitted_for(opts)
+    |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
+  end
+
   defp query_extras(query \\ nil, opts) do
+    opts =
+      to_options(opts) ++
+        [exclude_table_ids: exclude_object_types(e(opts, :exclude_object_types, []))]
+
+    filters = filters_from_opts(opts)
+
+    (query || base_or_filtered_query(filters, opts))
+    |> query_activity_extras(opts)
+    |> query_object_extras(opts)
+    |> query_optional_extras(filters, opts)
+    |> maybe_filter(filters)
+
+    # |> debug("pre-preloads")
+    # preload all things we commonly want in feeds
+    # |> Activities.activity_preloads(e(opts, :preload, :with_object), opts) # if we want to preload the rest later to allow for caching
+    # |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
+    # |> debug("post-preloads")
+  end
+
+  defp query_activity_extras(query, opts) do
     opts = to_feed_options(opts)
-    current_user = current_user(opts)
+    # current_user = current_user(opts)
     # debug(opts)
-    # eg. private messages should never appear in feeds
-    exclude_object_types = [Message] ++ e(opts, :exclude_object_types, [])
+
+    exclude_table_ids =
+      opts[:exclude_table_ids] || exclude_object_types(e(opts, :exclude_object_types, []))
+
     # exclude certain activity types
     exclude_verbs =
       (e(opts, :exclude_verbs, nil) || []) ++
@@ -837,23 +874,17 @@ defmodule Bonfire.Social.FeedActivities do
           end
         end
 
-    exclude_table_ids =
-      exclude_object_types
-      |> Enum.dedup()
-      |> Enum.map(&maybe_apply(&1, :__pointers__, :table_id))
-      |> List.wrap()
-
     exclude_verb_ids =
       exclude_verbs
-      |> Enum.dedup()
-      |> debug("exxclude_verbs")
-      |> Enum.map(&Bonfire.Social.Activities.verb_id(&1))
       |> List.wrap()
+      |> Enum.map(&Bonfire.Social.Activities.verb_id(&1))
+      |> Enum.uniq()
+
+    # |> debug("exxclude_verbs")
 
     # exclude_feed_ids = e(opts, :exclude_feed_ids, []) |> List.wrap() # WIP - to exclude activities that also appear in another feed
-    filters = filters_from_opts(opts)
 
-    (query || base_or_filtered_query(filters, opts))
+    query
     # |> proload([:activity])
     |> reusable_join(:inner, [root], assoc(root, :activity), as: :activity)
     |> reusable_join(:inner, [activity: activity], activity_pointer in Pointer,
@@ -863,6 +894,26 @@ defmodule Bonfire.Social.FeedActivities do
           is_nil(activity_pointer.deleted_at) and
           activity_pointer.table_id not in ^exclude_table_ids
     )
+    # FIXME: are filters already applied in base_or_filtered_query above?
+    # where: fp.feed_id not in ^exclude_feed_ids,
+    # Don't show messages or anything deleted
+    |> where(
+      [activity: activity],
+      activity.verb_id not in ^exclude_verb_ids
+    )
+  end
+
+  defp query_object_extras(query, opts) do
+    opts = to_feed_options(opts)
+    # current_user = current_user(opts)
+
+    # debug(opts)
+
+    exclude_table_ids =
+      opts[:exclude_table_ids] || exclude_object_types(e(opts, :exclude_object_types, []))
+
+    query
+    |> proload([:activity])
     |> reusable_join(:inner, [activity: activity], object in Pointer,
       as: :object,
       on:
@@ -870,24 +921,30 @@ defmodule Bonfire.Social.FeedActivities do
           is_nil(object.deleted_at) and
           (is_nil(object.table_id) or object.table_id not in ^exclude_table_ids)
     )
-    # FIXME: are filters already applied in base_or_filtered_query above?
-    |> maybe_filter(filters)
-    # where: fp.feed_id not in ^exclude_feed_ids,
+
     # Don't show messages or anything deleted
-    |> where(
-      [activity: activity],
-      activity.verb_id not in ^exclude_verb_ids
-    )
+  end
+
+  defp query_optional_extras(query, filters, opts) do
+    current_user = current_user(opts)
+
+    query
     |> maybe_exclude_mine(current_user)
     |> maybe_exclude_replies(filters, opts)
     |> maybe_only_replies(filters, opts)
     |> maybe_time_limit(opts[:time_limit])
+  end
 
-    # |> debug("pre-preloads")
-    # preload all things we commonly want in feeds
-    # |> Activities.activity_preloads(e(opts, :preload, :with_object), opts) # if we want to preload the rest later to allow for caching
-    # |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
-    # |> debug("post-preloads")
+  def exclude_object_types(extras \\ []) do
+    # eg. private messages should never appear in feeds
+    exclude_object_types = [Message] ++ extras
+
+    exclude_object_types
+    |> List.wrap()
+    |> Enum.map(&maybe_apply(&1, :__pointers__, :table_id))
+    |> Enum.uniq()
+
+    # |> debug("exxclude_tables")
   end
 
   defp query_order(query, :num_replies = sort_by, sort_order) do

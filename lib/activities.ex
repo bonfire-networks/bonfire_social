@@ -508,6 +508,7 @@ defmodule Bonfire.Social.Activities do
           # * In the case of like of a post, creator of the post
           # TODO: in feeds, maybe load the creator with a where clause to skip it when creator==subject
           query
+          # |> proload(activity: [:object])
           |> proload(
             activity: [
               object:
