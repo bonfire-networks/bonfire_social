@@ -3,7 +3,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
   defmodule Bonfire.Social.API.GraphQL do
     use Absinthe.Schema.Notation
     use Absinthe.Relay.Schema.Notation, :modern
-
+    use Bonfire.Common.Utils
     import Bonfire.Social.Integration
     import Untangle
 
@@ -11,7 +11,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     alias Bonfire.API.GraphQL.Pagination
 
     alias Bonfire.API.GraphQL
-    alias Bonfire.Common.Utils
     alias Bonfire.Common.Types
     alias Bonfire.Social.Activities
 
@@ -33,6 +32,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
           %{verb: verb}, _, _ ->
             {:ok,
              verb
+             |> debug()
              |> Activities.verb_maybe_modify()
              |> Activities.verb_display()}
         end)
@@ -71,7 +71,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
           %{verb_id: verb}, _, _ ->
             {:ok, %{verb: verb}}
 
-          _, _, _ ->
+          %{verb: %{verb: verb}}, _, _ ->
+            {:ok, %{verb: verb}}
+
+          other, _, _ ->
+            warn(other, "not verb detected")
             {:ok, nil}
         end)
       end
@@ -91,15 +95,17 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       field(:object_post_content, :post_content) do
         resolve(fn
           %{object: %{post_content: %{id: _} = post_content}}, _, _ ->
-            {:ok, post_content}
+            {:ok, post_content |> debug("post_content detected")}
 
-          %{object: %Bonfire.Data.Social.Post{} = post}, _, _ ->
+          %{object: %{post_content: _} = object}, _, _ ->
             {:ok,
-             post
+             object
              |> repo().maybe_preload(:post_content)
-             |> Map.get(:post_content)}
+             |> e(:post_content, nil)
+             |> debug("post_content detected")}
 
-          _, _, _ ->
+          activity, _, _ ->
+            warn(activity, "no post_content detected")
             {:ok, nil}
         end)
       end
@@ -112,6 +118,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         resolve(Absinthe.Resolution.Helpers.dataloader(Needle.Pointer))
       end
     end
+
+    connection(node_type: :activity)
 
     object :post_content do
       field(:name, :string)
@@ -156,6 +164,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     end
 
     input_object :feed_filters do
+      # TODO: other filters?
       field(:feed_name, :string)
     end
 
@@ -186,11 +195,13 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       end
 
       @desc "Get activities in a feed"
-      field :feed, list_of(:activity) do
+      # field :feed, list_of(:activity) do
+      #   arg(:filter, :feed_filters)
+      #   arg(:paginate, :paginate)
+      #   resolve(&feed/2)
+      # end
+      connection field :feed, node_type: :activity do
         arg(:filter, :feed_filters)
-        # TODO
-        arg(:paginate, :paginate)
-
         resolve(&feed/2)
       end
     end
@@ -267,21 +278,55 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       {:ok, Activities.object_from_activity(activity)}
     end
 
-    defp feed(args, info) do
-      user = GraphQL.current_user(info)
-      debug(args)
+    # defp feed(args, info) do
+    #   user = GraphQL.current_user(info)
+    #   debug(args)
+
+    #   Bonfire.Social.FeedActivities.feed(
+    #     Types.maybe_to_atom(Utils.e(args, :filter, :feed_name, :local)),
+    #     current_user: user,
+    #     paginate: Utils.e(args, :paginate, nil)
+    #   )
+    #   |> feed()
+    # end
+    # defp feed(%{edges: feed}) when is_list(feed) do
+    #   {:ok, Enum.map(feed, &Map.get(&1, :activity))}
+    # end
+
+    def feed(feed_name \\ nil, args, info) do
+      {pagination_args, filters} =
+        Pagination.pagination_args_filter(args)
+        |> debug()
 
       Bonfire.Social.FeedActivities.feed(
-        Types.maybe_to_atom(Utils.e(args, :filter, :feed_name, :local)),
-        current_user: user,
-        paginate: Utils.e(args, :paginate, nil)
+        feed_name || Types.maybe_to_atom(Utils.e(filters, :filter, :feed_name, :local)),
+        current_user: GraphQL.current_user(info),
+        pagination: pagination_args
       )
-      |> feed()
+      |> Pagination.connection_paginate(pagination_args,
+        item_prepare_fun: fn fp -> e(fp, :activity, nil) || fp end
+      )
     end
 
-    defp feed(%{edges: feed}) when is_list(feed) do
-      {:ok, Enum.map(feed, &Map.get(&1, :activity))}
-    end
+    # defp my_feed(%{} = parent, _args, _info) do
+    #   Bonfire.Social.FeedActivities.my_feed(parent)
+    #   |> feed()
+    # end
+
+    # defp my_notifications(%User{} = user, _args, _info) do
+    #   Bonfire.Social.FeedActivities.feed(:notifications, user)
+    #   |> feed()
+    # end
+
+    # defp all_flags(%{} = user_or_account, _args, _info) do
+    #   Bonfire.Social.Flags.list(user_or_account)
+    #   |> feed()
+    # end
+
+    # defp feed(%{edges: feed}) when is_list(feed) do
+    #   {:ok, Enum.map(feed, &Map.get(&1, :activity))}
+    # end
+    # defp feed(_), do: {:ok, nil}
 
     defp create_post(args, info) do
       user = GraphQL.current_user(info)
