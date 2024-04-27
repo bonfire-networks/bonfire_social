@@ -66,10 +66,10 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       field(:url, :string) do
         resolve(fn
           %{object: %{id: _} = object}, _, _ ->
-            {:ok, Bonfire.Common.URIs.path(object)}
+            {:ok, Bonfire.Common.URIs.path(object) |> URIs.based_url()}
 
           activity, _, _ ->
-            {:ok, Bonfire.Common.URIs.path(activity)}
+            {:ok, Bonfire.Common.URIs.path(activity) |> URIs.based_url()}
         end)
       end
 
