@@ -49,7 +49,10 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       end
 
       field(:subject_id, :string)
-      field(:subject, :any_character)
+
+      field(:subject, :any_character) do
+        resolve(Absinthe.Resolution.Helpers.dataloader(Needle.Pointer))
+      end
 
       field(:object_id, :string)
 
@@ -57,6 +60,16 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         resolve(fn activity, _, _ ->
           # IO.inspect(activity)
           {:ok, Bonfire.Common.URIs.canonical_url(activity)}
+        end)
+      end
+
+      field(:url, :string) do
+        resolve(fn
+          %{object: %{id: _} = object}, _, _ ->
+            {:ok, Bonfire.Common.URIs.path(object)}
+
+          activity, _, _ ->
+            {:ok, Bonfire.Common.URIs.path(activity)}
         end)
       end
 
@@ -83,13 +96,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       # field(:object_id, :string)
       field :object, :any_context do
         resolve(&activity_object/3)
-
-        # fn
-        #     %{object: %{id: _} = object}, _, _ ->
-        #       {:ok, object}
-        #     %{activity: %{object: %{id: _} = object}}, _, _ ->
-        #       {:ok, object}
-        #   end
       end
 
       field(:object_post_content, :post_content) do
