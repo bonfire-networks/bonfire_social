@@ -10,7 +10,7 @@ defmodule Bonfire.Social.FeedActivities do
   alias Bonfire.Data.Social.FeedPublish
   alias Bonfire.Data.Social.Message
   alias Bonfire.Data.Social.Seen
-  alias Bonfire.Social.Integration
+  alias Bonfire.Social
   alias Bonfire.Data.Edges.Edge
   alias Bonfire.Social.Activities
   # alias Bonfire.Social.Edges
@@ -217,7 +217,7 @@ defmodule Bonfire.Social.FeedActivities do
   def feed_many_paginated(query, opts) do
     opts = to_options(opts)
 
-    Integration.many(
+    Social.many(
       query,
       opts[:paginate],
       opts ++ Activities.order_pagination_opts(opts[:sort_by], opts[:sort_order])
@@ -1488,7 +1488,7 @@ defmodule Bonfire.Social.FeedActivities do
   defp do_maybe_federate_activity(subject, verb, object, activity, opts) do
     if e(opts, :boundary, nil) != "public_remote",
       do:
-        Bonfire.Social.Integration.maybe_federate_and_gift_wrap_activity(
+        Bonfire.Social.maybe_federate_and_gift_wrap_activity(
           subject || e(activity, :subject, nil) || e(activity, :subject_id, nil),
           activity,
           verb: verb,

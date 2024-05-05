@@ -11,7 +11,7 @@ defmodule Bonfire.Social.Seen do
   alias Bonfire.Social.Edges
   # alias Bonfire.Social.Feeds
   # alias Bonfire.Social.FeedActivities
-  # alias Bonfire.Social.Integration
+  # alias Bonfire.Social
   # alias Bonfire.Social.Objects
 
   alias Bonfire.Social.Edges
@@ -19,7 +19,7 @@ defmodule Bonfire.Social.Seen do
   # alias Bonfire.Social.Feeds
 
   # import Ecto.Query
-  # import Bonfire.Social.Integration
+  # import Bonfire.Social
   use Bonfire.Common.Utils
   use Bonfire.Common.Repo
 

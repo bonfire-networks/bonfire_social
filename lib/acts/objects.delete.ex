@@ -7,7 +7,7 @@ defmodule Bonfire.Social.Acts.Objects.Delete do
   # alias Bonfire.Epics.Act
   alias Bonfire.Epics.Epic
 
-  alias Bonfire.Social.Integration
+  alias Bonfire.Social
   # alias Ecto.Changeset
   use Arrows
   import Bonfire.Epics
@@ -43,7 +43,7 @@ defmodule Bonfire.Social.Acts.Objects.Delete do
         object =
           Keyword.get(epic.assigns[:options], as, %{})
           #  preloads needed to be able to federate deletions, and for is_local?
-          |> Integration.repo().maybe_preload([:character, :peered, created: [creator: :peered]])
+          |> Social.repo().maybe_preload([:character, :peered, created: [creator: :peered]])
 
         maybe_debug(epic, act, object, "Delete object")
 

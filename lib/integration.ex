@@ -1,4 +1,6 @@
-defmodule Bonfire.Social.Integration do
+defmodule Bonfire.Social do
+  @moduledoc "./README.md" |> File.stream!() |> Enum.drop(1) |> Enum.join()
+
   use Arrows
   alias Bonfire.Common.Config
   use Bonfire.Common.Utils

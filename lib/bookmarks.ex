@@ -8,7 +8,7 @@ defmodule Bonfire.Social.Bookmarks do
   alias Bonfire.Social.Edges
   alias Bonfire.Social.Feeds
   # alias Bonfire.Social.FeedActivities
-  alias Bonfire.Social.Integration
+  alias Bonfire.Social
   alias Bonfire.Social.Objects
 
   alias Bonfire.Social.Edges
@@ -16,7 +16,7 @@ defmodule Bonfire.Social.Bookmarks do
   # alias Bonfire.Social.Feeds
 
   # import Ecto.Query
-  # import Bonfire.Social.Integration
+  # import Bonfire.Social
   use Bonfire.Common.Utils
   use Bonfire.Common.Repo
 
@@ -118,7 +118,7 @@ defmodule Bonfire.Social.Bookmarks do
     # |> Activities.query_object_preload_activity(:bookmark, :bookmarked_id, opts)
     # |> Activities.as_permitted_for(opts, [:see])
     # |> debug()
-    |> Integration.many(opts[:paginate], opts)
+    |> Social.many(opts[:paginate], opts)
   end
 
   @doc "List the current user's bookmarks"

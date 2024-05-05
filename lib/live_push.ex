@@ -2,7 +2,7 @@ defmodule Bonfire.Social.LivePush do
   # FIXME: dependency on ui_common should be optional, or should this be moved to a UI extension?
   use Bonfire.UI.Common
   import Untangle
-  import Bonfire.Social.Integration
+  import Bonfire.Social
   alias Bonfire.Social.Activities
   alias Bonfire.Social.FeedActivities
   alias Bonfire.Data.Social.Activity

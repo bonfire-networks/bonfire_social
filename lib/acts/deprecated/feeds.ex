@@ -16,7 +16,7 @@ defmodule Bonfire.Social.Acts.Feeds do
   alias Bonfire.Social.Feeds
   alias Ecto.Changeset
   alias Needle.Changesets
-  # import Bonfire.Social.Integration, only: [repo: 0]
+  # import Bonfire.Social, only: [repo: 0]
   import Epics
   # import Untangle, only: [error: 2, warn: 1]
 

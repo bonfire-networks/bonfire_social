@@ -6,7 +6,7 @@ defmodule Bonfire.Social.Flags do
     schema: Flag,
     searchable_fields: [:flagger_id, :flagged_id]
 
-  alias Bonfire.Social.Integration
+  alias Bonfire.Social
   # import Bonfire.Boundaries.Queries
 
   alias Bonfire.Data.Identity.User
@@ -60,7 +60,7 @@ defmodule Bonfire.Social.Flags do
     case check_flag(flagger, object, opts)
          ~> create(flagger, ..., opts) do
       {:ok, flag} ->
-        Integration.maybe_federate_and_gift_wrap_activity(flagger, flag)
+        Social.maybe_federate_and_gift_wrap_activity(flagger, flag)
 
       e ->
         maybe_dup(flagger, object, e)
@@ -191,7 +191,7 @@ defmodule Bonfire.Social.Flags do
     filters
     |> query(opts)
     # |> proload(:activity)
-    |> Integration.many(opts[:paginate?], opts)
+    |> Social.many(opts[:paginate?], opts)
 
     # TODO: activity preloads
   end

@@ -8,7 +8,7 @@ defmodule Bonfire.Social.Likes do
   alias Bonfire.Social.Edges
   alias Bonfire.Social.Feeds
   # alias Bonfire.Social.FeedActivities
-  alias Bonfire.Social.Integration
+  alias Bonfire.Social
   alias Bonfire.Social.Objects
 
   alias Bonfire.Social.Edges
@@ -16,7 +16,7 @@ defmodule Bonfire.Social.Likes do
   alias Bonfire.Social.Feeds
 
   # import Ecto.Query
-  # import Bonfire.Social.Integration
+  # import Bonfire.Social
   use Bonfire.Common.Utils
   use Bonfire.Common.Repo
 
@@ -100,7 +100,7 @@ defmodule Bonfire.Social.Likes do
 
     case create(liker, liked, opts) do
       {:ok, like} ->
-        Integration.maybe_federate_and_gift_wrap_activity(liker, like)
+        Social.maybe_federate_and_gift_wrap_activity(liker, like)
 
       {:error, e} ->
         case get(liker, liked) do
@@ -155,7 +155,7 @@ defmodule Bonfire.Social.Likes do
     # |> Activities.query_object_preload_activity(:like, :liked_id, opts)
     # |> Activities.as_permitted_for(opts, [:see])
     # |> debug()
-    |> Integration.many(opts[:paginate?], opts)
+    |> Social.many(opts[:paginate?], opts)
   end
 
   @doc "List the current user's likes"

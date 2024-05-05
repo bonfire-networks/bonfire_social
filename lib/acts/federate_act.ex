@@ -18,7 +18,7 @@ defmodule Bonfire.Social.Acts.Federate do
 
   alias Bonfire.Common.Utils
   # alias Bonfire.Data.Social.Post
-  alias Bonfire.Social.Integration
+  alias Bonfire.Social
   # alias Ecto.Changeset
   alias Bonfire.Common
   alias Common.Types
@@ -59,21 +59,21 @@ defmodule Bonfire.Social.Acts.Federate do
 
         nil
 
-      Integration.federate_outgoing?(current_user) != true ->
+      Social.federate_outgoing?(current_user) != true ->
         info(
           "ActivityPub: Federation is disabled (possibly just for this user) or an adapter is not available"
         )
 
         nil
 
-      not Integration.is_local?(current_user) or not Integration.is_local?(object) ->
+      not Social.is_local?(current_user) or not Social.is_local?(object) ->
         warn(current_user, "ActivityPub: Skip pushing remote object")
         nil
 
       action in [:insert] ->
         maybe_debug(epic, act, action, "Maybe queue for federation")
 
-        Bonfire.Social.Integration.maybe_federate_and_gift_wrap_activity(
+        Bonfire.Social.maybe_federate_and_gift_wrap_activity(
           current_user,
           object,
           options
@@ -82,7 +82,7 @@ defmodule Bonfire.Social.Acts.Federate do
       action in [:update] ->
         maybe_debug(epic, act, action, "Maybe queue update for federation")
 
-        Bonfire.Social.Integration.maybe_federate_and_gift_wrap_activity(
+        Bonfire.Social.maybe_federate_and_gift_wrap_activity(
           current_user,
           object,
           options ++
@@ -93,7 +93,7 @@ defmodule Bonfire.Social.Acts.Federate do
       action == :delete ->
         maybe_debug(epic, act, action, "Maybe queue delete for federation")
 
-        Bonfire.Social.Integration.maybe_federate_and_gift_wrap_activity(
+        Bonfire.Social.maybe_federate_and_gift_wrap_activity(
           current_user,
           object,
           options ++

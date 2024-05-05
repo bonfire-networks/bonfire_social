@@ -5,7 +5,7 @@ defmodule Bonfire.Social.PostContents do
   use Arrows
 
   alias Bonfire.Data.Social.PostContent
-  alias Bonfire.Social.Integration
+  alias Bonfire.Social
   import Bonfire.Common.Extend
   use Bonfire.Common.Utils
   use Bonfire.Common.Repo
@@ -446,14 +446,14 @@ defmodule Bonfire.Social.PostContents do
            # |> debug()
            |> PaperTrail.update(user: current_user)
            |> debug do
-      if Integration.federate_outgoing?(current_user),
+      if Social.federate_outgoing?(current_user),
         do:
           Bonfire.Common.Needles.get(id(post_content),
             current_user: current_user,
             verbs: [:edit]
           )
           ~> Map.put(:post_content, updated)
-          |> Integration.maybe_federate(
+          |> Social.maybe_federate(
             current_user,
             :edit,
             ...,
@@ -541,7 +541,7 @@ defmodule Bonfire.Social.PostContents do
              #          Bonfire.Federate.ActivityPub.AdapterUtils.get_or_fetch_character_by_ap_id(
              #            mention["href"] || mention["name"]
              #          ),
-             true <- Bonfire.Social.Integration.federating?(character) do
+             true <- Bonfire.Social.federating?(character) do
           {
             url,
             character

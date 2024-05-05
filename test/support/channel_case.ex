@@ -17,14 +17,14 @@ defmodule Bonfire.Social.ChannelCase do
 
   use ExUnit.CaseTemplate
 
-  # import Bonfire.Social.Integration
+  # import Bonfire.Social
 
   using do
     quote do
       # Import conveniences for testing with channels
       import Phoenix.ChannelTest
       import Bonfire.Social.ChannelCase
-      import Bonfire.Social.Integration
+      import Bonfire.Social
 
       # The default endpoint for testing
       @endpoint Application.compile_env!(:bonfire, :endpoint_module)

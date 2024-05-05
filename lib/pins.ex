@@ -8,7 +8,7 @@ defmodule Bonfire.Social.Pins do
   alias Bonfire.Social.Edges
   alias Bonfire.Social.Feeds
   # alias Bonfire.Social.FeedActivities
-  alias Bonfire.Social.Integration
+  alias Bonfire.Social
   alias Bonfire.Social.Objects
 
   alias Bonfire.Social.Edges
@@ -16,7 +16,7 @@ defmodule Bonfire.Social.Pins do
   alias Bonfire.Social.Feeds
 
   # import Ecto.Query
-  alias Bonfire.Social.Integration
+  alias Bonfire.Social
   use Bonfire.Common.Utils
   use Bonfire.Common.Repo
 
@@ -101,7 +101,7 @@ defmodule Bonfire.Social.Pins do
 
     case create(pinner, pinned, opts) do
       {:ok, pin} ->
-        Integration.maybe_federate_and_gift_wrap_activity(pinner, pin)
+        Social.maybe_federate_and_gift_wrap_activity(pinner, pin)
 
       {:error, e} ->
         case get(pinner, pinned) do
@@ -190,7 +190,7 @@ defmodule Bonfire.Social.Pins do
 
   defp list_paginated(filters, opts) do
     query(filters, opts)
-    |> Integration.many(opts[:paginate?], opts)
+    |> Social.many(opts[:paginate?], opts)
 
     # |> Activities.query_object_preload_activity(:pin, :pinned_id, opts)
     # |> Activities.as_permitted_for(opts, [:see])

@@ -7,7 +7,7 @@ defmodule Bonfire.Social.Boosts do
   alias Bonfire.Social.Edges
   alias Bonfire.Social.Feeds
   # alias Bonfire.Social.FeedActivities
-  alias Bonfire.Social.Integration
+  alias Bonfire.Social
   alias Bonfire.Social.LivePush
   alias Bonfire.Social.Objects
 
@@ -16,7 +16,7 @@ defmodule Bonfire.Social.Boosts do
   use Bonfire.Common.Repo,
     searchable_fields: [:booster_id, :boosted_id]
 
-  # import Bonfire.Social.Integration
+  # import Bonfire.Social
   use Bonfire.Common.Utils
 
   @behaviour Bonfire.Common.QueryModule
@@ -137,7 +137,7 @@ defmodule Bonfire.Social.Boosts do
         notify: true
       )
 
-      Integration.maybe_federate_and_gift_wrap_activity(booster, boost)
+      Social.maybe_federate_and_gift_wrap_activity(booster, boost)
       |> debug("maybe_federated the boost")
     end
   end
