@@ -46,7 +46,8 @@ defmodule Bonfire.Social.Activities do
     changeset
     |> put_assoc(verb, creator)
     |> FeedActivities.cast(opts[:feed_ids])
-    |> debug("csss")
+
+    # |> debug("csss")
   end
 
   def put_assoc(changeset, verb, subject),
