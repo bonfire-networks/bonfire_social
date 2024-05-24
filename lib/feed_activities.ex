@@ -565,6 +565,31 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed_contains?(feed_name, filters, opts) when is_list(filters) do
+    case feed_contains_query(feed_name, filters, opts)
+         |> repo().many() do
+      [] -> false
+      items -> items
+    end
+  end
+
+  def feed_contains?(feed, object, opts) when is_map(object) or is_binary(object) do
+    case ulid(object) do
+      nil ->
+        do_feed(feed, opts)
+        |> feed_contains?(object, opts)
+
+      id ->
+        feed_contains?(feed, [object: id], opts)
+    end
+  end
+
+  def feed_contains_single?(feed_name, filters, opts) when is_list(filters) do
+    feed_contains_query(feed_name, filters, opts)
+    |> repo().one()
+    |> id()
+  end
+
+  defp feed_contains_query(feed_name, filters, opts) when is_list(filters) do
     {feed_ids, opts} = feed_ids_and_opts(feed_name, to_options(opts))
 
     feed_query(
@@ -579,19 +604,6 @@ defmodule Bonfire.Social.FeedActivities do
       )
     )
     |> Activities.as_permitted_for(opts)
-    |> repo().one()
-    |> id()
-  end
-
-  def feed_contains?(feed, object, opts) when is_map(object) or is_binary(object) do
-    case ulid(object) do
-      nil ->
-        do_feed(feed, opts)
-        |> feed_contains?(object, opts)
-
-      id ->
-        feed_contains?(feed, [object: id], opts)
-    end
   end
 
   # @decorate time()
