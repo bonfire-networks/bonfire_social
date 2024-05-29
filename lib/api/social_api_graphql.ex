@@ -307,7 +307,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       Bonfire.Social.FeedActivities.feed(
         feed_name || Types.maybe_to_atom(Utils.e(filters, :filter, :feed_name, :local)),
         current_user: GraphQL.current_user(info),
-        pagination: pagination_args
+        pagination: pagination_args,
+        # we don't want to preload anything unnecessarily (relying instead on preloads in sub-field definitions)
+        preload: false
       )
       |> Pagination.connection_paginate(pagination_args,
         item_prepare_fun: fn fp -> e(fp, :activity, nil) || fp end

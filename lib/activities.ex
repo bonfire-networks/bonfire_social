@@ -317,6 +317,10 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
+  def activity_preloads(query, false, _opts) do
+    query
+  end
+
   def activity_preloads(query, preloads, opts) do
     activity_preloads(query, [preloads], opts)
   end
