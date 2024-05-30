@@ -307,7 +307,7 @@ defmodule Bonfire.Social.Activities do
 
     if not is_nil(query) and Ecto.Queryable.impl_for(query) do
       do_activity_preloads(query, preloads, opts)
-      |> debug("accumulated proloads to include in query")
+      |> debug("accumulated proloads included in query")
     else
       do_activity_preloads(nil, preloads, opts)
       |> debug("accumulated postloads to try")
@@ -326,7 +326,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   defp do_activity_preloads(query, preloads, opts) when is_list(preloads) do
-    # debug(preloads)
+    # debug(preloads, "preloads list")
 
     if not is_nil(query) and Ecto.Queryable.impl_for(query) do
       preloads
@@ -358,54 +358,41 @@ defmodule Bonfire.Social.Activities do
 
     case preloads do
       :all ->
-        do_activity_preloads(
-          query,
+      
           [
             :feed,
             :tags
-          ],
-          opts
-        )
+          ]
 
       :thread_postload ->
-        do_activity_preloads(
-          query,
+      
           [
             # :with_subject,
             # :feed_by_subject,
             :with_replied,
             :with_object_more
-          ],
-          opts
-        )
+          ]
 
       :feed ->
-        do_activity_preloads(
-          query,
+       
           [
             :with_subject,
             :feed_by_subject,
             :with_replied
-          ],
-          opts
-        )
+          ]
 
       :feed_postload ->
-        do_activity_preloads(
-          query,
+      
           [
             :with_thread_name,
             :with_reply_to,
             :with_media,
             :with_parent,
             :maybe_with_labelled
-          ],
-          opts
-        )
+          ]
 
       :feed_metadata ->
-        do_activity_preloads(
-          query,
+       
           [
             :with_subject,
             :with_creator,
@@ -413,93 +400,75 @@ defmodule Bonfire.Social.Activities do
             # :with_reply_to,
             :with_thread_name
             # :with_media
-          ],
-          opts
-        )
+          ]
 
       :feed_by_subject ->
-        do_activity_preloads(
-          query,
+       
           [
             :with_creator,
             # :with_verb,
             :feed_by_creator
-          ],
-          opts
-        )
+          ]
 
       :feed_by_creator ->
-        do_activity_preloads(
-          query,
+        
           [
             :with_object_more,
             # :with_reply_to,
             # :with_thread_name,
             :with_media
-          ],
-          opts
-        )
+          ]
 
       :notifications ->
-        do_activity_preloads(
-          query,
+   
           [
             :feed_by_subject,
             :with_reply_to,
             :with_seen
-          ],
-          opts
-        )
+          ]
 
       :posts_with_reply_to ->
-        do_activity_preloads(
-          query,
+    
           [
             :with_subject,
             :with_object_posts
             # :with_reply_to # do not preload as part of query because will be preloaded async later
-          ],
-          opts
-        )
+          ]
 
       :posts_with_thread ->
-        do_activity_preloads(
-          query,
+   
           [
             :with_subject,
             :with_object_posts,
             :with_replied,
             :with_thread_name
-          ],
-          opts
-        )
+          ]
 
       :posts ->
-        do_activity_preloads(
-          query,
+
           [
             :with_subject,
             :with_object_posts
-          ],
-          opts
-        )
+          ]
 
       _default ->
-        do_activity_preloads(
-          query,
+
           [
             :with_subject,
             # :with_verb,
             :with_object_posts,
             :with_replied
-          ],
+          ]
+    end
+    |> debug("computed preloads")
+    |> do_activity_preloads(
+          query,
+          ...,
           opts
         )
-    end
   end
 
   defp do_activity_preloads(query, preload, opts) when is_atom(preload) do
-    # debug(preload)
 
     if not is_nil(query) and Ecto.Queryable.impl_for(query) do
       current_user_id = current_user_id(opts)

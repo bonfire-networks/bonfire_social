@@ -169,9 +169,25 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       field(:object_id, :id)
     end
 
+    enum :sort_order do
+      value :asc
+      value :desc
+    end
+    
+    enum :sort_by do
+      value :date
+      value :num_likes
+      value :num_boosts
+      value :num_replies
+    end
+
     input_object :feed_filters do
-      # TODO: other filters?
       field(:feed_name, :string)
+
+      # TODO: other filters?
+      field(:time_limit, :integer, default_value: 7)
+      field(:sort_by, :sort_by, default_value: :date)
+      field(:sort_order, :sort_order, default_value: :desc)
     end
 
     input_object :post_filters do
@@ -300,13 +316,15 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     # end
 
     def feed(feed_name \\ nil, args, info) do
+        current_user = GraphQL.current_user(info)
       {pagination_args, filters} =
         Pagination.pagination_args_filter(args)
         |> debug()
+      filters = Utils.e(filters, :filter, [])
 
       Bonfire.Social.FeedActivities.feed(
-        feed_name || Types.maybe_to_atom(Utils.e(filters, :filter, :feed_name, :local)),
-        current_user: GraphQL.current_user(info),
+        {feed_name || Types.maybe_to_atom(Utils.e(filters, :feed_name, nil) || Bonfire.Social.FeedActivities.feed_name(:default, current_user)), filters},
+        current_user: current_user,
         pagination: pagination_args,
         # we don't want to preload anything unnecessarily (relying instead on preloads in sub-field definitions)
         preload: false

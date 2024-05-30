@@ -233,7 +233,7 @@ defmodule Bonfire.Social.FeedActivities do
       # to avoid 'cannot preload in subquery' error
       |> make_distinct(opts[:sort_order], opts[:sort_order], opts)
       |> query_order(opts[:sort_by], opts[:sort_order])
-      |> feed_many_paginated(opts ++ [paginate: true, return: :query, multiply_limit: 2])
+      |> feed_many_paginated(Keyword.merge(opts, [paginate: true, return: :query, multiply_limit: 2]))
       |> repo().make_subquery()
 
     # |> debug("deferred subquery")
@@ -243,10 +243,10 @@ defmodule Bonfire.Social.FeedActivities do
     |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
     |> Activities.as_permitted_for(opts)
     |> query_order(opts[:sort_by], opts[:sort_order])
-
-    # |> debug("query with deferred join")
+    |> debug("query with deferred join")
   end
 
+  @decorate time()
   defp paginate_and_boundarise_feed(query, opts) do
     case opts[:return] do
       :explain ->
@@ -273,11 +273,11 @@ defmodule Bonfire.Social.FeedActivities do
       _ ->
         # ^ tell Paginator to always give us and `after` cursor
         case paginate_and_boundarise_feed_deferred_query(query, opts)
-             |> debug("final query")
+            #  |> debug("final query")
              |> feed_many_paginated(opts ++ [infinite_pages: true]) do
           %{edges: []} ->
             debug(
-              "there were no results, try without the deferred query in case some where missing because of boundaries"
+              "there were no results, try without the deferred query in case some were missing because of boundaries"
             )
 
             paginate_and_boundarise_feed_non_deferred_query(query, opts)
@@ -307,8 +307,8 @@ defmodule Bonfire.Social.FeedActivities do
     |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
     |> Activities.as_permitted_for(opts)
     |> query_order(opts[:sort_by], opts[:sort_order])
+    # |> debug("final query")
     |> feed_many_paginated(opts)
-
     # |> debug()
   end
 
@@ -498,7 +498,6 @@ defmodule Bonfire.Social.FeedActivities do
     feed_id_or_ids_or_name
     |> feed_query(opts)
     |> paginate_and_boundarise_feed(maybe_merge_filters(opts[:feed_filters], opts))
-    # |> debug()
     |> prepare_feed(opts)
   end
 
@@ -770,8 +769,7 @@ defmodule Bonfire.Social.FeedActivities do
         debug("unknown feed")
         query_extras(opts)
     end
-
-    # |> debug()
+    |> debug("feed query")
   end
 
   defp generic_feed_query(feed_ids, opts) do
@@ -944,7 +942,7 @@ defmodule Bonfire.Social.FeedActivities do
     |> maybe_exclude_mine(current_user)
     |> maybe_exclude_replies(filters, opts)
     |> maybe_only_replies(filters, opts)
-    |> maybe_time_limit(opts[:time_limit])
+    |> maybe_time_limit(e(filters, :time_limit, nil) || opts[:time_limit])
   end
 
   def exclude_object_types(extras \\ []) do
@@ -979,7 +977,9 @@ defmodule Bonfire.Social.FeedActivities do
 
     where(query, [activity: activity], activity.id > ^limit_pointer)
   end
-
+  defp maybe_time_limit(query, x_days) when is_binary(x_days) do
+    maybe_time_limit(query, Types.maybe_to_integer(x_days))
+  end
   defp maybe_time_limit(query, _), do: query
 
   defp maybe_filter(query, %{object_type: object_type}) when not is_nil(object_type) do
@@ -1053,7 +1053,6 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   defp maybe_only_replies(query, filters, opts) do
-    debug(filters)
 
     if e(opts, :only_replies, nil) == true or e(filters, :object_type, nil) == "discussions" do
       query
