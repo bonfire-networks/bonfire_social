@@ -195,7 +195,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   defp maybe_merge_filters(filters, opts) do
-    Enum.into(filters, opts)
+    Enum.into(Enums.input_to_atoms(filters), opts)
   end
 
   @doc """
@@ -233,7 +233,9 @@ defmodule Bonfire.Social.FeedActivities do
       # to avoid 'cannot preload in subquery' error
       |> make_distinct(opts[:sort_order], opts[:sort_order], opts)
       |> query_order(opts[:sort_by], opts[:sort_order])
-      |> feed_many_paginated(Keyword.merge(opts, [paginate: true, return: :query, multiply_limit: 2]))
+      |> feed_many_paginated(
+        Keyword.merge(opts, paginate: true, return: :query, multiply_limit: 2)
+      )
       |> repo().make_subquery()
 
     # |> debug("deferred subquery")
@@ -273,7 +275,7 @@ defmodule Bonfire.Social.FeedActivities do
       _ ->
         # ^ tell Paginator to always give us and `after` cursor
         case paginate_and_boundarise_feed_deferred_query(query, opts)
-            #  |> debug("final query")
+             #  |> debug("final query")
              |> feed_many_paginated(opts ++ [infinite_pages: true]) do
           %{edges: []} ->
             debug(
@@ -309,6 +311,7 @@ defmodule Bonfire.Social.FeedActivities do
     |> query_order(opts[:sort_by], opts[:sort_order])
     # |> debug("final query")
     |> feed_many_paginated(opts)
+
     # |> debug()
   end
 
@@ -977,9 +980,11 @@ defmodule Bonfire.Social.FeedActivities do
 
     where(query, [activity: activity], activity.id > ^limit_pointer)
   end
+
   defp maybe_time_limit(query, x_days) when is_binary(x_days) do
     maybe_time_limit(query, Types.maybe_to_integer(x_days))
   end
+
   defp maybe_time_limit(query, _), do: query
 
   defp maybe_filter(query, %{object_type: object_type}) when not is_nil(object_type) do
@@ -1053,7 +1058,6 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   defp maybe_only_replies(query, filters, opts) do
-
     if e(opts, :only_replies, nil) == true or e(filters, :object_type, nil) == "discussions" do
       query
       |> maybe_preload_replied()

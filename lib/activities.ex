@@ -358,118 +358,105 @@ defmodule Bonfire.Social.Activities do
 
     case preloads do
       :all ->
-      
-          [
-            :feed,
-            :tags
-          ]
+        [
+          :feed,
+          :tags
+        ]
 
       :thread_postload ->
-      
-          [
-            # :with_subject,
-            # :feed_by_subject,
-            :with_replied,
-            :with_object_more
-          ]
+        [
+          # :with_subject,
+          # :feed_by_subject,
+          :with_replied,
+          :with_object_more
+        ]
 
       :feed ->
-       
-          [
-            :with_subject,
-            :feed_by_subject,
-            :with_replied
-          ]
+        [
+          :with_subject,
+          :feed_by_subject,
+          :with_replied
+        ]
 
       :feed_postload ->
-      
-          [
-            :with_thread_name,
-            :with_reply_to,
-            :with_media,
-            :with_parent,
-            :maybe_with_labelled
-          ]
+        [
+          :with_thread_name,
+          :with_reply_to,
+          :with_media,
+          :with_parent,
+          :maybe_with_labelled
+        ]
 
       :feed_metadata ->
-       
-          [
-            :with_subject,
-            :with_creator,
-            # :with_verb,
-            # :with_reply_to,
-            :with_thread_name
-            # :with_media
-          ]
+        [
+          :with_subject,
+          :with_creator,
+          # :with_verb,
+          # :with_reply_to,
+          :with_thread_name
+          # :with_media
+        ]
 
       :feed_by_subject ->
-       
-          [
-            :with_creator,
-            # :with_verb,
-            :feed_by_creator
-          ]
+        [
+          :with_creator,
+          # :with_verb,
+          :feed_by_creator
+        ]
 
       :feed_by_creator ->
-        
-          [
-            :with_object_more,
-            # :with_reply_to,
-            # :with_thread_name,
-            :with_media
-          ]
+        [
+          :with_object_more,
+          # :with_reply_to,
+          # :with_thread_name,
+          :with_media
+        ]
 
       :notifications ->
-   
-          [
-            :feed_by_subject,
-            :with_reply_to,
-            :with_seen
-          ]
+        [
+          :feed_by_subject,
+          :with_reply_to,
+          :with_seen
+        ]
 
       :posts_with_reply_to ->
-    
-          [
-            :with_subject,
-            :with_object_posts
-            # :with_reply_to # do not preload as part of query because will be preloaded async later
-          ]
+        [
+          :with_subject,
+          :with_object_posts
+          # :with_reply_to # do not preload as part of query because will be preloaded async later
+        ]
 
       :posts_with_thread ->
-   
-          [
-            :with_subject,
-            :with_object_posts,
-            :with_replied,
-            :with_thread_name
-          ]
+        [
+          :with_subject,
+          :with_object_posts,
+          :with_replied,
+          :with_thread_name
+        ]
 
       :posts ->
-
-          [
-            :with_subject,
-            :with_object_posts
-          ]
+        [
+          :with_subject,
+          :with_object_posts
+        ]
 
       _default ->
-
-          [
-            :with_subject,
-            # :with_verb,
-            :with_object_posts,
-            :with_replied
-          ]
+        [
+          :with_subject,
+          # :with_verb,
+          :with_object_posts,
+          :with_replied
+        ]
     end
     |> debug("computed preloads")
     |> do_activity_preloads(
-          query,
-          ...,
-          opts
-        )
+      query,
+      ...,
+      opts
+    )
   end
 
   defp do_activity_preloads(query, preload, opts) when is_atom(preload) do
-
     if not is_nil(query) and Ecto.Queryable.impl_for(query) do
       current_user_id = current_user_id(opts)
       subject_user_id = id(opts[:subject_user])
