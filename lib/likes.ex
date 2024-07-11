@@ -160,7 +160,7 @@ defmodule Bonfire.Social.Likes do
 
   @doc "List the current user's likes"
   def list_my(opts) do
-    list_by(current_user_required!(opts), opts ++ [preload: :object_with_creator])
+    list_by(current_user_required!(opts), Keyword.put_new(opts, :preload, :object_with_creator))
   end
 
   @doc "List likes by a user"
@@ -169,8 +169,11 @@ defmodule Bonfire.Social.Likes do
     opts = to_options(opts)
 
     list_paginated(
-      Edges.filters_from_opts(opts) |> Map.put(:subject, by_user),
-      opts ++ [preload: :object, subject_user: by_user]
+      Edges.filters_from_opts(opts) 
+      |> Map.put(:subject, by_user),
+      opts
+      |> Keyword.put_new(:preload, :object)
+      |> Keyword.put(:subject_user, :by_user)
     )
   end
 
