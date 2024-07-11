@@ -208,7 +208,6 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed_paginated(filters, opts, query) do
     do_query(filters, opts, query)
-    # |> debug
     |> paginate_and_boundarise_feed(opts)
 
     # |> prepare_feed(opts)

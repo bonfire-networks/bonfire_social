@@ -210,19 +210,27 @@ defmodule Bonfire.Social.Pins do
   end
 
   def list_instance_pins(opts) when is_list(opts) do
-    opts = opts ++ [preload: :object_with_creator]
-    list_by(instance_scope(), opts)
+    opts = to_options(opts)
+    list_by(instance_scope(), Keyword.put(opts, :preload, :object_with_creator))
   end
 
   @doc "List pins by a user"
   def list_by(by_user, opts \\ [])
       when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
-    # opts = to_options(opts)
+    opts = to_options(opts)
 
     list_paginated(
-      Edges.filters_from_opts(opts) |> Map.put(:subject, by_user),
-      opts ++ [preload: [object: [created: [creator: [:profile, :character]]]]]
+      Edges.filters_from_opts(opts)
+      |> Map.put(:subject, by_user),
+      opts
+      |> Keyword.put_new(:preload, :object)
+      |> Keyword.put(:subject_user, :by_user)
     )
+
+    # list_paginated(
+    #   Edges.filters_from_opts(opts) |> Map.put(:subject, by_user),
+    #   opts ++ [preload: [object: [created: [creator: [:profile, :character]]]]]
+    # )
 
     # edges =
     #   for %{edge: %{} = edge} <- e(feed, :edges, []),

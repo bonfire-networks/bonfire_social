@@ -90,7 +90,7 @@ defmodule Bonfire.Social.LivePush do
       activity_id
     })
 
-    # also send to the thread 
+    # also send to the thread
     # TODO: only do this for thread roots, and otherwise notify the actual thread
     PubSub.broadcast(activity_id, {
       {Bonfire.Social.Feeds, :hide_activity},

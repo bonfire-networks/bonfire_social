@@ -292,6 +292,7 @@ defmodule Bonfire.Social.Activities do
 
   def activity_preloads(query, opts) do
     opts = to_options(opts)
+    debug(opts, "preloads")
     activity_preloads(query, opts[:preload], opts)
   end
 
