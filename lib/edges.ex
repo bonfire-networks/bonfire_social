@@ -288,6 +288,11 @@ defmodule Bonfire.Social.Edges do
     |> proload(edge: [object: {"object_", [:profile, :character]}])
   end
 
+  defp maybe_proload(query, :object, nil) do
+    maybe_join_type(query, :object, nil)
+    |> maybe_proload(:object_post_content, nil)
+  end
+
   defp maybe_proload(query, :object, object_type) do
     maybe_join_type(query, :object, object_type)
   end

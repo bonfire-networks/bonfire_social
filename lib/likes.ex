@@ -156,11 +156,14 @@ defmodule Bonfire.Social.Likes do
     # |> Activities.as_permitted_for(opts, [:see])
     # |> debug()
     |> Social.many(opts[:paginate?], opts)
+
+    # |> Activities.activity_preloads(opts)
   end
 
   @doc "List the current user's likes"
   def list_my(opts) do
-    list_by(current_user_required!(opts), Keyword.put_new(opts, :preload, :object_with_creator))
+    opts = to_options(opts)
+    list_by(current_user_required!(opts), Keyword.put(opts, :preload, :object_with_creator))
   end
 
   @doc "List likes by a user"
@@ -169,7 +172,7 @@ defmodule Bonfire.Social.Likes do
     opts = to_options(opts)
 
     list_paginated(
-      Edges.filters_from_opts(opts) 
+      Edges.filters_from_opts(opts)
       |> Map.put(:subject, by_user),
       opts
       |> Keyword.put_new(:preload, :object)

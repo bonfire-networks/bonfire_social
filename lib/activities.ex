@@ -348,6 +348,7 @@ defmodule Bonfire.Social.Activities do
               :feed_by_subject,
               :feed_by_creator,
               :notifications,
+              :object_with_creator,
               :posts,
               :posts_with_thread,
               :posts_with_reply_to,
@@ -419,6 +420,12 @@ defmodule Bonfire.Social.Activities do
           :with_seen
         ]
 
+      :object_with_creator ->
+        [
+          :with_object_posts,
+          :with_creator
+        ]
+
       :posts_with_reply_to ->
         [
           :with_subject,
@@ -457,6 +464,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   defp do_activity_preloads(query, preload, opts) when is_atom(preload) do
+    # pre-loading on a query
     if not is_nil(query) and Ecto.Queryable.impl_for(query) do
       current_user_id = current_user_id(opts)
       subject_user_id = id(opts[:subject_user])
@@ -629,6 +637,8 @@ defmodule Bonfire.Social.Activities do
           query_preload_seen(query, opts)
       end
     else
+      # post-loading on an struct or list of structs
+
       case preload do
         :with_creator ->
           # This actually loads the creator of the object:
@@ -925,6 +935,7 @@ defmodule Bonfire.Social.Activities do
 
   defp do_maybe_repo_preload(objects, preloads, opts) do
     opts
+    #  why not?
     |> Keyword.put_new(:follow_pointers, false)
     |> repo().maybe_preload(objects, preloads, ...)
   end
