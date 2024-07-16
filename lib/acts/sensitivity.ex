@@ -11,7 +11,7 @@ defmodule Bonfire.Social.Acts.Sensitivity do
   import Epics
   import Untangle
   use Arrows
-  alias Bonfire.Common
+  # alias Bonfire.Common
   # alias Common.Types
 
   def run(epic, act) do

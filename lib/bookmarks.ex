@@ -6,10 +6,10 @@ defmodule Bonfire.Social.Bookmarks do
 
   # alias Bonfire.Social.Activities
   alias Bonfire.Social.Edges
-  alias Bonfire.Social.Feeds
+  # alias Bonfire.Social.Feeds
   # alias Bonfire.Social.FeedActivities
   alias Bonfire.Social
-  alias Bonfire.Social.Objects
+  # alias Bonfire.Social.Objects
 
   alias Bonfire.Social.Edges
   # alias Bonfire.Social.Objects

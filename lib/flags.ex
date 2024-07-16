@@ -87,7 +87,7 @@ defmodule Bonfire.Social.Flags do
   end
 
   # determines the feeds a flag is published to
-  defp flag_feeds(object, :group),
+  defp flag_feeds(_object, :group),
     do: [instance_moderators()] |> debug("send flag of actual groups to instance moderators")
 
   defp flag_feeds(object, _),
@@ -98,7 +98,7 @@ defmodule Bonfire.Social.Flags do
   # FIXME: should user instance moderators rather than admins
   def instance_moderators, do: Bonfire.Me.Users.list_admins()
 
-  defp check_flag(flagger, object, opts) do
+  defp check_flag(_flagger, object, opts) do
     #  NOTE: currently allowing anyone to flag anything regardless of boundaries - TODO: make configurable?
     skip? = true
 

@@ -629,11 +629,11 @@ defmodule Bonfire.Social.Objects do
     |> repo().delete()
   end
 
-  def ap_receive_activity(creator, _activity, %{pointer: %{id: _} = pointer} = object) do
+  def ap_receive_activity(creator, _activity, %{pointer: %{id: _} = pointer} = _object) do
     ap_maybe_delete(creator, pointer)
   end
 
-  def ap_receive_activity(creator, _activity, %{pointer_id: pointer} = object)
+  def ap_receive_activity(creator, _activity, %{pointer_id: pointer} = _object)
       when is_binary(pointer) do
     ap_maybe_delete(creator, pointer)
   end
@@ -642,7 +642,7 @@ defmodule Bonfire.Social.Objects do
     error(object, "dunno how to delete object")
   end
 
-  def ap_maybe_delete(creator, nil) do
+  def ap_maybe_delete(_creator, nil) do
     {:ok, :none}
   end
 

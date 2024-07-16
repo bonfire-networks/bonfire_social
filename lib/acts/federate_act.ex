@@ -21,7 +21,7 @@ defmodule Bonfire.Social.Acts.Federate do
   alias Bonfire.Social
   # alias Ecto.Changeset
   alias Bonfire.Common
-  alias Common.Types
+  # alias Common.Types
 
   def run(epic, act) do
     # epic.assigns

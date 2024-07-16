@@ -5,9 +5,9 @@ defmodule Bonfire.Social.Tags do
 
   # alias Bonfire.Common.Config
   # alias Bonfire.Tag.Tags
-  alias Bonfire.Social.PostContents
+  # alias Bonfire.Social.PostContents
   # alias Bonfire.Data.Social.PostContent
-  alias Ecto.Changeset
+  # alias Ecto.Changeset
 
   def maybe_cast(changeset, attrs, creator, opts) do
     with true <- module_enabled?(Bonfire.Tag.Tags, creator) do
@@ -41,7 +41,7 @@ defmodule Bonfire.Social.Tags do
          urls: Keyword.values(urls)
        }}
     else
-      other ->
+      _other ->
         {:ok, %{text: text, mentions: [], hashtags: [], urls: []}}
     end
   end

@@ -1423,10 +1423,10 @@ defmodule Bonfire.Social.FeedActivities do
   defp put_in_feeds(feeds, activity, push? \\ true)
 
   defp put_in_feeds(feeds, activity, push?) when is_list(feeds) and feeds != [] do
-    fa =
-      feeds
-      |> Circles.circle_ids()
-      |> Enum.map(fn x -> put_in_feeds(x, activity, false) end)
+    # fa =
+    #   feeds
+    #   |> Circles.circle_ids()
+    #   |> Enum.map(fn x -> put_in_feeds(x, activity, false) end)
 
     if push?, do: LivePush.push_activity(feeds, activity)
   end
@@ -1435,7 +1435,7 @@ defmodule Bonfire.Social.FeedActivities do
        when is_map(feed_or_subject) or
               (is_binary(feed_or_subject) and feed_or_subject != "") do
     with feed_id <- ulid(feed_or_subject),
-         {:ok, published} <- do_put_in_feeds(feed_id, ulid(activity)) do
+         {:ok, _published} <- do_put_in_feeds(feed_id, ulid(activity)) do
       # push to feeds of online users
       if push?, do: LivePush.push_activity(feed_id, activity)
     else
