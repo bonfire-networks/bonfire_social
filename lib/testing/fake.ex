@@ -8,7 +8,9 @@ defmodule Bonfire.Social.Fake do
   # alias Common.Types
 
   def fake_remote_user!() do
-    {:ok, user} = Common.Utils.maybe_apply(Bonfire.Federate.ActivityPub.Simulate, :fake_remote_user, [])
+    {:ok, user} =
+      Common.Utils.maybe_apply(Bonfire.Federate.ActivityPub.Simulate, :fake_remote_user, [])
+
     user
   end
 end
