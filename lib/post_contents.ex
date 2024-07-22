@@ -514,7 +514,7 @@ defmodule Bonfire.Social.PostContents do
     #  TODO: put somewhere reusable by other types
     hashtags =
       for %{"type" => "Hashtag"} = tag <- tags do
-        with {:ok, hashtag} <- Bonfire.Tag.Tags.get_or_create_hashtag(tag["name"]) do
+        with {:ok, hashtag} <- Bonfire.Tag.get_or_create_hashtag(tag["name"]) do
           {tag["href"], hashtag}
         else
           none ->

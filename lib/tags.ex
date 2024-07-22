@@ -5,14 +5,14 @@ defmodule Bonfire.Social.Tags do
   use Bonfire.Common.Utils
 
   # alias Bonfire.Common.Config
-  # alias Bonfire.Tag.Tags
+  # alias Bonfire.Tag
   # alias Bonfire.Social.PostContents
   # alias Bonfire.Data.Social.PostContent
   # alias Ecto.Changeset
 
   def maybe_cast(changeset, attrs, creator, opts) do
-    with true <- module_enabled?(Bonfire.Tag.Tags, creator) do
-      Bonfire.Tag.Tags.cast(changeset, attrs, creator, opts)
+    with true <- module_enabled?(Bonfire.Tag, creator) do
+      Bonfire.Tag.cast(changeset, attrs, creator, opts)
     else
       _ -> changeset
     end
@@ -147,9 +147,9 @@ defmodule Bonfire.Social.Tags do
   def auto_boost(_, _), do: debug("not auto-boosting (invalid inputs)")
 
   def indexing_format_tags(tags) when is_list(tags) do
-    if Bonfire.Common.Extend.module_enabled?(Bonfire.Tag.Tags) do
+    if Bonfire.Common.Extend.module_enabled?(Bonfire.Tag) do
       tags
-      |> Enum.map(&Bonfire.Tag.Tags.indexing_object_format_name/1)
+      |> Enum.map(&Bonfire.Tag.indexing_object_format_name/1)
     end
   end
 
