@@ -1,4 +1,6 @@
 defmodule Bonfire.Social.Likes do
+  @moduledoc "Mutate, query, and federate likes (indicating appreciation for an activity or object). Likes are implemented on top of the `Bonfire.Data.Edges.Edge` schema (see `Bonfire.Social.Edges` for functions shared by different Edge types)."
+
   # alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Like
   # alias Bonfire.Data.Social.LikeCount

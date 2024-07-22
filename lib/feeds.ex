@@ -1,4 +1,11 @@
 defmodule Bonfire.Social.Feeds do
+  @moduledoc """
+  Helpers to create or query (though that's usually done through `Bonfire.Social.FeedActivities`) feeds.
+
+  This is the [context](https://hexdocs.pm/phoenix/contexts.html) for `Bonfire.Data.Social.Feed`, a virtual schema with just one field:
+  - id
+  """
+
   use Bonfire.Common.Utils
   use Arrows
   use Untangle

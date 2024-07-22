@@ -1,4 +1,12 @@
 defmodule Bonfire.Social.Acts.PostContents do
+  @moduledoc """
+  An Act (as specified by `Bonfire.Epics`) that translates creates a the post contents for a object (eg. post) or changeset.
+
+  Act Options:
+    * `on` - key in assigns to find the object, default: `:post`
+    * `current_user` - self explanatory
+  """
+
   alias Bonfire.Common.Utils
   # alias Bonfire.Epics
   # alias Bonfire.Epics.Act

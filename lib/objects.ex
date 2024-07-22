@@ -1,4 +1,6 @@
 defmodule Bonfire.Social.Objects do
+  @moduledoc "Generic helpers for querying and mutating objects"
+
   use Arrows
 
   use Bonfire.Common.Repo,

@@ -1,4 +1,16 @@
 defmodule Bonfire.Social.Threads do
+  @moduledoc """
+  Handle mutating and querying discussion threads and replies.
+
+  Context for `Bonfire.Data.Social.Replied` which contains these fields:
+  - id: object 
+  - reply_to: what object or activity are we replying to
+  - thread: what discussion thread we're in, if any (usually same as the ID of the original object that started the thread)
+  - direct_replies_count: number of direct replies to this object (automatically counted and updated)
+  - nested_replies_count: number of nested replies to this object and any replies to it (automatically aggregated, counted and updated)
+  - total_replies_count: direct replies + nested replies (automatically summed)
+  - path: breadcrumbs leading from the `reply_to` all the way to the original object that started the thread. Powered by `EctoMaterializedPath`.
+  """
   use Arrows
   use Bonfire.Common.Utils
 

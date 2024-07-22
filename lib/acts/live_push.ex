@@ -1,10 +1,18 @@
 defmodule Bonfire.Social.Acts.LivePush do
+  @moduledoc """
+  An Act (as specified by `Bonfire.Epics`) that translates creates an activity for a object (eg. post) or changeset.
+
+  Act Options:
+    * `on` - key in assigns to find the object, default: `:post`
+    * `feeds` - key
+    * `notify_feeds` - key 
+  """
+
   use Bonfire.Common.Utils
   alias Bonfire.Epics
   # alias Bonfire.Epics.Act
   alias Bonfire.Epics.Epic
 
-  alias Bonfire.Social.LivePush
   import Epics
 
   def run(epic, act) do
@@ -33,7 +41,11 @@ defmodule Bonfire.Social.Acts.LivePush do
             "Publishing to feeds at assign #{feeds_key}"
           )
 
-          LivePush.push_activity(feeds, activity, notify: notify_feeds)
+          maybe_apply(Bonfire.UI.Social.LivePush, :push_activity, [
+            feeds,
+            activity,
+            [notify: notify_feeds]
+          ])
           |> debug("pushed")
           |> Epic.assign(epic, on, ...)
       end

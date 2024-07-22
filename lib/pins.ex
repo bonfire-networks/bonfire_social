@@ -1,4 +1,6 @@
 defmodule Bonfire.Social.Pins do
+  @moduledoc "Mutate or query pins (making an activity or object appear at the beginning of feeds or other lists). Pins are implemented on top of the `Bonfire.Data.Edges.Edge` schema (see `Bonfire.Social.Edges` for functions shared by different Edge types)."
+
   # alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Pin
   # alias Bonfire.Data.Social.PinCount

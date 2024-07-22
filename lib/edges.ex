@@ -1,4 +1,14 @@
 defmodule Bonfire.Social.Edges do
+  @moduledoc """
+  Shared helpers for modules that implemented Edges to mutate or query them, preload relevant associations, etc.
+
+  This is a shared [context](https://hexdocs.pm/phoenix/contexts.html) for `Bonfire.Data.Edges.Edge`, which has these fields:
+  - id: primary key which matches the related Activity 
+  - subject: the who (eg. a user)
+  - table: what kind of action (eg. references Like or Follow in `Needle.Table` ...)
+  - object: the what (eg. a specific post)
+  """
+
   use Arrows
   use Bonfire.Common.Utils
   use Bonfire.Common.Repo

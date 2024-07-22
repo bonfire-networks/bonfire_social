@@ -1,4 +1,5 @@
 defmodule Bonfire.Social.APActivities do
+  @moduledoc "A special type of activity object (see `Bonfire.Social.Activities`) that stores the federated JSON data as-is. Used for any object type that isn't recognised or isn't implemented by an extension."
   alias Bonfire.Data.Social.APActivity
   alias Bonfire.Social.Activities
   # alias Bonfire.Social.FeedActivities

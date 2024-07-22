@@ -1,4 +1,6 @@
 defmodule Bonfire.Social.Boosts do
+  @moduledoc "Mutate, query, and federate boosts (re-sharing an activity or object). Boosts are implemented on top of the `Bonfire.Data.Edges.Edge` schema (see `Bonfire.Social.Edges` for functions shared by different Edge types)."
+
   # alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Boost
   # alias Bonfire.Boundaries.Verbs
@@ -8,7 +10,7 @@ defmodule Bonfire.Social.Boosts do
   alias Bonfire.Social.Feeds
   # alias Bonfire.Social.FeedActivities
   alias Bonfire.Social
-  alias Bonfire.Social.LivePush
+
   alias Bonfire.Social.Objects
 
   # alias Bonfire.Data.Edges.Edge
@@ -132,10 +134,12 @@ defmodule Bonfire.Social.Boosts do
       # livepush will need a list of feed IDs we published to
       feed_ids = for fp <- boost.feed_publishes, do: fp.feed_id
 
-      LivePush.push_activity_object(feed_ids, boost, boosted,
-        push_to_thread: false,
-        notify: true
-      )
+      maybe_apply(Bonfire.UI.Social.LivePush, :push_activity_object, [
+        feed_ids,
+        boost,
+        boosted,
+        [push_to_thread: false, notify: true]
+      ])
 
       Social.maybe_federate_and_gift_wrap_activity(booster, boost)
       |> debug("maybe_federated the boost")

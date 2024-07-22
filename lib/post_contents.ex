@@ -1,6 +1,11 @@
 defmodule Bonfire.Social.PostContents do
   @moduledoc """
-  Query and manipulate post contents
+  Query, manipulate, and federate post contents. See also `Bonfire.Social.Posts` for directly handling posts.
+
+  Context for `Bonfire.Data.Social.PostContent` which has the following fields:
+  - name (eg. title)
+  - summary (eg. description)
+  - html_body (NOTE: can also contain markdown or plaintext)
   """
   use Arrows
 

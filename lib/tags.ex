@@ -1,4 +1,5 @@
 defmodule Bonfire.Social.Tags do
+  @moduletag "Helpers for tagging things. Mostly wrappers around functions in `Bonfire.Tag` and `Bonfire.Classify` extensions."
   use Bonfire.Common.Repo
   use Arrows
   use Bonfire.Common.Utils

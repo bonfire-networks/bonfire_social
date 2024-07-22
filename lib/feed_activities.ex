@@ -1,4 +1,12 @@
 defmodule Bonfire.Social.FeedActivities do
+  @moduledoc """
+  Helpers to create or query a feed's activities.
+
+  This is the [context](https://hexdocs.pm/phoenix/contexts.html) for `Bonfire.Data.Social.FeedPublish`, which has two foreign fields:
+  - id (of the activity, see `Bonfire.Social.Activities`)
+  - feed (see `Bonfire.Social.Feeds`)
+  """
+
   use Arrows
   use Untangle
   use Bonfire.Common.Utils
@@ -16,7 +24,6 @@ defmodule Bonfire.Social.FeedActivities do
   # alias Bonfire.Social.Edges
   alias Bonfire.Social.Feeds
   alias Bonfire.Social.Objects
-  alias Bonfire.Social.LivePush
 
   alias Needle
   alias Needle.Pointer
@@ -1428,7 +1435,7 @@ defmodule Bonfire.Social.FeedActivities do
     #   |> Circles.circle_ids()
     #   |> Enum.map(fn x -> put_in_feeds(x, activity, false) end)
 
-    if push?, do: LivePush.push_activity(feeds, activity)
+    if push?, do: maybe_apply(Bonfire.UI.Social.LivePush, :push_activity, [feeds, activity])
   end
 
   defp put_in_feeds(feed_or_subject, activity, push?)
@@ -1437,7 +1444,7 @@ defmodule Bonfire.Social.FeedActivities do
     with feed_id <- ulid(feed_or_subject),
          {:ok, _published} <- do_put_in_feeds(feed_id, ulid(activity)) do
       # push to feeds of online users
-      if push?, do: LivePush.push_activity(feed_id, activity)
+      if push?, do: maybe_apply(Bonfire.UI.Social.LivePush, :push_activity, [feed_id, activity])
     else
       e ->
         error(

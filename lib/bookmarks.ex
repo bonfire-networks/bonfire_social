@@ -1,4 +1,6 @@
 defmodule Bonfire.Social.Bookmarks do
+  @moduledoc "Mutate or query bookmarks. Bookmarks are implemented on top of the `Bonfire.Data.Edges.Edge` schema (see `Bonfire.Social.Edges` for functions shared by different Edge types)."
+
   # alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Bookmark
   # alias Bonfire.Data.Social.LikeCount
@@ -11,7 +13,6 @@ defmodule Bonfire.Social.Bookmarks do
   alias Bonfire.Social
   # alias Bonfire.Social.Objects
 
-  alias Bonfire.Social.Edges
   # alias Bonfire.Social.Objects
   # alias Bonfire.Social.Feeds
 

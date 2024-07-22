@@ -1,7 +1,8 @@
 defmodule Bonfire.Social.Seen do
   @moduledoc """
-  Track seen/unseen (similar to read/unread, but only indicates that it was displayed in a feed or other listing for the user, not that they actually read it) status of things (usually `Activities`)
+  Track seen/unseen (similar to read/unread, but only indicates that it was displayed in a feed or other listing for the user, not that they actually read it) status of things (usually `Activities`). This is implemented on top of the `Bonfire.Data.Edges.Edge` schema (see `Bonfire.Social.Edges` for functions shared by different Edge types).
   """
+
   alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Seen
   # alias Bonfire.Data.Social.SeenCount

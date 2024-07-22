@@ -1,6 +1,8 @@
 if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
      Code.ensure_loaded?(Absinthe.Schema.Notation) do
   defmodule Bonfire.Social.API.GraphQL do
+    @moduledoc "Social API fields/endpoints for GraphQL"
+
     use Absinthe.Schema.Notation
     use Absinthe.Relay.Schema.Notation, :modern
     use Bonfire.Common.Utils

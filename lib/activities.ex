@@ -1,4 +1,14 @@
 defmodule Bonfire.Social.Activities do
+  @moduledoc """
+  Helpers to create or query (though that's usually done through `Bonfire.Social.FeedActivities`) activities, preload relevant associations, and otherwise massage activity-related data.
+
+  This is the [context](https://hexdocs.pm/phoenix/contexts.html) for `Bonfire.Data.Social.Activity`, which has these fields:
+  - id: primary key (which when the verb is Create usually matches the related Object) 
+  - subject: references the who (eg. a user)
+  - verb: what kind of action (eg. references Like or Follow in `Bonfire.Data.AccessControl.Verb`)
+  - object: references the what (eg. a specific post)
+  """
+
   use Arrows
   use Untangle
   use Bonfire.Common.Utils

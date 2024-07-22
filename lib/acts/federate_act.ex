@@ -1,13 +1,14 @@
 defmodule Bonfire.Social.Acts.Federate do
   @moduledoc """
-
-  An Act that translates a post or changeset into some jobs for the
-  AP publish worker. Handles creation, update and delete
+  An Act (as specified by `Bonfire.Epics`) that translates an object (eg. a post) or changeset into some jobs for the AP publish worker. Handles creation, update and delete.
 
   Act Options:
-    * `on` - key in assigns to find the post, default: `:post`
-    * `as` - key in assigns to assign indexable object, default: `:post_index`
+    * `on` - key in assigns to find the object, default: `:post`
+    * `ap_on` - key in assigns to find the AP object, default: `:ap_object`
+    * `action` - indicates what kind of action we're federating, default: `:insert`
+    * `current_user` - self explanatory
   """
+
   use Arrows
   import Bonfire.Epics
   import Untangle

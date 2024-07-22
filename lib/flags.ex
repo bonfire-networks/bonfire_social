@@ -1,4 +1,6 @@
 defmodule Bonfire.Social.Flags do
+  @moduledoc "Mutate, query, and federate flags (reporting an activity or object to moderators and/or admins). Flags are implemented on top of the `Bonfire.Data.Edges.Edge` schema (see `Bonfire.Social.Edges` for functions shared by different Edge types)."
+
   use Arrows
   use Bonfire.Common.Utils
 

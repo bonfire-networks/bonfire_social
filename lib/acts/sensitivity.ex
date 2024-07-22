@@ -1,4 +1,12 @@
 defmodule Bonfire.Social.Acts.Sensitivity do
+  @moduledoc """
+  An Act (as specified by `Bonfire.Epics`) that marks the sensitivity level of a object (eg. post) or changeset.
+
+  Act Options:
+    * `on` - key in assigns to find the object, default: `:post`
+    * `current_user` - self explanatory
+  """
+
   # alias Bonfire.Data.Social.Sensitive
   alias Bonfire.Epics
   # alias Bonfire.Epics.Act

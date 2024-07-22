@@ -1,4 +1,13 @@
 defmodule Bonfire.Social.Acts.Activity do
+  @moduledoc """
+  An Act (as specified by `Bonfire.Epics`) that translates creates an activity for a object (eg. post) or changeset.
+
+  Act Options:
+    * `on` - key in assigns to find the object, default: `:post`
+    * `verb` - indicates what kind of activity we're creating, default: `:create`
+    * `current_user` - self explanatory
+  """
+
   alias Bonfire.Epics.Epic
   alias Bonfire.Epics
 
