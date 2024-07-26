@@ -41,11 +41,27 @@ defmodule Bonfire.Social.Edges do
     :paginate?
   ]
 
+  @doc """
+  Inserts a new edge with the given schema, subject, verb, and object.
+
+  ## Examples
+
+      > insert(MySchema, %User{id: 1}, :like, %Post{id: 2}, [])
+      {:ok, %Edge{}}
+  """
   def insert(schema, subject, verb, object, options) do
     changeset(schema, subject, verb, object, options)
     |> insert(subject, object)
   end
 
+  @doc """
+  Inserts a changeset with optional subject and object.
+
+  ## Examples
+
+      iex> insert(%Changeset{}, %User{id: 1}, %Post{id: 2})
+      {:ok, %Edge{}}
+  """
   def insert(changeset, subject \\ nil, object \\ nil) do
     changeset
     |> Changeset.unique_constraint([:subject_id, :object_id, :table_id])
@@ -86,17 +102,46 @@ defmodule Bonfire.Social.Edges do
     |> repo().maybe_preload(edge: [:subject, :object], activity: [:subject, :object])
   end
 
+  @doc """
+  Prepares a changeset for the given schema, subject, verb, object, and options.
+
+  ## Examples
+
+      iex> changeset(MySchema, %User{id: 1}, :like, %Post{id: 2}, [])
+      %Ecto.Changeset{}
+  """
   def changeset(schema, subject, verb, object, options) do
     changeset_extra(schema, subject, verb, object, options)
     |> Objects.cast_creator_caretaker(options[:current_user] || subject)
   end
 
-  @doc "Avoids it being deleted when subject is deleted"
+  @doc """
+   Prepares a changeset with creator but no caretaker, which avoids the edge being deleted when subject is deleted.
+
+  ## Examples
+
+      iex> changeset_without_caretaker(MySchema, %User{id: 1}, :like, %Post{id: 2}, [])
+      %Ecto.Changeset{}
+  """
   def changeset_without_caretaker(schema, subject, verb, object, options) do
     changeset_extra(schema, subject, verb, object, options)
     |> Objects.cast_creator(options[:current_user] || subject)
   end
 
+  @doc """
+   Prepares a changeset with creator but no caretaker, which avoids the edge being deleted when subject is deleted.
+
+  ## Examples
+
+      iex> changeset_without_caretaker(MySchema, %User{id: 1}, %Post{id: 2}, [])
+      %Ecto.Changeset{}
+  """
+  def changeset_base_with_creator(schema, subject, object, options) do
+    changeset_base(schema, subject, object, options)
+    |> Objects.cast_creator(options[:current_user] || subject)
+  end
+
+  @doc "TODOC"
   def changeset_extra(schema, subject, verb, object, options) do
     changeset_base(schema, subject, object, options)
     |> Acls.cast(subject, options)
@@ -104,18 +149,13 @@ defmodule Bonfire.Social.Edges do
     |> FeedActivities.put_feed_publishes(Keyword.get(options, :to_feeds, []))
   end
 
+  @doc "TODOC"
   def changeset_base(schema, subject, object, options) when is_atom(schema),
     do: changeset_base({schema, schema}, subject, object, options)
 
   def changeset_base({insert_schema, type_schema}, subject, object, _options) do
     Changesets.cast(struct(insert_schema), %{}, [])
     |> put_edge_assoc(type_schema, subject, object)
-  end
-
-  @doc "Avoids it being deleted when subject is deleted"
-  def changeset_base_with_creator(schema, subject, object, options) do
-    changeset_base(schema, subject, object, options)
-    |> Objects.cast_creator(options[:current_user] || subject)
   end
 
   def put_edge_assoc(changeset, subject, object),
@@ -141,6 +181,17 @@ defmodule Bonfire.Social.Edges do
     |> debug()
   end
 
+  @doc """
+  Retrieves the edge with either:
+  - a schema/context, subject, and object(s)
+  - a schema/context, filters, and options
+
+  ## Examples
+
+      > get(MySchema, %User{id: 1}, %Post{id: 2})
+
+      > get(MySchema, [%{subject: %User{id: 1}}], [])
+  """
   def get(schema_or_context, subject, object, opts \\ [])
 
   def get(schema_or_context, filters, opts, []) when is_list(filters) and is_list(opts) do
@@ -168,25 +219,54 @@ defmodule Bonfire.Social.Edges do
     |> repo().one()
   end
 
-  @doc "retrieves the last edge of a given type, subject, and object from the database"
+  @doc """
+  Retrieves the last edge of a given type, subject, and object from the database.
+
+  ## Examples
+
+      iex> last(MySchema, %User{id: 1}, %Post{id: 2}, [])
+  """
   def last(schema_or_context, subject, object, opts) do
     do_query(schema_or_context, subject, object, opts)
     |> limit(1)
     |> repo().one()
   end
 
-  @doc "retrieves the date of the last edge of a given type, subject, and object from the database"
+  @doc """
+  Retrieves the date of the last edge of a given type, subject, and object from the database.
+
+  ## Examples
+
+      > last_date(:like, %User{id: 1}, %Post{id: 2}, [])
+      ~N[2023-07-25 12:34:56]
+  """
   def last_date(type, subject, object, opts) do
     last(type, subject, object, Keyword.put(opts, :preload, false))
     |> DatesTimes.date_from_pointer()
   end
 
+  @doc """
+  Checks if an edge exists with the given schema/context, subject, and object.
+
+  ## Examples
+
+      > exists?(MySchema, %User{id: 1}, %Post{id: 2}, [])
+      true
+  """
   def exists?(schema_or_context, subject, object, opts) do
     do_query(schema_or_context, subject, object, Keyword.put(opts, :preload, false))
     # |> info()
     |> repo().exists?()
   end
 
+  @doc """
+  Counts the edges for the given type, filters or object, and options.
+
+  ## Examples
+
+      > count(:like, %Post{id: 2}, [])
+      42
+  """
   def count(type, filters_or_object, opts \\ [])
 
   def count(type, object, _opts) when is_struct(object) do
@@ -207,6 +287,14 @@ defmodule Bonfire.Social.Edges do
     |> repo().one()
   end
 
+  @doc """
+  Counts the edges for the given type, subject, object, and options.
+
+  ## Examples
+
+      > count_for_subject(:like, %User{id: 1}, %Post{id: 2}, [])
+      42
+  """
   def count_for_subject(type, subject, object, opts) do
     do_query(type, subject, object, Keyword.put(opts, :preload, :skip))
     |> Ecto.Query.exclude(:select)
@@ -250,12 +338,14 @@ defmodule Bonfire.Social.Edges do
     end
   end
 
+  @doc "TODOC"
   def query(filters, opts) do
     from(root in Edge, as: :edge)
     |> boundarise(root.object_id, opts)
     |> filter(filters, opts)
   end
 
+  @doc "TODOC"
   def query_parent(query_schema, filters, opts) do
     # debug(opts)
     from(root in query_schema)
@@ -350,6 +440,7 @@ defmodule Bonfire.Social.Edges do
     |> proload(edge: [:object])
   end
 
+  @doc "TODOC"
   def filters_from_opts(%{assigns: assigns}) do
     input_to_atoms(
       e(assigns, :feed_filters, nil) || e(assigns, :__context__, :current_params, nil) || %{}
@@ -482,18 +573,39 @@ defmodule Bonfire.Social.Edges do
     query
   end
 
-  # doc "Delete Follows where i am the subject"
+  @doc """
+  Deletes edges where the given user is the subject.
+
+  ## Examples
+
+      iex> delete_by_subject(%User{id: 1})
+      :ok
+  """
   def delete_by_subject(user),
     do: query([subject: user], skip_boundary_check: true) |> do_delete()
 
-  # doc "Delete Follows where i am the object"
+  @doc """
+  Deletes edges where the given user is the object.
+
+  ## Examples
+
+      iex> delete_by_object(%User{id: 1})
+      :ok
+  """
   def delete_by_object(user),
     do: query([object: user], skip_boundary_check: true) |> do_delete()
 
-  # doc "Delete Follows where i am the subject or the object."
+  # doc "Delete edges where i am the subject and/or the object."
   # defp delete_by_any(me), do: do_delete(by_any_q(me))
 
-  # doc "Delete Follows where i am the subject and someone else is the object."
+  @doc """
+  Deletes edges by subject, type, and object
+
+  ## Examples
+
+      iex> delete_by_both(%User{id: 1}, MySchema, %User{id: 2})
+      :ok
+  """
   def delete_by_both(me, schema, object),
     do:
       [subject: me, object: object, table_id: Bonfire.Common.Types.table_id(schema)]

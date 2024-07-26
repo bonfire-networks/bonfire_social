@@ -34,11 +34,27 @@ defmodule Bonfire.Social.FeedActivities do
   def schema_module, do: FeedPublish
   def query_module, do: __MODULE__
 
+  @doc """
+  Casts the changeset to publish an activity to the given creator and feed IDs.
+
+  ## Examples
+
+      > cast(changeset, creator, opts)
+      %Ecto.Changeset{}
+  """
   def cast(changeset, creator, opts) do
     Feeds.target_feeds(changeset, creator, opts)
     |> cast(changeset, ...)
   end
 
+  @doc """
+  Casts the changeset to publish an activity to the given feed IDs.
+
+  ## Examples
+
+      > cast(changeset, feed_ids)
+      %Ecto.Changeset{}
+  """
   def cast(changeset, feed_ids) do
     Enum.map(feed_ids, &%{feed_id: &1})
     |> Changesets.put_assoc!(changeset, :feed_publishes, ...)
@@ -48,6 +64,17 @@ defmodule Bonfire.Social.FeedActivities do
   Gets a list of feed ids this activity was published to from the database.
 
   Currently only used by the ActivityPub integration.
+
+  ## Examples
+
+      iex> feeds_for_activity(%{id: id})
+      [feed_id1, feed_id2]
+
+      iex> feeds_for_activity(id)
+      [feed_id1, feed_id2]
+
+      iex> feeds_for_activity(activity)
+      []
   """
   def feeds_for_activity(%{id: id}), do: feeds_for_activity(id)
 
@@ -63,6 +90,14 @@ defmodule Bonfire.Social.FeedActivities do
   # TODO: put in config
   def skip_verbs_default, do: [:flag]
 
+  @doc """
+  Converts socket, assigns, or options to feed options.
+
+  ## Examples
+
+      > to_feed_options(socket.assigns)
+      [exclude_verbs: [:flag, :boost, :follow]]
+  """
   def to_feed_options(socket_or_opts) do
     opts = to_options(socket_or_opts)
     # TODO: clean up this code
@@ -108,6 +143,21 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   # @decorate time()
+  @doc """
+  Gets feed ids and options for the given feed or list of feeds.
+
+  ## Examples
+
+      > feed_ids_and_opts(feed_name, opts)
+      {feed_ids, opts}
+
+      > feed_ids_and_opts(:my, opts)
+
+      > feed_ids_and_opts({feed_name, feed_id}, opts)
+
+      > feed_ids_and_opts({:notifications, feed_id}, opts)
+
+  """
   def feed_ids_and_opts(feed_name, opts)
 
   def feed_ids_and_opts({:my, feed_ids}, opts) do
@@ -182,6 +232,12 @@ defmodule Bonfire.Social.FeedActivities do
 
   @doc """
   Gets a user's home feed, a combination of all feeds the user is subscribed to.
+
+  ## Examples
+
+      > my_feed(opts)
+
+      > my_feed(opts, previously_loaded_home_feed_ids)
   """
   def my_feed(opts, home_feed_ids \\ nil) do
     opts =
@@ -206,8 +262,14 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   @doc """
-  Return a page of Feed Activities (reverse chronological) + pagination metadata
+  Returns a page of feed activities (reverse chronological) + pagination metadata 
+
   TODO: consolidate with `feed/2`
+
+  ## Examples
+
+      > feed_paginated(filters, opts, query)
+      %{edges: edges, page_info: page_info}
   """
   def feed_paginated(filters \\ [], opts \\ []) do
     feed_paginated(filters, opts, default_query())
@@ -220,6 +282,14 @@ defmodule Bonfire.Social.FeedActivities do
     # |> prepare_feed(opts)
   end
 
+  @doc """
+  Returns paginated results for the given query.
+
+  ## Examples
+
+      > feed_many_paginated(query, opts)
+      %{edges: edges, page_info: page_info}
+  """
   def feed_many_paginated(query, opts) do
     opts = to_options(opts)
 
@@ -373,6 +443,10 @@ defmodule Bonfire.Social.FeedActivities do
 
   @doc """
   Gets a feed by id or ids or a thing/things containing an id/ids.
+
+  ## Examples
+
+      > feed(feed, opts)
   """
   def feed(feed, opts \\ [])
   def feed(%{id: feed_id}, opts), do: feed(feed_id, opts)

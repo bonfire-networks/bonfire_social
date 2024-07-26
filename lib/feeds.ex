@@ -29,13 +29,31 @@ defmodule Bonfire.Social.Feeds do
   @behaviour Bonfire.Common.QueryModule
   def schema_module, do: Feed
 
-  ## TODO: de-duplicate feed_ids_to_publish/3 and target_feeds/4 ##
-  def feed_ids_to_publish(_me, "admins", _) do
+  @doc """
+  Determines the feed IDs to publish based on the provided parameters.
+
+  TODO: de-duplicate `feed_ids_to_publish/4` and `target_feeds/3`
+
+  ## Examples
+
+  ### When called with the `"admins"` boundary:
+
+      iex> Bonfire.Social.Feeds.feed_ids_to_publish(nil, "admins", nil)
+      # List of admin feed IDS
+
+  ### When called with a different boundary and some optional feeds:
+
+      > Bonfire.Social.Feeds.feed_ids_to_publish(me, "public", %{reply_to: true}, [some_feed_id])
+      # List of feed IDs for the provided boundary
+  """
+  def feed_ids_to_publish(me, boundary, assigns, reply_and_or_mentions_notifications_feeds \\ nil)
+
+  def feed_ids_to_publish(_me, "admins", _, _) do
     admins_notifications()
     |> debug("posting to admin feeds")
   end
 
-  def feed_ids_to_publish(me, boundary, assigns, reply_and_or_mentions_notifications_feeds \\ nil) do
+  def feed_ids_to_publish(me, boundary, assigns, reply_and_or_mentions_notifications_feeds) do
     [
       e(assigns, :reply_to, :replied, :thread, :id, nil),
       maybe_my_outbox_feed_id(me, boundary),
@@ -54,6 +72,21 @@ defmodule Bonfire.Social.Feeds do
     |> debug()
   end
 
+  @doc """
+  Returns the feed ID of the outbox depending on the boundary. 
+
+  ## Examples
+
+  ### When the boundary is `"public"`:
+
+      > Bonfire.Social.Feeds.maybe_my_outbox_feed_id(me, "public")
+      # Feed ID of the outbox
+
+  ### When the boundary is `"mentions"` or `"admins"`:
+
+      > Bonfire.Social.Feeds.maybe_my_outbox_feed_id(me, "mentions")
+      nil
+  """
   def maybe_my_outbox_feed_id(me, boundary) do
     if boundary not in ["mentions", "admins"] do
       case my_feed_id(:outbox, me) do
@@ -74,6 +107,21 @@ defmodule Bonfire.Social.Feeds do
   defp global_feed_ids(boundary),
     do: Map.get(@global_feeds, boundary, []) |> Enum.map(&named_feed_id/1)
 
+  @doc """
+  Generates a list of notification feed IDs based on mentions and replies.
+
+  ## Examples
+
+  ### When there are mentions and a reply to creator:
+
+      > Bonfire.Social.Feeds.reply_and_or_mentions_notifications_feeds(me, "public", ["mention1"], "creator_id")
+      # List of notification feed IDs
+
+  ### When no mentions and no reply to creator:
+
+      > Bonfire.Social.Feeds.reply_and_or_mentions_notifications_feeds(me, "local", [], nil)
+      # List of notification feed IDs for local boundary
+  """
   def reply_and_or_mentions_notifications_feeds(
         me,
         boundary,
@@ -130,7 +178,23 @@ defmodule Bonfire.Social.Feeds do
     end
   end
 
-  ## TODO: de-duplicate feed_ids_to_publish/3 and target_feeds/4 ##
+  @doc """
+  Determines the target feeds for a given changeset, creator, and options.
+
+  TODO: de-duplicate `feed_ids_to_publish/4` and `target_feeds/3`
+
+  ## Examples
+
+  ### When given a changeset:
+
+      > Bonfire.Social.Feeds.target_feeds(changeset, creator, opts)
+      # List of target feed IDs based on the changeset
+
+  ### When given an object:
+
+      > Bonfire.Social.Feeds.target_feeds(object, creator, opts)
+      # List of target feed IDs based on the object
+  """
   def target_feeds(%Ecto.Changeset{} = changeset, creator, opts) do
     # debug(changeset)
 
@@ -178,13 +242,13 @@ defmodule Bonfire.Social.Feeds do
   def target_feeds({_, %{} = object}, creator, opts),
     do: target_feeds(object, creator, opts)
 
-  def do_target_feeds(
-        creator,
-        opts,
-        mentions \\ [],
-        reply_to_creator \\ nil,
-        thread_id \\ nil
-      ) do
+  defp do_target_feeds(
+         creator,
+         opts,
+         mentions \\ [],
+         reply_to_creator \\ nil,
+         thread_id \\ nil
+       ) do
     creator_notifications =
       feed_id(:notifications, creator)
       |> debug("creator_notifications")
@@ -269,9 +333,34 @@ defmodule Bonfire.Social.Feeds do
     |> debug("target feeds")
   end
 
+  @doc """
+  Retrieves custom feeds if specified in the options.
+
+  ## Examples
+
+  ### With custom feeds specified:
+
+      iex> Bonfire.Social.Feeds.maybe_custom_feeds(to_feeds: [custom_feed_id])
+      [custom_feed_id]
+  """
   def maybe_custom_feeds(preset_and_custom_boundary),
     do: maybe_from_opts(preset_and_custom_boundary, :to_feeds, [])
 
+  @doc """
+  Gets the feed ID for a named feed.
+
+  ## Examples
+
+  ### For an existing named feed:
+
+      iex> Bonfire.Social.Feeds.named_feed_id(:notifications, [])
+      # Feed ID for notifications
+
+  ### For a binary name:
+
+      iex> Bonfire.Social.Feeds.named_feed_id("notifications", [])
+      # Feed ID for notifications
+  """
   def named_feed_id(name, opts \\ [])
   def named_feed_id(:explore, _), do: nil
   def named_feed_id(:fediverse, _), do: named_feed_id(:activity_pub)
@@ -291,6 +380,21 @@ defmodule Bonfire.Social.Feeds do
     end
   end
 
+  @doc """
+  Generates the home feed IDs for a user, including extra feeds if specified.
+
+  ## Examples
+
+  ### With socket options and extra feeds:
+
+      > Bonfire.Social.Feeds.my_home_feed_ids(socket_or_opts, [extra_feed_id])
+      # List of home feed IDs including extra feeds
+
+  ### Without socket options:
+
+      > Bonfire.Social.Feeds.my_home_feed_ids(_, [extra_feed_id])
+      # List of home feed IDs including extra feeds
+  """
   @decorate time()
   def my_home_feed_ids(socket_or_opts, extra_feeds \\ [])
   # TODO: make configurable if user wants notifications included in home feed
@@ -348,6 +452,16 @@ defmodule Bonfire.Social.Feeds do
 
   def my_home_feed_ids(_, extra_feeds), do: extra_feeds
 
+  @doc """
+  Retrieves the feed ID for a given type and subject.
+
+  ## Examples
+
+  ### For a user:
+
+      > Bonfire.Social.Feeds.my_feed_id(:notifications, user)
+      # Feed ID for notifications of the user
+  """
   def my_feed_id(type, other) do
     case current_user(other) do
       nil ->
@@ -360,6 +474,21 @@ defmodule Bonfire.Social.Feeds do
     end
   end
 
+  @doc """
+  Retrieves a list of feed IDs based on the feed name and subjects.
+
+  ## Examples
+
+  ### For a list of subjects:
+
+      > Bonfire.Social.Feeds.feed_ids(:notifications, [subject1, subject2])
+      # List of notification feed IDs for the subjects
+
+  ### For a single subject:
+
+      > Bonfire.Social.Feeds.feed_ids(:notifications, subject)
+      [feed_id]
+  """
   def feed_ids(feed_name, for_subjects) when is_list(for_subjects) do
     for_subjects
     |> repo().maybe_preload([:character])
@@ -370,8 +499,22 @@ defmodule Bonfire.Social.Feeds do
 
   def feed_ids(feed_name, for_subject), do: [feed_id(feed_name, for_subject)]
 
-  # def feed_id(type, for_subjects) when is_list(for_subjects), do: feed_ids(type, for_subjects)
+  @doc """
+  Gets the feed ID for a given feed name and subject.
 
+  ## Examples
+
+  ### For a character:
+
+      > Bonfire.Social.Feeds.feed_id(:notifications, character)
+      # Feed ID for notifications of the character
+
+  ### For a binary feed name:
+
+      > Bonfire.Social.Feeds.feed_id("notifications", subject)
+      # Feed ID for notifications
+  """
+  # def feed_id(type, for_subjects) when is_list(for_subjects), do: feed_ids(type, for_subjects)
   def feed_id(type, %{character: _} = object),
     do: object |> repo().maybe_preload(:character) |> e(:character, nil) |> feed_id(type, ...)
 
@@ -415,6 +558,21 @@ defmodule Bonfire.Social.Feeds do
     end
   end
 
+  @doc """
+  Gets the feed ID for a given feed name and subject, raising an error if not found.
+
+  ## Examples
+
+  ### For a valid feed:
+
+      > Bonfire.Social.Feeds.feed_id!(:notifications, subject)
+      # Feed ID for notifications
+
+  ### For an invalid feed:
+
+      > Bonfire.Social.Feeds.feed_id!(:invalid, subject)
+      ** (RuntimeError) Expected feed name and user or character, got :invalid
+  """
   def feed_id!(feed_name, for_subject) do
     feed_id(feed_name, for_subject) ||
       raise "Expected feed name and user or character, got #{inspect(feed_name)}"
@@ -431,6 +589,21 @@ defmodule Bonfire.Social.Feeds do
   defp feed_key(:notification), do: :notifications_id
   defp feed_key(other), do: raise("Unknown feed name: #{inspect(other)}")
 
+  @doc """
+  Checks if a creator notification should be sent for a subject.
+
+  ## Examples
+
+  ### When creator is different:
+
+      > Bonfire.Social.Feeds.maybe_creator_notification(subject, other_creator)
+      [{:notifications, other_creator}]
+
+  ### When creator is the same:
+
+      > Bonfire.Social.Feeds.maybe_creator_notification(subject, subject)
+      []
+  """
   def maybe_creator_notification(subject, object_creator, opts \\ []) do
     if id(subject) != id(object_creator) and
          (opts[:local] != false or Bonfire.Social.federating?(object_creator)) do
@@ -440,6 +613,16 @@ defmodule Bonfire.Social.Feeds do
     end
   end
 
+  @doc """
+  Gets the inbox feed ID of the creator of the given object.
+
+  ## Examples
+
+  ### For an object:
+
+      > Bonfire.Social.Feeds.inbox_of_obj_creator(object)
+      # Inbox feed ID of the object's creator
+  """
   def inbox_of_obj_creator(object) do
     # |> IO.inspect
     Objects.preload_creator(object) |> Objects.object_creator() |> feed_id(:notifications, ...)
@@ -454,12 +637,30 @@ defmodule Bonfire.Social.Feeds do
   #     || feed_id(:inbox, admin)
   # end
 
+  @doc """
+  Retrieves the notifications feed IDs for all admins.
+  """
   def admins_notifications(),
     do:
       Bonfire.Me.Users.list_admins()
       |> repo().maybe_preload([:character])
       |> admins_notifications()
 
+  @doc """
+  Retrieves the notifications feed IDs for the provided admin(s).
+
+  ## Examples
+
+  ### For an admin:
+
+      > Bonfire.Social.Feeds.admin_notifications(admin)
+      # Notifications feed ID for the admin
+
+  ### For a list of admins:
+
+      > Bonfire.Social.Feeds.admins_notifications([admin1, admin2])
+      # List of notifications feed IDs for the admins
+  """
   def admins_notifications(admins) when is_list(admins),
     do: Enum.map(admins, fn x -> admin_notifications(x) end)
 
@@ -468,6 +669,21 @@ defmodule Bonfire.Social.Feeds do
       feed_id(:notifications, admin)
   end
 
+  @doc """
+  Creates a feed for the given subject if it doesn't already exist.
+
+  ## Examples
+
+  ### For a new feed:
+
+      > Bonfire.Social.Feeds.maybe_create_feed(:notifications, subject)
+      {:ok, feed_id}
+
+  ### For an existing feed:
+
+      > Bonfire.Social.Feeds.maybe_create_feed(:notifications, existing_subject)
+      {:ok, existing_feed_id}
+  """
   def maybe_create_feed(type, for_subject) do
     with feed_id when is_binary(feed_id) <- create_box(type, for_subject) do
       # debug(for_subject)
@@ -483,7 +699,17 @@ defmodule Bonfire.Social.Feeds do
     end
   end
 
-  # @doc "Create an inbox or outbox for an existing Pointable (eg. User)"
+  @doc """
+  Creates an inbox or outbox for a character.
+
+  ## Examples
+
+      > Bonfire.Social.Feeds.create_box(:inbox, %Character{id: 1})
+      {:ok, box_id}
+
+      > Bonfire.Social.Feeds.create_box(:outbox, %Character{id: 2})
+      {:ok, box_id}
+  """
   defp create_box(type, %Character{id: _} = character) do
     # TODO: optimise using cast_assoc?
     with {:ok, %{id: feed_id} = _feed} <- create(),

@@ -48,6 +48,15 @@ defmodule Bonfire.Social.Activities do
   def schema_module, do: Activity
   def query_module, do: __MODULE__
 
+  @doc """
+  Casts a changeset with the provided verb, creator and options.
+
+  ## Examples
+
+      > cast(changeset, :like, %User{}, feed_ids: [])
+      # Changeset with associations set
+
+  """
   def cast(changeset, verb, creator, opts) do
     # verb_id = verb_id(verb)
     creator = repo().maybe_preload(creator, :character)
@@ -95,6 +104,15 @@ defmodule Bonfire.Social.Activities do
   defp put_data(changeset, key, value),
     do: Changesets.update_data(changeset, &Map.put(&1, key, value))
 
+  @doc """
+  Filters a query to include only permitted objects.
+
+  ## Examples
+
+      > as_permitted_for(query, [])
+      # Filtered query
+
+  """
   def as_permitted_for(q, opts \\ [], verbs \\ [:see, :read]) do
     to_options(opts)
     |> Keyword.put_new(:verbs, verbs)
@@ -108,8 +126,13 @@ defmodule Bonfire.Social.Activities do
   end
 
   @doc """
-  Create an Activity
+  Create an Activity.
   NOTE: you will usually want to use `cast/3` instead or maybe `Objects.publish/5`
+
+  ## Examples
+
+      > create(%User{id: "1"}, :like, %Post{id: "1"})
+      {:ok, %Activity{}}
   """
   def create(subject, verb, object, activity_id \\ nil)
 
@@ -159,7 +182,14 @@ defmodule Bonfire.Social.Activities do
     |> Ecto.Changeset.cast(attrs, [:id])
   end
 
-  @doc "Delete an activity (usage by things like unlike)"
+  @doc """
+  Deletes an activity by subject, verb, and object.
+
+  ## Examples
+
+      > delete_by_subject_verb_object(%User{id: "1"}, :like, %Post{id: "1"})
+      # Number of deleted activities
+  """
   def delete_by_subject_verb_object(subject, verb, object) do
     q = by_subject_verb_object_q(subject, Verbs.get_id!(verb), object)
     # FIXME? does cascading delete take care of this?
@@ -168,7 +198,21 @@ defmodule Bonfire.Social.Activities do
     elem(repo().delete_all(q), 1)
   end
 
-  @doc "Delete activities, using specific filters"
+  @doc """
+  Deletes activities by ID or struct, or using specific filters.
+
+  ## Examples
+
+      > delete(activity)
+      # Number of deleted activities
+      
+      > delete("1")
+      # Number of deleted activities
+
+      > delete([id: "1"])
+      # Number of deleted activities
+
+  """
   def delete(id) when is_binary(id) or is_struct(id) do
     # maybe_remove_for_deleters_feeds(id)
     delete({:id, id})
@@ -188,7 +232,15 @@ defmodule Bonfire.Social.Activities do
     |> elem(0)
   end
 
-  def delete_object(id) when is_binary(id) or is_struct(id) do
+  @doc """
+  Deletes an activity by object ID.
+
+  ## Examples
+
+      iex> delete_by_object("1")
+      # Number of deleted objects
+  """
+  def delete_by_object(id) when is_binary(id) or is_struct(id) do
     # maybe_remove_for_deleters_feeds(id)
     delete({:object_id, id})
   end
@@ -209,9 +261,27 @@ defmodule Bonfire.Social.Activities do
     )
   end
 
+  @doc """
+  Preloads the creation activity for an object.
+
+  ## Examples
+
+      > object_preload_create_activity(%Post{})
+      # Object with preloaded creation activity
+
+  """
   def object_preload_create_activity(object),
     do: object_preload_activity(object, :create)
 
+  @doc """
+  Preloads the activity for an object and verb.
+
+  ## Examples
+
+      > object_preload_activity(%Post{}, :like)
+      # Object with preloaded activity
+
+  """
   def object_preload_activity(object, verb \\ :create) do
     verb_id = verb_id(verb)
 
@@ -224,10 +294,27 @@ defmodule Bonfire.Social.Activities do
     repo().preload(object, activity: query)
   end
 
+  @doc """
+  Preloads creation activity for objects in a query.
+
+  ## Examples
+
+      > query_object_preload_create_activity(query, [])
+      # Query with preloaded creation activities
+  """
   def query_object_preload_create_activity(q, opts \\ []) do
     query_object_preload_activity(q, :create, :id, opts)
   end
 
+  @doc """
+  Preloads activity for objects in a query using the specified verb and object ID field.
+
+  ## Examples
+
+      > query_object_preload_activity(query, :like, :post_id, [])
+      # Query with preloaded activities
+
+  """
   def query_object_preload_activity(
         q,
         verb \\ :create,
@@ -300,29 +387,86 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
-  def activity_preloads(query, opts) do
+  @doc """
+  Applies preloads to a query or or post-loads to object(s) with the specified options. See `activity_preloads/3` for what preload options you can specify.
+
+  ## Examples
+
+      iex> activity_preloads(query, preload: [])
+      # Query with applied activity preloads
+
+  """
+  def activity_preloads(query_or_object_or_objects, opts) do
     opts = to_options(opts)
     debug(opts, "preloads")
-    activity_preloads(query, opts[:preload], opts)
+    activity_preloads(query_or_object_or_objects, opts[:preload], opts)
   end
 
+  @doc """
+  Applies preloads to a query or or post-loads to object(s) with the specified preloads and options.
+
+  ## Examples
+
+      > activity_preloads(query, [], [])
+      # Original query, with no extra joins/preloads
+
+      > activity_preloads(object, [], [])
+      # Original object, with no extra assocs preloads
+
+      > activity_preloads(object_or_query, [:with_creator], [])
+      # Object or query with extra assocs preloads
+
+      > activity_preloads(object_or_query, [:feed, :with_reply_to, :with_media, :with_object_more, :maybe_with_labelled])
+      # Object or query several extra assoc preloads
+
+   Other possible preloads:
+      :default
+      :all
+      :feed
+      :feed_postload
+      :feed_metadata
+      :feed_by_subject
+      :feed_by_creator
+      :notifications
+      :object_with_creator
+      :posts
+      :posts_with_thread
+      :posts_with_reply_to
+      :with_creator
+      :with_subject
+      :with_verb
+      :with_object
+      :with_object_posts
+      :with_object_more
+      :with_replied
+      :with_thread_name
+      :with_parent
+      :with_reply_to
+      :with_seen
+      :with_media
+      :per_media
+      :tags
+      :maybe_with_labelled
+
+  """
   def activity_preloads([], _, _) do
     debug("skip because we have an empty list")
     []
   end
 
-  def activity_preloads(query, preloads, opts) when is_list(preloads) do
+  def activity_preloads(query_or_object_or_objects, preloads, opts) when is_list(preloads) do
     # debug(query, "query or data")
     debug(preloads, "preloads")
     opts = to_options(opts)
 
-    if not is_nil(query) and Ecto.Queryable.impl_for(query) do
-      do_activity_preloads(query, preloads, opts)
+    if not is_nil(query_or_object_or_objects) and
+         Ecto.Queryable.impl_for(query_or_object_or_objects) do
+      do_activity_preloads(query_or_object_or_objects, preloads, opts)
       |> debug("accumulated proloads included in query")
     else
       do_activity_preloads(nil, preloads, opts)
       |> debug("accumulated postloads to try")
-      |> maybe_repo_preload_activity(query, ..., opts)
+      |> maybe_repo_preload_activity(query_or_object_or_objects, ..., opts)
 
       # |> debug()
     end
@@ -756,6 +900,19 @@ defmodule Bonfire.Social.Activities do
     # |> Activities.reply_to_as_permitted_for(opts)
   end
 
+  @doc """
+  Optimizes the query to optionally include the subject data.
+
+  If `exclude_user_ids` is empty, the subject is always included. Otherwise, it is included only if it is different from the users in `exclude_user_ids`.
+
+  ## Examples
+
+      iex> maybe_join_subject(query, [])
+      # returns query with subject preloaded
+
+      iex> maybe_join_subject(query, [1, 2, 3])
+      # returns query with subject included only if subject.id not in [1, 2, 3]
+  """
   def maybe_join_subject(query, []),
     do:
       query
@@ -799,7 +956,21 @@ defmodule Bonfire.Social.Activities do
     )
   end
 
-  @doc "query optimisation: only includes the subject if different from subject or current_user"
+  @doc """
+  Optionally joins the creator.
+
+  Performs a query optimization: only includes the creator if different from the subject or current user.
+
+  If `exclude_user_ids` is empty, the creator is always included. Otherwise, it is included only if it is different from the users in `exclude_user_ids`.
+
+  ## Examples
+
+      iex> maybe_join_creator(query, [])
+      # returns query with creator preloaded if different from the subject
+
+      iex> maybe_join_creator(query, [1, 2, 3])
+      # returns query with creator included only if creator.id not in [1, 2, 3]
+  """
   def maybe_join_creator(query, []) do
     query
     #  join subject, since creator will only be loaded if different from the subject
@@ -952,12 +1123,24 @@ defmodule Bonfire.Social.Activities do
   end
 
   @doc """
-  Get an activity by its ID
+  Gets an activity by its ID.
+
+  ## Examples
+
+      iex> get("activity_id", [])
   """
   def get(id, opts) when is_binary(id), do: repo().single(query([id: id], opts))
 
   @doc """
-  Get an activity by its object ID (usually a create activity)
+  Retrieves an activity based on a query and options.
+
+  ## Examples
+
+      iex> read(query)
+      # returns an activity based on the provided query
+
+      iex> read(object_id)
+      # returns an activity for the provided object ID (usually a create activity)
   """
   def read(query, opts \\ []),
     do:
@@ -973,6 +1156,15 @@ defmodule Bonfire.Social.Activities do
   def read_query(%Ecto.Query{} = query, %User{} = user),
     do: read_query(query, current_user: user)
 
+  @doc """
+  Constructs a query for reading activities based on input.
+
+  ## Examples
+
+      > read_query(query, opts)
+
+      > read_query(object_id, opts)
+  """
   def read_query(%Ecto.Query{} = query, opts) do
     opts = to_options(opts)
     # debug(opts, "opts")
@@ -996,6 +1188,15 @@ defmodule Bonfire.Social.Activities do
     |> read_query(opts)
   end
 
+  @doc """
+  Constructs a query based on filters and optional user context.
+
+  ## Examples
+
+      iex> query(filters)
+
+      iex> query([my: :feed], [current_user: nil])
+  """
   def query(filters \\ [], opts_or_current_user \\ [])
 
   def query([my: :feed], opts_or_current_user) do
@@ -1013,6 +1214,14 @@ defmodule Bonfire.Social.Activities do
     )
   end
 
+  @doc """
+  Processes and structures activity data within an object.
+
+  ## Examples
+
+      iex> activity_under_object(%{activity: %{id: 2, object: %{id: 1}}})
+      %{id: 1, activity: %{id: 2}}
+  """
   # this is a hack to mimic the old structure of the data provided to
   # the activity component, which will we refactor soon(tm)
   def activity_under_object(%{activity: %{object: %{id: _} = object} = activity} = top_object) do
@@ -1103,6 +1312,14 @@ defmodule Bonfire.Social.Activities do
   end
 
   @decorate time()
+  @doc """
+  Retrieves or constructs the object from an activity.
+
+  ## Examples
+
+      iex> object_from_activity(%{object: %{id: 1}})
+      %{id: 1}
+  """
   def object_from_activity(activity)
 
   # special case for edges (eg. Boost) coming to us via LivePush
@@ -1132,6 +1349,13 @@ defmodule Bonfire.Social.Activities do
   # def object_from_activity(%Needle.Pointer{id: _} = object), do: load_object(object, skip_boundary_check: true) # get other pointable objects (only as fallback, should normally already be preloaded)
   def object_from_activity(object_or_activity), do: object_or_activity
 
+  @doc """
+  Loads an object based on its ID or pointer.
+
+  ## Examples
+
+      > load_object("object_id")
+  """
   def load_object(id_or_pointer, opts \\ []) do
     # TODO: avoid so many queries
     # |> repo().maybe_preload([:post_content])
@@ -1146,6 +1370,14 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
+  @doc """
+  Returns the name of a verb based on its slug or identifier.
+
+  ## Examples
+
+      iex> verb_name(:create)
+      "Create"
+  """
   # TODO: put in Verbs module
   def verb_name(slug) when is_atom(slug),
     do: Bonfire.Boundaries.Verbs.get(slug)[:verb]
@@ -1155,6 +1387,14 @@ defmodule Bonfire.Social.Activities do
   def verb_name(%{verb: verb}) when is_binary(verb), do: verb
 
   # @decorate time()
+  @doc """
+  Optionally modifies the verb based on activity context.
+
+  ## Examples
+
+      iex> verb_maybe_modify("Create", %{object: %{post_content: %{id: 1}}})
+      "Write"
+  """
   def verb_maybe_modify(verb, activity \\ nil)
 
   # FIXME: temporary as we may later request other things
@@ -1224,6 +1464,13 @@ defmodule Bonfire.Social.Activities do
   # |> String.downcase()
 
   # @decorate time()
+  @doc """
+  Returns a localized and formatted display name for a verb.
+
+  ## Examples
+
+      iex> verb_display("create")
+  """
   def verb_display(verb) do
     verb = maybe_to_string(verb)
 
@@ -1247,6 +1494,13 @@ defmodule Bonfire.Social.Activities do
     )
   end
 
+  @doc """
+  Retrieves or constructs an ID for a verb based on its name or identifier.
+
+  ## Examples
+
+      iex> verb_id(:create)
+  """
   def verb_id(verb) when is_binary(verb),
     do: ulid(verb) || Verbs.get_id(maybe_to_atom(verb))
 
@@ -1254,7 +1508,7 @@ defmodule Bonfire.Social.Activities do
     do: Verbs.get_id(verb) || Verbs.get_id!(:create)
 
   @doc """
-  Outputs the names all object verbs, for the purpose of adding to the localisation strings, as long as the output is piped through to localise_strings/1 at compile time.
+  Outputs the names of all object verbs for localization, for the purpose of adding to the localisation strings, as long as the output is piped through to localise_strings/1 at compile time.
   """
   def all_verb_names() do
     # Bonfire.Boundaries.Verbs.verbs()
@@ -1271,6 +1525,9 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
+  @doc """
+  Retrieves additional verb names with various formats for localization.
+  """
   def all_verb_names_extra() do
     Enum.flat_map(all_verb_names(), fn v ->
       conjugated =
@@ -1294,8 +1551,19 @@ defmodule Bonfire.Social.Activities do
   defp sanitise_verb_name("Editted"), do: "Edited"
   defp sanitise_verb_name(verb), do: verb
 
+  @doc """
+  Counts the total number of activities.
+  """
   def count_total(), do: repo().one(select(Activity, [u], count(u.id)))
 
+  @doc """
+  Orders query results based on a specified field and sort order.
+
+  ## Examples
+
+      > query_order(query, :num_replies, :asc)
+      # returns the query ordered by number of replies in ascending order
+  """
   def query_order(query, :num_replies, sort_order) do
     if sort_order == :asc do
       query
@@ -1396,6 +1664,14 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
+  @doc """
+  Provides pagination options for ordering.
+
+  ## Examples
+
+      > order_pagination_opts(:num_likes, :desc)
+      # returns pagination options for ordering by number of likes in descending order
+  """
   def order_pagination_opts(sort_by, sort_order) do
     # [cursor_fields: [{{:activity, :id}, sort_order}]]
     [
@@ -1404,6 +1680,14 @@ defmodule Bonfire.Social.Activities do
     ]
   end
 
+  @doc """
+  Retrieves the cursor value for pagination based on field or data structure.
+
+  ## Examples
+
+      > fetch_cursor_value_fun(%{nested_replies_count: 5}, :num_replies)
+      # returns the cursor value based on the number of replies
+  """
   def fetch_cursor_value_fun(%{nested_replies_count: _} = replied, :num_replies) do
     debug(:num_replies)
     e(replied, :nested_replies_count, 0) + e(replied, :direct_replies_count, 0)
@@ -1430,6 +1714,14 @@ defmodule Bonfire.Social.Activities do
     Paginator.default_fetch_cursor_value(d, field)
   end
 
+  @doc """
+  Provides cursor fields for ordering based on sort criteria.
+
+  ## Examples
+
+      > order_cursor_fields(:num_likes, :asc)
+      # returns cursor fields for ordering by number of likes in ascending order
+  """
   def order_cursor_fields(:num_likes, sort_order),
     do: [{{:activity, :like_count, :object_count}, sort_order}, {{:activity, :id}, sort_order}]
 

@@ -361,7 +361,7 @@ defmodule Bonfire.Social.Objects do
 
     id = ulid!(object)
 
-    Activities.delete_object(id)
+    Activities.delete_by_object(id)
     |> debug("Delete it from feeds first and foremost")
 
     with {:error, _} <-
