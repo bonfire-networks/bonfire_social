@@ -23,27 +23,64 @@ defmodule Bonfire.Social.PostContents do
       {"Update", "ChatMessage"}
     ]
 
-  @doc "Given a set of filters, returns an Ecto.Query for matching post contents."
+  @doc """
+  Given a set of filters, returns an Ecto.Query for matching post contents.
+
+  ## Examples
+
+      iex> Bonfire.Social.PostContents.query(%{name: "Test Post"})
+      #Ecto.Query<from p0 in Bonfire.Data.Social.PostContent, where: p0.name == ^"Test Post">
+  """
   def query(filters, _opts \\ []) do
     PostContent
     |> query_filter(filters)
   end
 
-  @doc "Given a set of filters, returns a single post content matching those filters"
+  @doc """
+  Given a set of filters, returns a single post content matching those filters.
+
+  ## Examples
+
+      iex> Bonfire.Social.PostContents.one(%{name: "Test Post"})
+      %Bonfire.Data.Social.PostContent{name: "Test Post", ...}
+  """
   def one(filters, opts \\ []) do
     query(filters, opts)
     |> repo().single()
   end
 
-  @doc "Given a post content ID, returns the corresponding post content"
+  @doc """
+  Given a post content ID, returns the corresponding post content.
+
+  ## Examples
+
+      iex> Bonfire.Social.PostContents.get("01FXYZ123ABC")
+      %Bonfire.Data.Social.PostContent{id: "01FXYZ123ABC", ...}
+  """
   def get(id, opts \\ []) do
     if is_ulid?(id), do: one([id: id], opts)
   end
 
+  @doc """
+  Returns the base query for post contents.
+
+  ## Examples
+
+      iex> Bonfire.Social.PostContents.base_query()
+      #Ecto.Query<from p0 in Bonfire.Data.Social.PostContent>
+  """
   def base_query do
     Needle.Pointers.query_base()
   end
 
+  @doc """
+  Performs a search query on post contents based on the given text.
+
+  ## Examples
+
+      iex> Bonfire.Social.PostContents.search_query("test", %{})
+      #Ecto.Query<from p0 in Bonfire.Data.Social.PostContent, ...>
+  """
   def search_query(text, opts) do
     (opts[:query] || base_query())
     |> proload([:post_content, :named])
@@ -73,7 +110,19 @@ defmodule Bonfire.Social.PostContents do
     ])
   end
 
-  @doc "Given a changeset, post content attributes, creator, boundary and options, returns a changeset prepared with relevant attributes and associations"
+  @doc """
+  Given a changeset, post content attributes, creator, boundary and options, returns a changeset prepared with relevant attributes and associations.
+
+  ## Examples
+
+      iex> attrs = %{name: "Test Post", html_body: "Content"}
+      iex> creator = %Bonfire.Data.Identity.User{id: "01FXYZ123ABC"}
+      iex> boundary = "public"
+      iex> opts = []
+      iex> changeset = %Ecto.Changeset{}
+      iex> Bonfire.Social.PostContents.cast(changeset, attrs, creator, boundary, opts)
+      #Ecto.Changeset<...>
+  """
   def cast(changeset, attrs, creator, boundary, opts) do
     has_images = is_list(attrs[:uploaded_media]) and length(attrs[:uploaded_media]) > 0
 
@@ -89,6 +138,15 @@ defmodule Bonfire.Social.PostContents do
     # |> debug()
   end
 
+  @doc """
+  Creates a changeset for a PostContent struct.
+
+  ## Examples
+
+      iex> attrs = %{name: "Test Post", html_body: "Content"}
+      iex> Bonfire.Social.PostContents.changeset(%Bonfire.Data.Social.PostContent{}, attrs)
+      #Ecto.Changeset<...>
+  """
   def changeset(%PostContent{} = cs \\ %PostContent{}, attrs) do
     PostContent.changeset(cs, attrs)
     |> Changeset.cast(attrs, [:hashtags, :mentions, :urls])

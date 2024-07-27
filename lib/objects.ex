@@ -1,5 +1,14 @@
 defmodule Bonfire.Social.Objects do
-  @moduledoc "Generic helpers for querying and mutating objects"
+  @moduledoc """
+  Generic helpers for querying and mutating objects.
+
+  This module provides functions for working with social objects, including:
+  - Casting common associations when creating objects
+  - Reading and querying objects
+  - Deleting objects
+  - Publishing and setting boundaries
+  - Handling ActivityPub federation
+  """
 
   use Arrows
 
@@ -33,13 +42,21 @@ defmodule Bonfire.Social.Objects do
   @cannot_delete_msg "Object not found or you have no permission to delete it"
 
   @doc """
+  Casts various attributes for an object changeset.
+
   Handles casting:
-  * Creator
-  * Caretaker
-  * Threaded replies (when present)
-  * Tags/Mentions (when present)
-  * Acls
-  * Activity
+  - Creator
+  - Caretaker
+  - Threaded replies (when present)
+  - Tags/Mentions (when present)
+  - ACLs
+  - Activity
+
+  ## Examples
+
+      iex> cast(changeset, %{}, user, [])
+      %Ecto.Changeset{}
+
   """
   def cast(changeset, attrs, creator, opts) do
     # debug(creator, "creator")
@@ -57,10 +74,18 @@ defmodule Bonfire.Social.Objects do
   end
 
   @doc """
+  Casts basic attributes for an object changeset.
+
   Handles casting:
-  * Creator
-  * Caretaker
-  * Acls
+  - Creator
+  - Caretaker
+  - ACLs
+
+  ## Examples
+
+      iex> cast_basic(changeset, %{}, user, [])
+      %Ecto.Changeset{}
+
   """
   def cast_basic(changeset, _attrs, creator, opts) do
     changeset
@@ -71,8 +96,16 @@ defmodule Bonfire.Social.Objects do
   end
 
   @doc """
+  Casts minimal attributes for an object changeset.
+
   Handles casting:
-  * Acls
+  - ACLs
+
+  ## Examples
+
+      iex> cast_mini(changeset, %{}, user, [])
+      %Ecto.Changeset{}
+
   """
   def cast_mini(changeset, _attrs, creator, opts) do
     # apply boundaries on all objects, uses data preloaded by `Threads` and `PostContents`
@@ -82,10 +115,18 @@ defmodule Bonfire.Social.Objects do
   end
 
   @doc """
+  Casts attributes for publishing an object.
+
   Handles casting:
-  * Acls
-  * Activity
-  * Feed Publishes
+  - ACLs
+  - Activity
+  - Feed Publishes
+
+  ## Examples
+
+      iex> cast_publish(changeset, %{}, user, [])
+      %Ecto.Changeset{}
+
   """
   def cast_publish(changeset, attrs, creator, opts) do
     # debug(creator, "creator")
@@ -138,6 +179,15 @@ defmodule Bonfire.Social.Objects do
     |> cast_caretaker(user)
   end
 
+  @doc """
+  Reads an object by its ID.
+
+  ## Examples
+
+      iex> read("123", [])
+      {:ok, %{id: "123", activity: %{}}}
+
+  """
   def read(object_id, opts) when is_binary(object_id) do
     # |> debug
     opts = to_options(opts) ++ [skip_opts_check: true]
@@ -165,15 +215,34 @@ defmodule Bonfire.Social.Objects do
 
   def maybe_preload_activity_object(pointer, _current_user), do: pointer
 
+  @doc """
+  Preloads the reply creator for an object.
+
+  ## Examples
+
+      iex> preload_reply_creator(%Object{})
+      %Object{replied: %{reply_to: ...}}
+
+  """
   def preload_reply_creator(object) do
     object
     # |> IO.inspect
     |> repo().maybe_preload(replied: [reply_to: [created: [creator: [:character]]]])
     # |> repo().maybe_preload([replied: [:reply_to]]) #|> IO.inspect
     # |> IO.inspect
+    #  FIXME: is this loaded the same creator twice?
     |> repo().maybe_preload(replied: [reply_to: [creator: [:character]]])
   end
 
+  @doc """
+  Preloads the creator for an object.
+
+  ## Examples
+
+      iex> preload_creator(%Object{})
+      %Object{}
+
+  """
   # TODO: does not take permissions into consideration
   def preload_creator(object),
     do:
@@ -181,6 +250,15 @@ defmodule Bonfire.Social.Objects do
       |> repo().maybe_preload(created: [creator: [:character]])
       |> repo().maybe_preload(creator: [:character])
 
+  @doc """
+  Gets the creator of an object (if preloaded)
+
+  ## Examples
+
+      iex> object_creator(%Object{})
+      %User{}
+
+  """
   def object_creator(object) do
     e(object, :created, :creator, nil) || e(object, :creator, nil)
   end
@@ -195,6 +273,15 @@ defmodule Bonfire.Social.Objects do
     end
   end
 
+  @doc """
+  Lists objects in a paginated manner.
+
+  ## Examples
+
+      iex> list_paginated([type: :post], [])
+      %Page{}
+
+  """
   def list_paginated(filters, opts \\ [])
 
   def list_paginated(filters, opts)
@@ -257,6 +344,14 @@ defmodule Bonfire.Social.Objects do
   #   from(q in query, where: q.table_id not in ^types)
   # end
 
+  @doc """
+  Sets the name/title of an object.
+
+  ## Examples
+
+      iex> set_name("123", "New Name", [])
+      {:ok, %Object{id: "123", named: %{name: "New Name"}}}
+  """
   def set_name(id, name, opts) when is_binary(id) do
     Bonfire.Common.Needles.one(id, opts)
     ~> set_name(name, opts)
@@ -282,6 +377,15 @@ defmodule Bonfire.Social.Objects do
     |> boundarise(q, main_object.id, ...)
   end
 
+  @doc """
+  Deletes an object if the current users (provided in opts) has permission to, along with related associations (such as mixins).
+
+  ## Examples
+
+      iex> delete(%Object{}, current_user: me)
+      {:ok, %Object{}}
+
+  """
   def delete(object, opts) when is_map(object) do
     opts = to_options(opts)
 
@@ -407,6 +511,21 @@ defmodule Bonfire.Social.Objects do
     maybe_generic_delete(type, object, options)
   end
 
+  @doc """
+  Attempts a generic deletion of an object, to be used when no specific delete function is defined for a schema.
+
+  ## Parameters
+
+  - `type`: The type of the object to delete.
+  - `object`: The object to delete.
+  - `options`: A keyword list of options for the deletion.
+
+  ## Examples
+
+      iex> maybe_generic_delete(MyApp.SomeType, %MyApp.SomeType{}, [])
+      {:ok, %MyApp.SomeType{}}
+
+  """
   def maybe_generic_delete(type, object, options \\ [])
 
   def maybe_generic_delete(type, object, options) do
@@ -445,6 +564,21 @@ defmodule Bonfire.Social.Objects do
   #   nil
   # end
 
+  @doc """
+  Deletes objects that are taken care of by the given main object(s).
+
+  This function recursively deletes caretakers and their objects, except for the original object (i.e if Alice is a user who takes care of some posts but also a group that in turn takes care of some posts or boosts, it will delete all of those except Alice herself).
+
+  ## Parameters
+
+  - `main`: The main object or list of objects to start the deletion from.
+
+  ## Examples
+
+      iex> delete_caretaken(%Object{id: "main_id"})
+      {:ok, [%Object{}, %Object{}]}
+
+  """
   def delete_caretaken(main) do
     mains = List.wrap(main)
     main_ids = Enums.ids(mains)
@@ -476,8 +610,33 @@ defmodule Bonfire.Social.Objects do
     # |> debug("double-check that main thing(s) is deleted too")
   end
 
+  @doc """
+  Retrieves care closures for the given IDs.
+
+  ## Parameters
+
+  - `ids`: A list of IDs to find care closures for.
+
+  ## Examples
+
+      iex> care_closures(["id1", "id2"])
+
+  """
   def care_closures(ids), do: repo().all(CareClosure.by_branch(Types.ulids(ids)))
 
+  @doc """
+  Retrieves a list of objects that are taken care of by the given caretaker IDs.
+
+  ## Parameters
+
+  - `ids`: A list of caretaker IDs.
+
+  ## Examples
+
+      iex> care_taken(["caretaker1", "caretaker2"])
+      [%Object{}, %Object{}]
+
+  """
   def care_taken(ids),
     do:
       repo().all(
@@ -487,6 +646,21 @@ defmodule Bonfire.Social.Objects do
       |> repo().maybe_preload(:pointer)
       |> Enum.map(&(Utils.e(&1, :pointer, nil) || Utils.id(&1)))
 
+  @doc """
+  Runs an epic for a given type and options.
+
+  ## Parameters
+
+  - `type`: The type of epic to run.
+  - `options`: A keyword list of options for the epic.
+  - `on`: The key in the epic's assigns to return (default: `:object`).
+
+  ## Examples
+
+      iex> run_epic(:delete, [object: %Object{}])
+      {:ok, %Object{}}
+
+  """
   def run_epic(type, options \\ [], on \\ :object) do
     options = Keyword.merge(options, crash: true, debug: true, verbose: true)
 
@@ -504,6 +678,15 @@ defmodule Bonfire.Social.Objects do
     {:error, error}
   end
 
+  @doc """
+  Publishes an object.
+
+  ## Examples
+
+      iex> publish(%User{}, :create, %Object{}, [], __MODULE__)
+      {:ok, %Activity{}}
+
+  """
   # used in Classify, Geolocate, etc
   def publish(creator, verb, thing, opts_or_attrs \\ nil, for_module \\ __MODULE__)
 
@@ -537,6 +720,15 @@ defmodule Bonfire.Social.Objects do
     {:ok, nil}
   end
 
+  @doc """
+  Sets boundaries for an object.
+
+  ## Examples
+
+      iex> set_boundaries(%User{}, %Object{}, [], __MODULE__)
+      [boundary: "public", to_circles: [], to_feeds: []]
+
+  """
   def set_boundaries(creator, thing, opts_or_attrs \\ [], for_module \\ __MODULE__) do
     # TODO: make default audience configurable & per object audience selectable by user in API and UI (note: also in `Federation.ap_prepare_activity`)
     boundary_preset =
@@ -579,6 +771,15 @@ defmodule Bonfire.Social.Objects do
     )
   end
 
+  @doc """
+  Resets the preset boundary for an object.
+
+  ## Examples
+
+      iex> reset_preset_boundary(%User{}, %Object{}, "public", [], __MODULE__)
+      {:ok, %Boundary{}}
+
+  """
   def reset_preset_boundary(
         creator,
         thing,
@@ -604,6 +805,15 @@ defmodule Bonfire.Social.Objects do
     set_opts[:boundaries_as_set] || error("Boundaries not enabled")
   end
 
+  @doc """
+  Casts the object sensitivity on a changeset.
+
+  ## Examples
+
+      iex> cast_sensitivity(%Changeset{}, true)
+      %Changeset{}
+
+  """
   def cast_sensitivity(changeset, sensitive?) do
     changeset
     |> Changesets.put_assoc!(:sensitive, %{
@@ -611,6 +821,15 @@ defmodule Bonfire.Social.Objects do
     })
   end
 
+  @doc """
+  Sets the sensitivity of an existing object.
+
+  ## Examples
+
+      iex> set_sensitivity(%Object{sensitive: %{}}, true)
+      {:ok, %Object{}}
+
+  """
   # TODO: also support setting with an ID, or with an object that doesn't have a `sensitive` assoc
   def set_sensitivity(%{sensitive: _} = pointer, true) do
     pointer
@@ -656,6 +875,15 @@ defmodule Bonfire.Social.Objects do
     |> debug("ap_maybe_deleted")
   end
 
+  @doc """
+  Gets the permalink for an object.
+
+  ## Examples
+
+      iex> permalink(%{canonical_uri: "https://example.com/object/123"})
+      "https://example.com/object/123"
+
+  """
   def permalink(%{canonical_uri: permalink}) do
     permalink
   end

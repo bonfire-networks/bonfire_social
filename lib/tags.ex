@@ -1,15 +1,23 @@
 defmodule Bonfire.Social.Tags do
-  @moduletag "Helpers for tagging things. Mostly wrappers around functions in `Bonfire.Tag` and `Bonfire.Classify` extensions."
+  @moduledoc """
+  Helpers for tagging things. Mostly wrappers around functions in `Bonfire.Tag` and `Bonfire.Classify` extensions.
+
+  This module provides functionality for processing tags, handling categories, and auto-boosting content.
+  """
+
   use Bonfire.Common.Repo
   use Arrows
   use Bonfire.Common.Utils
 
-  # alias Bonfire.Common.Config
-  # alias Bonfire.Tag
-  # alias Bonfire.Social.PostContents
-  # alias Bonfire.Data.Social.PostContent
-  # alias Ecto.Changeset
+  @doc """
+  Casts tags if the Bonfire.Tag module is enabled for the creator.
 
+  ## Examples
+
+      iex> maybe_cast(%Ecto.Changeset{}, %{tags: ["tag1", "tag2"]}, %User{}, [])
+      %Ecto.Changeset{}
+
+  """
   def maybe_cast(changeset, attrs, creator, opts) do
     with true <- module_enabled?(Bonfire.Tag, creator) do
       Bonfire.Tag.cast(changeset, attrs, creator, opts)
@@ -18,6 +26,15 @@ defmodule Bonfire.Social.Tags do
     end
   end
 
+  @doc """
+  Processes text to extract mentions, hashtags, and URLs if the Bonfire.Tag module is enabled.
+
+  ## Examples
+
+      iex> maybe_process(%User{}, "Hello @user #hashtag https://example.com", [])
+      {:ok, %{text: "Hello @user #hashtag https://example.com", mentions: [], hashtags: [], urls: []}}
+
+  """
   def maybe_process(creator, text, opts) do
     output_format =
       (opts[:output_format] || Bonfire.Social.PostContents.editor_output_content_type(creator))
@@ -25,7 +42,6 @@ defmodule Bonfire.Social.Tags do
 
     debug(text, "hmmmm")
 
-    # debug(text)
     with true <- is_binary(text) and text != "",
          true <- module_enabled?(Bonfire.Tag, creator),
          {text, mentions, hashtags, urls} <-
@@ -47,8 +63,16 @@ defmodule Bonfire.Social.Tags do
     end
   end
 
+  @doc """
+  Filters a list of categories, returning those that are auto-boostable for a user.
+
+  ## Examples
+
+      iex> maybe_boostable_categories(%User{}, [%Bonfire.Classify.Category{id: "123"}])
+      [%Bonfire.Classify.Category{id: "123", tree: nil}]
+
+  """
   def maybe_boostable_categories(creator, categories) when is_list(categories) do
-    # TODO: optimise, maybe using Bonfire.Boundaries.load_pointers ?
     Enum.map(categories, &maybe_boostable_category(creator, &1))
     |> filter_empty([])
     |> repo().maybe_preload(:tree)
@@ -109,12 +133,30 @@ defmodule Bonfire.Social.Tags do
     |> if(preload?, do: repo().maybe_preload(..., [:character]), else: ...)
   end
 
+  @doc """
+  Attempts to auto-boost an object to categories, based on which ones a user has permission to publish to.
+
+  ## Examples
+
+      iex> maybe_auto_boost(%User{}, [%Bonfire.Classify.Category{id: "123"}], %Post{id: "456"})
+      :ok
+
+  """
   def maybe_auto_boost(creator, category_or_categories, object) do
     maybe_boostable_categories(creator, category_or_categories)
     |> debug()
     |> auto_boost(..., object)
   end
 
+  @doc """
+  Auto-boosts an object to some categories' feed.
+
+  ## Examples
+
+      iex> auto_boost([%Bonfire.Classify.Category{id: "123"}], %Post{id: "456"})
+      :ok
+
+  """
   def auto_boost(categories_auto_boost, object) when is_list(categories_auto_boost) do
     categories_auto_boost
     |> Enum.each(&auto_boost(&1, object))

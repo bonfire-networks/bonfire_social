@@ -13,10 +13,43 @@ defmodule Bonfire.Social do
     description: l("Basic social networking functionality, such as feeds and discussions.")
   )
 
+  @doc """
+  Returns the configured repository module.
+
+  ## Examples
+
+      iex> Bonfire.Social.repo()
+      Bonfire.Common.Repo
+
+  """
   def repo, do: Config.repo()
 
+  @doc """
+  Returns the configured mailer module.
+  """
   def mailer, do: Config.get!(:mailer_module)
 
+  @doc """
+  Federates an activity (if enabled) and wraps it with additional metadata.
+
+  This function attempts to federate an activity and, if successful, merges the
+  federated activity information with the original object.
+
+  ## Parameters
+
+    - subject: The subject initiating the federation.
+    - object: The object to be federated.
+    - opts: Optional parameters for federation.
+
+  ## Examples
+
+      iex> subject = %User{id: 1}
+      iex> object = %Post{id: 2, content: "Hello, world!"}
+      iex> {:ok, wrapped_object} = Bonfire.Social.maybe_federate_and_gift_wrap_activity(subject, object)
+      iex> Map.has_key?(wrapped_object, :activity)
+      true
+
+  """
   def maybe_federate_and_gift_wrap_activity(
         subject,
         object,
@@ -166,8 +199,29 @@ defmodule Bonfire.Social do
     # object
   end
 
-  # TODO: clean up the following patterns
+  @doc """
+  Attempts to federate an activity based on the given parameters.
 
+  This function handles various patterns of activities and objects, attempting to
+  federate them according to the specified verb and options.
+
+  ## Parameters
+
+    - subject: The subject initiating the federation.
+    - verb: The verb describing the activity (e.g., :create, :delete).
+    - object: The object to be federated.
+    - activity: The associated activity data (optional).
+    - opts: Additional options for federation.
+
+  ## Examples
+
+      iex> subject = %User{id: 1}
+      iex> object = %Post{id: 2, content: "Hello, world!"}
+      iex> Bonfire.Social.maybe_federate(subject, :create, object)
+      {:ok, %ActivityPub.Object{}}
+
+  """
+  # TODO: clean up the following patterns
   def maybe_federate(subject, verb, object, activity \\ nil, opts \\ []) do
     debug(subject, "subject")
 
@@ -187,20 +241,91 @@ defmodule Bonfire.Social do
     end
   end
 
+  @doc """
+  Checks if outgoing federation is enabled for the given subject.
+
+  ## Parameters
+
+    - subject: The subject to check for federation capability (optional).
+
+  ## Examples
+
+      iex> Bonfire.Social.federate_outgoing?()
+      true
+
+      iex> Bonfire.Social.federate_outgoing?(user)
+      false
+
+  """
   def federate_outgoing?(subject \\ nil) do
     Bonfire.Common.Extend.module_enabled?(Bonfire.Federate.ActivityPub.Outgoing, subject) and
       Bonfire.Federate.ActivityPub.Outgoing.federate_outgoing?(subject)
   end
 
+  @doc """
+  Checks if federation is generally enabled for the given subject.
+
+  ## Parameters
+
+    - subject: The subject to check for federation capability (optional).
+
+  ## Examples
+
+      iex> Bonfire.Social.federating?()
+      true
+
+      iex> Bonfire.Social.federating?(user)
+      true
+
+  """
   def federating?(subject \\ nil) do
     Bonfire.Common.Extend.module_enabled?(Bonfire.Federate.ActivityPub, subject) and
       Bonfire.Federate.ActivityPub.federating?(subject)
   end
 
+  @doc """
+  Determines if the given thing is local to the current instance.
+
+  ## Parameters
+
+    - thing: The object to check for locality.
+    - opts: Additional options for the check (optional).
+
+  ## Examples
+
+      iex> Bonfire.Social.is_local?(local_user)
+      true
+
+      iex> Bonfire.Social.is_local?(remote_user)
+      false
+
+  """
   def is_local?(thing, opts \\ []) do
     maybe_apply(Bonfire.Federate.ActivityPub.AdapterUtils, :is_local?, [thing, opts], opts)
   end
 
+  @doc """
+  Executes a query and returns results based on the specified options.
+
+  This function can return query results in various formats, including raw query,
+  stream, or paginated results.
+
+  ## Parameters
+
+    - query: The Ecto query to execute.
+    - paginate?: Boolean indicating whether to paginate results.
+    - opts: Additional options for query execution.
+
+  ## Examples
+
+      iex> query = from(u in User, where: u.age > 18)
+      iex> Bonfire.Social.many(query, false, return: :query)
+      #Ecto.Query<...>
+
+      iex> Bonfire.Social.many(query, true, after: "1")
+      %{entries: [%User{}, ...], page_info: %{...}}
+
+  """
   def many(query, paginate?, opts \\ [])
 
   def many(query, false, opts) do

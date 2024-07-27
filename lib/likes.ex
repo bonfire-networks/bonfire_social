@@ -1,5 +1,12 @@
 defmodule Bonfire.Social.Likes do
-  @moduledoc "Mutate, query, and federate likes (indicating appreciation for an activity or object). Likes are implemented on top of the `Bonfire.Data.Edges.Edge` schema (see `Bonfire.Social.Edges` for functions shared by different Edge types)."
+  @moduledoc """
+  Mutate, query, and federate likes (indicating appreciation for an activity or object).
+
+  This module provides functionality to manage and query likes, including creating, deleting, and listing likes.
+  It also handles federation of likes using ActivityPub.
+
+  Likes are implemented on top of the `Bonfire.Data.Edges.Edge` schema (see `Bonfire.Social.Edges` for shared functions)
+  """
 
   # alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Like
@@ -31,24 +38,100 @@ defmodule Bonfire.Social.Likes do
   def federation_module,
     do: ["Like", {"Create", "Like"}, {"Undo", "Like"}, {"Delete", "Like"}]
 
+  @doc """
+  Checks if a user has liked an object.
+
+  ## Parameters
+
+    - user: The user to check.
+    - object: The object to check for likes.
+
+  ## Examples
+
+      iex> Bonfire.Social.Likes.liked?(%User{id: "user123"}, %Post{id: "post456"})
+      true
+  """
   def liked?(%{} = user, object),
     do: Edges.exists?(__MODULE__, user, object, skip_boundary_check: true)
 
+  @doc """
+  Retrieves a Like edge between a subject and an object.
+
+  ## Parameters
+
+    - subject: The subject (usually a user) of the Like edge.
+    - object: The object that was liked.
+    - opts: Additional options for the query (optional).
+
+  ## Examples
+
+      iex> Bonfire.Social.Likes.get(%User{id: "user123"}, %Post{id: "post456"})
+      {:ok, %Like{}}
+
+  """
   def get(subject, object, opts \\ []),
     do: Edges.get(__MODULE__, subject, object, opts)
 
+  @doc """
+    Similar to `get/3`, but raises an error if the Like edge is not found.
+  """
   def get!(subject, object, opts \\ []),
     do: Edges.get!(__MODULE__, subject, object, opts)
 
+  @doc """
+  Lists likes created by a specific subject.
+
+  ## Parameters
+
+    - subject: The subject (usually a user) who created the likes.
+    - opts: Additional options for the query (optional).
+
+  ## Examples
+
+      iex> Bonfire.Social.Likes.by_liker(%User{id: "user123"})
+      [%Like{}, ...]
+
+  """
   def by_liker(subject, opts \\ []) when is_map(subject) or is_binary(subject),
     do:
       (opts ++ [subject: subject])
       |> query([current_user: subject] ++ List.wrap(opts))
       |> repo().many()
 
+  @doc """
+  Lists likes for a specific object.
+
+  ## Parameters
+
+    - object: The object that was liked.
+    - opts: Additional options for the query (optional).
+
+  ## Examples
+
+      iex> Bonfire.Social.Likes.by_liked(%Post{id: "post456"})
+      [%Like{}, ...]
+
+  """
   def by_liked(object, opts \\ []) when is_map(object) or is_binary(object),
     do: (opts ++ [object: object]) |> query(opts) |> repo().many()
 
+  @doc """
+  Counts likes based on filters or for a specific user-object pair.
+
+  ## Parameters
+
+    - filters: A list of filters to apply when counting likes.
+    - opts: Additional options for the query.
+
+  ## Examples
+
+      iex> Bonfire.Social.Likes.count([object: %Post{id: "post456"}])
+      5
+
+      iex> Bonfire.Social.Likes.count(%User{id: "user123"}, %Post{id: "post456"})
+      1
+
+  """
   def count(filters \\ [], opts \\ [])
 
   def count(filters, opts) when is_list(filters) and is_list(opts) do
@@ -60,6 +143,21 @@ defmodule Bonfire.Social.Likes do
 
   def count(%{} = object, _), do: Edges.count(:like, object, skip_boundary_check: true)
 
+  @doc """
+  Records a like for an object.
+
+  ## Parameters
+
+    - liker: The user creating the like.
+    - object: The object to be liked.
+    - opts: Additional options for creating the like (optional).
+
+  ## Examples
+
+      iex> Bonfire.Social.Likes.like(%User{id: "user123"}, %Post{id: "post456"})
+      {:ok, %Like{}}
+
+  """
   def like(liker, object, opts \\ [])
 
   def like(%{} = liker, %{} = object, opts) do
@@ -117,6 +215,21 @@ defmodule Bonfire.Social.Likes do
     end
   end
 
+  @doc """
+  Removes a like for an object.
+
+  ## Parameters
+
+    - liker: The user removing the like.
+    - object: The object to be unliked.
+    - opts: Additional options (optional).
+
+  ## Examples
+
+      iex> Bonfire.Social.Likes.unlike(%User{id: "user123"}, %Post{id: "post456"})
+      {:ok, nil}
+
+  """
   def unlike(liker, object, opts \\ [])
 
   def unlike(%{} = liker, %{} = liked, _opts) do
@@ -144,6 +257,22 @@ defmodule Bonfire.Social.Likes do
     # |> query_filter(filters)
   end
 
+  @doc """
+  Creates a query for Like edges based on the given filters and options.
+
+  ## Parameters
+
+    - filters: A keyword list of filters to apply to the query.
+    - opts: Additional options for the query.
+
+  ## Examples
+
+      iex> filters = [subject: %User{id: "user123"}]
+      iex> opts = [limit: 10]
+      iex> Bonfire.Social.Likes.query(filters, opts)
+      #Ecto.Query<...>
+
+  """
   def query([my: :likes], opts),
     do: query([subject: current_user_required!(opts)], opts)
 
@@ -162,13 +291,38 @@ defmodule Bonfire.Social.Likes do
     # |> Activities.activity_preloads(opts)
   end
 
-  @doc "List the current user's likes"
+  @doc """
+  List the current user's likes.
+
+  ## Parameters
+
+    - opts: Additional options for the query.
+
+  ## Examples
+
+      iex> Bonfire.Social.Likes.list_my(current_user: %User{id: "user123"})
+      %{edges: [%Like{}, ...], page_info: %{}}
+
+  """
   def list_my(opts) do
     opts = to_options(opts)
     list_by(current_user_required!(opts), Keyword.put(opts, :preload, :object_with_creator))
   end
 
-  @doc "List likes by a user"
+  @doc """
+  Lists likes created by a specific user.
+
+  ## Parameters
+
+    - by_user: The user whose likes to list.
+    - opts: Additional options for the query (optional).
+
+  ## Examples
+
+      iex> Bonfire.Social.Likes.list_by(%User{id: "user123"})
+      %{edges: [%Like{}, ...], page_info: %{}}
+
+  """
   def list_by(by_user, opts \\ [])
       when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
     opts = to_options(opts)
@@ -182,7 +336,20 @@ defmodule Bonfire.Social.Likes do
     )
   end
 
-  @doc "List likers of something(s)"
+  @doc """
+  Lists likers of a specific object or objects.
+
+  ## Parameters
+
+    - object: The object or objects to find likers for.
+    - opts: Additional options for the query (optional).
+
+  ## Examples
+
+      iex> Bonfire.Social.Likes.list_of(%Post{id: "post456"})
+      %{edges: [%Like{}, ...], page_info: %{}}
+
+  """
   def list_of(object, opts \\ [])
       when is_binary(object) or is_list(object) or is_map(object) do
     opts = to_options(opts)
@@ -197,6 +364,21 @@ defmodule Bonfire.Social.Likes do
     Edges.insert(Like, liker, :like, liked, opts)
   end
 
+  @doc """
+  Publishes an ActivityPub activity for a like.
+
+  ## Parameters
+
+    - subject: The subject of the like activity.
+    - verb: The verb of the activity (:delete or other).
+    - like: The like object.
+
+  ## Examples
+
+      iex> Bonfire.Social.Likes.ap_publish_activity(%User{id: "user123"}, :create, %Like{})
+      {:ok, %ActivityPub.Object{}}
+
+  """
   def ap_publish_activity(subject, :delete, like) do
     with {:ok, liker} <-
            ActivityPub.Actor.get_cached(pointer: subject || like.edge.subject_id),
@@ -221,6 +403,23 @@ defmodule Bonfire.Social.Likes do
     end
   end
 
+  @doc """
+  Receives and processes an ActivityPub like activity.
+
+  ## Parameters
+
+    - liker: The user performing the like action.
+    - activity: The ActivityPub activity data.
+    - object: The object being liked.
+
+  ## Examples
+
+      iex> activity = %{data: %{"type" => "Like"}}
+      iex> object = %ActivityPub.Object{}
+      iex> Bonfire.Social.Likes.ap_receive_activity(%User{id: "user123"}, activity, object)
+      {:ok, %Like{}}
+
+  """
   def ap_receive_activity(
         liker,
         %{data: %{"type" => "Like"}} = _activity,

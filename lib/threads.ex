@@ -2,7 +2,9 @@ defmodule Bonfire.Social.Threads do
   @moduledoc """
   Handle mutating and querying discussion threads and replies.
 
-  Context for `Bonfire.Data.Social.Replied` which contains these fields:
+  Provides functionality for managing threaded discussions, including creating replies, querying threads, and handling participants.
+
+  It is the context module for `Bonfire.Data.Social.Replied` which contains these fields:
   - id: object 
   - reply_to: what object or activity are we replying to
   - thread: what discussion thread we're in, if any (usually same as the ID of the original object that started the thread)
@@ -11,6 +13,7 @@ defmodule Bonfire.Social.Threads do
   - total_replies_count: direct replies + nested replies (automatically summed)
   - path: breadcrumbs leading from the `reply_to` all the way to the original object that started the thread. Powered by `EctoMaterializedPath`.
   """
+
   use Arrows
   use Bonfire.Common.Utils
 
@@ -40,8 +43,21 @@ defmodule Bonfire.Social.Threads do
   def base_query, do: from(Replied, as: :replied)
 
   @doc """
-  Handles casting related to the reply and threading.
+  Casts a changeset with reply_to and threading info.
+
   If it's not a reply or the user is not permitted to reply to the thing, a new thread will be created.
+
+  ## Parameters
+
+  - `changeset`: The changeset to be updated
+  - `attrs`: Attributes for the reply
+  - `user`: The user creating the reply
+  - `_preset_or_custom_boundary`: Boundary setting (currently unused)
+
+  ## Examples
+
+      iex> cast(changeset, %{reply_to_id: "123"}, user, nil)
+      %Ecto.Changeset{}
   """
   # def cast(changeset, attrs, user, "public"), do: cast_replied(changeset, attrs, user)
   # def cast(changeset, attrs, user, _), do: start_new_thread(changeset)
@@ -108,9 +124,22 @@ defmodule Bonfire.Social.Threads do
   end
 
   @doc """
-  Returns `{:ok, reply}` or `{:error, reason}`, where `reason` may be:
-  * `:not_found` - we could not find the object you are replying to.
-  * `:not_permitted` - you do not have permission to reply to this.
+  Finds the object being replied to.
+
+  ## Parameters
+
+  - `attrs`: Attributes containing reply information
+  - `user`: The user attempting to reply
+
+  ## Returns
+
+  - `{:ok, reply}` if the reply object is found and the user has permission
+  - `{:error, reason}` otherwise, where reason may be `:not_found` or `:not_permitted`
+
+  ## Examples
+
+      iex> find_reply_to(%{reply_to_id: "123"}, user)
+      {:ok, %{id: "123", ...}}
   """
   def find_reply_to(attrs, user) do
     find_reply_id(attrs)
@@ -118,6 +147,19 @@ defmodule Bonfire.Social.Threads do
     |> maybe_replyable(user)
   end
 
+  @doc """
+  Finds the thread for a reply.
+
+  ## Parameters
+
+  - `attrs`: Attributes containing thread information
+  - `user`: The user attempting to access the thread
+
+  ## Examples
+
+      iex> find_thread(%{thread_id: "456"}, user)
+      {:ok, %{id: "456", ...}}
+  """
   # old; not sure this is what forks will look like when we implement thread forking
   def find_thread(attrs, user) do
     find_thread_id(attrs)
@@ -139,13 +181,37 @@ defmodule Bonfire.Social.Threads do
     end
   end
 
-  @doc false
+  @doc """
+  Initializes a parent replied record.
+
+  ## Parameters
+
+  - `replied_attrs`: Attributes for the replied record
+
+  ## Examples
+
+      iex> init_parent_replied(%{id: "789", thread_id: "456"})
+      {:ok, %Replied{}}
+  """
   # TODO: can we do this in the transaction?
   def init_parent_replied(replied_attrs) do
     repo().insert(replied_attrs, on_conflict: :nothing)
   end
 
-  @doc false
+  @doc """
+  Creates a parent replied record within a changeset.
+
+  ## Parameters
+
+  - `changeset` or `object`: The changeset to update
+  - `replied`: The replied struct
+  - `replied_attrs`: Attributes for the replied record
+
+  ## Examples
+
+      iex> create_parent_replied(changeset, %Replied{}, %{id: "789", thread_id: "456"})
+      %Ecto.Changeset{}
+  """
   def create_parent_replied(%Changeset{} = changeset, replied, replied_attrs) do
     changeset.repo.insert_all(Replied, [replied_attrs], on_conflict: :nothing)
 
@@ -253,18 +319,47 @@ defmodule Bonfire.Social.Threads do
   #   repo().put(changeset(attrs))
   # end
 
-  def read(object_id, socket_or_current_user) when is_binary(object_id) do
-    # current_user = current_user(socket_or_current_user)
+  @doc """
+  Reads a thread by its ID.
 
+  ## Parameters
+
+  - `object_id`: The ID of the object to read
+  - `opts`: should contain `current_user` to check for read permissions
+
+  ## Returns
+
+  - `{:ok, object}` if the object is found and readable
+  - `{:error, reason}` otherwise
+
+  ## Examples
+
+      iex> read("123", current_user: me)
+      {:ok, %{id: "123", ...}}
+  """
+  def read(object_id, opts) when is_binary(object_id) do
     with {:ok, object} <-
            base_query()
            |> query_filter(id: object_id)
-           |> Activities.read(socket_or_current_user) do
+           |> Activities.read(opts) do
       {:ok, object}
     end
   end
 
-  @doc "List participants of an activity or thread (depending on user's boundaries)"
+  @doc """
+  Lists participants of a thread or individual object.
+
+  ## Parameters
+
+  - `activity_or_object`: The activity or object to list participants for
+  - `thread_or_object_id`: Optional thread or object ID
+  - `opts`: Additional options
+
+  ## Examples
+
+      iex> list_participants(activity, "thread_123", limit: 10)
+      [%{id: "user1", ...}, %{id: "user2", ...}]
+  """
   def list_participants(activity_or_object, thread_or_object_id \\ nil, opts \\ []) do
     opts = to_options(opts)
     current_user = current_user(opts)
@@ -320,11 +415,11 @@ defmodule Bonfire.Social.Threads do
   end
 
   @doc "List participants in a thread (depending on user's boundaries)"
-  def fetch_participants(thread_id, opts \\ [])
+  defp fetch_participants(thread_id, opts \\ [])
 
-  def fetch_participants(thread_id, opts)
-      when is_binary(thread_id) or
-             (is_list(thread_id) and thread_id != []) do
+  defp fetch_participants(thread_id, opts)
+       when is_binary(thread_id) or
+              (is_list(thread_id) and thread_id != []) do
     FeedActivities.feed_paginated(
       [in_thread: {thread_id, &filter/3}],
       opts ++ [preload: :with_subject],
@@ -332,9 +427,21 @@ defmodule Bonfire.Social.Threads do
     )
   end
 
-  def fetch_participants(_, _), do: []
+  defp fetch_participants(_, _), do: []
 
-  @doc "Count participants in a thread (depending on user's boundaries)"
+  @doc """
+  Counts participants in a thread.
+
+  ## Parameters
+
+  - `thread_id`: The ID of the thread
+  - `opts`: Additional options, should contain `current_user` to check for permission
+
+  ## Examples
+
+      iex> count_participants("thread_123")
+      5
+  """
   def count_participants(thread_id, opts \\ [])
 
   def count_participants(thread_id, opts)
@@ -387,6 +494,17 @@ defmodule Bonfire.Social.Threads do
     )
   end
 
+  @doc """
+  Filters query results for threads.
+
+
+  ## Examples
+
+      iex> filter(:in_thread, "thread_123", query)
+      %Ecto.Query{}
+
+      iex> filter(:distinct, :threads, query)
+  """
   def filter(:in_thread, thread_id, query) when not is_list(thread_id),
     do: filter(:in_thread, [thread_id], query)
 
@@ -427,6 +545,19 @@ defmodule Bonfire.Social.Threads do
       else: result
   end
 
+  @doc """
+  Lists replies in a thread.
+
+  ## Parameters
+
+  - `thread`: The thread or thread ID
+  - `opts`: Additional options
+
+  ## Examples
+
+      iex> list_replies("thread_123", limit: 10)
+      %{edges: [%{id: "reply1", ...}, %{id: "reply2", ...}]}
+  """
   def list_replies(thread, opts \\ [])
 
   def list_replies(%{thread_id: thread_id}, opts),
@@ -465,6 +596,19 @@ defmodule Bonfire.Social.Threads do
         Config.get(:pagination_hard_max_limit, 500)
       )
 
+  @doc """
+  Builds a query for thread replies.
+
+  ## Parameters
+
+  - `filter`: Filter criteria (e.g., `[thread_id: "123"]`)
+  - `opts`: Additional query options
+
+  ## Examples
+
+      iex> query([thread_id: "123"], preload: [:posts])
+      %Ecto.Query{}
+  """
   def query([thread_id: thread_id], opts) do
     preloads =
       if(opts[:thread_mode] == :flat, do: [:posts_with_reply_to], else: [:posts]) ++
@@ -553,6 +697,24 @@ defmodule Bonfire.Social.Threads do
     Activities.query_order(query, sort_by, sort_order)
   end
 
+  @doc """
+  Builds a query for unseen replies.
+
+  ## Parameters
+
+  - `filters`: Filter criteria
+  - `opts`: Additional query options
+
+  ## Returns
+
+  - `{:ok, query}` if the query can be built
+  - `{:error, reason}` otherwise
+
+  ## Examples
+
+      iex> unseen_query([thread_id: "123"], current_user: user)
+      {:ok, %Ecto.Query{}}
+  """
   def unseen_query(filters, opts) do
     table_id = Bonfire.Common.Types.table_id(Seen)
     current_user = current_user_required!(opts)
@@ -573,12 +735,38 @@ defmodule Bonfire.Social.Threads do
          |> debug()}
   end
 
+  @doc """
+  Counts unseen replies.
+
+  ## Parameters
+
+  - `filters`: Filter criteria
+  - `opts`: Additional options
+
+  ## Examples
+
+      iex> unseen_count([thread_id: "123"], current_user: user)
+      5
+  """
   def unseen_count(filters, opts) do
     unseen_query(filters, opts)
     ~> select(count())
     |> repo().one()
   end
 
+  @doc """
+  Marks all unseen replies as seen.
+
+  ## Parameters
+
+  - `filters`: Filter criteria
+  - `opts`: Additional options
+
+  ## Examples
+
+      iex> mark_all_seen([thread_id: "123"], current_user: user)
+      {:ok, [%{id: "reply1"}, %{id: "reply2"}]}
+  """
   def mark_all_seen(filters, opts) do
     current_user = current_user_required!(opts)
 
@@ -595,16 +783,42 @@ defmodule Bonfire.Social.Threads do
 
   defp maybe_max_depth(query, _max_depth), do: query
 
-  # uses https://github.com/bonfire-networks/ecto_materialized_path
-  # equivalent of `EctoMaterializedPath.arrange(replies, :path)`
+  @doc """
+  Arranges replies into a tree structure.
+
+  Powered by https://github.com/bonfire-networks/ecto_materialized_path
+
+  ## Parameters
+
+  - `replies`: List of replies
+  - `opts`: Arrangement options
+
+  ## Examples
+
+      iex> arrange_replies_tree([%{id: "1"}, %{id: "2", reply_to_id: "1"}])
+      %{"1" => %{id: "1", direct_replies: [%{id: "2", reply_to_id: "1"}]}}
+  """
+
   def arrange_replies_tree(replies, opts \\ []) do
     replies
-    # |> debug()
     |> Replied.arrange(arrange_opts(opts))
-
-    # |> debug()
   end
 
+  @doc """
+  Arranges replies. 
+
+  TODOC: how is it different than `arrange_replies_tree/2`?
+
+  ## Parameters
+
+  - `replies`: List of replies
+  - `opts`: Arrangement options
+
+  ## Examples
+
+      iex> arrange_replies([%{id: "1"}, %{id: "2", path: ["1"]}])
+      %{"1" => %{id: "1", children: %{"2" => %{id: "2", path: ["1"]}}}}
+  """
   def arrange_replies(replies, opts \\ []),
     do: EctoMaterializedPath.arrange_nodes(replies, :path, arrange_opts(opts))
 
@@ -674,7 +888,19 @@ defmodule Bonfire.Social.Threads do
   #   end)
   # end
 
-  @doc "Key can be for eg. :thread_id or :reply_to_id"
+  @doc """
+  Prepares a thread or reply for federation with ActivityPub.
+
+  ## Parameters
+
+  - `object_or_thread_or_reply_to_id`: The object, thread, or reply ID
+  - `key`: The key to use for preparation (`:thread_id` or `:reply_to_id`, default is `:thread_id`)
+
+  ## Examples
+
+      iex> ap_prepare("thread_123")
+      "https://example.com/ap/objects/thread_123"
+  """
   def ap_prepare(object_or_thread_or_reply_to_id, key \\ :thread_id)
 
   def ap_prepare(object, key) when is_struct(object) do

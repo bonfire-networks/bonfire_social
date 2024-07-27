@@ -1,5 +1,11 @@
 defmodule Bonfire.Social.APActivities do
-  @moduledoc "A special type of activity object (see `Bonfire.Social.Activities`) that stores the federated JSON data as-is. Used for any object type that isn't recognised or isn't implemented by an extension."
+  @moduledoc """
+  A special type of activity object that stores federated JSON data as-is.
+
+  This module is used for any object type that isn't recognized or isn't implemented by an extension.
+  It provides functionality to handle ActivityPub activities, particularly for receiving and creating activities.
+  """
+
   alias Bonfire.Data.Social.APActivity
   alias Bonfire.Social.Activities
   # alias Bonfire.Social.FeedActivities
@@ -13,10 +19,54 @@ defmodule Bonfire.Social.APActivities do
   use Bonfire.Common.Utils
   import Bonfire.Common.Config, only: [repo: 0]
 
+  @doc """
+  Receives and processes an ActivityPub activity.
+
+  This function is used to handle incoming federated activities.
+
+  ## Parameters
+
+    - creator: The character (user) associated with the activity.
+    - activity: The ActivityPub activity data.
+    - object: The object associated with the activity.
+
+  ## Examples
+
+      iex> creator = %Character{id: "user123"}
+      iex> activity = %{data: %{"type" => "Create"}}
+      iex> object = %{data: %{"type" => "Note", "content" => "Hello, fediverse!"}}
+      iex> Bonfire.Social.APActivities.ap_receive_activity(creator, activity, object)
+      {:ok, %APActivity{}}
+
+  """
   def ap_receive_activity(creator, activity, object) do
     create(creator, activity, object)
   end
 
+  @doc """
+  Creates an `APActivity` from the given character, activity, and object.
+
+  This function handles various patterns of input data to create an APActivity.
+
+  ## Parameters
+
+    - character: The character (user) creating the activity.
+    - activity: The activity data.
+    - object: The object associated with the activity.
+    - public: A boolean indicating whether the activity is public (optional).
+
+  ## Examples
+
+      iex> character = %Character{id: "user123"}
+      iex> activity = %{data: %{"type" => "Create", "object" => %{"content" => "Hello, world!"}}}
+      iex> object = %{data: %{"type" => "Note"}}
+      iex> Bonfire.Social.APActivities.create(character, activity, object)
+      {:ok, %APActivity{}}
+
+      iex> Bonfire.Social.APActivities.create(character, activity, object, true)
+      {:ok, %APActivity{}}
+
+  """
   def create(character, activity, object, public \\ nil)
 
   def create(character, %{data: %{} = activity, public: public}, object, public_initial),
@@ -103,7 +153,7 @@ defmodule Bonfire.Social.APActivities do
     data
   end
 
-  def insert(character, json, opts) do
+  defp insert(character, json, opts) do
     # TODO: add type field(s) to the table to be able to quickly filter without JSONB?
     # TODO: add creator (to be used when showing in reply_to)
     activity =
@@ -123,11 +173,11 @@ defmodule Bonfire.Social.APActivities do
     |> debug()
   end
 
-  def maybe_attach_video_oembed(
-        changeset,
-        %{"object" => %{"type" => "Video", "id" => url}},
-        current_user
-      ) do
+  defp maybe_attach_video_oembed(
+         changeset,
+         %{"object" => %{"type" => "Video", "id" => url}},
+         current_user
+       ) do
     # because Peertube doesn't give us details to play/embed the video in the AS JSON
     Bonfire.Files.Acts.URLPreviews.maybe_fetch_and_save(current_user, url)
     |> Bonfire.Files.Acts.AttachMedia.cast(changeset, ... || [])
@@ -135,11 +185,11 @@ defmodule Bonfire.Social.APActivities do
     # TODO clean up: we shouldn't be reaching into the Acts outside of Epics
   end
 
-  def maybe_attach_video_oembed(
-        changeset,
-        _json,
-        _current_user
-      ) do
+  defp maybe_attach_video_oembed(
+         changeset,
+         _json,
+         _current_user
+       ) do
     changeset
   end
 end

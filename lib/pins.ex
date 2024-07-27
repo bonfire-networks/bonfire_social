@@ -1,5 +1,11 @@
 defmodule Bonfire.Social.Pins do
-  @moduledoc "Mutate or query pins (making an activity or object appear at the beginning of feeds or other lists). Pins are implemented on top of the `Bonfire.Data.Edges.Edge` schema (see `Bonfire.Social.Edges` for functions shared by different Edge types)."
+  @moduledoc """
+  Mutate or query pins (which make an activity or object appear at the beginning of feeds or other lists).
+
+  This module provides functionality to manage and query pins, including creating, deleting, and listing pins. 
+
+  Pins are implemented on top of the `Bonfire.Data.Edges.Edge` schema (see `Bonfire.Social.Edges` for shared functions)
+  """
 
   # alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Pin
@@ -37,27 +43,108 @@ defmodule Bonfire.Social.Pins do
   defp instance_scope,
     do: Bonfire.Boundaries.Circles.get_id(:local) || "3SERSFR0MY0VR10CA11NSTANCE"
 
+  @doc """
+  Checks if an object is pinned by the instance.
+
+  ## Parameters
+
+    - scope: The scope to check for pinning (eg. `:instance` or a user)
+    - object: The object to check for pinning.
+
+  ## Examples
+
+      iex> Bonfire.Social.Pins.pinned?(:instance, %Post{id: "post123"})
+      true
+
+      iex> Bonfire.Social.Pins.pinned?(%User{id: "user123"}, %Post{id: "post456"})
+      false
+  """
   def pinned?(:instance, object),
     do: Edges.exists?(__MODULE__, instance_scope(), object, skip_boundary_check: true)
 
   def pinned?(scope, object),
     do: Edges.exists?(__MODULE__, scope, object, skip_boundary_check: true)
 
+  @doc """
+  Retrieves a Pin edge between a subject and an object.
+
+  ## Parameters
+
+    - subject: The subject (usually a user) of the Pin edge.
+    - object: The object that was pinned.
+    - opts: Additional options for the query (optional).
+
+  ## Examples
+
+      iex> Bonfire.Social.Pins.get(%User{id: "user123"}, %Post{id: "post456"})
+      {:ok, %Pin{}}
+
+  """
   def get(subject, object, opts \\ []),
     do: Edges.get(__MODULE__, subject, object, opts)
 
+  @doc """
+    Similar to `get/3`, but raises an error if the Pin edge is not found.
+  """
   def get!(subject, object, opts \\ []),
     do: Edges.get!(__MODULE__, subject, object, opts)
 
+  @doc """
+  Lists pins by a specific subject.
+
+  ## Parameters
+
+    - subject: The subject (usually a user) who created the pins.
+    - opts: Additional options for the query (optional).
+
+  ## Examples
+
+      iex> Bonfire.Social.Pins.by_pinner(%User{id: "user123"})
+      [%Pin{}, ...]
+
+  """
   def by_pinner(%{} = subject, opts \\ []),
     do:
       (opts ++ [subject: subject])
       |> query([current_user: subject] ++ List.wrap(opts))
       |> repo().many()
 
+  @doc """
+  Lists pins of a specific object.
+
+  ## Parameters
+
+    - object: The object that was pinned.
+    - opts: Additional options for the query (optional).
+
+  ## Examples
+
+      iex> Bonfire.Social.Pins.by_pinned(%Post{id: "post456"})
+      [%Pin{}, ...]
+
+  """
   def by_pinned(%{} = object, opts \\ []),
     do: (opts ++ [object: object]) |> query(opts) |> repo().many()
 
+  @doc """
+  Creates a pin for an object.
+
+  ## Parameters
+
+    - pinner: The user creating the pin.
+    - object: The object to be pinned.
+    - scope: The scope of the pin (eg. `:instance`, optional).
+    - opts: Additional options for creating the pin (optional).
+
+  ## Examples
+
+      iex> Bonfire.Social.Pins.pin(%User{id: "user123"}, %Post{id: "post456"})
+      {:ok, %Pin{}}
+
+      iex> Bonfire.Social.Pins.pin(%User{id: "user123"}, %Post{id: "post456"}, :instance)
+      {:ok, %Pin{}}
+
+  """
   def pin(pinner, object, scope \\ nil, opts \\ [])
 
   def pin(pinner, object, :instance, opts) do
@@ -118,6 +205,24 @@ defmodule Bonfire.Social.Pins do
     end
   end
 
+  @doc """
+  Removes a pin for an object.
+
+  ## Parameters
+
+    - user: The user removing the pin.
+    - object: The object to be unpinned.
+    - scope: The scope of the pin (eg. `:instance`, optional).
+
+  ## Examples
+
+      iex> Bonfire.Social.Pins.unpin(%User{id: "user123"}, %Post{id: "post456"})
+      {:ok, nil}
+
+      iex> Bonfire.Social.Pins.unpin(%User{id: "user123"}, %Post{id: "post456"}, :instance)
+      {:ok, nil}
+
+  """
   def unpin(user, object, scope \\ nil)
 
   def unpin(user, object, :instance) do
@@ -143,6 +248,24 @@ defmodule Bonfire.Social.Pins do
     end
   end
 
+  @doc """
+  Sets the rank/position of a pin within a specific scope.
+
+  ## Parameters
+
+    - pin: The pin to be ranked.
+    - scope: The scope for ranking (eg. `:instance`).
+    - position: The desired position/rank for the pin.
+
+  ## Examples
+
+      iex> Bonfire.Social.Pins.rank_pin("pin123", :instance, 1)
+      {:ok, %Bonfire.Data.Assort.Ranked{}}
+
+      iex> Bonfire.Social.Pins.rank_pin("pin123", %User{id: "user456"}, 2)
+      {:ok, %Bonfire.Data.Assort.Ranked{}}
+
+  """
   def rank_pin(pin, :instance, position) do
     rank_pin(pin, instance_scope(), position)
   end
@@ -206,17 +329,55 @@ defmodule Bonfire.Social.Pins do
 
   defp maybe_load_pointer(data, _), do: data
 
-  @doc "List the current user's pins"
+  @doc """
+  Lists pins for the current user.
+
+  ## Parameters
+
+    - opts: Additional options for the query.
+
+  ## Examples
+
+      iex> Bonfire.Social.Pins.list_my(current_user: %User{id: "user123"})
+      %{edges: [%Pin{}, ...], page_info: %{}}
+
+  """
   def list_my(opts) do
     list_by(current_user_required!(opts), opts)
   end
 
+  @doc """
+  Lists pins for the instance.
+
+  ## Parameters
+
+    - opts: Additional options for the query.
+
+  ## Examples
+
+      iex> Bonfire.Social.Pins.list_instance_pins(limit: 10)
+      %{edges: [%Pin{}, ...], page_info: %{}}
+
+  """
   def list_instance_pins(opts) when is_list(opts) do
     opts = to_options(opts)
     list_by(instance_scope(), Keyword.put(opts, :preload, :object_with_creator))
   end
 
-  @doc "List pins by a user"
+  @doc """
+  Lists pins by a specific user.
+
+  ## Parameters
+
+    - by_user: The user whose pins to list.
+    - opts: Additional options for the query (optional).
+
+  ## Examples
+
+      iex> Bonfire.Social.Pins.list_by(%User{id: "user123"})
+      %{edges: [%Pin{}, ...], page_info: %{}}
+
+  """
   def list_by(by_user, opts \\ [])
       when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
     opts = to_options(opts)
@@ -241,7 +402,20 @@ defmodule Bonfire.Social.Pins do
     # %{page_info: e(feed, :page_info, []), edges: edges}
   end
 
-  @doc "List pinners of something(s)"
+  @doc """
+  Lists pinners of a specific object or objects.
+
+  ## Parameters
+
+    - object: The object or objects to find pinners for.
+    - opts: Additional options for the query (optional).
+
+  ## Examples
+
+      iex> Bonfire.Social.Pins.list_of(%Post{id: "post456"})
+      %{edges: [%Pin{}, ...], page_info: %{}}
+
+  """
   def list_of(object, opts \\ [])
       when is_binary(object) or is_list(object) or is_map(object) do
     opts = to_options(opts)
@@ -265,8 +439,23 @@ defmodule Bonfire.Social.Pins do
   #   end
   # end
 
+  @doc """
+  Publishes an ActivityPub activity for a pin.
+
+  ## Parameters
+
+    - subject: The subject of the pin activity.
+    - verb: The verb of the activity (not used - currently pins are federated out as likes)
+    - pin: The `Pin` object.
+
+  ## Examples
+
+      iex> Bonfire.Social.Pins.ap_publish_activity(%User{id: "user123"}, :create, %Pin{})
+      {:ok, %ActivityPub.Object{}}
+
+  """
   def ap_publish_activity(subject, _verb, pin) do
-    info(pin)
+    # info(pin)
 
     with {:ok, pinner} <-
            ActivityPub.Actor.get_cached(pointer: subject || pin.edge.subject_id),

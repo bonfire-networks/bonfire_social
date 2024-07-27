@@ -1,6 +1,10 @@
 defmodule Bonfire.Social.Seen do
   @moduledoc """
-  Track seen/unseen (similar to read/unread, but only indicates that it was displayed in a feed or other listing for the user, not that they actually read it) status of things (usually `Activities`). This is implemented on top of the `Bonfire.Data.Edges.Edge` schema (see `Bonfire.Social.Edges` for functions shared by different Edge types).
+  Track seen/unseen status of things (usually `Activities`).
+
+  This module implements functionality to manage the seen/unseen status of objects (similar to read/unread status in other apps, but only indicates that it was displayed in a feed or other listing for the user, not that they actually read it). 
+
+  Seen is implemented on top of the `Bonfire.Data.Edges.Edge` schema (see `Bonfire.Social.Edges` for shared functions).
   """
 
   alias Bonfire.Data.Identity.User
@@ -29,17 +33,72 @@ defmodule Bonfire.Social.Seen do
   def schema_module, do: Seen
   def query_module, do: __MODULE__
 
+  @doc """
+  Checks if a user has seen an object.
+
+  ## Parameters
+
+    - user: The user to check.
+    - object: The object to check if seen.
+
+  ## Examples
+
+      iex> user = %User{id: "user123"}
+      iex> object = %Post{id: "post456"}
+      iex> Bonfire.Social.Seen.seen?(user, object)
+      true
+
+  """
   def seen?(%{} = user, object),
     do: Edges.exists?(__MODULE__, user, object, skip_boundary_check: true)
 
+  @doc """
+  Retrieves a Seen edge between a subject and an object.
+
+  ## Parameters
+
+    - subject: The subject (usually a user) of the Seen edge.
+    - object: The object that was seen.
+    - opts: Additional options for the query (optional).
+
+  ## Examples
+
+      iex> subject = %User{id: "user123"}
+      iex> object = %Post{id: "post456"}
+      iex> Bonfire.Social.Seen.get(subject, object)
+      {:ok, %Seen{}}
+
+  """
   def get(subject, object, opts \\ []),
     do: Edges.get(__MODULE__, subject, object, opts)
 
+  @doc """
+    Similar to `get/3`, but raises an error if the Seen edge is not found.
+  """
   def get!(subject, object, opts \\ []),
     do: Edges.get!(__MODULE__, subject, object, opts)
 
   # def by_subject(%{}=subject), do: [subject: subject] |> query(current_user: subject) |> repo().many()
 
+  @doc """
+  Marks an object as seen by a user.
+
+  ## Parameters
+
+    - subject: The user marking the object as seen.
+    - object: The object(s) or ID(s) being marked as seen.
+
+  ## Examples
+
+      iex> user = %User{id: "user123"}
+      iex> object = %Post{id: "post456"}
+      iex> Bonfire.Social.Seen.mark_seen(user, object)
+      {:ok, %Seen{}}
+
+      iex> Bonfire.Social.Seen.mark_seen(user, "456")
+      {:ok, %Seen{}}
+
+  """
   def mark_seen(%User{} = subject, %{id: _} = object) do
     case create(subject, object) do
       {:ok, seen} ->
@@ -71,11 +130,29 @@ defmodule Bonfire.Social.Seen do
   end
 
   # TODO: bulk with insert_all 
-  def mark_seen(%User{} = subject, objects) do
+  def mark_seen(%User{} = subject, objects) when is_list(objects) do
     Enum.each(objects, &mark_seen(subject, &1))
     Enum.count(objects)
   end
 
+  @doc """
+  Marks an object as unseen by a user.
+
+  ## Parameters
+
+  - subject: The user marking the object as unseen.
+  - object: The object or ID being marked as unseen.
+
+  ## Examples
+
+  iex> user = %User{id: "user123"}
+  iex> object = %Post{id: "post456"}
+  iex> Bonfire.Social.Seen.mark_unseen(user, object)
+  {:ok, nil}
+
+  iex> Bonfire.Social.Seen.mark_unseen(user, "456")
+
+  """
   def mark_unseen(%User{} = subject, %{} = object) do
     # delete the Seen
     Edges.delete_by_both(subject, Seen, object)
@@ -101,6 +178,22 @@ defmodule Bonfire.Social.Seen do
     # def query([my: :seens], opts), do: [subject: current_user(opts)] |> query(opts)
   end
 
+  @doc """
+  Creates a query for Seen edges based on the given filters and options.
+
+  ## Parameters
+
+    - filters: A keyword list of filters to apply to the query.
+    - opts: Additional options for the query.
+
+  ## Examples
+
+      iex> filters = [subject: %User{id: "123"}]
+      iex> opts = [limit: 10]
+      iex> Bonfire.Social.Seen.query(filters, opts)
+      #Ecto.Query<...>
+
+  """
   def query(filters, opts) do
     query_base(filters, opts)
   end
