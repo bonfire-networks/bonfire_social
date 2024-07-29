@@ -1,5 +1,11 @@
 defmodule Bonfire.Social.Flags do
-  @moduledoc "Mutate, query, and federate flags (reporting an activity or object to moderators and/or admins). Flags are implemented on top of the `Bonfire.Data.Edges.Edge` schema (see `Bonfire.Social.Edges` for functions shared by different Edge types)."
+  @moduledoc """
+  Flagging functionality
+
+  This module handles flagging (reporting an activity or object to moderators and/or admins). It includes creating, querying, and managing flags, as well as handling federation through ActivityPub.
+
+  Flags are implemented on top of the `Bonfire.Data.Edges.Edge` schema (see `Bonfire.Social.Edges` for shared functions)
+  """
 
   use Arrows
   use Bonfire.Common.Utils
@@ -32,23 +38,117 @@ defmodule Bonfire.Social.Flags do
   def federation_module,
     do: ["Flag", {"Create", "Flag"}, {"Undo", "Flag"}, {"Delete", "Flag"}]
 
+  @doc """
+  Checks if a user has flagged an object.
+
+  ## Parameters
+
+  - `user`: The user to check.
+  - `object`: The object to check.
+
+  ## Returns
+
+  Boolean indicating whether the user has flagged the object.
+
+  ## Examples
+
+      iex> user = %Bonfire.Data.Identity.User{id: "user123"}
+      iex> object = %Bonfire.Data.Social.Post{id: "post456"}
+      iex> Bonfire.Social.Flags.flagged?(user, object)
+      false
+  """
   def flagged?(%{} = user, object),
     do: Edges.exists?(__MODULE__, user, object, skip_boundary_check: true)
 
+  @doc """
+  Retrieves a flag by subject and object.
+
+  ## Parameters
+
+  - `subject`: The subject (flagger) of the flag.
+  - `object`: The object being flagged.
+  - `opts`: Additional options (optional).
+
+  ## Returns
+
+  The flag if found, otherwise an error tuple.
+
+  ## Examples
+
+      iex> Bonfire.Social.Flags.get(subject, object)
+      {:ok, %Bonfire.Data.Social.Flag{}}
+  """
   def get(subject, object, opts \\ []),
     do: Edges.get(__MODULE__, subject, object, opts)
 
+  @doc """
+    Retrieves a flag by subject and object, raising an error if not found.
+  """
   def get!(subject, object, opts \\ []),
     do: Edges.get!(__MODULE__, subject, object, opts)
 
+  @doc """
+  Retrieves flags created by a specific user.
+
+  ## Parameters
+
+  - `subject`: The flagger to query flags for.
+
+  ## Returns
+
+  A list of flags created by the subject.
+
+  ## Examples
+
+      iex> flagger = %Bonfire.Data.Identity.User{id: "user123"}
+      iex> Bonfire.Social.Flags.by_flagger(flagger)
+      [%Bonfire.Data.Social.Flag{}, ...]
+  """
   def by_flagger(%{} = subject),
     do: [subject: subject] |> query(current_user: subject) |> repo().many()
 
+  @doc """
+  Retrieves flags of a specific flagged object.
+
+  ## Parameters
+
+  - `object`: The object to query flags for.
+
+  ## Returns
+
+  A list of flags for the given object.
+
+  ## Examples
+
+      iex> object = %Bonfire.Data.Social.Post{id: "post456"}
+      iex> Bonfire.Social.Flags.by_flagged(object)
+      [%Bonfire.Data.Social.Flag{}, ...]
+  """
   def by_flagged(%{} = object),
     do: [object: object] |> query(current_user: object) |> repo().many()
 
   # def by_any(%User{}=user), do: repo().many(by_any_q(user))
 
+  @doc """
+  Records a flag.
+
+  ## Parameters
+
+  - `flagger`: The user creating the flag.
+  - `flagged`: The object being flagged.
+  - `opts`: Additional options (optional).
+
+  ## Returns
+
+  A tuple containing the created flag or an error.
+
+  ## Examples
+
+      iex> flagger = %Bonfire.Data.Identity.User{id: "user123"}
+      iex> flagged = %Bonfire.Data.Social.Post{id: "post456"}
+      iex> Bonfire.Social.Flags.flag(flagger, flagged)
+      {:ok, %Bonfire.Data.Social.Flag{}}
+  """
   def flag(flagger, flagged, opts \\ [])
 
   def flag(%{} = flagger, object, opts) do
@@ -72,6 +172,19 @@ defmodule Bonfire.Social.Flags do
       maybe_dup(flagger, object, e)
   end
 
+  @doc """
+  Retrieves moderators for a given object.
+
+  ## Parameters
+
+  - `object`: The object to find moderators for.
+
+  ## Examples
+
+      iex> object = %Bonfire.Data.Social.Post{id: "post456"}
+      iex> Bonfire.Social.Flags.moderators(object)
+      [%Bonfire.Data.Identity.User{}, ...]
+  """
   def moderators(object),
     do: Bonfire.Boundaries.Controlleds.list_subjects_by_verb(object, :mediate)
 
@@ -97,7 +210,19 @@ defmodule Bonfire.Social.Flags do
       [notifications: e(moderators(object), nil) || instance_moderators()]
       |> debug("send the flag to group moderators if any, otherwise instance moderators")
 
-  # FIXME: should user instance moderators rather than admins
+  @doc """
+  Retrieves instance moderators.
+
+  ## Returns
+
+  A list of instance moderators.
+
+  ## Examples
+
+      iex> Bonfire.Social.Flags.instance_moderators()
+      [%Bonfire.Data.Identity.User{}, ...]
+  """
+  # FIXME: should list actual instance moderators rather than admins
   def instance_moderators, do: Bonfire.Me.Users.list_admins()
 
   defp check_flag(_flagger, object, opts) do
@@ -127,6 +252,25 @@ defmodule Bonfire.Social.Flags do
     end
   end
 
+  @doc """
+  Removes a flag created by a specific user on an object, if one exists.
+
+  ## Parameters
+
+  - `flagger`: The user who created the flag.
+  - `flagged`: The flagged object or ID.
+
+  ## Returns
+
+  The result of the unflag operation.
+
+  ## Examples
+
+      iex> flagger = %Bonfire.Data.Identity.User{id: "user123"}
+      iex> flagged = %Bonfire.Data.Social.Post{id: "post456"}
+      iex> Bonfire.Social.Flags.unflag(flagger, flagged)
+      :ok
+  """
   def unflag(%User{} = flagger, %{} = flagged) do
     # delete the Flag
     Edges.delete_by_both(flagger, Flag, flagged)
@@ -141,6 +285,22 @@ defmodule Bonfire.Social.Flags do
     end
   end
 
+  @doc """
+  Lists flags based on given options.
+
+  ## Parameters
+
+  - `opts`: Options for filtering and pagination.
+
+  ## Returns
+
+  A paginated list of flags.
+
+  ## Examples
+
+      iex> Bonfire.Social.Flags.list(scope: :instance)
+      %{page_info: %{}, edges: [%Bonfire.Data.Social.Flag{}, ...]}
+  """
   def list(opts) do
     opts = opts ++ [preload: :object_with_creator]
     opts = to_options(opts)
@@ -178,6 +338,22 @@ defmodule Bonfire.Social.Flags do
     end
   end
 
+  @doc """
+  Lists flags with preloaded associations.
+
+  ## Parameters
+
+  - `opts`: Options for filtering and pagination.
+
+  ## Returns
+
+  A paginated list of flags with preloaded associations.
+
+  ## Examples
+
+      iex> Bonfire.Social.Flags.list_preloaded(scope: :instance)
+      %{page_info: %{}, edges: [%Bonfire.Data.Social.Flag{object: %{created: %{creator: %{}}}}, ...]}
+  """
   def list_preloaded(opts) do
     list(opts)
     |> repo().maybe_preload(
@@ -198,10 +374,41 @@ defmodule Bonfire.Social.Flags do
     # TODO: activity preloads
   end
 
-  @doc "List current user's flags, which are in their outbox"
+  @doc """
+  Lists flags created by the current user.
+
+  ## Parameters
+
+  - `opts`: Options for filtering and pagination.
+
+  ## Returns
+
+  A paginated list of flags created by the current user.
+
+  ## Examples
+
+      iex> Bonfire.Social.Flags.list_my(current_user: %Bonfire.Data.Identity.User{id: "user123"})
+      %{page_info: %{}, edges: [%Bonfire.Data.Social.Flag{}, ...]}
+  """
   def list_my(opts), do: list_by(current_user_required!(opts), opts)
 
-  @doc "List flags by the user and which are in their outbox"
+  @doc """
+  Lists flags created by a specific user.
+
+  ## Parameters
+
+  - `by_user`: The user or user ID to filter flags by.
+  - `opts`: Options for filtering and pagination (optional).
+
+  ## Returns
+
+  A paginated list of flags created by the specified user.
+
+  ## Examples
+
+      iex> Bonfire.Social.Flags.list_by("user123")
+      %{page_info: %{}, edges: [%Bonfire.Data.Social.Flag{}, ...]}
+  """
   def list_by(by_user, opts \\ [])
       when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
     list_paginated(
@@ -210,7 +417,23 @@ defmodule Bonfire.Social.Flags do
     )
   end
 
-  @doc "List flag of an object and which are in a feed"
+  @doc """
+  Lists flags for a specific object.
+
+  ## Parameters
+
+  - `object`: The object or object ID to filter flags by.
+  - `opts`: Options for filtering and pagination (optional).
+
+  ## Returns
+
+  A paginated list of flags for the specified object.
+
+  ## Examples
+
+      iex> Bonfire.Social.Flags.list_of("post456")
+      %{page_info: %{}, edges: [%Bonfire.Data.Social.Flag{}, ...]}
+  """
   def list_of(object, opts \\ [])
       when is_binary(object) or is_list(object) or is_map(object) do
     list_paginated(
@@ -247,6 +470,26 @@ defmodule Bonfire.Social.Flags do
     Edges.insert(Flag, flagger, :flag, flagged, opts)
   end
 
+  @doc """
+  Publishes a flag activity to ActivityPub.
+
+  ## Parameters
+
+  - `subject`: The subject (flagger) of the flag.
+  - `_verb`: The verb associated with the flag (unused).
+  - `flag`: The flag to publish.
+
+  ## Returns
+
+  The result of the ActivityPub publish operation.
+
+  ## Examples
+
+      iex> subject = %Bonfire.Data.Identity.User{id: "user123"}
+      iex> flag = %Bonfire.Data.Social.Flag{}
+      iex> Bonfire.Social.Flags.ap_publish_activity(subject, :flag, flag)
+      {:ok, %ActivityPub.Object{}}
+  """
   def ap_publish_activity(subject, _verb, %Flag{} = flag) do
     flagger = subject || e(flag, :edge, :subject, nil) || e(flag, :activity, :subject, nil)
     flagged = e(flag, :edge, :object, nil) || e(flag, :activity, :object, nil)
@@ -302,6 +545,27 @@ defmodule Bonfire.Social.Flags do
     end
   end
 
+  @doc """
+  Receives a flag activity from ActivityPub for multiple objects.
+
+  ## Parameters
+
+  - `creator`: The creator of the flag.
+  - `activity`: The ActivityPub activity.
+  - `object`: An object or list of objects to be flagged.
+
+  ## Returns
+
+  A tuple containing the result of the flag operation.
+
+  ## Examples
+
+      iex> creator = %Bonfire.Data.Identity.User{id: "user123"}
+      iex> activity = %{data: %{"type" => "Flag"}}
+      iex> objects = [%{pointer_id: "post456"}, %{pointer_id: "post789"}]
+      iex> Bonfire.Social.Flags.ap_receive_activity(creator, activity, objects)
+      {:ok, [%Bonfire.Data.Social.Flag{}, %Bonfire.Data.Social.Flag{}]}
+  """
   def ap_receive_activity(
         creator,
         %{data: %{"type" => "Flag"}} = activity,

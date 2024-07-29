@@ -1,5 +1,9 @@
 defmodule Bonfire.Social.Bookmarks do
-  @moduledoc "Mutate or query bookmarks. Bookmarks are implemented on top of the `Bonfire.Data.Edges.Edge` schema (see `Bonfire.Social.Edges` for functions shared by different Edge types)."
+  @moduledoc """
+  Mutate or query bookmarks (similar to likes but only visible to the creator of the bookmark)
+
+  Bookmarks are implemented on top of the `Bonfire.Data.Edges.Edge` schema (see `Bonfire.Social.Edges` for shared functions)
+  """
 
   # alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Bookmark
@@ -26,24 +30,78 @@ defmodule Bonfire.Social.Bookmarks do
   def schema_module, do: Bookmark
   def query_module, do: __MODULE__
 
+  @doc """
+  Checks if a user has bookmarked an object.
+
+  ## Examples
+
+      iex> Bonfire.Social.Bookmarks.bookmarked?(user, object)
+      true
+
+  """
   def bookmarked?(%{} = user, object),
     do: Edges.exists?(__MODULE__, user, object, skip_boundary_check: true)
 
+  @doc """
+  Retrieves a bookmark by subject and object.
+
+  ## Examples
+
+      iex> Bonfire.Social.Bookmarks.get(user, object)
+      {:ok, %Bonfire.Data.Social.Bookmark{}}
+
+  """
   def get(subject, object, opts \\ []),
     do: Edges.get(__MODULE__, subject, object, opts)
 
+  @doc """
+  Retrieves a bookmark edge, raising an error if not found.
+  """
   def get!(subject, object, opts \\ []),
     do: Edges.get!(__MODULE__, subject, object, opts)
 
+  @doc """
+  Retrieves bookmarked objects by a subject.
+
+  ## Examples
+
+      iex> Bonfire.Social.Bookmarks.by_bookmarker(user)
+      [%Bonfire.Data.Social.Bookmark{}, ...]
+
+  """
   def by_bookmarker(subject, opts \\ []) when is_map(subject) or is_binary(subject),
     do:
       (opts ++ [subject: subject])
       |> query([current_user: subject] ++ List.wrap(opts))
       |> repo().many()
 
+  @doc """
+  Retrieves bookmark(er)s for an object.
+
+  ## Examples
+
+      iex> Bonfire.Social.Bookmarks.by_bookmarked(object)
+      [%Bonfire.Data.Social.Bookmark{}, ...]
+
+  """
   def by_bookmarked(object, opts \\ []) when is_map(object) or is_binary(object),
     do: (opts ++ [object: object]) |> query(opts) |> repo().many()
 
+  @doc """
+  Counts bookmarks based on filters and options.
+
+  ## Examples
+
+      iex> Bonfire.Social.Bookmarks.count([subject: user_id], [])
+      5
+
+      iex> Bonfire.Social.Bookmarks.count(user, object)
+      1
+
+      iex> Bonfire.Social.Bookmarks.count(object, [])
+      10
+
+  """
   def count(filters \\ [], opts \\ [])
 
   def count(filters, opts) when is_list(filters) and is_list(opts) do
@@ -55,6 +113,15 @@ defmodule Bonfire.Social.Bookmarks do
 
   def count(%{} = object, _), do: Edges.count(:bookmark, object, skip_boundary_check: true)
 
+  @doc """
+  Bookmarks an object for a user.
+
+  ## Examples
+
+      iex> Bonfire.Social.Bookmarks.bookmark(user, object)
+      {:ok, %Bonfire.Data.Social.Bookmark{}}
+
+  """
   def bookmark(%{} = bookmarker, bookmarked, opts \\ []) do
     opts =
       [
@@ -79,6 +146,15 @@ defmodule Bonfire.Social.Bookmarks do
     end
   end
 
+  @doc """
+  Removes a bookmark from an object for a user, if one exists
+
+  ## Examples
+
+      iex> Bonfire.Social.Bookmarks.unbookmark(user, object)
+      :ok
+
+  """
   def unbookmark(bookmarker, object, opts \\ [])
 
   def unbookmark(%{} = bookmarker, %{} = bookmarked, _opts) do
@@ -122,12 +198,28 @@ defmodule Bonfire.Social.Bookmarks do
     |> Social.many(opts[:paginate], opts)
   end
 
-  @doc "List the current user's bookmarks"
+  @doc """
+  Lists the current user's bookmarks.
+
+  ## Examples
+
+      iex> Bonfire.Social.Bookmarks.list_my(current_user: me)
+      [%Bonfire.Data.Social.Bookmark{}, ...]
+
+  """
   def list_my(opts) do
     list_by(current_user_required!(opts), opts ++ [preload: :object_with_creator])
   end
 
-  @doc "List bookmarks by a user"
+  @doc """
+  Lists bookmarks by a specific user.
+
+  ## Examples
+
+      iex> Bonfire.Social.Bookmarks.list_by(user_id, current_user: me)
+      [%Bonfire.Data.Social.Bookmark{}, ...]
+
+  """
   def list_by(by_user, opts \\ [])
       when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
     opts = to_options(opts)
@@ -138,7 +230,15 @@ defmodule Bonfire.Social.Bookmarks do
     )
   end
 
-  @doc "List bookmarkers of something(s)"
+  @doc """
+  Lists bookmark(er)s of a specific object or objects.
+
+  ## Examples
+
+      iex> Bonfire.Social.Bookmarks.list_of(object_id)
+      [%Bonfire.Data.Social.Bookmark{}, ...]
+
+  """
   def list_of(object, opts \\ [])
       when is_binary(object) or is_list(object) or is_map(object) do
     opts = to_options(opts)
@@ -153,7 +253,7 @@ defmodule Bonfire.Social.Bookmarks do
     insert(bookmarker, bookmarked, opts)
   end
 
-  def insert(subject, object, options) do
+  defp insert(subject, object, options) do
     Edges.changeset_base(Bookmark, subject, object, options)
     |> Edges.insert(subject, object)
   end

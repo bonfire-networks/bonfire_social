@@ -95,11 +95,12 @@ defmodule Bonfire.Social.FeedActivities do
 
   ## Examples
 
-      > to_feed_options(socket.assigns)
+      > assigns = %{exclude_verbs: [:flag, :boost]}
+      > to_feed_options(assigns)
       [exclude_verbs: [:flag, :boost, :follow]]
   """
-  def to_feed_options(socket_or_opts) do
-    opts = to_options(socket_or_opts)
+  def to_feed_options(opts) do
+    opts = to_options(opts)
     # TODO: clean up this code
     exclude_verbs =
       if opts[:exclude_verbs] == false do
@@ -151,11 +152,14 @@ defmodule Bonfire.Social.FeedActivities do
       > feed_ids_and_opts(feed_name, opts)
       {feed_ids, opts}
 
-      > feed_ids_and_opts(:my, opts)
-
       > feed_ids_and_opts({feed_name, feed_id}, opts)
 
-      > feed_ids_and_opts({:notifications, feed_id}, opts)
+      iex> feed_ids_and_opts(:my, [current_user: me])
+      {["feed_id1", "feed_id2"], [exclude_verbs: [:flag, :boost, :follow]]}
+
+      iex> feed_ids_and_opts({:notifications, "feed_id3"}, [current_user: me])
+      {"feed_id3", [skip_boundary_check: :admins, include_flags: true, exclude_verbs: false, skip_dedup: true, preload: [:notifications]]}
+
 
   """
   def feed_ids_and_opts(feed_name, opts)
@@ -235,9 +239,11 @@ defmodule Bonfire.Social.FeedActivities do
 
   ## Examples
 
-      > my_feed(opts)
+      iex> Bonfire.Social.FeedActivities.my_feed([current_user: %{id: "user123"}])
+      %{edges: [%{activity: %{}}], page_info: %{}}
 
-      > my_feed(opts, previously_loaded_home_feed_ids)
+      iex> Bonfire.Social.FeedActivities.my_feed([current_user: %{id: "user123"}], ["feed_id1", "feed_id2"])
+      %{edges: [%{activity: %{}}], page_info: %{}}
   """
   def my_feed(opts, home_feed_ids \\ nil) do
     opts =
@@ -268,15 +274,14 @@ defmodule Bonfire.Social.FeedActivities do
 
   ## Examples
 
-      > feed_paginated(filters, opts, query)
-      %{edges: edges, page_info: page_info}
+      iex> feed_paginated([], [])
+      %{edges: [%{activity: %{}}], page_info: %{}}
+
+      iex> query = Ecto.Query.from(f in FeedPublish)
+      iex> Bonfire.Social.FeedActivities.feed_paginated([], base_query: query)
   """
   def feed_paginated(filters \\ [], opts \\ []) do
-    feed_paginated(filters, opts, default_query())
-  end
-
-  def feed_paginated(filters, opts, query) do
-    do_query(filters, opts, query)
+    do_query(filters, opts, opts[:base_query] || default_query())
     |> paginate_and_boundarise_feed(opts)
 
     # |> prepare_feed(opts)
@@ -446,7 +451,11 @@ defmodule Bonfire.Social.FeedActivities do
 
   ## Examples
 
-      > feed(feed, opts)
+      iex> Bonfire.Social.FeedActivities.feed("feed123", [])
+      %{edges: [%{activity: %{}}], page_info: %{}}
+
+      iex> Bonfire.Social.FeedActivities.feed(:explore, [])
+      %{edges: [%{activity: %{}}], page_info: %{}}
   """
   def feed(feed, opts \\ [])
   def feed(%{id: feed_id}, opts), do: feed(feed_id, opts)
@@ -1165,6 +1174,14 @@ defmodule Bonfire.Social.FeedActivities do
   @doc """
   Creates a new local activity and publishes to appropriate feeds
   TODO: make this re-use the changeset-based code like in Epics instead of duplicating logic (currently it is only used in VF extension anyway)
+
+  ## Examples
+
+      iex> subject = %{id: "user123"}
+      iex> verb = :create
+      iex> object = %{id: "post456"}
+      iex> Bonfire.Social.FeedActivities.publish(subject, verb, object, [])
+      {:ok, %Bonfire.Data.Social.Activity{}}
   """
   def publish(subject, verb_or_activity, object, opts \\ [])
 
@@ -1210,6 +1227,13 @@ defmodule Bonfire.Social.FeedActivities do
   Arranges for an insert changeset to also publish to feeds related to some objects.
 
   Options: see `get_feed_ids/1`
+
+  ## Examples
+
+      iex> changeset = %Ecto.Changeset{}
+      iex> options = [feeds: ["feed123", "feed456"]]
+      iex> Bonfire.Social.FeedActivities.put_feed_publishes(changeset, options)
+      %Ecto.Changeset{}
   """
   def put_feed_publishes(changeset, options) do
     get_feed_publishes(options)
@@ -1219,6 +1243,14 @@ defmodule Bonfire.Social.FeedActivities do
 
   @doc """
   Creates the underlying data for `put_feed_publishes/2`.
+
+  Options: see `get_feed_ids/1`
+
+  ## Examples
+
+      iex> options = [feeds: ["feed123", "feed456"]]
+      iex> Bonfire.Social.FeedActivities.get_feed_publishes(options)
+      [%{feed_id: "feed123"}, %{feed_id: "feed456"}]
   """
   def get_feed_publishes(options) do
     options
@@ -1239,10 +1271,16 @@ defmodule Bonfire.Social.FeedActivities do
   Computes the feed ids for `get_feed_publishes/2`.
 
   Options:
-  * `:inbox` - list of objects whose inbox we should attempt to insert into.
-  * `:outbox` - list of objects whose outbox we should attempt to insert into.
-  * `:notifications` - list of objects whose notifications we should attempt to insert into.
-  * `:feeds` - list of ids (or objects containing IDs of feeds to post to.
+  * `:inbox` - list of users/characters whose inbox we should attempt to insert into.
+  * `:outbox` - list of users/characters whose outbox we should attempt to insert into.
+  * `:notifications` - list of users/characters whose notifications we should attempt to insert into.
+  * `:feeds` - list of ids (or objects containing IDs) of feeds to post to.
+
+  ## Examples
+
+      iex> options = [outbox: [%{id: "author123"}], inbox: [%{id: "mention987"}], notifications: [%{id: "reply654"}], feeds: ["feed456"]]
+      iex> Bonfire.Social.FeedActivities.get_feed_ids(options)
+      ["inbox_feed_id_for_user123", "feed456"]
   """
   def get_feed_ids(options) do
     keys = [:inbox, :outbox, :notifications]
@@ -1354,7 +1392,19 @@ defmodule Bonfire.Social.FeedActivities do
   #   ret
   # end
 
-  @doc "Creates a new local activity or takes an existing one and publishes to specified feeds"
+  @doc """
+  Creates a new local activity or takes an existing one and publishes to specified feeds
+
+  ## Examples
+
+      iex> subject = %{id: "user123"}
+      iex> verb = :create
+      iex> object = %{id: "post456"}
+      iex> feeds = ["feed789"]
+      iex> opts = []
+      iex> Bonfire.Social.FeedActivities.maybe_feed_publish(subject, verb, object, feeds, opts)
+      {:ok, %Bonfire.Data.Social.Activity{}}
+  """
   def maybe_feed_publish(subject, verb_or_activity, object, feeds, opts)
 
   def maybe_feed_publish(subject, verb, object, feeds, opts)
@@ -1544,7 +1594,14 @@ defmodule Bonfire.Social.FeedActivities do
   def the_object({%{} = object, _mixin_object}), do: object
   def the_object(object), do: object
 
-  @doc "Remove one or more activities from all feeds"
+  @doc """
+  Remove one or more activities from all feeds
+
+  ## Examples
+
+      iex> Bonfire.Social.FeedActivities.delete("123", :object_id)
+      {1, nil}
+  """
   def delete(objects, by_field) when is_atom(by_field) do
     case ulid(objects) do
       # is_list(id_or_ids) ->
@@ -1558,7 +1615,15 @@ defmodule Bonfire.Social.FeedActivities do
     end
   end
 
-  @doc "Remove activities from feeds, using specific filters"
+  @doc """
+  Remove activities from feeds, using specific filters
+
+  ## Examples
+
+      iex> filters = [object_id: "123"]
+      iex> Bonfire.Social.FeedActivities.delete(filters)
+      {5, nil}
+  """
   def delete(filters) when is_list(filters) or is_tuple(filters) do
     q =
       FeedPublish
@@ -1617,12 +1682,28 @@ defmodule Bonfire.Social.FeedActivities do
     # |> debug()
   end
 
+  @doc """
+  Returns the count of unseen items in a feed for the current user.
+
+  ## Examples
+
+      iex> unseen_count(feed_id, current_user: me)
+      5
+  """
   def unseen_count(feed_id, opts) do
     unseen_query(feed_id, opts)
     ~> select(count())
     |> repo().one()
   end
 
+  @doc """
+  Returns the count of items in a feed based on given filters and options.
+
+  ## Examples
+
+      iex> count(filters, current_user: me)
+      10
+  """
   def count(filters \\ [], opts \\ []) do
     query(filters, opts, opts[:query] || default_query())
     |> Ecto.Query.exclude(:select)
@@ -1634,6 +1715,14 @@ defmodule Bonfire.Social.FeedActivities do
     |> repo().one()
   end
 
+  @doc """
+  Returns the count of distinct subjects in a feed based on given filters and options.
+
+  ## Examples
+
+      iex> count_subjects(filters, opts)
+      3
+  """
   def count_subjects(filters \\ [], opts \\ []) do
     query(filters, opts, opts[:query] || default_query())
     |> Ecto.Query.exclude(:select)
@@ -1645,8 +1734,19 @@ defmodule Bonfire.Social.FeedActivities do
     |> repo().one()
   end
 
+  @doc """
+  Returns the total count of activities in feeds.
+  """
   def count_total(), do: repo().one(select(FeedPublish, [u], count(u.id)))
 
+  @doc """
+  Marks all unseen items in a feed as seen for the current user.
+
+  ## Examples
+
+      iex> mark_all_seen(feed_id, current_user: me)
+      {:ok, number_of_marked_items}
+  """
   def mark_all_seen(feed_id, opts) do
     current_user = current_user_required!(opts)
 

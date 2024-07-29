@@ -422,8 +422,7 @@ defmodule Bonfire.Social.Threads do
               (is_list(thread_id) and thread_id != []) do
     FeedActivities.feed_paginated(
       [in_thread: {thread_id, &filter/3}],
-      opts ++ [preload: :with_subject],
-      q_subjects(opts)
+      opts ++ [preload: :with_subject, base_query: q_subjects(opts)]
     )
   end
 

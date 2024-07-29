@@ -1,5 +1,9 @@
 defmodule Bonfire.Social.Boosts do
-  @moduledoc "Mutate, query, and federate boosts (re-sharing an activity or object). Boosts are implemented on top of the `Bonfire.Data.Edges.Edge` schema (see `Bonfire.Social.Edges` for functions shared by different Edge types)."
+  @moduledoc """
+  Mutate, query, and federate boosts (re-sharing an activity or object).
+
+  Boosts are implemented on top of the `Bonfire.Data.Edges.Edge` schema (see `Bonfire.Social.Edges` for shared functions)
+  """
 
   # alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Boost
@@ -35,9 +39,33 @@ defmodule Bonfire.Social.Boosts do
       {"Delete", "Announce"}
     ]
 
+  @doc """
+  Checks if a user has boosted an object.
+
+  ## Examples
+
+      iex> Bonfire.Social.Boosts.boosted?(user, object)
+      true
+
+  """
   def boosted?(%{} = user, object),
     do: Edges.exists?(__MODULE__, user, object, skip_boundary_check: true)
 
+  @doc """
+  Counts boosts based on filters and options.
+
+  ## Examples
+
+      iex> Bonfire.Social.Boosts.count([subject: user_id], [])
+      5 # user made 5 boosts, across all objects
+
+      iex> Bonfire.Social.Boosts.count(user, object)
+      3 # user boosted object 3 times
+
+      iex> Bonfire.Social.Boosts.count(object, [])
+      10 # object was boosted 5 times, across all users
+
+  """
   def count(filters \\ [], opts \\ [])
 
   def count(filters, opts) when is_list(filters) and is_list(opts) do
@@ -50,15 +78,45 @@ defmodule Bonfire.Social.Boosts do
   def count(object, _) when is_struct(object),
     do: Edges.count(:boost, object, skip_boundary_check: true)
 
+  @doc """
+  Gets the date of the latest boost by a user for an object.
+
+  ## Examples
+
+      iex> Bonfire.Social.Boosts.date_last_boosted(user, object)
+      ~U[2023-07-29 12:34:56Z]
+
+  """
   def date_last_boosted(%{} = user, object),
     do: Edges.last_date(__MODULE__, user, object, skip_boundary_check: true)
 
+  @doc """
+  Retrieves a boost edge by subject and object.
+
+  ## Examples
+
+      iex> Bonfire.Social.Boosts.get(subject, object)
+      {:ok, %Bonfire.Data.Social.Boost{}}
+
+  """
   def get(subject, object, opts \\ []),
     do: Edges.get(__MODULE__, subject, object, opts)
 
+  @doc """
+    Retrieves a boost edge, raising an error if not found.
+  """
   def get!(subject, object, opts \\ []),
     do: Edges.get!(__MODULE__, subject, object, opts)
 
+  @doc """
+  Boosts an object for a user.
+
+  ## Examples
+
+      iex> Bonfire.Social.Boosts.boost(user, object)
+      {:ok, %Bonfire.Data.Social.Boost{}}
+
+  """
   def boost(booster, boosted, opts \\ [])
 
   def boost(%{} = booster, %{} = object, opts) do
@@ -146,6 +204,15 @@ defmodule Bonfire.Social.Boosts do
     end
   end
 
+  @doc """
+  Removes a boost from an object for a user, if one exists
+
+  ## Examples
+
+      iex> Bonfire.Social.Boosts.unboost(user, object)
+      {:ok, _}
+
+  """
   def unboost(booster, boosted, opts \\ [])
 
   def unboost(booster, %{} = boosted, _opts) do
@@ -163,12 +230,28 @@ defmodule Bonfire.Social.Boosts do
     end
   end
 
-  @doc "List current user's boosts"
+  @doc """
+  Lists boosts by the current user.
+
+  ## Examples
+
+      iex> Bonfire.Social.Boosts.list_my(current_user: me)
+      [%Bonfire.Data.Social.Boost{}, ...]
+
+  """
   def list_my(opts) do
     list_by(current_user_required!(opts), opts)
   end
 
-  @doc "List boosts by the user "
+  @doc """
+  Lists boosts by a specific user.
+
+  ## Examples
+
+      iex> Bonfire.Social.Boosts.list_by(user_id)
+      [%Bonfire.Data.Social.Boost{}, ...]
+
+  """
   def list_by(by_user, opts \\ [])
       when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
     # query FeedPublish
@@ -179,13 +262,30 @@ defmodule Bonfire.Social.Boosts do
     )
   end
 
-  @doc "List boost of an object"
+  @doc """
+  Lists boosts of a specific object.
+
+  ## Examples
+
+      iex> Bonfire.Social.Boosts.list_of(object_id)
+      [%Bonfire.Data.Social.Boost{}, ...]
+
+  """
   def list_of(id, opts \\ []) when is_binary(id) or is_list(id) or is_map(id) do
     opts = to_options(opts)
     # query FeedPublish
     list_paginated([object: id], opts ++ [preload: :subject])
   end
 
+  @doc """
+  Lists boosts with pagination.
+
+  ## Examples
+
+      iex> Bonfire.Social.Boosts.list_paginated([subject: user_id], [limit: 10])
+      %{edges: [%Bonfire.Data.Social.Boost{}, ...], page_info: %{...}}
+
+  """
   def list_paginated(filters, opts \\ []) do
     filters
     |> query(opts)
@@ -216,6 +316,15 @@ defmodule Bonfire.Social.Boosts do
     Edges.insert(Boost, booster, :boost, boosted, opts)
   end
 
+  @doc """
+  Publishes a federated activity for a boost action.
+
+  ## Examples
+
+      iex> Bonfire.Social.Boosts.ap_publish_activity(subject, :create, boost)
+      {:ok, _activity}
+
+  """
   def ap_publish_activity(subject, :delete, boost) do
     with {:ok, booster} <-
            ActivityPub.Actor.get_cached(
@@ -248,6 +357,15 @@ defmodule Bonfire.Social.Boosts do
     end
   end
 
+  @doc """
+  Receives and processes a federated boost activity.
+
+  ## Examples
+
+      iex> Bonfire.Social.Boosts.ap_receive_activity(creator, activity, object)
+      {:ok, _boost}
+
+  """
   def ap_receive_activity(
         creator,
         %{data: %{"type" => "Announce"}} = _activity,
