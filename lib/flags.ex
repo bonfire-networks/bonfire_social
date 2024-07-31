@@ -183,7 +183,6 @@ defmodule Bonfire.Social.Flags do
 
       iex> object = %Bonfire.Data.Social.Post{id: "post456"}
       iex> Bonfire.Social.Flags.moderators(object)
-      [%Bonfire.Data.Identity.User{}, ...]
   """
   def moderators(object),
     do: Bonfire.Boundaries.Controlleds.list_subjects_by_verb(object, :mediate)
