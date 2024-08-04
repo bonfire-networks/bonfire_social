@@ -662,14 +662,7 @@ defmodule Bonfire.Social.Objects do
 
   """
   def run_epic(type, options \\ [], on \\ :object) do
-    options = Keyword.merge(options, crash: true, debug: true, verbose: true)
-
-    epic =
-      Epic.from_config!(__MODULE__, type)
-      |> Epic.assign(:options, options)
-      |> Epic.run()
-
-    if epic.errors == [], do: {:ok, epic.assigns[on]}, else: {:error, epic}
+    Bonfire.Epics.run_epic(__MODULE__, type, Keyword.put(options, :on, on))
   end
 
   def delete_apply_error(error, args) do
