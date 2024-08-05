@@ -164,6 +164,8 @@ defmodule Bonfire.Social do
       "Federate deletion of an object"
     )
 
+    # FIXME: skip federate deletion for local-only objects
+
     # ActivityPub.delete(object || activity, true)
     maybe_federate(subject, :delete, object || activity, nil, opts)
   end

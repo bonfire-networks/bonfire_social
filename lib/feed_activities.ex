@@ -1388,7 +1388,9 @@ defmodule Bonfire.Social.FeedActivities do
   #   # debug(feed_ids)
   #   # |> debug("notify_to_feed_ids")
   #   ret = publish(subject, verb_or_activity, object, to_feeds: feed_ids)
-  #   LivePush.notify(subject, verb_or_activity, object, feed_ids)
+  #   maybe_apply(Bonfire.UI.Social.LivePush, :notify, [
+  #     subject, verb_or_activity, object, feed_ids
+  #     ])
   #   ret
   # end
 
@@ -1641,7 +1643,10 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp hide_activities(fp) when is_list(fp) do
     for %{id: activity, feed_id: feed_id} <- fp do
-      LivePush.hide_activity(feed_id, activity)
+      maybe_apply(Bonfire.UI.Social.LivePush, :hide_activity, [
+        feed_id,
+        activity
+      ])
     end
   end
 
