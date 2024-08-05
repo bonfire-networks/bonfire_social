@@ -273,13 +273,13 @@ defmodule Bonfire.Social.PostContents do
        when is_binary(text) and (mentions != %{} or hashtags != %{}) do
     mention_urls =
       mentions
-      |> debug
+      |> debug()
       |> Map.keys()
       |> Enums.filter_empty([])
 
     hashtag_urls =
       hashtags
-      |> debug
+      |> debug()
       |> Map.keys()
       |> Enums.filter_empty([])
 
@@ -306,7 +306,7 @@ defmodule Bonfire.Social.PostContents do
     Map.merge(attrs, map)
   end
 
-  def maybe_detect_languages(attrs, fields \\ [:name, :summary, :html_body]) do
+  def maybe_detect_languages(_attrs, fields \\ [:name, :summary, :html_body]) do
     # TODO
     # if module_enabled?(Elixir.Text.Language) do
     #   fields
@@ -508,7 +508,7 @@ defmodule Bonfire.Social.PostContents do
            |> PostContent.changeset(post_content, ...)
            # |> debug()
            |> PaperTrail.update(user: current_user)
-           |> debug do
+           |> debug() do
       if Social.federate_outgoing?(current_user),
         do:
           Bonfire.Common.Needles.get(id(post_content),

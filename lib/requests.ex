@@ -421,7 +421,7 @@ defmodule Bonfire.Social.Requests do
          {:ok, subject_actor} <-
            ActivityPub.Actor.get_cached(pointer: subject),
          {:ok, ap_object} <-
-           ActivityPub.Object.get_cached(pointer: request_id) |> info,
+           ActivityPub.Object.get_cached(pointer: request_id) |> info(),
          {:ok, _} <-
            ActivityPub.accept(%{
              actor: object_actor,

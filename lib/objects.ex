@@ -528,7 +528,7 @@ defmodule Bonfire.Social.Objects do
   """
   def maybe_generic_delete(type, object, options \\ [])
 
-  def maybe_generic_delete(type, object, options) do
+  def maybe_generic_delete(_type, object, options) do
     options =
       to_options(options)
       |> Keyword.put(:object, object)
