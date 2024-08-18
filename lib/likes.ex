@@ -387,6 +387,12 @@ defmodule Bonfire.Social.Likes do
              pointer: e(like.edge, :object, nil) || like.edge.object_id
            ) do
       ActivityPub.unlike(%{actor: liker, object: object})
+    else
+      {:error, :not_found} ->
+        :ignore
+
+      e ->
+        error(e)
     end
   end
 
@@ -400,6 +406,12 @@ defmodule Bonfire.Social.Likes do
              pointer: e(like.edge, :object, nil) || like.edge.object_id
            ) do
       ActivityPub.like(%{actor: liker, object: object, pointer: ulid(like)})
+    else
+      {:error, :not_found} ->
+        :ignore
+
+      e ->
+        error(e)
     end
   end
 

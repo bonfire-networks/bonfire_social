@@ -335,6 +335,12 @@ defmodule Bonfire.Social.Boosts do
              pointer: e(boost.edge, :object, nil) || e(boost.edge, :object_id, nil)
            ) do
       ActivityPub.unannounce(%{actor: booster, object: object})
+    else
+      {:error, :not_found} ->
+        :ignore
+
+      e ->
+        error(e)
     end
   end
 
@@ -352,8 +358,11 @@ defmodule Bonfire.Social.Boosts do
            ) do
       ActivityPub.announce(%{actor: booster, object: object, pointer: ulid(boost)})
     else
+      {:error, :not_found} ->
+        :ignore
+
       e ->
-        error(e, "Could not find the federated actor or object to boost.")
+        error(e)
     end
   end
 
