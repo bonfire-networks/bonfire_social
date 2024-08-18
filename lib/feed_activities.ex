@@ -1609,7 +1609,7 @@ defmodule Bonfire.Social.FeedActivities do
       # is_list(id_or_ids) ->
       #   Enum.each(id_or_ids, fn x -> delete(x, by_field) end)
       nil ->
-        error(objects, "Nothing to delete")
+        warn(objects, "No activities to delete from feed")
 
       objects ->
         debug(objects)

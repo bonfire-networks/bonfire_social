@@ -2,6 +2,10 @@ defmodule Bonfire.Social.DeleteTest do
   use Bonfire.Social.DataCase, async: true
   use Bonfire.Common.Utils
 
+  import Bonfire.Files.Simulation
+  alias Bonfire.Files
+  alias Bonfire.Files.ImageUploader
+
   alias Bonfire.Social.FeedActivities
   alias Bonfire.Posts
   alias Bonfire.Social.Objects
@@ -32,6 +36,35 @@ defmodule Bonfire.Social.DeleteTest do
     assert {:error, _} = Posts.read(post.id, skip_boundary_check: true)
   end
 
+  test "when post is deleted, also delete attached media" do
+    user = Fake.fake_user!()
+    assert {:ok, upload} = Files.upload(ImageUploader, user, icon_file())
+
+    assert path = Files.local_path(ImageUploader, upload)
+    assert File.exists?(path)
+
+    post =
+      fake_post!(
+        user,
+        "public",
+        %{
+          post_content: %{
+            summary: "summary",
+            name: "name",
+            html_body: "epic html"
+          }
+        },
+        uploaded_media: [upload]
+      )
+      |> repo().maybe_preload([:media])
+
+    assert path == e(post, :media, []) |> List.first() |> Files.local_path(ImageUploader, ...)
+    assert File.exists?(path)
+
+    assert {:ok, _} = Bonfire.Me.DeleteWorker.delete_structs_now(post)
+    refute File.exists?(path)
+  end
+
   test "deletion of a user deletes its posts" do
     user = Fake.fake_user!()
 
@@ -44,15 +77,51 @@ defmodule Bonfire.Social.DeleteTest do
         }
       })
 
-    Oban.Testing.with_testing_mode(:inline, fn ->
-      {:ok, _} =
-        Users.enqueue_delete(user)
-        |> debug("del?")
-    end)
+    # Oban.Testing.with_testing_mode(:inline, fn ->
+    #   {:ok, _} =
+    #     Users.enqueue_delete(user)
+    #     |> debug("del?")
+    # end)
+    assert {:ok, _} = Bonfire.Me.DeleteWorker.delete_structs_now(user)
 
     refute Users.get_current(user.id)
     assert {:error, _} = Posts.read(post.id, skip_boundary_check: true)
 
-    # TODO: test that we also delete likes/boosts/etc
+    # TODO: check if we also delete likes/boosts/etc
+  end
+
+  test "deletion of a user deletes its posts (and media attached to those)" do
+    user = Fake.fake_user!()
+
+    assert {:ok, upload} = Files.upload(ImageUploader, user, icon_file())
+
+    assert path = Files.local_path(ImageUploader, upload)
+    assert File.exists?(path)
+
+    post =
+      fake_post!(
+        user,
+        "public",
+        %{
+          post_content: %{
+            summary: "summary",
+            name: "name",
+            html_body: "epic html"
+          }
+        },
+        uploaded_media: [upload]
+      )
+      |> repo().maybe_preload([:media])
+
+    assert path == e(post, :media, []) |> List.first() |> Files.local_path(ImageUploader, ...)
+    assert File.exists?(path)
+
+    assert {:ok, _} = Bonfire.Me.DeleteWorker.delete_structs_now(user)
+
+    refute Users.get_current(user.id)
+    assert {:error, _} = Posts.read(post.id, skip_boundary_check: true)
+    refute File.exists?(path)
+
+    # TODO: check if we also delete likes/boosts/etc
   end
 end

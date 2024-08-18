@@ -429,18 +429,26 @@ defmodule Bonfire.Social.Objects do
   end
 
   def do_delete(%{__struct__: type} = object, opts) do
+    always_delete_associations = [
+      :created,
+      :caretaker,
+      :activities,
+      :peered,
+      :controlled
+    ]
+
     opts =
       opts
       |> to_options()
       |> Keyword.put(:action, :delete)
       # generic assocs to delete from all object types if they exist
-      |> Keyword.put(:delete_associations, [
-        :created,
-        :caretaker,
-        :activities,
-        :peered,
-        :controlled
-      ])
+      |> Keyword.update(:delete_associations, always_delete_associations, fn
+        false ->
+          []
+
+        extra_delete_associations ->
+          Enum.uniq(extra_delete_associations ++ always_delete_associations)
+      end)
 
     # TODO? these mixins should be deleted if their associated pointer is deleted
     # [
@@ -468,30 +476,49 @@ defmodule Bonfire.Social.Objects do
     Activities.delete_by_object(id)
     |> debug("Delete it from feeds first and foremost")
 
-    with {:error, _} <-
-           Bonfire.Common.ContextModule.maybe_apply(
-             object,
+    object_type = Bonfire.Common.Types.object_type(object)
+
+    with object_type when not is_nil(object_type) <- object_type,
+         context_module when not is_nil(context_module) <-
+           Bonfire.Common.ContextModule.maybe_context_module(object_type),
+         {:none, _} <-
+           maybe_apply(
+             context_module,
              :delete,
              [object, opts],
              &delete_apply_error/2
            ),
-         {:error, _} <-
-           Bonfire.Common.ContextModule.maybe_apply(
-             object,
+         {:none, _} <-
+           maybe_apply(
+             context_module,
              :soft_delete,
              [object, opts],
              &delete_apply_error/2
            ),
-         {:error, _} <-
-           Bonfire.Common.ContextModule.maybe_apply(
-             object,
+         {:none, _} <-
+           maybe_apply(
+             context_module,
              :soft_delete,
              [object],
              &delete_apply_error/2
            ),
-         {:error, e} <- try_generic_delete(type, object, opts) do
+         {:error, e} <-
+           try_generic_delete(
+             object_type || type,
+             object,
+             opts,
+             "there's no delete function defined for this type, so try with generic deletion"
+           ) do
       error(e, "Unable to delete this")
     else
+      nil ->
+        try_generic_delete(
+          object_type || type,
+          object,
+          opts,
+          "could not find the type or context module for this object, so try with generic deletion"
+        )
+
       {:ok, del} ->
         debug(del, "deleted!")
         if opts[:socket_connected], do: Activities.maybe_remove_for_deleters_feeds(id)
@@ -502,10 +529,10 @@ defmodule Bonfire.Social.Objects do
     end
   end
 
-  defp try_generic_delete(type, object, options) do
+  defp try_generic_delete(type, object, options, msg) do
     warn(
       type,
-      "there's no delete function defined for this type, so try with generic deletion"
+      msg
     )
 
     maybe_generic_delete(type, object, options)
@@ -531,7 +558,6 @@ defmodule Bonfire.Social.Objects do
   def maybe_generic_delete(_type, object, options) do
     options =
       to_options(options)
-      |> Keyword.put(:object, object)
       |> Keyword.put(:action, :delete)
 
     # cover our bases with some more common mixins
@@ -548,13 +574,22 @@ defmodule Bonfire.Social.Objects do
       delete_caretaken(object)
     end
 
+    object = repo().maybe_preload(object, [:media])
+    delete_media = e(object, :media, [])
+
     options
     |> Keyword.update(
       :delete_associations,
       delete_extras,
-      &(&1 ++ delete_extras)
+      &Enum.uniq(&1 ++ delete_extras)
+    )
+    |> Keyword.update(
+      :delete_media,
+      delete_media,
+      &Enum.uniq(List.wrap(&1) ++ delete_media)
     )
     |> debug("deletion opts")
+    |> Keyword.put(:object, object)
     |> run_epic(:delete, ..., :object)
     |> debug("fini")
   end
@@ -594,7 +629,9 @@ defmodule Bonfire.Social.Objects do
 
     care_taken(caretaker_ids)
     |> Enum.reject(&(Enums.id(&1) in caretaker_ids))
-    |> debug("then delete list things they are caretaker of")
+    |> debug(
+      "then delete list things they are caretaker of (and don't federate deletion of those things individually, as hopefully that cascades from the Actor deletion)"
+    )
     |> do_delete(skip_boundary_check: true, skip_federation: true)
     |> debug("deleted care_taken")
 
@@ -606,8 +643,7 @@ defmodule Bonfire.Social.Objects do
     |> do_delete(skip_boundary_check: true, delete_caretaken: false)
     |> debug("deleted caretakers")
 
-    # Bonfire.Ecto.Acts.Delete.maybe_delete(main, repo())
-    # |> debug("double-check that main thing(s) is deleted too")
+    # Bonfire.Ecto.Acts.Delete.maybe_delete(main, repo()) # main thing should be deleted by the caller
   end
 
   @doc """
@@ -665,10 +701,10 @@ defmodule Bonfire.Social.Objects do
     Bonfire.Epics.run_epic(__MODULE__, type, Keyword.put(options, :on, on))
   end
 
-  def delete_apply_error(error, args) do
-    debug(error, "no delete function match for #{inspect(args)}")
+  def delete_apply_error(error, _args) do
+    debug(error, "no delete function match")
 
-    {:error, error}
+    {:none, error}
   end
 
   @doc """
