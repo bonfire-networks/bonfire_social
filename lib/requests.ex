@@ -46,7 +46,7 @@ defmodule Bonfire.Social.Requests do
 
   ## Examples
 
-      iex> request(user, type, object)
+      iex> request(subject, Follow, object)
       {:ok, request}
   """
   def request(user, type, object, opts \\ [])
@@ -94,7 +94,7 @@ defmodule Bonfire.Social.Requests do
 
   ## Examples
 
-      iex> get(subject, type, object, opts)
+      iex> get(subject, Follow, object, opts)
       {:ok, request}
   """
   def get(subject, type, object, opts \\ []),
@@ -118,7 +118,7 @@ defmodule Bonfire.Social.Requests do
 
   ## Examples
 
-      iex> exists?(subject, type, object, opts)
+      iex> exists?(subject, Follow, object, opts)
       true
   """
   def exists?(subject, type, object, opts \\ []),

@@ -149,35 +149,52 @@ defmodule Bonfire.Social.Edges do
     |> FeedActivities.put_feed_publishes(Keyword.get(options, :to_feeds, []))
   end
 
-  @doc "TODOC"
+  @doc """
+  Prepares a basic schema, with the schema type as top-level and an Egde assoc
+
+  iex> changeset_base(Like, %User{id: 1}, %Post{id: 2}, [])
+      %Ecto.Changeset{}
+
+  iex> changeset_base(Follow, %User{id: 1}, %User{id: 2}, [])
+      %Ecto.Changeset{}
+
+  iex> changeset_base({Request, Follow}, %User{id: 1}, %User{id: 2}, [])
+      %Ecto.Changeset{}
+  """
   def changeset_base(schema, subject, object, options) when is_atom(schema),
     do: changeset_base({schema, schema}, subject, object, options)
 
-  def changeset_base({insert_schema, type_schema}, subject, object, _options) do
-    Changesets.cast(struct(insert_schema), %{}, [])
-    |> put_edge_assoc(type_schema, subject, object)
+  def changeset_base({main_schema, type_of_edge_schema}, subject, object, _options) do
+    Changesets.cast(struct(main_schema), %{}, [])
+    |> put_edge_assoc(type_of_edge_schema, subject, object)
   end
 
   def put_edge_assoc(changeset, subject, object),
     do: put_edge_assoc(changeset, changeset.data.__struct__, subject, object)
 
-  def put_edge_assoc(changeset, schema, subject, object) do
-    table_name = schema.__schema__(:source)
+  def put_edge_assoc(changeset, type_of_edge_schema, subject, object)
+      when is_atom(type_of_edge_schema) do
+    put_edge_assoc(changeset, Bonfire.Common.Types.table_id(type_of_edge_schema), subject, object)
+    |> Ecto.Changeset.unique_constraint([:subject_id, :object_id, :table_id],
+      name:
+        String.to_atom(
+          "bonfire_data_edges_edge_#{type_of_edge_schema.__schema__(:source)}_unique_index"
+        )
+    )
+  end
 
+  def put_edge_assoc(changeset, type_id, subject, object) when is_binary(type_id) do
     %{
       # subject: subject,
       subject_id: ulid(subject),
       # object: object,
       object_id: ulid(object),
-      table_id: Bonfire.Common.Types.table_id(schema)
+      table_id: type_id
     }
     |> debug()
     # |> Changesets.put_assoc(changeset, :edge, ...)
     |> Ecto.Changeset.cast(changeset, %{edge: ...}, [])
     |> Ecto.Changeset.cast_assoc(:edge, with: &Edge.changeset/2)
-    |> Ecto.Changeset.unique_constraint([:subject_id, :object_id, :table_id],
-      name: String.to_atom("bonfire_data_edges_edge_#{table_name}_unique_index")
-    )
     |> debug()
   end
 
