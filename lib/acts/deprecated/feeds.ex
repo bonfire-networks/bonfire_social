@@ -29,7 +29,7 @@ defmodule Bonfire.Social.Acts.Feeds do
       true ->
         on = Keyword.fetch!(act.options, :on)
         changeset = epic.assigns[on]
-        current_user = Keyword.fetch!(epic.assigns[:options], :current_user)
+        current_user = Bonfire.Common.Utils.current_user(epic.assigns[:options])
         boundary = epic.assigns[:options][:boundary]
 
         case changeset do

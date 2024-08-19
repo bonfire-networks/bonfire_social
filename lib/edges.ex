@@ -112,7 +112,7 @@ defmodule Bonfire.Social.Edges do
   """
   def changeset(schema, subject, verb, object, options) do
     changeset_extra(schema, subject, verb, object, options)
-    |> Objects.cast_creator_caretaker(options[:current_user] || subject)
+    |> Objects.cast_creator_caretaker(current_user(options) || subject)
   end
 
   @doc """
@@ -125,7 +125,7 @@ defmodule Bonfire.Social.Edges do
   """
   def changeset_without_caretaker(schema, subject, verb, object, options) do
     changeset_extra(schema, subject, verb, object, options)
-    |> Objects.cast_creator(options[:current_user] || subject)
+    |> Objects.cast_creator(current_user(options) || subject)
   end
 
   @doc """
@@ -138,7 +138,7 @@ defmodule Bonfire.Social.Edges do
   """
   def changeset_base_with_creator(schema, subject, object, options) do
     changeset_base(schema, subject, object, options)
-    |> Objects.cast_creator(options[:current_user] || subject)
+    |> Objects.cast_creator(current_user(options) || subject)
   end
 
   @doc "TODOC"

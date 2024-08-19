@@ -21,7 +21,7 @@ defmodule Bonfire.Social.Acts.PostContents do
   def run(epic, act) do
     on = Keyword.get(act.options, :on, :post)
     changeset = epic.assigns[on]
-    current_user = epic.assigns.options[:current_user]
+    current_user = Utils.current_user(epic.assigns[:options])
 
     cond do
       epic.errors != [] ->

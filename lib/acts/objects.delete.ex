@@ -17,7 +17,7 @@ defmodule Bonfire.Social.Acts.Objects.Delete do
   @doc false
   def run(epic, act) do
     # current_account = epic.assigns[:options][:current_account]
-    # current_user = epic.assigns[:options][:current_user]
+    # current_user = Bonfire.Common.Utils.current_user(epic.assigns[:options])
     ap_on = Keyword.get(act.options, :ap_on, :ap_object)
 
     cond do

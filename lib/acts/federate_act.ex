@@ -33,7 +33,7 @@ defmodule Bonfire.Social.Acts.Federate do
     object = epic.assigns[on]
     options = epic.assigns[:options]
     action = Keyword.get(options, :action, :insert)
-    current_user = options[:current_user]
+    current_user = Utils.current_user(options)
     # current_user_id = Types.ulid(current_user)
 
     cond do

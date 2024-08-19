@@ -363,10 +363,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     # defp feed(_), do: {:ok, nil}
 
     defp create_post(args, info) do
-      user = GraphQL.current_user(info)
-
-      if user do
-        Bonfire.Posts.publish(post_attrs: args, current_user: user)
+      if Enums.id(GraphQL.current_user(info)) do
+        Bonfire.Posts.publish(post_attrs: args, current_user: user, context: info)
       else
         {:error, "Not authenticated"}
       end

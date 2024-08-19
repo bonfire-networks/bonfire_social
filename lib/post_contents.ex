@@ -170,6 +170,7 @@ defmodule Bonfire.Social.PostContents do
     only_prepare_content(attrs, creator, opts)
   end
 
+  # post from local user
   def maybe_prepare_contents(attrs, creator, _boundary, opts) do
     if module_enabled?(Bonfire.Social.Tags, creator) do
       debug("process post contents for tags/mentions")

@@ -23,7 +23,7 @@ defmodule Bonfire.Social.Acts.Activity do
   def run(epic, act) do
     on = Keyword.get(act.options, :on, :post)
     changeset = epic.assigns[on]
-    current_user = epic.assigns[:options][:current_user]
+    current_user = Bonfire.Common.Utils.current_user(epic.assigns[:options])
     verb = Keyword.get(epic.assigns[:options], :verb, :create)
 
     cond do
