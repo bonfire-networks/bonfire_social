@@ -18,6 +18,7 @@ defmodule Bonfire.Social.Flags do
   # import Bonfire.Boundaries.Queries
 
   alias Bonfire.Data.Identity.User
+  alias Bonfire.Data.Identity.Named
   alias Bonfire.Data.Social.Flag
   # alias Bonfire.Boundaries.Verbs
   alias Bonfire.Common
@@ -357,7 +358,7 @@ defmodule Bonfire.Social.Flags do
     list(opts)
     |> repo().maybe_preload(
       # [edge: [object: [created: [creator: [:profile, :character]]]]],
-      [object: [created: [creator: [:profile, :character]]]],
+      [:named, object: [created: [creator: [:profile, :character]]]],
       follow_pointers: false
     )
   end
@@ -367,10 +368,10 @@ defmodule Bonfire.Social.Flags do
 
     filters
     |> query(opts)
-    # |> proload(:activity)
+    |> proload([:named])
     |> Social.many(opts[:paginate?], opts)
 
-    # TODO: activity preloads
+    # TODO: activity preloads?
   end
 
   @doc """
@@ -465,8 +466,30 @@ defmodule Bonfire.Social.Flags do
     query_base(filters, opts)
   end
 
-  defp create(flagger, flagged, opts) do
-    Edges.insert(Flag, flagger, :flag, flagged, opts)
+  defp create(subject, object, opts) do
+    do_create(subject, object, opts[:comment], opts)
+  end
+
+  defp do_create(subject, object, nil, opts) do
+    Edges.changeset(Flag, subject, :flag, object, opts)
+    |> Edges.insert(subject, object)
+  end
+
+  defp do_create(subject, object, comment, opts) do
+    # TODO: check if comment is spam
+    Edges.changeset(Flag, subject, :flag, object, opts)
+    |> Ecto.Changeset.cast(%{named: %{name: comment}}, [])
+    |> Ecto.Changeset.cast_assoc(:named,
+      with: fn cs, params ->
+        Named.changeset(cs, params,
+          normalize_fn: fn text ->
+            Bonfire.Social.PostContents.prepare_text(text, subject, opts)
+          end
+        )
+      end
+    )
+    |> debug("cssss")
+    |> Edges.insert(subject, object)
   end
 
   @doc """

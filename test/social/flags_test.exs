@@ -161,6 +161,39 @@ defmodule Bonfire.Social.FlagsTest do
     assert flag.edge.subject_id == fetched_flag.edge.subject_id
   end
 
+  test "can include a comment with a flag, which admin can see" do
+    me = Fake.fake_user!()
+    {:ok, me} = Users.make_admin(me)
+    someone = Fake.fake_user!()
+
+    attrs = %{
+      post_content: %{
+        summary: "summary",
+        name: "name",
+        html_body: "<p>epic html message</p>"
+      }
+    }
+
+    assert {:ok, flagged} =
+             Posts.publish(
+               current_user: me,
+               post_attrs: attrs,
+               boundary: "public",
+               debug: true,
+               crash: true
+             )
+
+    comment = "this is spam"
+    assert {:ok, flag} = Flags.flag(someone, flagged, comment: comment)
+
+    assert %{edges: [fetched_flag]} = Flags.list_paginated([:all], current_user: me)
+
+    assert flag.id == fetched_flag.id
+    assert flag.edge.object_id == fetched_flag.edge.object_id
+    assert flag.edge.subject_id == fetched_flag.edge.subject_id
+    assert comment == fetched_flag.named.name
+  end
+
   test "can list something's flaggers (as an admin)" do
     me = Fake.fake_user!()
     {:ok, me} = Users.make_admin(me)

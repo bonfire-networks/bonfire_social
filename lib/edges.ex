@@ -103,7 +103,7 @@ defmodule Bonfire.Social.Edges do
   end
 
   @doc """
-  Prepares a changeset for the given schema, subject, verb, object, and options.
+  Prepares a full changeset for the given schema, subject, verb, object, and options.
 
   ## Examples
 
@@ -116,7 +116,7 @@ defmodule Bonfire.Social.Edges do
   end
 
   @doc """
-   Prepares a changeset with creator but no caretaker, which avoids the edge being deleted when subject is deleted.
+   Prepares a changeset with creator but no caretaker, which avoids the edge being deleted when subject is deleted. Also includes Acls, Activities and FeedActivities.
 
   ## Examples
 
@@ -133,7 +133,7 @@ defmodule Bonfire.Social.Edges do
 
   ## Examples
 
-      iex> changeset_without_caretaker(MySchema, %User{id: 1}, %Post{id: 2}, [])
+      iex> changeset_base_with_creator(MySchema, %User{id: 1}, %Post{id: 2}, [])
       %Ecto.Changeset{}
   """
   def changeset_base_with_creator(schema, subject, object, options) do
@@ -141,7 +141,7 @@ defmodule Bonfire.Social.Edges do
     |> Objects.cast_creator(current_user(options) || subject)
   end
 
-  @doc "TODOC"
+  @doc "Prepares a changeset with Acls, Activities and FeedActivities"
   def changeset_extra(schema, subject, verb, object, options) do
     changeset_base(schema, subject, object, options)
     |> Acls.cast(subject, options)
