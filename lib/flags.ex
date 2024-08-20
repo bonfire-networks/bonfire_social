@@ -471,8 +471,7 @@ defmodule Bonfire.Social.Flags do
   end
 
   defp do_create(subject, object, nil, opts) do
-    Edges.changeset(Flag, subject, :flag, object, opts)
-    |> Edges.insert(subject, object)
+    Edges.insert(Flag, subject, :flag, object, opts)
   end
 
   defp do_create(subject, object, comment, opts) do

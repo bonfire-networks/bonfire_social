@@ -360,8 +360,23 @@ defmodule Bonfire.Social.Likes do
     )
   end
 
-  defp create(liker, liked, opts) do
-    Edges.insert(Like, liker, :like, liked, opts)
+  defp create(subject, object, opts) do
+    do_create(subject, object, opts[:reaction_emoji], opts[:reaction_media], opts)
+  end
+
+  # defp do_create(subject, object, emoji, _, opts) when is_binary(emoji) do
+  #   # TODO: emoji_id = get_or_create(emoji)
+  #   Edges.changeset({Like, emoji_id}, subject, :like, object, opts)
+  #   |> debug("cssss")
+  #   |> Edges.insert(subject, object)
+  # end
+
+  defp do_create(subject, object, _, media_id, opts) when is_binary(media_id) do
+    Edges.insert({Like, media_id}, subject, :like, object, opts)
+  end
+
+  defp do_create(subject, object, _, _, opts) do
+    Edges.insert(Like, subject, :like, object, opts)
   end
 
   @doc """
