@@ -125,7 +125,6 @@ defmodule Bonfire.Social.LikesTest do
     assert fetched_liked.edge.object_id == post.id
   end
 
-  @tag :todo
   test "can paginate my likes" do
     account = Fake.fake_account!()
     alice = Fake.fake_user!(account)
@@ -164,12 +163,7 @@ defmodule Bonfire.Social.LikesTest do
     assert {:ok, _like1} = Likes.like(alice, p1)
     assert {:ok, _like2} = Likes.like(alice, p2)
 
-    # assert %{edges: [fetched_liked]} = Likes.list_my(current_user: alice)
-    conn = conn(user: alice, account: account)
-    {:ok, view, _html} = live(conn, "/likes")
-    # open_browser(view)
-    assert true == false
-    # TODO!
+    assert %{edges: [_, _]} = Likes.list_my(current_user: alice, limit: 2)
   end
 
   test "can list the likers of something" do
@@ -246,8 +240,39 @@ defmodule Bonfire.Social.LikesTest do
     assert fetched_like.activity.object_id == post.id
   end
 
-  @tag :todo
   test "can react with an emoji (i.e. a short text)" do
+    me = fake_user!()
+
+    emoji = "🔥"
+    label = "fire"
+
+    attrs = %{
+      post_content: %{html_body: "<p>hey you have an epic html post</p>"}
+    }
+
+    assert {:ok, post} =
+             Posts.publish(
+               current_user: me,
+               post_attrs: attrs,
+               boundary: "public"
+             )
+
+    assert {:ok, like} = Likes.like(me, post, reaction_emoji: {emoji, %{label: label}})
+
+    # %{
+    #   extra_info: %{
+    #     summary: "🔥",
+    #     info: %{label: "fire"}
+    #   }
+    # } = like
+
+    # TODO
+    refute like.edge.table_id == "11KES11KET0BE11KEDY0VKN0WS"
+
+    assert %{edges: [fetched_liked]} = Likes.list_my(current_user: me)
+    assert fetched_liked.edge.object_id == post.id
+
+    assert true == Likes.liked?(me, post)
   end
 
   test "can react with a custom emoji (i.e. a Media)" do
@@ -255,15 +280,11 @@ defmodule Bonfire.Social.LikesTest do
 
     label = "test custom emoji"
     shortcode = ":test:"
-    metadata = EmojiUploader.prepare_meta(label, shortcode)
 
-    assert {:ok, upload} =
-             Bonfire.Files.upload(EmojiUploader, me, icon_file(), %{metadata: metadata})
-
-    {:ok, settings} = EmojiUploader.media_put_setting(upload, metadata, current_user: me)
+    {:ok, settings} = Bonfire.Files.EmojiUploader.add_emoji(me, icon_file(), label, shortcode)
 
     assert %{id: media_id, url: url} =
-             Bonfire.Common.Settings.get([:custom_emoji, metadata.shortcode], nil, settings)
+             Bonfire.Common.Settings.get([:custom_emoji, shortcode], nil, settings)
 
     # assert url =~ path
 

@@ -478,7 +478,7 @@ defmodule Bonfire.Social.Flags do
     # TODO: check if comment is spam
     Edges.changeset(Flag, subject, :flag, object, opts)
     |> Ecto.Changeset.cast(%{named: %{name: comment}}, [])
-    |> Ecto.Changeset.cast_assoc(:named,
+    |> Needle.Changesets.cast_assoc(:named,
       with: fn cs, params ->
         Named.changeset(cs, params,
           normalize_fn: fn text ->

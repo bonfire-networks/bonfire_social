@@ -364,12 +364,25 @@ defmodule Bonfire.Social.Likes do
     do_create(subject, object, opts[:reaction_emoji], opts[:reaction_media], opts)
   end
 
-  # defp do_create(subject, object, emoji, _, opts) when is_binary(emoji) do
-  #   # TODO: emoji_id = get_or_create(emoji)
-  #   Edges.changeset({Like, emoji_id}, subject, :like, object, opts)
-  #   |> debug("cssss")
-  #   |> Edges.insert(subject, object)
-  # end
+  defp do_create(subject, object, emoji_id, _, opts) when is_binary(emoji_id) do
+    Edges.changeset({Like, Types.ulid!(emoji_id)}, subject, :like, object, opts)
+    |> debug("cssss")
+    |> Edges.insert(subject, object)
+  end
+
+  defp do_create(subject, object, {emoji, meta}, _, opts) when is_binary(emoji) and emoji != "" do
+    # TODO put in separate Virtual instead so they can be reused: 
+    with {:ok, emoji} <-
+           get_or_create_emoji(emoji, meta)
+           |> debug() do
+      Edges.changeset({Like, Types.ulid!(emoji)}, subject, :like, object, opts)
+      |> Edges.insert(subject, object)
+    else
+      e ->
+        error(e)
+        do_create(subject, object, nil, nil, opts)
+    end
+  end
 
   defp do_create(subject, object, _, media_id, opts) when is_binary(media_id) do
     Edges.insert({Like, media_id}, subject, :like, object, opts)
@@ -377,6 +390,17 @@ defmodule Bonfire.Social.Likes do
 
   defp do_create(subject, object, _, _, opts) do
     Edges.insert(Like, subject, :like, object, opts)
+  end
+
+  def get_or_create_emoji(emoji, meta) do
+    # TODO: put somewhere reusable 
+    Bonfire.Data.Social.Emoji.changeset(%{})
+    |> Ecto.Changeset.cast(%{extra_info: %{summary: emoji, info: meta}}, [])
+    |> Needle.Changesets.cast_assoc(:extra_info,
+      with: &Bonfire.Data.Identity.ExtraInfo.changeset/2
+    )
+    |> debug("cssss")
+    |> repo().insert()
   end
 
   @doc """
