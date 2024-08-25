@@ -1705,7 +1705,8 @@ defmodule Bonfire.Social.Activities do
 
   def fetch_cursor_value_fun(d, list) when is_tuple(list) do
     debug(list, "with list")
-    apply(Utils, :e, [d] ++ Tuple.to_list(list) ++ [nil])
+    # NOTE: this won't be able to use Pathex
+    apply(E, :e, [d] ++ Tuple.to_list(list) ++ [nil])
   end
 
   def fetch_cursor_value_fun(d, field) do

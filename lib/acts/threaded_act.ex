@@ -18,6 +18,7 @@ defmodule Bonfire.Social.Acts.Threaded do
   alias Needle.Changesets
   import Epics
   import Untangle
+  use Bonfire.Common.E
   use Arrows
   alias Bonfire.Common
   alias Common.Types
@@ -79,7 +80,7 @@ defmodule Bonfire.Social.Acts.Threaded do
 
     custom_thread = Threads.find_thread(attrs, current_user)
 
-    thread_title = Utils.e(attrs, :name, nil)
+    thread_title = e(attrs, :name, nil)
 
     case Threads.find_reply_to(attrs, current_user) |> debug("find_reply_to") do
       {:ok, %{replied: %{thread_id: thread_id, thread: %{}}} = reply_to} ->

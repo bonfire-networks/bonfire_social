@@ -18,6 +18,7 @@ defmodule Bonfire.Social.Acts.Sensitivity do
   # alias Needle.Changesets
   import Epics
   import Untangle
+  use Bonfire.Common.E
   use Arrows
   # alias Bonfire.Common
   # alias Common.Types
@@ -55,9 +56,9 @@ defmodule Bonfire.Social.Acts.Sensitivity do
         attrs = Keyword.get(epic.assigns[:options], attrs_key, %{})
 
         sensitive =
-          Utils.e(attrs, :sensitive, nil) ||
-            Utils.e(changeset, :changes, :post_content, :changes, :summary, nil) ||
-            Utils.e(attrs, :post_content, :summary, nil) || Utils.e(attrs, :summary, nil)
+          e(attrs, :sensitive, nil) ||
+            e(changeset, :changes, :post_content, :changes, :summary, nil) ||
+            e(attrs, :post_content, :summary, nil) || e(attrs, :summary, nil)
 
         Objects.cast_sensitivity(changeset, sensitive)
         |> Epic.assign(epic, on, ...)

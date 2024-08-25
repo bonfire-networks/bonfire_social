@@ -307,9 +307,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     #   debug(args)
 
     #   Bonfire.Social.FeedActivities.feed(
-    #     Types.maybe_to_atom(Utils.e(args, :filter, :feed_name, :local)),
+    #     Types.maybe_to_atom(e(args, :filter, :feed_name, :local)),
     #     current_user: user,
-    #     paginate: Utils.e(args, :paginate, nil)
+    #     paginate: e(args, :paginate, nil)
     #   )
     #   |> feed()
     # end
@@ -324,12 +324,12 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         Pagination.pagination_args_filter(args)
         |> debug()
 
-      filters = Utils.e(filters, :filter, [])
+      filters = e(filters, :filter, [])
 
       Bonfire.Social.FeedActivities.feed(
         {feed_name ||
            Types.maybe_to_atom(
-             Utils.e(filters, :feed_name, nil) ||
+             e(filters, :feed_name, nil) ||
                Bonfire.Social.FeedActivities.feed_name(:default, current_user)
            ), filters},
         current_user: current_user,
@@ -380,7 +380,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       if user do
         with {:ok, f} <- Bonfire.Social.Graph.Follows.follow(user, to_follow),
-             do: {:ok, Utils.e(f, :activity, nil)}
+             do: {:ok, e(f, :activity, nil)}
       else
         {:error, "Not authenticated"}
       end
@@ -391,7 +391,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       if user do
         with {:ok, f} <- Bonfire.Social.Boosts.boost(user, id),
-             do: {:ok, Utils.e(f, :activity, nil)}
+             do: {:ok, e(f, :activity, nil)}
       else
         {:error, "Not authenticated"}
       end
@@ -402,7 +402,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       if user do
         with {:ok, f} <- Bonfire.Social.Likes.like(user, id),
-             do: {:ok, Utils.e(f, :activity, nil)}
+             do: {:ok, e(f, :activity, nil)}
       else
         {:error, "Not authenticated"}
       end
@@ -413,7 +413,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       if user do
         with {:ok, f} <- Bonfire.Social.Flags.flag(user, id),
-             do: {:ok, Utils.e(f, :activity, nil)}
+             do: {:ok, e(f, :activity, nil)}
       else
         {:error, "Not authenticated"}
       end

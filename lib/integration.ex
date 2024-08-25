@@ -192,7 +192,7 @@ defmodule Bonfire.Social do
 
     verb =
       verb ||
-        Utils.e(activity, :verb, :verb, "Create")
+        e(activity, :verb, :verb, "Create")
         |> String.downcase()
         |> Types.maybe_to_atom()
 
@@ -233,7 +233,7 @@ defmodule Bonfire.Social do
       Bonfire.Federate.ActivityPub.Outgoing.maybe_federate(
         subject,
         verb,
-        object || Utils.e(activity, :object, nil) || Utils.e(activity, :object_id, nil),
+        object || e(activity, :object, nil) || e(activity, :object_id, nil),
         opts
       )
     else

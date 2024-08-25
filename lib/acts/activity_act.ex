@@ -16,6 +16,7 @@ defmodule Bonfire.Social.Acts.Activity do
 
   alias Ecto.Changeset
   import Epics
+  use Bonfire.Common.E
   import Untangle, only: [warn: 2]
   use Arrows
   alias Bonfire.Common.Utils
@@ -74,9 +75,9 @@ defmodule Bonfire.Social.Acts.Activity do
           Feeds.reply_and_or_mentions_notifications_feeds(
             current_user,
             boundary_name,
-            Utils.e(changeset.changes, :post_content, :changes, :mentions, []),
-            Utils.e(attrs, :reply_to, :created, :creator, nil),
-            Utils.e(attrs, :to_circles, [])
+            e(changeset.changes, :post_content, :changes, :mentions, []),
+            e(attrs, :reply_to, :created, :creator, nil),
+            e(attrs, :to_circles, [])
           )
 
         # CLEANUP: duplicate implementation of `Feeds.target_feeds`

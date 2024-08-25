@@ -18,6 +18,7 @@ defmodule Bonfire.Social.Acts.AntiSpam do
   # alias Needle.Changesets
   import Epics
   import Untangle
+  use Bonfire.Common.E
   use Arrows
   # alias Bonfire.Common
   # alias Common.Types
@@ -102,7 +103,7 @@ defmodule Bonfire.Social.Acts.AntiSpam do
   end
 
   defp get_attr(attrs, changeset, key) do
-    Utils.e(changeset, :changes, :post_content, :changes, key, nil) || e(attrs, key, nil) ||
+    e(changeset, :changes, :post_content, :changes, key, nil) || e(attrs, key, nil) ||
       e(attrs, :post, :post_content, key, nil) ||
       e(attrs, :post_content, key, nil) || e(attrs, :post, key, nil) || e(attrs, key, nil)
   end

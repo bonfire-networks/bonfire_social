@@ -200,18 +200,18 @@ defmodule Bonfire.Social.Feeds do
 
     # maybe include people, tags or other characters that were mentioned/tagged
     # |> debug("mentions")
-    mentions = Utils.e(changeset, :changes, :post_content, :changes, :mentions, [])
+    mentions = e(changeset, :changes, :post_content, :changes, :mentions, [])
 
     # maybe include the creator of what we're replying to
     # |> debug("reply_to")
     reply_to_creator =
-      Utils.e(changeset, :changes, :replied, :changes, :replying_to, :created, :creator, nil)
+      e(changeset, :changes, :replied, :changes, :replying_to, :created, :creator, nil)
 
     # include the thread as feed, so it can be followed
     # |> debug("thread_id")
     thread_id =
-      Utils.e(changeset, :changes, :replied, :changes, :thread_id, nil) ||
-        Utils.e(changeset, :changes, :replied, :changes, :replying_to, :thread_id, nil)
+      e(changeset, :changes, :replied, :changes, :thread_id, nil) ||
+        e(changeset, :changes, :replied, :changes, :replying_to, :thread_id, nil)
 
     do_target_feeds(creator, opts, mentions, reply_to_creator, thread_id)
   end
@@ -224,17 +224,17 @@ defmodule Bonfire.Social.Feeds do
 
     # maybe include people, tags or other characters that were mentioned/tagged
     # |> debug("mentions")
-    tags = Utils.e(object, :tags, [])
+    tags = e(object, :tags, [])
 
     # maybe include the creator of what we're replying to
     # |> debug("reply_to")
-    reply_to_creator = Utils.e(object, :replied, :reply_to, :created, :creator, nil)
+    reply_to_creator = e(object, :replied, :reply_to, :created, :creator, nil)
 
     # include the thread as feed, so it can be followed
     # |> debug("thread_id")
     thread_id =
-      Utils.e(object, :replied, :thread_id, nil) ||
-        Utils.e(object, :replied, :reply_to, :thread_id, nil)
+      e(object, :replied, :thread_id, nil) ||
+        e(object, :replied, :reply_to, :thread_id, nil)
 
     do_target_feeds(creator, opts, tags, reply_to_creator, thread_id)
   end

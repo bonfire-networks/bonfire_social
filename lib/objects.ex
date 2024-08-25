@@ -680,7 +680,7 @@ defmodule Bonfire.Social.Objects do
         |> proload(:pointer)
       )
       |> repo().maybe_preload(:pointer)
-      |> Enum.map(&(Utils.e(&1, :pointer, nil) || Utils.id(&1)))
+      |> Enum.map(&(e(&1, :pointer, nil) || Utils.id(&1)))
 
   @doc """
   Runs an epic for a given type and options.

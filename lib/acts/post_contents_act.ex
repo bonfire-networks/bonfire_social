@@ -15,6 +15,7 @@ defmodule Bonfire.Social.Acts.PostContents do
   # alias Bonfire.Social.PostContents
   alias Ecto.Changeset
   import Bonfire.Epics
+  use Bonfire.Common.E
   import Untangle, only: [warn: 2]
   use Arrows
 
@@ -82,16 +83,16 @@ defmodule Bonfire.Social.Acts.PostContents do
   end
 
   defp assign_meta(epic, act, on, meta_key) do
-    data = Utils.e(epic.assigns[on], :changes, :post_content, :changes, meta_key, [])
+    data = e(epic.assigns[on], :changes, :post_content, :changes, meta_key, [])
 
     smart(epic, act, data, "found #{meta_key}")
     Epic.assign(epic, meta_key, data)
   end
 
   defp assign_text(epic, on, meta_key \\ :text) do
-    name = Utils.e(epic.assigns[on], :changes, :post_content, :changes, :name, nil)
-    summary = Utils.e(epic.assigns[on], :changes, :post_content, :changes, :summary, nil)
-    html_body = Utils.e(epic.assigns[on], :changes, :post_content, :changes, :html_body, nil)
+    name = e(epic.assigns[on], :changes, :post_content, :changes, :name, nil)
+    summary = e(epic.assigns[on], :changes, :post_content, :changes, :summary, nil)
+    html_body = e(epic.assigns[on], :changes, :post_content, :changes, :html_body, nil)
 
     Epic.assign(epic, meta_key, "#{name} #{summary} #{html_body}")
   end
