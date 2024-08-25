@@ -1101,7 +1101,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   defp maybe_filter(query, filters) do
-    if Map.keys(filters) |> List.first() |> is_atom() do
+    if is_map(filters) and Map.keys(filters) |> List.first() |> is_atom() do
       debug(filters, "no known extra filters defined")
       query
     else
