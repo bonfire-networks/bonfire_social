@@ -264,7 +264,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   defp maybe_merge_filters(filters, opts) do
-    Enum.into(Enums.input_to_atoms(filters), opts)
+    Keyword.merge(Enums.input_to_atoms(filters) |> Keyword.new(), opts)
   end
 
   @doc """
