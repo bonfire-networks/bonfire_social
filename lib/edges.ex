@@ -462,6 +462,7 @@ defmodule Bonfire.Social.Edges do
     input_to_atoms(
       e(assigns, :feed_filters, nil) || e(assigns, :__context__, :current_params, nil) || %{}
     )
+    |> Map.new()
   end
 
   def filters_from_opts(%{__context__: _} = assigns) do
