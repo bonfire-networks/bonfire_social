@@ -344,7 +344,10 @@ defmodule Bonfire.Social.Feeds do
       [custom_feed_id]
   """
   def maybe_custom_feeds(preset_and_custom_boundary),
-    do: maybe_from_opts(preset_and_custom_boundary, :to_feeds, [])
+    do:
+      preset_and_custom_boundary
+      |> IO.inspect(label: "preset_and_custom_boundary")
+      |> maybe_from_opts(:to_feeds, [])
 
   @doc """
   Gets the feed ID for a named feed.

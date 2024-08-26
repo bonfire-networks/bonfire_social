@@ -1101,11 +1101,20 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   defp maybe_filter(query, filters) do
-    if is_map(filters) and Map.keys(filters) |> List.first() |> is_atom() do
-      debug(filters, "no known extra filters defined")
-      query
-    else
-      maybe_filter(query, input_to_atoms(filters))
+    cond do
+      is_list(filters) and filters != [] ->
+        maybe_filter(query, filters)
+
+      is_list(filters) or (is_map(filters) and Map.keys(filters) |> List.first() |> is_atom()) ->
+        debug(filters, "no known extra filters defined")
+        query
+
+      true ->
+        filters
+        |> IO.inspect()
+        |> input_to_atoms()
+        |> IO.inspect(label: "as atoms")
+        |> maybe_filter(query, ...)
     end
   end
 
