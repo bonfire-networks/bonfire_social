@@ -190,16 +190,29 @@ defmodule Bonfire.Social.Objects do
   """
   def read(object_id, opts) when is_binary(object_id) do
     # |> debug
-    opts = to_options(opts) ++ [skip_opts_check: true]
+    opts = Keyword.merge(to_options(opts), skip_opts_check: true, verbs: [:read])
 
     Common.Needles.pointer_query([id: object_id], opts)
     # |> debug()
+    # why skipping here? is Needles.pointer_query checking the boundary?
     |> Activities.read(skip_boundary_check: true)
     # |> debug("object with activity")
     ~> maybe_preload_activity_object(opts)
     ~> Activities.activity_under_object(...)
     ~> to_ok()
     |> debug("final object")
+  end
+
+  def read(%Ecto.Query{} = query, opts \\ []) do
+    opts = Keyword.merge(to_options(opts), verbs: [:read])
+
+    with {:ok, object} <-
+           query
+           |> Activities.read_query(opts)
+           |> as_permitted_for(opts)
+           |> repo().single() do
+      {:ok, Activities.activity_under_object(object)}
+    end
   end
 
   def maybe_preload_activity_object(
@@ -261,16 +274,6 @@ defmodule Bonfire.Social.Objects do
   """
   def object_creator(object) do
     e(object, :created, :creator, nil) || e(object, :creator, nil)
-  end
-
-  def read(%Ecto.Query{} = query, opts_or_socket_or_current_user \\ []) do
-    with {:ok, object} <-
-           query
-           |> Activities.read_query(opts_or_socket_or_current_user)
-           |> as_permitted_for(opts_or_socket_or_current_user)
-           |> repo().single() do
-      {:ok, Activities.activity_under_object(object)}
-    end
   end
 
   @doc """
