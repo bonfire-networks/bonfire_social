@@ -149,28 +149,28 @@ defmodule Bonfire.Social.Pins do
 
   def pin(pinner, object, :instance, opts) do
     if Bonfire.Boundaries.can?(pinner, :pin, :instance) do
-      pin(instance_scope(), object, pinner, opts)
+      pin(instance_scope(), object, pinner, opts ++ [skip_boundary_check: true])
     else
       error(l("Sorry, you cannot pin to the instance"))
     end
   end
 
-  def pin(pinner, %{} = object, user, opts) do
-    if Bonfire.Boundaries.can?(user || pinner, @boundary_verb, object) do
-      do_pin(pinner, object, opts)
+  def pin(pinner, %{} = object, scope, opts) do
+    if Bonfire.Boundaries.can?(pinner, @boundary_verb, object) do
+      do_pin(scope || pinner, object, opts)
     else
       error(l("Sorry, you cannot pin this"))
     end
   end
 
-  def pin(pinner, pinned, user, opts) when is_binary(pinned) do
+  def pin(pinner, object, scope, opts) when is_binary(object) do
     with {:ok, object} <-
-           Bonfire.Common.Needles.get(pinned,
-             current_user: user || pinner,
+           Bonfire.Common.Needles.get(object,
+             current_user: pinner,
              verbs: [@boundary_verb]
            ) do
-      # debug(pinned)
-      do_pin(pinner, object, opts)
+      # debug(object)
+      do_pin(scope || pinner, object, opts)
     else
       _ ->
         error(l("Sorry, you cannot pin this"))

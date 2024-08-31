@@ -25,6 +25,8 @@ defmodule Bonfire.Social.Threads do
   import Bonfire.Boundaries.Queries
 
   alias Bonfire.Data.Social.Replied
+  alias Bonfire.Data.Social.Pin
+
   alias Bonfire.Social.Activities
   alias Bonfire.Social.FeedActivities
 
@@ -572,14 +574,17 @@ defmodule Bonfire.Social.Threads do
       [thread_id: thread_id],
       opts
     )
-    # |> debug()
+    |> debug("quuuery")
     # return a page of items + pagination metadata
     |> repo().many_paginated(
       maybe_set_high_limit(opts, opts[:thread_mode]) ++
         Activities.order_pagination_opts(opts[:sort_by], opts[:sort_order])
     )
     # preloaded after so we can get more than 1
-    |> repo().maybe_preload(activity: [:media])
+    |> repo().maybe_preload(
+      # :pinned, 
+      activity: [:media]
+    )
 
     # |> repo().many # without pagination
     # |> debug("thread")
@@ -615,10 +620,15 @@ defmodule Bonfire.Social.Threads do
 
     opts =
       to_options(opts)
+      # |> Keyword.put_new(:thread_id, thread_id)
       |> Keyword.put_new_lazy(:max_depth, fn -> Config.get(:thread_default_max_depth, 3) end)
       |> Keyword.put_new(:preload, preloads)
 
     # |> debug("thread opts")
+
+    pin_table_id = Bonfire.Common.Types.table_id(Pin)
+    # and p.table_id == ^pin_table_id 
+    pinned_query = from p in Edge, where: p.subject_id == ^thread_id
 
     %Replied{id: Bonfire.Common.Needles.id_binary(thread_id)}
     # TODO: change the order of the or_where to make the DB check the thread_id before the path
@@ -629,8 +639,10 @@ defmodule Bonfire.Social.Threads do
     )
     |> maybe_max_depth(opts[:max_depth])
     |> where([replied], replied.id != ^thread_id)
+    |> preload(pinned: ^pinned_query)
     |> query_extras(opts)
-    |> debug("Thread nested query")
+
+    # |> debug("Thread nested query")
   end
 
   def query(filter, opts) do
@@ -800,6 +812,7 @@ defmodule Bonfire.Social.Threads do
 
   def arrange_replies_tree(replies, opts \\ []) do
     replies
+    |> debug("repppl")
     |> Replied.arrange(arrange_opts(opts))
   end
 
@@ -823,16 +836,47 @@ defmodule Bonfire.Social.Threads do
 
   defp arrange_opts(opts) do
     if opts[:sort_by] == :latest_reply do
-      #  requires: `sort_order` (desc or asc), `struct_sort_key` (a virtual field on the struct that contains the path to store the data to sort by), and `sort_by_key` (defaults to :id)
+      # sorting requires: `sort_order` (desc or asc), `struct_sort_key` (a virtual field on the struct that contains the path to store the data to sort by), and `sort_by_key` or `sort_by_key_fun`
       Keyword.merge(opts,
         sort_order: opts[:sort_order] || :desc,
         struct_sort_key: :path_sorter,
-        sort_by_key: :id
+        sort_by_key_fun: &custom_nodes_sorter_latest_reply/2
       )
     else
       opts
+      # |> Keyword.merge( # TODO
+      #   sort_order: opts[:sort_order] || :desc,
+      #   struct_sort_key: :path_sorter,
+      #   sort_by_key_fun: &custom_nodes_sorter_pin/2
+      # )
     end
-    |> debug()
+    |> debug("arrange_opts")
+  end
+
+  defp custom_nodes_sorter_latest_reply(nodes, opts) do
+    # FIXME: pins should always be at the top
+    order = opts[:sort_order] == :desc
+
+    nodes
+    |> Enum.map(fn
+      %{pinned: %{id: _}, id: id} -> {!order, id}
+      %{pinned: _, id: id} -> {order, id}
+      %{pinned: %{id: _}} -> {!order, nil}
+      %{id: id} -> id
+      _ -> nil
+    end)
+  end
+
+  defp custom_nodes_sorter_pin(nodes, opts) do
+    # FIXME: pins should always be at the top
+    order = opts[:sort_order] == :desc
+
+    nodes
+    |> Enum.map(fn
+      %{pinned: %{id: _}} -> order
+      %{pinned: _} -> !order
+      _ -> nil
+    end)
   end
 
   # Deprecated:
