@@ -24,6 +24,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       field(:activity, :activity)
     end
 
+    # for pagination 
     connection(node_type: :post)
 
     object :verb do
