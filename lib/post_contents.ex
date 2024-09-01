@@ -440,16 +440,17 @@ defmodule Bonfire.Social.PostContents do
         |> debug("Sss")
 
       diffed = %{
-        name: diff(e(version.previous_version, :name, ""), e(version.current_version, :name, "")),
+        name:
+          diff(ed(version.previous_version, :name, ""), ed(version.current_version, :name, "")),
         summary:
           diff(
-            e(version.previous_version, :summary, ""),
-            e(version.current_version, :summary, "")
+            ed(version.previous_version, :summary, ""),
+            ed(version.current_version, :summary, "")
           ),
         html_body:
           diff(
-            e(version.previous_version, :html_body, ""),
-            e(version.current_version, :html_body, "")
+            ed(version.previous_version, :html_body, ""),
+            ed(version.current_version, :html_body, "")
           )
       }
 
