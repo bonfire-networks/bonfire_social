@@ -627,8 +627,8 @@ defmodule Bonfire.Social.Threads do
     # |> debug("thread opts")
 
     pin_table_id = Bonfire.Common.Types.table_id(Pin)
+    # pinned_query = from p in Edge, where: p.subject_id == ^thread_id
     # and p.table_id == ^pin_table_id 
-    pinned_query = from p in Edge, where: p.subject_id == ^thread_id
 
     %Replied{id: Bonfire.Common.Needles.id_binary(thread_id)}
     # TODO: change the order of the or_where to make the DB check the thread_id before the path
@@ -637,10 +637,17 @@ defmodule Bonfire.Social.Threads do
       [replied],
       replied.thread_id == ^thread_id or replied.reply_to_id == ^thread_id
     )
-    |> maybe_max_depth(opts[:max_depth])
     |> where([replied], replied.id != ^thread_id)
-    |> preload(pinned: ^pinned_query)
-    |> query_extras(opts)
+    |> join(:left, [replied], pinned in Edge,
+      as: :pinned,
+      on:
+        replied.id == pinned.object_id and pinned.subject_id == ^thread_id and
+          pinned.table_id == ^pin_table_id
+    )
+    |> proload(:pinned)
+    # |> preload(pinned: ^pinned_query)
+    |> maybe_max_depth(opts[:max_depth])
+    |> query_extras(opts ++ [with_pins: true])
 
     # |> debug("Thread nested query")
   end
@@ -657,10 +664,10 @@ defmodule Bonfire.Social.Threads do
     query
     |> Activities.query_object_preload_create_activity(opts)
     |> Activities.as_permitted_for(opts, opts[:verbs] || [:see, :read])
-    |> query_order(opts[:sort_by], opts[:sort_order])
+    |> query_order(opts[:sort_by], opts[:sort_order], opts[:with_pins])
   end
 
-  #   defp query_order(query, :latest_reply, sort_order) do
+  #   defp query_order(query, :latest_reply, sort_order, _with_pins?) do
   #     #  query = query
   #     #   |> select([replied], %{
   #     #  replied | path_depth: fragment("array_upper(?, 1) as path_depth", replied.path) 
@@ -694,18 +701,18 @@ defmodule Bonfire.Social.Threads do
   #     end
   #   end
 
-  defp query_order(%{aliases: %{replied: _}} = query, sort_by, sort_order) do
-    Activities.query_order(query, sort_by, sort_order)
+  defp query_order(%{aliases: %{replied: _}} = query, sort_by, sort_order, with_pins?) do
+    Activities.query_order(query, sort_by, sort_order, with_pins?)
   end
 
-  defp query_order(query, :num_replies = sort_by, sort_order) do
+  defp query_order(query, :num_replies = sort_by, sort_order, with_pins?) do
     # debug(query.aliases)
     from(query, as: :replied)
-    |> Activities.query_order(sort_by, sort_order)
+    |> Activities.query_order(sort_by, sort_order, with_pins?)
   end
 
-  defp query_order(query, sort_by, sort_order) do
-    Activities.query_order(query, sort_by, sort_order)
+  defp query_order(query, sort_by, sort_order, with_pins?) do
+    Activities.query_order(query, sort_by, sort_order, with_pins?)
   end
 
   @doc """
@@ -861,9 +868,9 @@ defmodule Bonfire.Social.Threads do
     |> Enum.map(fn
       %{pinned: %{id: _}, id: id} -> {!order, id}
       %{pinned: _, id: id} -> {order, id}
-      %{pinned: %{id: _}} -> {!order, nil}
+      %{pinned: %{id: _}} -> {!order, !order}
       %{id: id} -> id
-      _ -> nil
+      _ -> !order
     end)
   end
 

@@ -1564,7 +1564,9 @@ defmodule Bonfire.Social.Activities do
       > query_order(query, :num_replies, :asc)
       # returns the query ordered by number of replies in ascending order
   """
-  def query_order(query, :num_replies, sort_order) do
+  def query_order(query, sort_by, sort_order, with_pins? \\ false)
+
+  def query_order(query, :num_replies, sort_order, _no_pins) do
     if sort_order == :asc do
       query
       |> proload(:activity)
@@ -1616,7 +1618,7 @@ defmodule Bonfire.Social.Activities do
   #   end
   # end
 
-  def query_order(query, :num_boosts, sort_order) do
+  def query_order(query, :num_boosts, sort_order, _no_pins) do
     if sort_order == :asc do
       query
       |> proload(activity: [:boost_count])
@@ -1634,7 +1636,7 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
-  def query_order(query, :num_likes, sort_order) do
+  def query_order(query, :num_likes, sort_order, _no_pins) do
     if sort_order == :asc do
       query
       |> proload(activity: [:like_count])
@@ -1652,15 +1654,37 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
-  def query_order(query, _, sort_order) do
+  def query_order(query, _, sort_order, true = _with_pins) do
     if sort_order == :asc do
       query
       |> proload(:activity)
-      |> order_by([activity: activity], activity.id)
+      |> order_by([activity: activity, pinned: pinned],
+        desc_nulls_last: pinned.id,
+        asc: activity.id
+      )
     else
       query
       |> proload(:activity)
-      |> order_by([activity: activity], desc: activity.id)
+      |> order_by([activity: activity, pinned: pinned],
+        desc_nulls_last: pinned.id,
+        desc: activity.id
+      )
+    end
+  end
+
+  def query_order(query, _, sort_order, _no_pins) do
+    if sort_order == :asc do
+      query
+      |> proload(:activity)
+      |> order_by([activity: activity],
+        asc: activity.id
+      )
+    else
+      query
+      |> proload(:activity)
+      |> order_by([activity: activity],
+        desc: activity.id
+      )
     end
   end
 
