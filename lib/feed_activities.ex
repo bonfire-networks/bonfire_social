@@ -370,18 +370,6 @@ defmodule Bonfire.Social.FeedActivities do
 
             result
         end
-        # TODO: where best to do these postloads? and try to optimise into one call
-        |> Bonfire.Common.Needles.Preload.maybe_preload_nested_pointers(
-          [activity: [replied: [:reply_to]]],
-          opts
-        )
-        |> Bonfire.Common.Needles.Preload.maybe_preload_nested_pointers(
-          [activity: [:object]],
-          opts
-        )
-
-        # run post-preloads to follow pointers and catch anything else missing - TODO: only follow some pointers
-        # |> Activities.activity_preloads(e(opts, :preload, :feed), opts |> Keyword.put_new(:follow_pointers, true))
     end
   end
 
@@ -707,7 +695,25 @@ defmodule Bonfire.Social.FeedActivities do
       :edges,
       edges
       |> maybe_dedup_feed_objects(opts)
-      # |> Activities.activity_preloads(post_preloads, opts)
+      # TODO: where best to do these postloads? and try to optimise into one call
+
+      |> Bonfire.Common.Needles.Preload.maybe_preload_nested_pointers(
+        [activity: [replied: [:reply_to]]],
+        opts
+      )
+      |> Bonfire.Common.Needles.Preload.maybe_preload_nested_pointers(
+        [activity: [:object]],
+        opts
+      )
+      |> repo().maybe_preload(
+        # FIXME: this should happen in `Activities.activity_preloads`
+        [activity: Activities.maybe_with_labelled()],
+        opts |> Keyword.put_new(:follow_pointers, false)
+      )
+
+      # run post-preloads to follow pointers and catch anything else missing - TODO: only follow some pointers
+      # |> Activities.activity_preloads(e(opts, :preload, :feed), opts |> Keyword.put_new(:follow_pointers, true))
+      # |> Activities.activity_preloads(e(opts, :preload, :feed), opts |> Keyword.put_new(:follow_pointers, false))
     )
   end
 
@@ -959,7 +965,7 @@ defmodule Bonfire.Social.FeedActivities do
           debug("include labelling for all")
           []
         else
-          debug("do not include labelling")
+          debug("do not include labelling as activities")
           [:label]
         end ++
         if opts[:include_flags] == :moderators and

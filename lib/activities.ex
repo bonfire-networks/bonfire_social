@@ -783,9 +783,19 @@ defmodule Bonfire.Social.Activities do
             do:
               query
               |> proload(
-                activity: [labelled: {"labelled_", [:post_content, :media, subject: [:profile]]}]
+                activity: [
+                  labelled:
+                    {"labelled_",
+                     [
+                       :post_content
+                       # :media, 
+                       # subject: [:profile]
+                     ]}
+                ]
               ),
             else: query
+
+        # NOTE: media attached to the label should be loaded separately as there can be several
 
         # proload query, activity: [:media] # FYI: proloading media only queries one attachment
         :with_seen ->
@@ -851,15 +861,19 @@ defmodule Bonfire.Social.Activities do
           [:media, :sensitive]
 
         :maybe_with_labelled ->
-          if Extend.module_enabled?(Bonfire.Label, opts),
-            do: [labelled: [:post_content, :media, subject: [:profile]]],
-            else: []
+          maybe_with_labelled()
 
         :with_seen ->
           subquery = subquery_preload_seen(opts)
           if subquery, do: [seen: subquery], else: []
       end
     end
+  end
+
+  def maybe_with_labelled do
+    if Extend.extension_enabled?(:bonfire_label),
+      do: [labelled: [:post_content, :media, subject: [:profile]]],
+      else: []
   end
 
   defp maybe_preload_reply_to(opts) do

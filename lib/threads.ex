@@ -583,7 +583,13 @@ defmodule Bonfire.Social.Threads do
     # preloaded after so we can get more than 1
     |> repo().maybe_preload(
       # :pinned, 
+      # FIXME: this should happen via `Activities.activity_preloads`
       activity: [:media]
+    )
+    |> repo().maybe_preload(
+      # FIXME: this should happen via `Activities.activity_preloads`
+      [activity: Activities.maybe_with_labelled()],
+      opts |> Keyword.put_new(:follow_pointers, false)
     )
 
     # |> repo().many # without pagination
