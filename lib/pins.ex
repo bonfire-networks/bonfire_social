@@ -233,18 +233,18 @@ defmodule Bonfire.Social.Pins do
     end
   end
 
-  def unpin(subject, %{} = pinned, _) do
+  def unpin(subject, %{} = pinned, scope) do
     # delete the Pin
-    Edges.delete_by_both(subject, Pin, pinned)
+    Edges.delete_by_both(scope || subject, Pin, pinned)
     # delete the pin activity & feed entries
-    Activities.delete_by_subject_verb_object(subject, :pin, pinned)
+    Activities.delete_by_subject_verb_object(scope || subject, :pin, pinned)
 
     # Note: the pin count is automatically decremented by DB triggers
   end
 
-  def unpin(subject, pinned, user) when is_binary(pinned) do
-    with {:ok, pinned} <- Bonfire.Common.Needles.get(pinned, current_user: user || subject) do
-      unpin(subject, pinned)
+  def unpin(subject, pinned, scope) when is_binary(pinned) do
+    with {:ok, pinned} <- Bonfire.Common.Needles.get(pinned, current_user: subject) do
+      unpin(subject, pinned, scope)
     end
   end
 

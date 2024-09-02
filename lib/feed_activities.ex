@@ -829,7 +829,7 @@ defmodule Bonfire.Social.FeedActivities do
       :local in feed_ids or local_feed_id in feed_ids ->
         debug("local feed")
 
-        # excludes likes/follows from local feed - TODO: configurable
+        # excludes likes/etc from local feed - TODO: configurable
         Enums.deep_merge(opts, exclude_verbs: [:like, :pin])
         # |> debug("local_opts")
         |> query_extras()
@@ -861,11 +861,15 @@ defmodule Bonfire.Social.FeedActivities do
       specific_feeds? and
           not is_struct(e(opts, :feed_filters, nil)) ->
         debug(feed_id_or_ids, "specific feed(s)")
-        generic_feed_query(feed_id_or_ids, opts)
+
+        Enums.deep_merge(opts, exclude_verbs: [:pin])
+        |> generic_feed_query(feed_id_or_ids, ...)
 
       true ->
         debug("unknown feed")
-        query_extras(opts)
+
+        Enums.deep_merge(opts, exclude_verbs: [:pin])
+        |> query_extras()
     end
     |> debug("feed query")
   end

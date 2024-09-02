@@ -632,10 +632,6 @@ defmodule Bonfire.Social.Threads do
 
     # |> debug("thread opts")
 
-    pin_table_id = Bonfire.Common.Types.table_id(Pin)
-    # pinned_query = from p in Edge, where: p.subject_id == ^thread_id
-    # and p.table_id == ^pin_table_id 
-
     %Replied{id: Bonfire.Common.Needles.id_binary(thread_id)}
     # TODO: change the order of the or_where to make the DB check the thread_id before the path
     |> Replied.descendants()
@@ -644,16 +640,8 @@ defmodule Bonfire.Social.Threads do
       replied.thread_id == ^thread_id or replied.reply_to_id == ^thread_id
     )
     |> where([replied], replied.id != ^thread_id)
-    |> join(:left, [replied], pinned in Edge,
-      as: :pinned,
-      on:
-        replied.id == pinned.object_id and pinned.subject_id == ^thread_id and
-          pinned.table_id == ^pin_table_id
-    )
-    |> proload(:pinned)
-    # |> preload(pinned: ^pinned_query)
     |> maybe_max_depth(opts[:max_depth])
-    |> query_extras(opts ++ [with_pins: true])
+    |> maybe_with_pins(thread_id, opts)
 
     # |> debug("Thread nested query")
   end
@@ -671,6 +659,29 @@ defmodule Bonfire.Social.Threads do
     |> Activities.query_object_preload_create_activity(opts)
     |> Activities.as_permitted_for(opts, opts[:verbs] || [:see, :read])
     |> query_order(opts[:sort_by], opts[:sort_order], opts[:with_pins])
+  end
+
+  def maybe_with_pins(query, thread_id, opts) do
+    if Extend.module_enabled?(Bonfire.Social.Pins) or
+         Extend.module_enabled?(Bonfire.Social.Answers) do
+      pin_table_id = Bonfire.Common.Types.table_id(Pin)
+      # pinned_query = from p in Edge, where: p.subject_id == ^thread_id
+      # and p.table_id == ^pin_table_id 
+
+      query
+      |> join(:left, [replied], pinned in Edge,
+        as: :pinned,
+        on:
+          replied.id == pinned.object_id and pinned.subject_id == ^thread_id and
+            pinned.table_id == ^pin_table_id
+      )
+      |> proload(:pinned)
+      # |> preload(pinned: ^pinned_query)
+      |> query_extras(opts ++ [with_pins: true])
+    else
+      query
+      |> query_extras(opts)
+    end
   end
 
   #   defp query_order(query, :latest_reply, sort_order, _with_pins?) do
