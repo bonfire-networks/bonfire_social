@@ -494,23 +494,23 @@ defmodule Bonfire.Social.FeedActivities do
     Bonfire.Social.Flags.list_preloaded(opts ++ [include_flags: :moderators])
   end
 
-  def feed(:media, opts) do
-    feed(
-      {:media, :all},
-      opts
-    )
-  end
+  #  TODO
+  # def feed(:media, opts) do
+  #   feed(
+  #     {:media, :all},
+  #     opts
+  #   )
+  # end
+  # def feed({:media, type}, opts) do
+  #   opts =
+  #     opts
+  #     |> Keyword.merge(
+  #       # per_media_type: type, # TODO for filtering different types of media
+  #       preload: List.wrap(e(opts, :preload, [])) ++ [:per_media]
+  #     )
 
-  def feed({:media, type}, opts) do
-    opts =
-      opts
-      |> Keyword.merge(
-        per_media_type: type,
-        preload: List.wrap(e(opts, :preload, [])) ++ [:per_media]
-      )
-
-    feed(:explore, opts)
-  end
+  #   feed(:explore, opts)
+  # end
 
   def feed(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
     {feed_ids, opts} =
@@ -866,7 +866,7 @@ defmodule Bonfire.Social.FeedActivities do
         |> generic_feed_query(feed_id_or_ids, ...)
 
       true ->
-        debug("unknown feed")
+        debug(feed_id_or_ids, "unknown feed")
 
         Enums.deep_merge(opts, exclude_verbs: [:pin])
         |> query_extras()
@@ -1087,7 +1087,7 @@ defmodule Bonfire.Social.FeedActivities do
   defp maybe_time_limit(query, _), do: query
 
   defp maybe_filter(query, %{object_type: object_type}) when not is_nil(object_type) do
-    case Bonfire.Common.Types.table_types(object_type) |> debug() do
+    case Bonfire.Common.Types.table_types(object_type) |> debug("object_type tables") do
       table_ids when is_list(table_ids) and table_ids != [] ->
         where(query, [object: object], object.table_id in ^table_ids)
 
@@ -1209,6 +1209,7 @@ defmodule Bonfire.Social.FeedActivities do
     # debug("FeedActivities: just making visible for and putting in these circles/feeds: #{inspect circles}")
     # Bonfire.Boundaries.maybe_make_visible_for(subject, object, circles) # |> debug("grant")
     Feeds.target_feeds(the_object(object), subject, opts)
+    |> debug("feeds to publish to")
     |> maybe_feed_publish(subject, verb_or_activity, object, ..., opts)
   end
 
@@ -1495,14 +1496,16 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp create_activity(subject, verb, object, _), do: Activities.create(subject, verb, object)
 
-  defp create_and_put_in_feeds(subject, verb, object, feed_id, opts)
-       when (is_map(object) and is_binary(feed_id)) or is_list(feed_id) do
-    with {:ok, activity} <- create_activity(subject, verb, object, e(opts, :activity_json, nil)) do
+  defp create_and_put_in_feeds(subject, verb, %{} = object, feed_ids, opts)
+       when is_binary(feed_ids) or is_list(feed_ids) do
+    with {:ok, activity} <-
+           create_activity(subject, verb, object, e(opts, :activity_json, nil))
+           |> debug("created") do
       # publish in specified feed
       # meh
       with {:ok, published} <-
              put_in_feeds_and_maybe_federate(
-               feed_id,
+               feed_ids,
                subject,
                verb,
                object,
@@ -1516,7 +1519,7 @@ defmodule Bonfire.Social.FeedActivities do
           {:ok, activity}
 
         e ->
-          warn(e, "did not put_in_feeds or federate: #{inspect(feed_id)}")
+          warn(e, "did not put_in_feeds or federate: #{inspect(feed_ids)}")
           {:ok, activity}
       end
     end
@@ -1576,9 +1579,9 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp put_in_feeds(feeds, activity, push?) when is_list(feeds) and feeds != [] do
     # fa =
-    #   feeds
-    #   |> Circles.circle_ids()
-    #   |> Enum.map(fn x -> put_in_feeds(x, activity, false) end)
+    feeds
+    # |> Circles.circle_ids()
+    |> Enum.map(fn x -> put_in_feeds(x, id(activity), false) end)
 
     if push?, do: maybe_apply(Bonfire.UI.Social.LivePush, :push_activity, [feeds, activity])
   end

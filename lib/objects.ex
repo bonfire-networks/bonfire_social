@@ -722,34 +722,27 @@ defmodule Bonfire.Social.Objects do
   # used in Classify, Geolocate, etc
   def publish(creator, verb, thing, opts_or_attrs \\ nil, for_module \\ __MODULE__)
 
-  def publish(
-        %{id: _} = creator,
-        verb,
-        %{id: _} = thing,
+  def publish(creator, verb, %{id: _} = thing, opts_or_attrs, for_module) do
+    creator =
+      creator || e(thing, :creator, nil) || e(thing, :created, :creator, nil) ||
+        e(thing, :created, :creator_id, nil) || e(thing, :provider, nil)
+
+    # make visible but don't put in feeds
+    opts_with_boundaries =
+      set_boundaries(
+        creator,
+        thing,
         opts_or_attrs,
         for_module
       )
-      when is_atom(verb) do
-    # this sets permissions & returns recipients in opts to be used for publishing
-    opts = set_boundaries(creator, thing, opts_or_attrs, for_module)
 
     # add to activity feed + maybe federate
-    Bonfire.Social.FeedActivities.publish(creator, verb, thing, opts)
-  end
-
-  def publish(creator, _verb, %{id: _} = thing, opts_or_attrs, for_module) do
-    debug("No creator for object so we can't publish it")
-
-    # make visible but don't put in feeds
-    set_boundaries(
-      creator || e(thing, :creator, nil) || e(thing, :created, :creator, nil) ||
-        e(thing, :created, :creator_id, nil) || e(thing, :provider, nil),
-      thing,
-      opts_or_attrs,
-      for_module
-    )
-
-    {:ok, nil}
+    if creator do
+      Bonfire.Social.FeedActivities.publish(creator, verb, thing, opts_with_boundaries)
+    else
+      warn("No creator for object so we can't publish it")
+      {:ok, nil}
+    end
   end
 
   @doc """
