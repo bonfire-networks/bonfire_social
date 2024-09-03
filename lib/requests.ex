@@ -136,7 +136,7 @@ defmodule Bonfire.Social.Requests do
   def requested(%Request{id: _} = request, _opts), do: {:ok, request}
 
   def requested(request, opts),
-    do: get([id: ulid(request), object: current_user(opts)], opts ++ [skip_boundary_check: true])
+    do: get([id: uid(request), object: current_user(opts)], opts ++ [skip_boundary_check: true])
 
   # TODO: abstract the next few functions into Edges
 
@@ -333,7 +333,7 @@ defmodule Bonfire.Social.Requests do
   #     info("skip boundary check")
   #     {:ok, object}
   #   else
-  #     case ulid(object) do
+  #     case uid(object) do
   #       id when is_binary(id) ->
   #         Common.Needles.one(id, opts ++ [log_query: true])
   #         |> info("allowed to request ?")
@@ -411,7 +411,7 @@ defmodule Bonfire.Social.Requests do
   ###
 
   def ap_publish_activity(subject, {:accept, request}, action) do
-    request_id = ulid(request)
+    request_id = uid(request)
 
     with false <- Social.is_local?(e(action.edge, :subject, nil)),
          {:ok, object_actor} <-

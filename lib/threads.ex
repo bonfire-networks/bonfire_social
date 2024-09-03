@@ -72,7 +72,7 @@ defmodule Bonfire.Social.Threads do
 
     case find_reply_to(attrs, user) do
       {:ok, %{replied: %{thread_id: thread_id, thread: %{}}} = reply_to} ->
-        thread_id = ulid(custom_thread) || thread_id
+        thread_id = uid(custom_thread) || thread_id
 
         debug(
           reply_to,
@@ -84,7 +84,7 @@ defmodule Bonfire.Social.Threads do
       # |> debug("cs with replied")
       {:ok, %{replied: %{thread_id: thread_id}} = reply_to}
       when is_binary(thread_id) ->
-        thread_id = ulid(custom_thread) || reply_to.id
+        thread_id = uid(custom_thread) || reply_to.id
 
         debug(
           thread_id,
@@ -95,7 +95,7 @@ defmodule Bonfire.Social.Threads do
 
       {:ok, %{} = reply_to} ->
         # debug(reply_to)
-        thread_id = ulid(custom_thread) || reply_to.id
+        thread_id = uid(custom_thread) || reply_to.id
 
         debug(
           thread_id,
@@ -116,7 +116,7 @@ defmodule Bonfire.Social.Threads do
         if custom_thread do
           debug(custom_thread, "adding under thread but not as a reply")
 
-          Changesets.put_assoc(changeset, :replied, %{thread_id: ulid(custom_thread)})
+          Changesets.put_assoc(changeset, :replied, %{thread_id: uid(custom_thread)})
         else
           debug("no valid reply_to_id or thread_id specified, starting new thread")
 
@@ -246,7 +246,7 @@ defmodule Bonfire.Social.Threads do
     Changesets.put_assoc(
       changeset,
       :replied,
-      make_child_of(reply_to, %{thread_id: ulid(thread), reply_to: reply_to})
+      make_child_of(reply_to, %{thread_id: uid(thread), reply_to: reply_to})
     )
   end
 
@@ -753,7 +753,7 @@ defmodule Bonfire.Social.Threads do
   def unseen_query(filters, opts) do
     table_id = Bonfire.Common.Types.table_id(Seen)
     current_user = current_user_required!(opts)
-    uid = ulid(current_user)
+    uid = uid(current_user)
 
     if uid && table_id,
       do:

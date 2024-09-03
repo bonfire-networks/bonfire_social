@@ -179,7 +179,7 @@ defmodule Bonfire.Social.Tags do
 
       # remove it from the inbox ("Submitted" tab)
       if inbox_id,
-        do: Bonfire.Social.FeedActivities.delete(feed_id: inbox_id, id: ulid(object)) |> debug(),
+        do: Bonfire.Social.FeedActivities.delete(feed_id: inbox_id, id: uid(object)) |> debug(),
         else: debug("no inbox ID")
     else
       debug("skip boosting, because not a character")

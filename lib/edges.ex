@@ -186,9 +186,9 @@ defmodule Bonfire.Social.Edges do
   def put_edge_assoc(changeset, type_id, subject, object) when is_binary(type_id) do
     %{
       # subject: subject,
-      subject_id: ulid(subject),
+      subject_id: uid(subject),
       # object: object,
-      object_id: ulid(object),
+      object_id: uid(object),
       table_id: type_id
     }
     |> debug()
@@ -493,10 +493,10 @@ defmodule Bonfire.Social.Edges do
         boundarise(query, edge.subject_id, opts)
 
       _ when is_list(subject) ->
-        where(query, [edge: edge], edge.subject_id in ^ulids(subject))
+        where(query, [edge: edge], edge.subject_id in ^uids(subject))
 
       _ when is_map(subject) or is_binary(subject) ->
-        where(query, [edge: edge], edge.subject_id == ^ulid(subject))
+        where(query, [edge: edge], edge.subject_id == ^uid(subject))
     end
   end
 
@@ -506,10 +506,10 @@ defmodule Bonfire.Social.Edges do
         boundarise(query, edge.object_id, opts)
 
       _ when is_list(object) ->
-        where(query, [edge: edge], edge.object_id in ^ulids(object))
+        where(query, [edge: edge], edge.object_id in ^uids(object))
 
       _ when is_map(object) or is_binary(object) ->
-        where(query, [edge: edge], edge.object_id == ^ulid!(object))
+        where(query, [edge: edge], edge.object_id == ^uid!(object))
 
       _ ->
         warn(object, "unrecognised object")
@@ -578,7 +578,7 @@ defmodule Bonfire.Social.Edges do
   defp filter(query, {:tree_parent, parents}, _opts) do
     query
     |> proload(edge: [:tree])
-    |> where([tree: tree], tree.parent_id in ^ulids(parents))
+    |> where([tree: tree], tree.parent_id in ^uids(parents))
   end
 
   defp filter(query, {common, _}, _opts)

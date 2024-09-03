@@ -691,13 +691,13 @@ defmodule Bonfire.Social.Feeds do
     with feed_id when is_binary(feed_id) <- create_box(type, for_subject) do
       # debug(for_subject)
       debug(
-        "created new #{inspect(type)} with id #{inspect(feed_id)} for #{inspect(ulid(for_subject))}"
+        "created new #{inspect(type)} with id #{inspect(feed_id)} for #{inspect(uid(for_subject))}"
       )
 
       feed_id
     else
       e ->
-        error("could not find or create feed (#{inspect(e)}) for #{inspect(ulid(for_subject))}")
+        error("could not find or create feed (#{inspect(e)}) for #{inspect(uid(for_subject))}")
         nil
     end
   end

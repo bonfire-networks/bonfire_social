@@ -365,7 +365,7 @@ defmodule Bonfire.Social.Likes do
   end
 
   defp do_create(subject, object, emoji_id, _, opts) when is_binary(emoji_id) do
-    Edges.changeset({Like, Types.ulid!(emoji_id)}, subject, :like, object, opts)
+    Edges.changeset({Like, Types.uid!(emoji_id)}, subject, :like, object, opts)
     |> debug("cssss")
     |> Edges.insert(subject, object)
   end
@@ -375,7 +375,7 @@ defmodule Bonfire.Social.Likes do
     with {:ok, emoji} <-
            get_or_create_emoji(emoji, meta)
            |> debug() do
-      Edges.changeset({Like, Types.ulid!(emoji)}, subject, :like, object, opts)
+      Edges.changeset({Like, Types.uid!(emoji)}, subject, :like, object, opts)
       |> Edges.insert(subject, object)
     else
       e ->
@@ -444,7 +444,7 @@ defmodule Bonfire.Social.Likes do
            ActivityPub.Object.get_cached(
              pointer: e(like.edge, :object, nil) || like.edge.object_id
            ) do
-      ActivityPub.like(%{actor: liker, object: object, pointer: ulid(like)})
+      ActivityPub.like(%{actor: liker, object: object, pointer: uid(like)})
     else
       {:error, :not_found} ->
         :ignore

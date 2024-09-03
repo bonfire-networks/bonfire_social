@@ -356,7 +356,7 @@ defmodule Bonfire.Social.Boosts do
            ActivityPub.Object.get_cached(
              pointer: e(boost, :edge, :object, nil) || e(boost, :edge, :object_id, nil)
            ) do
-      ActivityPub.announce(%{actor: booster, object: object, pointer: ulid(boost)})
+      ActivityPub.announce(%{actor: booster, object: object, pointer: uid(boost)})
     else
       {:error, :not_found} ->
         :ignore

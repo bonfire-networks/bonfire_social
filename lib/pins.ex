@@ -184,7 +184,7 @@ defmodule Bonfire.Social.Pins do
     opts = [
       # TODO: make configurable
       boundary: "mentions",
-      to_circles: [ulid(pinned_creator)],
+      to_circles: [uid(pinned_creator)],
       to_feeds: Feeds.maybe_creator_notification(pinner, pinned_creator, opts)
     ]
 
@@ -274,7 +274,7 @@ defmodule Bonfire.Social.Pins do
     with {:ok, %Ecto.Changeset{valid?: true} = cs} <-
            Bonfire.Data.Assort.Ranked.changeset(%{
              item_id: pin,
-             scope_id: ulid(scope),
+             scope_id: uid(scope),
              rank_set: position
            })
            |> Ecto.Changeset.unique_constraint([:item_id, :scope_id],
@@ -461,7 +461,7 @@ defmodule Bonfire.Social.Pins do
            ActivityPub.Actor.get_cached(pointer: subject || pin.edge.subject_id),
          {:ok, object} <-
            ActivityPub.Object.get_cached(pointer: e(pin.edge, :object, nil) || pin.edge.object_id) do
-      ActivityPub.like(%{actor: pinner, object: object, pointer: ulid(pin)})
+      ActivityPub.like(%{actor: pinner, object: object, pointer: uid(pin)})
     end
   end
 

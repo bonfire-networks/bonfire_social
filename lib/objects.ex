@@ -156,7 +156,7 @@ defmodule Bonfire.Social.Objects do
   end
 
   def cast_creator(changeset, creator),
-    do: cast_creator(changeset, creator, ulid(creator))
+    do: cast_creator(changeset, creator, uid(creator))
 
   defp cast_creator(changeset, _creator, nil), do: changeset
 
@@ -165,7 +165,7 @@ defmodule Bonfire.Social.Objects do
   end
 
   def cast_caretaker(changeset, caretaker),
-    do: cast_caretaker(changeset, caretaker, ulid(caretaker))
+    do: cast_caretaker(changeset, caretaker, uid(caretaker))
 
   defp cast_caretaker(changeset, _caretaker, nil), do: changeset
 
@@ -311,7 +311,7 @@ defmodule Bonfire.Social.Objects do
 
   # doc "List objects created by a user and which are in their outbox, which are not replies"
   def filter(:by, user, query) do
-    case ulid(user) do
+    case uid(user) do
       nil ->
         query
 
@@ -364,7 +364,7 @@ defmodule Bonfire.Social.Objects do
     # TODO: check user's edit permissions
     object
     |> repo().maybe_preload(:named)
-    |> changeset_named(%{named: %{id: ulid(object), name: name}})
+    |> changeset_named(%{named: %{id: uid(object), name: name}})
     |> repo().update()
   end
 
@@ -474,7 +474,7 @@ defmodule Bonfire.Social.Objects do
     #   Bonfire.Data.Social.PostContent
     # ]
 
-    id = ulid!(object)
+    id = uid!(object)
 
     Activities.delete_by_object(id)
     |> debug("Delete it from feeds first and foremost")
@@ -628,7 +628,7 @@ defmodule Bonfire.Social.Objects do
         "First of all, we must collate a list of recursive caretakers, plus ID(s) provided"
       )
 
-    caretaker_ids = Types.ulids(caretakers)
+    caretaker_ids = Types.uids(caretakers)
 
     care_taken(caretaker_ids)
     |> Enum.reject(&(Enums.id(&1) in caretaker_ids))
@@ -661,7 +661,7 @@ defmodule Bonfire.Social.Objects do
       iex> care_closures(["id1", "id2"])
 
   """
-  def care_closures(ids), do: repo().all(CareClosure.by_branch(Types.ulids(ids)))
+  def care_closures(ids), do: repo().all(CareClosure.by_branch(Types.uids(ids)))
 
   @doc """
   Retrieves a list of objects that are taken care of by the given caretaker IDs.
@@ -679,7 +679,7 @@ defmodule Bonfire.Social.Objects do
   def care_taken(ids),
     do:
       repo().all(
-        from(c in Caretaker, where: c.caretaker_id in ^Types.ulids(ids))
+        from(c in Caretaker, where: c.caretaker_id in ^Types.uids(ids))
         |> proload(:pointer)
       )
       |> repo().maybe_preload(:pointer)

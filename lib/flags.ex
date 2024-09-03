@@ -243,7 +243,7 @@ defmodule Bonfire.Social.Flags do
           else: Common.Needles.one(id, opts)
 
       _ when is_binary(object) ->
-        if is_ulid?(object) do
+        if is_uid?(object) do
           Common.Needles.one(object, opts)
         else
           # try by username

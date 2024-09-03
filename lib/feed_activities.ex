@@ -462,7 +462,7 @@ defmodule Bonfire.Social.FeedActivities do
         opts
         |> debug("feed_opts for #{id_or_ids}")
 
-      ulid(id_or_ids)
+      uid_or_uids(id_or_ids)
       |> do_feed(opts)
     end
   end
@@ -589,7 +589,7 @@ defmodule Bonfire.Social.FeedActivities do
     # current_user = current_user(current_user_or_socket)
     case Feeds.named_feed_id(feed_name, opts) || Feeds.my_feed_id(feed_name, opts) do
       feed when is_binary(feed) or is_list(feed) ->
-        # debug(ulid(current_user(opts)), "current_user")
+        # debug(uid(current_user(opts)), "current_user")
         # debug(feed_name, "feed_name")
         debug(feed, "feed id(s)")
         feed
@@ -652,7 +652,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feed_contains?(feed, object, opts) when is_map(object) or is_binary(object) do
-    case ulid(object) do
+    case uid(object) do
       nil ->
         do_feed(feed, opts)
         |> feed_contains?(object, opts)
@@ -876,7 +876,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp generic_feed_query(feed_ids, opts) do
     query_extras(opts)
-    |> where([fp], fp.feed_id in ^ulids(feed_ids))
+    |> where([fp], fp.feed_id in ^uids(feed_ids))
 
     # |> debug("generic")
   end
@@ -1098,7 +1098,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   defp maybe_filter(query, %{object: object}) do
-    case ulid(object) do
+    case uid_or_uids(object) do
       id when is_binary(id) ->
         where(query, [activity: activity], activity.object_id == ^id)
 
@@ -1233,7 +1233,7 @@ defmodule Bonfire.Social.FeedActivities do
   #   the_object = Objects.preload_creator(the_object(object))
   #   object_creator = Objects.object_creator(the_object)
 
-  #   if ulid(object_creator) && ulid(subject) != ulid(object_creator) do
+  #   if uid(object_creator) && uid(subject) != uid(object_creator) do
   #     notify_characters(subject, verb_or_activity, object, [object_creator])
   #   else
   #     debug("no creator found, just creating an activity")
@@ -1315,7 +1315,7 @@ defmodule Bonfire.Social.FeedActivities do
     ids =
       for(
         character <- all,
-        feed <- index[ulid(character)],
+        feed <- index[uid(character)],
         do: Feeds.feed_id(feed, character)
       )
 
@@ -1378,7 +1378,7 @@ defmodule Bonfire.Social.FeedActivities do
         v <- Keyword.get(options, k, []),
         reduce: %{} do
       acc ->
-        id = ulid(v)
+        id = uid(v)
         Map.update(acc, id, [k], &[k | &1])
     end
   end
@@ -1487,12 +1487,12 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   defp create_activity(subject, verb, object, true) do
-    dump([subject, verb, ulid(object), true])
-    Bonfire.Social.APActivities.create(subject, %{verb: verb}, ulid(object))
+    dump([subject, verb, uid(object), true])
+    Bonfire.Social.APActivities.create(subject, %{verb: verb}, uid(object))
   end
 
   defp create_activity(subject, verb, object, %{} = json),
-    do: Bonfire.Social.APActivities.create(subject, Enum.into(json, %{verb: verb}), ulid(object))
+    do: Bonfire.Social.APActivities.create(subject, Enum.into(json, %{verb: verb}), uid(object))
 
   defp create_activity(subject, verb, object, _), do: Activities.create(subject, verb, object)
 
@@ -1589,8 +1589,8 @@ defmodule Bonfire.Social.FeedActivities do
   defp put_in_feeds(feed_or_subject, activity, push?)
        when is_map(feed_or_subject) or
               (is_binary(feed_or_subject) and feed_or_subject != "") do
-    with feed_id <- ulid(feed_or_subject),
-         {:ok, _published} <- do_put_in_feeds(feed_id, ulid(activity)) do
+    with feed_id <- uid(feed_or_subject),
+         {:ok, _published} <- do_put_in_feeds(feed_id, uid(activity)) do
       # push to feeds of online users
       if push?, do: maybe_apply(Bonfire.UI.Social.LivePush, :push_activity, [feed_id, activity])
     else
@@ -1627,7 +1627,7 @@ defmodule Bonfire.Social.FeedActivities do
       {1, nil}
   """
   def delete(objects, by_field) when is_atom(by_field) do
-    case ulid(objects) do
+    case uid_or_uids(objects) do
       # is_list(id_or_ids) ->
       #   Enum.each(id_or_ids, fn x -> delete(x, by_field) end)
       nil ->
@@ -1688,11 +1688,11 @@ defmodule Bonfire.Social.FeedActivities do
     current_user = current_user(opts)
 
     feed_id =
-      if is_ulid?(feed_id),
+      if is_uid?(feed_id),
         do: feed_id,
         else: Bonfire.Social.Feeds.my_feed_id(feed_id, current_user)
 
-    uid = ulid(current_user)
+    uid = uid(current_user)
 
     if uid && table_id && feed_id,
       do:

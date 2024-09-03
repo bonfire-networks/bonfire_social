@@ -76,7 +76,7 @@ defmodule Bonfire.Social.Activities do
     verb = Changesets.set_state(struct(Verb, Verbs.get(verb)), :loaded)
     verb_id = verb.id
 
-    %{subject_id: ulid(subject), object_id: ulid(object), verb_id: verb_id}
+    %{subject_id: uid(subject), object_id: uid(object), verb_id: verb_id}
     |> Changesets.put_assoc!(changeset, :activity, ...)
     # |> Changeset.update_change(:activity, &put_data(&1, :subject, maybe_to_struct(subject, Needle.Pointer)))
     |> Changeset.update_change(:activity, &put_data(&1, :verb, verb))
@@ -96,7 +96,7 @@ defmodule Bonfire.Social.Activities do
     verb = Changesets.set_state(struct(Verb, Verbs.get(verb)), :loaded)
     verb_id = verb.id
 
-    %{subject_id: ulid(subject), object_id: ulid(object), verb_id: verb_id}
+    %{subject_id: uid(subject), object_id: uid(object), verb_id: verb_id}
     |> Ecto.build_assoc(thing, :activity, ...)
     |> Map.put(:verb, verb)
   end
@@ -255,7 +255,7 @@ defmodule Bonfire.Social.Activities do
       when is_binary(verb) do
     from(f in Activity,
       where:
-        f.subject_id == ^ulid!(subject) and f.object_id == ^ulid!(object) and
+        f.subject_id == ^uid!(subject) and f.object_id == ^uid!(object) and
           f.verb_id == ^verb,
       select: f.id
     )
@@ -355,7 +355,7 @@ defmodule Bonfire.Social.Activities do
   # end
 
   defp query_preload_seen(q, opts) do
-    user_id = ulid(current_user(opts))
+    user_id = uid(current_user(opts))
 
     if user_id do
       table_id = Bonfire.Common.Types.table_id(Seen)
@@ -376,7 +376,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   defp subquery_preload_seen(opts) do
-    user_id = ulid(current_user(opts))
+    user_id = uid(current_user(opts))
 
     if user_id do
       table_id = Bonfire.Common.Types.table_id(Seen)
@@ -1215,7 +1215,7 @@ defmodule Bonfire.Social.Activities do
 
   def query([my: :feed], opts_or_current_user) do
     current_user = current_user_required!(opts_or_current_user)
-    query([feed_id: ulid(current_user)], opts_or_current_user)
+    query([feed_id: uid(current_user)], opts_or_current_user)
   end
 
   def query(filters, opts_or_current_user) do
@@ -1468,7 +1468,7 @@ defmodule Bonfire.Social.Activities do
     do: maybe_to_string(verb) |> verb_maybe_modify(activity)
 
   def verb_maybe_modify(verb, activity) when is_binary(verb) do
-    if is_ulid?(verb) do
+    if is_uid?(verb) do
       verb_maybe_modify(Bonfire.Boundaries.Verbs.get!(verb)[:verb], activity)
     else
       verb
@@ -1516,7 +1516,7 @@ defmodule Bonfire.Social.Activities do
       iex> verb_id(:create)
   """
   def verb_id(verb) when is_binary(verb),
-    do: ulid(verb) || Verbs.get_id(maybe_to_atom(verb))
+    do: uid(verb) || Verbs.get_id(maybe_to_atom(verb))
 
   def verb_id(verb) when is_atom(verb),
     do: Verbs.get_id(verb) || Verbs.get_id!(:create)

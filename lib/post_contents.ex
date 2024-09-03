@@ -58,7 +58,7 @@ defmodule Bonfire.Social.PostContents do
       %Bonfire.Data.Social.PostContent{id: "01FXYZ123ABC", ...}
   """
   def get(id, opts \\ []) do
-    if is_ulid?(id), do: one([id: id], opts)
+    if is_uid?(id), do: one([id: id], opts)
   end
 
   @doc """

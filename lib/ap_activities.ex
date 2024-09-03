@@ -80,7 +80,7 @@ defmodule Bonfire.Social.APActivities do
   # end
 
   def create(character, activity, object, public) when is_map(activity) or is_map(object) do
-    if ulid(character) do
+    if uid(character) do
       do_create(character, activity, object, public)
     else
       with actor_id when is_binary(actor_id) <-
@@ -96,7 +96,7 @@ defmodule Bonfire.Social.APActivities do
                :get_or_fetch_character_by_ap_id,
                [actor_id]
              ),
-           cid when is_binary(cid) <- ulid(character) do
+           cid when is_binary(cid) <- uid(character) do
         do_create(character, activity, object, public)
       else
         other ->
@@ -126,7 +126,7 @@ defmodule Bonfire.Social.APActivities do
 
     # TODO: reuse logic from Posts for targeting the audience
     opts =
-      [boundary: boundary, id: ulid(object), verb: e(activity, :verb, :create)]
+      [boundary: boundary, id: uid(object), verb: e(activity, :verb, :create)]
       |> debug("ap_opts")
 
     with {:ok, apactivity} <- insert(character, json, opts) do
