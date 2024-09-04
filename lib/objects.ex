@@ -24,6 +24,7 @@ defmodule Bonfire.Social.Objects do
   alias Bonfire.Common
   alias Bonfire.Data.Identity.Caretaker
   alias Bonfire.Data.Identity.CareClosure
+  alias Bonfire.Data.Social.Activity
   alias Bonfire.Boundaries.Acls
   alias Bonfire.Social.Activities
   alias Bonfire.Social.FeedActivities
@@ -151,7 +152,8 @@ defmodule Bonfire.Social.Objects do
   end
 
   defp cast_activity(changeset, attrs, creator, opts) do
-    Map.put(attrs, :id, Needle.ULID.generate())
+    # TODO: generate 
+    Map.put_new_lazy(attrs, :id, fn -> Needle.UID.generate(Activity) end)
     |> cast_activity(changeset, ..., creator, opts)
   end
 
