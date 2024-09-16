@@ -46,19 +46,19 @@ defmodule Bonfire.Social.Feeds do
       > Bonfire.Social.Feeds.feed_ids_to_publish(me, "public", %{reply_to: true}, [some_feed_id])
       # List of feed IDs for the provided boundary
   """
-  def feed_ids_to_publish(me, boundary, assigns, reply_and_or_mentions_notifications_feeds \\ nil)
+  def feed_ids_to_publish(me, boundary, assigns, notify_feeds \\ nil)
 
   def feed_ids_to_publish(_me, "admins", _, _) do
     admins_notifications()
     |> debug("posting to admin feeds")
   end
 
-  def feed_ids_to_publish(me, boundary, assigns, reply_and_or_mentions_notifications_feeds) do
+  def feed_ids_to_publish(me, boundary, assigns, notify_feeds) do
     [
       e(assigns, :reply_to, :replied, :thread, :id, nil),
       maybe_my_outbox_feed_id(me, boundary),
       global_feed_ids(boundary),
-      reply_and_or_mentions_notifications_feeds ||
+      notify_feeds ||
         reply_and_or_mentions_notifications_feeds(
           me,
           boundary,
@@ -129,53 +129,94 @@ defmodule Bonfire.Social.Feeds do
         reply_to_creator,
         to_circles \\ []
       ) do
-    my_notifications = feed_id(:notifications, me)
+    # my_notifications = feed_id(:notifications, me)
 
-    (user_notifications_feeds([reply_to_creator], boundary) ++
-       user_notifications_feeds(
-         mentions,
-         boundary,
-         to_circles
-       ))
-    |> Enums.filter_empty([])
-    |> Enum.uniq()
+    filter_reply_and_or_mentions(me, reply_to_creator, mentions)
+    |> users_to_notify(
+      boundary,
+      to_circles
+    )
+    |> notify_feeds()
+
     # avoid self-notifying
-    |> Enum.reject(&(&1 == my_notifications))
+    # |> Enum.reject(&(&1 == my_notifications))
+    # |> debug()
+  end
+
+  def reply_and_or_mentions_to_notify(
+        me,
+        boundary,
+        mentions,
+        reply_to_creator,
+        to_circles \\ []
+      ) do
+    users =
+      filter_reply_and_or_mentions(me, reply_to_creator, mentions)
+      |> debug()
+      |> users_to_notify(
+        boundary,
+        to_circles
+      )
+
+    %{
+      notify_feeds: notify_feeds(users),
+      notify_emails: notify_emails(users)
+    }
     |> debug()
   end
 
-  defp user_notifications_feeds(users, boundary, to_circles \\ []) do
+  defp filter_reply_and_or_mentions(me, reply_to_creator, mentions) do
+    my_id = Enums.id(me)
+
+    ([reply_to_creator] ++ mentions)
+    # avoid self-notifying
+    |> Enum.reject(&(Enums.id(&1) == my_id))
+  end
+
+  defp users_to_notify(users, boundary, to_circles \\ []) do
     # debug(epic, act, users, "users going in")
     cond do
       boundary in ["public", "mentions"] ->
         users
-        |> debug()
         |> filter_empty([])
-        |> repo().maybe_preload([:character])
-        |> Enum.map(&feed_id(:notifications, &1))
+        |> repo().maybe_preload([:character, :settings])
 
       boundary == "local" ->
         users
-        |> debug()
         |> filter_empty([])
-        |> repo().maybe_preload([:character, :peered])
-        # only local
+        |> repo().maybe_preload([:character, :peered, :settings])
+        # notify only local users
         |> Enum.filter(&is_local?/1)
-        |> Enum.map(&feed_id(:notifications, &1))
 
       true ->
         # we should only notify mentions & reply_to_creator IF they are included in the object's boundaries
+        # TODO: check also if they can read the object otherwise (for example, by being member of an included circle)
 
         to_circles_ids = Enums.ids(to_circles)
 
         users
         |> filter_empty([])
         |> Enum.filter(&(id(&1) in to_circles_ids))
-        |> repo().maybe_preload([:character])
-        |> debug()
-        # only local
-        |> Enum.map(&feed_id(:notifications, &1))
+        |> repo().maybe_preload([:character, :settings])
     end
+    |> debug()
+  end
+
+  defp notify_feeds(users) do
+    users
+    |> Enum.map(&feed_id(:notifications, &1))
+    |> Enums.filter_empty([])
+    |> Enum.uniq()
+  end
+
+  defp notify_emails(users) do
+    users
+    |> Enum.filter(&Settings.get([:email_notifications, :reply_or_mentions], false, &1))
+    |> repo().maybe_preload(accounted: [account: [:email]])
+    |> debug()
+    |> Enum.map(&e(&1, :accounted, :account, :email, :email_address, nil))
+    |> Enums.filter_empty([])
+    |> Enum.uniq()
   end
 
   @doc """

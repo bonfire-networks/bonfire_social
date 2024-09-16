@@ -32,7 +32,6 @@ defmodule Bonfire.Social.Acts.LivePush do
           notify_feeds_key = Keyword.get(act.options, :notify_feeds, :notify_feeds)
 
           feeds = Map.get(epic.assigns, feeds_key, [])
-          notify_feeds = Map.get(epic.assigns, notify_feeds_key, [])
 
           maybe_debug(
             epic,
@@ -41,11 +40,11 @@ defmodule Bonfire.Social.Acts.LivePush do
             "Publishing to feeds at assign #{feeds_key}"
           )
 
-          maybe_apply(Bonfire.UI.Social.LivePush, :push_activity, [
+          Bonfire.Social.LivePush.push_activity(
             feeds,
             activity,
-            [notify: notify_feeds]
-          ])
+            notify: Map.get(epic.assigns, notify_feeds_key, [])
+          )
           |> debug("pushed")
           |> Epic.assign(epic, on, ...)
       end

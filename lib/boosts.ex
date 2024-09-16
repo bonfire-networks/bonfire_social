@@ -192,7 +192,7 @@ defmodule Bonfire.Social.Boosts do
       # livepush will need a list of feed IDs we published to
       feed_ids = for fp <- boost.feed_publishes, do: fp.feed_id
 
-      maybe_apply(Bonfire.UI.Social.LivePush, :push_activity_object, [
+      maybe_apply(Bonfire.Social.LivePush, :push_activity_object, [
         feed_ids,
         boost,
         boosted,

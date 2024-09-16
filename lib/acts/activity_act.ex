@@ -71,8 +71,8 @@ defmodule Bonfire.Social.Acts.Activity do
 
         attrs = Keyword.get(epic.assigns[:options], attrs_key, %{})
 
-        notifications_feeds =
-          Feeds.reply_and_or_mentions_notifications_feeds(
+        notify =
+          Feeds.reply_and_or_mentions_to_notify(
             current_user,
             boundary_name,
             e(changeset.changes, :post_content, :changes, :mentions, []),
@@ -86,7 +86,7 @@ defmodule Bonfire.Social.Acts.Activity do
             current_user,
             boundary_name,
             epic.assigns,
-            notifications_feeds
+            notify[:notify_feeds]
           )
 
         # feed_ids = Feeds.target_feeds(changeset, current_user, boundary) # duplicate of `Feeds.feed_ids_to_publish`
@@ -100,7 +100,7 @@ defmodule Bonfire.Social.Acts.Activity do
         )
         |> Epic.assign(epic, on, ...)
         |> Epic.assign(..., feeds_key, feed_ids)
-        |> Epic.assign(..., notify_feeds_key, notifications_feeds)
+        |> Epic.assign(..., notify_feeds_key, notify)
 
       changeset.action == :delete ->
         # TODO: deletion

@@ -1408,7 +1408,7 @@ defmodule Bonfire.Social.FeedActivities do
   #   # debug(feed_ids)
   #   # |> debug("notify_to_feed_ids")
   #   ret = publish(subject, verb_or_activity, object, to_feeds: feed_ids)
-  #   maybe_apply(Bonfire.UI.Social.LivePush, :notify, [
+  #   maybe_apply(Bonfire.Social.LivePush, :notify, [
   #     subject, verb_or_activity, object, feed_ids
   #     ])
   #   ret
@@ -1583,7 +1583,7 @@ defmodule Bonfire.Social.FeedActivities do
     # |> Circles.circle_ids()
     |> Enum.map(fn x -> put_in_feeds(x, id(activity), false) end)
 
-    if push?, do: maybe_apply(Bonfire.UI.Social.LivePush, :push_activity, [feeds, activity])
+    if push?, do: maybe_apply(Bonfire.Social.LivePush, :push_activity, [feeds, activity])
   end
 
   defp put_in_feeds(feed_or_subject, activity, push?)
@@ -1592,7 +1592,7 @@ defmodule Bonfire.Social.FeedActivities do
     with feed_id <- uid(feed_or_subject),
          {:ok, _published} <- do_put_in_feeds(feed_id, uid(activity)) do
       # push to feeds of online users
-      if push?, do: maybe_apply(Bonfire.UI.Social.LivePush, :push_activity, [feed_id, activity])
+      if push?, do: maybe_apply(Bonfire.Social.LivePush, :push_activity, [feed_id, activity])
     else
       e ->
         error(
@@ -1665,7 +1665,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp hide_activities(fp) when is_list(fp) do
     for %{id: activity, feed_id: feed_id} <- fp do
-      maybe_apply(Bonfire.UI.Social.LivePush, :hide_activity, [
+      maybe_apply(Bonfire.Social.LivePush, :hide_activity, [
         feed_id,
         activity
       ])
