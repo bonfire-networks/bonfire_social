@@ -7,6 +7,9 @@ defmodule Bonfire.Social.NotificationEmailsTest do
 
   setup do
     Process.put([:bonfire_mailer, Bonfire.Mailer, :mailer_behaviour], Bonfire.Mailer.Swoosh)
+
+    Process.put([:bonfire, :email_notifications, :reply_or_mentions], true)
+
     on_exit(fn -> Process.delete([:bonfire_mailer, Bonfire.Mailer, :mailer_behaviour]) end)
   end
 
@@ -46,7 +49,7 @@ defmodule Bonfire.Social.NotificationEmailsTest do
 
     # assert an email that satisfies a condition
     assert_email_sent(fn email ->
-      assert length(email.to) == 1
+      assert length(email.to) == 2
       assert email.text_body =~ bob.profile.name
     end)
   end

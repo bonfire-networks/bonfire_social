@@ -125,7 +125,7 @@ defmodule Bonfire.Social.LivePush do
     |> Enum.reject(&(uid(&1) == subject_id))
     |> FeedActivities.get_feed_ids(notifications: ...)
     |> normalise_feed_ids()
-    |> send_notifications(subject, verb, object, ...)
+    |> notify(subject, verb, object, ...)
   end
 
   def prepare_activity(%Activity{} = activity, opts \\ []) do
@@ -135,13 +135,13 @@ defmodule Bonfire.Social.LivePush do
   end
 
   def notify(activity, opts),
-    do: notify(activity.subject, activity.verb, activity.object, opts)
+    do: send_notifications(activity, opts)
 
   def notify(subject, verb, object, opts) do
-    send_notifications(subject, verb, object, opts)
+    send_notifications(%{subject: subject, verb: verb, object: object}, opts)
   end
 
-  defp send_notifications(subject, verb, object, opts \\ []) do
+  defp send_notifications(%{subject: subject, verb: verb, object: object} = activity, opts \\ []) do
     verb_display =
       Bonfire.Social.Activities.verb_name(verb)
       |> Bonfire.Social.Activities.verb_display()
@@ -225,18 +225,30 @@ defmodule Bonfire.Social.LivePush do
 
     # TODO: send email notif?
     warn(notify_emails, "TODO")
+    # debug(Bonfire.UI.Social.ActivityLive.activity_components(
+    #      %{subject: subject, verb: verb},
+    #      object,
+    #      :email
+    #    ))
 
     if is_list(notify_emails) and notify_emails != [] do
       url = URIs.based_url(preview_assigns[:url])
 
+      assigns =
+        Bonfire.UI.Social.ActivityLive.prepare(%{
+          activity: activity,
+          object: object,
+          permalink: url
+        })
+
       email =
         Bonfire.Mailer.new(
-          subject: "[Bonfire] " <> preview_assigns[:title],
-          html_body:
-            preview_assigns[:title] <>
-              "<p> #{content}<p><a href='#{url}'>See details</a>",
-          text_body:
-            preview_assigns[:title] <> "\n\n" <> preview_assigns[:message] <> "\n\n" <> url
+          subject: "[Bonfire] " <> preview_assigns[:title]
+          # html_body: preview_assigns[:title] <> "<p> #{content}<p><a href='#{url}'>See details</a>",
+          # text_body: preview_assigns[:title] <> "\n\n" <> preview_assigns[:message] <> "\n\n" <> url
+        )
+        |> Bonfire.Mailer.Render.templated(Bonfire.UI.Social.ActivityLive, assigns,
+          layout: Bonfire.UI.Common.Email.Basic
         )
         |> debug()
 

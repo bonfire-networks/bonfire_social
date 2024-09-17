@@ -211,9 +211,11 @@ defmodule Bonfire.Social.Feeds do
 
   defp notify_emails(users) do
     users
-    |> Enum.filter(&Settings.get([:email_notifications, :reply_or_mentions], false, &1))
+    |> Enum.filter(
+      &(Settings.get([:email_notifications, :reply_or_mentions], false, &1)
+        |> debug("notify_enabled?"))
+    )
     |> repo().maybe_preload(accounted: [account: [:email]])
-    |> debug()
     |> Enum.map(&e(&1, :accounted, :account, :email, :email_address, nil))
     |> Enums.filter_empty([])
     |> Enum.uniq()
