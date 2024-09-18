@@ -49,7 +49,7 @@ defmodule Bonfire.Social.NotificationEmailsTest do
 
     # assert an email that satisfies a condition
     assert_email_sent(fn email ->
-      assert length(email.to) == 2
+      assert length(email.to) == 1
       assert email.text_body =~ bob.profile.name
     end)
   end
