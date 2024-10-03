@@ -358,7 +358,7 @@ defmodule Bonfire.Social.Flags do
     list(opts)
     |> repo().maybe_preload(
       # [edge: [object: [created: [creator: [:profile, :character]]]]],
-      [:named, object: [created: [creator: [:profile, :character]]]],
+      [:named, object: [:media, :sensitive, created: [creator: [:profile, :character]]]],
       follow_pointers: false
     )
   end
