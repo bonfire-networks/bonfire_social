@@ -300,7 +300,7 @@ defmodule Bonfire.Social.FeedActivities do
 
     Social.many(
       query,
-      opts[:paginate],
+      opts[:paginate] || opts,
       opts ++ Activities.order_pagination_opts(opts[:sort_by], opts[:sort_order])
     )
   end
@@ -639,6 +639,14 @@ defmodule Bonfire.Social.FeedActivities do
     end) ||
       (
         debug(feed, "object not found in feed")
+
+        debug(
+          Enum.map(feed, fn fi ->
+            e(fi, :activity, :object, :post_content, nil) || e(fi, :activity, :object, nil)
+          end),
+          "posts / object in feed"
+        )
+
         false
       )
   end
@@ -669,7 +677,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   defp feed_contains_query(feed_name, filters, opts) when is_list(filters) do
-    {feed_ids, opts} = feed_ids_and_opts(feed_name, to_options(opts))
+    {feed_ids, opts} = feed_ids_and_opts(feed_name, to_options(opts) ++ [limit: 10])
 
     feed_query(
       feed_ids,

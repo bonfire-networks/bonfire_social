@@ -366,6 +366,8 @@ defmodule Bonfire.Social.PostContents do
       # special for MD links coming from milkdown
       |> Regex.replace(~r/<(http[^>]+)>/U, ..., " \\1 ")
       |> Regex.replace(~r/@<([^>]+)>/U, ..., " @\\1 ")
+      # for @user@domain.tld
+      |> String.replace("\\@", "@")
       |> maybe_sane_html(do_not_strip_html, nil)
 
   defp maybe_sane_html(text, true, _),
