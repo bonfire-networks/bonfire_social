@@ -297,11 +297,13 @@ defmodule Bonfire.Social.FeedActivities do
   """
   def feed_many_paginated(query, opts) do
     opts = to_options(opts)
+    # debug(opts)
 
     Social.many(
       query,
       opts[:paginate] || opts,
-      opts ++ Activities.order_pagination_opts(opts[:sort_by], opts[:sort_order])
+      Keyword.merge(opts, Activities.order_pagination_opts(opts[:sort_by], opts[:sort_order]))
+      |> debug()
     )
   end
 

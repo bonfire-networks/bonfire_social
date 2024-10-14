@@ -330,7 +330,7 @@ defmodule Bonfire.Social do
   """
   def many(query, paginate?, opts \\ [])
 
-  def many(query, false, opts) do
+  def many(query, paginate?, opts) do
     case opts[:return] do
       :query ->
         query
@@ -347,19 +347,11 @@ defmodule Bonfire.Social do
         )
 
       _ ->
-        repo().many(query, opts)
-    end
-  end
-
-  def many(query, _true, opts) do
-    case opts[:return] do
-      # :query ->
-      #   query
-
-      # :csv ->
-      # query
-      _ ->
-        repo().many_paginated(query, opts)
+        if paginate? == false do
+          repo().many(query, opts)
+        else
+          repo().many_paginated(query, opts)
+        end
     end
   end
 end

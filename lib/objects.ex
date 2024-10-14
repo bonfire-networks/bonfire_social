@@ -291,6 +291,7 @@ defmodule Bonfire.Social.Objects do
 
   def list_paginated(filters, opts)
       when is_list(filters) or is_struct(filters) do
+    # debug(opts)
     filters
     # |> debug("filters")
     # |> query_paginated(opts)
@@ -308,6 +309,13 @@ defmodule Bonfire.Social.Objects do
     debug(type)
 
     query_base(type)
+    |> list_query(opts)
+  end
+
+  def list_query(filters, opts) do
+    warn(filters, "TODO: do something with these?")
+
+    query_base()
     |> list_query(opts)
   end
 
