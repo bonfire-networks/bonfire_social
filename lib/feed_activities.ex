@@ -281,6 +281,8 @@ defmodule Bonfire.Social.FeedActivities do
       iex> Bonfire.Social.FeedActivities.feed_paginated([], base_query: query)
   """
   def feed_paginated(filters \\ [], opts \\ []) do
+    opts = to_options(opts)
+
     do_query(filters, opts, opts[:base_query] || default_query())
     |> paginate_and_boundarise_feed(opts)
 
@@ -558,6 +560,8 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   defp do_feed(feed_id_or_ids_or_name, opts) do
+    opts = to_feed_options(opts)
+
     if opts[:cache] do
       key = feed_id_or_ids_or_name
 
