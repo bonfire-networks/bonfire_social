@@ -1,4 +1,4 @@
-paper_trail = "~> 1.1.2"
+# paper_trail = "~> 1.1.2"
 nimble_csv = "~> 1.2"
 faker = "~> 0.14" # fake data generation
 exto = "~> 0.3"

@@ -401,36 +401,42 @@ defmodule Bonfire.Social.PostContents do
     end
   end
 
-  def get_versions(post_content) do
-    PaperTrail.get_versions(post_content)
-    |> repo().maybe_preload(user: [:profile, :character])
-    |> Enum.map_reduce(nil, fn
-      current, nil ->
-        current = %{
-          editor: current.user,
-          edited_at: current.inserted_at,
-          current_version: current.item_changes,
-          previous_version: %{}
-        }
+  def versioning_enabled?(opts), do: module_enabled?(PaperTrail, opts)
 
-        {current, current}
+  def get_versions(post_content, opts) do
+    if versioning_enabled?(opts) do
+      PaperTrail.get_versions(post_content)
+      |> repo().maybe_preload(user: [:profile, :character])
+      |> Enum.map_reduce(nil, fn
+        current, nil ->
+          current = %{
+            editor: current.user,
+            edited_at: current.inserted_at,
+            current_version: current.item_changes,
+            previous_version: %{}
+          }
 
-      current, %{current_version: previous_version} ->
-        current = %{
-          editor: current.user,
-          edited_at: current.inserted_at,
-          current_version: Map.merge(previous_version, current.item_changes),
-          previous_version: previous_version
-        }
+          {current, current}
 
-        {current, current}
-    end)
-    |> elem(0)
-    |> debug("vvv")
+        current, %{current_version: previous_version} ->
+          current = %{
+            editor: current.user,
+            edited_at: current.inserted_at,
+            current_version: Map.merge(previous_version, current.item_changes),
+            previous_version: previous_version
+          }
+
+          {current, current}
+      end)
+      |> elem(0)
+      |> debug("vvv")
+    else
+      []
+    end
   end
 
-  def get_versions_diffed(post_content) do
-    for %{} = version <- get_versions(post_content) do
+  def get_versions_diffed(post_content, opts) do
+    for %{} = version <- get_versions(post_content, opts) do
       # TODO: make more flexble so the fields aren't hardcoded and put somewhere reusable by other objects/mixins
 
       prev_length =
@@ -500,26 +506,25 @@ defmodule Bonfire.Social.PostContents do
     with post_content <-
            post_content
            |> repo().maybe_preload(:created),
-         #  create the v1 entry if this is the first edir
-         :ok <-
-           PaperTrail.initialise(post_content,
-             user: %{id: e(post_content, :created, :creator_id, nil)}
-           ),
-         {:ok, %{model: updated}} <-
+         changeset =
            attrs
            # TODO: apply the preparation/sanitation functions?
            |> debug()
-           |> PostContent.changeset(post_content, ...)
-           # |> debug()
-           |> PaperTrail.update(user: current_user)
+           |> PostContent.changeset(post_content, ...),
+         #  create the v1 entry if this is the first edir
+         {:ok, updated_post_content} <-
+           save_edit(current_user, post_content, changeset)
            |> debug() do
+      post =
+        Bonfire.Common.Needles.get(id(post_content),
+          current_user: current_user,
+          verbs: [:edit]
+        )
+        ~> Map.put(:post_content, updated_post_content)
+
       if Social.federate_outgoing?(current_user),
         do:
-          Bonfire.Common.Needles.get(id(post_content),
-            current_user: current_user,
-            verbs: [:edit]
-          )
-          ~> Map.put(:post_content, updated)
+          post
           |> Social.maybe_federate(
             current_user,
             :edit,
@@ -527,7 +532,30 @@ defmodule Bonfire.Social.PostContents do
             nil
           )
 
-      {:ok, updated}
+      {:ok, post}
+      # {:ok, updated_post_content}
+    end
+  end
+
+  defp save_edit(current_user, %PostContent{} = post_content, changeset) do
+    if versioning_enabled?(current_user) do
+      #  create the v1 entry if this is the first edit
+      with :ok <-
+             PaperTrail.initialise(post_content,
+               user: %{id: e(post_content, :created, :creator_id, nil) || uid(current_user)}
+             ),
+           # update the PostContent
+           {:ok, %{model: updated}} <-
+             PaperTrail.update(changeset, user: current_user)
+             |> debug() do
+        {:ok, updated}
+      end
+    else
+      with {:ok, updated} <-
+             repo().update(changeset, user: current_user)
+             |> debug() do
+        {:ok, updated}
+      end
     end
   end
 
