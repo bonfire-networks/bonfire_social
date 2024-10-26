@@ -309,35 +309,12 @@ defmodule Bonfire.Social.FeedActivities do
     )
   end
 
-  defp paginate_and_boundarise_feed_deferred_query(initial_query, opts) do
-    # speeds up queries by applying filters (incl. pagination) in a deferred join before boundarising and extra joins/preloads
-
-    initial_query =
-      initial_query
-      |> select([:id])
-      # to avoid 'cannot preload in subquery' error
-      |> make_distinct(opts[:sort_order], opts[:sort_order], opts)
-      |> query_order(opts[:sort_by], opts[:sort_order])
-      |> feed_many_paginated(
-        Keyword.merge(opts, paginate: true, return: :query, multiply_limit: 2)
-      )
-      |> repo().make_subquery()
-
-    # |> debug("deferred subquery")
-
-    default_or_filtered_query(opts)
-    |> join(:inner, [fp], ^initial_query, on: [id: fp.id])
-    |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
-    |> Activities.as_permitted_for(opts)
-    |> query_order(opts[:sort_by], opts[:sort_order])
-    |> debug("query with deferred join")
-  end
-
   @decorate time()
   defp paginate_and_boundarise_feed(query, opts) do
     case opts[:return] do
       :explain ->
-        paginate_and_boundarise_feed_deferred_query(query, opts)
+        (maybe_paginate_and_boundarise_feed_deferred_query(query, opts) ||
+           paginate_and_boundarise_feed_non_deferred_query(query, opts))
         |> Ecto.Adapters.SQL.explain(repo(), :all, ...,
           analyze: true,
           verbose: false,
@@ -359,15 +336,21 @@ defmodule Bonfire.Social.FeedActivities do
 
       _ ->
         # ^ tell Paginator to always give us and `after` cursor
-        case paginate_and_boundarise_feed_deferred_query(query, opts)
-             #  |> debug("final query")
-             |> feed_many_paginated(opts ++ [infinite_pages: true]) do
-          %{edges: []} ->
-            debug(
-              "there were no results, try without the deferred query in case some were missing because of boundaries"
-            )
+        with %Ecto.Query{} = query <-
+               maybe_paginate_and_boundarise_feed_deferred_query(query, opts),
+             %{edges: []} <- feed_many_paginated(query, opts ++ [infinite_pages: true]) do
+          debug(
+            "there were no results, try without the deferred query in case some were missing because of boundaries"
+          )
+
+          paginate_and_boundarise_feed_non_deferred_query(query, opts)
+          |> feed_many_paginated(opts)
+        else
+          nil ->
+            debug("deferred join is not enabled")
 
             paginate_and_boundarise_feed_non_deferred_query(query, opts)
+            |> feed_many_paginated(opts)
 
           result ->
             debug("we got results")
@@ -375,17 +358,6 @@ defmodule Bonfire.Social.FeedActivities do
             result
         end
     end
-  end
-
-  defp paginate_and_boundarise_feed_non_deferred_query(query, opts) do
-    query
-    |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
-    |> Activities.as_permitted_for(opts)
-    |> query_order(opts[:sort_by], opts[:sort_order])
-    # |> debug("final query")
-    |> feed_many_paginated(opts)
-
-    # |> debug()
   end
 
   # defp paginate_and_boundarise_feed(query, opts) do
@@ -408,6 +380,42 @@ defmodule Bonfire.Social.FeedActivities do
   #   # |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
   #   |> feed_many_paginated(paginate)
   # end
+
+  defp maybe_paginate_and_boundarise_feed_deferred_query(initial_query, opts) do
+    # speeds up queries by applying filters (incl. pagination) in a deferred join before boundarising and extra joins/preloads
+
+    if opts[:query_with_deferred_join] do
+      initial_query =
+        initial_query
+        |> select([:id])
+        # to avoid 'cannot preload in subquery' error
+        |> make_distinct(opts[:sort_order], opts[:sort_order], opts)
+        |> query_order(opts[:sort_by], opts[:sort_order])
+        |> feed_many_paginated(
+          Keyword.merge(opts, paginate: true, return: :query, multiply_limit: 2)
+        )
+        |> repo().make_subquery()
+
+      # |> debug("deferred subquery")
+
+      default_or_filtered_query(opts)
+      |> join(:inner, [fp], ^initial_query, on: [id: fp.id])
+      |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
+      |> Activities.as_permitted_for(opts)
+      |> query_order(opts[:sort_by], opts[:sort_order])
+      |> debug("query with deferred join")
+    end
+  end
+
+  defp paginate_and_boundarise_feed_non_deferred_query(query, opts) do
+    query
+    |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
+    |> Activities.as_permitted_for(opts)
+    |> query_order(opts[:sort_by], opts[:sort_order])
+
+    # |> debug("final query")
+    # |> debug()
+  end
 
   def feed_name(name, current_user_or_socket) when is_nil(name) or name == :default do
     debug(current_user_or_socket)
