@@ -1,8 +1,10 @@
 import Config
 
-config :bonfire_social,
-  enabled: true,
+config :bonfire_common,
   localisation_path: "priv/localisation"
+
+config :bonfire_social,
+  enabled: true
 
 config :paper_trail, repo: Bonfire.Common.Repo
 
