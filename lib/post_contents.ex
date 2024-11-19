@@ -721,7 +721,7 @@ defmodule Bonfire.Social.PostContents do
     # image = Bonfire.Files.ImageUploader.remote_url(obj.image)
 
     %{
-      "index_type" => Types.module_to_str(Bonfire.Data.Social.PostContent),
+      # "index_type" => Types.module_to_str(Bonfire.Data.Social.PostContent), # no need as can be inferred later by `Enums.maybe_to_structs/1`
       "name" => obj.name,
       "summary" => obj.summary,
       "html_body" => obj.html_body
