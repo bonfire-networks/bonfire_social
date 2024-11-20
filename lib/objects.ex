@@ -575,7 +575,7 @@ defmodule Bonfire.Social.Objects do
 
     # cover our bases with some more common mixins
     delete_extras =
-      Bonfire.Common.Repo.Preload.schema_mixins(object) ++
+      Bonfire.Common.Needles.Tables.schema_mixin_assocs(object) ++
         [
           :post_content,
           :profile,
