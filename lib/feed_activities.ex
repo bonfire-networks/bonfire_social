@@ -246,10 +246,13 @@ defmodule Bonfire.Social.FeedActivities do
       %{edges: [%{activity: %{}}], page_info: %{}}
   """
   def my_feed(opts, home_feed_ids \\ nil) do
+    debug("1. Starting my_feed")
+
     opts =
       opts
       |> to_options()
       |> Keyword.put_new(:home_feed_ids, home_feed_ids)
+      |> debug("1a. my_feed opts")
 
     feed(:my, opts)
   end
@@ -268,7 +271,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   @doc """
-  Returns a page of feed activities (reverse chronological) + pagination metadata 
+  Returns a page of feed activities (reverse chronological) + pagination metadata
 
   TODO: consolidate with `feed/2`
 
@@ -311,6 +314,8 @@ defmodule Bonfire.Social.FeedActivities do
 
   @decorate time()
   defp paginate_and_boundarise_feed(query, opts) do
+    debug("6. Starting paginate_and_boundarise_feed")
+
     case opts[:return] do
       :explain ->
         (maybe_paginate_and_boundarise_feed_deferred_query(query, opts) ||
@@ -525,6 +530,8 @@ defmodule Bonfire.Social.FeedActivities do
   # end
 
   def feed(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
+    debug("2. Starting feed with name: #{inspect(feed_name)}")
+
     {feed_ids, opts} =
       feed_ids_and_opts(feed_name, opts)
       |> debug("feed_ids_and_opts")
@@ -568,7 +575,11 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   defp do_feed(feed_id_or_ids_or_name, opts) do
-    opts = to_feed_options(opts)
+    debug("3. Starting do_feed")
+
+    opts =
+      to_feed_options(opts)
+      |> debug("3a. feed options")
 
     if opts[:cache] do
       key = feed_id_or_ids_or_name
@@ -589,6 +600,8 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   defp actually_do_feed(feed_id_or_ids_or_name, opts) do
+    debug("4. Starting actually_do_feed")
+
     feed_id_or_ids_or_name
     |> feed_query(opts)
     |> paginate_and_boundarise_feed(maybe_merge_filters(opts[:feed_filters], opts))
@@ -712,11 +725,16 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp prepare_feed(%{edges: edges} = result, opts)
        when is_list(edges) and edges != [] do
+    debug("7. Starting prepare_feed with edges")
+    debug(edges, "7a. edges to prepare")
+
     Map.put(
       result,
       :edges,
       edges
       |> maybe_dedup_feed_objects(opts)
+      |> debug("7b. after dedup")
+
       # TODO: where best to do these postloads? and try to optimise into one call
 
       |> Bonfire.Common.Needles.Preload.maybe_preload_nested_pointers(
@@ -837,9 +855,15 @@ defmodule Bonfire.Social.FeedActivities do
   # @decorate time()
   # PLEASE: note this query is not boundarised, it is your responsibility to do so in the calling function!
   defp feed_query(feed_id_or_ids, opts) do
-    opts = to_feed_options(opts)
+    debug("5. Starting feed_query")
 
-    feed_ids = List.wrap(feed_id_or_ids)
+    opts =
+      to_feed_options(opts)
+      |> IO.inspect(label: "5a. feed query opts")
+
+    feed_ids =
+      List.wrap(feed_id_or_ids)
+      |> IO.inspect(label: "5b. feed_ids")
 
     specific_feeds? = is_binary(feed_id_or_ids) or (is_list(feed_id_or_ids) and feed_ids != [])
 
@@ -899,8 +923,7 @@ defmodule Bonfire.Social.FeedActivities do
   defp generic_feed_query(feed_ids, opts) do
     query_extras(opts)
     |> where([fp], fp.feed_id in ^uids(feed_ids))
-
-    # |> debug("generic")
+    |> debug("generic")
   end
 
   @doc "Return a boundarised query for a feed"
