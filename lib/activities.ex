@@ -38,6 +38,7 @@ defmodule Bonfire.Social.Activities do
   # alias Bonfire.Social.Edges
   # alias Bonfire.Social.Feeds
   alias Bonfire.Social.FeedActivities
+  alias Bonfire.Social.Objects
 
   alias Needle.Changesets
   alias Needle.Pointer
@@ -214,7 +215,7 @@ defmodule Bonfire.Social.Activities do
 
   """
   def delete(id) when is_binary(id) or is_struct(id) do
-    # maybe_remove_for_deleters_feeds(id)
+    Objects.maybe_unindex(id)
     delete({:id, id})
   end
 
@@ -224,7 +225,9 @@ defmodule Bonfire.Social.Activities do
       |> query_filter(filters)
       |> debug("gonna delete")
 
-    # FIXME? does cascading delete take care of this?
+    # TODO: move call Objects.maybe_unindex here to delete from search index?
+
+    # FIXME? does cascading delete take care of deleting the activities from feeds?
     FeedActivities.delete(repo().many(q), :id)
 
     q

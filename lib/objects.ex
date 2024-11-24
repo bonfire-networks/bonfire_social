@@ -40,8 +40,6 @@ defmodule Bonfire.Social.Objects do
   @behaviour Bonfire.Federate.ActivityPub.FederationModules
   def federation_module, do: ["Delete", {"Create", "Tombstone"}]
 
-  @cannot_delete_msg "Object not found or you have no permission to delete it"
-
   @doc """
   Casts various attributes for an object changeset.
 
@@ -430,7 +428,7 @@ defmodule Bonfire.Social.Objects do
       do_delete(object, opts)
     else
       _ ->
-        error(@cannot_delete_msg)
+        error(object, l("Object not found or you have no permission to delete it"))
     end
   end
 
@@ -908,6 +906,14 @@ defmodule Bonfire.Social.Objects do
 
     delete(object, creator)
     |> debug("ap_maybe_deleted")
+  end
+
+  def maybe_unindex(object) do
+    if Bonfire.Common.Extend.module_enabled?(Bonfire.Search.Indexer) do
+      Bonfire.Search.Indexer.maybe_delete_object(object)
+    else
+      :ok
+    end
   end
 
   @doc """

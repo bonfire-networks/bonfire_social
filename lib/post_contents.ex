@@ -401,7 +401,12 @@ defmodule Bonfire.Social.PostContents do
     end
   end
 
-  def versioning_enabled?(opts), do: module_enabled?(PaperTrail, opts)
+  def versioning_enabled?(opts) do
+    case opts[:versioning_enabled] do
+      nil -> module_enabled?(PaperTrail, opts)
+      versioning_enabled? -> versioning_enabled?
+    end
+  end
 
   def get_versions(post_content, opts) do
     if versioning_enabled?(opts) do
@@ -714,7 +719,7 @@ defmodule Bonfire.Social.PostContents do
   def indexing_object_format(%{post_content: obj}),
     do: indexing_object_format(obj)
 
-  def indexing_object_format(%PostContent{id: _} = obj) do
+  def indexing_object_format(%{name: _} = obj) do
     # obj = repo().maybe_preload(obj, [:icon, :image])
 
     # icon = Bonfire.Files.IconUploader.remote_url(obj.icon)
@@ -722,9 +727,9 @@ defmodule Bonfire.Social.PostContents do
 
     %{
       # "index_type" => Types.module_to_str(Bonfire.Data.Social.PostContent), # no need as can be inferred later by `Enums.maybe_to_structs/1`
-      "name" => obj.name,
-      "summary" => obj.summary,
-      "html_body" => obj.html_body
+      "name" => e(obj, :name, nil),
+      "summary" => e(obj, :summary, nil),
+      "html_body" => e(obj, :html_body, nil)
 
       # "icon" => %{"url"=> icon},
       # "image" => %{"url"=> image},

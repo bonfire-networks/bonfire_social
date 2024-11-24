@@ -210,4 +210,6 @@ defmodule Bonfire.Social.Tags do
     |> Map.get(:tags, [])
     |> indexing_format_tags()
   end
+
+  def indexing_format_tags(_), do: []
 end
