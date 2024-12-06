@@ -103,8 +103,8 @@ defmodule Bonfire.Social.Acts.AntiSpam do
   end
 
   defp get_attr(attrs, changeset, key) do
-    e(changeset, :changes, :post_content, :changes, key, nil) || e(attrs, key, nil) ||
-      e(attrs, :post, :post_content, key, nil) ||
-      e(attrs, :post_content, key, nil) || e(attrs, :post, key, nil) || e(attrs, key, nil)
+    ed(changeset, :changes, :post_content, :changes, key, nil) || ed(attrs, key, nil) ||
+      ed(attrs, :post, :post_content, key, nil) ||
+      ed(attrs, :post_content, key, nil) || ed(attrs, :post, key, nil) || ed(attrs, key, nil)
   end
 end

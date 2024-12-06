@@ -331,7 +331,7 @@ defmodule Bonfire.Social.PostContents do
   end
 
   defp get_attr(attrs, key) do
-    e(attrs, key, nil) || e(attrs, :post, :post_content, key, nil) ||
+    ed(attrs, key, nil) || ed(attrs, :post, :post_content, key, nil) ||
       e(attrs, :post_content, key, nil) || e(attrs, :post, key, nil)
   end
 
