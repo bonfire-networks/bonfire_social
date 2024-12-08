@@ -1121,6 +1121,7 @@ defmodule Bonfire.Social.FeedActivities do
       DatesTimes.past(x_days, :day)
       |> debug("from date")
       |> Needle.UID.generate()
+      |> debug("UID")
 
     where(query, [activity: activity], activity.id > ^limit_pointer)
   end
