@@ -497,6 +497,10 @@ defmodule Bonfire.Social.Edges do
 
       _ when is_map(subject) or is_binary(subject) ->
         where(query, [edge: edge], edge.subject_id == ^uid(subject))
+
+      _ ->
+        warn(subject, "unrecognised subject")
+        query
     end
   end
 

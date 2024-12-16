@@ -52,6 +52,10 @@ defmodule Bonfire.Social.Seen do
   def seen?(%{} = user, object),
     do: Edges.exists?(__MODULE__, user, object, skip_boundary_check: true)
 
+  def last_date(subject, object) do
+    Edges.last_date(__MODULE__, subject, object, skip_boundary_check: true)
+  end
+
   @doc """
   Retrieves a Seen edge between a subject and an object.
 
@@ -70,13 +74,13 @@ defmodule Bonfire.Social.Seen do
 
   """
   def get(subject, object, opts \\ []),
-    do: Edges.get(__MODULE__, subject, object, opts)
+    do: Edges.get(__MODULE__, subject, object, opts ++ [skip_boundary_check: true])
 
   @doc """
     Similar to `get/3`, but raises an error if the Seen edge is not found.
   """
   def get!(subject, object, opts \\ []),
-    do: Edges.get!(__MODULE__, subject, object, opts)
+    do: Edges.get!(__MODULE__, subject, object, opts ++ [skip_boundary_check: true])
 
   # def by_subject(%{}=subject), do: [subject: subject] |> query(current_user: subject) |> repo().many()
 
@@ -99,8 +103,10 @@ defmodule Bonfire.Social.Seen do
       {:ok, %Seen{}}
 
   """
-  def mark_seen(%User{} = subject, %{id: _} = object) do
-    case create(subject, object) do
+  def mark_seen(subject, object, opts \\ [])
+
+  def mark_seen(%{} = subject, %{id: _} = object, opts) do
+    case create(subject, object, opts) do
       {:ok, seen} ->
         {:ok, seen}
 
@@ -121,17 +127,17 @@ defmodule Bonfire.Social.Seen do
       {:ok, nil}
   end
 
-  def mark_seen(%User{} = subject, object) when is_binary(object) do
+  def mark_seen(%{} = subject, object, opts) when is_binary(object) do
     with {:ok, seen} <-
            Bonfire.Common.Needles.get(object, current_user: subject, verb: :see) do
       # debug(seen)
-      mark_seen(subject, seen)
+      mark_seen(subject, seen, opts)
     end
   end
 
   # TODO: bulk with insert_all 
-  def mark_seen(%User{} = subject, objects) when is_list(objects) do
-    Enum.each(objects, &mark_seen(subject, &1))
+  def mark_seen(%{} = subject, objects, opts) when is_list(objects) do
+    Enum.each(objects, &mark_seen(subject, &1, opts))
     Enum.count(objects)
   end
 
@@ -199,8 +205,13 @@ defmodule Bonfire.Social.Seen do
   end
 
   defp create(subject, seen, opts \\ []) do
-    Edges.changeset_base(Seen, subject, seen, opts)
-    |> repo().insert()
+    if opts[:upsert] do
+      Edges.changeset_base(Seen, subject, seen, opts)
+      |> repo().upsert()
+    else
+      Edges.changeset_base(Seen, subject, seen, opts)
+      |> repo().insert()
+    end
 
     # |> repo().maybe_preload(edge: [:object])
   end
