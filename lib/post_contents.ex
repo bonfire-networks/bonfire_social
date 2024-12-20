@@ -404,7 +404,7 @@ defmodule Bonfire.Social.PostContents do
   def versioning_enabled?(opts) do
     case opts[:versioning_enabled] do
       nil -> module_enabled?(PaperTrail, opts)
-      versioning_enabled? -> versioning_enabled?
+      versioning_enabled? -> versioning_enabled? && module_enabled?(PaperTrail, opts)
     end
   end
 
