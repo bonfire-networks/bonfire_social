@@ -837,7 +837,8 @@ defmodule Bonfire.Social.Activities do
         :with_object_more ->
           [
             :replied,
-            object: [:post_content, :peered, :character, profile: :icon]
+            object: [:post_content, :peered]
+            # object: [:post_content, :peered, :character, profile: :icon]
           ]
 
         :with_replied ->

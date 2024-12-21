@@ -342,7 +342,7 @@ defmodule Bonfire.Social.FeedActivities do
         end)
 
       _ ->
-        # ^ tell Paginator to always give us and `after` cursor
+        # infinite_pages tells Paginator to always give us ab `after` cursor
         with %Ecto.Query{} = query <-
                maybe_paginate_and_boundarise_feed_deferred_query(query, opts),
              %{edges: []} <- feed_many_paginated(query, opts ++ [infinite_pages: true]) do
