@@ -1253,7 +1253,7 @@ defmodule Bonfire.Social.Activities do
     activity_under_object(activity, Map.drop(top_object, [:activities]))
   end
 
-  def activity_under_object(%Activity{object: activity_object} = activity) do
+  def activity_under_object(%Activity{object: %{id: _} = activity_object} = activity) do
     Map.put(activity_object, :activity, Map.drop(activity, [:object]))
   end
 
@@ -1267,6 +1267,56 @@ defmodule Bonfire.Social.Activities do
 
   def activity_under_object(%Activity{} = activity, %{} = object) do
     Map.put(object, :activity, activity)
+  end
+
+  @doc """
+  Processes and structures activity data within a media.
+
+  ## Examples
+
+      iex> activity_under_media(%{activity: %{id: 2, object: %{id: 1}}})
+      %{id: 1, activity: %{id: 2}}
+  """
+  # this is a hack to mimic the old structure of the data provided to
+  # the activity component, which will we refactor soon(tm)
+  def activity_under_media(%{activity: %{media: %{id: _} = media} = activity} = top_object) do
+    activity_under_media(activity, media)
+  end
+
+  def activity_under_media(%{activity: %{media: [%{id: _} = media]} = activity} = top_object) do
+    activity_under_media(activity, media)
+  end
+
+  def activity_under_media(%Activity{media: %{id: _} = media} = activity) do
+    activity_under_media(activity, media)
+  end
+
+  def activity_under_media(%Activity{media: [%{id: _} = media]} = activity) do
+    activity_under_media(activity, media)
+  end
+
+  def activity_under_media(%{activity: %{id: _} = activity} = media) do
+    activity_under_media(activity, media)
+  end
+
+  def activity_under_media(%{activities: [%{id: _} = activity]} = top_object) do
+    activity_under_media(activity, Map.drop(top_object, [:activities]))
+  end
+
+  def activity_under_media(%{} = object_without_activity) do
+    Map.put(object_without_activity, :activity, %{})
+  end
+
+  def activity_under_media({:ok, %{} = media}) do
+    {:ok, activity_under_media(media)}
+  end
+
+  def activity_under_media(%Activity{} = activity, %{} = media) do
+    Map.put(media, :activity, Map.drop(activity, [:media]))
+  end
+
+  def activity_under_media(%Activity{} = activity, [%{} = media]) do
+    Map.put(media, :activity, Map.drop(activity, [:media]))
   end
 
   def activity_with_object_from_assigns(%{activity: %{object: %{id: _}} = activity} = _assigns) do

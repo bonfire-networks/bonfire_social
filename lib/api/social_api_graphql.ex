@@ -18,10 +18,20 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
     # import_types(Absinthe.Type.Custom)
 
+    # for pagination 
+    connection(node_type: :any_context)
+
     object :post do
       field(:id, :id)
       field(:post_content, :post_content)
-      field(:activity, :activity)
+
+      field(:activity, :activity,
+        description: "An activity associated with this post (usually the post creation)"
+      )
+
+      field(:activities, list_of(:activity),
+        description: "All activities associated with this post (TODO)"
+      )
     end
 
     # for pagination 
@@ -98,8 +108,10 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       # field(:object_id, :string)
       field :object, :any_context do
-        resolve(&activity_object/3)
+        resolve(&the_activity_object/3)
       end
+
+      field :media, :media, description: "Media attached to this activity (TODO)"
 
       field(:object_post_content, :post_content) do
         resolve(fn
@@ -114,13 +126,17 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
              |> debug("post_content detected")}
 
           activity, _, _ ->
-            warn(activity, "no post_content detected")
-            {:ok, nil}
+            {:ok,
+             activity
+             |> repo().maybe_preload(:object_post_content)
+             |> e(:object_post_content, nil)
+             |> debug(
+               "no object with post_content detected, tried preloading :object_post_content"
+             )}
         end)
       end
 
       field(:direct_replies, list_of(:replied)) do
-        # TODO
         arg(:paginate, :paginate)
 
         # , args: %{my: :followed})
@@ -153,7 +169,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       # field(:reply_to, :activity)
 
       field(:direct_replies, list_of(:replied)) do
-        # TODO
         arg(:paginate, :paginate)
 
         # , args: %{my: :followed})
@@ -161,36 +176,126 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       end
     end
 
+    # TODO move to bonfire_files
+    object :media do
+      field :id, non_null(:id)
+
+      field :path, :string
+
+      field :size, :integer
+
+      field :media_type, :string
+
+      field :metadata, :json
+
+      field :creator, :any_character do
+        resolve(Absinthe.Resolution.Helpers.dataloader(Needle.Pointer))
+      end
+
+      field(:activity, :activity, description: "An activity associated with this media")
+
+      field(:activities, list_of(:activity),
+        description: "All activities associated with this media (TODO)"
+      )
+
+      field(:objects, list_of(:any_context),
+        description: "All objects associated with this media (TODO)"
+      )
+    end
+
+    connection(node_type: :media)
+
     # object :posts_page do
     #   field(:page_info, non_null(:page_info))
     #   field(:edges, non_null(list_of(non_null(:post))))
     #   field(:total_count, non_null(:integer))
     # end
 
-    input_object :activity_filters do
-      field(:activity_id, :id)
-      field(:object_id, :id)
+    input_object :object_filter do
+      field(:object_id, :id, description: "The ID of the object")
+    end
+
+    input_object :activity_filter do
+      field(:activity_id, :id, description: "The ID of the activity")
+      field(:object_id, :id, description: "The ID of the object")
     end
 
     enum :sort_order do
-      value(:asc)
-      value(:desc)
+      value(:asc, description: "Ascending order")
+      value(:desc, description: "Descending order")
     end
 
     enum :sort_by do
-      value(:date)
-      value(:num_likes)
-      value(:num_boosts)
-      value(:num_replies)
+      value(:date, description: "Sort by date")
+      value(:num_likes, description: "Sort by number of likes")
+      value(:num_boosts, description: "Sort by number of boosts")
+      value(:num_replies, description: "Sort by number of replies")
+      value(:num_flags, description: "Sort by flags (for moderators) (TODO)")
+
+      value(:num_activities,
+        description:
+          "Sort by number of associated activities, only when querying by object or media (TODO)"
+      )
     end
 
     input_object :feed_filters do
-      field(:feed_name, :string)
+      field(:feed_name, :string,
+        description: "Specify which feed to query. For example: explore, my, local, remote"
+      )
 
-      # TODO: other filters?
-      field(:time_limit, :integer, default_value: 7)
-      field(:sort_by, :sort_by, default_value: :date)
-      field(:sort_order, :sort_order, default_value: :desc)
+      field(:feed_id, list_of(:id),
+        description: "Optionally specify feed IDs (overrides feedName) (TODO)"
+      )
+
+      field :subject_usernames, list_of(:string),
+        description: "Optionally filter by activity subject (TODO)"
+
+      field :subject_ids, list_of(:id),
+        description: "Optionally filter by activity subject (overrides subjectUsernames) (TODO)"
+
+      field :creator_usernames, list_of(:string),
+        description: "Optionally filter by object creators (TODO)"
+
+      field :creator_ids, list_of(:id),
+        description: "Optionally filter by object creators (overrides creatorUsernames) (TODO)"
+
+      field :object_usernames, list_of(:string),
+        description: "Optionally filter by the username of the object (TODO)"
+
+      field :object_ids, list_of(:id),
+        description: "Optionally filter by objects (overrides objectUsernames) (TODO)"
+
+      field :tags, list_of(:string),
+        description: "Optionally filter by hashtags or @ mentions (TODO)"
+
+      field :tag_ids, list_of(:id),
+        description: "Optionally filter by tag IDs (overrides Tags) (TODO)"
+
+      field(:activity_types, list_of(:string),
+        description: "Filter by activity type (eg. create, boost, follow) (TODO)"
+      )
+
+      field(:object_types, list_of(:string),
+        description: "Filter by object type (eg. post, poll) (TODO)"
+      )
+
+      field :media_types, list_of(:string),
+        description: "Filter by media type (eg. image, video, link) (TODO)"
+
+      field(:time_limit, :integer,
+        default_value: nil,
+        description: "Include only recent activities (time limit in days) (TODO)"
+      )
+
+      field(:sort_by, :sort_by,
+        default_value: :date,
+        description: "Sort by date, likes, boosts, replies, etc..."
+      )
+
+      field(:sort_order, :sort_order,
+        default_value: :desc,
+        description: "Sort in ascending or descending order"
+      )
     end
 
     input_object :post_filters do
@@ -215,7 +320,13 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       @desc "Get an activity"
       field :activity, :activity do
-        arg(:filter, :activity_filters)
+        arg(:filter, :activity_filter)
+        resolve(&get_activity/3)
+      end
+
+      @desc "Get an object"
+      field :object, :any_context do
+        arg(:filter, :object_filter)
         resolve(&get_activity/3)
       end
 
@@ -225,9 +336,21 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       #   arg(:paginate, :paginate)
       #   resolve(&feed/2)
       # end
-      connection field :feed, node_type: :activity do
+      connection field :feed_activities, node_type: :activity do
         arg(:filter, :feed_filters)
         resolve(&feed/2)
+      end
+
+      @desc "Get objects in a feed (TODO)"
+      connection field :feed_objects, node_type: :any_context do
+        arg(:filter, :feed_filters)
+        resolve(&feed_objects/2)
+      end
+
+      @desc "Get media in a feed (TODO)"
+      connection field :feed_media, node_type: :media do
+        arg(:filter, :feed_filters)
+        resolve(&feed_media/2)
       end
     end
 
@@ -291,15 +414,15 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       Bonfire.Social.Activities.read(id, GraphQL.current_user(info))
     end
 
-    def activity_object(%{activity: %{object: _object} = activity}, _, _) do
-      activity_object(activity)
+    def the_activity_object(%{activity: %{object: _object} = activity}, _, _) do
+      do_the_activity_object(activity)
     end
 
-    def activity_object(%{object: _object} = activity, _, _) do
-      activity_object(activity)
+    def the_activity_object(%{object: _object} = activity, _, _) do
+      do_the_activity_object(activity)
     end
 
-    def activity_object(activity) do
+    defp do_the_activity_object(%{} = activity) do
       {:ok, Activities.object_from_activity(activity)}
     end
 
@@ -318,7 +441,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     #   {:ok, Enum.map(feed, &Map.get(&1, :activity))}
     # end
 
-    def feed(feed_name \\ nil, args, info) do
+    def feed(feed_type \\ :activities, feed_name \\ nil, args, info) do
       current_user = GraphQL.current_user(info)
 
       {pagination_args, filters} =
@@ -336,11 +459,30 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         current_user: current_user,
         pagination: pagination_args,
         # we don't want to preload anything unnecessarily (relying instead on preloads in sub-field definitions)
-        preload: false
+        preload:
+          case feed_type do
+            :objects -> :per_object
+            :media -> :per_media
+            _activities -> false
+          end
       )
       |> Pagination.connection_paginate(pagination_args,
-        item_prepare_fun: fn fp -> e(fp, :activity, nil) || fp end
+        item_prepare_fun:
+          case feed_type do
+            :objects -> fn fp -> Activities.activity_under_object(e(fp, :activity, nil) || fp) end
+            :media -> fn fp -> Activities.activity_under_media(e(fp, :activity, nil) || fp) end
+            _activities -> fn fp -> e(fp, :activity, nil) || fp end
+          end
       )
+      |> debug("paginated_feed")
+    end
+
+    def feed_objects(feed_name \\ nil, args, info) do
+      feed(:objects, feed_name, args, info)
+    end
+
+    def feed_media(feed_name \\ nil, args, info) do
+      feed(:media, feed_name, args, info)
     end
 
     # defp my_feed(%{} = parent, _args, _info) do
@@ -364,7 +506,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     # defp feed(_), do: {:ok, nil}
 
     defp create_post(args, info) do
-      if Enums.id(GraphQL.current_user(info)) do
+      if user = GraphQL.current_user(info) do
         Bonfire.Posts.publish(post_attrs: args, current_user: user, context: info)
       else
         {:error, "Not authenticated"}
