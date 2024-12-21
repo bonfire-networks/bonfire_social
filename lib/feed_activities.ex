@@ -134,6 +134,7 @@ defmodule Bonfire.Social.FeedActivities do
     opts
     |> Keyword.merge(
       exclude_verbs: exclude_verbs,
+      preload: opts[:activity_preloads] |> Enums.filter_empty(nil) || opts[:preload],
       exclude_replies:
         !Bonfire.Common.Settings.get(
           [Bonfire.Social.Feeds, :include, :reply],
@@ -141,6 +142,7 @@ defmodule Bonfire.Social.FeedActivities do
           opts
         )
     )
+    |> IO.inspect(label: "5a. feed query opts", limit: :infinity)
   end
 
   # @decorate time()
@@ -382,7 +384,7 @@ defmodule Bonfire.Social.FeedActivities do
   #   |> debug()
   #   # |> preload([top_root, activity], activity: activity)
   #   # |> proload(top_root: :activity)
-  #   # |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
+  #   # |> Activities.activity_preloads(opts[:preload], opts)
   #   |> feed_many_paginated(paginate)
   # end
 
@@ -405,7 +407,7 @@ defmodule Bonfire.Social.FeedActivities do
 
       default_or_filtered_query(opts)
       |> join(:inner, [fp], ^initial_query, on: [id: fp.id])
-      |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
+      |> Activities.activity_preloads(opts[:preload], opts)
       |> Activities.as_permitted_for(opts)
       |> query_order(opts[:sort_by], opts[:sort_order])
       |> debug("query with deferred join")
@@ -414,7 +416,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp paginate_and_boundarise_feed_non_deferred_query(query, opts) do
     query
-    |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
+    |> Activities.activity_preloads(opts[:preload], opts)
     |> Activities.as_permitted_for(opts)
     |> query_order(opts[:sort_by], opts[:sort_order])
 
@@ -752,8 +754,8 @@ defmodule Bonfire.Social.FeedActivities do
       )
 
       # run post-preloads to follow pointers and catch anything else missing - TODO: only follow some pointers
-      # |> Activities.activity_preloads(e(opts, :preload, :feed), opts |> Keyword.put_new(:follow_pointers, true))
-      # |> Activities.activity_preloads(e(opts, :preload, :feed), opts |> Keyword.put_new(:follow_pointers, false))
+      # |> Activities.activity_preloads(opts[:preload], opts |> Keyword.put_new(:follow_pointers, true))
+      # |> Activities.activity_preloads(opts[:preload], opts |> Keyword.put_new(:follow_pointers, false))
     )
   end
 
@@ -859,7 +861,6 @@ defmodule Bonfire.Social.FeedActivities do
 
     opts =
       to_feed_options(opts)
-      |> IO.inspect(label: "5a. feed query opts")
 
     feed_ids =
       List.wrap(feed_id_or_ids)
@@ -961,7 +962,7 @@ defmodule Bonfire.Social.FeedActivities do
   def query_extras_boundarised(query \\ nil, opts) do
     query_extras(query, opts)
     |> Activities.as_permitted_for(opts)
-    |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
+    |> Activities.activity_preloads(opts[:preload], opts)
   end
 
   @doc "add assocs needed in lists of objects"
@@ -975,7 +976,7 @@ defmodule Bonfire.Social.FeedActivities do
     |> query_optional_extras(filters, opts)
     |> maybe_filter(filters)
     |> Objects.as_permitted_for(opts)
-    |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
+    |> Activities.activity_preloads(opts[:preload], opts)
   end
 
   defp query_extras(query \\ nil, opts) do
@@ -994,7 +995,7 @@ defmodule Bonfire.Social.FeedActivities do
     # |> debug("pre-preloads")
     # preload all things we commonly want in feeds
     # |> Activities.activity_preloads(e(opts, :preload, :with_object), opts) # if we want to preload the rest later to allow for caching
-    # |> Activities.activity_preloads(e(opts, :preload, :feed), opts)
+    # |> Activities.activity_preloads(opts[:preload], opts)
     # |> debug("post-preloads")
   end
 
