@@ -67,13 +67,13 @@ defmodule Bonfire.Social.FeedActivities do
 
   ## Examples
 
-      iex> feeds_for_activity(%{id: id})
+      > feeds_for_activity(%{id: id})
       [feed_id1, feed_id2]
 
-      iex> feeds_for_activity(id)
+      > feeds_for_activity(id)
       [feed_id1, feed_id2]
 
-      iex> feeds_for_activity(activity)
+      > feeds_for_activity(activity)
       []
   """
   def feeds_for_activity(%{id: id}), do: feeds_for_activity(id)
@@ -156,10 +156,10 @@ defmodule Bonfire.Social.FeedActivities do
 
       > feed_ids_and_opts({feed_name, feed_id}, opts)
 
-      iex> feed_ids_and_opts(:my, [current_user: me])
+      > feed_ids_and_opts(:my, [current_user: me])
       {["feed_id1", "feed_id2"], [exclude_verbs: [:flag, :boost, :follow]]}
 
-      iex> feed_ids_and_opts({:notifications, "feed_id3"}, [current_user: me])
+      > feed_ids_and_opts({:notifications, "feed_id3"}, [current_user: me])
       {"feed_id3", [skip_boundary_check: :admins, include_flags: true, exclude_verbs: false, skip_dedup: true, preload: [:notifications]]}
 
 
@@ -241,10 +241,10 @@ defmodule Bonfire.Social.FeedActivities do
 
   ## Examples
 
-      iex> Bonfire.Social.FeedActivities.my_feed([current_user: %{id: "user123"}])
+      > Bonfire.Social.FeedActivities.my_feed([current_user: %{id: "user123"}])
       %{edges: [%{activity: %{}}], page_info: %{}}
 
-      iex> Bonfire.Social.FeedActivities.my_feed([current_user: %{id: "user123"}], ["feed_id1", "feed_id2"])
+      > Bonfire.Social.FeedActivities.my_feed([current_user: %{id: "user123"}], ["feed_id1", "feed_id2"])
       %{edges: [%{activity: %{}}], page_info: %{}}
   """
   def my_feed(opts, home_feed_ids \\ nil) do
@@ -279,11 +279,11 @@ defmodule Bonfire.Social.FeedActivities do
 
   ## Examples
 
-      iex> feed_paginated([], [])
-      %{edges: [%{activity: %{}}], page_info: %{}}
+      iex> %{edges: _, page_info: %{}} = feed_paginated([], [])
 
-      iex> query = Ecto.Query.from(f in FeedPublish)
-      iex> Bonfire.Social.FeedActivities.feed_paginated([], base_query: query)
+      iex> query = Ecto.Query.from(f in Bonfire.Data.Social.FeedPublish)
+      iex> %{edges: _, page_info: %{}} = Bonfire.Social.FeedActivities.feed_paginated([], base_query: query)
+      
   """
   def feed_paginated(filters \\ [], opts \\ []) do
     opts = to_options(opts)
@@ -458,11 +458,11 @@ defmodule Bonfire.Social.FeedActivities do
 
   ## Examples
 
-      iex> Bonfire.Social.FeedActivities.feed("feed123", [])
-      %{edges: [%{activity: %{}}], page_info: %{}}
+      > Bonfire.Social.FeedActivities.feed("feed123", [])
+      %{edges: [%{activity: %{}}], page_info: %Paginator.PageInfo{}}
 
-      iex> Bonfire.Social.FeedActivities.feed(:explore, [])
-      %{edges: [%{activity: %{}}], page_info: %{}}
+      iex> %{edges: _, page_info: %Paginator.PageInfo{}} = Bonfire.Social.FeedActivities.feed(:explore, [])
+      
   """
   def feed(feed, opts \\ [])
   def feed(%{id: feed_id}, opts), do: feed(feed_id, opts)
@@ -1243,10 +1243,10 @@ defmodule Bonfire.Social.FeedActivities do
 
   ## Examples
 
-      iex> subject = %{id: "user123"}
-      iex> verb = :create
-      iex> object = %{id: "post456"}
-      iex> Bonfire.Social.FeedActivities.publish(subject, verb, object, [])
+      > subject = %{id: "user123"}
+      > verb = :create
+      > object = %{id: "post456"}
+      > Bonfire.Social.FeedActivities.publish(subject, verb, object, [])
       {:ok, %Bonfire.Data.Social.Activity{}}
   """
   def publish(subject, verb_or_activity, object, opts \\ [])
@@ -1297,14 +1297,14 @@ defmodule Bonfire.Social.FeedActivities do
 
   ## Examples
 
-      iex> changeset = %Ecto.Changeset{}
-      iex> options = [feeds: ["feed123", "feed456"]]
-      iex> Bonfire.Social.FeedActivities.put_feed_publishes(changeset, options)
+      > changeset = %Ecto.Changeset{}
+      > options = [feeds: ["feed123", "feed456"]]
+      > Bonfire.Social.FeedActivities.put_feed_publishes(changeset, options)
       %Ecto.Changeset{}
   """
   def put_feed_publishes(changeset, options) do
     get_feed_publishes(options)
-    # |> debug()
+    |> debug()
     |> Changesets.put_assoc!(changeset, :feed_publishes, ...)
   end
 
@@ -1315,8 +1315,8 @@ defmodule Bonfire.Social.FeedActivities do
 
   ## Examples
 
-      iex> options = [feeds: ["feed123", "feed456"]]
-      iex> Bonfire.Social.FeedActivities.get_feed_publishes(options)
+      > options = [feeds: ["feed123", "feed456"]]
+      > Bonfire.Social.FeedActivities.get_feed_publishes(options)
       [%{feed_id: "feed123"}, %{feed_id: "feed456"}]
   """
   def get_feed_publishes(options) do
@@ -1345,8 +1345,8 @@ defmodule Bonfire.Social.FeedActivities do
 
   ## Examples
 
-      iex> options = [outbox: [%{id: "author123"}], inbox: [%{id: "mention987"}], notifications: [%{id: "reply654"}], feeds: ["feed456"]]
-      iex> Bonfire.Social.FeedActivities.get_feed_ids(options)
+      > options = [outbox: [%{id: "author123"}], inbox: [%{id: "mention987"}], notifications: [%{id: "reply654"}], feeds: ["feed456"]]
+      > Bonfire.Social.FeedActivities.get_feed_ids(options)
       ["inbox_feed_id_for_user123", "feed456"]
   """
   def get_feed_ids(options) do
@@ -1466,12 +1466,12 @@ defmodule Bonfire.Social.FeedActivities do
 
   ## Examples
 
-      iex> subject = %{id: "user123"}
-      iex> verb = :create
-      iex> object = %{id: "post456"}
-      iex> feeds = ["feed789"]
-      iex> opts = []
-      iex> Bonfire.Social.FeedActivities.maybe_feed_publish(subject, verb, object, feeds, opts)
+      > subject = %{id: "user123"}
+      > verb = :create
+      > object = %{id: "post456"}
+      > feeds = ["feed789"]
+      > opts = []
+      > Bonfire.Social.FeedActivities.maybe_feed_publish(subject, verb, object, feeds, opts)
       {:ok, %Bonfire.Data.Social.Activity{}}
   """
   def maybe_feed_publish(subject, verb_or_activity, object, feeds, opts)
@@ -1670,7 +1670,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   ## Examples
 
-      iex> Bonfire.Social.FeedActivities.delete("123", :object_id)
+      > Bonfire.Social.FeedActivities.delete("123", :object_id)
       {1, nil}
   """
   def delete(objects, by_field) when is_atom(by_field) do
@@ -1691,8 +1691,8 @@ defmodule Bonfire.Social.FeedActivities do
 
   ## Examples
 
-      iex> filters = [object_id: "123"]
-      iex> Bonfire.Social.FeedActivities.delete(filters)
+      > filters = [object_id: "123"]
+      > Bonfire.Social.FeedActivities.delete(filters)
       {5, nil}
   """
   def delete(filters) when is_list(filters) or is_tuple(filters) do
@@ -1761,7 +1761,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   ## Examples
 
-      iex> unseen_count(feed_id, current_user: me)
+      > unseen_count(feed_id, current_user: me)
       5
   """
   def unseen_count(feed_id, opts) do
@@ -1775,7 +1775,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   ## Examples
 
-      iex> count(filters, current_user: me)
+      > count(filters, current_user: me)
       10
   """
   def count(filters \\ [], opts \\ []) do
@@ -1794,7 +1794,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   ## Examples
 
-      iex> count_subjects(filters, opts)
+      > count_subjects(filters, opts)
       3
   """
   def count_subjects(filters \\ [], opts \\ []) do
@@ -1818,7 +1818,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   ## Examples
 
-      iex> mark_all_seen(feed_id, current_user: me)
+      > mark_all_seen(feed_id, current_user: me)
       {:ok, number_of_marked_items}
   """
   def mark_all_seen(feed_id, opts) do

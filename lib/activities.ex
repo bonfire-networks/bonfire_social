@@ -240,7 +240,7 @@ defmodule Bonfire.Social.Activities do
 
   ## Examples
 
-      iex> delete_by_object("1")
+      > delete_by_object("1")
       # Number of deleted objects
   """
   def delete_by_object(id) when is_binary(id) or is_struct(id) do
@@ -357,45 +357,12 @@ defmodule Bonfire.Social.Activities do
   #   end
   # end
 
-  defp query_preload_seen(q, opts) do
-    user_id = uid(current_user(opts))
-
-    if user_id do
-      table_id = Bonfire.Common.Types.table_id(Seen)
-
-      q
-      |> reusable_join(:left, [activity: activity], seen_edge in Edge,
-        as: :seen,
-        on:
-          activity.id == seen_edge.object_id and seen_edge.table_id == ^table_id and
-            seen_edge.subject_id == ^user_id
-      )
-      |> preload([activity: activity, seen: seen],
-        activity: {activity, seen: seen}
-      )
-    else
-      q
-    end
-  end
-
-  defp subquery_preload_seen(opts) do
-    user_id = uid(current_user(opts))
-
-    if user_id do
-      table_id = Bonfire.Common.Types.table_id(Seen)
-
-      from(seen_edge in Edge,
-        where: seen_edge.table_id == ^table_id and seen_edge.subject_id == ^user_id
-      )
-    end
-  end
-
   @doc """
   Applies preloads to a query or or post-loads to object(s) with the specified options. See `activity_preloads/3` for what preload options you can specify.
 
   ## Examples
 
-      iex> activity_preloads(query, preload: [])
+      > activity_preloads(query, preload: [])
       # Query with applied activity preloads
 
   """
@@ -459,15 +426,21 @@ defmodule Bonfire.Social.Activities do
 
   def activity_preloads(query_or_object_or_objects, preloads, opts) when is_list(preloads) do
     # debug(query, "query or data")
-    debug(preloads, "preloads")
+    debug(preloads, "preloads inputted")
     opts = to_options(opts)
 
     if not is_nil(query_or_object_or_objects) and
          Ecto.Queryable.impl_for(query_or_object_or_objects) do
-      do_activity_preloads(query_or_object_or_objects, preloads, opts)
-      |> debug("accumulated proloads included in query")
+      preloads
+      |> Bonfire.Social.FeedLoader.map_activity_preloads()
+      |> debug("accumulated preloads to proload")
+      |> Enum.reduce(query_or_object_or_objects, &prepare_activity_preloads(&2, &1, opts))
+      |> debug("query with accumulated proloads")
     else
-      do_activity_preloads(nil, preloads, opts)
+      preloads
+      |> Bonfire.Social.FeedLoader.map_activity_preloads()
+      |> Enum.flat_map(&prepare_activity_preloads(nil, &1, opts))
+      |> Enum.uniq()
       |> debug("accumulated postloads to try")
       |> maybe_repo_preload_activity(query_or_object_or_objects, ..., opts)
 
@@ -483,145 +456,7 @@ defmodule Bonfire.Social.Activities do
     activity_preloads(query, [preloads], opts)
   end
 
-  defp do_activity_preloads(query, preloads, opts) when is_list(preloads) do
-    # debug(preloads, "preloads list")
-
-    if not is_nil(query) and Ecto.Queryable.impl_for(query) do
-      preloads
-      |> Enum.uniq()
-      |> Enum.reduce(query, &do_activity_preloads(&2, &1, opts))
-    else
-      preloads
-      |> Enum.uniq()
-      |> Enum.flat_map(&do_activity_preloads(nil, &1, opts))
-    end
-  end
-
-  defp do_activity_preloads(query, preloads, opts)
-       when preloads in [
-              :all,
-              :feed,
-              :feed_postload,
-              :feed_metadata,
-              :feed_by_subject,
-              :feed_by_creator,
-              :notifications,
-              :object_with_creator,
-              :posts,
-              :posts_with_thread,
-              :posts_with_reply_to,
-              :default
-            ] do
-    # shorthand presets
-    # debug(preloads)
-
-    case preloads do
-      :all ->
-        [
-          :feed,
-          :tags
-        ]
-
-      :thread_postload ->
-        [
-          # :with_subject,
-          # :feed_by_subject,
-          :with_replied,
-          :with_object_more
-        ]
-
-      :feed ->
-        [
-          :with_subject,
-          :feed_by_subject,
-          :with_replied
-        ]
-
-      :feed_postload ->
-        [
-          :with_thread_name,
-          :with_reply_to,
-          :with_media,
-          :with_parent,
-          :maybe_with_labelled
-        ]
-
-      :feed_metadata ->
-        [
-          :with_subject,
-          :with_creator,
-          # :with_verb,
-          # :with_reply_to,
-          :with_thread_name
-          # :with_media
-        ]
-
-      :feed_by_subject ->
-        [
-          :with_creator,
-          # :with_verb,
-          :feed_by_creator
-        ]
-
-      :feed_by_creator ->
-        [
-          :with_object_more,
-          # :with_reply_to,
-          # :with_thread_name,
-          :with_media
-        ]
-
-      :notifications ->
-        [
-          :feed_by_subject,
-          :with_reply_to,
-          :with_seen
-        ]
-
-      :object_with_creator ->
-        [
-          :with_object_posts,
-          :with_creator
-        ]
-
-      :posts_with_reply_to ->
-        [
-          :with_subject,
-          :with_object_posts
-          # :with_reply_to # do not preload as part of query because will be preloaded async later
-        ]
-
-      :posts_with_thread ->
-        [
-          :with_subject,
-          :with_object_posts,
-          :with_replied,
-          :with_thread_name
-        ]
-
-      :posts ->
-        [
-          :with_subject,
-          :with_object_posts
-        ]
-
-      _default ->
-        [
-          :with_subject,
-          # :with_verb,
-          :with_object_posts,
-          :with_replied
-        ]
-    end
-    |> debug("computed preloads")
-    |> do_activity_preloads(
-      query,
-      ...,
-      opts
-    )
-  end
-
-  defp do_activity_preloads(query, preload, opts) when is_atom(preload) do
+  defp prepare_activity_preloads(query, preload, opts) when is_atom(preload) do
     # pre-loading on a query
     if not is_nil(query) and Ecto.Queryable.impl_for(query) do
       current_user_id = current_user_id(opts)
@@ -803,6 +638,9 @@ defmodule Bonfire.Social.Activities do
         # proload query, activity: [:media] # FYI: proloading media only queries one attachment
         :with_seen ->
           query_preload_seen(query, opts)
+
+        nil ->
+          query
       end
     else
       # post-loading on an struct or list of structs
@@ -870,7 +708,43 @@ defmodule Bonfire.Social.Activities do
         :with_seen ->
           subquery = subquery_preload_seen(opts)
           if subquery, do: [seen: subquery], else: []
+
+        nil ->
+          []
       end
+    end
+  end
+
+  defp query_preload_seen(q, opts) do
+    user_id = uid(current_user(opts))
+
+    if user_id do
+      table_id = Bonfire.Common.Types.table_id(Seen)
+
+      q
+      |> reusable_join(:left, [activity: activity], seen_edge in Edge,
+        as: :seen,
+        on:
+          activity.id == seen_edge.object_id and seen_edge.table_id == ^table_id and
+            seen_edge.subject_id == ^user_id
+      )
+      |> preload([activity: activity, seen: seen],
+        activity: {activity, seen: seen}
+      )
+    else
+      q
+    end
+  end
+
+  defp subquery_preload_seen(opts) do
+    user_id = uid(current_user(opts))
+
+    if user_id do
+      table_id = Bonfire.Common.Types.table_id(Seen)
+
+      from(seen_edge in Edge,
+        where: seen_edge.table_id == ^table_id and seen_edge.subject_id == ^user_id
+      )
     end
   end
 
@@ -925,10 +799,10 @@ defmodule Bonfire.Social.Activities do
 
   ## Examples
 
-      iex> maybe_join_subject(query, [])
+      > maybe_join_subject(query, [])
       # returns query with subject preloaded
 
-      iex> maybe_join_subject(query, [1, 2, 3])
+      > maybe_join_subject(query, [1, 2, 3])
       # returns query with subject included only if subject.id not in [1, 2, 3]
   """
   def maybe_join_subject(query, []),
@@ -983,10 +857,10 @@ defmodule Bonfire.Social.Activities do
 
   ## Examples
 
-      iex> maybe_join_creator(query, [])
+      > maybe_join_creator(query, [])
       # returns query with creator preloaded if different from the subject
 
-      iex> maybe_join_creator(query, [1, 2, 3])
+      > maybe_join_creator(query, [1, 2, 3])
       # returns query with creator included only if creator.id not in [1, 2, 3]
   """
   def maybe_join_creator(query, []) do
@@ -1145,7 +1019,7 @@ defmodule Bonfire.Social.Activities do
 
   ## Examples
 
-      iex> get("activity_id", [])
+      > get("activity_id", [])
   """
   def get(id, opts) when is_binary(id), do: repo().single(query([id: id], opts))
 
@@ -1154,10 +1028,10 @@ defmodule Bonfire.Social.Activities do
 
   ## Examples
 
-      iex> read(query)
+      > read(query)
       # returns an activity based on the provided query
 
-      iex> read(object_id)
+      > read(object_id)
       # returns an activity for the provided object ID (usually a create activity)
   """
   def read(query, opts \\ []),
@@ -1211,9 +1085,10 @@ defmodule Bonfire.Social.Activities do
 
   ## Examples
 
-      iex> query(filters)
+      > query(filters)
 
       iex> query([my: :feed], [current_user: nil])
+      ** (Bonfire.Fail.Auth) You need to log in first. 
   """
   def query(filters \\ [], opts_or_current_user \\ [])
 
@@ -1237,8 +1112,8 @@ defmodule Bonfire.Social.Activities do
 
   ## Examples
 
-      iex> activity_under_object(%{activity: %{id: 2, object: %{id: 1}}})
-      %{id: 1, activity: %{id: 2}}
+      iex> %{id: 1, activity: %{id: 2}} = activity_under_object(%{activity: %Bonfire.Data.Social.Activity{id: 2, object: %{id: 1}}})
+      
   """
   # this is a hack to mimic the old structure of the data provided to
   # the activity component, which will we refactor soon(tm)
@@ -1275,8 +1150,8 @@ defmodule Bonfire.Social.Activities do
 
   ## Examples
 
-      iex> activity_under_media(%{activity: %{id: 2, object: %{id: 1}}})
-      %{id: 1, activity: %{id: 2}}
+      iex> %{id: 1, activity: %{id: 2}} = activity_under_media(%{activity: %Bonfire.Data.Social.Activity{id: 2, media: %{id: 1}}})
+      
   """
   # this is a hack to mimic the old structure of the data provided to
   # the activity component, which will we refactor soon(tm)

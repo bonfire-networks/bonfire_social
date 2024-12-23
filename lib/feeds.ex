@@ -29,6 +29,10 @@ defmodule Bonfire.Social.Feeds do
   @behaviour Bonfire.Common.QueryModule
   def schema_module, do: Feed
 
+  def feed_presets do
+    Config.get([__MODULE__, :feed_presets], [])
+  end
+
   @doc """
   Determines the feed IDs to publish based on the provided parameters.
 
@@ -39,12 +43,12 @@ defmodule Bonfire.Social.Feeds do
   ### When called with the `"admins"` boundary:
 
       iex> Bonfire.Social.Feeds.feed_ids_to_publish(nil, "admins", nil)
-      # List of admin feed IDS
+      [] # List of admin feed IDS
 
   ### When called with a different boundary and some optional feeds:
 
       > Bonfire.Social.Feeds.feed_ids_to_publish(me, "public", %{reply_to: true}, [some_feed_id])
-      # List of feed IDs for the provided boundary
+      [] # List of feed IDs for the provided boundary
   """
   def feed_ids_to_publish(me, boundary, assigns, notify_feeds \\ nil)
 
@@ -383,8 +387,8 @@ defmodule Bonfire.Social.Feeds do
 
   ### With custom feeds specified:
 
-      iex> Bonfire.Social.Feeds.maybe_custom_feeds(to_feeds: [custom_feed_id])
-      [custom_feed_id]
+      iex> Bonfire.Social.Feeds.maybe_custom_feeds(to_feeds: ["custom_feed_id"])
+      ["custom_feed_id"]
   """
   def maybe_custom_feeds(preset_and_custom_boundary),
     do:

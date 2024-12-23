@@ -243,33 +243,21 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         description: "Specify which feed to query. For example: explore, my, local, remote"
       )
 
-      field(:feed_id, list_of(:id),
+      field(:feed_ids, list_of(:id),
         description: "Optionally specify feed IDs (overrides feedName) (TODO)"
       )
 
-      field :subject_usernames, list_of(:string),
+      field :subjects, list_of(:string),
         description: "Optionally filter by activity subject (TODO)"
 
-      field :subject_ids, list_of(:id),
-        description: "Optionally filter by activity subject (overrides subjectUsernames) (TODO)"
-
-      field :creator_usernames, list_of(:string),
+      field :creators, list_of(:string),
         description: "Optionally filter by object creators (TODO)"
 
-      field :creator_ids, list_of(:id),
-        description: "Optionally filter by object creators (overrides creatorUsernames) (TODO)"
-
-      field :object_usernames, list_of(:string),
+      field :objects, list_of(:string),
         description: "Optionally filter by the username of the object (TODO)"
-
-      field :object_ids, list_of(:id),
-        description: "Optionally filter by objects (overrides objectUsernames) (TODO)"
 
       field :tags, list_of(:string),
         description: "Optionally filter by hashtags or @ mentions (TODO)"
-
-      field :tag_ids, list_of(:id),
-        description: "Optionally filter by tag IDs (overrides Tags) (TODO)"
 
       field(:activity_types, list_of(:string),
         description: "Filter by activity type (eg. create, boost, follow) (TODO)"
