@@ -281,7 +281,7 @@ defmodule Bonfire.Social.Objects do
 
   ## Examples
 
-      iex> list_paginated([type: :post], [])
+      iex> list_paginated([object_types: :post], [])
       %Page{}
 
   """
@@ -350,7 +350,7 @@ defmodule Bonfire.Social.Objects do
 
   # Note: expects you to be querying against `Pointer`, i.e. to not have limited the types already.
   # """
-  # def exclude_types(query, types) do
+  # def exclude_object_types(query, types) do
   #   types = Enum.map(List.wrap(types), &get_table_id!/1)
   #   from(q in query, where: q.table_id not in ^types)
   # end

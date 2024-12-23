@@ -16,17 +16,20 @@ defmodule Bonfire.Social.FeedLoader do
           feed_name: String.t() | nil,
           feed_ids: list(String.t()) | String.t() | nil,
           activity_types: list(String.t()) | String.t() | nil,
-          #  TODO: rename to exclude_activity_types
-          exclude_verbs: list(String.t()) | String.t() | nil,
-          object_types: list(String.t()) | String.t() | nil,
-          media_types: list(String.t()) | String.t() | nil,
+          exclude_activity_types: list(String.t()) | String.t() | nil,
           subjects: list(String.t()) | String.t() | nil,
-          objects: list(String.t()) | String.t() | nil,
-          creators: list(String.t()) | String.t() | nil,
-          # TODO
           subject_circles: list(String.t()) | String.t() | nil,
+          subject_types: list(String.t()) | String.t() | nil,
+          exclude_subject_types: list(String.t()) | String.t() | nil,
+          objects: list(String.t()) | String.t() | nil,
           object_circles: list(String.t()) | String.t() | nil,
+          object_types: list(String.t()) | String.t() | nil,
+          exclude_object_types: list(String.t()) | String.t() | nil,
+          creators: list(String.t()) | String.t() | nil,
           creator_circles: list(String.t()) | String.t() | nil,
+          exclude_replies: boolean() | nil,
+          only_replies: boolean() | nil,
+          media_types: list(String.t()) | String.t() | nil,
           tags: list(String.t()) | String.t() | nil,
           time_limit: integer() | nil,
           sort_by: atom() | nil,
@@ -40,11 +43,11 @@ defmodule Bonfire.Social.FeedLoader do
 
       # 1: Retrieve a preset feed without parameters
       iex> preset_feed_filters(:local, [])
-      {:ok, %{feed_name: :local, exclude_verbs: [:like]}}
+      {:ok, %{feed_name: :local, exclude_activity_types: [:like]}}
 
       # 1: Retrieve a preset feed without parameters
       iex> preset_feed_filters(:local, [])
-      {:ok, %{feed_name: :local, exclude_verbs: [:like]}}
+      {:ok, %{feed_name: :local, exclude_activity_types: [:like]}}
 
       # 2: Retrieve a preset feed with parameters
       iex> preset_feed_filters(:user_activities, [by: "alice"])
@@ -378,6 +381,7 @@ defmodule Bonfire.Social.FeedLoader do
       iex> map_activity_preloads([:all]) |> Enum.sort()
       [
         :maybe_with_labelled,
+        :tags,
         :with_creator,
         :with_media,
         :with_object_more,
@@ -387,7 +391,8 @@ defmodule Bonfire.Social.FeedLoader do
         :with_reply_to,
         :with_seen,
         :with_subject,
-        :with_thread_name
+        :with_thread_name,
+        :with_verb
       ]
 
       # With unknown key 
@@ -415,6 +420,7 @@ defmodule Bonfire.Social.FeedLoader do
       Enums.fun(preload_presets, :keys)
     else
       preloads
+      |> Enums.filter_empty([])
     end
     |> do_map_preloads(preload_presets, MapSet.new())
   end

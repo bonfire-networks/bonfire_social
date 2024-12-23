@@ -14,19 +14,25 @@ defmodule Bonfire.Social.RuntimeConfig do
         },
         explore: %{
           description: "All activities",
-          filters: %{feed_name: :explore, exclude_verbs: [:like]}
+          filters: %{feed_name: :explore, exclude_activity_types: [:like]}
         },
         local: %{
           description: "Local instance activities",
-          filters: %{feed_name: :local, exclude_verbs: [:like]}
+          filters: %{feed_name: :local, exclude_activity_types: [:like]}
         },
         remote: %{
           description: "Remote/Fediverse activities",
-          filters: %{feed_name: :remote, exclude_verbs: [:like]}
+          filters: %{feed_name: :remote, exclude_activity_types: [:like]}
         },
         notifications: %{
           description: "Notifications for me",
-          filters: %{feed_name: :notifications},
+          filters: %{
+            feed_name: :notifications,
+            # so we can show flags to admins in notifications
+            skip_boundary_check: :admins,
+            include_flags: true,
+            show_objects_only_once: false
+          },
           current_user_required: true
         },
         messages: %{
@@ -107,13 +113,24 @@ defmodule Bonfire.Social.RuntimeConfig do
         # Moderation feeds
         flagged_by_me: %{
           description: "Content I've flagged",
-          filters: %{activity_types: :flag, subjects: :me},
+          filters: %{
+            activity_types: :flag,
+            subjects: :me,
+            include_flags: true,
+            show_objects_only_once: false
+          },
           parameterized: true,
           current_user_required: true
         },
         flagged_content: %{
           description: "Content flagged by anyone (mods only)",
-          filters: %{activity_types: :flag},
+          filters: %{
+            activity_types: :flag,
+            # so we can show flags to admins in notifications
+            skip_boundary_check: :admins,
+            include_flags: true,
+            show_objects_only_once: false
+          },
           current_user_required: true,
           role_required: :mod
         },
@@ -283,6 +300,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           :with_subject,
           :with_object_posts
         ],
+        extras: [:with_verb, :tags],
         default: [
           :with_subject,
           :with_object_posts,

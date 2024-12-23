@@ -83,7 +83,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   def feeds_for_activity(activity) do
-    error("feeds_for_activity: dunno how to get feeds for #{inspect(activity)}")
+    error(activity, "dunno how to get feeds for this")
     []
   end
 
@@ -95,52 +95,54 @@ defmodule Bonfire.Social.FeedActivities do
 
   ## Examples
 
-      > assigns = %{exclude_verbs: [:flag, :boost]}
+      > assigns = %{exclude_activity_types: [:flag, :boost]}
       > to_feed_options(assigns)
-      [exclude_verbs: [:flag, :boost, :follow]]
+      [exclude_activity_types: [:flag, :boost, :follow]]
   """
   def to_feed_options(opts) do
     opts = to_options(opts)
     # TODO: clean up this code
-    exclude_verbs =
-      if opts[:exclude_verbs] == false do
+    exclude_activity_types =
+      if opts[:exclude_activity_types] == false do
         false
       else
-        opts[:exclude_verbs] || skip_verbs_default()
+        opts[:exclude_activity_types] || skip_verbs_default()
       end
 
-    # exclude_verbs = opts[:exclude_verbs] || skip_verbs_default()
+    # exclude_activity_types = opts[:exclude_activity_types] || skip_verbs_default()
 
-    exclude_verbs =
-      if opts[:exclude_verbs] != false and
+    exclude_activity_types =
+      if opts[:exclude_activity_types] != false and
            !Bonfire.Common.Settings.get(
              [Bonfire.Social.Feeds, :include, :boost],
              true,
              opts
            ),
-         do: exclude_verbs ++ [:boost],
-         else: exclude_verbs
+         do: exclude_activity_types ++ [:boost],
+         else: exclude_activity_types
 
-    exclude_verbs =
-      if opts[:exclude_verbs] != false and
+    exclude_activity_types =
+      if opts[:exclude_activity_types] != false and
            !Bonfire.Common.Settings.get(
              [Bonfire.Social.Feeds, :include, :follow],
              false,
              opts
            ),
-         do: exclude_verbs ++ [:follow],
-         else: exclude_verbs
+         do: exclude_activity_types ++ [:follow],
+         else: exclude_activity_types
 
     opts
     |> Keyword.merge(
-      exclude_verbs: exclude_verbs,
+      exclude_activity_types: exclude_activity_types,
       preload: opts[:activity_preloads] |> Enums.filter_empty(nil) || opts[:preload],
       exclude_replies:
-        !Bonfire.Common.Settings.get(
-          [Bonfire.Social.Feeds, :include, :reply],
-          true,
-          opts
-        )
+        Keyword.get_lazy(opts, :exclude_replies, fn ->
+          !Bonfire.Common.Settings.get(
+            [Bonfire.Social.Feeds, :include, :reply],
+            true,
+            opts
+          )
+        end)
     )
     |> IO.inspect(label: "5a. feed query opts", limit: :infinity)
   end
@@ -157,10 +159,10 @@ defmodule Bonfire.Social.FeedActivities do
       > feed_ids_and_opts({feed_name, feed_id}, opts)
 
       > feed_ids_and_opts(:my, [current_user: me])
-      {["feed_id1", "feed_id2"], [exclude_verbs: [:flag, :boost, :follow]]}
+      {["feed_id1", "feed_id2"], [exclude_activity_types: [:flag, :boost, :follow]]}
 
       > feed_ids_and_opts({:notifications, "feed_id3"}, [current_user: me])
-      {"feed_id3", [skip_boundary_check: :admins, include_flags: true, exclude_verbs: false, skip_dedup: true, preload: [:notifications]]}
+      {"feed_id3", [skip_boundary_check: :admins, include_flags: true, exclude_activity_types: false, show_objects_only_once: false, preload: [:notifications]]}
 
 
   """
@@ -199,8 +201,8 @@ defmodule Bonfire.Social.FeedActivities do
         # so we can show flags to admins in notifications
         skip_boundary_check: :admins,
         include_flags: true,
-        exclude_verbs: false,
-        skip_dedup: true,
+        exclude_activity_types: false,
+        show_objects_only_once: false,
         preload: List.wrap(e(opts, :preload, [])) ++ [:notifications]
       )
 
@@ -210,7 +212,7 @@ defmodule Bonfire.Social.FeedActivities do
   def feed_ids_and_opts(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
     opts =
       opts
-      |> Keyword.put_new_lazy(:exclude_verbs, &skip_verbs_default/0)
+      |> Keyword.put_new_lazy(:exclude_activity_types, &skip_verbs_default/0)
 
     {named_feed(
        feed_name,
@@ -223,7 +225,7 @@ defmodule Bonfire.Social.FeedActivities do
              (is_binary(feed_id) or is_list(feed_id)) do
     opts =
       opts
-      |> Keyword.put_new_lazy(:exclude_verbs, &skip_verbs_default/0)
+      |> Keyword.put_new_lazy(:exclude_activity_types, &skip_verbs_default/0)
 
     {feed_id, opts}
   end
@@ -231,7 +233,7 @@ defmodule Bonfire.Social.FeedActivities do
   def feed_ids_and_opts(feed, opts) when is_binary(feed) or is_list(feed) do
     opts =
       opts
-      |> Keyword.put_new_lazy(:exclude_verbs, &skip_verbs_default/0)
+      |> Keyword.put_new_lazy(:exclude_activity_types, &skip_verbs_default/0)
 
     {feed, opts}
   end
@@ -488,7 +490,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   def feed(:explore, opts) do
     opts
-    |> Enums.deep_merge(exclude_verbs: [:like, :pin])
+    |> Enums.deep_merge(exclude_activity_types: [:like, :pin])
     |> do_feed(:explore, ...)
 
     # |> debug("explore feed")
@@ -646,7 +648,7 @@ defmodule Bonfire.Social.FeedActivities do
         :feed_filters,
         Map.merge(
           e(opts, :feed_filters, %{}),
-          %{object: object}
+          %{objects: object}
         )
       )
     )
@@ -661,19 +663,21 @@ defmodule Bonfire.Social.FeedActivities do
   def feed_contains?(feed, id_or_html_body, _opts)
       when is_list(feed) and (is_binary(id_or_html_body) or is_map(id_or_html_body)) do
     Enum.find_value(feed, fn fi ->
-      if fi.activity.object_id == id(id_or_html_body) or
-           e(fi.activity.object, :post_content, :html_body, "") =~ id_or_html_body do
-        id(fi.activity.object)
+      if (fi.activity.object_id == id(id_or_html_body) or
+            e(fi.activity.object, :post_content, :html_body, "") =~
+              e(id_or_html_body, :post_content, :html_body, nil)) ||
+           e(id_or_html_body, :object, :post_content, :html_body, nil) ||
+           e(id_or_html_body, :activity, :object, :post_content, :html_body, nil) ||
+           id_or_html_body do
+        fi.activity
       end
     end) ||
       (
-        debug(feed, "object not found in feed")
-
         debug(
           Enum.map(feed, fn fi ->
             e(fi, :activity, :object, :post_content, nil) || e(fi, :activity, :object, nil)
           end),
-          "posts / object in feed"
+          "object not found in feed"
         )
 
         false
@@ -695,14 +699,15 @@ defmodule Bonfire.Social.FeedActivities do
         |> feed_contains?(object, opts)
 
       id ->
-        feed_contains?(feed, [object: id], opts)
+        feed_contains?(feed, [objects: id], opts)
     end
   end
 
   def feed_contains_single?(feed_name, filters, opts) when is_list(filters) do
     feed_contains_query(feed_name, filters, opts)
     |> repo().one()
-    |> id()
+
+    # |> id()
   end
 
   defp feed_contains_query(feed_name, filters, opts) when is_list(filters) do
@@ -739,19 +744,19 @@ defmodule Bonfire.Social.FeedActivities do
 
       # TODO: where best to do these postloads? and try to optimise into one call
 
-      |> Bonfire.Common.Needles.Preload.maybe_preload_nested_pointers(
-        [activity: [replied: [:reply_to]]],
-        opts
-      )
-      |> Bonfire.Common.Needles.Preload.maybe_preload_nested_pointers(
-        [activity: [:object]],
-        opts
-      )
-      |> repo().maybe_preload(
-        # FIXME: this should happen in `Activities.activity_preloads`
-        [activity: Activities.maybe_with_labelled()],
-        opts |> Keyword.put_new(:follow_pointers, false)
-      )
+      # |> Bonfire.Common.Needles.Preload.maybe_preload_nested_pointers(
+      #   [activity: [replied: [:reply_to]]],
+      #   opts
+      # )
+      # |> Bonfire.Common.Needles.Preload.maybe_preload_nested_pointers(
+      #   [activity: [:object]],
+      #   opts
+      # )
+      # |> repo().maybe_preload(
+      #   # FIXME: this should happen in `Activities.activity_preloads`
+      #   [activity: Activities.maybe_with_labelled()],
+      #   opts |> Keyword.put_new(:follow_pointers, false)
+      # )
 
       # run post-preloads to follow pointers and catch anything else missing - TODO: only follow some pointers
       # |> Activities.activity_preloads(opts[:preload], opts |> Keyword.put_new(:follow_pointers, true))
@@ -765,13 +770,13 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   defp maybe_dedup_feed_objects(edges, opts) do
-    if e(opts, :skip_dedup, nil) do
-      edges
-    else
+    if Keyword.get(opts, :show_objects_only_once, true) do
       # TODO: try doing this in queries in a way that it's not needed here?
       edges
       # |> Enum.uniq_by(&id(&1))
       |> Enum.uniq_by(&e(&1, :activity, :object_id, nil))
+    else
+      edges
     end
   end
 
@@ -877,7 +882,7 @@ defmodule Bonfire.Social.FeedActivities do
         debug("local feed")
 
         # excludes likes/etc from local feed - TODO: configurable
-        Enums.deep_merge(opts, exclude_verbs: [:like, :pin])
+        Enums.deep_merge(opts, exclude_activity_types: [:like, :pin])
         # |> debug("local_opts")
         |> query_extras()
         |> proload(
@@ -893,7 +898,7 @@ defmodule Bonfire.Social.FeedActivities do
       :activity_pub in feed_ids or federated_feed_id in feed_ids ->
         debug("remote/federated feed")
 
-        Enums.deep_merge(opts, exclude_verbs: [:like, :pin])
+        Enums.deep_merge(opts, exclude_activity_types: [:like, :pin])
         |> query_extras()
         |> proload(
           activity: [subject: {"subject_", character: [:peered]}, object: {"object_", [:peered]}]
@@ -909,13 +914,13 @@ defmodule Bonfire.Social.FeedActivities do
           not is_struct(e(opts, :feed_filters, nil)) ->
         debug(feed_id_or_ids, "specific feed(s)")
 
-        Enums.deep_merge(opts, exclude_verbs: [:pin])
+        Enums.deep_merge(opts, exclude_activity_types: [:pin])
         |> generic_feed_query(feed_id_or_ids, ...)
 
       true ->
         debug(feed_id_or_ids, "unknown feed")
 
-        Enums.deep_merge(opts, exclude_verbs: [:pin])
+        Enums.deep_merge(opts, exclude_activity_types: [:pin])
         |> query_extras()
     end
     |> debug("feed query")
@@ -1008,8 +1013,8 @@ defmodule Bonfire.Social.FeedActivities do
       opts[:exclude_table_ids] || exclude_object_types(e(opts, :exclude_object_types, []))
 
     # exclude certain activity types
-    exclude_verbs =
-      (e(opts, :exclude_verbs, nil) || []) ++
+    exclude_activity_types =
+      (e(opts, :exclude_activity_types, nil) || []) ++
         [:message] ++
         if opts[:include_labelling] do
           debug("include labelling for all")
@@ -1033,7 +1038,7 @@ defmodule Bonfire.Social.FeedActivities do
         end
 
     exclude_verb_ids =
-      exclude_verbs
+      exclude_activity_types
       |> List.wrap()
       |> Enum.map(&Bonfire.Social.Activities.verb_id(&1))
       |> Enum.uniq()
@@ -1133,7 +1138,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp maybe_time_limit(query, _), do: query
 
-  defp maybe_filter(query, %{object_type: object_type}) when not is_nil(object_type) do
+  defp maybe_filter(query, %{object_types: object_type}) when not is_nil(object_type) do
     case Bonfire.Common.Types.table_types(object_type) |> debug("object_type tables") do
       table_ids when is_list(table_ids) and table_ids != [] ->
         where(query, [object: object], object.table_id in ^table_ids)
@@ -1144,7 +1149,7 @@ defmodule Bonfire.Social.FeedActivities do
     end
   end
 
-  defp maybe_filter(query, %{object: object}) do
+  defp maybe_filter(query, %{objects: object}) do
     case uid_or_uids(object) do
       id when is_binary(id) ->
         where(query, [activity: activity], activity.object_id == ^id)
@@ -1198,7 +1203,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   defp maybe_exclude_replies(query, filters, opts) do
-    if e(opts, :exclude_replies, nil) == true or e(filters, :object_type, nil) == "posts" do
+    if e(opts, :exclude_replies, nil) == true or e(filters, :object_types, nil) == "posts" do
       query
       |> maybe_preload_replied()
       |> where(
@@ -1213,7 +1218,7 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   defp maybe_only_replies(query, filters, opts) do
-    if e(opts, :only_replies, nil) == true or e(filters, :object_type, nil) == "discussions" do
+    if e(opts, :only_replies, nil) == true or e(filters, :object_types, nil) == "discussions" do
       query
       |> maybe_preload_replied()
       |> where(

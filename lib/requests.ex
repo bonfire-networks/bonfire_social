@@ -222,13 +222,13 @@ defmodule Bonfire.Social.Requests do
 
   defp query_base(filters, type, opts)
        when is_atom(type) and not is_nil(type) do
-    (filters ++ [type: type.__pointers__(:table_id)])
+    (filters ++ [activity_types: type])
     |> query_base(opts)
   end
 
   defp query_base(filters, _, opts) do
     Edges.query_parent(Request, filters, opts)
-    |> query_filter(Keyword.drop(filters, [:object, :subject, :type]))
+    |> query_filter(Keyword.drop(filters, [:object, :subject, :activity_types]))
 
     # |> proload(:request)
   end

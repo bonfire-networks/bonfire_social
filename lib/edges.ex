@@ -27,10 +27,10 @@ defmodule Bonfire.Social.Edges do
     :preload,
     :object,
     :subject,
-    :type,
+    :activity_types,
     :preload_type,
-    :object_type,
-    :subject_type,
+    :object_types,
+    :subject_types,
     :current_user,
     :current_account,
     :id,
@@ -368,7 +368,7 @@ defmodule Bonfire.Social.Edges do
     from(root in query_schema)
     |> reusable_join([root], edge in assoc(root, :edge), as: :edge)
     |> boundarise(edge.object_id, opts)
-    |> maybe_proload(opts[:preload], filters[:object_type])
+    |> maybe_proload(opts[:preload], filters[:object_types])
     |> filter(filters, opts)
   end
 
@@ -521,8 +521,8 @@ defmodule Bonfire.Social.Edges do
     end
   end
 
-  defp filter(query, {:type, types}, _opts) do
-    debug(types, "filter by types")
+  defp filter(query, {:activity_types, types}, _opts) do
+    debug(types, "filter by activity_types")
 
     case Bonfire.Common.Types.table_types(types) do
       table_ids when is_list(table_ids) and table_ids != [] ->
@@ -533,7 +533,7 @@ defmodule Bonfire.Social.Edges do
     end
   end
 
-  defp filter(query, {:subject_type, types}, _opts) do
+  defp filter(query, {:subject_types, types}, _opts) do
     case Bonfire.Common.Types.table_types(types) do
       table_ids when is_list(table_ids) and table_ids != [] ->
         where(query, [subject: subject], subject.table_id in ^table_ids)
@@ -543,7 +543,7 @@ defmodule Bonfire.Social.Edges do
     end
   end
 
-  defp filter(query, {:exclude_subject_type, types}, _opts) do
+  defp filter(query, {:exclude_subject_types, types}, _opts) do
     case Bonfire.Common.Types.table_types(types) do
       table_ids when is_list(table_ids) and table_ids != [] ->
         where(query, [subject: subject], subject.table_id not in ^table_ids)
@@ -553,7 +553,7 @@ defmodule Bonfire.Social.Edges do
     end
   end
 
-  defp filter(query, {:object_type, types}, _opts) when is_list(types) do
+  defp filter(query, {:object_types, types}, _opts) when is_list(types) do
     case Bonfire.Common.Types.table_types(types) do
       table_ids when is_list(table_ids) and table_ids != [] ->
         where(query, [object: object], object.table_id in ^table_ids)
@@ -563,8 +563,8 @@ defmodule Bonfire.Social.Edges do
     end
   end
 
-  defp filter(query, {:exclude_object_type, types}, _opts) do
-    case Bonfire.Common.Types.table_types(types) |> debug("exclude_object_type") do
+  defp filter(query, {:exclude_object_types, types}, _opts) do
+    case Bonfire.Common.Types.table_types(types) |> debug("exclude_object_types") do
       table_ids when is_list(table_ids) and table_ids != [] ->
         where(query, [object: object], object.table_id not in ^table_ids)
 

@@ -427,7 +427,7 @@ defmodule Bonfire.Social.Activities do
   def activity_preloads(query_or_object_or_objects, preloads, opts) when is_list(preloads) do
     # debug(query, "query or data")
     debug(preloads, "preloads inputted")
-    opts = to_options(opts)
+    opts = to_options(debug(opts))
 
     if not is_nil(query_or_object_or_objects) and
          Ecto.Queryable.impl_for(query_or_object_or_objects) do
@@ -457,12 +457,16 @@ defmodule Bonfire.Social.Activities do
   end
 
   defp prepare_activity_preloads(query, preload, opts) when is_atom(preload) do
+    current_user_id = current_user_id(opts)
+    subject_user_id = id(opts[:subject_user])
+
+    exclude_user_ids =
+      [current_user_id, subject_user_id]
+      |> filter_empty([])
+      |> debug("exclude_user_ids")
+
     # pre-loading on a query
     if not is_nil(query) and Ecto.Queryable.impl_for(query) do
-      current_user_id = current_user_id(opts)
-      subject_user_id = id(opts[:subject_user])
-      exclude_user_ids = [current_user_id, subject_user_id] |> filter_empty([])
-
       case preload do
         :with_creator ->
           # This actually loads the creator of the object:
@@ -650,7 +654,25 @@ defmodule Bonfire.Social.Activities do
           # This actually loads the creator of the object:
           # * In the case of a post, creator of the post
           # * In the case of like of a post, creator of the post
-          [object: [created: [creator: [:character, profile: :icon]]]]
+
+          # query = from(c in Pointer, where: c.id != parent_as(:activity).subject_id)
+          preload_fn = fn ids, assoc ->
+            debug(ids)
+            debug(assoc)
+
+            %{related_key: related_key, queryable: queryable} = assoc
+
+            ids = Enum.reject(ids, fn id -> id in exclude_user_ids end)
+            # TODO: how to also exclude the activity's subject_id?
+
+            repo().all(
+              from q in queryable,
+                where: field(q, ^related_key) in ^ids
+            )
+            |> debug()
+          end
+
+          [object: [created: [creator: {preload_fn, [:character, profile: :icon]}]]]
 
         :tags ->
           # Tags/mentions (this actual needs to be done by Repo.preload to be able to list more than one)
@@ -1194,41 +1216,6 @@ defmodule Bonfire.Social.Activities do
   def activity_under_media(%Activity{} = activity, [%{} = media]) do
     Map.put(media, :activity, Map.drop(activity, [:media]))
   end
-
-  def activity_with_object_from_assigns(%{activity: %{object: %{id: _}} = activity} = _assigns) do
-    activity
-  end
-
-  def activity_with_object_from_assigns(
-        %{activity: %{} = activity, object: %{id: _} = object} = _assigns
-      ) do
-    debug("Activity with both an activity and object")
-
-    Map.put(
-      activity,
-      :object,
-      object
-    )
-  end
-
-  def activity_with_object_from_assigns(%{activity: %{} = activity} = assigns) do
-    debug("Activity without :object as assoc")
-
-    object_under_activity(activity, assigns[:object])
-  end
-
-  def activity_with_object_from_assigns(%{object: %{} = _object} = assigns) do
-    debug("Activity with only an object")
-
-    e(assigns[:object], :activity, nil) ||
-      %Activity{
-        subject:
-          e(assigns[:object], :created, :creator, nil) || e(assigns[:object], :creator, nil),
-        object: assigns[:object]
-      }
-  end
-
-  def activity_with_object_from_assigns(_), do: nil
 
   def object_under_activity(%{object: %{id: _}} = activity, nil) do
     activity
