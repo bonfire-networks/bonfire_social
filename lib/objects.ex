@@ -276,6 +276,26 @@ defmodule Bonfire.Social.Objects do
     e(object, :created, :creator, nil) || e(object, :creator, nil)
   end
 
+
+  def query_maybe_time_limit(query, 0), do: query
+
+  def query_maybe_time_limit(query, x_days) when is_integer(x_days) do
+    limit_pointer =
+      DatesTimes.past(x_days, :day)
+      |> debug("from date")
+      |> Needle.UID.generate()
+      |> debug("UID")
+
+    where(query, [activity: activity], activity.id > ^limit_pointer)
+  end
+
+  def query_maybe_time_limit(query, x_days) when is_binary(x_days) do
+    query_maybe_time_limit(query, Types.maybe_to_integer(x_days))
+  end
+
+  def query_maybe_time_limit(query, _), do: query
+
+
   @doc """
   Lists objects in a paginated manner.
 
@@ -354,6 +374,17 @@ defmodule Bonfire.Social.Objects do
   #   types = Enum.map(List.wrap(types), &get_table_id!/1)
   #   from(q in query, where: q.table_id not in ^types)
   # end
+
+  def prepare_exclude_object_types(extras \\ [], defaults \\ []) do
+    # eg. private messages should never appear in feeds
+
+    (defaults ++ extras)
+    |> List.wrap()
+    |> Enum.map(&maybe_apply(&1, :__pointers__, :table_id))
+    |> Enum.uniq()
+
+    # |> debug("exxclude_tables")
+  end
 
   @doc """
   Sets the name/title of an object.

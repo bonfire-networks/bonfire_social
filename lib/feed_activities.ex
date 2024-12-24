@@ -21,11 +21,10 @@ defmodule Bonfire.Social.FeedActivities do
   alias Bonfire.Social
   alias Bonfire.Data.Edges.Edge
   alias Bonfire.Social.Activities
-  # alias Bonfire.Social.Edges
+  alias Bonfire.Social.FeedLoader
   alias Bonfire.Social.Feeds
   alias Bonfire.Social.Objects
 
-  alias Needle
   alias Needle.Pointer
   alias Needle.Changesets
 
@@ -60,729 +59,10 @@ defmodule Bonfire.Social.FeedActivities do
     |> Changesets.put_assoc!(changeset, :feed_publishes, ...)
   end
 
-  @doc """
-  Gets a list of feed ids this activity was published to from the database.
 
-  Currently only used by the ActivityPub integration.
+  defdelegate feed(name \\ nil, opts), to: FeedLoader
 
-  ## Examples
-
-      > feeds_for_activity(%{id: id})
-      [feed_id1, feed_id2]
-
-      > feeds_for_activity(id)
-      [feed_id1, feed_id2]
-
-      > feeds_for_activity(activity)
-      []
-  """
-  def feeds_for_activity(%{id: id}), do: feeds_for_activity(id)
-
-  def feeds_for_activity(id) when is_binary(id) do
-    repo().all(from(f in FeedPublish, where: f.id == ^id, select: f.feed_id))
-  end
-
-  def feeds_for_activity(activity) do
-    error(activity, "dunno how to get feeds for this")
-    []
-  end
-
-  # TODO: put in config
-  def skip_verbs_default, do: [:flag]
-
-  @doc """
-  Converts socket, assigns, or options to feed options.
-
-  ## Examples
-
-      > assigns = %{exclude_activity_types: [:flag, :boost]}
-      > to_feed_options(assigns)
-      [exclude_activity_types: [:flag, :boost, :follow]]
-  """
-  def to_feed_options(opts) do
-    opts = to_options(opts)
-    # TODO: clean up this code
-    exclude_activity_types =
-      if opts[:exclude_activity_types] == false do
-        false
-      else
-        opts[:exclude_activity_types] || skip_verbs_default()
-      end
-
-    # exclude_activity_types = opts[:exclude_activity_types] || skip_verbs_default()
-
-    exclude_activity_types =
-      if opts[:exclude_activity_types] != false and
-           !Bonfire.Common.Settings.get(
-             [Bonfire.Social.Feeds, :include, :boost],
-             true,
-             opts
-           ),
-         do: exclude_activity_types ++ [:boost],
-         else: exclude_activity_types
-
-    exclude_activity_types =
-      if opts[:exclude_activity_types] != false and
-           !Bonfire.Common.Settings.get(
-             [Bonfire.Social.Feeds, :include, :follow],
-             false,
-             opts
-           ),
-         do: exclude_activity_types ++ [:follow],
-         else: exclude_activity_types
-
-    opts
-    |> Keyword.merge(
-      exclude_activity_types: exclude_activity_types,
-      preload: opts[:activity_preloads] |> Enums.filter_empty(nil) || opts[:preload],
-      exclude_replies:
-        Keyword.get_lazy(opts, :exclude_replies, fn ->
-          !Bonfire.Common.Settings.get(
-            [Bonfire.Social.Feeds, :include, :reply],
-            true,
-            opts
-          )
-        end)
-    )
-    |> IO.inspect(label: "5a. feed query opts", limit: :infinity)
-  end
-
-  # @decorate time()
-  @doc """
-  Gets feed ids and options for the given feed or list of feeds.
-
-  ## Examples
-
-      > feed_ids_and_opts(feed_name, opts)
-      {feed_ids, opts}
-
-      > feed_ids_and_opts({feed_name, feed_id}, opts)
-
-      > feed_ids_and_opts(:my, [current_user: me])
-      {["feed_id1", "feed_id2"], [exclude_activity_types: [:flag, :boost, :follow]]}
-
-      > feed_ids_and_opts({:notifications, "feed_id3"}, [current_user: me])
-      {"feed_id3", [skip_boundary_check: :admins, include_flags: true, exclude_activity_types: false, show_objects_only_once: false, preload: [:notifications]]}
-
-
-  """
-  def feed_ids_and_opts(feed_name, opts)
-
-  def feed_ids_and_opts({:my, feed_ids}, opts) do
-    feed_ids_and_opts(:my, opts ++ [home_feed_ids: feed_ids])
-  end
-
-  def feed_ids_and_opts(:my, opts) do
-    # opts = to_feed_options(opts)
-
-    home_feed_ids =
-      if is_list(opts[:home_feed_ids]),
-        do: opts[:home_feed_ids],
-        else: Feeds.my_home_feed_ids(opts)
-
-    {home_feed_ids, opts}
-  end
-
-  def feed_ids_and_opts(:notifications = feed_name, opts) do
-    feed_ids_and_opts(
-      {:notifications,
-       named_feed(
-         feed_name,
-         opts
-       )},
-      opts
-    )
-  end
-
-  def feed_ids_and_opts({:notifications, feed_id}, opts) do
-    opts =
-      opts
-      |> Keyword.merge(
-        # so we can show flags to admins in notifications
-        skip_boundary_check: :admins,
-        include_flags: true,
-        exclude_activity_types: false,
-        show_objects_only_once: false,
-        preload: List.wrap(e(opts, :preload, [])) ++ [:notifications]
-      )
-
-    {feed_id, opts}
-  end
-
-  def feed_ids_and_opts(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
-    opts =
-      opts
-      |> Keyword.put_new_lazy(:exclude_activity_types, &skip_verbs_default/0)
-
-    {named_feed(
-       feed_name,
-       opts
-     ), opts}
-  end
-
-  def feed_ids_and_opts({feed_name, feed_id}, opts)
-      when is_atom(feed_name) and not is_nil(feed_name) and
-             (is_binary(feed_id) or is_list(feed_id)) do
-    opts =
-      opts
-      |> Keyword.put_new_lazy(:exclude_activity_types, &skip_verbs_default/0)
-
-    {feed_id, opts}
-  end
-
-  def feed_ids_and_opts(feed, opts) when is_binary(feed) or is_list(feed) do
-    opts =
-      opts
-      |> Keyword.put_new_lazy(:exclude_activity_types, &skip_verbs_default/0)
-
-    {feed, opts}
-  end
-
-  @doc """
-  Gets a user's home feed, a combination of all feeds the user is subscribed to.
-
-  ## Examples
-
-      > Bonfire.Social.FeedActivities.my_feed([current_user: %{id: "user123"}])
-      %{edges: [%{activity: %{}}], page_info: %{}}
-
-      > Bonfire.Social.FeedActivities.my_feed([current_user: %{id: "user123"}], ["feed_id1", "feed_id2"])
-      %{edges: [%{activity: %{}}], page_info: %{}}
-  """
-  def my_feed(opts, home_feed_ids \\ nil) do
-    debug("1. Starting my_feed")
-
-    opts =
-      opts
-      |> to_options()
-      |> Keyword.put_new(:home_feed_ids, home_feed_ids)
-      |> debug("1a. my_feed opts")
-
-    feed(:my, opts)
-  end
-
-  defp maybe_merge_filters(filters, opts) when is_struct(filters) do
-    warn(filters, "did we filter?")
-    opts
-  end
-
-  defp maybe_merge_filters(filters, opts) when is_nil(filters) or filters == [] do
-    opts
-  end
-
-  defp maybe_merge_filters(filters, opts) do
-    Keyword.merge(Enums.input_to_atoms(filters) |> Keyword.new(), opts)
-  end
-
-  @doc """
-  Returns a page of feed activities (reverse chronological) + pagination metadata
-
-  TODO: consolidate with `feed/2`
-
-  ## Examples
-
-      iex> %{edges: _, page_info: %{}} = feed_paginated([], [])
-
-      iex> query = Ecto.Query.from(f in Bonfire.Data.Social.FeedPublish)
-      iex> %{edges: _, page_info: %{}} = Bonfire.Social.FeedActivities.feed_paginated([], base_query: query)
-      
-  """
-  def feed_paginated(filters \\ [], opts \\ []) do
-    opts = to_options(opts)
-
-    do_query(filters, opts, opts[:base_query] || default_query())
-    |> paginate_and_boundarise_feed(opts)
-
-    # |> prepare_feed(opts)
-  end
-
-  @doc """
-  Returns paginated results for the given query.
-
-  ## Examples
-
-      > feed_many_paginated(query, opts)
-      %{edges: edges, page_info: page_info}
-  """
-  def feed_many_paginated(query, opts) do
-    opts = to_options(opts)
-    # debug(opts)
-
-    Social.many(
-      query,
-      opts[:paginate] || opts,
-      Keyword.merge(opts, Activities.order_pagination_opts(opts[:sort_by], opts[:sort_order]))
-      |> debug()
-    )
-  end
-
-  @decorate time()
-  defp paginate_and_boundarise_feed(query, opts) do
-    debug("6. Starting paginate_and_boundarise_feed")
-
-    case opts[:return] do
-      :explain ->
-        (maybe_paginate_and_boundarise_feed_deferred_query(query, opts) ||
-           paginate_and_boundarise_feed_non_deferred_query(query, opts))
-        |> Ecto.Adapters.SQL.explain(repo(), :all, ...,
-          analyze: true,
-          verbose: false,
-          costs: true,
-          timing: true,
-          summary: true,
-          format: :text
-        )
-        |> IO.puts()
-
-        throw("Explanation printed.")
-
-      :stream ->
-        repo().transaction(fn ->
-          opts[:stream_callback].(
-            repo().stream(Ecto.Query.exclude(query, :preload), max_rows: 100)
-          )
-        end)
-
-      _ ->
-        # infinite_pages tells Paginator to always give us ab `after` cursor
-        with %Ecto.Query{} = query <-
-               maybe_paginate_and_boundarise_feed_deferred_query(query, opts),
-             %{edges: []} <- feed_many_paginated(query, opts ++ [infinite_pages: true]) do
-          debug(
-            "there were no results, try without the deferred query in case some were missing because of boundaries"
-          )
-
-          paginate_and_boundarise_feed_non_deferred_query(query, opts)
-          |> feed_many_paginated(opts)
-        else
-          nil ->
-            debug("deferred join is not enabled")
-
-            paginate_and_boundarise_feed_non_deferred_query(query, opts)
-            |> feed_many_paginated(opts)
-
-          result ->
-            debug("we got results")
-
-            result
-        end
-    end
-  end
-
-  # defp paginate_and_boundarise_feed(query, opts) do
-  #   paginate = e(opts, :paginate, nil) || e(opts, :after, nil) || opts
-
-  #   # WIP: BOUNDARISE with deferred join to speed up queries!
-
-  #   (from top_root in subquery(
-  #     query
-  #     # |> as(:root)
-  #     |> Ecto.Query.exclude(:preload) # to avoid 'cannot preload in subquery' error
-  #     |> feed_many_paginated(paginate ++ [return: :query])
-  #   ), as: :top_root)
-  #   # |> Activities.as_permitted_for_subqueried(opts)
-  #   |> Activities.as_permitted_for(opts)
-  #   |> select([:top_root])
-  #   |> debug()
-  #   # |> preload([top_root, activity], activity: activity)
-  #   # |> proload(top_root: :activity)
-  #   # |> Activities.activity_preloads(opts[:preload], opts)
-  #   |> feed_many_paginated(paginate)
-  # end
-
-  defp maybe_paginate_and_boundarise_feed_deferred_query(initial_query, opts) do
-    # speeds up queries by applying filters (incl. pagination) in a deferred join before boundarising and extra joins/preloads
-
-    if opts[:query_with_deferred_join] do
-      initial_query =
-        initial_query
-        |> select([:id])
-        # to avoid 'cannot preload in subquery' error
-        |> make_distinct(opts[:sort_order], opts[:sort_order], opts)
-        |> query_order(opts[:sort_by], opts[:sort_order])
-        |> feed_many_paginated(
-          Keyword.merge(opts, paginate: true, return: :query, multiply_limit: 2)
-        )
-        |> repo().make_subquery()
-
-      # |> debug("deferred subquery")
-
-      default_or_filtered_query(opts)
-      |> join(:inner, [fp], ^initial_query, on: [id: fp.id])
-      |> Activities.activity_preloads(opts[:preload], opts)
-      |> Activities.as_permitted_for(opts)
-      |> query_order(opts[:sort_by], opts[:sort_order])
-      |> debug("query with deferred join")
-    end
-  end
-
-  defp paginate_and_boundarise_feed_non_deferred_query(query, opts) do
-    query
-    |> Activities.activity_preloads(opts[:preload], opts)
-    |> Activities.as_permitted_for(opts)
-    |> query_order(opts[:sort_by], opts[:sort_order])
-
-    # |> debug("final query")
-    # |> debug()
-  end
-
-  def feed_name(name, current_user_or_socket) when is_nil(name) or name == :default do
-    debug(current_user_or_socket)
-    current = current_user_id(current_user_or_socket)
-    # || current_account(socket)
-
-    if not is_nil(current) do
-      # my feed
-      :my
-    else
-      # fallback to showing instance feed
-      :local
-    end
-    |> debug("default feed to load:")
-  end
-
-  def feed_name(name, _socket) when is_atom(name) or is_binary(name) do
-    name
-  end
-
-  def feed_name(opts, socket) do
-    case e(opts, :feed_name, nil) || e(opts, :feed_id, nil) || e(opts, :id, nil) |> debug("fffff") do
-      nil ->
-        throw("Unexpected feed id(s)")
-
-      name ->
-        feed_name(name, socket)
-    end
-  end
-
-  @doc """
-  Gets a feed by id or ids or a thing/things containing an id/ids.
-
-  ## Examples
-
-      > Bonfire.Social.FeedActivities.feed("feed123", [])
-      %{edges: [%{activity: %{}}], page_info: %Paginator.PageInfo{}}
-
-      iex> %{edges: _, page_info: %Paginator.PageInfo{}} = Bonfire.Social.FeedActivities.feed(:explore, [])
-      
-  """
-  def feed(feed, opts \\ [])
-  def feed(%{id: feed_id}, opts), do: feed(feed_id, opts)
-  def feed([feed_id], opts), do: feed(feed_id, opts)
-
-  def feed(id_or_ids, opts)
-      when is_binary(id_or_ids) or (is_list(id_or_ids) and id_or_ids != []) do
-    if Keyword.keyword?(id_or_ids) do
-      id_or_ids
-      |> debug("id_or_idsss")
-      |> feed_name(opts)
-      |> debug("kkkk")
-      |> feed(opts)
-    else
-      opts =
-        opts
-        |> debug("feed_opts for #{id_or_ids}")
-
-      uid_or_uids(id_or_ids)
-      |> do_feed(opts)
-    end
-  end
-
-  def feed(:explore, opts) do
-    opts
-    |> Enums.deep_merge(exclude_activity_types: [:like, :pin])
-    |> do_feed(:explore, ...)
-
-    # |> debug("explore feed")
-  end
-
-  def feed(:curated, opts) do
-    Bonfire.Social.Pins.list_instance_pins(opts)
-    # |> debug()
-  end
-
-  def feed(:likes, opts) do
-    Bonfire.Social.Likes.list_my(opts)
-    # |> debug()
-  end
-
-  def feed(:bookmarks, opts) do
-    Bonfire.Social.Bookmarks.list_my(opts)
-    # |> debug()
-  end
-
-  def feed(:flags, opts) do
-    Bonfire.Social.Flags.list_preloaded(opts ++ [include_flags: :moderators])
-  end
-
-  #  TODO
-  # def feed(:media, opts) do
-  #   feed(
-  #     {:media, :all},
-  #     opts
-  #   )
-  # end
-  # def feed({:media, type}, opts) do
-  #   opts =
-  #     opts
-  #     |> Keyword.merge(
-  #       # per_media_type: type, # TODO for filtering different types of media
-  #       preload: List.wrap(e(opts, :preload, [])) ++ [:per_media]
-  #     )
-
-  #   feed(:explore, opts)
-  # end
-
-  def feed(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
-    debug("2. Starting feed with name: #{inspect(feed_name)}")
-
-    {feed_ids, opts} =
-      feed_ids_and_opts(feed_name, opts)
-      |> debug("feed_ids_and_opts")
-
-    feed(feed_ids, opts)
-  end
-
-  def feed({feed_name, feed_id_or_ids}, opts)
-      when is_atom(feed_name) and not is_nil(feed_name) and
-             (is_binary(feed_id_or_ids) or is_list(feed_id_or_ids)) do
-    {feed_ids, opts} =
-      feed_ids_and_opts({feed_name, feed_id_or_ids}, opts)
-      |> debug("feed_ids_and_opts")
-
-    feed(feed_ids, opts)
-  end
-
-  def feed({feed_name, feed_name_again}, opts)
-      when is_atom(feed_name) and not is_nil(feed_name) and is_atom(feed_name_again) do
-    feed(feed_name, opts)
-  end
-
-  def feed(%Ecto.Query{} = custom_query, opts) do
-    # opts = to_feed_options(opts)
-
-    custom_query
-    |> proload([:activity])
-    |> query_extras(opts)
-    |> paginate_and_boundarise_feed(maybe_merge_filters(opts[:feed_filters], opts))
-    |> prepare_feed(opts)
-  end
-
-  def feed({feed_name, %{} = filters}, opts) do
-    feed(feed_name, [feed_filters: input_to_atoms(filters)] ++ opts)
-  end
-
-  def feed(other, _) do
-    e = l("Not a recognised feed to query")
-    error(other, e)
-    raise e
-  end
-
-  defp do_feed(feed_id_or_ids_or_name, opts) do
-    debug("3. Starting do_feed")
-
-    opts =
-      to_feed_options(opts)
-      |> debug("3a. feed options")
-
-    if opts[:cache] do
-      key = feed_id_or_ids_or_name
-
-      case Cache.get!(key) do
-        nil ->
-          debug(key, "querying and putting in cache")
-          Cache.put(key, actually_do_feed(feed_id_or_ids_or_name, opts))
-
-        feed ->
-          debug(key, "got from cache")
-          feed
-      end
-    else
-      debug("do not cache")
-      actually_do_feed(feed_id_or_ids_or_name, opts)
-    end
-  end
-
-  defp actually_do_feed(feed_id_or_ids_or_name, opts) do
-    debug("4. Starting actually_do_feed")
-
-    feed_id_or_ids_or_name
-    |> feed_query(opts)
-    |> paginate_and_boundarise_feed(maybe_merge_filters(opts[:feed_filters], opts))
-    |> prepare_feed(opts)
-  end
-
-  defp named_feed(feed_name, opts \\ [])
-  defp named_feed(:explore, _opts), do: nil
-
-  defp named_feed(feed_name, opts)
-       when is_atom(feed_name) and not is_nil(feed_name) do
-    # current_user = current_user(current_user_or_socket)
-    case Feeds.named_feed_id(feed_name, opts) || Feeds.my_feed_id(feed_name, opts) do
-      feed when is_binary(feed) or is_list(feed) ->
-        # debug(uid(current_user(opts)), "current_user")
-        # debug(feed_name, "feed_name")
-        debug(feed, "feed id(s)")
-        feed
-
-      itself when itself == feed_name ->
-        Feeds.my_feed_id(feed_name, opts) ||
-          (
-            error("FeedActivities.feed: no known feed #{inspect(feed_name)}")
-            nil
-          )
-
-      e ->
-        error("FeedActivities.feed: no known feed #{inspect(feed_name)} - #{inspect(e)}")
-
-        debug(opts)
-        nil
-    end
-  end
-
-  def feed_with_object(feed_name, object, opts \\ []) do
-    feed(
-      feed_name,
-      Keyword.put(
-        opts,
-        :feed_filters,
-        Map.merge(
-          e(opts, :feed_filters, %{}),
-          %{objects: object}
-        )
-      )
-    )
-  end
-
-  def feed_contains?(feed_name, object, opts \\ [])
-
-  def feed_contains?(%{edges: edges}, object, opts) do
-    feed_contains?(edges, object, opts)
-  end
-
-  def feed_contains?(feed, id_or_html_body, _opts)
-      when is_list(feed) and (is_binary(id_or_html_body) or is_map(id_or_html_body)) do
-    Enum.find_value(feed, fn fi ->
-      if (fi.activity.object_id == id(id_or_html_body) or
-            e(fi.activity.object, :post_content, :html_body, "") =~
-              e(id_or_html_body, :post_content, :html_body, nil)) ||
-           e(id_or_html_body, :object, :post_content, :html_body, nil) ||
-           e(id_or_html_body, :activity, :object, :post_content, :html_body, nil) ||
-           id_or_html_body do
-        fi.activity
-      end
-    end) ||
-      (
-        debug(
-          Enum.map(feed, fn fi ->
-            e(fi, :activity, :object, :post_content, nil) || e(fi, :activity, :object, nil)
-          end),
-          "object not found in feed"
-        )
-
-        false
-      )
-  end
-
-  def feed_contains?(feed_name, filters, opts) when is_list(filters) do
-    case feed_contains_query(feed_name, filters, opts)
-         |> repo().many() do
-      [] -> false
-      items -> items
-    end
-  end
-
-  def feed_contains?(feed, object, opts) when is_map(object) or is_binary(object) do
-    case uid(object) do
-      nil ->
-        do_feed(feed, opts)
-        |> feed_contains?(object, opts)
-
-      id ->
-        feed_contains?(feed, [objects: id], opts)
-    end
-  end
-
-  def feed_contains_single?(feed_name, filters, opts) when is_list(filters) do
-    feed_contains_query(feed_name, filters, opts)
-    |> repo().one()
-
-    # |> id()
-  end
-
-  defp feed_contains_query(feed_name, filters, opts) when is_list(filters) do
-    {feed_ids, opts} = feed_ids_and_opts(feed_name, to_options(opts) ++ [limit: 10])
-
-    feed_query(
-      feed_ids,
-      Keyword.put(
-        opts,
-        :feed_filters,
-        Enum.into(
-          filters,
-          e(opts, :feed_filters, %{})
-        )
-      )
-    )
-    |> Activities.as_permitted_for(opts)
-  end
-
-  # @decorate time()
-  defp prepare_feed(result, opts)
-
-  defp prepare_feed(%{edges: edges} = result, opts)
-       when is_list(edges) and edges != [] do
-    debug("7. Starting prepare_feed with edges")
-    debug(edges, "7a. edges to prepare")
-
-    Map.put(
-      result,
-      :edges,
-      edges
-      |> maybe_dedup_feed_objects(opts)
-      |> debug("7b. after dedup")
-
-      # TODO: where best to do these postloads? and try to optimise into one call
-
-      # |> Bonfire.Common.Needles.Preload.maybe_preload_nested_pointers(
-      #   [activity: [replied: [:reply_to]]],
-      #   opts
-      # )
-      # |> Bonfire.Common.Needles.Preload.maybe_preload_nested_pointers(
-      #   [activity: [:object]],
-      #   opts
-      # )
-      # |> repo().maybe_preload(
-      #   # FIXME: this should happen in `Activities.activity_preloads`
-      #   [activity: Activities.maybe_with_labelled()],
-      #   opts |> Keyword.put_new(:follow_pointers, false)
-      # )
-
-      # run post-preloads to follow pointers and catch anything else missing - TODO: only follow some pointers
-      # |> Activities.activity_preloads(opts[:preload], opts |> Keyword.put_new(:follow_pointers, true))
-      # |> Activities.activity_preloads(opts[:preload], opts |> Keyword.put_new(:follow_pointers, false))
-    )
-  end
-
-  defp prepare_feed(result, _opts) do
-    debug(result, "seems like empty feed")
-    result
-  end
-
-  defp maybe_dedup_feed_objects(edges, opts) do
-    if Keyword.get(opts, :show_objects_only_once, true) do
-      # TODO: try doing this in queries in a way that it's not needed here?
-      edges
-      # |> Enum.uniq_by(&id(&1))
-      |> Enum.uniq_by(&e(&1, :activity, :object_id, nil))
-    else
-      edges
-    end
-  end
-
-  defp default_query(), do: select(Needle.Pointers.query_base(), [p], p)
-
-  defp base_query(_opts \\ []) do
+  def base_query(_opts \\ []) do
     # feeds = from fp in FeedPublish, # why the subquery?..
     #   where: fp.feed_id in ^feed_ids,
     #   group_by: fp.id,
@@ -834,353 +114,25 @@ defmodule Bonfire.Social.FeedActivities do
       query
       |> repo().make_subquery()
 
-    default_or_filtered_query(opts)
+    FeedLoader.default_or_filtered_query(FeedLoader.default_query(), opts)
     |> join(:inner, [fp], ^subquery, on: [id: fp.id])
   end
 
-  defp default_or_filtered_query(filters \\ nil, opts) do
-    case filters || e(opts, :feed_filters, nil) do
-      %Ecto.Query{} = query ->
-        query
 
-      _ ->
-        default_query()
-        |> proload(:activity)
-    end
-  end
 
-  defp base_or_filtered_query(filters \\ nil, opts) do
-    case filters || e(opts, :feed_filters, nil) do
-      %Ecto.Query{} = query ->
-        query
 
-      _ ->
-        base_query(opts)
-    end
-  end
-
-  # @decorate time()
-  # PLEASE: note this query is not boundarised, it is your responsibility to do so in the calling function!
-  defp feed_query(feed_id_or_ids, opts) do
-    debug("5. Starting feed_query")
-
-    opts =
-      to_feed_options(opts)
-
-    feed_ids =
-      List.wrap(feed_id_or_ids)
-      |> IO.inspect(label: "5b. feed_ids")
-
-    specific_feeds? = is_binary(feed_id_or_ids) or (is_list(feed_id_or_ids) and feed_ids != [])
-
-    local_feed_id = Feeds.named_feed_id(:local)
-    federated_feed_id = Feeds.named_feed_id(:activity_pub)
-    fetcher_user_id = "1ACT1V1TYPVBREM0TESFETCHER"
-
-    cond do
-      :local in feed_ids or local_feed_id in feed_ids ->
-        debug("local feed")
-
-        # excludes likes/etc from local feed - TODO: configurable
-        Enums.deep_merge(opts, exclude_activity_types: [:like, :pin])
-        # |> debug("local_opts")
-        |> query_extras()
-        |> proload(
-          activity: [subject: {"subject_", character: [:peered]}, object: {"object_", [:peered]}]
-        )
-        |> where(
-          [fp, activity: activity, subject_peered: subject_peered, object_peered: object_peered],
-          (fp.feed_id == ^local_feed_id or
-             (is_nil(subject_peered.id) and is_nil(object_peered.id))) and
-            activity.subject_id != ^fetcher_user_id
-        )
-
-      :activity_pub in feed_ids or federated_feed_id in feed_ids ->
-        debug("remote/federated feed")
-
-        Enums.deep_merge(opts, exclude_activity_types: [:like, :pin])
-        |> query_extras()
-        |> proload(
-          activity: [subject: {"subject_", character: [:peered]}, object: {"object_", [:peered]}]
-        )
-        |> where(
-          [fp, activity: activity, subject_peered: subject_peered, object_peered: object_peered],
-          fp.feed_id == ^federated_feed_id or
-            (not is_nil(subject_peered.id) or not is_nil(object_peered.id)) or
-            activity.subject_id == ^fetcher_user_id
-        )
-
-      specific_feeds? and
-          not is_struct(e(opts, :feed_filters, nil)) ->
-        debug(feed_id_or_ids, "specific feed(s)")
-
-        Enums.deep_merge(opts, exclude_activity_types: [:pin])
-        |> generic_feed_query(feed_id_or_ids, ...)
-
-      true ->
-        debug(feed_id_or_ids, "unknown feed")
-
-        Enums.deep_merge(opts, exclude_activity_types: [:pin])
-        |> query_extras()
-    end
-    |> debug("feed query")
-  end
-
-  defp generic_feed_query(feed_ids, opts) do
-    query_extras(opts)
-    |> where([fp], fp.feed_id in ^uids(feed_ids))
-    |> debug("generic")
-  end
-
-  @doc "Return a boundarised query for a feed"
-  def query(filters \\ [], opts \\ [], query \\ default_query()) do
-    do_query(filters, opts, query)
-    |> Activities.as_permitted_for(opts)
-  end
-
-  # NOT boundarised!
-  defp do_query(filters \\ [], opts \\ [], query \\ default_query())
-
-  # defp do_query([feed_id: feed_id_or_ids], opts) when is_binary(feed_id_or_ids) or is_list(feed_id_or_ids) do
-  #   # debug(feed_id_or_ids: feed_id_or_ids)
-  #   feed_query(feed_id_or_ids, opts)
-  #   do_query([], opts, query)
-  # end
-  defp do_query(filters, opts, query) when is_list(filters) do
-    query
-    |> query_extras(opts)
-    |> query_filter(filters, nil, nil)
-
-    # |> debug("FeedActivities - query")
-  end
-
-  defp do_query(filters, _opts, query) do
-    # |> query_extras(current_user)
-    # |> query_filter(filters, nil, nil)
-    warn(
-      query,
-      "invalid feed query with filters #{inspect(filters)}"
-    )
-  end
-
-  @doc "add assocs needed in timelines/feeds"
-  def query_extras_boundarised(query \\ nil, opts) do
-    query_extras(query, opts)
-    |> Activities.as_permitted_for(opts)
-    |> Activities.activity_preloads(opts[:preload], opts)
-  end
-
-  @doc "add assocs needed in lists of objects"
-  def query_object_extras_boundarised(query \\ nil, opts) do
-    opts = to_options(opts)
-    filters = filters_from_opts(opts)
-
-    (query || base_or_filtered_query(filters, opts))
-    |> proload([:activity])
-    # |> query_activity_extras(opts)
-    |> query_optional_extras(filters, opts)
-    |> maybe_filter(filters)
-    |> Objects.as_permitted_for(opts)
-    |> Activities.activity_preloads(opts[:preload], opts)
-  end
-
-  defp query_extras(query \\ nil, opts) do
-    opts =
-      to_options(opts) ++
-        [exclude_table_ids: exclude_object_types(e(opts, :exclude_object_types, []))]
-
-    filters = filters_from_opts(opts)
-
-    (query || base_or_filtered_query(filters, opts))
-    |> query_activity_extras(opts)
-    |> query_object_extras(opts)
-    |> query_optional_extras(filters, opts)
-    |> maybe_filter(filters)
-
-    # |> debug("pre-preloads")
-    # preload all things we commonly want in feeds
-    # |> Activities.activity_preloads(e(opts, :preload, :with_object), opts) # if we want to preload the rest later to allow for caching
-    # |> Activities.activity_preloads(opts[:preload], opts)
-    # |> debug("post-preloads")
-  end
-
-  defp query_activity_extras(query, opts) do
-    opts = to_feed_options(opts)
-    # current_user = current_user(opts)
-    # debug(opts)
-
-    exclude_table_ids =
-      opts[:exclude_table_ids] || exclude_object_types(e(opts, :exclude_object_types, []))
-
-    # exclude certain activity types
-    exclude_activity_types =
-      (e(opts, :exclude_activity_types, nil) || []) ++
-        [:message] ++
-        if opts[:include_labelling] do
-          debug("include labelling for all")
-          []
-        else
-          debug("do not include labelling as activities")
-          [:label]
-        end ++
-        if opts[:include_flags] == :moderators and
-             Bonfire.Boundaries.can?(opts, :mediate, :instance) do
-          debug("include flags for mods/admins")
-          []
-        else
-          if opts[:include_flags] do
-            debug("include flags for all")
-            []
-          else
-            debug("do not include flags")
-            [:flag]
-          end
-        end
-
-    exclude_verb_ids =
-      exclude_activity_types
-      |> List.wrap()
-      |> Enum.map(&Bonfire.Social.Activities.verb_id(&1))
-      |> Enum.uniq()
-
-    # |> debug("exxclude_verbs")
-
-    # exclude_feed_ids = e(opts, :exclude_feed_ids, []) |> List.wrap() # WIP - to exclude activities that also appear in another feed
-
-    query
-    # |> proload([:activity])
-    |> reusable_join(:inner, [root], assoc(root, :activity), as: :activity)
-    |> reusable_join(:inner, [activity: activity], activity_pointer in Pointer,
-      as: :activity_pointer,
-      on:
-        activity_pointer.id == activity.id and
-          is_nil(activity_pointer.deleted_at) and
-          activity_pointer.table_id not in ^exclude_table_ids
-    )
-    # FIXME: are filters already applied in base_or_filtered_query above?
-    # where: fp.feed_id not in ^exclude_feed_ids,
-    # Don't show messages or anything deleted
-    |> where(
-      [activity: activity],
-      activity.verb_id not in ^exclude_verb_ids
-    )
-  end
-
-  defp query_object_extras(query, opts) do
-    opts = to_feed_options(opts)
-    # current_user = current_user(opts)
-
-    # debug(opts)
-
-    exclude_table_ids =
-      opts[:exclude_table_ids] || exclude_object_types(e(opts, :exclude_object_types, []))
-
-    query
-    |> proload([:activity])
-    |> reusable_join(:inner, [activity: activity], object in Pointer,
-      as: :object,
-      on:
-        object.id == activity.object_id and
-          is_nil(object.deleted_at) and
-          (is_nil(object.table_id) or object.table_id not in ^exclude_table_ids)
-    )
-
-    # Don't show messages or anything deleted
-  end
-
-  defp query_optional_extras(query, filters, opts) do
-    current_user = current_user(opts)
-
-    query
-    |> maybe_exclude_mine(current_user)
-    |> maybe_exclude_replies(filters, opts)
-    |> maybe_only_replies(filters, opts)
-    |> maybe_time_limit(e(filters, :time_limit, nil) || opts[:time_limit])
-  end
-
-  def exclude_object_types(extras \\ []) do
-    # eg. private messages should never appear in feeds
-    exclude_object_types = [Message] ++ extras
-
-    exclude_object_types
-    |> List.wrap()
-    |> Enum.map(&maybe_apply(&1, :__pointers__, :table_id))
-    |> Enum.uniq()
-
-    # |> debug("exxclude_tables")
-  end
-
-  defp query_order(query, :num_replies = sort_by, sort_order) do
+  def query_order(query, :num_replies = sort_by, sort_order) do
     query
     |> maybe_preload_replied()
     |> Activities.query_order(sort_by, sort_order)
   end
 
-  defp query_order(query, sort_by, sort_order) do
+  def query_order(query, sort_by, sort_order) do
     Activities.query_order(query, sort_by, sort_order)
   end
 
-  defp maybe_time_limit(query, 0), do: query
 
-  defp maybe_time_limit(query, x_days) when is_integer(x_days) do
-    limit_pointer =
-      DatesTimes.past(x_days, :day)
-      |> debug("from date")
-      |> Needle.UID.generate()
-      |> debug("UID")
-
-    where(query, [activity: activity], activity.id > ^limit_pointer)
-  end
-
-  defp maybe_time_limit(query, x_days) when is_binary(x_days) do
-    maybe_time_limit(query, Types.maybe_to_integer(x_days))
-  end
-
-  defp maybe_time_limit(query, _), do: query
-
-  defp maybe_filter(query, %{object_types: object_type}) when not is_nil(object_type) do
-    case Bonfire.Common.Types.table_types(object_type) |> debug("object_type tables") do
-      table_ids when is_list(table_ids) and table_ids != [] ->
-        where(query, [object: object], object.table_id in ^table_ids)
-
-      other ->
-        warn(other, "Unrecognised object_type '#{object_type}'")
-        query
-    end
-  end
-
-  defp maybe_filter(query, %{objects: object}) do
-    case uid_or_uids(object) do
-      id when is_binary(id) ->
-        where(query, [activity: activity], activity.object_id == ^id)
-
-      ids when is_list(ids) and ids != [] ->
-        where(query, [activity: activity], activity.object_id in ^ids)
-
-      _ ->
-        query
-    end
-  end
-
-  defp maybe_filter(query, filters) do
-    cond do
-      is_list(filters) and filters != [] ->
-        maybe_filter(query, filters)
-
-      is_list(filters) or (is_map(filters) and Map.keys(filters) |> List.first() |> is_atom()) ->
-        debug(filters, "no known extra filters defined")
-        query
-
-      true ->
-        filters
-        |> IO.inspect()
-        |> input_to_atoms()
-        |> IO.inspect(label: "as atoms")
-        |> maybe_filter(query, ...)
-    end
-  end
-
-  defp maybe_exclude_mine(query, me) do
+  def query_maybe_exclude_mine(query, me) do
     if not is_nil(me) and
          !Bonfire.Common.Settings.get(
            [Bonfire.Social.Feeds, :include, :outbox],
@@ -1193,54 +145,45 @@ defmodule Bonfire.Social.FeedActivities do
     end
   end
 
-  defp maybe_preload_replied(%{aliases: %{replied: _}} = query) do
+  def maybe_preload_replied(%{aliases: %{replied: _}} = query) do
     query
   end
 
-  defp maybe_preload_replied(query) do
+  def maybe_preload_replied(query) do
     query
     |> proload(activity: [:replied])
   end
 
-  defp maybe_exclude_replies(query, filters, opts) do
-    if e(opts, :exclude_replies, nil) == true or e(filters, :object_types, nil) == "posts" do
-      query
-      |> maybe_preload_replied()
-      |> where(
-        [replied: replied],
-        is_nil(replied.reply_to_id)
-      )
 
-      # |> debug("exclude_replies")
-    else
-      query
-    end
+  @doc """
+  Gets a list of feed ids this activity was published to from the database.
+
+  Currently only used by the ActivityPub integration.
+
+  ## Examples
+
+      > feeds_for_activity(%{id: id})
+      [feed_id1, feed_id2]
+
+      > feeds_for_activity(id)
+      [feed_id1, feed_id2]
+
+      > feeds_for_activity(activity)
+      []
+  """
+  def feeds_for_activity(%{id: id}), do: feeds_for_activity(id)
+
+  def feeds_for_activity(id) when is_binary(id) do
+    repo().all(from(f in FeedPublish, where: f.id == ^id, select: f.feed_id))
   end
 
-  defp maybe_only_replies(query, filters, opts) do
-    if e(opts, :only_replies, nil) == true or e(filters, :object_types, nil) == "discussions" do
-      query
-      |> maybe_preload_replied()
-      |> where(
-        [replied: replied],
-        not is_nil(replied.reply_to_id)
-      )
-
-      # |> debug("exclude_replies")
-    else
-      query
-    end
+  def feeds_for_activity(activity) do
+    error(activity, "dunno how to get feeds for this")
+    []
   end
 
-  def filters_from_opts(opts) do
-    input_to_atoms(
-      e(opts, :feed_filters, nil) || e(opts, :__context__, :current_params, nil) || %{}
-    )
-  end
 
-  # def feed(%{feed_publishes: _} = feed_for, _) do
-  #   repo().maybe_preload(feed_for, [feed_publishes: [activity: [:verb, :object, subject_user: [:profile, :character]]]]) |> Map.get(:feed_publishes)
-  # end
+
 
   @doc """
   Creates a new local activity and publishes to appropriate feeds
@@ -1298,7 +241,7 @@ defmodule Bonfire.Social.FeedActivities do
   @doc """
   Arranges for an insert changeset to also publish to feeds related to some objects.
 
-  Options: see `get_feed_ids/1`
+  Options: see `get_publish_feed_ids/1`
 
   ## Examples
 
@@ -1316,7 +259,7 @@ defmodule Bonfire.Social.FeedActivities do
   @doc """
   Creates the underlying data for `put_feed_publishes/2`.
 
-  Options: see `get_feed_ids/1`
+  Options: see `get_publish_feed_ids/1`
 
   ## Examples
 
@@ -1327,7 +270,7 @@ defmodule Bonfire.Social.FeedActivities do
   def get_feed_publishes(options) do
     options
     # |> info()
-    |> get_feed_ids()
+    |> get_publish_feed_ids()
     # |> info()
     # Dedupe
     |> MapSet.new()
@@ -1351,10 +294,10 @@ defmodule Bonfire.Social.FeedActivities do
   ## Examples
 
       > options = [outbox: [%{id: "author123"}], inbox: [%{id: "mention987"}], notifications: [%{id: "reply654"}], feeds: ["feed456"]]
-      > Bonfire.Social.FeedActivities.get_feed_ids(options)
+      > Bonfire.Social.FeedActivities.get_publish_feed_ids(options)
       ["inbox_feed_id_for_user123", "feed456"]
   """
-  def get_feed_ids(options) do
+  def get_publish_feed_ids(options) do
     keys = [:inbox, :outbox, :notifications]
     # process all the specifications
     options = get_feed_publishes_options(options)
@@ -1679,7 +622,7 @@ defmodule Bonfire.Social.FeedActivities do
       {1, nil}
   """
   def delete(objects, by_field) when is_atom(by_field) do
-    case uid_or_uids(objects) do
+    case Types.uid_or_uids(objects) do
       # is_list(id_or_ids) ->
       #   Enum.each(id_or_ids, fn x -> delete(x, by_field) end)
       nil ->
@@ -1775,43 +718,7 @@ defmodule Bonfire.Social.FeedActivities do
     |> repo().one()
   end
 
-  @doc """
-  Returns the count of items in a feed based on given filters and options.
 
-  ## Examples
-
-      > count(filters, current_user: me)
-      10
-  """
-  def count(filters \\ [], opts \\ []) do
-    query(filters, opts, opts[:query] || default_query())
-    |> Ecto.Query.exclude(:select)
-    # |> Ecto.Query.exclude(:distinct)
-    |> Ecto.Query.exclude(:preload)
-    |> Ecto.Query.exclude(:order_by)
-    ~> select(count())
-    |> debug()
-    |> repo().one()
-  end
-
-  @doc """
-  Returns the count of distinct subjects in a feed based on given filters and options.
-
-  ## Examples
-
-      > count_subjects(filters, opts)
-      3
-  """
-  def count_subjects(filters \\ [], opts \\ []) do
-    query(filters, opts, opts[:query] || default_query())
-    |> Ecto.Query.exclude(:select)
-    |> Ecto.Query.exclude(:distinct)
-    |> Ecto.Query.exclude(:preload)
-    |> Ecto.Query.exclude(:order_by)
-    ~> select([subject: subject], count(subject.id, :distinct))
-    |> debug()
-    |> repo().one()
-  end
 
   @doc """
   Returns the total count of activities in feeds.

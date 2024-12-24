@@ -107,7 +107,7 @@ defmodule Bonfire.Social.LivePush do
       |> debug()
 
     # FIXME: avoid querying this again
-    FeedActivities.get_feed_ids(inbox: users)
+    FeedActivities.get_publish_feed_ids(inbox: users)
     |> increment_counters(:inbox)
 
     notify_users(subject, verb, object, users)
@@ -123,7 +123,7 @@ defmodule Bonfire.Social.LivePush do
 
     users
     |> Enum.reject(&(uid(&1) == subject_id))
-    |> FeedActivities.get_feed_ids(notifications: ...)
+    |> FeedActivities.get_publish_feed_ids(notifications: ...)
     |> normalise_feed_ids()
     |> notify(subject, verb, object, ...)
   end

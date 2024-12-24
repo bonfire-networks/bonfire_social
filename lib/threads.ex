@@ -422,7 +422,7 @@ defmodule Bonfire.Social.Threads do
   defp fetch_participants(thread_id, opts)
        when is_binary(thread_id) or
               (is_list(thread_id) and thread_id != []) do
-    FeedActivities.feed_paginated(
+    Bonfire.Social.FeedLoader.feed_paginated(
       [in_thread: {thread_id, &filter/3}],
       opts ++ [preload: :with_subject, base_query: q_subjects(opts)]
     )
@@ -652,6 +652,36 @@ defmodule Bonfire.Social.Threads do
     |> query_extras(opts ++ [verbs: [:see]])
 
     # |> debug("Thread filtered query")
+  end
+
+  def query_maybe_exclude_replies(query, preload_fun \\ &(&1), opts) do
+    if e(opts, :exclude_replies, nil) == true or e(opts, :object_types, nil) == Bonfire.Data.Social.Post do
+      query
+      |> preload_fun.()
+      |> where(
+        [replied: replied],
+        is_nil(replied.reply_to_id)
+      )
+
+      # |> debug("exclude_replies")
+    else
+      query
+    end
+  end
+
+  def query_maybe_only_replies(query, preload_fun \\ &(&1), opts) do
+    if e(opts, :only_replies, nil) == true or e(opts, :object_types, nil) == "discussions" do
+      query
+      |> preload_fun.()
+      |> where(
+        [replied: replied],
+        not is_nil(replied.reply_to_id)
+      )
+
+      # |> debug("exclude_replies")
+    else
+      query
+    end
   end
 
   defp query_extras(query, opts) do

@@ -432,13 +432,13 @@ defmodule Bonfire.Social.Activities do
     if not is_nil(query_or_object_or_objects) and
          Ecto.Queryable.impl_for(query_or_object_or_objects) do
       preloads
-      |> Bonfire.Social.FeedLoader.map_activity_preloads()
+      |> Bonfire.Social.FeedLoader.map_activity_preloads(opts[:activity_loaded_preloads])
       |> debug("accumulated preloads to proload")
       |> Enum.reduce(query_or_object_or_objects, &prepare_activity_preloads(&2, &1, opts))
       |> debug("query with accumulated proloads")
     else
       preloads
-      |> Bonfire.Social.FeedLoader.map_activity_preloads()
+      |> Bonfire.Social.FeedLoader.map_activity_preloads(opts[:activity_loaded_preloads])
       |> Enum.flat_map(&prepare_activity_preloads(nil, &1, opts))
       |> Enum.uniq()
       |> debug("accumulated postloads to try")
@@ -645,6 +645,10 @@ defmodule Bonfire.Social.Activities do
 
         nil ->
           query
+
+        other ->
+          warn(other, "Unknown preload")
+          query
       end
     else
       # post-loading on an struct or list of structs
@@ -655,24 +659,23 @@ defmodule Bonfire.Social.Activities do
           # * In the case of a post, creator of the post
           # * In the case of like of a post, creator of the post
 
-          # query = from(c in Pointer, where: c.id != parent_as(:activity).subject_id)
-          preload_fn = fn ids, assoc ->
-            debug(ids)
-            debug(assoc)
+          # preload_fn = fn ids, assoc ->
+          #   debug(ids)
+          #   debug(assoc)
 
-            %{related_key: related_key, queryable: queryable} = assoc
+          #   %{related_key: related_key, queryable: queryable} = assoc
 
-            ids = Enum.reject(ids, fn id -> id in exclude_user_ids end)
-            # TODO: how to also exclude the activity's subject_id?
+          #   ids = Enum.reject(ids, fn id -> id in exclude_user_ids end)
+          #   # TODO: how to also exclude the activity's subject_id?
 
-            repo().all(
-              from q in queryable,
-                where: field(q, ^related_key) in ^ids
-            )
-            |> debug()
-          end
+          #   repo().all(
+          #     from q in queryable,
+          #       where: field(q, ^related_key) in ^ids
+          #   )
+          #   |> debug()
+          # end
 
-          [object: [created: [creator: {preload_fn, [:character, profile: :icon]}]]]
+          [object: [created: [creator: {repo().reject_preload_ids(exclude_user_ids), [:character, profile: :icon]}]]]
 
         :tags ->
           # Tags/mentions (this actual needs to be done by Repo.preload to be able to list more than one)
@@ -733,9 +736,14 @@ defmodule Bonfire.Social.Activities do
 
         nil ->
           []
+        other ->
+          warn(other, "Unknown preload")
+          []
       end
     end
   end
+
+
 
   defp query_preload_seen(q, opts) do
     user_id = uid(current_user(opts))

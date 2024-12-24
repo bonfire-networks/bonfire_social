@@ -442,7 +442,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         {feed_name ||
            Types.maybe_to_atom(
              e(filters, :feed_name, nil) ||
-               Bonfire.Social.FeedActivities.feed_name(:default, current_user)
+               Bonfire.Social.FeedLoader.feed_name_or_default(:default, current_user)
            ), filters},
         current_user: current_user,
         pagination: pagination_args,

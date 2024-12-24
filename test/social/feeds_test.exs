@@ -54,12 +54,12 @@ defmodule Bonfire.Social.FeedsTest do
                   labelled: %Ecto.Association.NotLoaded{},
                   sensitive: %Ecto.Association.NotLoaded{}
                 } <-
-                  Bonfire.Social.FeedActivities.feed_contains?(feed, post, current_user: user)
+                  Bonfire.Social.FeedLoader.feed_contains?(feed, post, current_user: user)
 
     # |> IO.inspect(label: "feed_contains in me?")
-
+    postloads1 = [:with_subject, :with_object_more]
     feed =
-      Bonfire.Social.Activities.activity_preloads(feed, [:with_subject, :with_object_more],
+      Bonfire.Social.Activities.activity_preloads(feed, postloads1,
         current_user: user
       )
 
@@ -74,10 +74,10 @@ defmodule Bonfire.Social.FeedsTest do
                   labelled: %Ecto.Association.NotLoaded{},
                   sensitive: %Ecto.Association.NotLoaded{}
                 } <-
-                  Bonfire.Social.FeedActivities.feed_contains?(feed, reply, current_user: user)
+                  Bonfire.Social.FeedLoader.feed_contains?(feed, reply, current_user: user)
                   |> IO.inspect(label: "feed_contains in me after postloads?")
 
-    feed = Bonfire.Social.Activities.activity_preloads(feed, :all, current_user: user)
+    feed = Bonfire.Social.Activities.activity_preloads(feed, :all, current_user: user, activity_loaded_preloads: postloads1)
 
     # NOTE: by running postloads instead of preloading in original query, we are loading unecessary data sonce
 
@@ -111,7 +111,7 @@ defmodule Bonfire.Social.FeedsTest do
              tags: [],
              seen: nil
            } =
-             Bonfire.Social.FeedActivities.feed_contains?(feed, reply, current_user: user)
+             Bonfire.Social.FeedLoader.feed_contains?(feed, reply, current_user: user)
              |> IO.inspect(label: "feed_contains in me after postloads?")
 
     feed = Bonfire.Social.FeedActivities.feed(:local, current_user: user)
@@ -124,12 +124,12 @@ defmodule Bonfire.Social.FeedsTest do
                   labelled: %Ecto.Association.NotLoaded{},
                   sensitive: %Ecto.Association.NotLoaded{}
                 } <-
-                  Bonfire.Social.FeedActivities.feed_contains?(feed, post, current_user: user)
+                  Bonfire.Social.FeedLoader.feed_contains?(feed, post, current_user: user)
 
     # |> IO.inspect(label: "feed_contains in local?")
 
     # check that we show it to others
-    assert Bonfire.Social.FeedActivities.feed_contains?(:local, post,
+    assert Bonfire.Social.FeedLoader.feed_contains?(:local, post,
              current_user: another_local_user
            )
   end
