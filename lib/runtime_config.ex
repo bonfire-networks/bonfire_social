@@ -245,6 +245,15 @@ defmodule Bonfire.Social.RuntimeConfig do
         }
       }
 
+      
+    config :bonfire_social, Bonfire.Social.FeedLoader,
+      preload_by_context: [
+        query: [
+          :with_subject,
+          :with_creator
+        ]
+      ]
+
     config :bonfire_social, Bonfire.Social.FeedLoader,
       preload_presets: [
         # Default groupings, 
