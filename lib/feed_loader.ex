@@ -27,8 +27,10 @@ defmodule Bonfire.Social.FeedLoader do
   alias Bonfire.Social.Threads
   alias Needle.Pointer
 
+  @type feed_name :: Atom.t() | String.t() | nil
+
   @type filter_params :: %{
-          feed_name: String.t() | nil,
+          feed_name: feed_name,
           feed_ids: list(String.t()) | String.t() | nil,
           activity_types: list(String.t()) | String.t() | nil,
           exclude_activity_types: list(String.t()) | String.t() | nil,
@@ -54,49 +56,26 @@ defmodule Bonfire.Social.FeedLoader do
 
   # ==== START OF CODE TO REFACTOR ====
 
-  @doc """
-  Gets a feed by id or ids or a thing/things containing an id/ids.
+   @doc """
+  Gets a feed based on filters and options.
+
+  ## Parameters
+  - `name_or_filters` - A map of filter parameters (or a feed name atom/string if not other filters are needed)
+  - `opts` - Options that aren't filter-related
 
   ## Examples
 
       > Bonfire.Social.FeedActivities.feed("feed123", [])
       %{edges: [%{activity: %{}}], page_info: %Paginator.PageInfo{}}
 
-      iex> %{edges: _, page_info: %Paginator.PageInfo{}} = Bonfire.Social.FeedActivities.feed(:explore, [])
+      iex> %{edges: _, page_info: %Paginator.PageInfo{}} = Bonfire.Social.FeedActivities.feed(:explore)
       
+      iex> %{edges: _, page_info: %Paginator.PageInfo{}} = Bonfire.Social.FeedActivities.feed(%{feed_name: :explore})
   """
-  def feed(opts) when is_list(opts), do: feed(nil, opts)
-  def feed(feed_name), do: feed(feed_name, [])
+  @spec feed(filter_params() | atom() | String.t(), Keyword.t()) :: map()
+  def feed(name_or_filters \\ nil, opts \\ [])
 
-  def feed(feed, opts)
-  def feed(%{id: feed_id}, opts), do: feed(feed_id, opts)
-  def feed([feed_id], opts), do: feed(feed_id, opts)
-
-  def feed(id_or_ids, opts)
-      when is_binary(id_or_ids) or (is_list(id_or_ids) and id_or_ids != []) do
-    if Keyword.keyword?(id_or_ids) do
-      id_or_ids
-      |> debug("id_or_idsss")
-      |> feed_name_or_default(opts)
-      |> debug("kkkk")
-      |> feed(opts)
-    else
-      opts =
-        opts
-        |> debug("feed_opts for #{id_or_ids}")
-
-      Types.uid_or_uids(id_or_ids)
-      |> do_feed(opts)
-    end
-  end
-
-  def feed(:explore, opts) do
-    opts
-    |> Enums.deep_merge(exclude_activity_types: [:like, :pin])
-    |> do_feed(:explore, ...)
-
-    # |> debug("explore feed")
-  end
+  # TODO: the following should re-use feed queries rather than context list functions
 
   def feed(:curated, opts) do
     Bonfire.Social.Pins.list_instance_pins(opts)
@@ -117,6 +96,37 @@ defmodule Bonfire.Social.FeedLoader do
     Bonfire.Social.Flags.list_preloaded(opts ++ [include_flags: :moderators])
   end
 
+  def feed(feed_name, opts) when not is_nil(feed_name) and is_atom(feed_name) or is_binary(feed_name) do
+    feed(%{feed_name: feed_name}, opts)
+  end
+
+  def feed(%{feed_name: feed_name} = custom_filters, opts) when not is_nil(feed_name) and is_atom(feed_name) or is_binary(feed_name) do
+    opts = to_options(opts)
+    debug(custom_filters)
+    case preset_feed_filters(feed_name, opts) do
+      {:ok, preset_filters} -> 
+        filters = Map.merge(preset_filters, custom_filters)
+        |> Map.merge(opts[:feed_filters] || %{})
+        feed_filtered(filters[:feed_name] || feed_name, filters, opts)
+      other -> error(other, to_string feed_name)
+    end
+  end
+
+  def feed([feed_name], opts) when not is_nil(feed_name) and is_atom(feed_name) or is_binary(feed_name), do: feed(feed_name, opts)
+
+  def feed(custom_filters, opts) do
+    debug(custom_filters)
+    Enum.into(custom_filters || %{}, %{feed_name: default_feed_name(opts)})
+    |> feed(opts)
+  end 
+
+  # def feed(%{id: feed_id}, opts), do: feed(feed_id, opts)
+
+
+  # def feed(%{feed_publishes: _} = feed_for, _) do
+  #   repo().maybe_preload(feed_for, [feed_publishes: [activity: [:verb, :object, subject_user: [:profile, :character]]]]) |> Map.get(:feed_publishes)
+  # end
+
   #  TODO
   # def feed(:media, opts) do
   #   feed(
@@ -135,51 +145,68 @@ defmodule Bonfire.Social.FeedLoader do
   #   feed(:explore, opts)
   # end
 
-  def feed(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
+  # TODO: put in config
+  def skip_verbs_default, do: [:flag]
+
+
+  def feed_filtered(feed_name, filters, opts) when is_atom(feed_name) and not is_nil(feed_name) do
     debug("2. Starting feed with name: #{inspect(feed_name)}")
 
     {feed_ids, opts} =
       feed_ids_and_opts(feed_name, opts)
       |> debug("feed_ids_and_opts")
 
-    feed(feed_ids, opts)
+    feed_filtered(feed_ids, filters, opts)
   end
 
-  def feed({feed_name, feed_id_or_ids}, opts)
+  def feed_filtered({feed_name, feed_id_or_ids}, filters, opts)
       when is_atom(feed_name) and not is_nil(feed_name) and
              (is_binary(feed_id_or_ids) or is_list(feed_id_or_ids)) do
     {feed_ids, opts} =
       feed_ids_and_opts({feed_name, feed_id_or_ids}, opts)
       |> debug("feed_ids_and_opts")
 
-    feed(feed_ids, opts)
+    feed_filtered(feed_ids, filters, opts)
   end
 
-  def feed({feed_name, feed_name_again}, opts)
+  def feed_filtered({feed_name, feed_name_again}, filters, opts)
       when is_atom(feed_name) and not is_nil(feed_name) and is_atom(feed_name_again) do
-    feed(feed_name, opts)
+    feed_filtered(feed_name, filters, opts)
   end
 
-  def feed(%Ecto.Query{} = custom_query, opts) do
+  def feed_filtered(%Ecto.Query{} = custom_query, filters, opts) do
     # opts = to_feed_options(opts)
 
     custom_query
     |> proload([:activity])
-    |> query_extras(opts)
-    |> paginate_and_boundarise_feed(maybe_merge_filters(opts[:feed_filters], opts))
+    |> query_extras(filters, opts)
+    |> paginate_and_boundarise_feed(filters, opts)
     |> prepare_feed(opts)
   end
 
-  def feed({feed_name, %{} = filters}, opts) do
-    feed(feed_name, [feed_filters: Enums.input_to_atoms(filters)] ++ opts)
+  def feed_filtered({feed_name, %{} = extra_filters}, filters, opts) do
+    feed_filtered(feed_name, Map.merge(filters, extra_filters), opts)
+  end
+
+  def feed_filtered(id_or_ids, filters, opts)
+      when is_binary(id_or_ids) or (is_list(id_or_ids) and id_or_ids != []) do
+    if Keyword.keyword?(id_or_ids) do
+      id_or_ids
+      |> debug("id_or_idsss")
+      |> feed_name_or_default(opts)
+      |> debug("kkkk")
+      |> feed_filtered(filters, opts)
+    else
+      debug(opts, "feed_opts for #{id_or_ids}")
+
+      Types.uid_or_uids(id_or_ids)
+      |> do_feed(filters, opts)
+    end
   end
 
 
-  # def feed(%{feed_publishes: _} = feed_for, _) do
-  #   repo().maybe_preload(feed_for, [feed_publishes: [activity: [:verb, :object, subject_user: [:profile, :character]]]]) |> Map.get(:feed_publishes)
-  # end
 
-  def feed(other, _) do
+  def feed_filtered(other, filters, _) do
     e = l("Not a recognised feed to query")
     error(other, e)
     raise e
@@ -204,7 +231,7 @@ defmodule Bonfire.Social.FeedLoader do
     opts = to_options(opts)
 
     do_query(filters, opts, opts[:base_query] || default_query())
-    |> paginate_and_boundarise_feed(opts)
+    |> paginate_and_boundarise_feed(filters, opts)
 
     # |> prepare_feed(opts)
   end
@@ -230,7 +257,7 @@ defmodule Bonfire.Social.FeedLoader do
   end
 
   @decorate time()
-  defp paginate_and_boundarise_feed(query, opts) do
+  defp paginate_and_boundarise_feed(query, filters, opts) do
     debug("6. Starting paginate_and_boundarise_feed")
 
     case opts[:return] do
@@ -282,7 +309,7 @@ defmodule Bonfire.Social.FeedLoader do
     end
   end
 
-  # defp paginate_and_boundarise_feed(query, opts) do
+  # defp paginate_and_boundarise_feed(query, filters, opts) do
   #   paginate = e(opts, :paginate, nil) || e(opts, :after, nil) || opts
 
   #   # WIP: BOUNDARISE with deferred join to speed up queries!
@@ -365,21 +392,8 @@ defmodule Bonfire.Social.FeedLoader do
     feed(:my, opts)
   end
 
-  defp maybe_merge_filters(filters, opts) when is_struct(filters) do
-    warn(filters, "did we filter?")
-    opts
-  end
 
-  defp maybe_merge_filters(filters, opts) when is_nil(filters) or filters == [] do
-    opts
-  end
-
-  defp maybe_merge_filters(filters, opts) do
-    Keyword.merge(Enums.input_to_atoms(filters) |> Keyword.new(), opts)
-  end
-
-
-  defp do_feed(feed_id_or_ids_or_name, opts) do
+  defp do_feed(feed_id_or_ids_or_name, filters, opts) do
     debug("3. Starting do_feed")
 
     opts =
@@ -387,12 +401,12 @@ defmodule Bonfire.Social.FeedLoader do
       |> debug("3a. feed options")
 
     if opts[:cache] do
-      key = feed_id_or_ids_or_name
+      key = feed_id_or_ids_or_name # FIXME: key should include filters
 
       case Cache.get!(key) do
         nil ->
           debug(key, "querying and putting in cache")
-          Cache.put(key, actually_do_feed(feed_id_or_ids_or_name, opts))
+          Cache.put(key, actually_do_feed(feed_id_or_ids_or_name, filters, opts))
 
         feed ->
           debug(key, "got from cache")
@@ -400,16 +414,17 @@ defmodule Bonfire.Social.FeedLoader do
       end
     else
       debug("do not cache")
-      actually_do_feed(feed_id_or_ids_or_name, opts)
+    |> debug("doof")
+      actually_do_feed(feed_id_or_ids_or_name, filters, opts)
     end
   end
 
-  defp actually_do_feed(feed_id_or_ids_or_name, opts) do
+  defp actually_do_feed(feed_id_or_ids_or_name, filters, opts) do
     debug("4. Starting actually_do_feed")
 
     feed_id_or_ids_or_name
-    |> feed_query(opts)
-    |> paginate_and_boundarise_feed(maybe_merge_filters(opts[:feed_filters], opts))
+    |> feed_query(filters, opts)
+    |> paginate_and_boundarise_feed(filters, opts)
     |> prepare_feed(opts)
   end
 
@@ -429,14 +444,12 @@ defmodule Bonfire.Social.FeedLoader do
   end
 
 
-  # TODO: put in config
-  def skip_verbs_default, do: [:flag]
 
-  def filters_from_opts(opts) do
-    Enums.input_to_atoms(
-      e(opts, :feed_filters, nil) || e(opts, :__context__, :current_params, nil) || %{}
-    )
-  end
+  # def filters_from_opts(opts) do
+  #   Enums.input_to_atoms(
+  #     e(opts, :feed_filters, nil) || e(opts, :__context__, :current_params, nil) || %{}
+  #   )
+  # end
 
   @doc """
   Converts socket, assigns, or options to feed options.
@@ -492,7 +505,7 @@ defmodule Bonfire.Social.FeedLoader do
           )
         end)
     )
-    |> IO.inspect(label: "5a. feed query opts", limit: :infinity)
+    |> debug("5a. feed query opts")
   end
 
   # @decorate time()
@@ -560,7 +573,7 @@ defmodule Bonfire.Social.FeedLoader do
   def feed_ids_and_opts(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
     opts =
       opts
-      |> Keyword.put_new_lazy(:exclude_activity_types, &skip_verbs_default/0)
+      |> Enums.fun(:put_new_lazy, [:exclude_activity_types, &skip_verbs_default/0])
 
     {named_feed_ids(
        feed_name,
@@ -573,7 +586,7 @@ defmodule Bonfire.Social.FeedLoader do
              (is_binary(feed_id) or is_list(feed_id)) do
     opts =
       opts
-      |> Keyword.put_new_lazy(:exclude_activity_types, &skip_verbs_default/0)
+      |> Enums.fun(:put_new_lazy, [:exclude_activity_types, &skip_verbs_default/0])
 
     {feed_id, opts}
   end
@@ -581,15 +594,14 @@ defmodule Bonfire.Social.FeedLoader do
   def feed_ids_and_opts(feed, opts) when is_binary(feed) or is_list(feed) do
     opts =
       opts
-      |> Keyword.put_new_lazy(:exclude_activity_types, &skip_verbs_default/0)
+      |> Enums.fun(:put_new_lazy, [:exclude_activity_types, &skip_verbs_default/0])
 
     {feed, opts}
   end
 
-
-    def feed_name_or_default(name, current_user_or_socket) when is_nil(name) or name == :default do
-    debug(current_user_or_socket)
-    current = current_user_id(current_user_or_socket)
+  def default_feed_name(opts) do
+    debug(opts)
+    current = current_user_id(opts)
     # || current_account(socket)
 
     if not is_nil(current) do
@@ -602,17 +614,22 @@ defmodule Bonfire.Social.FeedLoader do
     |> debug("default feed to load:")
   end
 
-  def feed_name_or_default(name, _socket) when is_atom(name) or is_binary(name) do
+
+  def feed_name_or_default(name, opts) when is_nil(name) or name == :default do
+    default_feed_name(opts)
+  end
+
+  def feed_name_or_default(name, _opts) when is_atom(name) or is_binary(name) do
     name
   end
 
-  def feed_name_or_default(opts, socket) do
-    case e(opts, :feed_name, nil) || e(opts, :feed_id, nil) || e(opts, :id, nil) |> debug("fffff") do
+  def feed_name_or_default(filters, opts) do
+    case e(filters, :feed_name, nil) || e(filters, :feed_id, nil)|| e(filters, :feed_ids, nil) || e(filters, :id, nil) |> debug("fffff") do
       nil ->
         throw("Unexpected feed id(s)")
 
       name ->
-        feed_name_or_default(name, socket)
+        feed_name_or_default(name, opts)
     end
   end
 
@@ -669,23 +686,33 @@ defmodule Bonfire.Social.FeedLoader do
     end
   end
 
-  defp maybe_filter(query, filters) do
-    cond do
-      is_list(filters) and filters != [] ->
-        maybe_filter(query, filters)
+  defp maybe_filter(query, filters) when is_list(filters) and filters != [] do
 
-      is_list(filters) or (is_map(filters) and Map.keys(filters) |> List.first() |> is_atom()) ->
-        debug(filters, "no known extra filters defined")
-        query
+        maybe_filter(query, Map.new(filters))
 
-      true ->
-        filters
-        |> IO.inspect()
-        |> Enums.input_to_atoms()
-        |> IO.inspect(label: "as atoms")
-        |> maybe_filter(query, ...)
-    end
   end
+
+  defp maybe_filter(query, filters) do
+    # cond do
+
+
+    #   # is_list(filters) or (is_map(filters) and Map.keys(filters) |> List.first() |> is_atom()) ->
+    #   #   debug(filters, "no known extra filters defined")
+    #   #   query
+
+    #   # true ->
+    #   #   filters
+    #     # |> debug("filters")
+    #     # |> Enums.input_to_atoms()
+    #     # |> debug("as atoms")
+    #     # |> maybe_filter(query, ...)
+
+    #   true -> 
+       warn(filters, "no supported filters defined")
+        query
+    # end
+  end
+
 
   defp default_query(), do: select(Needle.Pointers.query_base(), [p], p)
 
@@ -704,15 +731,14 @@ defmodule Bonfire.Social.FeedLoader do
 
   # @decorate time()
   # PLEASE: note this query is not boundarised, it is your responsibility to do so in the calling function!
-  defp feed_query(feed_id_or_ids, opts) do
+  defp feed_query(feed_id_or_ids, filters, opts) do
     debug("5. Starting feed_query")
 
-    opts =
-      to_feed_options(opts)
+    # opts = to_feed_options(opts)
 
     feed_ids =
       List.wrap(feed_id_or_ids)
-      |> IO.inspect(label: "5b. feed_ids")
+      |> debug("5b. feed_ids")
 
     specific_feeds? = is_binary(feed_id_or_ids) or (is_list(feed_id_or_ids) and feed_ids != [])
 
@@ -725,9 +751,9 @@ defmodule Bonfire.Social.FeedLoader do
         debug("local feed")
 
         # excludes likes/etc from local feed - TODO: configurable
-        Enums.deep_merge(opts, exclude_activity_types: [:like, :pin])
+        Enums.deep_merge(filters, exclude_activity_types: [:like, :pin])
         # |> debug("local_opts")
-        |> query_extras()
+        |> query_extras(..., opts)
         |> proload(
           activity: [subject: {"subject_", character: [:peered]}, object: {"object_", [:peered]}]
         )
@@ -741,8 +767,8 @@ defmodule Bonfire.Social.FeedLoader do
       :activity_pub in feed_ids or federated_feed_id in feed_ids ->
         debug("remote/federated feed")
 
-        Enums.deep_merge(opts, exclude_activity_types: [:like, :pin])
-        |> query_extras()
+        Enums.deep_merge(filters, exclude_activity_types: [:like, :pin])
+        |> query_extras(..., opts)
         |> proload(
           activity: [subject: {"subject_", character: [:peered]}, object: {"object_", [:peered]}]
         )
@@ -757,20 +783,20 @@ defmodule Bonfire.Social.FeedLoader do
           not is_struct(e(opts, :feed_filters, nil)) ->
         debug(feed_id_or_ids, "specific feed(s)")
 
-        Enums.deep_merge(opts, exclude_activity_types: [:pin])
-        |> generic_feed_query(feed_id_or_ids, ...)
+        Enums.deep_merge(filters, exclude_activity_types: [:pin])
+        |> generic_feed_query(feed_id_or_ids, ..., opts)
 
       true ->
         debug(feed_id_or_ids, "unknown feed")
 
-        Enums.deep_merge(opts, exclude_activity_types: [:pin])
-        |> query_extras()
+        Enums.deep_merge(filters, exclude_activity_types: [:pin])
+        |> query_extras(opts)
     end
     |> debug("feed query")
   end
 
-  defp generic_feed_query(feed_ids, opts) do
-    query_extras(opts)
+  defp generic_feed_query(feed_ids, filters, opts) do
+    query_extras(filters, opts)
     |> where([fp], fp.feed_id in ^Types.uids(feed_ids))
     |> debug("generic")
   end
@@ -784,14 +810,10 @@ defmodule Bonfire.Social.FeedLoader do
   # NOT boundarised!
   defp do_query(filters \\ [], opts \\ [], query \\ default_query())
 
-  # defp do_query([feed_id: feed_id_or_ids], opts) when is_binary(feed_id_or_ids) or is_list(feed_id_or_ids) do
-  #   # debug(feed_id_or_ids: feed_id_or_ids)
-  #   feed_query(feed_id_or_ids, opts)
-  #   do_query([], opts, query)
-  # end
+
   defp do_query(filters, opts, query) when is_list(filters) do
     query
-    |> query_extras(opts)
+    |> query_extras(filters, opts)
     |> query_filter(filters, nil, nil)
 
     # |> debug("FeedActivities - query")
@@ -807,16 +829,15 @@ defmodule Bonfire.Social.FeedLoader do
   end
 
   @doc "add assocs needed in timelines/feeds"
-  def query_extras_boundarised(query \\ nil, opts) do
-    query_extras(query, opts)
+  def query_extras_boundarised(query \\ nil, filters, opts) do
+    query_extras(query, filters, opts)
     |> Activities.as_permitted_for(opts)
     |> Activities.activity_preloads(opts[:preload], opts)
   end
 
   @doc "add assocs needed in lists of objects"
-  def query_object_extras_boundarised(query \\ nil, opts) do
-    opts = to_options(opts)
-    filters = filters_from_opts(opts)
+  def query_object_extras_boundarised(query \\ nil, filters, opts) do
+    # opts = to_options(opts)
 
     (query || default_or_filtered_query(filters, FeedActivities.base_query(opts), opts))
     |> proload([:activity])
@@ -827,12 +848,11 @@ defmodule Bonfire.Social.FeedLoader do
     |> Activities.activity_preloads(opts[:preload], opts)
   end
 
-  defp query_extras(query \\ nil, opts) do
-    opts =
-      to_options(opts) ++
-        [exclude_table_ids: Objects.prepare_exclude_object_types(e(opts, :exclude_object_types, []), [Message])]
+  defp query_extras(query \\ nil, filters, opts) do
+    # opts =
+    #   to_options(opts) ++
+    #     [exclude_table_ids: Objects.prepare_exclude_object_types(e(opts, :exclude_object_types, []), [Message])]
 
-    filters = filters_from_opts(opts)
 
     (query || default_or_filtered_query(filters, FeedActivities.base_query(opts), opts))
     |> query_activity_extras(opts)
@@ -866,6 +886,7 @@ defmodule Bonfire.Social.FeedLoader do
 
     exclude_table_ids =
       opts[:exclude_table_ids] || Objects.prepare_exclude_object_types(e(opts, :exclude_object_types, []), [Message]) # TODO: put default in config
+    |> debug("exlude")
 
     # exclude certain activity types
     exclude_activity_types =
@@ -929,6 +950,7 @@ defmodule Bonfire.Social.FeedLoader do
 
     exclude_table_ids =
       opts[:exclude_table_ids] || Objects.prepare_exclude_object_types(e(opts, :exclude_object_types, []), [Message])
+    |> debug("exl tab")
 
     query
     |> proload([:activity])
@@ -985,7 +1007,7 @@ defmodule Bonfire.Social.FeedLoader do
   def feed_contains?(feed, object, opts) when is_map(object) or is_binary(object) do
     case Types.uid(object) do
       nil ->
-        do_feed(feed, opts)
+        do_feed(feed, opts[:feed_filters] || %{}, opts)
         |> feed_contains?(object, opts)
 
       id ->
@@ -1005,14 +1027,8 @@ defmodule Bonfire.Social.FeedLoader do
 
     feed_query(
       feed_ids,
-      Keyword.put(
-        opts,
-        :feed_filters,
-        Enum.into(
-          filters,
-          e(opts, :feed_filters, %{})
-        )
-      )
+      filters,
+      opts
     )
     |> Activities.as_permitted_for(opts)
   end
@@ -1167,7 +1183,7 @@ defmodule Bonfire.Social.FeedLoader do
 
     case presets[name] do
       nil ->
-        debug(presets, "Feed not found: #{name}")
+        debug(presets, "Feed `#{name}` not found")
         {:error, :not_found}
 
       # %{admin_required: true} = alias when not user.is_admin -> 

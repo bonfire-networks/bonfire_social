@@ -18,7 +18,7 @@ defmodule Bonfire.Social.FeedsTest do
   import Tesla.Mock
   use Mneme
 
-  @tag :mneme
+  @tag mneme: true #, capture_log: false
   test "shows a public post in local feed" do
     user = fake_user!()
     another_local_user = fake_user!()
@@ -75,7 +75,7 @@ defmodule Bonfire.Social.FeedsTest do
                   sensitive: %Ecto.Association.NotLoaded{}
                 } <-
                   Bonfire.Social.FeedLoader.feed_contains?(feed, reply, current_user: user)
-                  |> IO.inspect(label: "feed_contains in me after postloads?")
+                  |> dump( "feed_contains in me after postloads?")
 
     feed = Bonfire.Social.Activities.activity_preloads(feed, :all, current_user: user, activity_loaded_preloads: postloads1)
 
@@ -112,7 +112,7 @@ defmodule Bonfire.Social.FeedsTest do
              seen: nil
            } =
              Bonfire.Social.FeedLoader.feed_contains?(feed, reply, current_user: user)
-             |> IO.inspect(label: "feed_contains in me after postloads?")
+             |> dump( "feed_contains in me after postloads?")
 
     feed = Bonfire.Social.FeedActivities.feed(:local, current_user: user)
 
@@ -126,7 +126,7 @@ defmodule Bonfire.Social.FeedsTest do
                 } <-
                   Bonfire.Social.FeedLoader.feed_contains?(feed, post, current_user: user)
 
-    # |> IO.inspect(label: "feed_contains in local?")
+    # |> dump( "feed_contains in local?")
 
     # check that we show it to others
     assert Bonfire.Social.FeedLoader.feed_contains?(:local, post,
