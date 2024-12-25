@@ -73,6 +73,10 @@ defmodule Bonfire.Social.FeedLoader do
       iex> %{edges: _, page_info: %Paginator.PageInfo{}} = Bonfire.Social.FeedActivities.feed(%{feed_name: :explore})
   """
   @spec feed(filter_params() | atom() | String.t(), Keyword.t()) :: map()
+  def feed(feed_name, filters, opts) do
+    feed(filters |> Enum.into(%{feed_name: feed_name}), opts)
+  end
+
   def feed(name_or_filters \\ nil, opts \\ [])
 
   # TODO: the following should re-use feed queries rather than context list functions
@@ -150,7 +154,7 @@ defmodule Bonfire.Social.FeedLoader do
 
 
   def feed_filtered(feed_name, filters, opts) when is_atom(feed_name) and not is_nil(feed_name) do
-    debug("2. Starting feed with name: #{inspect(feed_name)}")
+    debug(feed_name, "2. Starting feed with name")
 
     {feed_ids, opts} =
       feed_ids_and_opts(feed_name, opts)
@@ -164,7 +168,7 @@ defmodule Bonfire.Social.FeedLoader do
              (is_binary(feed_id_or_ids) or is_list(feed_id_or_ids)) do
     {feed_ids, opts} =
       feed_ids_and_opts({feed_name, feed_id_or_ids}, opts)
-      |> debug("feed_ids_and_opts")
+      |> debug("had a name and id")
 
     feed_filtered(feed_ids, filters, opts)
   end
@@ -206,10 +210,13 @@ defmodule Bonfire.Social.FeedLoader do
 
 
 
-  def feed_filtered(other, filters, _) do
-    e = l("Not a recognised feed to query")
-    error(other, e)
-    raise e
+  def feed_filtered(other, filters, opts) do
+    e = l("Not a recognised feed to query, return explore feed (with any provided filters)")
+    debug(other, e)
+    # raise e
+    query_extras(filters, opts)
+    |> paginate_and_boundarise_feed(filters, opts)
+    |> prepare_feed(opts)
   end
 
 
@@ -796,9 +803,13 @@ defmodule Bonfire.Social.FeedLoader do
   end
 
   defp generic_feed_query(feed_ids, filters, opts) do
-    query_extras(filters, opts)
-    |> where([fp], fp.feed_id in ^Types.uids(feed_ids))
+    case Types.uids(feed_ids) do
+    [] -> query_extras(filters, opts)
     |> debug("generic")
+    uids -> query_extras(filters, opts)
+    |> where([fp], fp.feed_id in ^uids)
+    |> debug("generic with ids")
+    end
   end
 
   @doc "Return a boundarised query for a feed"
@@ -976,11 +987,11 @@ defmodule Bonfire.Social.FeedLoader do
       when is_list(feed) and (is_binary(id_or_html_body) or is_map(id_or_html_body)) do
     Enum.find_value(feed, fn fi ->
       if (fi.activity.object_id == Enums.id(id_or_html_body) or
-            e(fi.activity.object, :post_content, :html_body, "") =~
-              e(id_or_html_body, :post_content, :html_body, nil)) ||
+            e(fi.activity.object, :post_content, :html_body, "")) =~
+              (e(id_or_html_body, :post_content, :html_body, nil) ||
            e(id_or_html_body, :object, :post_content, :html_body, nil) ||
            e(id_or_html_body, :activity, :object, :post_content, :html_body, nil) ||
-           id_or_html_body do
+           id_or_html_body || "") do
         fi.activity
       end
     end) ||

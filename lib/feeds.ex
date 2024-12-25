@@ -637,7 +637,10 @@ defmodule Bonfire.Social.Feeds do
   defp feed_key(:notifications), do: :notifications_id
   # just in case
   defp feed_key(:notification), do: :notifications_id
-  defp feed_key(other), do: raise("Unknown feed name: #{inspect(other)}")
+  defp feed_key(other) do 
+    debug(other, "Unknown feed key")
+    nil
+  end
 
   @doc """
   Checks if a creator notification should be sent for a subject.
