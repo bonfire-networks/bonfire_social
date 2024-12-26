@@ -637,7 +637,8 @@ defmodule Bonfire.Social.Feeds do
   defp feed_key(:notifications), do: :notifications_id
   # just in case
   defp feed_key(:notification), do: :notifications_id
-  defp feed_key(other) do 
+
+  defp feed_key(other) do
     debug(other, "Unknown feed key")
     nil
   end

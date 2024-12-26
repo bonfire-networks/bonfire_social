@@ -89,11 +89,11 @@ defmodule Bonfire.Social.RuntimeConfig do
         # },
 
         # Content type feeds
-        # publications: %{
-        #   description: "All known publications",
-        #   filters: %{media_types: :publication]}
-        # },
-        images: %{
+        publications: %{
+          description: "All known publications",
+          filters: %{media_types: :publication}
+        },
+        local_images: %{
           description: "All known images",
           filters: %{media_types: "image"}
         },
@@ -153,18 +153,27 @@ defmodule Bonfire.Social.RuntimeConfig do
         }
       ]
 
+    feed_default_include = [
+      :with_subject,
+      :with_creator,
+      :with_object_more,
+      :with_media,
+      :with_reply_to,
+      :with_peered
+    ]
+
+    config :bonfire_social, Bonfire.Social.FeedLoader,
+      preload_defaults: [
+        feed: [
+          include: feed_default_include
+        ]
+      ]
+
     config :bonfire_social, Bonfire.Social.FeedLoader,
       preload_rules: %{
         "All Activities (default preloads, should be excluded in other rules as needed)" => %{
           match: %{},
-          include: [
-            :with_subject,
-            :with_creator,
-            :with_object_more,
-            :with_media,
-            :with_reply_to,
-            :with_peered
-          ]
+          include: feed_default_include
         },
 
         # Specific Feeds
@@ -240,17 +249,17 @@ defmodule Bonfire.Social.RuntimeConfig do
         },
         "Media" => %{
           match: %{media_types: "*"},
-          include: [:with_creator, :with_peered],
+          include: [:per_media, :with_creator, :with_peered],
           exclude: [:with_subject, :with_media, :with_object, :with_object_more]
         }
       }
 
-      
     config :bonfire_social, Bonfire.Social.FeedLoader,
       preload_by_context: [
         query: [
           :with_subject,
-          :with_creator
+          :with_creator,
+          :per_media
         ]
       ]
 
@@ -292,27 +301,27 @@ defmodule Bonfire.Social.RuntimeConfig do
           :with_seen
         ],
         object_with_creator: [
-          :with_object_posts,
+          :with_post_content,
           :with_creator
         ],
         posts_with_reply_to: [
           :with_subject,
-          :with_object_posts
+          :with_post_content
         ],
         posts_with_thread: [
           :with_subject,
-          :with_object_posts,
+          :with_post_content,
           :with_replied,
           :with_thread_name
         ],
         posts: [
           :with_subject,
-          :with_object_posts
+          :with_post_content
         ],
         extras: [:with_verb, :tags],
         default: [
           :with_subject,
-          :with_object_posts,
+          :with_post_content,
           :with_replied
         ]
       ]

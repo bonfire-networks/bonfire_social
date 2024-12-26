@@ -59,7 +59,6 @@ defmodule Bonfire.Social.FeedActivities do
     |> Changesets.put_assoc!(changeset, :feed_publishes, ...)
   end
 
-
   defdelegate feed(name \\ nil, opts), to: FeedLoader
 
   def base_query(_opts \\ []) do
@@ -118,9 +117,6 @@ defmodule Bonfire.Social.FeedActivities do
     |> join(:inner, [fp], ^subquery, on: [id: fp.id])
   end
 
-
-
-
   def query_order(query, :num_replies = sort_by, sort_order) do
     query
     |> maybe_preload_replied()
@@ -130,7 +126,6 @@ defmodule Bonfire.Social.FeedActivities do
   def query_order(query, sort_by, sort_order) do
     Activities.query_order(query, sort_by, sort_order)
   end
-
 
   def query_maybe_exclude_mine(query, me) do
     if not is_nil(me) and
@@ -153,7 +148,6 @@ defmodule Bonfire.Social.FeedActivities do
     query
     |> proload(activity: [:replied])
   end
-
 
   @doc """
   Gets a list of feed ids this activity was published to from the database.
@@ -181,9 +175,6 @@ defmodule Bonfire.Social.FeedActivities do
     error(activity, "dunno how to get feeds for this")
     []
   end
-
-
-
 
   @doc """
   Creates a new local activity and publishes to appropriate feeds
@@ -717,8 +708,6 @@ defmodule Bonfire.Social.FeedActivities do
     ~> select(count())
     |> repo().one()
   end
-
-
 
   @doc """
   Returns the total count of activities in feeds.

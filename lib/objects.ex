@@ -276,7 +276,6 @@ defmodule Bonfire.Social.Objects do
     e(object, :created, :creator, nil) || e(object, :creator, nil)
   end
 
-
   def query_maybe_time_limit(query, 0), do: query
 
   def query_maybe_time_limit(query, x_days) when is_integer(x_days) do
@@ -294,7 +293,6 @@ defmodule Bonfire.Social.Objects do
   end
 
   def query_maybe_time_limit(query, _), do: query
-
 
   @doc """
   Lists objects in a paginated manner.

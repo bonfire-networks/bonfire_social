@@ -654,8 +654,9 @@ defmodule Bonfire.Social.Threads do
     # |> debug("Thread filtered query")
   end
 
-  def query_maybe_exclude_replies(query, preload_fun \\ &(&1), opts) do
-    if e(opts, :exclude_replies, nil) == true or e(opts, :object_types, nil) == Bonfire.Data.Social.Post do
+  def query_maybe_exclude_replies(query, preload_fun \\ & &1, opts) do
+    if e(opts, :exclude_replies, nil) == true or
+         e(opts, :object_types, nil) == Bonfire.Data.Social.Post do
       query
       |> preload_fun.()
       |> where(
@@ -669,7 +670,7 @@ defmodule Bonfire.Social.Threads do
     end
   end
 
-  def query_maybe_only_replies(query, preload_fun \\ &(&1), opts) do
+  def query_maybe_only_replies(query, preload_fun \\ & &1, opts) do
     if e(opts, :only_replies, nil) == true or e(opts, :object_types, nil) == "discussions" do
       query
       |> preload_fun.()

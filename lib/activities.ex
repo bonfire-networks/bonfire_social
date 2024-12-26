@@ -406,7 +406,7 @@ defmodule Bonfire.Social.Activities do
       :with_subject
       :with_verb
       :with_object
-      :with_object_posts
+      :with_post_content
       :with_object_more
       :with_replied
       :with_thread_name
@@ -500,7 +500,7 @@ defmodule Bonfire.Social.Activities do
         :with_object ->
           proload(query, activity: [:object])
 
-        :with_object_posts ->
+        :with_post_content ->
           proload(query,
             activity: [
               :sensitive,
@@ -675,7 +675,14 @@ defmodule Bonfire.Social.Activities do
           #   |> debug()
           # end
 
-          [object: [created: [creator: {repo().reject_preload_ids(exclude_user_ids), [:character, profile: :icon]}]]]
+          [
+            object: [
+              created: [
+                creator:
+                  {repo().reject_preload_ids(exclude_user_ids), [:character, profile: :icon]}
+              ]
+            ]
+          ]
 
         :tags ->
           # Tags/mentions (this actual needs to be done by Repo.preload to be able to list more than one)
@@ -691,10 +698,11 @@ defmodule Bonfire.Social.Activities do
         :with_object ->
           [:object]
 
-        :with_object_posts ->
+        :with_post_content ->
           [
             # :replied,
-            object: [:post_content, :peered]
+            #  NOTE: :peered info is needed to correctly render remote posts, but that should be loaded in :with_peered depending on feed type
+            object: [:post_content]
           ]
 
         :with_object_more ->
@@ -736,14 +744,13 @@ defmodule Bonfire.Social.Activities do
 
         nil ->
           []
+
         other ->
           warn(other, "Unknown preload")
           []
       end
     end
   end
-
-
 
   defp query_preload_seen(q, opts) do
     user_id = uid(current_user(opts))
