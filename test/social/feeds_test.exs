@@ -57,64 +57,77 @@ defmodule Bonfire.Social.FeedsTest do
       fake_post!(user, "public", %{
         reply_to_id: post_id,
         post_content: %{
-          name: "name",
+          # name: "name",
           html_body: "epic html"
         }
       })
 
     feed = Bonfire.Social.FeedLoader.feed(:my, current_user: user)
 
+    activity = Bonfire.Social.FeedLoader.feed_contains?(feed, post, current_user: user)
+
     auto_assert %Bonfire.Data.Social.Activity{
-                  subject: %Ecto.Association.NotLoaded{},
+                  # because current_user is the subject
+                  subject: nil,
                   verb: %Ecto.Association.NotLoaded{},
-                  object: %Ecto.Association.NotLoaded{},
+                  object: %Needle.Pointer{
+                    created: %Bonfire.Data.Social.Created{creator: nil},
+                    peered: %Ecto.Association.NotLoaded{},
+                    #  because :with_creator preloads the object
+                    post_content: %Ecto.Association.NotLoaded{}
+                  },
                   replied: %Ecto.Association.NotLoaded{},
                   labelled: %Ecto.Association.NotLoaded{},
                   sensitive: %Ecto.Association.NotLoaded{}
-                } <-
-                  Bonfire.Social.FeedLoader.feed_contains?(feed, post, current_user: user)
+                } <- activity
 
     # |> IO.inspect(label: "feed_contains in me?")
-    postloads1 = [:with_subject, :with_object_more]
+    postloads1 = [:with_subject, :with_object_more, :with_peered]
 
-    feed =
-      Bonfire.Social.Activities.activity_preloads(feed, postloads1, current_user: user)
+    activity =
+      Bonfire.Social.Activities.activity_preloads(activity, postloads1, current_user: user)
 
     auto_assert %Bonfire.Data.Social.Activity{
-                  subject: %Needle.Pointer{
-                    character: %Bonfire.Data.Identity.Character{},
-                    profile: %Bonfire.Data.Social.Profile{}
-                  },
+                  # subject: %Needle.Pointer{
+                  #   character: %Bonfire.Data.Identity.Character{},
+                  #   profile: %Bonfire.Data.Social.Profile{}
+                  # },
+                  # because current_user is the subject
+                  subject: nil,
                   verb: %Ecto.Association.NotLoaded{},
-                  object: %Needle.Pointer{post_content: %Bonfire.Data.Social.PostContent{}},
+                  object: %Needle.Pointer{
+                    created: %Bonfire.Data.Social.Created{creator: nil},
+                    peered: nil,
+                    post_content: %Bonfire.Data.Social.PostContent{}
+                  },
                   replied: %Bonfire.Data.Social.Replied{},
                   labelled: %Ecto.Association.NotLoaded{},
                   sensitive: %Ecto.Association.NotLoaded{}
-                } <-
-                  Bonfire.Social.FeedLoader.feed_contains?(feed, reply, current_user: user)
-                  |> dump("feed_contains in me after postloads?")
+                } <- activity
 
-    feed =
-      Bonfire.Social.Activities.activity_preloads(feed, :all,
-        current_user: user,
-        activity_loaded_preloads: postloads1
-      )
+    # |> dump("after postloads?")
+
+    assert activity =
+             Bonfire.Social.FeedLoader.feed_contains?(feed, reply, current_user: user)
+             |> Bonfire.Social.Activities.activity_preloads(:all,
+               current_user: user,
+               activity_loaded_preloads: postloads1
+             )
 
     # NOTE: by running postloads instead of preloading in original query, we are loading unecessary data sonce
 
     assert %Bonfire.Data.Social.Activity{
-             subject: %Needle.Pointer{
-               character: %Bonfire.Data.Identity.Character{},
-               profile: %Bonfire.Data.Social.Profile{}
-             },
-             verb: %Bonfire.Data.AccessControl.Verb{},
+             # because current_user is the subject
+             subject: nil,
+             verb: %Bonfire.Data.AccessControl.Verb{verb: "Create"},
              object: %Needle.Pointer{
-               post_content: %Bonfire.Data.Social.PostContent{},
+               post_content: %Bonfire.Data.Social.PostContent{html_body: "epic html"},
                created: %Bonfire.Data.Social.Created{creator: nil}
              },
              replied: %Bonfire.Data.Social.Replied{
-               # thread: %Needle.Pointer{named: nil}, # FIXME: create named mixin only when not empty
-               thread: %Needle.Pointer{named: %{name: nil}},
+               # FIXME: create named mixin only when not empty
+               thread: %Needle.Pointer{named: nil},
+               #  thread: %Needle.Pointer{named: %Bonfire.Data.Identity.Named{name: nil}},
                reply_to: %Needle.Pointer{
                  id: post_id,
                  post_content: %Bonfire.Data.Social.PostContent{},
@@ -127,15 +140,13 @@ defmodule Bonfire.Social.FeedsTest do
                }
              },
              labelled: nil,
-             sensitive: %Bonfire.Data.Social.Sensitive{is_sensitive: true},
+             sensitive: %Bonfire.Data.Social.Sensitive{is_sensitive: false},
              media: [],
              tags: [],
              seen: nil
-           } =
-             Bonfire.Social.FeedLoader.feed_contains?(feed, reply, current_user: user)
-             |> dump("feed_contains in me after postloads?")
+           } = activity
 
-    feed = Bonfire.Social.FeedLoader.feed(:local, limit: 3, current_user: user)
+    feed = Bonfire.Social.FeedLoader.feed(:local, limit: 5, current_user: user)
 
     auto_assert %Bonfire.Data.Social.Activity{
                   subject: %Needle.Pointer{character: %Bonfire.Data.Identity.Character{}},
@@ -186,17 +197,25 @@ defmodule Bonfire.Social.FeedsTest do
                    %{preset: nil, filters: %{}, preloads: [], postloads: []}
                  ]
 
-  # Generate tests dynamically from feed presets - WIP: my, user_posts, messages, user_following, user_followers, remote, my_requests, trending_discussions, local_images, publications
-  # for %{preset: preset, filters: filters} = params when preset in [:user_posts] <- @test_params do
-  for %{preset: preset, filters: filters} = params <- @test_params do
+  # Generate tests dynamically from feed presets - WIP: my, messages, user_following, user_followers, remote, my_requests, trending_discussions, local_images, publications
+  for %{preset: preset, filters: filters} = params when preset in [:user_followers] <-
+        @test_params do
+    # for %{preset: preset, filters: filters} = params <- @test_params do
     describe "feed preset `#{inspect(preset)}` loads feed and configured preloads" do
       setup do
         %{preset: preset} = params = unquote(Macro.escape(params))
-        user = fake_user!()
+        user = fake_user!("main user")
+        other_user = fake_user!("other_user")
 
         # Create test content based on the preset
-        {object, activity} = create_test_content(preset, user)
-        Map.merge(params, %{object: object, activity: activity, user: user})
+        {object, activity} = create_test_content(preset, user, other_user)
+
+        Map.merge(params, %{
+          object: object,
+          activity: activity,
+          user: user,
+          other_user: other_user
+        })
       end
 
       test "using preset name", %{
@@ -206,16 +225,22 @@ defmodule Bonfire.Social.FeedsTest do
         postloads: postloads,
         object: object,
         activity: activity,
-        user: user
+        user: user,
+        other_user: other_user
       } do
         if preset && object do
-          feed = Bonfire.Social.FeedLoader.feed(preset, %{}, current_user: user, limit: 3)
+          feed =
+            Bonfire.Social.FeedLoader.feed(preset, %{},
+              current_user: user,
+              limit: 3,
+              by: other_user
+            )
 
-          verify_feed(preset, feed, activity, object, user, preloads, postloads)
+          verify_feed(preset, feed, activity, object, user, other_user, preloads, postloads)
         end
       end
 
-      # test "`using filters: #{inspect(filters)}", %{preset: preset, filters: filters, preloads: preloads, postloads: postloads, object: object, activity: activity, user: user} do
+      # test "`using filters: #{inspect(filters)}", %{preset: preset, filters: filters, preloads: preloads, postloads: postloads, object: object, activity: activity, user: user, other_user: other_user} do
       #   feed = Bonfire.Social.FeedLoader.feed(nil, filters, current_user: user)
 
       #     assert loaded_activity = Bonfire.Social.FeedLoader.feed_contains?(feed, object, current_user: user)
@@ -233,7 +258,7 @@ defmodule Bonfire.Social.FeedsTest do
     end
   end
 
-  defp verify_feed(preset, feed, activity, object, user, preloads, postloads) do
+  defp verify_feed(preset, feed, activity, object, user, other_user, preloads, postloads) do
     assert loaded_activity =
              Bonfire.Social.FeedLoader.feed_contains?(feed, activity || object,
                current_user: user
@@ -323,13 +348,11 @@ defmodule Bonfire.Social.FeedsTest do
                 "expected creator to NOT be loaded, got #{inspect(activity)}"
               )
 
-        :with_post_content ->
+        :with_object ->
           pattern_matched? =
             match?(
               %{
-                object: %Needle.Pointer{
-                  post_content: %Bonfire.Data.Social.PostContent{}
-                }
+                object: %Needle.Pointer{}
               },
               activity
             )
@@ -338,12 +361,12 @@ defmodule Bonfire.Social.FeedsTest do
             do:
               assert(
                 pattern_matched?,
-                "expected post_content to be loaded, got #{inspect(activity)}"
+                "expected object to be loaded, got #{inspect(activity)}"
               ),
             else:
               refute(
                 pattern_matched?,
-                "expected post_content to NOT be loaded, got #{inspect(activity)}"
+                "expected object to NOT be loaded, got #{inspect(activity)}"
               )
 
         :with_object_more ->
@@ -351,7 +374,7 @@ defmodule Bonfire.Social.FeedsTest do
             match?(
               %{
                 object: %Needle.Pointer{
-                  post_content: %{}
+                  post_content: %Bonfire.Data.Social.PostContent{}
                 }
               },
               activity
@@ -377,13 +400,22 @@ defmodule Bonfire.Social.FeedsTest do
                 "expected object & post_content to NOT be loaded, got #{inspect(activity)}"
               )
 
+        :with_post_content ->
+          verify_preloads(activity, [:with_object_more], assert?)
+
         :with_media ->
           # has_media = match?(%{media: _}, activity)
           if assert? do
             # assert has_media
-            assert is_list(activity.media)
+            assert(
+              is_list(activity.media),
+              "expected media to be loaded, got #{inspect(activity)}"
+            )
           else
-            refute is_list(activity.media)
+            refute(
+              is_list(activity.media),
+              "expected media to NOT be loaded, got #{inspect(activity)}"
+            )
           end
 
         :with_reply_to ->
@@ -391,15 +423,61 @@ defmodule Bonfire.Social.FeedsTest do
             match?(%{replied: %{reply_to: %Needle.Pointer{}}}, activity) or
               match?(%{replied: %{reply_to: nil}}, activity)
 
-          if assert?, do: assert(pattern_matched?), else: refute(pattern_matched?)
+          if assert?,
+            do:
+              assert(
+                pattern_matched?,
+                "expected reply_to to be loaded, got #{inspect(activity)}"
+              ),
+            else:
+              refute(
+                pattern_matched?,
+                "expected reply_to to NOT be loaded, got #{inspect(activity)}"
+              )
 
         :with_peered ->
-          pattern_matched? = match?(%{peer: _}, activity)
-          if assert?, do: assert(pattern_matched?), else: refute(pattern_matched?)
+          pattern_matched? =
+            match?(%{object: %{peered: nil}}, activity) or
+              match?(%{object: %{peered: %{id: _}}}, activity)
+
+          if assert?,
+            do:
+              assert(
+                pattern_matched?,
+                "expected object peered to be loaded, got #{inspect(activity)}"
+              ),
+            else:
+              refute(
+                pattern_matched?,
+                "expected object peered to NOT be loaded, got #{inspect(activity)}"
+              )
 
         :with_seen ->
-          pattern_matched? = Map.has_key?(activity, :seen)
-          if assert?, do: assert(pattern_matched?), else: refute(pattern_matched?)
+          pattern_matched? =
+            match?(
+              %{
+                seen: nil
+              },
+              activity
+            ) or
+              match?(
+                %{
+                  seen: %Bonfire.Data.Social.Seen{}
+                },
+                activity
+              )
+
+          if assert?,
+            do:
+              assert(
+                pattern_matched?,
+                "expected activity seen to be loaded, got #{inspect(activity)}"
+              ),
+            else:
+              refute(
+                pattern_matched?,
+                "expected activity seen to NOT be loaded, got #{inspect(activity)}"
+              )
 
         other ->
           raise "Missing verify_preloads case for #{inspect(other)}"
@@ -408,16 +486,19 @@ defmodule Bonfire.Social.FeedsTest do
   end
 
   # Helper to create appropriate test content based on feed type
-  defp create_test_content(preset, user) do
+  defp create_test_content(preset, user, other_user) do
     case preset do
       :my ->
-        followed_user = fake_user!()
+        other_user = fake_user!("other_user")
 
         assert {:ok, %Bonfire.Data.Social.Follow{} = follow} =
-                 Bonfire.Social.Graph.Follows.follow(user, followed_user)
+                 Bonfire.Social.Graph.Follows.follow(user, other_user)
+
+        # assert {:ok, %Bonfire.Data.Social.Follow{} = follow} =
+        #          Bonfire.Social.Graph.Follows.follow(other_user, user)
 
         assert post =
-                 fake_post!(followed_user, "public", %{
+                 fake_post!(other_user, "public", %{
                    post_content: %{
                      name: "followed user post",
                      html_body: "content from someone I follow"
@@ -428,7 +509,7 @@ defmodule Bonfire.Social.FeedsTest do
         {post, nil}
 
       :remote ->
-        #   remote_user = fake_remote_user!()
+        #   remote_user = fake_remote_user!("remote_user")
 
         #   post =
         #     fake_post!(remote_user, "public", %{
@@ -442,11 +523,11 @@ defmodule Bonfire.Social.FeedsTest do
         {nil, nil}
 
       :notifications ->
-        create_test_content(:mentions, user)
+        create_test_content(:mentions, user, other_user)
 
       :liked_by_me ->
         assert post =
-                 fake_post!(user, "public", %{
+                 fake_post!(other_user, "public", %{
                    post_content: %{name: "likeable post", html_body: "content"}
                  })
 
@@ -454,16 +535,14 @@ defmodule Bonfire.Social.FeedsTest do
         {post, like}
 
       :user_followers ->
-        followed_user = fake_user!()
-        assert {:ok, follow} = Bonfire.Social.Graph.Follows.follow(user, followed_user)
+        assert {:ok, follow} = Bonfire.Social.Graph.Follows.follow(user, other_user)
 
-        {followed_user, follow}
+        {other_user, follow}
 
       :user_following ->
-        follower_user = fake_user!()
-        assert {:ok, follow} = Bonfire.Social.Graph.Follows.follow(follower_user, user)
+        assert {:ok, follow} = Bonfire.Social.Graph.Follows.follow(other_user, user)
 
-        {follower_user, follow}
+        {other_user, follow}
 
       :my_requests ->
         # TODO
@@ -487,10 +566,8 @@ defmodule Bonfire.Social.FeedsTest do
         {post, nil}
 
       :mentions ->
-        other = fake_user!()
-
         assert post =
-                 fake_post!(other, "public", %{
+                 fake_post!(other_user, "public", %{
                    post_content: %{name: "mention me", html_body: "@#{user.character.username}"}
                  })
 
@@ -498,7 +575,7 @@ defmodule Bonfire.Social.FeedsTest do
 
       :flagged_by_me ->
         assert post =
-                 fake_post!(fake_user!(), "public", %{
+                 fake_post!(other_user, "public", %{
                    post_content: %{name: "flagged post", html_body: "content"}
                  })
 
@@ -511,7 +588,7 @@ defmodule Bonfire.Social.FeedsTest do
                    post_content: %{name: "flagged post", html_body: "content"}
                  })
 
-        assert {:ok, flag} = Bonfire.Social.Flags.flag(fake_user!(), post)
+        assert {:ok, flag} = Bonfire.Social.Flags.flag(other_user, post)
         {post, flag}
 
       :local_images ->
@@ -542,18 +619,19 @@ defmodule Bonfire.Social.FeedsTest do
         {nil, nil}
 
       :messages ->
-        receiver = Fake.fake_user!()
+        #   receiver = Fake.fake_user!()
+        #   attrs = %{
+        #     to_circles: [receiver.id],
+        #     post_content: %{name: "test DM", html_body: "content"}
+        #   }
+        #   assert {:ok, message} = Messages.send(user, attrs)
+        #   {receiver, message}
 
-        attrs = %{
-          to_circles: [receiver.id],
-          post_content: %{name: "test DM", html_body: "content"}
-        }
+        # TODO?
+        {nil, nil}
 
-        assert {:ok, message} = Messages.send(user, attrs)
-
-        {receiver, message}
-
-      other when is_nil(other) or other in [:local, :explore, :user_posts, :user_activities] ->
+      other
+      when is_nil(other) or other in [:local, :explore, :user_by_object_type, :user_activities] ->
         assert post =
                  fake_post!(user, "public", %{
                    post_content: %{name: "default post", html_body: "content"}

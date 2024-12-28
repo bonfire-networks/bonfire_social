@@ -25,8 +25,8 @@ defmodule Bonfire.Social.Edges do
 
   @skip_warn_filters [
     :preload,
-    :object,
-    :subject,
+    :objects,
+    :subjects,
     :activity_types,
     :preload_type,
     :object_types,
@@ -331,7 +331,7 @@ defmodule Bonfire.Social.Edges do
 
   defp do_query({schema_or_context, type}, subject, object, opts) do
     edge_module_query(schema_or_context, [
-      [subject: subject, object: object],
+      [subjects: subject, objects: object],
       type,
       Keyword.put_new(opts, :current_user, subject)
     ])
@@ -341,7 +341,7 @@ defmodule Bonfire.Social.Edges do
     edge_module_query(
       schema_or_context,
       [
-        [subject: subject, object: object],
+        [subjects: subject, objects: object],
         Keyword.put_new(opts, :current_user, subject)
       ]
     )
@@ -396,12 +396,16 @@ defmodule Bonfire.Social.Edges do
 
   defp maybe_proload(query, :object, object_type)
        when object_type in [Bonfire.Data.Identity.User, Bonfire.Classify.Category] do
-    maybe_join_type(query, :object, object_type)
-    |> maybe_proload(:object_profile, nil)
+    maybe_proload(:object_profile, object_type)
   end
 
-  defp maybe_proload(query, :object_profile, _object_type) do
-    query
+  defp maybe_proload(query, :object_character, object_type) do
+    maybe_join_type(query, :object, object_type)
+    |> proload(edge: [object: {"object_", [:character]}])
+  end
+
+  defp maybe_proload(query, :object_profile, object_type) do
+    maybe_join_type(query, :object, object_type)
     |> proload(edge: [object: {"object_", [:profile, :character]}])
   end
 
@@ -445,7 +449,7 @@ defmodule Bonfire.Social.Edges do
        when is_atom(object_type) and not is_nil(object_type) do
     query
     |> proload(:edge)
-    |> join(:left, [edge: edge], object in ^object_type,
+    |> reusable_join(:left, [edge: edge], object in ^object_type,
       as: :object,
       on: edge.object_id == object.id
     )
@@ -487,7 +491,7 @@ defmodule Bonfire.Social.Edges do
     |> debug()
   end
 
-  defp filter(query, {:subject, subject}, opts) do
+  defp filter(query, {:subjects, subject}, opts) do
     case subject do
       :visible ->
         boundarise(query, edge.subject_id, opts)
@@ -504,7 +508,7 @@ defmodule Bonfire.Social.Edges do
     end
   end
 
-  defp filter(query, {:object, object}, opts) do
+  defp filter(query, {:objects, object}, opts) do
     case object do
       :visible ->
         boundarise(query, edge.object_id, opts)
@@ -604,7 +608,7 @@ defmodule Bonfire.Social.Edges do
       :ok
   """
   def delete_by_subject(user),
-    do: query([subject: user], skip_boundary_check: true) |> do_delete()
+    do: query([subjects: user], skip_boundary_check: true) |> do_delete()
 
   @doc """
   Deletes edges where the given user is the object.
@@ -615,7 +619,7 @@ defmodule Bonfire.Social.Edges do
       :ok
   """
   def delete_by_object(user),
-    do: query([object: user], skip_boundary_check: true) |> do_delete()
+    do: query([objects: user], skip_boundary_check: true) |> do_delete()
 
   # doc "Delete edges where i am the subject and/or the object."
   # defp delete_by_any(me), do: do_delete(by_any_q(me))
@@ -630,7 +634,7 @@ defmodule Bonfire.Social.Edges do
   """
   def delete_by_both(me, schema, object),
     do:
-      [subject: me, object: object, table_id: Bonfire.Common.Types.table_id(schema)]
+      [subjects: me, objects: object, table_id: Bonfire.Common.Types.table_id(schema)]
       |> query(skip_boundary_check: true)
       |> do_delete()
 

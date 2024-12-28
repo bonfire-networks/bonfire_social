@@ -504,7 +504,7 @@ defmodule Bonfire.Social.Activities do
           proload(query,
             activity: [
               :sensitive,
-              object: {"object_", [:post_content, :peered]}
+              object: {"object_", [:post_content]}
             ]
           )
 
@@ -512,7 +512,14 @@ defmodule Bonfire.Social.Activities do
           proload(query,
             activity: [
               :sensitive,
-              object: {"object_", [:post_content, :peered, :character, profile: :icon]}
+              object: {"object_", [:post_content, :character, profile: :icon]}
+            ]
+          )
+
+        :with_peered ->
+          proload(query,
+            activity: [
+              object: {"object_", [:peered]}
             ]
           )
 
@@ -701,15 +708,20 @@ defmodule Bonfire.Social.Activities do
         :with_post_content ->
           [
             # :replied,
-            #  NOTE: :peered info is needed to correctly render remote posts, but that should be loaded in :with_peered depending on feed type
             object: [:post_content]
           ]
 
         :with_object_more ->
           [
             :replied,
-            object: [:post_content, :peered]
+            object: [:post_content]
             # object: [:post_content, :peered, :character, profile: :icon]
+          ]
+
+        :with_peered ->
+          #  NOTE: :peered info is needed to correctly render remote posts, but only loaded when unknown, depending on feed type
+          [
+            object: [:peered]
           ]
 
         :with_replied ->

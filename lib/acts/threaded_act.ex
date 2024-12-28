@@ -91,6 +91,7 @@ defmodule Bonfire.Social.Acts.Threaded do
 
         changeset
         |> put_replied(thread_id, reply_to, thread_title)
+        |> maybe_put_name(thread_title)
         |> Epic.assign(epic, on, ...)
         |> Epic.assign(:reply_to, reply_to)
 
@@ -102,6 +103,7 @@ defmodule Bonfire.Social.Acts.Threaded do
 
         changeset
         |> put_replied(thread_id, reply_to, thread_title)
+        |> maybe_put_name(thread_title)
         |> Epic.assign(epic, on, ...)
         |> Epic.assign(:reply_to, reply_to)
 
@@ -114,6 +116,7 @@ defmodule Bonfire.Social.Acts.Threaded do
 
         changeset
         |> put_replied(thread_id, reply_to, thread_title)
+        |> maybe_put_name(thread_title)
         |> Epic.assign(epic, on, ...)
         |> Epic.assign(:reply_to, reply_to)
 
@@ -128,13 +131,13 @@ defmodule Bonfire.Social.Acts.Threaded do
 
         changeset
         |> put_replied(thread_id, nil, thread_title)
+        |> maybe_put_name(thread_title)
         |> Epic.assign(epic, on, ...)
     end
   end
 
   defp put_replied(changeset, thread_id, nil, thread_title) do
     changeset
-    |> Changesets.put_assoc(:named, %{name: thread_title})
     |> Changesets.put_assoc(:replied, %{
       thread_id: thread_id,
       reply_to_id: nil
@@ -144,7 +147,6 @@ defmodule Bonfire.Social.Acts.Threaded do
   defp put_replied(changeset, thread_id, %{} = reply_to, thread_title) do
     changeset
     # |> maybe_debug()
-    |> Changesets.put_assoc(:named, %{name: thread_title})
     |> Changesets.put_assoc(:replied, %{
       thread_id: thread_id,
       reply_to_id: reply_to.id
@@ -153,6 +155,16 @@ defmodule Bonfire.Social.Acts.Threaded do
       :replied,
       &Replied.make_child_of(&1, reply_to.replied)
     )
+  end
+
+  defp maybe_put_name(changeset, nil) do
+    changeset
+  end
+
+  defp maybe_put_name(changeset, thread_title) do
+    changeset
+    # |> maybe_debug()
+    |> Changesets.put_assoc(:named, %{name: thread_title})
   end
 
   defp init_replied(reply_to) do

@@ -44,14 +44,14 @@ defmodule Bonfire.Social.RuntimeConfig do
         # User interaction feeds
         liked_by_me: %{
           description: "Posts I've liked",
-          filters: %{activity_types: :like, subjects: :me},
-          parameterized: true
+          filters: %{activity_types: :like},
+          parameterized: %{subjects: :me}
         },
         my_bookmarks: %{
           description: "Posts I've bookmarked",
-          filters: %{activity_types: :bookmark, subjects: :me},
+          filters: %{activity_types: :bookmark},
           current_user_required: true,
-          parameterized: true,
+          parameterized: %{subjects: :me},
           show_in_main_menu: true
         },
         my_requests: %{
@@ -64,28 +64,28 @@ defmodule Bonfire.Social.RuntimeConfig do
         user_activities: %{
           description: "A specific user's activities",
           # $username is replaced at runtime
-          filters: %{subjects: :by},
-          parameterized: true
+          filters: %{},
+          parameterized: %{subjects: :by}
         },
         user_followers: %{
           description: "Followers of a specific user",
-          filters: %{object_types: :follow, objects: :by},
-          parameterized: true
+          filters: %{object_types: :follow},
+          parameterized: %{objects: :by}
         },
         user_following: %{
           description: "Users followed by a specific user",
-          filters: %{activity_types: :follow, subjects: :by},
-          parameterized: true
+          filters: %{activity_types: :follow},
+          parameterized: %{subjects: :by}
         },
-        user_posts: %{
+        user_by_object_type: %{
           description: "Posts by a specific user",
-          filters: %{creators: :by, object_types: :post},
-          parameterized: true
+          filters: %{creators: :by},
+          parameterized: %{creators: :by, object_types: :post}
         },
         # user_publications: %{
         #   description: "Publications by a specific user",
-        #   filters: %{creators: :by, media_types: :publication},
-        #   parameterized: true
+        #   filters: %{media_types: :publication},
+        #   parameterized: %{creators: :by}
         # },
 
         # Content type feeds
@@ -101,13 +101,13 @@ defmodule Bonfire.Social.RuntimeConfig do
         # Hashtag feeds
         hashtag: %{
           description: "Activities with a specific hashtag",
-          filters: %{tags: :hashtag},
-          parameterized: true
+          filters: %{},
+          parameterized: %{tags: :hashtag}
         },
         mentions: %{
           description: "Activities with a specific @ mention",
-          filters: %{tags: :mentioned},
-          parameterized: true
+          filters: %{},
+          parameterized: %{tags: :mentioned}
         },
 
         # Moderation feeds
@@ -115,11 +115,10 @@ defmodule Bonfire.Social.RuntimeConfig do
           description: "Content I've flagged",
           filters: %{
             activity_types: :flag,
-            subjects: :me,
             include_flags: true,
             show_objects_only_once: false
           },
-          parameterized: true,
+          parameterized: %{subjects: :me},
           current_user_required: true
         },
         flagged_content: %{
@@ -219,12 +218,19 @@ defmodule Bonfire.Social.RuntimeConfig do
         "Followed by a Specific User" => %{
           match: %{activity_types: :follow, subjects: "*"},
           include: [:with_object, :with_peered],
-          exclude: [:with_subject, :with_object_more, :with_media, :with_reply_to]
+          exclude: [:with_subject, :with_creator, :with_object_more, :with_media, :with_reply_to]
         },
         "Followers of a Specific User" => %{
           match: %{object_types: :follow, objects: "*"},
           include: [:with_subject],
-          exclude: [:with_object, :with_object_more, :with_peered, :with_media, :with_reply_to]
+          exclude: [
+            :with_object,
+            :with_creator,
+            :with_object_more,
+            :with_peered,
+            :with_media,
+            :with_reply_to
+          ]
         },
         "Activities with a Specific Hashtag or @ mention" => %{
           match: %{tags: "*"},
@@ -295,11 +301,11 @@ defmodule Bonfire.Social.RuntimeConfig do
           :with_object_more,
           :with_media
         ],
-        notifications: [
-          :feed_by_subject,
-          :with_reply_to,
-          :with_seen
-        ],
+        # notifications: [
+        #   :feed_by_subject,
+        #   :with_reply_to,
+        #   :with_seen
+        # ],
         object_with_creator: [
           :with_post_content,
           :with_creator
@@ -318,7 +324,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           :with_subject,
           :with_post_content
         ],
-        extras: [:with_verb, :tags],
+        extras: [:with_verb, :tags, :with_seen],
         default: [
           :with_subject,
           :with_post_content,

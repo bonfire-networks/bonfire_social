@@ -109,17 +109,30 @@ defmodule Bonfire.Social.FeedLoader do
     opts = to_options(opts)
     debug(custom_filters)
 
-    case preset_feed_filters(feed_name, opts) do
-      {:ok, preset_filters} ->
+    case feed_definition_if_permitted(feed_name, opts) do
+      {:ok, %{parameterized: %{} = parameters, filters: preset_filters}} ->
         filters =
-          Map.merge(preset_filters, custom_filters)
-          |> Map.merge(opts[:feed_filters] || %{})
+          merge_feed_filters(preset_filters, custom_filters, opts)
+          |> parameterize_filters(parameters, opts)
+          |> debug("parameterized feed_filters")
+
+        feed_filtered(filters[:feed_name], filters, opts)
+
+      {:ok, %{filters: preset_filters}} ->
+        filters =
+          merge_feed_filters(preset_filters, custom_filters, opts)
+          |> debug("merged feed_filters")
 
         feed_filtered(filters[:feed_name], filters, opts)
 
       other ->
         error(other, to_string(feed_name))
     end
+  end
+
+  defp merge_feed_filters(preset_filters, custom_filters, opts) do
+    Map.merge(preset_filters, custom_filters)
+    |> Map.merge(Map.new(opts[:feed_filters] || %{}))
   end
 
   def feed([feed_name], opts)
@@ -528,7 +541,7 @@ defmodule Bonfire.Social.FeedLoader do
           )
         end)
     )
-    |> debug("5a. feed query opts")
+    |> debug("feed query opts - TODO: some of these should be filters")
   end
 
   # @decorate time()
@@ -586,8 +599,8 @@ defmodule Bonfire.Social.FeedLoader do
         skip_boundary_check: :admins,
         include_flags: true,
         exclude_activity_types: false,
-        show_objects_only_once: false,
-        preload: List.wrap(e(opts, :preload, [])) ++ [:notifications]
+        show_objects_only_once: false
+        # preload: List.wrap(e(opts, :preload, [])) ++ [:notifications]
       )
 
     {feed_id, opts}
@@ -670,12 +683,12 @@ defmodule Bonfire.Social.FeedLoader do
       itself when itself == feed_name ->
         Feeds.my_feed_id(feed_name, opts) ||
           (
-            error("FeedActivities.feed: no known feed #{inspect(feed_name)}")
+            warn(feed_name, "not a known feed")
             nil
           )
 
       e ->
-        error("FeedActivities.feed: no known feed #{inspect(feed_name)} - #{inspect(e)}")
+        error(e, "not a known feed: `#{inspect(feed_name)}`")
 
         debug(opts)
         nil
@@ -1001,7 +1014,8 @@ defmodule Bonfire.Social.FeedLoader do
   def feed_contains?(feed, id_or_html_body, _opts)
       when is_list(feed) and (is_binary(id_or_html_body) or is_map(id_or_html_body)) do
     q_id =
-      Enums.id(e(id_or_html_body, :object, nil)) ||
+      e(id_or_html_body, :object_id, nil) || Enums.id(e(id_or_html_body, :object, nil)) ||
+        e(id_or_html_body, :activity, :object_id, nil) ||
         Enums.id(e(id_or_html_body, :activity, :object, nil)) || Enums.id(id_or_html_body)
 
     q_body =
@@ -1020,7 +1034,7 @@ defmodule Bonfire.Social.FeedLoader do
       end
     end) ||
       (
-        debug(
+        dump(
           Enum.map(feed, fn fi ->
             # e(fi, :activity, :object, nil) || 
             e(fi, :activity, :object, :post_content, nil) ||
@@ -1206,8 +1220,8 @@ defmodule Bonfire.Social.FeedLoader do
       {:error, e} ->
         {:error, e}
 
-      {:ok, %{parameterized: true, filters: filters}} ->
-        {:ok, parameterize_filters(filters, opts)}
+      {:ok, %{parameterized: %{} = parameters, filters: filters}} ->
+        {:ok, parameterize_filters(filters, parameters, opts)}
 
       {:ok, %{filters: filters}} ->
         {:ok, filters}
@@ -1250,31 +1264,31 @@ defmodule Bonfire.Social.FeedLoader do
   ## Examples
 
       # 1: Parameterizing a simple filter
-      iex> parameterize_filters(%{subjects: [:me]}, current_user: %{id: "alice"})
+      iex> parameterize_filters(%{}, %{subjects: [:me]}, current_user: %{id: "alice"})
       %{subjects: [%{id: "alice"}]}
 
       # 2: Parameterizing multiple filters
-      iex> parameterize_filters(%{subjects: :me, tags: [:hashtag]}, current_user: %{id: "alice"}, hashtag: "elixir")
-      %{subjects: %{id: "alice"}, tags: ["elixir"]}
+      iex> parameterize_filters(%{}, %{subjects: [:me], tags: [:hashtag]}, current_user: %{id: "alice"}, hashtag: "elixir")
+      %{subjects: [%{id: "alice"}], tags: ["elixir"]}
 
       # 3: Parameterizing with undefined options
-      iex> parameterize_filters(%{subjects: :me}, current_user: nil)
+      iex> parameterize_filters(%{}, %{subjects: :me}, current_user: nil)
       %{subjects: nil}
 
       # 4: Handling filters that don't require parameterization
-      iex> parameterize_filters(%{activity_types: ["like"]}, current_user: "bob")
+      iex> parameterize_filters(%{activity_types: ["like"]}, %{}, current_user: "bob")
       %{activity_types: ["like"]}
   """
-  def parameterize_filters(filters, opts) do
-    filters
+  def parameterize_filters(filters, parameters, opts) do
+    parameters
     |> Enum.map(fn
       {k, v} when is_list(v) ->
-        {k, Enum.map(v, &replace_parameters(&1, opts))}
+        {k, Enum.map(v, &replace_parameters(&1, filters, opts))}
 
       {k, v} ->
-        {k, replace_parameters(v, opts)}
+        {k, replace_parameters(v, filters, opts)}
     end)
-    |> Enum.into(%{})
+    |> Enum.into(filters)
   end
 
   @doc """
@@ -1282,39 +1296,89 @@ defmodule Bonfire.Social.FeedLoader do
 
   ## Examples
 
-      # 1: Replacing a `me` parameter with the current user
-      iex> replace_parameters(:me, current_user: %{id: "alice"})
+      # Replacing a `me` parameter with the current user
+      iex> replace_parameters(:me, %{}, current_user: %{id: "alice"})
       %{id: "alice"}
 
-      # 2: Replacing a `:current_user` parameter with the current user only if available
-      iex> replace_parameters(:current_user, current_user: nil)
+      # Replacing a `:current_user` parameter with the current user only if available
+      iex> replace_parameters(:current_user, %{}, current_user: nil)
       nil
 
-      # 3: Failing with `:current_user_required` parameter if we have no current user
-      iex> replace_parameters(:current_user_required, current_user: nil)
+      # Replacing a `by` parameter with the a value from the filters
+      iex> replace_parameters(:by, %{by: %{id: "alice"}}, [])
+      %{id: "alice"}
+
+      # Replacing a `by` parameter with the a value from the opts
+      iex> replace_parameters(:by, %{}, by: %{id: "alice"})
+      %{id: "alice"}
+
+      # Replacing a `:by` parameter with the current user as a fallback
+      iex> replace_parameters(:by, %{}, current_user: %{id: "alice"})
+      %{id: "alice"}
+
+      # Failing with `:current_user_required` parameter if we have no current user
+      iex> replace_parameters(:current_user_required, %{}, current_user: nil)
       ** (Bonfire.Fail.Auth) You need to log in first. 
 
-      # 4: Handling a parameter that is not in the opts
-      iex> replace_parameters(:unknown, current_user: "bob")
+      # Handling a parameter that is in the opts
+      iex> replace_parameters(:type, %{}, type: "post")
+      "post"
+
+      # Handling a parameter that is in the filters
+      iex> replace_parameters(:type, %{type: "post"}, [])
+      "post"
+
+      # Handling a parameter that is in the filters with string key
+      iex> replace_parameters(:type, %{"type"=> "post"}, [])
+      "post"
+
+      # # Handling a string key parameter that is in the filters
+      # iex> replace_parameters("type", %{type: "post"}, [])
+      # "post"
+
+      # # Handling a string key parameter that is in the opts - FIXME
+      # iex> replace_parameters("type", %{}, type: "post")
+      # "post"
+      
+      # Handling a parameter that is not in the opts
+      iex> replace_parameters(:unknown, %{}, current_user: "bob")
       :unknown
   """
-  def replace_parameters(:current_user, opts) do
+  def replace_parameters(:current_user, _filters, opts) do
     current_user(opts)
   end
 
-  def replace_parameters(:current_user_required, opts) do
+  def replace_parameters(:current_user_required, _filters, opts) do
     current_user_required!(opts)
   end
 
-  def replace_parameters(:me, opts) do
+  def replace_parameters(:me, _filters, opts) do
     current_user(opts)
   end
 
-  def replace_parameters(value, opts) do
-    ed(opts, value, value)
+  def replace_parameters(:by, filters, opts) do
+    e(filters, :by, fn ->
+      e(opts, :by, fn ->
+        warn(
+          opts,
+          "parameter `:by` was not found in filters or opts, defaulting to current_user if available instead"
+        )
+
+        current_user(opts)
+      end)
+    end)
   end
 
-  def replace_parameters(value, _params), do: value
+  def replace_parameters(value, filters, opts) do
+    ed(filters, value, fn ->
+      ed(opts, value, fn ->
+        error(opts, "parameter #{inspect(value)} was not found in filters or opts")
+        value
+      end)
+    end)
+  end
+
+  def replace_parameters(value, _filters, _params), do: value
 
   def preloads_from_filters_rules do
     # Default Rules, TODO: move to config
@@ -1520,15 +1584,7 @@ defmodule Bonfire.Social.FeedLoader do
 
       # Multiple preload keys
       iex> map_activity_preloads([:feed, :notifications]) |> Enum.sort()
-      [
-        :with_creator,
-        :with_media,
-        :with_object_more,
-        :with_replied,
-        :with_reply_to,
-        :with_seen,
-        :with_subject
-      ]
+      [:notifications, :with_creator, :with_media, :with_object_more, :with_replied, :with_subject]
 
       # With :all key it includes all defined preloads
       iex> map_activity_preloads([:all]) |> Enum.sort()
@@ -1538,8 +1594,8 @@ defmodule Bonfire.Social.FeedLoader do
         :with_creator,
         :with_media,
         :with_object_more,
-        :with_post_content,
         :with_parent,
+        :with_post_content,
         :with_replied,
         :with_reply_to,
         :with_seen,
