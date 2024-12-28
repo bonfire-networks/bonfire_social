@@ -1125,8 +1125,105 @@ defmodule Bonfire.Social.Activities do
   def read_query(filters, opts) when is_map(filters) or is_list(filters) do
     # current_user = current_user(opts)
     Activity
-    |> query_filter(filters)
+    |> maybe_filter(filters)
     |> read_query(opts)
+  end
+
+  def maybe_filter(query, filters, opts \\ [])
+
+  def maybe_filter(query, filters, opts) when is_list(filters) or is_map(filters) do
+    # filters = Keyword.drop(filters, @skip_warn_filters)
+    Enum.reduce(filters, query, &maybe_filter(&2, &1, opts))
+    |> query_filter(filters)
+    |> debug()
+  end
+
+  def maybe_filter(query, {:activity_types, types}, _opts) do
+    debug(types, "filter by activity_types")
+
+    case Verbs.ids(types) do
+      verb_ids when is_list(verb_ids) and verb_ids != [] ->
+        where(query, [activity: activity], activity.verb_id in ^verb_ids)
+
+      _ ->
+        query
+    end
+  end
+
+  # doc "List objects created by a user and which are in their outbox, which are not replies"
+  def maybe_filter(query, {:creators, user}, _opts) do
+    case uid(user) do
+      nil ->
+        query
+
+      id ->
+        # user = repo().maybe_preload(user, [:character])
+        verb_id = Verbs.get_id!(:create)
+
+        query
+        |> proload(activity: [:object, :replied])
+        |> where(
+          [activity: activity, replied: replied],
+          is_nil(replied.reply_to_id) and
+            activity.verb_id == ^verb_id and
+            activity.subject_id == ^id
+        )
+    end
+  end
+
+  def filter(query, {:subjects, subject}, opts) do
+    case subject do
+      :visible ->
+        boundarise(query, activity.subject_id, opts)
+
+      _ when is_list(subject) ->
+        where(query, [activity: activity], activity.subject_id in ^uids(subject))
+
+      _ when is_map(subject) or is_binary(subject) ->
+        where(query, [activity: activity], activity.subject_id == ^uid(subject))
+
+      _ ->
+        warn(subject, "unrecognised subject")
+        query
+    end
+  end
+
+  def maybe_filter(query, {:subject_types, types}, _opts) do
+    case Bonfire.Common.Types.table_types(types) do
+      table_ids when is_list(table_ids) and table_ids != [] ->
+        where(query, [subject: subject], subject.table_id in ^table_ids)
+
+      _ ->
+        query
+    end
+  end
+
+  def maybe_filter(query, {:exclude_subject_types, types}, _opts) do
+    case Bonfire.Common.Types.table_types(types) do
+      table_ids when is_list(table_ids) and table_ids != [] ->
+        where(query, [subject: subject], subject.table_id not in ^table_ids)
+
+      _ ->
+        query
+    end
+  end
+
+  def maybe_filter(query, {:objects, object}, _opts) do
+    case Types.uid_or_uids(object) do
+      id when is_binary(id) ->
+        where(query, [activity: activity], activity.object_id == ^id)
+
+      ids when is_list(ids) and ids != [] ->
+        where(query, [activity: activity], activity.object_id in ^ids)
+
+      _ ->
+        query
+    end
+  end
+
+  def maybe_filter(query, filters, _opts) do
+    warn(filters, "no supported activity-related filters defined")
+    query
   end
 
   @doc """

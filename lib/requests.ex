@@ -136,7 +136,7 @@ defmodule Bonfire.Social.Requests do
   def requested(%Request{id: _} = request, _opts), do: {:ok, request}
 
   def requested(request, opts),
-    do: get([id: uid(request), object: current_user(opts)], opts ++ [skip_boundary_check: true])
+    do: get([id: uid(request), objects: current_user(opts)], opts ++ [skip_boundary_check: true])
 
   # TODO: abstract the next few functions into Edges
 
@@ -152,7 +152,7 @@ defmodule Bonfire.Social.Requests do
     opts
     # |> Keyword.put_new(:current_user, user)
     |> Keyword.put_new(:preload, :object)
-    |> query([subject: user], type, ...)
+    |> query([subjects: user], type, ...)
     |> repo().many()
   end
 
@@ -181,7 +181,7 @@ defmodule Bonfire.Social.Requests do
     opts
     # |> Keyword.put_new(:current_user, user)
     |> Keyword.put_new(:preload, :subject)
-    |> query([object: user], type, ...)
+    |> query([objects: user], type, ...)
     |> repo().many()
   end
 
@@ -228,7 +228,7 @@ defmodule Bonfire.Social.Requests do
 
   defp query_base(filters, _, opts) do
     Edges.query_parent(Request, filters, opts)
-    |> query_filter(Keyword.drop(filters, [:object, :subject, :activity_types]))
+    |> query_filter(Keyword.drop(filters, [:objects, :subjects, :activity_types]))
 
     # |> proload(:request)
   end
@@ -243,11 +243,11 @@ defmodule Bonfire.Social.Requests do
   """
   def query(filters, type \\ nil, opts)
 
-  def query([my: :object], type, opts),
-    do: query([subject: current_user_required!(opts)], type, opts)
+  def query([my: :objects], type, opts),
+    do: query([subjects: current_user_required!(opts)], type, opts)
 
   def query([my: :requesters], type, opts),
-    do: query([object: current_user_required!(opts)], type, opts)
+    do: query([objects: current_user_required!(opts)], type, opts)
 
   def query(filters, type, opts) do
     query_base(filters, type, opts)
@@ -281,7 +281,7 @@ defmodule Bonfire.Social.Requests do
       when is_binary(user_id) do
     opts = to_options(opts)
 
-    query([subject: user_id], opts[:type], opts)
+    query([subjects: user_id], opts[:type], opts)
     # |> maybe_with_requested_profile_only(opts[:with_profile_only])
     |> many(opts)
   end
@@ -312,7 +312,7 @@ defmodule Bonfire.Social.Requests do
       when is_binary(user_id) do
     opts = to_options(opts)
 
-    query([object: user_id], opts[:type], opts)
+    query([objects: user_id], opts[:type], opts)
     # |> maybe_with_requester_profile_only(opts[:with_profile_only])
     |> many(opts)
   end

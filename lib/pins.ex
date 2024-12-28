@@ -105,7 +105,7 @@ defmodule Bonfire.Social.Pins do
   """
   def by_pinner(%{} = subject, opts \\ []),
     do:
-      (opts ++ [subject: subject])
+      (opts ++ [subjects: subject])
       |> query([current_user: subject] ++ List.wrap(opts))
       |> repo().many()
 
@@ -124,7 +124,7 @@ defmodule Bonfire.Social.Pins do
 
   """
   def by_pinned(%{} = object, opts \\ []),
-    do: (opts ++ [object: object]) |> query(opts) |> repo().many()
+    do: (opts ++ [objects: object]) |> query(opts) |> repo().many()
 
   @doc """
   Creates a pin for an object.
@@ -307,7 +307,7 @@ defmodule Bonfire.Social.Pins do
   end
 
   def query([my: :pins], opts),
-    do: query([subject: current_user_required!(opts)], opts)
+    do: query([subjects: current_user_required!(opts)], opts)
 
   def query(filters, opts) do
     query_base(filters, opts)
@@ -384,14 +384,14 @@ defmodule Bonfire.Social.Pins do
 
     list_paginated(
       Edges.filters_from_opts(opts)
-      |> Map.put(:subject, by_user),
+      |> Map.put(:subjects, by_user),
       opts
       |> Keyword.put_new(:preload, :object)
       |> Keyword.put(:subject_user, :by_user)
     )
 
     # list_paginated(
-    #   Edges.filters_from_opts(opts) |> Map.put(:subject, by_user),
+    #   Edges.filters_from_opts(opts) |> Map.put(:subjects, by_user),
     #   opts ++ [preload: [object: [created: [creator: [:profile, :character]]]]]
     # )
 
@@ -421,7 +421,7 @@ defmodule Bonfire.Social.Pins do
     opts = to_options(opts)
 
     list_paginated(
-      Edges.filters_from_opts(opts) |> Map.put(:object, object),
+      Edges.filters_from_opts(opts) |> Map.put(:objects, object),
       opts ++ [preload: :subject]
     )
   end

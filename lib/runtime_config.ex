@@ -69,7 +69,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         },
         user_followers: %{
           description: "Followers of a specific user",
-          filters: %{object_types: :follow},
+          filters: %{activity_types: :follow},
           parameterized: %{objects: :by}
         },
         user_following: %{
@@ -221,7 +221,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           exclude: [:with_subject, :with_creator, :with_object_more, :with_media, :with_reply_to]
         },
         "Followers of a Specific User" => %{
-          match: %{object_types: :follow, objects: "*"},
+          match: %{activity_types: :follow, objects: "*"},
           include: [:with_subject],
           exclude: [
             :with_object,

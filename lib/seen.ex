@@ -82,7 +82,7 @@ defmodule Bonfire.Social.Seen do
   def get!(subject, object, opts \\ []),
     do: Edges.get!(__MODULE__, subject, object, opts ++ [skip_boundary_check: true])
 
-  # def by_subject(%{}=subject), do: [subject: subject] |> query(current_user: subject) |> repo().many()
+  # def by_subject(%{}=subject), do: [subjects: subject] |> query(current_user: subject) |> repo().many()
 
   @doc """
   Marks an object as seen by a user.
@@ -181,7 +181,7 @@ defmodule Bonfire.Social.Seen do
     #   # object: {"seen_", [:profile, :character, :post_content]}
     #   ])
     # |> query_filter(filters)
-    # def query([my: :seens], opts), do: [subject: current_user(opts)] |> query(opts)
+    # def query([my: :seens], opts), do: [subjects: current_user(opts)] |> query(opts)
   end
 
   @doc """
@@ -194,7 +194,7 @@ defmodule Bonfire.Social.Seen do
 
   ## Examples
 
-      iex> filters = [subject: %User{id: "123"}]
+      iex> filters = [subjects: %User{id: "123"}]
       iex> opts = [limit: 10]
       iex> Bonfire.Social.Seen.query(filters, opts)
       #Ecto.Query<...>

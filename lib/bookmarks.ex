@@ -71,7 +71,7 @@ defmodule Bonfire.Social.Bookmarks do
   """
   def by_bookmarker(subject, opts \\ []) when is_map(subject) or is_binary(subject),
     do:
-      (opts ++ [subject: subject])
+      (opts ++ [subjects: subject])
       |> query([current_user: subject] ++ List.wrap(opts))
       |> repo().many()
 
@@ -85,7 +85,7 @@ defmodule Bonfire.Social.Bookmarks do
 
   """
   def by_bookmarked(object, opts \\ []) when is_map(object) or is_binary(object),
-    do: (opts ++ [object: object]) |> query(opts) |> repo().many()
+    do: (opts ++ [objects: object]) |> query(opts) |> repo().many()
 
   @doc """
   Counts bookmarks based on filters and options.
@@ -184,7 +184,7 @@ defmodule Bonfire.Social.Bookmarks do
   end
 
   def query([my: :bookmarks], opts),
-    do: query([subject: current_user_required!(opts)], opts)
+    do: query([subjects: current_user_required!(opts)], opts)
 
   def query(filters, opts) do
     query_base(filters, opts)
@@ -225,7 +225,7 @@ defmodule Bonfire.Social.Bookmarks do
     opts = to_options(opts)
 
     list_paginated(
-      Edges.filters_from_opts(opts) |> Map.put(:subject, by_user),
+      Edges.filters_from_opts(opts) |> Map.put(:subjects, by_user),
       opts ++ [preload: :object, subject_user: by_user]
     )
   end
@@ -244,7 +244,7 @@ defmodule Bonfire.Social.Bookmarks do
     opts = to_options(opts)
 
     list_paginated(
-      Edges.filters_from_opts(opts) |> Map.put(:object, object),
+      Edges.filters_from_opts(opts) |> Map.put(:objects, object),
       Keyword.put_new(opts, :preload, :subject)
     )
   end

@@ -335,8 +335,19 @@ defmodule Bonfire.Social.Objects do
     |> list_query(opts)
   end
 
+  def maybe_filter(query, filters, opts \\ [])
+
+  def maybe_filter(query, filters, opts) when is_list(filters) or is_map(filters) do
+    # filters = Keyword.new(filters)
+    # |> debug("filters")
+
+    Enum.reduce(filters, query, &maybe_filter(&2, &1, opts))
+    # |> query_filter(Keyword.drop(filters, @skip_warn_filters))
+    |> debug()
+  end
+
   # doc "List objects created by a user and which are in their outbox, which are not replies"
-  def filter(:by, user, query) do
+  def maybe_filter(query, {:creators, user}, _opts) do
     case uid(user) do
       nil ->
         query
@@ -354,6 +365,47 @@ defmodule Bonfire.Social.Objects do
             activity.subject_id == ^id
         )
     end
+  end
+
+  def maybe_filter(query, {:objects, object}, _opts) do
+    # TODO? for cases where we're not already filtering by object_id in Activities.maybe_filter
+    query
+    # case Types.uid_or_uids(object) do
+    #   id when is_binary(id) ->
+    #     where(query, [object: object], object.id == ^id)
+
+    #   ids when is_list(ids) and ids != [] ->
+    #     where(query, [object: object], object.id in ^ids)
+
+    #   _ ->
+    #     query
+    # end
+  end
+
+  def maybe_filter(query, {:object_types, object_type}, _opts) when not is_nil(object_type) do
+    case Bonfire.Common.Types.table_types(object_type) |> debug("object_type tables") do
+      table_ids when is_list(table_ids) and table_ids != [] ->
+        where(query, [object: object], object.table_id in ^table_ids)
+
+      other ->
+        warn(other, "Unrecognised object_type '#{object_type}'")
+        query
+    end
+  end
+
+  def maybe_filter(query, {:exclude_object_types, types}, _opts) do
+    case Bonfire.Common.Types.table_types(types) |> debug("exclude_object_types") do
+      table_ids when is_list(table_ids) and table_ids != [] ->
+        where(query, [object: object], object.table_id not in ^table_ids)
+
+      _ ->
+        query
+    end
+  end
+
+  def maybe_filter(query, filters, _opts) do
+    warn(filters, "no supported object-related filters defined")
+    query
   end
 
   @doc """

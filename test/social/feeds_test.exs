@@ -8,6 +8,7 @@ defmodule Bonfire.Social.FeedsTest do
   alias Bonfire.Files.ImageUploader
 
   alias Bonfire.Social.FeedActivities
+  alias Bonfire.Social.FeedLoader
   alias Bonfire.Posts
   alias Bonfire.Messages
   alias Bonfire.Social.Objects
@@ -62,9 +63,9 @@ defmodule Bonfire.Social.FeedsTest do
         }
       })
 
-    feed = Bonfire.Social.FeedLoader.feed(:my, current_user: user)
+    feed = FeedLoader.feed(:my, current_user: user)
 
-    activity = Bonfire.Social.FeedLoader.feed_contains?(feed, post, current_user: user)
+    activity = FeedLoader.feed_contains?(feed, post, current_user: user)
 
     auto_assert %Bonfire.Data.Social.Activity{
                   # because current_user is the subject
@@ -108,7 +109,7 @@ defmodule Bonfire.Social.FeedsTest do
     # |> dump("after postloads?")
 
     assert activity =
-             Bonfire.Social.FeedLoader.feed_contains?(feed, reply, current_user: user)
+             FeedLoader.feed_contains?(feed, reply, current_user: user)
              |> Bonfire.Social.Activities.activity_preloads(:all,
                current_user: user,
                activity_loaded_preloads: postloads1
@@ -146,7 +147,7 @@ defmodule Bonfire.Social.FeedsTest do
              seen: nil
            } = activity
 
-    feed = Bonfire.Social.FeedLoader.feed(:local, limit: 5, current_user: user)
+    feed = FeedLoader.feed(:local, limit: 5, current_user: user)
 
     auto_assert %Bonfire.Data.Social.Activity{
                   subject: %Needle.Pointer{character: %Bonfire.Data.Identity.Character{}},
@@ -156,14 +157,12 @@ defmodule Bonfire.Social.FeedsTest do
                   labelled: %Ecto.Association.NotLoaded{},
                   sensitive: %Ecto.Association.NotLoaded{}
                 } <-
-                  Bonfire.Social.FeedLoader.feed_contains?(feed, post, current_user: user)
+                  FeedLoader.feed_contains?(feed, post, current_user: user)
 
     # |> dump( "feed_contains in local?")
 
     # check that we show it to others
-    assert Bonfire.Social.FeedLoader.feed_contains?(:local, post,
-             current_user: another_local_user
-           )
+    assert FeedLoader.feed_contains?(:local, post, current_user: another_local_user)
   end
 
   # Get feed presets from config and transform them into test parameters
@@ -179,10 +178,12 @@ defmodule Bonfire.Social.FeedsTest do
                       ]
 
   # Generate test parameters from config
-  @test_params (for {preset, %{filters: filters}} <- @feed_presets do
+  @test_params (for {preset, %{filters: filters} = preset_details} <- @feed_presets do
+                  filters = Map.merge(filters, preset_details[:parameterized] || %{})
+
                   # Get preloads from preload rules based on feed config
                   postloads =
-                    Bonfire.Social.FeedLoader.preloads_from_filters(filters, @preload_rules)
+                    FeedLoader.preloads_from_filters(filters, @preload_rules)
 
                   context_preloads = @preload_by_context[:query] || []
 
@@ -198,9 +199,8 @@ defmodule Bonfire.Social.FeedsTest do
                  ]
 
   # Generate tests dynamically from feed presets - WIP: my, messages, user_following, user_followers, remote, my_requests, trending_discussions, local_images, publications
-  for %{preset: preset, filters: filters} = params when preset in [:user_followers] <-
-        @test_params do
-    # for %{preset: preset, filters: filters} = params <- @test_params do
+  # for %{preset: preset, filters: filters} = params when preset in [:liked_by_me] <- @test_params do
+  for %{preset: preset, filters: filters} = params <- @test_params do
     describe "feed preset `#{inspect(preset)}` loads feed and configured preloads" do
       setup do
         %{preset: preset} = params = unquote(Macro.escape(params))
@@ -230,9 +230,9 @@ defmodule Bonfire.Social.FeedsTest do
       } do
         if preset && object do
           feed =
-            Bonfire.Social.FeedLoader.feed(preset, %{},
+            FeedLoader.feed(preset, %{},
               current_user: user,
-              limit: 3,
+              # limit: 3,
               by: other_user
             )
 
@@ -240,19 +240,39 @@ defmodule Bonfire.Social.FeedsTest do
         end
       end
 
-      # test "`using filters: #{inspect(filters)}", %{preset: preset, filters: filters, preloads: preloads, postloads: postloads, object: object, activity: activity, user: user, other_user: other_user} do
-      #   feed = Bonfire.Social.FeedLoader.feed(nil, filters, current_user: user)
+      test "`using filters: #{inspect(filters)}", %{
+        preset: preset,
+        filters: filters,
+        preloads: preloads,
+        postloads: postloads,
+        object: object,
+        activity: activity,
+        user: user,
+        other_user: other_user
+      } do
+        if object do
+          opts = [
+            current_user: user,
+            # limit: 3,
+            by: other_user
+          ]
 
-      #     assert loaded_activity = Bonfire.Social.FeedLoader.feed_contains?(feed, object, current_user: user)
+          filters =
+            FeedLoader.parameterize_filters(%{}, filters, opts)
+            |> debug("parameterized_filters")
 
-      #     verify_preloads(loaded_activity, preloads)
+          feed = FeedLoader.feed(:custom, filters, opts)
 
-      # end
+          assert loaded_activity = FeedLoader.feed_contains?(feed, object, current_user: user)
+
+          verify_preloads(loaded_activity, preloads)
+        end
+      end
 
       # TODO: add some extra cases like mixing a feed_name with filters from a different preset
       # test "returns error for invalid filters", %{user: user} do
       #   assert_raise RuntimeError, fn ->
-      #     Bonfire.Social.FeedLoader.feed(preset, %{invalid_filter: true}, current_user: user)
+      #     FeedLoader.feed(preset, %{invalid_filter: true}, current_user: user)
       #   end
       # end
     end
@@ -260,9 +280,7 @@ defmodule Bonfire.Social.FeedsTest do
 
   defp verify_feed(preset, feed, activity, object, user, other_user, preloads, postloads) do
     assert loaded_activity =
-             Bonfire.Social.FeedLoader.feed_contains?(feed, activity || object,
-               current_user: user
-             )
+             FeedLoader.feed_contains?(feed, activity || object, current_user: user)
 
     verify_preloads(loaded_activity, preloads)
     verify_preloads(loaded_activity, postloads -- preloads, false)
@@ -273,12 +291,12 @@ defmodule Bonfire.Social.FeedsTest do
         activity_loaded_preloads: preloads
       )
 
-    verify_data(preset, loaded_activity, activity, object)
+    verify_data(preset, loaded_activity, activity, object, user, other_user)
 
     verify_preloads(loaded_activity, postloads)
   end
 
-  defp verify_data(preset, loaded_activity, activity, object) do
+  defp verify_data(preset, loaded_activity, activity, object, user, other_user) do
     case preset do
       :local_media ->
         assert %{media: [%{id: id}]} = loaded_activity
@@ -584,7 +602,7 @@ defmodule Bonfire.Social.FeedsTest do
 
       :flagged_content ->
         assert post =
-                 fake_post!(fake_user!(), "public", %{
+                 fake_post!(fake_user!(), "mentions", %{
                    post_content: %{name: "flagged post", html_body: "content"}
                  })
 
@@ -633,7 +651,7 @@ defmodule Bonfire.Social.FeedsTest do
       other
       when is_nil(other) or other in [:local, :explore, :user_by_object_type, :user_activities] ->
         assert post =
-                 fake_post!(user, "public", %{
+                 fake_post!(other_user, "public", %{
                    post_content: %{name: "default post", html_body: "content"}
                  })
 

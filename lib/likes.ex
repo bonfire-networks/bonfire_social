@@ -94,7 +94,7 @@ defmodule Bonfire.Social.Likes do
   """
   def by_liker(subject, opts \\ []) when is_map(subject) or is_binary(subject),
     do:
-      (opts ++ [subject: subject])
+      (opts ++ [subjects: subject])
       |> query([current_user: subject] ++ List.wrap(opts))
       |> repo().many()
 
@@ -113,7 +113,7 @@ defmodule Bonfire.Social.Likes do
 
   """
   def by_liked(object, opts \\ []) when is_map(object) or is_binary(object),
-    do: (opts ++ [object: object]) |> query(opts) |> repo().many()
+    do: (opts ++ [objects: object]) |> query(opts) |> repo().many()
 
   @doc """
   Counts likes based on filters or for a specific user-object pair.
@@ -267,14 +267,14 @@ defmodule Bonfire.Social.Likes do
 
   ## Examples
 
-      iex> filters = [subject: %User{id: "user123"}]
+      iex> filters = [subjects: %User{id: "user123"}]
       iex> opts = [limit: 10]
       iex> Bonfire.Social.Likes.query(filters, opts)
       #Ecto.Query<...>
 
   """
   def query([my: :likes], opts),
-    do: query([subject: current_user_required!(opts)], opts)
+    do: query([subjects: current_user_required!(opts)], opts)
 
   def query(filters, opts) do
     query_base(filters, opts)
@@ -329,7 +329,7 @@ defmodule Bonfire.Social.Likes do
 
     list_paginated(
       Edges.filters_from_opts(opts)
-      |> Map.put(:subject, by_user),
+      |> Map.put(:subjects, by_user),
       opts
       |> Keyword.put_new(:preload, :object)
       |> Keyword.put(:subject_user, :by_user)
@@ -355,7 +355,7 @@ defmodule Bonfire.Social.Likes do
     opts = to_options(opts)
 
     list_paginated(
-      Edges.filters_from_opts(opts) |> Map.put(:object, object),
+      Edges.filters_from_opts(opts) |> Map.put(:objects, object),
       Keyword.put_new(opts, :preload, :subject)
     )
   end

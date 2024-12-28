@@ -106,7 +106,7 @@ defmodule Bonfire.Social.Flags do
       [%Bonfire.Data.Social.Flag{}, ...]
   """
   def by_flagger(%{} = subject),
-    do: [subject: subject] |> query(current_user: subject) |> repo().many()
+    do: [subjects: subject] |> query(current_user: subject) |> repo().many()
 
   @doc """
   Retrieves flags of a specific flagged object.
@@ -126,7 +126,7 @@ defmodule Bonfire.Social.Flags do
       [%Bonfire.Data.Social.Flag{}, ...]
   """
   def by_flagged(%{} = object),
-    do: [object: object] |> query(current_user: object) |> repo().many()
+    do: [objects: object] |> query(current_user: object) |> repo().many()
 
   # def by_any(%User{}=user), do: repo().many(by_any_q(user))
 
@@ -412,7 +412,7 @@ defmodule Bonfire.Social.Flags do
   def list_by(by_user, opts \\ [])
       when is_binary(by_user) or is_list(by_user) or is_map(by_user) do
     list_paginated(
-      [subject: by_user],
+      [subjects: by_user],
       opts
     )
   end
@@ -437,7 +437,7 @@ defmodule Bonfire.Social.Flags do
   def list_of(object, opts \\ [])
       when is_binary(object) or is_list(object) or is_map(object) do
     list_paginated(
-      [object: object],
+      [objects: object],
       opts
     )
   end
@@ -446,8 +446,8 @@ defmodule Bonfire.Social.Flags do
     # these keys are for us, not query_filter
     next =
       filters
-      |> :proplists.delete(:object, ...)
-      |> :proplists.delete(:subject, ...)
+      |> :proplists.delete(:objects, ...)
+      |> :proplists.delete(:subjects, ...)
 
     Edges.query_parent(Flag, filters, opts)
     |> proload(
@@ -460,7 +460,7 @@ defmodule Bonfire.Social.Flags do
   end
 
   def query([:all], opts), do: query([], opts)
-  def query([my: :flags], opts), do: query([subject: current_user_required!(opts)], opts)
+  def query([my: :flags], opts), do: query([subjects: current_user_required!(opts)], opts)
 
   def query(filters, opts) do
     query_base(filters, opts)

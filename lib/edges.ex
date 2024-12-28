@@ -537,46 +537,6 @@ defmodule Bonfire.Social.Edges do
     end
   end
 
-  defp filter(query, {:subject_types, types}, _opts) do
-    case Bonfire.Common.Types.table_types(types) do
-      table_ids when is_list(table_ids) and table_ids != [] ->
-        where(query, [subject: subject], subject.table_id in ^table_ids)
-
-      _ ->
-        query
-    end
-  end
-
-  defp filter(query, {:exclude_subject_types, types}, _opts) do
-    case Bonfire.Common.Types.table_types(types) do
-      table_ids when is_list(table_ids) and table_ids != [] ->
-        where(query, [subject: subject], subject.table_id not in ^table_ids)
-
-      _ ->
-        query
-    end
-  end
-
-  defp filter(query, {:object_types, types}, _opts) when is_list(types) do
-    case Bonfire.Common.Types.table_types(types) do
-      table_ids when is_list(table_ids) and table_ids != [] ->
-        where(query, [object: object], object.table_id in ^table_ids)
-
-      _ ->
-        query
-    end
-  end
-
-  defp filter(query, {:exclude_object_types, types}, _opts) do
-    case Bonfire.Common.Types.table_types(types) |> debug("exclude_object_types") do
-      table_ids when is_list(table_ids) and table_ids != [] ->
-        where(query, [object: object], object.table_id not in ^table_ids)
-
-      _ ->
-        query
-    end
-  end
-
   defp filter(query, {:in_thread, thread_ids}, _opts) do
     query
     |> proload(edge: [:replied])

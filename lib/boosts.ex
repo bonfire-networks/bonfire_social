@@ -56,7 +56,7 @@ defmodule Bonfire.Social.Boosts do
 
   ## Examples
 
-      iex> Bonfire.Social.Boosts.count([subject: user_id], [])
+      iex> Bonfire.Social.Boosts.count([subjects: user_id], [])
       5 # user made 5 boosts, across all objects
 
       iex> Bonfire.Social.Boosts.count(user, object)
@@ -257,7 +257,7 @@ defmodule Bonfire.Social.Boosts do
     # query FeedPublish
     # [preload: [object: [created: [:creator]]]])
     list_paginated(
-      [subject: by_user],
+      [subjects: by_user],
       to_options(opts) ++ [preload: :object_with_creator, subject_user: by_user]
     )
   end
@@ -274,7 +274,7 @@ defmodule Bonfire.Social.Boosts do
   def list_of(id, opts \\ []) when is_binary(id) or is_list(id) or is_map(id) do
     opts = to_options(opts)
     # query FeedPublish
-    list_paginated([object: id], opts ++ [preload: :subject])
+    list_paginated([objects: id], opts ++ [preload: :subject])
   end
 
   @doc """
@@ -282,7 +282,7 @@ defmodule Bonfire.Social.Boosts do
 
   ## Examples
 
-      iex> Bonfire.Social.Boosts.list_paginated([subject: user_id], [limit: 10])
+      iex> Bonfire.Social.Boosts.list_paginated([subjects: user_id], [limit: 10])
       %{edges: [%Bonfire.Data.Social.Boost{}, ...], page_info: %{...}}
 
   """
@@ -306,7 +306,7 @@ defmodule Bonfire.Social.Boosts do
   end
 
   def query([my: :boosts], opts),
-    do: query([subject: current_user_required!(opts)], opts)
+    do: query([subjects: current_user_required!(opts)], opts)
 
   def query(filters, opts) do
     query_base(filters, opts)

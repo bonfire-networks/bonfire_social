@@ -114,7 +114,7 @@ defmodule Bonfire.Social.FeedLoader do
         filters =
           merge_feed_filters(preset_filters, custom_filters, opts)
           |> parameterize_filters(parameters, opts)
-          |> debug("parameterized feed_filters")
+          |> dump("parameterized feed_filters")
 
         feed_filtered(filters[:feed_name], filters, opts)
 
@@ -126,13 +126,20 @@ defmodule Bonfire.Social.FeedLoader do
         feed_filtered(filters[:feed_name], filters, opts)
 
       other ->
-        error(other, to_string(feed_name))
+        error(other, "No such feed configured or allowed: #{inspect(feed_name)}")
+        feed(%{custom_filters | feed_name: nil}, opts)
     end
   end
 
-  defp merge_feed_filters(preset_filters, custom_filters, opts) do
-    Map.merge(preset_filters, custom_filters)
-    |> Map.merge(Map.new(opts[:feed_filters] || %{}))
+  def feed(%{feed_name: _nil} = custom_filters, opts) do
+    opts = to_options(opts)
+    debug(custom_filters)
+
+    filters =
+      merge_feed_filters(custom_filters, opts)
+      |> debug("merged feed_filters")
+
+    feed_filtered(nil, filters, opts)
   end
 
   def feed([feed_name], opts)
@@ -176,11 +183,16 @@ defmodule Bonfire.Social.FeedLoader do
   #   feed(:explore, opts)
   # end
 
+  defp merge_feed_filters(preset_filters \\ %{}, custom_filters, opts) do
+    Map.merge(preset_filters, custom_filters)
+    |> Map.merge(Map.new(opts[:feed_filters] || %{}))
+  end
+
   # TODO: put in config
   def skip_verbs_default, do: [:flag]
 
   def feed_filtered(feed_name, filters, opts) when is_atom(feed_name) and not is_nil(feed_name) do
-    debug(feed_name, "2. Starting feed with name")
+    debug(feed_name, "Starting feed with name")
 
     {feed_ids, opts} =
       feed_ids_and_opts(feed_name, opts)
@@ -695,35 +707,23 @@ defmodule Bonfire.Social.FeedLoader do
     end
   end
 
-  defp maybe_filter(query, %{object_types: object_type}) when not is_nil(object_type) do
-    case Bonfire.Common.Types.table_types(object_type) |> debug("object_type tables") do
-      table_ids when is_list(table_ids) and table_ids != [] ->
-        where(query, [object: object], object.table_id in ^table_ids)
+  defp maybe_filter(query, filters, opts \\ [])
 
-      other ->
-        warn(other, "Unrecognised object_type '#{object_type}'")
-        query
-    end
+  defp maybe_filter(query, filters, opts) when is_list(filters) or is_map(filters) do
+    # filters = Keyword.new(filters)
+    # |> debug("filters")
+
+    Enum.reduce(filters, query, fn filter, query ->
+      query
+      # |> maybe_filter(filter, opts)
+      |> Activities.maybe_filter(filter, opts)
+      |> Objects.maybe_filter(filter, opts)
+    end)
+    # |> FeedActivities.query_filter(Keyword.drop(filters, @skip_warn_filters))
+    |> debug("query with filters applied")
   end
 
-  defp maybe_filter(query, %{objects: object}) do
-    case Types.uid_or_uids(object) do
-      id when is_binary(id) ->
-        where(query, [activity: activity], activity.object_id == ^id)
-
-      ids when is_list(ids) and ids != [] ->
-        where(query, [activity: activity], activity.object_id in ^ids)
-
-      _ ->
-        query
-    end
-  end
-
-  defp maybe_filter(query, filters) when is_list(filters) and filters != [] do
-    maybe_filter(query, Map.new(filters))
-  end
-
-  defp maybe_filter(query, filters) do
+  defp maybe_filter(query, filters, _opts) do
     # cond do
 
     #   # is_list(filters) or (is_map(filters) and Map.keys(filters) |> List.first() |> is_atom()) ->
@@ -926,6 +926,8 @@ defmodule Bonfire.Social.FeedLoader do
         Objects.prepare_exclude_object_types(e(filters, :exclude_object_types, []), [Message])
         |> debug("exlude")
 
+    include_flags = filters[:include_flags] || opts[:include_flags]
+
     # exclude certain activity types
     exclude_activity_types =
       (e(filters, :exclude_activity_types, nil) || []) ++
@@ -937,18 +939,16 @@ defmodule Bonfire.Social.FeedLoader do
           debug("do not include labelling as activities")
           [:label]
         end ++
-        if filters[:include_flags] == :moderators or
-             (opts[:include_flags] == :moderators and
-                Bonfire.Boundaries.can?(opts, :mediate, :instance)) do
+        if include_flags && Bonfire.Boundaries.can?(opts, :mediate, :instance) do
           debug("include flags for mods/admins")
           []
         else
-          if filters[:include_flags] || opts[:include_flags] do
+          if include_flags do
             debug("include flags for all")
             []
           else
             debug("do not include flags")
-            [:flag]
+            skip_verbs_default()
           end
         end
 
