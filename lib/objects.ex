@@ -382,6 +382,11 @@ defmodule Bonfire.Social.Objects do
     # end
   end
 
+  def maybe_filter(query, {:exclude_object_types, types}, _opts) do
+    # TODO? for cases where we're not already filtering by object_id in Activities.maybe_filter
+    query
+  end
+
   def maybe_filter(query, {:object_types, object_type}, _opts) when not is_nil(object_type) do
     case Bonfire.Common.Types.table_types(object_type) |> debug("object_type tables") do
       table_ids when is_list(table_ids) and table_ids != [] ->
@@ -430,7 +435,7 @@ defmodule Bonfire.Social.Objects do
 
     (defaults ++ extras)
     |> List.wrap()
-    |> Enum.map(&maybe_apply(&1, :__pointers__, :table_id))
+    |> Enum.map(&maybe_apply(&1, :__pointers__, [:table_id], fallback_return: nil))
     |> Enum.uniq()
 
     # |> debug("exxclude_tables")

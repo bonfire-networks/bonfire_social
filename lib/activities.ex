@@ -1151,12 +1151,12 @@ defmodule Bonfire.Social.Activities do
   end
 
   # doc "List objects created by a user and which are in their outbox, which are not replies"
-  def maybe_filter(query, {:creators, user}, _opts) do
-    case uid(user) do
+  def maybe_filter(query, {:creators, creators}, _opts) do
+    case uids(creators) do
       nil ->
         query
 
-      id ->
+      ids ->
         # user = repo().maybe_preload(user, [:character])
         verb_id = Verbs.get_id!(:create)
 
@@ -1166,7 +1166,26 @@ defmodule Bonfire.Social.Activities do
           [activity: activity, replied: replied],
           is_nil(replied.reply_to_id) and
             activity.verb_id == ^verb_id and
-            activity.subject_id == ^id
+            activity.subject_id in ^ids
+        )
+    end
+  end
+
+  def maybe_filter(query, {:exclude_creators, creators}, _opts) do
+    case Enums.uids(creators) do
+      nil ->
+        query
+
+      ids ->
+        # user = repo().maybe_preload(user, [:character])
+        verb_id = Verbs.get_id!(:create)
+
+        query
+        |> proload(activity: [:object, :replied])
+        |> where(
+          [activity: activity, replied: replied],
+          not (is_nil(replied.reply_to_id) and activity.verb_id == ^verb_id and
+                 activity.subject_id in ^ids)
         )
     end
   end
@@ -1188,6 +1207,20 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
+  def filter(query, {:exclude_subjects, subject}, opts) do
+    case subject do
+      _ when is_list(subject) ->
+        where(query, [activity: activity], activity.subject_id not in ^uids(subject))
+
+      _ when is_map(subject) or is_binary(subject) ->
+        where(query, [activity: activity], activity.subject_id != ^uid(subject))
+
+      _ ->
+        warn(subject, "unrecognised subject")
+        query
+    end
+  end
+
   def maybe_filter(query, {:subject_types, types}, _opts) do
     case Bonfire.Common.Types.table_types(types) do
       table_ids when is_list(table_ids) and table_ids != [] ->
@@ -1201,7 +1234,9 @@ defmodule Bonfire.Social.Activities do
   def maybe_filter(query, {:exclude_subject_types, types}, _opts) do
     case Bonfire.Common.Types.table_types(types) do
       table_ids when is_list(table_ids) and table_ids != [] ->
-        where(query, [subject: subject], subject.table_id not in ^table_ids)
+        query
+        |> proload(activity: [:subject])
+        |> where([subject: subject], subject.table_id not in ^table_ids)
 
       _ ->
         query
@@ -1215,6 +1250,19 @@ defmodule Bonfire.Social.Activities do
 
       ids when is_list(ids) and ids != [] ->
         where(query, [activity: activity], activity.object_id in ^ids)
+
+      _ ->
+        query
+    end
+  end
+
+  def maybe_filter(query, {:exlude_objects, object}, _opts) do
+    case Types.uid_or_uids(object) do
+      id when is_binary(id) ->
+        where(query, [activity: activity], activity.object_id != ^id)
+
+      ids when is_list(ids) and ids != [] ->
+        where(query, [activity: activity], activity.object_id not in ^ids)
 
       _ ->
         query
