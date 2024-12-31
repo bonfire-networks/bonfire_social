@@ -1,4 +1,4 @@
-defmodule Bonfire.Social.FeedsFiltersTest do
+defmodule Bonfire.Social.FeedsCirclesFilterTest do
   use Bonfire.Social.DataCase, async: true
   use Bonfire.Common.Utils
 

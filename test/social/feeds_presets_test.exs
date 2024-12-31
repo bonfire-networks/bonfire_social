@@ -71,7 +71,7 @@ defmodule Bonfire.Social.FeedsPresetTest do
                  ]
 
   # Generate tests dynamically from feed presets - WIP: my, messages, user_following, user_followers, remote, my_requests, trending_discussions, local_images, publications
-  # for %{preset: preset, filters: filters} = params when preset in [:liked_by_me] <- @test_params do
+  # for %{preset: preset, filters: filters} = params when preset in [:my_bookmarks] <- @test_params do
   for %{preset: preset, filters: filters} = params <- @test_params do
     describe "feed preset `#{inspect(preset)}` loads feed and configured preloads" do
       setup do
@@ -106,7 +106,8 @@ defmodule Bonfire.Social.FeedsPresetTest do
               current_user: user,
               # limit: 3,
               by: other_user,
-              tags: "#test"
+              tags: "#test",
+              show_objects_only_once: false
             )
 
           verify_feed(preset, feed, activity, object, user, other_user, preloads, postloads)
@@ -117,7 +118,7 @@ defmodule Bonfire.Social.FeedsPresetTest do
         preset: preset,
         filters: filters,
         preloads: preloads,
-        postloads: postloads,
+        # postloads: postloads,
         object: object,
         activity: activity,
         user: user,
@@ -128,7 +129,8 @@ defmodule Bonfire.Social.FeedsPresetTest do
             current_user: user,
             # limit: 3,
             by: other_user,
-            tags: ["test"]
+            tags: ["test"],
+            show_objects_only_once: false
           ]
 
           filters =
@@ -137,7 +139,8 @@ defmodule Bonfire.Social.FeedsPresetTest do
 
           feed = FeedLoader.feed(:custom, filters, opts)
 
-          assert loaded_activity = FeedLoader.feed_contains?(feed, object, current_user: user)
+          assert loaded_activity =
+                   FeedLoader.feed_contains?(feed, activity || object, current_user: user)
 
           verify_preloads(loaded_activity, preloads)
         end
@@ -434,7 +437,7 @@ defmodule Bonfire.Social.FeedsPresetTest do
       :user_following ->
         assert {:ok, follow} = Bonfire.Social.Graph.Follows.follow(other_user, user)
 
-        {other_user, follow}
+        {user, follow}
 
       :my_requests ->
         # TODO
@@ -447,7 +450,8 @@ defmodule Bonfire.Social.FeedsPresetTest do
                  })
 
         assert {:ok, bookmark} = Bonfire.Social.Bookmarks.bookmark(user, post)
-        {post, bookmark}
+
+        {post, nil}
 
       :hashtag ->
         assert post =

@@ -777,8 +777,8 @@ defmodule Bonfire.Social.FeedLoader do
 
     (query || default_or_filtered_query(filters, FeedActivities.base_query(opts), opts))
     |> proload([:activity])
-    |> query_optional_extras(filters, opts)
     |> maybe_filter(filters)
+    |> query_optional_extras(filters, opts)
     |> Objects.as_permitted_for(opts)
     |> Activities.activity_preloads(
       opts[:preload] || contextual_preloads_from_filters(filters, :query),
@@ -818,7 +818,7 @@ defmodule Bonfire.Social.FeedLoader do
   def prepare_filters_and_opts(filters, opts) do
     opts = to_options(opts)
 
-    {filters
+    {Map.new(filters)
      |> Map.put_new_lazy(:exclude_table_ids, fn ->
        Objects.prepare_exclude_object_types(
          e(filters, :exclude_object_types, []) ++ e(opts, :exclude_object_types, []),
@@ -877,7 +877,7 @@ defmodule Bonfire.Social.FeedLoader do
          |> Enum.uniq()
        end
      end)
-     |> Map.put(
+     |> Map.put_new(
        :exclude_replies,
        Keyword.get_lazy(opts, :exclude_replies, fn ->
          !Bonfire.Common.Settings.get(
@@ -895,22 +895,34 @@ defmodule Bonfire.Social.FeedLoader do
     |> debug("feed query filters & opts")
   end
 
-  defp maybe_filter(query, filters, opts \\ [])
+  defp do_apply_filters(query, filter_keys, filter_map, opts) do
+    Enum.reduce(filter_keys, query, fn filter_key, query ->
+      filter = {filter_key, Map.get(filter_map, filter_key)}
 
-  defp maybe_filter(query, filters, opts) when is_list(filters) or is_map(filters) do
-    # filters = Keyword.new(filters)
-    # |> debug("filters")
-
-    Enum.reduce(filters, query, fn filter, query ->
       query
       # |> maybe_filter(filter, opts)
       |> Activities.maybe_filter(filter, opts)
+      |> debug("Activities filter applied")
       #  TODO: can we avoid loading the object if not needed by a filter?
       |> proload(activity: [:object])
       |> Objects.maybe_filter(filter, opts)
+      |> debug("Objects filter applied")
     end)
+  end
+
+  defp maybe_filter(query, filters, opts \\ [])
+
+  defp maybe_filter(query, filters, opts) when is_list(filters) or is_map(filters) do
+    #  TODO: put in config
+    priority_filters_ordered = [:exclude_table_ids]
+    {to_run_first, remaining} = Map.split(filters, priority_filters_ordered)
+
+    query
+    # |> debug("filters")
+    |> do_apply_filters(priority_filters_ordered, to_run_first, opts)
+    |> do_apply_filters(Map.keys(remaining), remaining, opts)
     # |> FeedActivities.query_filter(Keyword.drop(filters, @skip_warn_filters))
-    |> debug("query with filters applied")
+    |> debug("query with Activities & Objects filters applied")
   end
 
   defp maybe_filter(query, filters, _opts) do
@@ -1155,7 +1167,7 @@ defmodule Bonfire.Social.FeedLoader do
 
       # 7: Custom feed with additional parameters
       iex> preset_feed_filters(:user_followers, [by: "alice"])
-      {:ok, %{object_types: :follow, objects: "alice"}}
+      {:ok, %{activity_types: :follow, objects: "alice"}}
   """
   @spec preset_feed_filters(String.t(), map()) :: {:ok, filter_params()} | {:error, atom()}
   def preset_feed_filters(name, opts \\ []) do

@@ -458,12 +458,11 @@ defmodule Bonfire.Social.Activities do
 
   defp prepare_activity_preloads(query, preload, opts) when is_atom(preload) do
     current_user_id = current_user_id(opts)
-    subject_user_id = id(opts[:subject_user])
 
-    exclude_user_ids =
-      [current_user_id, subject_user_id]
+    skip_loading_user_ids =
+      [current_user_id, id(opts[:subject_user])]
       |> filter_empty([])
-      |> debug("exclude_user_ids")
+      |> debug("skip_loading_user_ids")
 
     # pre-loading on a query
     if not is_nil(query) and Ecto.Queryable.impl_for(query) do
@@ -484,7 +483,7 @@ defmodule Bonfire.Social.Activities do
                  ]}
             ]
           )
-          |> maybe_join_creator(exclude_user_ids)
+          |> maybe_join_creator(skip_loading_user_ids)
 
         # :tags ->
         #   # Tags/mentions (this actual needs to be done by Repo.preload to be able to list more than one)
@@ -492,7 +491,7 @@ defmodule Bonfire.Social.Activities do
         #     activity: [tags:  {"tag_", [:character, profile: :icon]}]
         :with_subject ->
           query
-          |> maybe_join_subject(exclude_user_ids)
+          |> maybe_join_subject(skip_loading_user_ids)
 
         :with_verb ->
           proload(query, activity: [:verb])
@@ -672,7 +671,7 @@ defmodule Bonfire.Social.Activities do
 
           #   %{related_key: related_key, queryable: queryable} = assoc
 
-          #   ids = Enum.reject(ids, fn id -> id in exclude_user_ids end)
+          #   ids = Enum.reject(ids, fn id -> id in skip_loading_user_ids end)
           #   # TODO: how to also exclude the activity's subject_id?
 
           #   repo().all(
@@ -686,7 +685,7 @@ defmodule Bonfire.Social.Activities do
             object: [
               created: [
                 creator:
-                  {repo().reject_preload_ids(exclude_user_ids), [:character, profile: :icon]}
+                  {repo().reject_preload_ids(skip_loading_user_ids), [:character, profile: :icon]}
               ]
             ]
           ]
@@ -844,7 +843,7 @@ defmodule Bonfire.Social.Activities do
   @doc """
   Optimizes the query to optionally include the subject data.
 
-  If `exclude_user_ids` is empty, the subject is always included. Otherwise, it is included only if it is different from the users in `exclude_user_ids`.
+  If `skip_loading_user_ids` is empty, the subject is always included. Otherwise, it is included only if it is different from the users in `skip_loading_user_ids`.
 
   ## Examples
 
@@ -870,7 +869,7 @@ defmodule Bonfire.Social.Activities do
         ]
       )
 
-  def maybe_join_subject(query, exclude_user_ids) do
+  def maybe_join_subject(query, skip_loading_user_ids) do
     # optimisation: only includes the subject if different current_user
     query
     |> proload([:activity])
@@ -880,7 +879,7 @@ defmodule Bonfire.Social.Activities do
       subject in Pointer,
       as: :subject,
       on:
-        activity.subject_id not in ^exclude_user_ids and
+        activity.subject_id not in ^skip_loading_user_ids and
           activity.subject_id == subject.id
     )
     |> proload(
@@ -902,7 +901,7 @@ defmodule Bonfire.Social.Activities do
 
   Performs a query optimization: only includes the creator if different from the subject or current user.
 
-  If `exclude_user_ids` is empty, the creator is always included. Otherwise, it is included only if it is different from the users in `exclude_user_ids`.
+  If `skip_loading_user_ids` is empty, the creator is always included. Otherwise, it is included only if it is different from the users in `skip_loading_user_ids`.
 
   ## Examples
 
@@ -956,10 +955,10 @@ defmodule Bonfire.Social.Activities do
     )
   end
 
-  def maybe_join_creator(query, exclude_user_ids) do
+  def maybe_join_creator(query, skip_loading_user_ids) do
     query
-    #  join subject, since creator will only be loaded if different from the subject
-    |> maybe_join_subject(exclude_user_ids)
+    #  join subject? since creator will only be loaded if different from the subject
+    # |> maybe_join_subject(skip_loading_user_ids)
     |> proload(
       activity: [
         object:
@@ -977,7 +976,7 @@ defmodule Bonfire.Social.Activities do
       #  only includes the creator if different than the subject
       on:
         object_created.creator_id != activity.subject_id and
-          object_created.creator_id not in ^exclude_user_ids and
+          object_created.creator_id not in ^skip_loading_user_ids and
           object_created.creator_id == creator.id
     )
     |> proload(
@@ -1196,6 +1195,13 @@ defmodule Bonfire.Social.Activities do
       is_nil(activity_pointer.deleted_at) and
         (is_nil(activity_pointer.table_id) or activity_pointer.table_id not in ^exclude_table_ids)
     )
+    |> reusable_join(:inner, [activity: activity], object in Pointer,
+      as: :object,
+      # Don't show certain object types (like messages) or anything deleted
+      on:
+        object.id == activity.object_id and
+          is_nil(object.deleted_at) and object.table_id not in ^exclude_table_ids
+    )
   end
 
   # doc "List objects created by a user and which are in their outbox, which are not replies"
@@ -1209,7 +1215,7 @@ defmodule Bonfire.Social.Activities do
         verb_id = Verbs.get_id!(:create)
 
         query
-        |> proload(activity: [:object, :replied])
+        |> proload(activity: [:replied])
         |> where(
           [activity: activity, replied: replied],
           is_nil(replied.reply_to_id) and
@@ -1229,7 +1235,7 @@ defmodule Bonfire.Social.Activities do
         verb_id = Verbs.get_id!(:create)
 
         query
-        |> proload(activity: [:object, :replied])
+        |> proload(activity: [:replied])
         |> where(
           [activity: activity, replied: replied],
           not (is_nil(replied.reply_to_id) and activity.verb_id == ^verb_id and
@@ -1277,7 +1283,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   def maybe_filter(query, {:exclude_subject_types, types}, _opts) do
-    case Bonfire.Common.Types.table_types(types) do
+    case Bonfire.Common.Types.table_types(types) |> debug("exclude_subject_types table_ids") do
       table_ids when is_list(table_ids) and table_ids != [] ->
         query
         |> proload(activity: [:subject])

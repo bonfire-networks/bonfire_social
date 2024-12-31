@@ -264,7 +264,11 @@ defmodule Bonfire.Social.RuntimeConfig do
       preload_by_context: [
         query: [
           :with_subject,
+          #  so we're able to load conditionally (eg not when same as subject)
           :with_creator,
+          # we join in first query to filter out deleted objects and/or filter by type
+          :with_object,
+          #  FIXME? why media?
           :per_media
         ]
       ]

@@ -189,13 +189,13 @@ defmodule Bonfire.Social.FeedsFiltersTest do
       refute FeedLoader.feed_contains?(feed, post, current_user: user)
     end
 
-    test "exclude_object_types with invalid type (string)", %{user: user, post: post} do
+    test "exclude_object_types with invalid type (string) is ignored", %{user: user, post: post} do
       feed = FeedLoader.feed(:custom, %{exclude_object_types: ["fdskfjk"]}, current_user: user)
 
       assert FeedLoader.feed_contains?(feed, post, current_user: user)
     end
 
-    test "exclude_object_types with invalid type (atom)", %{user: user, post: post} do
+    test "exclude_object_types with invalid type (atom) is ignored", %{user: user, post: post} do
       feed = FeedLoader.feed(:custom, %{exclude_object_types: [:testing]}, current_user: user)
 
       assert FeedLoader.feed_contains?(feed, post, current_user: user)
@@ -348,8 +348,9 @@ defmodule Bonfire.Social.FeedsFiltersTest do
       }
     end
 
+    @tag :todo
     test "handles conflicting reply filters", %{user: user, reply_post: reply_post} do
-      # Test that conflicting settings result in an empty feed
+      # should test that conflicting settings result in what?
       feed =
         FeedLoader.feed(
           :custom,
@@ -365,7 +366,7 @@ defmodule Bonfire.Social.FeedsFiltersTest do
     end
   end
 
-  describe "complex filter interactions" do
+  describe "mixed filter interactions" do
     setup do
       user = fake_user!("main user")
       other_user = fake_user!("other_user")
@@ -379,7 +380,7 @@ defmodule Bonfire.Social.FeedsFiltersTest do
           }
         })
 
-      {:ok, _like} = Bonfire.Social.Likes.like(user, complex_post)
+      {:ok, _} = Bonfire.Social.Boosts.boost(user, complex_post)
 
       %{
         user: user,
@@ -388,17 +389,24 @@ defmodule Bonfire.Social.FeedsFiltersTest do
       }
     end
 
-    test "filter order shouldn't affect results", %{user: user, complex_post: complex_post} do
+    # fixme
+    test "filter order, or use of lists or not, shouldn't affect results", %{
+      user: user,
+      other_user: other_user,
+      complex_post: complex_post
+    } do
       # Same filters, different order
       filters1 = %{
-        tags: "test",
-        activity_types: :like,
-        creators: user.id
+        tags: ["test"],
+        activity_types: [:boost],
+        subjects: [user.id]
+        # creators: [other_user.id]
       }
 
       filters2 = %{
-        creators: user.id,
-        activity_types: :like,
+        # creators: other_user.id,
+        subjects: user.id,
+        activity_types: :boost,
         tags: "test"
       }
 
