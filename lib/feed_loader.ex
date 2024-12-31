@@ -927,7 +927,7 @@ defmodule Bonfire.Social.FeedLoader do
     exclude_table_ids =
       opts[:exclude_table_ids] ||
         Objects.prepare_exclude_object_types(e(filters, :exclude_object_types, []), [Message])
-        |> debug("exlude")
+        |> debug("exclude")
 
     include_flags = filters[:include_flags] || opts[:include_flags]
 
@@ -1031,8 +1031,11 @@ defmodule Bonfire.Social.FeedLoader do
       end
 
     Enum.find_value(feed, fn fi ->
+      a_body = e(fi.activity, :object, :post_content, :html_body, nil)
+
       if fi.activity.object_id == q_id or
-           e(fi.activity, :object, :post_content, :html_body, "") =~ (q_body || "") do
+           (a_body && q_body &&
+              a_body =~ q_body) do
         fi.activity
       end
     end) ||

@@ -1152,7 +1152,7 @@ defmodule Bonfire.Social.Activities do
 
   # doc "List objects created by a user and which are in their outbox, which are not replies"
   def maybe_filter(query, {:creators, creators}, _opts) do
-    case uids(creators) do
+    case Types.uids(creators) do
       nil ->
         query
 
@@ -1172,7 +1172,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   def maybe_filter(query, {:exclude_creators, creators}, _opts) do
-    case Enums.uids(creators) do
+    case Types.uids(creators) do
       nil ->
         query
 
@@ -1208,16 +1208,13 @@ defmodule Bonfire.Social.Activities do
   end
 
   def filter(query, {:exclude_subjects, subject}, opts) do
-    case subject do
-      _ when is_list(subject) ->
-        where(query, [activity: activity], activity.subject_id not in ^uids(subject))
-
-      _ when is_map(subject) or is_binary(subject) ->
-        where(query, [activity: activity], activity.subject_id != ^uid(subject))
-
-      _ ->
+    case Types.uids(subject) do
+      nil ->
         warn(subject, "unrecognised subject")
         query
+
+      ids ->
+        where(query, [activity: activity], activity.subject_id not in ^ids)
     end
   end
 
@@ -1243,6 +1240,49 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
+  def maybe_filter(query, {:circles, circle_ids}, opts) do
+    case Types.uids(circle_ids, nil) do
+      nil ->
+        warn(circle_ids, "unrecognized circle_ids")
+        query
+
+      # exclude members of all specified circles
+      circle_ids ->
+        query
+        |> reusable_join(
+          :inner,
+          [activity: activity],
+          subject_encircle in Bonfire.Data.AccessControl.Encircle,
+          as: :subject_encircle,
+          on:
+            activity.subject_id == subject_encircle.subject_id and
+              subject_encircle.circle_id in ^circle_ids
+        )
+    end
+  end
+
+  def maybe_filter(query, {:exclude_circles, circle_ids}, opts) do
+    case Types.uids(circle_ids, nil) do
+      nil ->
+        warn(circle_ids, "unrecognized circle_ids")
+        query
+
+      # exclude members of all specified circles
+      circle_ids ->
+        query
+        |> reusable_join(
+          :left,
+          [activity: activity],
+          subject_disencircle in Bonfire.Data.AccessControl.Encircle,
+          as: :subject_disencircle,
+          on:
+            activity.subject_id == subject_disencircle.subject_id and
+              subject_disencircle.circle_id in ^circle_ids
+        )
+        |> where([subject_disencircle: subject_disencircle], is_nil(subject_disencircle.id))
+    end
+  end
+
   def maybe_filter(query, {:objects, object}, _opts) do
     case Types.uid_or_uids(object) do
       id when is_binary(id) ->
@@ -1256,7 +1296,7 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
-  def maybe_filter(query, {:exlude_objects, object}, _opts) do
+  def maybe_filter(query, {:exclude_objects, object}, _opts) do
     case Types.uid_or_uids(object) do
       id when is_binary(id) ->
         where(query, [activity: activity], activity.object_id != ^id)
