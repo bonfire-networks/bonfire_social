@@ -33,7 +33,7 @@ defmodule Bonfire.Social.Objects do
   alias Bonfire.Boundaries.Verbs
 
   alias Needle.Changesets
-  # alias Needle.Pointer
+  alias Needle.Pointer
 
   alias Bonfire.Epics.Epic
 
@@ -388,7 +388,7 @@ defmodule Bonfire.Social.Objects do
   end
 
   def maybe_filter(query, {:object_types, object_type}, _opts) when not is_nil(object_type) do
-    case Bonfire.Common.Types.table_types(object_type) |> debug("object_type tables") do
+    case Bonfire.Common.Types.table_types(object_type) |> debug("object_type_tables") do
       table_ids when is_list(table_ids) and table_ids != [] ->
         where(query, [object: object], object.table_id in ^table_ids)
 
@@ -398,14 +398,27 @@ defmodule Bonfire.Social.Objects do
     end
   end
 
-  def maybe_filter(query, {:exclude_object_types, types}, _opts) do
-    case Bonfire.Common.Types.table_types(types) |> debug("exclude_object_types") do
+  def maybe_filter(query, {:exclude_object_types, types}, opts) do
+    case Objects.prepare_exclude_object_types(types)
+         |> debug("exclude_object_types_tables") do
       table_ids when is_list(table_ids) and table_ids != [] ->
-        where(query, [object: object], object.table_id not in ^table_ids)
+        maybe_filter(query, {:exclude_table_ids, table_ids}, opts)
 
       _ ->
         query
     end
+  end
+
+  def maybe_filter(query, {:exclude_table_ids, table_ids}, _opts)
+      when is_list(table_ids) and table_ids != [] do
+    query
+    |> reusable_join(:inner, [activity: activity], object in Pointer,
+      as: :object,
+      # Don't show certain object types (like messages) or anything deleted
+      on:
+        object.id == activity.object_id and
+          is_nil(object.deleted_at) and object.table_id not in ^table_ids
+    )
   end
 
   def maybe_filter(query, filters, _opts) do
@@ -434,9 +447,7 @@ defmodule Bonfire.Social.Objects do
     # eg. private messages should never appear in feeds
 
     (defaults ++ extras)
-    |> List.wrap()
-    |> Enum.map(&maybe_apply(&1, :__pointers__, [:table_id], fallback_return: nil))
-    |> Enum.uniq()
+    |> Bonfire.Common.Types.table_types()
 
     # |> debug("exxclude_tables")
   end

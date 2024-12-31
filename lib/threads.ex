@@ -646,17 +646,24 @@ defmodule Bonfire.Social.Threads do
     # |> debug("Thread nested query")
   end
 
-  def query(filter, opts) do
+  def query(filters, opts) do
     base_query()
-    |> query_filter(filter)
     |> query_extras(opts ++ [verbs: [:see]])
+    |> query_filter(filters)
+    |> maybe_filter(filters, opts)
 
     # |> debug("Thread filtered query")
   end
 
+  def maybe_filter(query, filters, opts) do
+    query
+    |> query_maybe_exclude_replies(opts[:replied_preload_fun] || (& &1), filters)
+    |> query_maybe_only_replies(opts[:replied_preload_fun] || (& &1), filters)
+  end
+
   def query_maybe_exclude_replies(query, preload_fun \\ & &1, opts) do
-    if e(opts, :exclude_replies, nil) == true or
-         e(opts, :object_types, nil) == Bonfire.Data.Social.Post do
+    if e(opts, :exclude_replies, nil) do
+      #  or e(opts, :object_types, nil) == Bonfire.Data.Social.Post do
       query
       |> preload_fun.()
       |> where(
@@ -671,7 +678,8 @@ defmodule Bonfire.Social.Threads do
   end
 
   def query_maybe_only_replies(query, preload_fun \\ & &1, opts) do
-    if e(opts, :only_replies, nil) == true or e(opts, :object_types, nil) == "discussions" do
+    if e(opts, :only_replies, nil) do
+      # or e(opts, :object_types, nil) == "discussions" do
       query
       |> preload_fun.()
       |> where(

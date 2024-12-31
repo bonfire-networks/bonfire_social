@@ -1150,6 +1150,54 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
+  def maybe_filter(query, {:exclude_activity_types, types}, _opts) do
+    debug(types, "filter by exclude_activity_types")
+
+    case Verbs.ids(types) do
+      verb_ids when is_list(verb_ids) and verb_ids != [] ->
+        maybe_filter(query, {:exclude_verb_ids, verb_ids}, [])
+
+      _ ->
+        query
+    end
+  end
+
+  def maybe_filter(query, {:exclude_verb_ids, verb_ids}, _opts)
+      when is_list(verb_ids) and verb_ids != [] do
+    debug(verb_ids, "filter by exclude_verb_ids")
+    where(query, [activity: activity], activity.verb_id not in ^verb_ids)
+  end
+
+  def maybe_filter(query, {:exclude_object_types, types}, _opts) do
+    debug(types, "filter by exclude_object_types")
+
+    case Objects.prepare_exclude_object_types(types, FeedLoader.skip_types_default()) do
+      exclude_table_ids when is_list(exclude_table_ids) and exclude_table_ids != [] ->
+        maybe_filter(query, {:exclude_table_ids, exclude_table_ids}, [])
+
+      _ ->
+        query
+    end
+  end
+
+  def maybe_filter(query, {:exclude_table_ids, exclude_table_ids}, _opts)
+      when is_list(exclude_table_ids) and exclude_table_ids != [] do
+    debug(exclude_table_ids, "filter by exclude_table_ids")
+
+    query
+    # |> proload([:activity])
+    # this loads the Pointer for the Activity, only in cases where the Activity ID does not match the Object ID which means this isn't a Create activity, and allows us to check that the Object (which may be boosted/liked/flagged/etc in this Activity) is not deleted or an excluded type
+    |> reusable_join(:left, [activity: activity], activity_pointer in Pointer,
+      as: :activity_pointer,
+      on: activity.object_id != activity.id and activity_pointer.id == activity.id
+    )
+    |> where(
+      [activity_pointer: activity_pointer],
+      is_nil(activity_pointer.deleted_at) and
+        (is_nil(activity_pointer.table_id) or activity_pointer.table_id not in ^exclude_table_ids)
+    )
+  end
+
   # doc "List objects created by a user and which are in their outbox, which are not replies"
   def maybe_filter(query, {:creators, creators}, _opts) do
     case Types.uids(creators) do
@@ -1190,7 +1238,7 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
-  def filter(query, {:subjects, subject}, opts) do
+  def maybe_filter(query, {:subjects, subject}, opts) do
     case subject do
       :visible ->
         boundarise(query, activity.subject_id, opts)
@@ -1207,7 +1255,7 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
-  def filter(query, {:exclude_subjects, subject}, opts) do
+  def maybe_filter(query, {:exclude_subjects, subject}, opts) do
     case Types.uids(subject) do
       nil ->
         warn(subject, "unrecognised subject")

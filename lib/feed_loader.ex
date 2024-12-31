@@ -192,7 +192,8 @@ defmodule Bonfire.Social.FeedLoader do
   end
 
   # TODO: put in config
-  def skip_verbs_default, do: [:flag]
+  def skip_verbs_default, do: [:flag, :message]
+  def skip_types_default, do: [Message]
 
   def feed_filtered(feed_name, filters, opts) when is_atom(feed_name) and not is_nil(feed_name) do
     debug(feed_name, "Starting feed with name")
@@ -448,9 +449,9 @@ defmodule Bonfire.Social.FeedLoader do
   defp do_feed(feed_id_or_ids_or_name, filters, opts) do
     debug("3. Starting do_feed")
 
-    opts =
-      to_feed_options(filters, opts)
-      |> debug("3a. feed options")
+    # opts =
+    #   to_feed_options(filters, opts)
+    #   |> debug("3a. feed options")
 
     if opts[:cache] do
       # FIXME: key should include filters
@@ -501,63 +502,6 @@ defmodule Bonfire.Social.FeedLoader do
   #     e(opts, :feed_filters, nil) || e(opts, :__context__, :current_params, nil) || %{}
   #   )
   # end
-
-  @doc """
-  Converts socket, assigns, or options to feed options.
-
-  ## Examples
-
-      > assigns = %{exclude_activity_types: [:flag, :boost]}
-      > to_feed_options(filters, assigns)
-      [exclude_activity_types: [:flag, :boost, :follow]]
-  """
-  def to_feed_options(filters, opts) do
-    opts = to_options(opts)
-    # TODO: clean up this code
-    exclude_activity_types =
-      if filters[:exclude_activity_types] == false do
-        false
-      else
-        filters[:exclude_activity_types] || skip_verbs_default()
-      end
-
-    # exclude_activity_types = opts[:exclude_activity_types] || skip_verbs_default()
-
-    exclude_activity_types =
-      if filters[:exclude_activity_types] != false and
-           !Bonfire.Common.Settings.get(
-             [Bonfire.Social.Feeds, :include, :boost],
-             true,
-             opts
-           ),
-         do: exclude_activity_types ++ [:boost],
-         else: exclude_activity_types
-
-    exclude_activity_types =
-      if filters[:exclude_activity_types] != false and
-           !Bonfire.Common.Settings.get(
-             [Bonfire.Social.Feeds, :include, :follow],
-             false,
-             opts
-           ),
-         do: exclude_activity_types ++ [:follow],
-         else: exclude_activity_types
-
-    opts
-    |> Keyword.merge(
-      exclude_activity_types: exclude_activity_types,
-      preload: opts[:activity_preloads] |> Enums.filter_empty(nil) || opts[:preload],
-      exclude_replies:
-        Keyword.get_lazy(opts, :exclude_replies, fn ->
-          !Bonfire.Common.Settings.get(
-            [Bonfire.Social.Feeds, :include, :reply],
-            true,
-            opts
-          )
-        end)
-    )
-    |> debug("feed query opts - TODO: some of these should be filters")
-  end
 
   # @decorate time()
   @doc """
@@ -613,6 +557,7 @@ defmodule Bonfire.Social.FeedLoader do
         # so we can show flags to admins in notifications
         skip_boundary_check: :admins,
         include_flags: true,
+        exclude_verb_ids: false,
         exclude_activity_types: false,
         show_objects_only_once: false
         # preload: List.wrap(e(opts, :preload, [])) ++ [:notifications]
@@ -622,10 +567,6 @@ defmodule Bonfire.Social.FeedLoader do
   end
 
   def feed_ids_and_opts(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
-    opts =
-      opts
-      |> Enums.fun(:put_new_lazy, [:exclude_activity_types, &skip_verbs_default/0])
-
     {named_feed_ids(
        feed_name,
        opts
@@ -635,18 +576,10 @@ defmodule Bonfire.Social.FeedLoader do
   def feed_ids_and_opts({feed_name, feed_id}, opts)
       when is_atom(feed_name) and not is_nil(feed_name) and
              (is_binary(feed_id) or is_list(feed_id)) do
-    opts =
-      opts
-      |> Enums.fun(:put_new_lazy, [:exclude_activity_types, &skip_verbs_default/0])
-
     {feed_id, opts}
   end
 
   def feed_ids_and_opts(feed, opts) when is_binary(feed) or is_list(feed) do
-    opts =
-      opts
-      |> Enums.fun(:put_new_lazy, [:exclude_activity_types, &skip_verbs_default/0])
-
     {feed, opts}
   end
 
@@ -708,42 +641,6 @@ defmodule Bonfire.Social.FeedLoader do
         debug(opts)
         nil
     end
-  end
-
-  defp maybe_filter(query, filters, opts \\ [])
-
-  defp maybe_filter(query, filters, opts) when is_list(filters) or is_map(filters) do
-    # filters = Keyword.new(filters)
-    # |> debug("filters")
-
-    Enum.reduce(filters, query, fn filter, query ->
-      query
-      # |> maybe_filter(filter, opts)
-      |> Activities.maybe_filter(filter, opts)
-      |> Objects.maybe_filter(filter, opts)
-    end)
-    # |> FeedActivities.query_filter(Keyword.drop(filters, @skip_warn_filters))
-    |> debug("query with filters applied")
-  end
-
-  defp maybe_filter(query, filters, _opts) do
-    # cond do
-
-    #   # is_list(filters) or (is_map(filters) and Map.keys(filters) |> List.first() |> is_atom()) ->
-    #   #   debug(filters, "no known extra filters defined")
-    #   #   query
-
-    #   # true ->
-    #   #   filters
-    #     # |> debug("filters")
-    #     # |> Enums.input_to_atoms()
-    #     # |> debug("as atoms")
-    #     # |> maybe_filter(query, ...)
-
-    #   true -> 
-    warn(filters, "no supported filters defined")
-    query
-    # end
   end
 
   defp default_query(), do: select(Needle.Pointers.query_base(), [p], p)
@@ -880,7 +777,6 @@ defmodule Bonfire.Social.FeedLoader do
 
     (query || default_or_filtered_query(filters, FeedActivities.base_query(opts), opts))
     |> proload([:activity])
-    # |> query_activity_extras(filters, opts)
     |> query_optional_extras(filters, opts)
     |> maybe_filter(filters)
     |> Objects.as_permitted_for(opts)
@@ -891,15 +787,17 @@ defmodule Bonfire.Social.FeedLoader do
   end
 
   defp query_extras(query \\ nil, filters, opts) do
-    # opts =
-    #   to_options(opts) ++
-    #     [exclude_table_ids: Objects.prepare_exclude_object_types(e(opts, :exclude_object_types, []), [Message])]
+    {filters, opts} = prepare_filters_and_opts(filters, opts)
+
+    # exclude_feed_ids = e(opts, :exclude_feed_ids, []) |> List.wrap() # WIP - to exclude activities that also appear in another feed
 
     (query || default_or_filtered_query(filters, FeedActivities.base_query(opts), opts))
-    |> query_activity_extras(filters, opts)
-    |> query_object_extras(filters, opts)
+    |> reusable_join(:inner, [root], assoc(root, :activity), as: :activity)
+    |> proload([:activity])
     |> query_optional_extras(filters, opts)
     |> maybe_filter(filters)
+
+    # where: fp.feed_id not in ^exclude_feed_ids,
 
     # |> debug("pre-preloads")
     # preload all things we commonly want in feeds
@@ -908,104 +806,143 @@ defmodule Bonfire.Social.FeedLoader do
     # |> debug("post-preloads")
   end
 
+  @doc """
+  Converts socket, assigns, or options to feed options.
+
+  ## Examples
+
+      > assigns = %{exclude_activity_types: [:flag, :boost]}
+      > to_feed_options(filters, assigns)
+      [exclude_activity_types: [:flag, :boost, :follow]]
+  """
+  def prepare_filters_and_opts(filters, opts) do
+    opts = to_options(opts)
+
+    {filters
+     |> Map.put_new_lazy(:exclude_table_ids, fn ->
+       Objects.prepare_exclude_object_types(
+         e(filters, :exclude_object_types, []) ++ e(opts, :exclude_object_types, []),
+         skip_types_default()
+       )
+     end)
+     |> Map.put_new_lazy(:exclude_verb_ids, fn ->
+       exclude_activity_types = filters[:exclude_activity_types] || opts[:exclude_activity_types]
+
+       if exclude_activity_types == false do
+         []
+       else
+         activity_types = List.wrap(filters[:activity_types] || opts[:activity_types])
+         include_flags = filters[:include_flags] || opts[:include_flags]
+
+         # exclude certain activity types
+         # if include_flags && Bonfire.Boundaries.can?(opts, :mediate, :instance) do
+         #   debug("include flags for mods/admins")
+         #   []
+         # else
+         exclude_activity_types =
+           (exclude_activity_types || []) ++
+             if(
+               :follow not in activity_types and
+                 !Bonfire.Common.Settings.get(
+                   [Bonfire.Social.Feeds, :include, :follow],
+                   false,
+                   opts
+                 ),
+               do: [:follow],
+               else: [exclude_activity_types]
+             ) ++
+             if(
+               :boost not in activity_types and
+                 !Bonfire.Common.Settings.get(
+                   [Bonfire.Social.Feeds, :include, :boost],
+                   true,
+                   opts
+                 ),
+               do: [:boost],
+               else: []
+             ) ++
+             if(:label in activity_types or opts[:include_labelling],
+               do: [],
+               else: [:label]
+             ) ++
+             if(include_flags,
+               do: [],
+               else: skip_verbs_default()
+             )
+
+         # end
+
+         exclude_activity_types
+         |> Enum.map(&Bonfire.Social.Activities.verb_id(&1))
+         |> Enum.uniq()
+       end
+     end)
+     |> Map.put(
+       :exclude_replies,
+       Keyword.get_lazy(opts, :exclude_replies, fn ->
+         !Bonfire.Common.Settings.get(
+           [Bonfire.Social.Feeds, :include, :reply],
+           true,
+           opts
+         )
+       end)
+     )
+     |> Map.drop([:exclude_object_types, :exclude_activity_types]),
+     opts
+     |> Keyword.merge(
+       preload: opts[:activity_preloads] |> Enums.filter_empty(nil) || opts[:preload]
+     )}
+    |> debug("feed query filters & opts")
+  end
+
+  defp maybe_filter(query, filters, opts \\ [])
+
+  defp maybe_filter(query, filters, opts) when is_list(filters) or is_map(filters) do
+    # filters = Keyword.new(filters)
+    # |> debug("filters")
+
+    Enum.reduce(filters, query, fn filter, query ->
+      query
+      # |> maybe_filter(filter, opts)
+      |> Activities.maybe_filter(filter, opts)
+      #  TODO: can we avoid loading the object if not needed by a filter?
+      |> proload(activity: [:object])
+      |> Objects.maybe_filter(filter, opts)
+    end)
+    # |> FeedActivities.query_filter(Keyword.drop(filters, @skip_warn_filters))
+    |> debug("query with filters applied")
+  end
+
+  defp maybe_filter(query, filters, _opts) do
+    # cond do
+
+    #   # is_list(filters) or (is_map(filters) and Map.keys(filters) |> List.first() |> is_atom()) ->
+    #   #   debug(filters, "no known extra filters defined")
+    #   #   query
+
+    #   # true ->
+    #   #   filters
+    #     # |> debug("filters")
+    #     # |> Enums.input_to_atoms()
+    #     # |> debug("as atoms")
+    #     # |> maybe_filter(query, ...)
+
+    #   true -> 
+    warn(filters, "no supported filters defined")
+    query
+    # end
+  end
+
   defp query_optional_extras(query, filters, opts) do
     current_user = current_user(opts)
 
     query
     |> FeedActivities.query_maybe_exclude_mine(current_user)
-    |> Threads.query_maybe_exclude_replies(&FeedActivities.maybe_preload_replied/1, opts)
-    |> Threads.query_maybe_only_replies(filters, opts)
+    |> Threads.maybe_filter(
+      filters,
+      opts |> Keyword.put(:replied_preload_fun, &FeedActivities.maybe_preload_replied/1)
+    )
     |> Objects.query_maybe_time_limit(e(filters, :time_limit, nil) || opts[:time_limit])
-  end
-
-  defp query_activity_extras(query, filters, opts) do
-    opts = to_feed_options(filters, opts)
-    # current_user = current_user(opts)
-    # debug(opts)
-
-    #  TODO: put default in config
-    exclude_table_ids =
-      opts[:exclude_table_ids] ||
-        Objects.prepare_exclude_object_types(e(filters, :exclude_object_types, []), [Message])
-        |> debug("exclude")
-
-    include_flags = filters[:include_flags] || opts[:include_flags]
-
-    # exclude certain activity types
-    exclude_activity_types =
-      (e(filters, :exclude_activity_types, nil) || []) ++
-        [:message] ++
-        if opts[:include_labelling] do
-          debug("include labelling for all")
-          []
-        else
-          debug("do not include labelling as activities")
-          [:label]
-        end ++
-        if include_flags && Bonfire.Boundaries.can?(opts, :mediate, :instance) do
-          debug("include flags for mods/admins")
-          []
-        else
-          if include_flags do
-            debug("include flags for all")
-            []
-          else
-            debug("do not include flags")
-            skip_verbs_default()
-          end
-        end
-
-    exclude_verb_ids =
-      exclude_activity_types
-      |> List.wrap()
-      |> Enum.map(&Bonfire.Social.Activities.verb_id(&1))
-      |> Enum.uniq()
-
-    # |> debug("exxclude_verbs")
-
-    # exclude_feed_ids = e(opts, :exclude_feed_ids, []) |> List.wrap() # WIP - to exclude activities that also appear in another feed
-
-    query
-    # |> proload([:activity])
-    |> reusable_join(:inner, [root], assoc(root, :activity), as: :activity)
-    |> reusable_join(:inner, [activity: activity], activity_pointer in Pointer,
-      as: :activity_pointer,
-      on:
-        activity_pointer.id == activity.id and
-          is_nil(activity_pointer.deleted_at) and
-          activity_pointer.table_id not in ^exclude_table_ids
-    )
-    # FIXME: are filters already applied in default_or_filtered_query above?
-    # where: fp.feed_id not in ^exclude_feed_ids,
-    # Don't show messages or anything deleted
-    |> where(
-      [activity: activity],
-      activity.verb_id not in ^exclude_verb_ids
-    )
-  end
-
-  defp query_object_extras(query, filters, opts) do
-    # opts = to_feed_options(filters, opts)
-    # current_user = current_user(opts)
-
-    # debug(opts)
-
-    exclude_table_ids =
-      opts[:exclude_table_ids] ||
-        Objects.prepare_exclude_object_types(e(filters, :exclude_object_types, []), [Message])
-        |> debug("exl tab")
-
-    query
-    |> proload([:activity])
-    |> reusable_join(:inner, [activity: activity], object in Pointer,
-      as: :object,
-      on:
-        object.id == activity.object_id and
-          is_nil(object.deleted_at) and
-          (is_nil(object.table_id) or object.table_id not in ^exclude_table_ids)
-    )
-
-    # Don't show messages or anything deleted
   end
 
   def feed_contains?(feed_name, object, opts \\ [])
