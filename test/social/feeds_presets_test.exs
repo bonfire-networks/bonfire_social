@@ -51,7 +51,12 @@ defmodule Bonfire.Social.FeedsPresetTest do
 
   # Generate test parameters from config
   @test_params (for {preset, %{filters: filters} = preset_details} <- @feed_presets do
-                  filters = Map.merge(filters, preset_details[:parameterized] || %{})
+                  filters =
+                    Map.merge(filters, preset_details[:parameterized] || %{})
+                    |> IO.inspect(label: "filters for #{preset}")
+
+                  # |> Enums.struct_to_map()
+                  # |> Map.drop([:__typename])
 
                   # Get preloads from preload rules based on feed config
                   postloads =
@@ -114,7 +119,7 @@ defmodule Bonfire.Social.FeedsPresetTest do
         end
       end
 
-      test "`using filters: #{inspect(filters)}", %{
+      test "using filters instead of the preset name", %{
         preset: preset,
         filters: filters,
         preloads: preloads,
@@ -135,7 +140,7 @@ defmodule Bonfire.Social.FeedsPresetTest do
 
           filters =
             FeedLoader.parameterize_filters(%{}, filters, opts)
-            |> debug("parameterized_filters")
+            |> debug("parameterized_filters for #{preset}")
 
           feed = FeedLoader.feed(:custom, filters, opts)
 

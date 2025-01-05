@@ -1,5 +1,8 @@
 defmodule Bonfire.Social.RuntimeConfig do
   @behaviour Bonfire.Common.ConfigModule
+
+  alias Bonfire.Social.FeedFilters
+
   def config_module, do: true
 
   def config do
@@ -9,54 +12,53 @@ defmodule Bonfire.Social.RuntimeConfig do
       feed_presets: [
         my: %{
           description: "Activities of people I follow",
-          filters: %{feed_name: :my},
+          filters: %FeedFilters{feed_name: :my},
           current_user_required: true
         },
         explore: %{
           description: "All activities",
-          filters: %{feed_name: :explore, exclude_activity_types: [:like]}
+          filters: %FeedFilters{feed_name: :explore, exclude_activity_types: [:like]}
         },
         local: %{
           description: "Local instance activities",
-          filters: %{feed_name: :local, exclude_activity_types: [:like]}
+          filters: %FeedFilters{feed_name: :local, exclude_activity_types: [:like]}
         },
         remote: %{
           description: "Remote/Fediverse activities",
-          filters: %{feed_name: :remote, exclude_activity_types: [:like]}
+          filters: %FeedFilters{feed_name: :remote, exclude_activity_types: [:like]}
         },
         notifications: %{
           description: "Notifications for me",
-          filters: %{
+          filters: %FeedFilters{
             feed_name: :notifications,
             # so we can show flags to admins in notifications
-            skip_boundary_check: :admins,
-            include_flags: true,
+            include_flags: :mod,
             show_objects_only_once: false
           },
           current_user_required: true
         },
         messages: %{
           description: "Messages for me",
-          filters: %{feed_name: :messages},
+          filters: %FeedFilters{feed_name: :messages},
           current_user_required: true
         },
 
         # User interaction feeds
         liked_by_me: %{
           description: "Posts I've liked",
-          filters: %{activity_types: :like},
-          parameterized: %{subjects: :me}
+          filters: %FeedFilters{activity_types: :like},
+          parameterized: %FeedFilters{subjects: :me}
         },
         my_bookmarks: %{
           description: "Posts I've bookmarked",
-          filters: %{activity_types: :bookmark},
+          filters: %FeedFilters{activity_types: :bookmark},
           current_user_required: true,
-          parameterized: %{subjects: :me},
+          parameterized: %FeedFilters{subjects: :me},
           show_in_main_menu: true
         },
         my_requests: %{
           description: "Pending requests for me",
-          filters: %{feed_name: :notifications, activity_types: :request},
+          filters: %FeedFilters{feed_name: :notifications, activity_types: :request},
           current_user_required: true
         },
 
@@ -64,23 +66,23 @@ defmodule Bonfire.Social.RuntimeConfig do
         user_activities: %{
           description: "A specific user's activities",
           # $username is replaced at runtime
-          filters: %{},
-          parameterized: %{subjects: :by}
+          filters: %FeedFilters{},
+          parameterized: %FeedFilters{subjects: :by}
         },
         user_followers: %{
           description: "Followers of a specific user",
-          filters: %{activity_types: :follow},
-          parameterized: %{objects: :by}
+          filters: %FeedFilters{activity_types: :follow},
+          parameterized: %FeedFilters{objects: :by}
         },
         user_following: %{
           description: "Users followed by a specific user",
-          filters: %{activity_types: :follow},
-          parameterized: %{subjects: :by}
+          filters: %FeedFilters{activity_types: :follow},
+          parameterized: %FeedFilters{subjects: :by}
         },
         user_by_object_type: %{
           description: "Posts by a specific user",
           filters: %{creators: :by},
-          parameterized: %{creators: :by, object_types: :post}
+          parameterized: %FeedFilters{creators: :by, object_types: :post}
         },
         # user_publications: %{
         #   description: "Publications by a specific user",
@@ -91,43 +93,42 @@ defmodule Bonfire.Social.RuntimeConfig do
         # Content type feeds
         publications: %{
           description: "All known publications",
-          filters: %{media_types: :publication}
+          filters: %FeedFilters{media_types: :publication}
         },
         local_images: %{
           description: "All known images",
-          filters: %{media_types: "image"}
+          filters: %FeedFilters{media_types: "image"}
         },
 
         # Hashtag feeds
         hashtag: %{
           description: "Activities with a specific hashtag",
-          filters: %{},
+          filters: %FeedFilters{},
           parameterized: %{tags: :hashtag}
         },
         mentions: %{
           description: "Activities with a specific @ mention",
-          filters: %{},
+          filters: %FeedFilters{},
           parameterized: %{tags: :mentioned}
         },
 
         # Moderation feeds
         flagged_by_me: %{
           description: "Content I've flagged",
-          filters: %{
+          filters: %FeedFilters{
             activity_types: :flag,
             include_flags: true,
             show_objects_only_once: false
           },
-          parameterized: %{subjects: :me},
+          parameterized: %FeedFilters{subjects: :me},
           current_user_required: true
         },
         flagged_content: %{
           description: "Content flagged by anyone (mods only)",
-          filters: %{
+          filters: %FeedFilters{
             activity_types: :flag,
             # so we can show flags to admins in notifications
-            skip_boundary_check: :admins,
-            include_flags: true,
+            include_flags: :mod,
             show_objects_only_once: false
           },
           current_user_required: true,
@@ -137,7 +138,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         # Combined filters examples
         trending_discussions: %{
           description: "Popular discussions from the last 7 days",
-          filters: %{
+          filters: %FeedFilters{
             time_limit: 7,
             sort_by: :num_replies,
             sort_order: :desc
@@ -145,7 +146,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         },
         local_media: %{
           description: "Media from local instance",
-          filters: %{
+          filters: %FeedFilters{
             feed_name: :local,
             media_types: "*"
           }
