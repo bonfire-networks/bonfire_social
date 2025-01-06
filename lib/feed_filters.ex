@@ -1,5 +1,5 @@
 defmodule Bonfire.Social.FeedFilters do
-  use Ecto.Schema
+  use TypedEctoSchema
   use Accessible
   import Ecto.Changeset
   import Untangle
@@ -9,7 +9,7 @@ defmodule Bonfire.Social.FeedFilters do
   alias FeedFilters.AtomOrStringList
 
   @primary_key false
-  embedded_schema do
+  typed_embedded_schema do
     field :feed_name, Ecto.Enum,
       values: [:my, :explore, :fediverse, :local, :curated, :likes, :bookmarks, :flags, :custom],
       default: :custom
@@ -94,15 +94,23 @@ defmodule Bonfire.Social.FeedFilters do
 
   ## Examples
 
-      iex> {:ok, %FeedFilters{feed_name: :explore, object_types: [:post]}} = validate(%{feed_name: "explore", object_types: ["post"]})
+      iex> {:ok, %FeedFilters{feed_name: :explore, object_types: [:post]}} = 
+      ...> validate(%{feed_name: :explore, object_types: "post"})
       
-      iex> {:ok, %FeedFilters{feed_name: :explore, object_types: [:post]}} = validate(%{feed_name: "explore", object_types: "post"})
+      iex> {:ok, %FeedFilters{feed_name: :explore, object_types: [:post]}} = 
+      ...> validate(%{feed_name: "explore", object_types: ["post"]})
 
-      iex> {:ok, %FeedFilters{feed_name: nil, object_types: [:post]}} = validate(%{feed_name: nil, object_types: "post"})
+      iex> {:ok, %FeedFilters{feed_name: :explore, object_types: [:post]}} = 
+      ...> validate(%{"feed_name"=> "explore", "object_types"=> "post"})
 
-      iex> {:ok, %FeedFilters{object_types: [:post]}} = validate(%{object_types: "post"})
+      iex> {:ok, %FeedFilters{feed_name: nil, object_types: [:post]}} = 
+      ...> validate(%{feed_name: nil, object_types: :post})
 
-      iex> {:error, %Ecto.Changeset{errors: [feed_name: {"is invalid", _}]}} = validate(%{feed_name: :unknown}) 
+      iex> {:ok, %FeedFilters{object_types: [:post]}} = 
+      ...> validate(%{object_types: "post"})
+
+      iex> {:error, %Ecto.Changeset{errors: [feed_name: {"is invalid", _}]}} = 
+      ...> validate(%{feed_name: :unknown}) 
   """
   # TODO: re-validate?
   def validate(%FeedFilters{} = attrs), do: {:ok, attrs}

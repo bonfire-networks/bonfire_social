@@ -1109,7 +1109,7 @@ defmodule Bonfire.Social.FeedLoader do
   end
 
   defp maybe_dedup_feed_objects(edges, filters) do
-    if filters[:show_objects_only_once] do
+    if filters[:show_objects_only_once] != false do
       # TODO: try doing this in queries in a way that it's not needed here?
       edges
       # |> Enum.uniq_by(&id(&1))

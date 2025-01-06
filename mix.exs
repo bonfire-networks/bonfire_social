@@ -22,13 +22,12 @@ defmodule Bonfire.Social.MixProject do
       start_permanent: Mix.env() == :prod,
       deps:
         Mess.deps([
+          {:typed_ecto_schema, "~> 0.4.1", runtime: false},
           {:bonfire_me,
            git: "https://github.com/bonfire-networks/bonfire_me",
-           
            optional: true, runtime: false},
           {:bonfire_api_graphql,
            git: "https://github.com/bonfire-networks/bonfire_api_graphql",
-           
            optional: true, runtime: false},
           {:absinthe, "~> 1.7", optional: true}
         ])

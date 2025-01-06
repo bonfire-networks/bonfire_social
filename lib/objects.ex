@@ -28,6 +28,7 @@ defmodule Bonfire.Social.Objects do
   alias Bonfire.Boundaries.Acls
   alias Bonfire.Social.Activities
   alias Bonfire.Social.FeedActivities
+  alias Bonfire.Social.FeedLoader
   alias Bonfire.Social.Tags
   alias Bonfire.Social.Threads
   alias Bonfire.Boundaries.Verbs
@@ -311,14 +312,14 @@ defmodule Bonfire.Social.Objects do
     filters
     # |> debug("filters")
     # |> query_paginated(opts)
-    |> FeedActivities.feed_many_paginated(opts)
+    |> FeedLoader.feed_many_paginated(opts)
   end
 
   def list_query(type_or_query \\ nil, opts)
 
   def list_query(%Ecto.Query{} = query, opts) do
     debug(query)
-    FeedActivities.query_object_extras_boundarised(query, opts)
+    FeedLoader.query_object_extras_boundarised(query, opts)
   end
 
   def list_query(type, opts) when is_atom(type) do
