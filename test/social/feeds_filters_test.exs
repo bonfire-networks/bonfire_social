@@ -348,7 +348,7 @@ defmodule Bonfire.Social.FeedsFiltersTest do
       }
     end
 
-    @tag :todo
+    # @tag :todo
     test "handles conflicting reply filters", %{user: user, reply_post: reply_post} do
       # should test that conflicting settings result in what?
       feed =

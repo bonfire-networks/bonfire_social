@@ -652,6 +652,7 @@ defmodule Bonfire.Social.FeedLoader do
     fetcher_user_id = "1ACT1V1TYPVBREM0TESFETCHER"
 
     cond do
+      # TODO: make local and remote filters instead 
       :local in feed_ids or local_feed_id in feed_ids ->
         debug("local feed")
 
