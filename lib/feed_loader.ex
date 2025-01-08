@@ -48,8 +48,12 @@ defmodule Bonfire.Social.FeedLoader do
 
   """
   @spec feed(map() | atom() | String.t(), Keyword.t()) :: map()
+  def feed(feed_name, %{feed_name: feed_name} = filters, opts) do
+    feed(filters, opts)
+  end
+
   def feed(feed_name, filters, opts) do
-    feed(filters |> Enum.into(%{feed_name: feed_name}), opts)
+    feed(filters |> Map.put(:feed_name, feed_name), opts)
   end
 
   def feed(name_or_filters \\ nil, opts \\ [])
@@ -113,7 +117,7 @@ defmodule Bonfire.Social.FeedLoader do
 
   def feed(%{feed_name: _nil} = custom_filters, opts) do
     opts = to_options(opts)
-    debug(custom_filters)
+    debug(custom_filters, "custom filters")
 
     filters =
       merge_feed_filters(custom_filters, opts)
@@ -163,9 +167,13 @@ defmodule Bonfire.Social.FeedLoader do
   #   feed(:explore, opts)
   # end
 
-  defp merge_feed_filters(preset_filters \\ %{}, custom_filters, opts) do
-    Map.merge(preset_filters, custom_filters)
-    |> Map.merge(Map.new(opts[:feed_filters] || %{}))
+  defp merge_feed_filters(custom_filters, opts) do
+    Enums.merge_to_struct(FeedFilters, custom_filters, opts[:feed_filters] || %{})
+  end
+
+  # TODO: optimise
+  defp merge_feed_filters(preset_filters, custom_filters, opts) do
+    Enums.merge_to_struct(FeedFilters, preset_filters, merge_feed_filters(custom_filters, opts))
   end
 
   # TODO: put in config

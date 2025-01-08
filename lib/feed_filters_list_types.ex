@@ -7,7 +7,7 @@ defmodule Bonfire.Social.FeedFilters.StringList do
   # Cast when value is already a list
   def cast(value) when is_list(value) do
     case Enum.all?(value, fn x -> is_binary(x) or is_map(x) end) do
-      true -> {:ok, Enum.map(value, &normalize_value/1)}
+      true -> {:ok, Enum.map(value, &normalize_value/1) |> Enum.uniq()}
       false -> :error
     end
   end
@@ -43,7 +43,7 @@ defmodule Bonfire.Social.FeedFilters.AtomOrStringList do
   # Cast when value is already a list
   def cast(value) when is_list(value) do
     case Enum.all?(value, fn x -> is_binary(x) or is_atom(x) or is_map(x) end) do
-      true -> {:ok, Enum.map(value, &normalize_value/1)}
+      true -> {:ok, Enum.map(value, &normalize_value/1) |> Enum.uniq()}
       false -> :error
     end
   end
