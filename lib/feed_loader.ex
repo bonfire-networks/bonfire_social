@@ -862,6 +862,7 @@ defmodule Bonfire.Social.FeedLoader do
          # end
 
          exclude_activity_types
+         |> Enums.filter_empty([])
          |> Enum.map(&Bonfire.Social.Activities.verb_id(&1))
          |> Enum.uniq()
        end

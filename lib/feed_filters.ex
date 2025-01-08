@@ -38,7 +38,11 @@ defmodule Bonfire.Social.FeedFilters do
     field :media_types, AtomOrStringList
     field :tags, StringList
     field :time_limit, :integer, default: nil
-    field :sort_by, Ecto.Enum, values: [nil, :num_replies, :num_boosts, :num_likes], default: nil
+
+    field :sort_by, Ecto.Enum,
+      values: [nil, :date_created, :num_replies, :num_boosts, :num_likes],
+      default: nil
+
     field :sort_order, Ecto.Enum, values: [:asc, :desc], default: :desc
   end
 
