@@ -410,6 +410,41 @@ defmodule Bonfire.Social.Objects do
     end
   end
 
+  def maybe_filter(query, {:media_types, types}, _opts) when is_list(types) and types != [] do
+    case prepare_media_type(types) do
+      [first | rest] ->
+        rest
+        |> Enum.reduce(
+          query
+          |> proload(:inner, activity: [:media])
+          |> where([media: media], ilike(media.media_type, ^"#{first}%")),
+          fn type, query ->
+            or_where(query, [media: media], ilike(media.media_type, ^"#{type}%"))
+          end
+        )
+
+      _ ->
+        query
+    end
+  end
+
+  def maybe_filter(query, {:exclude_media_types, types}, opts)
+      when is_list(types) and types != [] do
+    case prepare_media_type(types) do
+      [first | rest] ->
+        rest
+        |> Enum.reduce(
+          where(query, [media: media], not ilike(media.media_type, ^"#{first}%")),
+          fn type, query ->
+            or_where(query, [media: media], not ilike(media.media_type, ^"#{type}%"))
+          end
+        )
+
+      _ ->
+        query
+    end
+  end
+
   def maybe_filter(query, {:exclude_table_ids, table_ids}, _opts)
       when is_list(table_ids) and table_ids != [] do
     # TODO? for cases where we're not already filtering by table_ids in Activities.maybe_filter
@@ -426,6 +461,10 @@ defmodule Bonfire.Social.Objects do
   def maybe_filter(query, filters, _opts) do
     warn(filters, "no supported object-related filters defined")
     query
+  end
+
+  defp prepare_media_type(types) do
+    if :link in types, do: ["link", "article", "profile", "website"], else: types
   end
 
   @doc """

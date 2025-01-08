@@ -82,9 +82,13 @@ defmodule Bonfire.Social.Acts.Threaded do
 
     thread_title = e(attrs, :name, nil)
 
+    verb = epic.assigns[:verb] || Keyword.get(epic.assigns[:options], :verb, :create)
+    verb = if verb == :create, do: :reply, else: verb
+
     case Threads.find_reply_to(attrs, current_user) |> debug("find_reply_to") do
       {:ok, %{replied: %{thread_id: thread_id, thread: %{}}} = reply_to} ->
-        # we are permitted to both reply to the thing and the thread root.
+        debug("we are permitted to both reply to the thing and the thread root.")
+
         # for thread forking
         thread_id = Types.uid(custom_thread) || thread_id
         maybe_debug(epic, act, thread_id, "threading under parent thread root or custom thread")
@@ -94,10 +98,11 @@ defmodule Bonfire.Social.Acts.Threaded do
         |> maybe_put_name(thread_title)
         |> Epic.assign(epic, on, ...)
         |> Epic.assign(:reply_to, reply_to)
+        |> Epic.assign(:verb, verb)
 
       {:ok, %{replied: %{thread_id: thread_id}} = reply_to}
       when is_binary(thread_id) ->
-        # we're permitted to reply to the thing, but not the thread root
+        debug("we're permitted to reply to the thing, but not the thread root")
         thread_id = Types.uid(custom_thread) || reply_to.id
         smart(epic, act, reply_to, "threading under parent or custom thread")
 
@@ -106,9 +111,13 @@ defmodule Bonfire.Social.Acts.Threaded do
         |> maybe_put_name(thread_title)
         |> Epic.assign(epic, on, ...)
         |> Epic.assign(:reply_to, reply_to)
+        |> Epic.assign(:verb, verb)
 
       {:ok, %{} = reply_to} ->
-        # we're permitted to reply to the parent, but it appears to have no threading information.
+        debug(
+          "we're permitted to reply to the parent, but it appears to have no threading information."
+        )
+
         thread_id = Types.uid(custom_thread) || reply_to.id
         maybe_debug(epic, act, "parent missing threading, creating as root or custom")
 
@@ -119,6 +128,7 @@ defmodule Bonfire.Social.Acts.Threaded do
         |> maybe_put_name(thread_title)
         |> Epic.assign(epic, on, ...)
         |> Epic.assign(:reply_to, reply_to)
+        |> Epic.assign(:verb, verb)
 
       _ ->
         maybe_debug(

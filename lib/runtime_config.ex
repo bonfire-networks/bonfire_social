@@ -46,19 +46,19 @@ defmodule Bonfire.Social.RuntimeConfig do
         # User interaction feeds
         liked_by_me: %{
           description: "Posts I've liked",
-          filters: %FeedFilters{activity_types: :like},
-          parameterized: %FeedFilters{subjects: :me}
+          filters: %FeedFilters{activity_types: [:like]},
+          parameterized: %FeedFilters{subjects: [:me]}
         },
         my_bookmarks: %{
           description: "Posts I've bookmarked",
           filters: %FeedFilters{activity_types: :bookmark},
           current_user_required: true,
-          parameterized: %FeedFilters{subjects: :me},
+          parameterized: %FeedFilters{subjects: [:me]},
           show_in_main_menu: true
         },
         my_requests: %{
           description: "Pending requests for me",
-          filters: %FeedFilters{feed_name: :notifications, activity_types: :request},
+          filters: %FeedFilters{feed_name: :notifications, activity_types: [:request]},
           current_user_required: true
         },
 
@@ -67,66 +67,66 @@ defmodule Bonfire.Social.RuntimeConfig do
           description: "A specific user's activities",
           # $username is replaced at runtime
           filters: %FeedFilters{},
-          parameterized: %FeedFilters{subjects: :by}
+          parameterized: %FeedFilters{subjects: [:by]}
         },
         user_followers: %{
           description: "Followers of a specific user",
-          filters: %FeedFilters{activity_types: :follow},
-          parameterized: %FeedFilters{objects: :by}
+          filters: %FeedFilters{activity_types: [:follow]},
+          parameterized: %FeedFilters{objects: [:by]}
         },
         user_following: %{
           description: "Users followed by a specific user",
-          filters: %FeedFilters{activity_types: :follow},
-          parameterized: %FeedFilters{subjects: :by}
+          filters: %FeedFilters{activity_types: [:follow]},
+          parameterized: %FeedFilters{subjects: [:by]}
         },
         user_by_object_type: %{
           description: "Posts by a specific user",
-          filters: %{creators: :by},
-          parameterized: %FeedFilters{creators: :by, object_types: :post}
+          filters: %{creators: [:by]},
+          parameterized: %FeedFilters{creators: :by, object_types: [:post]}
         },
-        # user_publications: %{
+        # user_research: %{
         #   description: "Publications by a specific user",
-        #   filters: %{media_types: :publication},
+        #   filters: %{media_types: [:research]},
         #   parameterized: %{creators: :by}
         # },
 
         # Content type feeds
-        publications: %{
-          description: "All known publications",
-          filters: %FeedFilters{media_types: :publication}
+        research: %{
+          description: "All known research publications",
+          filters: %FeedFilters{media_types: [:research]}
         },
         local_images: %{
           description: "All known images",
-          filters: %FeedFilters{media_types: "image"}
+          filters: %FeedFilters{media_types: ["image"]}
         },
 
         # Hashtag feeds
         hashtag: %{
           description: "Activities with a specific hashtag",
           filters: %FeedFilters{},
-          parameterized: %{tags: :hashtag}
+          parameterized: %{tags: [:hashtag]}
         },
         mentions: %{
           description: "Activities with a specific @ mention",
           filters: %FeedFilters{},
-          parameterized: %{tags: :mentioned}
+          parameterized: %{tags: [:mentioned]}
         },
 
         # Moderation feeds
         flagged_by_me: %{
           description: "Content I've flagged",
           filters: %FeedFilters{
-            activity_types: :flag,
+            activity_types: [:flag],
             include_flags: true,
             show_objects_only_once: false
           },
-          parameterized: %FeedFilters{subjects: :me},
+          parameterized: %FeedFilters{subjects: [:me]},
           current_user_required: true
         },
         flagged_content: %{
           description: "Content flagged by anyone (mods only)",
           filters: %FeedFilters{
-            activity_types: :flag,
+            activity_types: [:flag],
             # so we can show flags to admins in notifications
             include_flags: :mod,
             show_objects_only_once: false
@@ -148,7 +148,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           description: "Media from local instance",
           filters: %FeedFilters{
             feed_name: :local,
-            media_types: "*"
+            media_types: ["*"]
           }
         }
       ]

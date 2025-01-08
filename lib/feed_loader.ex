@@ -91,7 +91,7 @@ defmodule Bonfire.Social.FeedLoader do
     opts = to_options(opts)
     debug(custom_filters)
 
-    case feed_definition_if_permitted(feed_name, opts) do
+    case feed_definition_if_permitted(feed_name, opts) |> debug("feed_definition") do
       {:ok, %{parameterized: %{} = parameters, filters: preset_filters}} ->
         with {:ok, filters} <-
                merge_feed_filters(preset_filters, custom_filters, opts)
@@ -617,7 +617,7 @@ defmodule Bonfire.Social.FeedLoader do
       itself when itself == feed_name ->
         Feeds.my_feed_id(feed_name, opts) ||
           (
-            warn(feed_name, "not a known feed")
+            debug(feed_name, "not an internal feed")
             nil
           )
 
@@ -827,28 +827,42 @@ defmodule Bonfire.Social.FeedLoader do
        if exclude_activity_types == false do
          []
        else
+         exclude_activity_types = exclude_activity_types || []
          activity_types = List.wrap(filters[:activity_types] || opts[:activity_types])
 
          exclude_activity_types =
            (exclude_activity_types || []) ++
              if(
-               :follow not in activity_types and
-                 !Bonfire.Common.Settings.get(
-                   [Bonfire.Social.Feeds, :include, :follow],
-                   false,
-                   opts
-                 ),
+               :follow in exclude_activity_types or
+                 (:follow not in activity_types and
+                    !Bonfire.Common.Settings.get(
+                      [Bonfire.Social.Feeds, :include, :follow],
+                      false,
+                      opts
+                    )),
                do: [:follow],
                else: [exclude_activity_types]
              ) ++
              if(
-               :boost not in activity_types and
-                 !Bonfire.Common.Settings.get(
-                   [Bonfire.Social.Feeds, :include, :boost],
-                   true,
-                   opts
-                 ),
+               :boost in exclude_activity_types or
+                 (:boost not in activity_types and
+                    !Bonfire.Common.Settings.get(
+                      [Bonfire.Social.Feeds, :include, :boost],
+                      true,
+                      opts
+                    )),
                do: [:boost],
+               else: []
+             ) ++
+             if(
+               :reply in exclude_activity_types or
+                 (:reply not in activity_types and
+                    !Bonfire.Common.Settings.get(
+                      [Bonfire.Social.Feeds, :include, :reply],
+                      true,
+                      opts
+                    )),
+               do: [:reply],
                else: []
              ) ++
              if(:label in activity_types or opts[:include_labelling],
@@ -870,16 +884,6 @@ defmodule Bonfire.Social.FeedLoader do
      |> Map.put_new(
        :skip_boundary_check,
        include_all_objects
-     )
-     |> Map.put_new(
-       :exclude_replies,
-       Keyword.get_lazy(opts, :exclude_replies, fn ->
-         !Bonfire.Common.Settings.get(
-           [Bonfire.Social.Feeds, :include, :reply],
-           true,
-           opts
-         )
-       end)
      )
      |> Map.drop([:exclude_object_types, :exclude_activity_types]),
      opts
@@ -949,10 +953,10 @@ defmodule Bonfire.Social.FeedLoader do
 
     query
     |> FeedActivities.query_maybe_exclude_mine(current_user)
-    |> Threads.maybe_filter(
-      filters,
-      opts |> Keyword.put(:replied_preload_fun, &FeedActivities.maybe_preload_replied/1)
-    )
+    # |> Threads.maybe_filter(
+    #   filters,
+    #   opts |> Keyword.put(:replied_preload_fun, &FeedActivities.maybe_preload_replied/1)
+    # )
     |> Objects.query_maybe_time_limit(e(filters, :time_limit, nil) || opts[:time_limit])
   end
 

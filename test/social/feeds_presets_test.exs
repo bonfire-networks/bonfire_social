@@ -504,7 +504,7 @@ defmodule Bonfire.Social.FeedsPresetTest do
         # TODO: images or open science publications attached to a post aren't directly linked to an activity (as opposed to open science publications fetched from ORCID API) so not included in current feed query, so need to adapt the feed query...
         {nil, nil}
 
-      :publications ->
+      :research ->
         #   assert {:ok, media} = Bonfire.OpenScience.APIs.fetch_and_publish_work(user, "https://doi.org/10.1080/1047840X.2012.720832")
         #   {media, nil} 
 

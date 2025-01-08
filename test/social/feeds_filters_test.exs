@@ -50,23 +50,23 @@ defmodule Bonfire.Social.FeedsFiltersTest do
       }
     end
 
-    test "exclude_replies: true filters out replies", %{
+    test "can filter out replies", %{
       user: user,
       root_post: root_post,
       reply_post: reply_post
     } do
-      feed = FeedLoader.feed(:local, %{exclude_replies: true}, current_user: user)
+      feed = FeedLoader.feed(:local, %{exclude_activity_types: :reply}, current_user: user)
 
       assert FeedLoader.feed_contains?(feed, root_post, current_user: user)
       refute FeedLoader.feed_contains?(feed, reply_post, current_user: user)
     end
 
-    test "only_replies: true shows only replies", %{
+    test "can show only replies", %{
       user: user,
       root_post: root_post,
       reply_post: reply_post
     } do
-      feed = FeedLoader.feed(:local, %{only_replies: true}, current_user: user)
+      feed = FeedLoader.feed(:local, %{activity_types: :reply}, current_user: user)
 
       refute FeedLoader.feed_contains?(feed, root_post, current_user: user)
       assert FeedLoader.feed_contains?(feed, reply_post, current_user: user)
@@ -348,7 +348,8 @@ defmodule Bonfire.Social.FeedsFiltersTest do
       }
     end
 
-    # @tag :todo
+    # still needed for something else?
+    @tag :todo
     test "handles conflicting reply filters", %{user: user, reply_post: reply_post} do
       # should test that conflicting settings result in what?
       feed =

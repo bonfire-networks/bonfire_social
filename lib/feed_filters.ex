@@ -15,35 +15,40 @@ defmodule Bonfire.Social.FeedFilters do
       default: :custom
 
     field :feed_ids, StringList
+
     field :activity_types, AtomOrStringList
     field :exclude_activity_types, AtomOrStringList
+
     field :subjects, StringList
     field :exclude_subjects, StringList
     field :subject_circles, StringList
     field :exclude_subject_circles, StringList
     field :subject_types, AtomOrStringList
     field :exclude_subject_types, AtomOrStringList
+
     field :objects, StringList
     field :exclude_objects, StringList
     field :object_circles, StringList
     field :object_types, AtomOrStringList
     field :exclude_object_types, AtomOrStringList
+
     field :creators, StringList
     field :exclude_creators, StringList
     field :creator_circles, StringList
-    field :exclude_replies, :boolean, default: false
-    field :only_replies, :boolean, default: false
-    field :include_flags, Ecto.Enum, values: [nil, false, true, :mod, :admins], default: false
-    field :show_objects_only_once, :boolean, default: true
+
     field :media_types, AtomOrStringList
     field :tags, StringList
+
     field :time_limit, :integer, default: nil
+    field :sort_order, Ecto.Enum, values: [:asc, :desc], default: :desc
 
     field :sort_by, Ecto.Enum,
       values: [nil, :date_created, :num_replies, :num_boosts, :num_likes],
       default: nil
 
-    field :sort_order, Ecto.Enum, values: [:asc, :desc], default: :desc
+    # NOTE: the following are meant for internal use
+    field :include_flags, Ecto.Enum, values: [nil, false, true, :mod, :admins], default: false
+    field :show_objects_only_once, :boolean, default: true
   end
 
   def supported_filters,
@@ -65,8 +70,6 @@ defmodule Bonfire.Social.FeedFilters do
       :creators,
       :exclude_creators,
       :creator_circles,
-      :exclude_replies,
-      :only_replies,
       :media_types,
       :tags,
       :time_limit,
@@ -87,11 +90,12 @@ defmodule Bonfire.Social.FeedFilters do
     # |> validate_length(:feed_ids, min: 1, message: "must have at least one feed ID")
     # |> validate_length(:tags, min: 1, message: "must have at least one tag")
     |> validate_number(:time_limit, greater_than_or_equal_to: 0)
+
     # |> validate_required([:feed_name])
     # |> validate_exclusion(:feed_name, [nil])
-    |> validate_mutex([:exclude_replies, :only_replies],
-      message: "cannot both exclude and only show replies"
-    )
+    # |> validate_mutex([:exclude_replies, :only_replies],
+    #   message: "cannot both exclude and only show replies"
+    # )
   end
 
   @doc """
