@@ -1294,7 +1294,7 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
-  def maybe_filter(query, {:circles, circle_ids}, opts) do
+  def maybe_filter(query, {:subject_circles, circle_ids}, opts) do
     case Types.uids(circle_ids, nil) do
       nil ->
         warn(circle_ids, "unrecognized circle_ids")
@@ -1315,7 +1315,7 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
-  def maybe_filter(query, {:exclude_circles, circle_ids}, opts) do
+  def maybe_filter(query, {:exclude_subject_circles, circle_ids}, opts) do
     case Types.uids(circle_ids, nil) do
       nil ->
         warn(circle_ids, "unrecognized circle_ids")

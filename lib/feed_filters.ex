@@ -20,6 +20,7 @@ defmodule Bonfire.Social.FeedFilters do
     field :subjects, StringList
     field :exclude_subjects, StringList
     field :subject_circles, StringList
+    field :exclude_subject_circles, StringList
     field :subject_types, AtomOrStringList
     field :exclude_subject_types, AtomOrStringList
     field :objects, StringList

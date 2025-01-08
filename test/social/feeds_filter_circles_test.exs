@@ -72,7 +72,7 @@ defmodule Bonfire.Social.FeedsCirclesFilterTest do
       refute FeedLoader.feed_contains?(feed, post_by_carl, current_user: user)
     end
 
-    test "`exclude_circles` filters out posts from members of a circle", %{
+    test "`exclude_subject_circles` filters out posts from members of a circle", %{
       user: user,
       circle: circle,
       post_by_alice: post_by_alice,
@@ -80,7 +80,7 @@ defmodule Bonfire.Social.FeedsCirclesFilterTest do
       post_by_carl: post_by_carl
     } do
       # Load a feed excluding posts by members of the "friends" circle
-      feed = FeedLoader.feed(:custom, %{exclude_circles: [circle]}, current_user: user)
+      feed = FeedLoader.feed(:custom, %{exclude_subject_circles: [circle]}, current_user: user)
 
       # Assert posts by Alice (member of the circle) are excluded
       refute FeedLoader.feed_contains?(feed, post_by_alice, current_user: user)
@@ -90,7 +90,7 @@ defmodule Bonfire.Social.FeedsCirclesFilterTest do
     end
 
     # TODO: optimise query with a special case that uses the same join for both?
-    test "`exclude_circles` and `circles` together prioritize exclusions", %{
+    test "`exclude_subject_circles` and `circles` together prioritize exclusions", %{
       user: user,
       carl: carl,
       circle: circle,
@@ -106,7 +106,7 @@ defmodule Bonfire.Social.FeedsCirclesFilterTest do
 
       # Load a feed that includes "friends" circle but excludes "coworkers" circle
       feed =
-        FeedLoader.feed(:custom, %{circles: [circle], exclude_circles: [second_circle]},
+        FeedLoader.feed(:custom, %{circles: [circle], exclude_subject_circles: [second_circle]},
           current_user: user
         )
 
