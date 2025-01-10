@@ -40,7 +40,7 @@ defmodule Bonfire.Social.FeedLoader do
   ## Examples
 
       iex> %{edges: _, page_info: %Paginator.PageInfo{}} = Bonfire.Social.FeedActivities.feed(:explore)
-      
+
       iex> %{edges: _, page_info: %Paginator.PageInfo{}} = Bonfire.Social.FeedActivities.feed(%{feed_name: :explore})
 
       > Bonfire.Social.FeedActivities.feed("feed123", [])
@@ -235,13 +235,31 @@ defmodule Bonfire.Social.FeedLoader do
     end
   end
 
+  # def feed_filtered(other, filters, opts) do
+  #   e = l("Not a recognised feed to query, return explore feed (with any provided filters)")
+  #   debug(other, e)
+  #   # raise e
+  #   query_extras(filters, opts)
+  #   |> paginate_and_boundarise_feed(filters, opts)
+  #   |> prepare_feed(filters, opts)
+  # end
+
   def feed_filtered(other, filters, opts) do
-    e = l("Not a recognised feed to query, return explore feed (with any provided filters)")
-    debug(other, e)
-    # raise e
-    query_extras(filters, opts)
-    |> paginate_and_boundarise_feed(filters, opts)
-    |> prepare_feed(filters, opts)
+    case other do
+      :custom ->
+        # For custom feeds, directly use the filters without looking up presets
+        query_extras(filters, opts)
+        |> paginate_and_boundarise_feed(filters, opts)
+        |> prepare_feed(filters, opts)
+
+      _ ->
+        e = l("Not a recognised feed to query, return explore feed (with any provided filters)")
+        debug(other, e)
+        # raise e
+        query_extras(filters, opts)
+        |> paginate_and_boundarise_feed(filters, opts)
+        |> prepare_feed(filters, opts)
+    end
   end
 
   @doc """
@@ -255,7 +273,7 @@ defmodule Bonfire.Social.FeedLoader do
 
       iex> query = Ecto.Query.from(f in Bonfire.Data.Social.FeedPublish)
       iex> %{edges: _, page_info: %{}} = feed_paginated([], base_query: query)
-      
+
   """
   def feed_paginated(filters \\ %{}, opts \\ []) do
     opts = to_options(opts)
@@ -660,7 +678,7 @@ defmodule Bonfire.Social.FeedLoader do
     fetcher_user_id = "1ACT1V1TYPVBREM0TESFETCHER"
 
     cond do
-      # TODO: make local and remote filters instead 
+      # TODO: make local and remote filters instead
       :local in feed_ids or local_feed_id in feed_ids ->
         debug("local feed")
 
@@ -927,7 +945,7 @@ defmodule Bonfire.Social.FeedLoader do
     #     # |> debug("as atoms")
     #     # |> maybe_filter(query, ...)
 
-    #   true -> 
+    #   true ->
     warn(filters, "no supported filters defined")
     query
     # end
@@ -994,7 +1012,7 @@ defmodule Bonfire.Social.FeedLoader do
       (
         dump(
           Enum.map(feed, fn fi ->
-            # e(fi, :activity, :object, nil) || 
+            # e(fi, :activity, :object, nil) ||
             e(fi, :activity, :object, :post_content, nil) ||
               e(fi, :activity, nil) || fi
           end),
@@ -1142,30 +1160,30 @@ defmodule Bonfire.Social.FeedLoader do
 
       # 1: Retrieve a preset feed without parameters
       iex> {:ok, %{feed_name: :local, exclude_activity_types: [:like]}} = preset_feed_filters(:local, [])
-      
+
       # 1: Retrieve a preset feed without parameters
       iex> {:ok, %{feed_name: :local, exclude_activity_types: [:like]}} =preset_feed_filters(:local, [])
-      
+
       # 2: Retrieve a preset feed with parameters
       iex> {:ok, %{subjects: "alice"}} = preset_feed_filters(:user_activities, [by: "alice"])
-      
+
       # 3: Feed not found (error case)
       iex> preset_feed_filters("unknown_feed", [])
       {:error, :not_found}
 
       # 4: Preset feed with parameterized filters
       iex> {:ok, %{activity_types: :like, subjects: %{id: "alice"}}} = preset_feed_filters(:liked_by_me, current_user: %{id: "alice"})
-      
+
       # 5: Feed with `current_user_required` should check for current user
       iex> {:ok, %{feed_name: :messages}} = preset_feed_filters(:messages, current_user: %{id: "alice"})
-      
+
       # 6: Feed with `current_user_required` and no current user
       iex> preset_feed_filters(:messages, [])
-      ** (Bonfire.Fail.Auth) You need to log in first. 
+      ** (Bonfire.Fail.Auth) You need to log in first.
 
       # 7: Custom feed with additional parameters
       iex> {:ok, %{activity_types: :follow, objects: "alice"}} = preset_feed_filters(:user_followers, [by: "alice"])
-      
+
   """
   @spec preset_feed_filters(String.t(), map()) :: {:ok, map()} | {:error, atom()}
   def preset_feed_filters(name, opts \\ []) do
@@ -1189,9 +1207,9 @@ defmodule Bonfire.Social.FeedLoader do
         debug(presets, "Feed `#{name}` not found")
         {:error, :not_found}
 
-      # %{admin_required: true} = alias when not user.is_admin -> 
+      # %{admin_required: true} = alias when not user.is_admin ->
       #   {:error, :unauthorized} # TODO
-      # %{mod_required: true} = alias when not user.is_moderator -> 
+      # %{mod_required: true} = alias when not user.is_moderator ->
       #   {:error, :unauthorized} # TODO
       %{current_user_required: true} = feed_def ->
         if current_user_required!(opts), do: {:ok, feed_def}
@@ -1280,7 +1298,7 @@ defmodule Bonfire.Social.FeedLoader do
 
       # Failing with `:current_user_required` parameter if we have no current user
       iex> replace_parameters(:current_user_required, %{}, current_user: nil)
-      ** (Bonfire.Fail.Auth) You need to log in first. 
+      ** (Bonfire.Fail.Auth) You need to log in first.
 
       # Handling a parameter that is in the opts
       iex> replace_parameters(:type, %{}, type: "post")
@@ -1301,7 +1319,7 @@ defmodule Bonfire.Social.FeedLoader do
       # # Handling a string key parameter that is in the opts - FIXME
       # iex> replace_parameters("type", %{}, type: "post")
       # "post"
-      
+
       # Handling a parameter that is not in the opts
       iex> replace_parameters(:unknown, %{}, current_user: "bob")
       :unknown
@@ -1436,25 +1454,25 @@ defmodule Bonfire.Social.FeedLoader do
 
       iex> matches_filter?(%{types: "*"}, %{types: "post"})
       true
-      
+
       iex> matches_filter?(%{types: ["post", "comment"]}, %{types: ["comment", "reaction"]})
       true
-      
+
       iex> matches_filter?(%{types: "post"}, %{types: ["comment", "post"]})
       true
-      
+
       iex> matches_filter?(%{types: :post}, %{types: ["comment", "post"]})
       true
-      
+
       iex> matches_filter?(%{types: "post"}, %{types: [:comment, :post]})
       true
-      
+
       iex> matches_filter?(%{types: ["post"]}, %{types: "post"})
       true
-      
+
       iex> matches_filter?(%{types: "post"}, %{types: "comment"})
       false
-      
+
       iex> matches_filter?(%{types: :post}, %{types: "post"})
       true
   """
@@ -1472,7 +1490,7 @@ defmodule Bonfire.Social.FeedLoader do
           rule_value == "*" ->
             true
 
-          # Direct match 
+          # Direct match
           filter_value == rule_value ->
             true
 
@@ -1566,7 +1584,7 @@ defmodule Bonfire.Social.FeedLoader do
         :with_verb
       ]
 
-      # With unknown key 
+      # With unknown key
       iex> map_activity_preloads([:unknown_key])
       [:unknown_key]
 
