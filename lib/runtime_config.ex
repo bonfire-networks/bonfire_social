@@ -21,11 +21,19 @@ defmodule Bonfire.Social.RuntimeConfig do
         },
         local: %{
           description: "Local instance activities",
-          filters: %FeedFilters{feed_name: :local, exclude_activity_types: [:like]}
+          filters: %FeedFilters{
+            feed_name: :local,
+            origin: :local,
+            exclude_activity_types: [:like]
+          }
         },
         remote: %{
-          description: "Remote/Fediverse activities",
-          filters: %FeedFilters{feed_name: :remote, exclude_activity_types: [:like]}
+          description: "Remote activities from other federated instances",
+          filters: %FeedFilters{
+            feed_name: :remote,
+            origin: :remote,
+            exclude_activity_types: [:like]
+          }
         },
         notifications: %{
           description: "Notifications for me",
@@ -271,6 +279,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           :with_object,
           #  FIXME? why media?
           :per_media
+          # :with_peered
         ]
       ]
 

@@ -667,77 +667,59 @@ defmodule Bonfire.Social.FeedLoader do
 
     # opts = to_feed_options(filters, opts)
 
-    feed_ids =
-      List.wrap(feed_id_or_ids)
-      |> debug("5b. feed_ids")
+    specific_feed_ids = Types.uids(feed_id_or_ids)
 
-    specific_feeds? = is_binary(feed_id_or_ids) or (is_list(feed_id_or_ids) and feed_ids != [])
-
-    local_feed_id = Feeds.named_feed_id(:local)
-    federated_feed_id = Feeds.named_feed_id(:activity_pub)
-    fetcher_user_id = "1ACT1V1TYPVBREM0TESFETCHER"
+    # local_feed_id = Feeds.named_feed_id(:local)
+    # federated_feed_id = Feeds.named_feed_id(:activity_pub)
+    # fetcher_user_id = "1ACT1V1TYPVBREM0TESFETCHER"
 
     cond do
-      # TODO: make local and remote filters instead
-      :local in feed_ids or local_feed_id in feed_ids ->
-        debug("local feed")
+      # NOTE: made into local and remote filters instead
+      # :local in feed_ids or local_feed_id in feed_ids ->
+      #   debug("local feed")
 
-        # excludes likes/etc from local feed - TODO: configurable
-        Enums.deep_merge(filters, exclude_activity_types: [:like, :pin])
-        # |> debug("local_opts")
-        |> query_extras(..., opts)
-        |> proload(
-          activity: [subject: {"subject_", character: [:peered]}, object: {"object_", [:peered]}]
-        )
-        |> where(
-          [fp, activity: activity, subject_peered: subject_peered, object_peered: object_peered],
-          (fp.feed_id == ^local_feed_id or
-             (is_nil(subject_peered.id) and is_nil(object_peered.id))) and
-            activity.subject_id != ^fetcher_user_id
-        )
+      #   # excludes likes/etc from local feed - TODO: configurable
+      #   Enums.deep_merge(filters, exclude_activity_types: [:like, :pin])
+      #   # |> debug("local_opts")
+      #   |> query_extras(..., opts)
+      #   |> proload(
+      #     activity: [subject: {"subject_", character: [:peered]}, object: {"object_", [:peered]}]
+      #   )
+      #   |> where(
+      #     [fp, activity: activity, subject_peered: subject_peered, object_peered: object_peered],
+      #     (fp.feed_id == ^local_feed_id or
+      #        (is_nil(subject_peered.id) and is_nil(object_peered.id))) and
+      #       activity.subject_id != ^fetcher_user_id
+      #   )
 
-      :activity_pub in feed_ids or federated_feed_id in feed_ids ->
-        debug("remote/federated feed")
+      # :activity_pub in feed_ids or federated_feed_id in feed_ids ->
+      #   debug("remote/federated feed")
 
-        Enums.deep_merge(filters, exclude_activity_types: [:like, :pin])
-        |> query_extras(..., opts)
-        |> proload(
-          activity: [subject: {"subject_", character: [:peered]}, object: {"object_", [:peered]}]
-        )
-        |> where(
-          [fp, activity: activity, subject_peered: subject_peered, object_peered: object_peered],
-          fp.feed_id == ^federated_feed_id or
-            (not is_nil(subject_peered.id) or not is_nil(object_peered.id)) or
-            activity.subject_id == ^fetcher_user_id
-        )
+      #   Enums.deep_merge(filters, exclude_activity_types: [:like, :pin])
+      #   |> query_extras(..., opts)
+      #   |> proload(
+      #     activity: [subject: {"subject_", character: [:peered]}, object: {"object_", [:peered]}]
+      #   )
+      #   |> where(
+      #     [fp, activity: activity, subject_peered: subject_peered, object_peered: object_peered],
+      #     fp.feed_id == ^federated_feed_id or
+      #       (not is_nil(subject_peered.id) or not is_nil(object_peered.id)) or
+      #       activity.subject_id == ^fetcher_user_id
+      #   )
 
-      specific_feeds? and
-          not is_struct(e(opts, :feed_filters, nil)) ->
+      specific_feed_ids != [] ->
         debug(feed_id_or_ids, "specific feed(s)")
 
-        Enums.deep_merge(filters, exclude_activity_types: [:pin])
-        |> generic_feed_query(feed_id_or_ids, ..., opts)
+        query_extras(filters, opts)
+        |> where([fp], fp.feed_id in ^specific_feed_ids)
+        |> debug("generic with ids")
 
       true ->
         debug(feed_id_or_ids, "unknown feed")
 
-        Enums.deep_merge(filters, exclude_activity_types: [:pin])
-        |> query_extras(opts)
+        query_extras(filters, opts)
     end
     |> debug("feed query")
-  end
-
-  defp generic_feed_query(feed_ids, filters, opts) do
-    case Types.uids(feed_ids) do
-      [] ->
-        query_extras(filters, opts)
-        |> debug("generic")
-
-      uids ->
-        query_extras(filters, opts)
-        |> where([fp], fp.feed_id in ^uids)
-        |> debug("generic with ids")
-    end
   end
 
   @doc "Return a boundarised query for a feed"
@@ -845,11 +827,11 @@ defmodule Bonfire.Social.FeedLoader do
        if exclude_activity_types == false do
          []
        else
-         exclude_activity_types = exclude_activity_types || []
+         exclude_activity_types = List.wrap(exclude_activity_types)
          activity_types = List.wrap(filters[:activity_types] || opts[:activity_types])
 
          exclude_activity_types =
-           (exclude_activity_types || []) ++
+           exclude_activity_types ++
              if(
                :follow in exclude_activity_types or
                  (:follow not in activity_types and

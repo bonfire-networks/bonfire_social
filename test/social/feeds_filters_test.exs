@@ -420,4 +420,145 @@ defmodule Bonfire.Social.FeedsFiltersTest do
       assert length(feed1.edges) == length(feed2.edges)
     end
   end
+
+  describe "origin can filter by subject" do
+    setup do
+      user = fake_user!("main user")
+      other_user = fake_user!("other_user")
+
+      local_post =
+        fake_post!(user, "public", %{
+          post_content: %{
+            name: "a local post",
+            html_body: "content"
+          }
+        })
+
+      remote_post =
+        fake_post!(other_user, "public", %{
+          post_content: %{
+            name: "a remote post",
+            html_body: "content"
+          }
+        })
+
+      instance_domain = "example.local"
+      instance_url = "https://#{instance_domain}"
+      actor_url = "#{instance_url}/actors/other_user"
+
+      {:ok, instance} =
+        Bonfire.Federate.ActivityPub.Instances.get_or_create(instance_url)
+        |> debug("instance created")
+
+      {:ok, peered} =
+        Bonfire.Federate.ActivityPub.Peered.save_canonical_uri(other_user, actor_url)
+        |> debug("user attached to instance")
+
+      %{
+        user: user,
+        other_user: other_user,
+        instance_domain: instance_domain,
+        instance: instance,
+        local_post: local_post,
+        remote_post: remote_post
+      }
+    end
+
+    test "with instance/peer IDs", %{
+      user: user,
+      other_user: other_user,
+      instance: instance,
+      local_post: local_post,
+      remote_post: remote_post
+    } do
+      feed = FeedLoader.feed(:custom, %{origin: Enums.id(instance)}, current_user: user)
+
+      assert FeedLoader.feed_contains?(feed, remote_post, current_user: user)
+      refute FeedLoader.feed_contains?(feed, local_post, current_user: user)
+    end
+
+    test "with  instance domain name", %{
+      user: user,
+      other_user: other_user,
+      local_post: local_post,
+      remote_post: remote_post,
+      instance_domain: instance_domain
+    } do
+      feed = FeedLoader.feed(:custom, %{origin: instance_domain}, current_user: user)
+
+      assert FeedLoader.feed_contains?(feed, remote_post, current_user: user)
+      refute FeedLoader.feed_contains?(feed, local_post, current_user: user)
+    end
+  end
+
+  describe "origin can filter by object" do
+    setup do
+      user = fake_user!("main user")
+      other_user = fake_user!("other_user")
+
+      local_post =
+        fake_post!(user, "public", %{
+          post_content: %{
+            name: "a local post",
+            html_body: "content"
+          }
+        })
+
+      remote_post =
+        fake_post!(other_user, "public", %{
+          post_content: %{
+            name: "a remote post",
+            html_body: "content"
+          }
+        })
+
+      instance_domain = "example.local"
+      instance_url = "https://#{instance_domain}"
+
+      {:ok, instance} =
+        Bonfire.Federate.ActivityPub.Instances.get_or_create(instance_url)
+        |> debug("instance created")
+
+      post_url = "#{instance_url}/post/1"
+
+      {:ok, peered} =
+        Bonfire.Federate.ActivityPub.Peered.save_canonical_uri(remote_post, post_url)
+        |> debug("post attached to instance")
+
+      %{
+        user: user,
+        other_user: other_user,
+        instance_domain: instance_domain,
+        instance: instance,
+        local_post: local_post,
+        remote_post: remote_post
+      }
+    end
+
+    test "with instance/peer IDs", %{
+      user: user,
+      other_user: other_user,
+      instance: instance,
+      local_post: local_post,
+      remote_post: remote_post
+    } do
+      feed = FeedLoader.feed(:custom, %{origin: Enums.id(instance)}, current_user: user)
+
+      assert FeedLoader.feed_contains?(feed, remote_post, current_user: user)
+      refute FeedLoader.feed_contains?(feed, local_post, current_user: user)
+    end
+
+    test "with  instance domain name", %{
+      user: user,
+      other_user: other_user,
+      local_post: local_post,
+      remote_post: remote_post,
+      instance_domain: instance_domain
+    } do
+      feed = FeedLoader.feed(:custom, %{origin: instance_domain}, current_user: user)
+
+      assert FeedLoader.feed_contains?(feed, remote_post, current_user: user)
+      refute FeedLoader.feed_contains?(feed, local_post, current_user: user)
+    end
+  end
 end

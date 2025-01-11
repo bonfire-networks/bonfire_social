@@ -1363,6 +1363,74 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
+  def maybe_filter(query, {:origin, origin}, _opts) when is_list(origin) and origin != [] do
+    fetcher_user_id = "1ACT1V1TYPVBREM0TESFETCHER"
+
+    cond do
+      :local in origin ->
+        debug("local feed")
+        local_feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
+
+        query
+        |> proload(
+          activity: [subject: {"subject_", character: [:peered]}, object: {"object_", [:peered]}]
+        )
+        |> where(
+          [fp, activity: activity, subject_peered: subject_peered, object_peered: object_peered],
+          (fp.feed_id == ^local_feed_id or
+             (is_nil(subject_peered.id) and is_nil(object_peered.id))) and
+            activity.subject_id != ^fetcher_user_id
+        )
+
+      :remote in origin ->
+        debug("remote/federated feed")
+        federated_feed_id = Bonfire.Social.Feeds.named_feed_id(:activity_pub)
+
+        query
+        |> proload(
+          activity: [subject: {"subject_", character: [:peered]}, object: {"object_", [:peered]}]
+        )
+        |> where(
+          [fp, activity: activity, subject_peered: subject_peered, object_peered: object_peered],
+          fp.feed_id == ^federated_feed_id or
+            (not is_nil(subject_peered.id) or not is_nil(object_peered.id)) or
+            activity.subject_id == ^fetcher_user_id
+        )
+
+      true ->
+        {instance_ids, instance_urls} =
+          Enum.split_with(origin, &Types.uid/1)
+          |> debug("list of instances")
+
+        instance_ids =
+          (instance_ids ++
+             if instance_urls != [] do
+               maybe_apply(
+                 Bonfire.Federate.ActivityPub.Instances,
+                 :list_by_domains,
+                 [instance_urls],
+                 fallback_return: []
+               )
+               |> Types.uids()
+             else
+               []
+             end)
+          |> debug("peers ids")
+
+        query
+        |> proload(
+          activity: [subject: {"subject_", character: [:peered]}, object: {"object_", [:peered]}]
+        )
+        |> where(
+          [subject_peered: subject_peered, object_peered: object_peered],
+          subject_peered.peer_id in ^instance_ids or object_peered.peer_id in ^instance_ids
+        )
+    end
+  end
+
+  def maybe_filter(query, {:origin, origin}, opts) when not is_nil(origin),
+    do: maybe_filter(query, {:origin, List.wrap(origin)}, opts)
+
   def maybe_filter(query, filters, _opts) do
     warn(filters, "no supported activity-related filters defined")
     query

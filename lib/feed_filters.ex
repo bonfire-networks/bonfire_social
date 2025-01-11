@@ -39,6 +39,8 @@ defmodule Bonfire.Social.FeedFilters do
     field :media_types, AtomOrStringList
     field :tags, StringList
 
+    field :origin, AtomOrStringList # can be :local, :remote, or ID(s) or domain name(s) of remote instance(s)
+
     field :time_limit, :integer, default: nil
     field :sort_order, Ecto.Enum, values: [:asc, :desc], default: :desc
 
@@ -72,9 +74,12 @@ defmodule Bonfire.Social.FeedFilters do
       :creator_circles,
       :media_types,
       :tags,
+      :origin,
       :time_limit,
       :sort_by,
-      :sort_order
+      :sort_order,
+      # :include_flags,
+      :show_objects_only_once
     ]
 
   @doc """

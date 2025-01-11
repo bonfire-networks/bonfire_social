@@ -68,6 +68,13 @@ defmodule Bonfire.Social.FeedsPresetTest do
                     postloads
                     |> Enum.filter(&Enum.member?(context_preloads, &1))
 
+                  preloads =
+                    if preset in [:local, :remote] do
+                      preloads ++ [:with_peered]
+                    else
+                      preloads
+                    end
+
                   %{preset: preset, filters: filters, preloads: preloads, postloads: postloads}
                 end) ++
                  [
@@ -409,18 +416,35 @@ defmodule Bonfire.Social.FeedsPresetTest do
         {post, nil}
 
       :remote ->
-        #   remote_user = fake_remote_user!("remote_user")
+        remote_user = fake_user!("remote_user")
 
-        #   post =
-        #     fake_post!(remote_user, "public", %{
-        #       post_content: %{
-        #         name: "remote post",
-        #         html_body: "content from fediverse"
-        #       }
-        #     })
+        instance_domain = "example.local"
+        instance_url = "https://#{instance_domain}"
+        actor_url = "#{instance_url}/actors/other_user"
 
-        # TODO
-        {nil, nil}
+        {:ok, instance} =
+          Bonfire.Federate.ActivityPub.Instances.get_or_create(instance_url)
+          |> debug("instance created")
+
+        {:ok, peered} =
+          Bonfire.Federate.ActivityPub.Peered.save_canonical_uri(remote_user, actor_url)
+          |> debug("user attached to instance")
+
+        remote_post =
+          fake_post!(remote_user, "public", %{
+            post_content: %{
+              name: "remote post",
+              html_body: "content from fediverse"
+            }
+          })
+
+        post_url = "#{instance_url}/post/1"
+
+        {:ok, peered} =
+          Bonfire.Federate.ActivityPub.Peered.save_canonical_uri(remote_post, post_url)
+          |> debug("post attached to instance")
+
+        {remote_post, nil}
 
       :notifications ->
         create_test_content(:mentions, user, other_user)
