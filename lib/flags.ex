@@ -158,12 +158,19 @@ defmodule Bonfire.Social.Flags do
       |> Keyword.put_new(:current_user, flagger)
       |> Keyword.put_new_lazy(:to_feeds, fn -> flag_feeds(id(object), object_type(object)) end)
 
-    # TODO flag_feeds should be the group moderators if the object is in a group
-
     case check_flag(flagger, object, opts)
          ~> create(flagger, ..., opts) do
       {:ok, flag} ->
-        Social.maybe_federate_and_gift_wrap_activity(flagger, flag)
+        if id(flagger) not in maybe_apply(
+             Bonfire.Federate.ActivityPub,
+             :do_not_federate_user_ids,
+             [],
+             fallback_return: []
+           ) do
+          Social.maybe_federate_and_gift_wrap_activity(flagger, flag)
+        else
+          {:ok, flag}
+        end
 
       e ->
         maybe_dup(flagger, object, e)
@@ -203,7 +210,11 @@ defmodule Bonfire.Social.Flags do
 
   # determines the feeds a flag is published to
   defp flag_feeds(_object, :group),
-    do: [instance_moderators()] |> debug("send flag of actual groups to instance moderators")
+    do:
+      [notifications: instance_moderators()]
+      |> debug("send flag of actual groups to instance moderators")
+
+  # TODO: flag_feeds should be the group moderators if the object is in a group
 
   defp flag_feeds(object, _),
     do:

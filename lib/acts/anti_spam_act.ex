@@ -61,7 +61,9 @@ defmodule Bonfire.Social.Acts.AntiSpam do
           if spam?(object, attrs, epic.assigns[:options][:context] || epic.assigns[:options]) do
             with {:error, _} <-
                    Bonfire.Social.Flags.flag(
-                     Bonfire.Me.Users.get_or_create_automod() || current_user,
+                     maybe_apply(Bonfire.Me.Users, :get_or_create_automod, [],
+                       fallback_return: nil
+                     ) || current_user,
                      object
                    ) do
               error("could not flag for mods to check")

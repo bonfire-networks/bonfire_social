@@ -13,6 +13,17 @@ defmodule Bonfire.Social do
     description: l("Basic social networking functionality, such as feeds and discussions.")
   )
 
+  @automod_id "1FR1END1YAVT0M0DERAT0RB0TS"
+  def automod_id, do: @automod_id
+
+  def get_or_create_automod,
+    do:
+      maybe_apply(Bonfire.Me.Users, :get_or_create_service_character, [
+        automod_id(),
+        "Mod Helper Bot",
+        "\"Here I am, brain the size of a planet, and they ask me to read spam.\""
+      ])
+
   @doc """
   Returns the configured repository module.
 

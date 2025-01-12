@@ -39,7 +39,8 @@ defmodule Bonfire.Social.FeedFilters do
     field :media_types, AtomOrStringList
     field :tags, StringList
 
-    field :origin, AtomOrStringList # can be :local, :remote, or ID(s) or domain name(s) of remote instance(s)
+    #  can be :local, :remote, or ID(s) or domain name(s) of remote instance(s)
+    field :origin, AtomOrStringList
 
     field :time_limit, :integer, default: nil
     field :sort_order, Ecto.Enum, values: [:asc, :desc], default: :desc
