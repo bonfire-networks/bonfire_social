@@ -161,12 +161,13 @@ defmodule Bonfire.Social.Flags do
     case check_flag(flagger, object, opts)
          ~> create(flagger, ..., opts) do
       {:ok, flag} ->
-        if id(flagger) not in maybe_apply(
-             Bonfire.Federate.ActivityPub,
-             :do_not_federate_user_ids,
-             [],
-             fallback_return: []
-           ) do
+        if opts[:skip_federation] != true and
+             id(flagger) not in maybe_apply(
+               Bonfire.Federate.ActivityPub,
+               :do_not_federate_user_ids,
+               [],
+               fallback_return: []
+             ) do
           Social.maybe_federate_and_gift_wrap_activity(flagger, flag)
         else
           {:ok, flag}

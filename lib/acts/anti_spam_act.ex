@@ -64,7 +64,8 @@ defmodule Bonfire.Social.Acts.AntiSpam do
                      maybe_apply(Bonfire.Me.Users, :get_or_create_automod, [],
                        fallback_return: nil
                      ) || current_user,
-                     object
+                     object,
+                     skip_federation: true
                    ) do
               error("could not flag for mods to check")
               raise Bonfire.Fail, :spam
