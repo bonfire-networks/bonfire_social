@@ -177,7 +177,7 @@ defmodule Bonfire.Social.FeedsPresetTest do
     loaded_activity =
       Bonfire.Social.Activities.activity_preloads(loaded_activity, postloads,
         current_user: user,
-        activity_loaded_preloads: preloads
+        activity_preloads: {preloads, nil}
       )
 
     verify_data(preset, loaded_activity, activity, object, user, other_user)

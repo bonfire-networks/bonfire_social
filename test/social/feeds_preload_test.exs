@@ -95,7 +95,7 @@ defmodule Bonfire.Social.FeedsPreloadTest do
              FeedLoader.feed_contains?(feed, reply, current_user: user)
              |> Bonfire.Social.Activities.activity_preloads(:all,
                current_user: user,
-               activity_loaded_preloads: postloads1
+               activity_preloads: {postloads1, nil}
              )
 
     # NOTE: by running postloads instead of preloading in original query, we are loading unecessary data sonce

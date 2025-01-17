@@ -429,16 +429,20 @@ defmodule Bonfire.Social.Activities do
     debug(preloads, "preloads inputted")
     opts = to_options(debug(opts))
 
+    already_preloaded =
+      is_tuple(opts[:activity_preloads]) &&
+        elem(opts[:activity_preloads], 0) |> debug("already_preloaded")
+
     if not is_nil(query_or_object_or_objects) and
          Ecto.Queryable.impl_for(query_or_object_or_objects) do
       preloads
-      |> Bonfire.Social.FeedLoader.map_activity_preloads(opts[:activity_loaded_preloads])
+      |> Bonfire.Social.FeedLoader.map_activity_preloads(already_preloaded)
       |> debug("accumulated preloads to proload")
       |> Enum.reduce(query_or_object_or_objects, &prepare_activity_preloads(&2, &1, opts))
       |> debug("query with accumulated proloads")
     else
       preloads
-      |> Bonfire.Social.FeedLoader.map_activity_preloads(opts[:activity_loaded_preloads])
+      |> Bonfire.Social.FeedLoader.map_activity_preloads(already_preloaded)
       |> Enum.flat_map(&prepare_activity_preloads(nil, &1, opts))
       |> Enum.uniq()
       |> debug("accumulated postloads to try")
@@ -1170,7 +1174,10 @@ defmodule Bonfire.Social.Activities do
   def maybe_filter(query, {:exclude_object_types, types}, _opts) do
     debug(types, "filter by exclude_object_types")
 
-    case Objects.prepare_exclude_object_types(types, FeedLoader.skip_types_default()) do
+    case Objects.prepare_exclude_object_types(
+           types,
+           Bonfire.Social.FeedLoader.skip_types_default()
+         ) do
       exclude_table_ids when is_list(exclude_table_ids) and exclude_table_ids != [] ->
         maybe_filter(query, {:exclude_table_ids, exclude_table_ids}, [])
 
