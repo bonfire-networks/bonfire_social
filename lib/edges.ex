@@ -396,7 +396,7 @@ defmodule Bonfire.Social.Edges do
 
   defp maybe_proload(query, :object, object_type)
        when object_type in [Bonfire.Data.Identity.User, Bonfire.Classify.Category] do
-    maybe_proload(:object_profile, object_type)
+    maybe_proload(query, :object_profile, object_type)
   end
 
   defp maybe_proload(query, :object_character, object_type) do
