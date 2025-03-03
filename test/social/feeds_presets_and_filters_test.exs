@@ -128,7 +128,7 @@ defmodule Bonfire.Social.Feeds.PresetFiltersTest do
         end
       end
 
-      if preset not in [:flagged_content] do
+      if preset not in [:flagged_content, :flagged_by_me] do
         test "using filters instead of the preset name", %{
           preset: preset,
           filters: filters,

@@ -857,7 +857,11 @@ defmodule Bonfire.Social.FeedLoader do
   def prepare_filters_and_opts(filters, opts) do
     opts = to_options(opts)
 
-    preload = opts[:preload] || contextual_preloads_from_filters(filters, :query)
+    preload =
+      opts[:preload] ||
+        contextual_preloads_from_filters(filters, :query)
+        |> debug("preloads to apply based on filters")
+
     # postload = opts[:postload] || contextual_preloads_from_filters(filters, :post)
 
     include_flags = filters[:include_flags] || opts[:include_flags]
@@ -1076,7 +1080,7 @@ defmodule Bonfire.Social.FeedLoader do
         |> feed_contains?(object, opts)
 
       id ->
-        feed_contains?(feed, [objects: id], opts)
+        feed_contains?(feed, %{objects: id}, opts)
     end
   end
 

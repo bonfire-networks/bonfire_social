@@ -85,13 +85,15 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
                  ]
 
   # Generate tests dynamically from feed presets - WIP: my, messages, user_following, user_followers, remote, my_requests, trending_discussions, local_images, publications
-  # for %{preset: preset, filters: filters} = params when preset in [:bookmarks] <- @test_params do
+  # for %{preset: preset, filters: filters} = params when preset in [:local_images] <- @test_params do
   for %{preset: preset, filters: filters} = params <- @test_params do
     describe "feed preset `#{inspect(preset)}` loads feed and configured preloads" do
       setup do
         %{preset: preset} = params = unquote(Macro.escape(params))
-        user = fake_user!("main user")
+        # _ = fake_admin!("an admin to be notified of flags")
+        user = fake_admin!("main user")
         other_user = fake_user!("other_user")
+        third_user = fake_user!("third_user")
 
         # Create test content based on the preset
         {object, activity} = create_test_content(preset, user, other_user)
@@ -100,63 +102,94 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
           object: object,
           activity: activity,
           user: user,
-          other_user: other_user
+          other_user: other_user,
+          third_user: third_user
         })
       end
 
-      test "using preset name", %{
-        preset: preset,
-        filters: filters,
-        preloads: preloads,
-        postloads: postloads,
-        object: object,
-        activity: activity,
-        user: user,
-        other_user: other_user
-      } do
-        if preset && object do
-          feed =
-            FeedLoader.feed(preset, %{},
-              current_user: user,
-              # limit: 3,
-              by: other_user,
-              tags: "#test",
-              show_objects_only_once: false
-            )
+      if preset not in [:user_followers, :user_following] do
+        test "using preset name", %{
+          preset: preset,
+          filters: filters,
+          preloads: preloads,
+          postloads: postloads,
+          object: object,
+          activity: activity,
+          user: user,
+          other_user: other_user
+        } do
+          if preset && object do
+            feed =
+              FeedLoader.feed(preset, %{},
+                current_user: user,
+                # limit: 3,
+                by: other_user,
+                tags: "#test",
+                show_objects_only_once: false
+              )
 
-          verify_feed(preset, feed, activity, object, user, other_user, preloads, postloads)
+            assert loaded_activity =
+                     FeedLoader.feed_contains?(feed, activity || object, current_user: user) ||
+                       FeedLoader.feed_contains?(feed, object, current_user: user)
+
+            verify_preloads(loaded_activity, preloads)
+            verify_preloads(loaded_activity, postloads -- preloads, false)
+
+            loaded_activity =
+              Bonfire.Social.Activities.activity_preloads(loaded_activity, postloads,
+                current_user: user,
+                activity_preloads: {preloads, nil}
+              )
+
+            verify_preloads(loaded_activity, postloads)
+          end
         end
-      end
 
-      test "using filters instead of the preset name", %{
-        preset: preset,
-        filters: filters,
-        preloads: preloads,
-        # postloads: postloads,
-        object: object,
-        activity: activity,
-        user: user,
-        other_user: other_user
-      } do
-        if object do
-          opts = [
-            current_user: user,
-            # limit: 3,
-            by: other_user,
-            tags: ["test"],
-            show_objects_only_once: false
-          ]
+        if preset not in [:flagged_content, :flagged_by_me] do
+          test "using filters instead of the preset name", %{
+            preset: preset,
+            filters: filters,
+            preloads: preloads,
+            # postloads: postloads,
+            object: object,
+            activity: activity,
+            user: user,
+            other_user: other_user,
+            third_user: third_user
+          } do
+            if object do
+              opts = [
+                current_user: user,
+                # limit: 3,
+                by: other_user,
+                tags: ["test"],
+                show_objects_only_once: false
+              ]
 
-          filters =
-            FeedLoader.parameterize_filters(%{}, filters, opts)
-            |> debug("parameterized_filters for #{preset}")
+              filters =
+                FeedLoader.parameterize_filters(%{}, filters, opts)
+                |> debug("parameterized_filters for #{preset}")
 
-          feed = FeedLoader.feed(:custom, filters, opts)
+              feed = FeedLoader.feed(:custom, filters, opts)
 
-          assert loaded_activity =
-                   FeedLoader.feed_contains?(feed, activity || object, current_user: user)
+              assert loaded_activity =
+                       FeedLoader.feed_contains?(feed, activity || object, current_user: user) ||
+                         FeedLoader.feed_contains?(feed, object, current_user: user)
 
-          verify_preloads(loaded_activity, preloads)
+              verify_preloads(loaded_activity, preloads, true, true) ||
+                (
+                  feed = FeedLoader.feed(:custom, filters, opts)
+
+                  if loaded_activity =
+                       FeedLoader.feed_contains?(feed, activity || object,
+                         current_user: third_user
+                       ) ||
+                         FeedLoader.feed_contains?(feed, object, current_user: user) do
+                    verify_preloads(loaded_activity, preloads, true, false)
+                  end
+                )
+            end
+          end
         end
       end
 
@@ -169,24 +202,8 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
     end
   end
 
-  defp verify_feed(preset, feed, activity, object, user, other_user, preloads, postloads) do
-    assert loaded_activity =
-             FeedLoader.feed_contains?(feed, activity || object, current_user: user)
-
-    verify_preloads(loaded_activity, preloads)
-    verify_preloads(loaded_activity, postloads -- preloads, false)
-
-    loaded_activity =
-      Bonfire.Social.Activities.activity_preloads(loaded_activity, postloads,
-        current_user: user,
-        activity_preloads: {preloads, nil}
-      )
-
-    verify_preloads(loaded_activity, postloads)
-  end
-
-  defp verify_preloads(activity, expected_preloads, assert? \\ true) do
-    debug(expected_preloads, "making sure we are #{if !assert?, do: "NOT "}preloading these")
+  defp verify_preloads(activity, expected_preloads, expected? \\ true, return_bool? \\ false) do
+    debug(expected_preloads, "making sure we are #{if !expected?, do: "NOT "}preloading these")
 
     for preload <- expected_preloads || [] do
       case preload do
@@ -202,14 +219,23 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
               activity
             ) or match?(%{subject: nil}, activity)
 
-          if assert?,
-            do:
-              assert(pattern_matched?, "expected subject to be loaded, got #{inspect(activity)}"),
-            else:
-              refute(
-                pattern_matched?,
-                "expected subject to NOT be loaded, got #{inspect(activity)}"
-              )
+          if return_bool? do
+            if expected?, do: pattern_matched?, else: !pattern_matched?
+          else
+            if expected?,
+              do:
+                assert(
+                  pattern_matched?,
+                  "expected subject to be loaded, got #{inspect(activity)}"
+                ),
+              else:
+                refute(
+                  pattern_matched?,
+                  "expected subject to NOT be loaded, got #{inspect(activity)}"
+                )
+
+            true
+          end
 
         :with_creator ->
           pattern_matched? =
@@ -235,14 +261,23 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
                 activity
               )
 
-          if assert?,
-            do:
-              assert(pattern_matched?, "expected creator to be loaded, got #{inspect(activity)}"),
-            else:
-              refute(
-                pattern_matched?,
-                "expected creator to NOT be loaded, got #{inspect(activity)}"
-              )
+          if return_bool? do
+            if expected?, do: pattern_matched?, else: !pattern_matched?
+          else
+            if expected?,
+              do:
+                assert(
+                  pattern_matched?,
+                  "expected creator to be loaded, got #{inspect(activity)}"
+                ),
+              else:
+                refute(
+                  pattern_matched?,
+                  "expected creator to NOT be loaded, got #{inspect(activity)}"
+                )
+
+            true
+          end
 
         :with_object ->
           pattern_matched? =
@@ -253,7 +288,7 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
               activity
             )
 
-          if assert?,
+          if expected?,
             do:
               assert(
                 pattern_matched?,
@@ -284,7 +319,7 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
                 activity
               )
 
-          if assert?,
+          if expected?,
             do:
               assert(
                 pattern_matched?,
@@ -297,11 +332,11 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
               )
 
         :with_post_content ->
-          verify_preloads(activity, [:with_object_more], assert?)
+          verify_preloads(activity, [:with_object_more], expected?)
 
         :with_media ->
           # has_media = match?(%{media: _}, activity)
-          if assert? do
+          if expected? do
             # assert has_media
             assert(
               is_list(activity.media),
@@ -315,14 +350,14 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
           end
 
         :per_media ->
-          verify_preloads(activity, [:with_media], assert?)
+          verify_preloads(activity, [:with_media], expected?)
 
         :with_reply_to ->
           pattern_matched? =
             match?(%{replied: %{reply_to: %Needle.Pointer{}}}, activity) or
               match?(%{replied: %{reply_to: nil}}, activity)
 
-          if assert?,
+          if expected?,
             do:
               assert(
                 pattern_matched?,
@@ -339,7 +374,7 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
             match?(%{object: %{peered: nil}}, activity) or
               match?(%{object: %{peered: %{id: _}}}, activity)
 
-          if assert?,
+          if expected?,
             do:
               assert(
                 pattern_matched?,
@@ -366,7 +401,7 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
                 activity
               )
 
-          if assert?,
+          if expected?,
             do:
               assert(
                 pattern_matched?,

@@ -4,6 +4,7 @@ defmodule Bonfire.Social.FeedFilters do
   import Ecto.Changeset
   import Untangle
 
+  alias Bonfire.Common.Enums
   alias Bonfire.Social.FeedFilters
   alias FeedFilters.StringList
   alias FeedFilters.AtomOrStringList
@@ -92,7 +93,10 @@ defmodule Bonfire.Social.FeedFilters do
   """
   def changeset(filters \\ %__MODULE__{}, attrs) do
     filters
-    |> cast(attrs, supported_filters())
+    |> cast(
+      Enums.input_to_atoms(attrs, also_discard_unknown_nested_keys: false),
+      supported_filters()
+    )
     # |> validate_length(:feed_ids, min: 1, message: "must have at least one feed ID")
     # |> validate_length(:tags, min: 1, message: "must have at least one tag")
     |> validate_number(:time_limit, greater_than_or_equal_to: 0)
