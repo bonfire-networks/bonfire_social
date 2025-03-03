@@ -383,11 +383,6 @@ defmodule Bonfire.Social.Objects do
     # end
   end
 
-  def maybe_filter(query, {:exclude_object_types, types}, _opts) do
-    # TODO? for cases where we're not already filtering by object_id in Activities.maybe_filter
-    query
-  end
-
   def maybe_filter(query, {:object_types, object_type}, _opts) when not is_nil(object_type) do
     case Bonfire.Common.Types.table_types(object_type) |> debug("object_type_tables") do
       table_ids when is_list(table_ids) and table_ids != [] ->
@@ -400,7 +395,7 @@ defmodule Bonfire.Social.Objects do
   end
 
   def maybe_filter(query, {:exclude_object_types, types}, opts) do
-    case Objects.prepare_exclude_object_types(types)
+    case prepare_exclude_object_types(types)
          |> debug("exclude_object_types_tables") do
       table_ids when is_list(table_ids) and table_ids != [] ->
         maybe_filter(query, {:exclude_table_ids, table_ids}, opts)
@@ -408,6 +403,24 @@ defmodule Bonfire.Social.Objects do
       _ ->
         query
     end
+  end
+
+  # def maybe_filter(query, {:exclude_object_types, types}, _opts) do
+  #   # TODO? for cases where we're not already filtering by object_id in Activities.maybe_filter
+  #   query
+  # end
+
+  def maybe_filter(query, {:exclude_table_ids, table_ids}, _opts)
+      when is_list(table_ids) and table_ids != [] do
+    # TODO? for cases where we're not already filtering by table_ids in Activities.maybe_filter
+    query
+    # |> reusable_join(:inner, [activity: activity], object in Pointer,
+    #   as: :object,
+    #   # Don't show certain object types (like messages) or anything deleted
+    #   on:
+    #     object.id == activity.object_id and
+    #       is_nil(object.deleted_at) and object.table_id not in ^table_ids
+    # )
   end
 
   def maybe_filter(query, {:media_types, types}, _opts) when is_list(types) and types != [] do
@@ -443,19 +456,6 @@ defmodule Bonfire.Social.Objects do
       _ ->
         query
     end
-  end
-
-  def maybe_filter(query, {:exclude_table_ids, table_ids}, _opts)
-      when is_list(table_ids) and table_ids != [] do
-    # TODO? for cases where we're not already filtering by table_ids in Activities.maybe_filter
-    query
-    # |> reusable_join(:inner, [activity: activity], object in Pointer,
-    #   as: :object,
-    #   # Don't show certain object types (like messages) or anything deleted
-    #   on:
-    #     object.id == activity.object_id and
-    #       is_nil(object.deleted_at) and object.table_id not in ^table_ids
-    # )
   end
 
   def maybe_filter(query, filters, _opts) do

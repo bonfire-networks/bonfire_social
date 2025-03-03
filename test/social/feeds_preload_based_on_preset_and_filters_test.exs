@@ -1,4 +1,4 @@
-defmodule Bonfire.Social.FeedsPresetTest do
+defmodule Bonfire.Social.Feeds.PreloadPresetTest do
   use Bonfire.Social.DataCase, async: true
   use Bonfire.Common.Utils
 
@@ -12,6 +12,8 @@ defmodule Bonfire.Social.FeedsPresetTest do
   alias Bonfire.Posts
   alias Bonfire.Messages
   alias Bonfire.Social.Objects
+
+  alias Bonfire.Social.Feeds.PresetFiltersTest
 
   alias Bonfire.Me.Users
   alias Bonfire.Me.Fake
@@ -83,7 +85,7 @@ defmodule Bonfire.Social.FeedsPresetTest do
                  ]
 
   # Generate tests dynamically from feed presets - WIP: my, messages, user_following, user_followers, remote, my_requests, trending_discussions, local_images, publications
-  # for %{preset: preset, filters: filters} = params when preset in [:my_bookmarks] <- @test_params do
+  # for %{preset: preset, filters: filters} = params when preset in [:bookmarks] <- @test_params do
   for %{preset: preset, filters: filters} = params <- @test_params do
     describe "feed preset `#{inspect(preset)}` loads feed and configured preloads" do
       setup do
@@ -180,20 +182,7 @@ defmodule Bonfire.Social.FeedsPresetTest do
         activity_preloads: {preloads, nil}
       )
 
-    verify_data(preset, loaded_activity, activity, object, user, other_user)
-
     verify_preloads(loaded_activity, postloads)
-  end
-
-  defp verify_data(preset, loaded_activity, activity, object, user, other_user) do
-    case preset do
-      :local_media ->
-        assert %{media: [%{id: id}]} = loaded_activity
-        assert id == object.id
-
-      _ ->
-        debug(preset, "Missing verify_data case")
-    end
   end
 
   defp verify_preloads(activity, expected_preloads, assert? \\ true) do
@@ -325,6 +314,9 @@ defmodule Bonfire.Social.FeedsPresetTest do
             )
           end
 
+        :per_media ->
+          verify_preloads(activity, [:with_media], assert?)
+
         :with_reply_to ->
           pattern_matched? =
             match?(%{replied: %{reply_to: %Needle.Pointer{}}}, activity) or
@@ -389,183 +381,6 @@ defmodule Bonfire.Social.FeedsPresetTest do
         other ->
           raise "Missing verify_preloads case for #{inspect(other)}"
       end
-    end
-  end
-
-  # Helper to create appropriate test content based on feed type
-  defp create_test_content(preset, user, other_user) do
-    case preset do
-      :my ->
-        other_user = fake_user!("other_user")
-
-        assert {:ok, %Bonfire.Data.Social.Follow{} = follow} =
-                 Bonfire.Social.Graph.Follows.follow(user, other_user)
-
-        # assert {:ok, %Bonfire.Data.Social.Follow{} = follow} =
-        #          Bonfire.Social.Graph.Follows.follow(other_user, user)
-
-        assert post =
-                 fake_post!(other_user, "public", %{
-                   post_content: %{
-                     name: "followed user post",
-                     html_body: "content from someone I follow"
-                   }
-                 })
-
-        # FIXME: why is post not appearing in my feed?
-        {post, nil}
-
-      :remote ->
-        remote_user = fake_user!("remote_user")
-
-        instance_domain = "example.local"
-        instance_url = "https://#{instance_domain}"
-        actor_url = "#{instance_url}/actors/other_user"
-
-        {:ok, instance} =
-          Bonfire.Federate.ActivityPub.Instances.get_or_create(instance_url)
-          |> debug("instance created")
-
-        {:ok, peered} =
-          Bonfire.Federate.ActivityPub.Peered.save_canonical_uri(remote_user, actor_url)
-          |> debug("user attached to instance")
-
-        remote_post =
-          fake_post!(remote_user, "public", %{
-            post_content: %{
-              name: "remote post",
-              html_body: "content from fediverse"
-            }
-          })
-
-        post_url = "#{instance_url}/post/1"
-
-        {:ok, peered} =
-          Bonfire.Federate.ActivityPub.Peered.save_canonical_uri(remote_post, post_url)
-          |> debug("post attached to instance")
-
-        {remote_post, nil}
-
-      :notifications ->
-        create_test_content(:mentions, user, other_user)
-
-      :liked_by_me ->
-        assert post =
-                 fake_post!(other_user, "public", %{
-                   post_content: %{name: "likeable post", html_body: "content"}
-                 })
-
-        assert {:ok, like} = Bonfire.Social.Likes.like(user, post)
-        {post, like}
-
-      :user_followers ->
-        assert {:ok, follow} = Bonfire.Social.Graph.Follows.follow(user, other_user)
-
-        {other_user, follow}
-
-      :user_following ->
-        assert {:ok, follow} = Bonfire.Social.Graph.Follows.follow(other_user, user)
-
-        {user, follow}
-
-      :my_requests ->
-        # TODO
-        {nil, nil}
-
-      :my_bookmarks ->
-        assert post =
-                 fake_post!(user, "public", %{
-                   post_content: %{name: "bookmarkable post", html_body: "content"}
-                 })
-
-        assert {:ok, bookmark} = Bonfire.Social.Bookmarks.bookmark(user, post)
-
-        {post, nil}
-
-      :hashtag ->
-        assert post =
-                 fake_post!(user, "public", %{
-                   post_content: %{name: "tagged post", html_body: "post with #test"}
-                 })
-
-        {post, nil}
-
-      :mentions ->
-        assert post =
-                 fake_post!(other_user, "public", %{
-                   post_content: %{name: "mention me", html_body: "@#{user.character.username}"}
-                 })
-
-        {post, nil}
-
-      :flagged_by_me ->
-        assert post =
-                 fake_post!(other_user, "public", %{
-                   post_content: %{name: "flagged post", html_body: "content"}
-                 })
-
-        assert {:ok, flag} = Bonfire.Social.Flags.flag(user, post)
-        {post, flag}
-
-      :flagged_content ->
-        assert post =
-                 fake_post!(fake_user!(), "mentions", %{
-                   post_content: %{name: "flagged post", html_body: "content"}
-                 })
-
-        assert {:ok, flag} = Bonfire.Social.Flags.flag(other_user, post)
-        {post, flag}
-
-      :local_images ->
-        # assert {:ok, media} = Bonfire.Files.upload(ImageUploader, user, icon_file())
-        # post =
-        #   fake_post!(user, "public", %{
-        #     post_content: %{name: "media post", html_body: "content"},
-        #     uploaded_media: [media]
-        #   })
-        # {media, nil}
-
-        # TODO: images or open science publications attached to a post aren't directly linked to an activity (as opposed to open science publications fetched from ORCID API) so not included in current feed query, so need to adapt the feed query...
-        {nil, nil}
-
-      :research ->
-        #   assert {:ok, media} = Bonfire.OpenScience.APIs.fetch_and_publish_work(user, "https://doi.org/10.1080/1047840X.2012.720832")
-        #   {media, nil} 
-
-        #  FIXME: feed ends up empty
-        {nil, nil}
-
-      :local_media ->
-        # TODO: with both image and publication?
-        {nil, nil}
-
-      :trending_discussions ->
-        # TODO
-        {nil, nil}
-
-      :messages ->
-        #   receiver = Fake.fake_user!()
-        #   attrs = %{
-        #     to_circles: [receiver.id],
-        #     post_content: %{name: "test DM", html_body: "content"}
-        #   }
-        #   assert {:ok, message} = Messages.send(user, attrs)
-        #   {receiver, message}
-
-        # TODO?
-        {nil, nil}
-
-      other
-      when is_nil(other) or other in [:local, :explore, :user_by_object_type, :user_activities] ->
-        assert post =
-                 fake_post!(other_user, "public", %{
-                   post_content: %{name: "default post", html_body: "content"}
-                 })
-
-        {post, nil}
-
-      other ->
-        raise "Missing create_test_content case for #{inspect(other)}"
     end
   end
 end

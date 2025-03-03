@@ -165,7 +165,7 @@ defmodule Bonfire.Social.FeedsFiltersTest do
       refute FeedLoader.feed_contains?(feed, post, current_user: user)
     end
 
-    test "exclude_object_types filters out specific subject types (schema)", %{
+    test "exclude_object_types filters out specific object types (schema)", %{
       user: user,
       post: post
     } do
@@ -177,7 +177,7 @@ defmodule Bonfire.Social.FeedsFiltersTest do
       refute FeedLoader.feed_contains?(feed, post, current_user: user)
     end
 
-    test "exclude_object_types filters out specific subject types (schema string)", %{
+    test "exclude_object_types filters out specific object types (schema string)", %{
       user: user,
       post: post
     } do

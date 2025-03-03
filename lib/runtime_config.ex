@@ -13,11 +13,13 @@ defmodule Bonfire.Social.RuntimeConfig do
         my: %{
           description: "Activities of people I follow",
           filters: %FeedFilters{feed_name: :my},
-          current_user_required: true
+          current_user_required: true,
+          show_in_main_menu: true
         },
         explore: %{
           description: "All activities",
-          filters: %FeedFilters{feed_name: :explore, exclude_activity_types: [:like]}
+          filters: %FeedFilters{feed_name: :explore, exclude_activity_types: [:like]},
+          show_in_main_menu: true
         },
         local: %{
           description: "Local instance activities",
@@ -25,7 +27,8 @@ defmodule Bonfire.Social.RuntimeConfig do
             feed_name: :local,
             origin: :local,
             exclude_activity_types: [:like]
-          }
+          },
+          show_in_main_menu: true
         },
         remote: %{
           description: "Remote activities from other federated instances",
@@ -33,7 +36,8 @@ defmodule Bonfire.Social.RuntimeConfig do
             feed_name: :remote,
             origin: :remote,
             exclude_activity_types: [:like]
-          }
+          },
+          show_in_main_menu: true
         },
         notifications: %{
           description: "Notifications for me",
@@ -52,12 +56,13 @@ defmodule Bonfire.Social.RuntimeConfig do
         },
 
         # User interaction feeds
-        liked_by_me: %{
+        likes: %{
           description: "Posts I've liked",
           filters: %FeedFilters{activity_types: [:like]},
-          parameterized: %FeedFilters{subjects: [:me]}
+          parameterized: %FeedFilters{subjects: [:me]},
+          show_in_main_menu: true
         },
-        my_bookmarks: %{
+        bookmarks: %{
           description: "Posts I've bookmarked",
           filters: %FeedFilters{activity_types: :bookmark},
           current_user_required: true,

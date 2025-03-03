@@ -1142,13 +1142,15 @@ defmodule Bonfire.Social.Activities do
   end
 
   def maybe_filter(query, {:activity_types, types}, _opts) do
-    debug(types, "filter by activity_types")
+    IO.inspect(types, label: "filter by activity_types")
 
     case Verbs.ids(types) do
       verb_ids when is_list(verb_ids) and verb_ids != [] ->
+        IO.inspect(verb_ids, label: "filter by verb_ids")
         where(query, [activity: activity], activity.verb_id in ^verb_ids)
 
-      _ ->
+      other ->
+        IO.inspect(other, label: "no verb_ids")
         query
     end
   end
@@ -1171,7 +1173,7 @@ defmodule Bonfire.Social.Activities do
     where(query, [activity: activity], activity.verb_id not in ^verb_ids)
   end
 
-  def maybe_filter(query, {:exclude_object_types, types}, _opts) do
+  def maybe_filter(query, {:exclude_object_types, types}, _opts) when not is_nil(types) do
     debug(types, "filter by exclude_object_types")
 
     case Objects.prepare_exclude_object_types(
@@ -1179,9 +1181,11 @@ defmodule Bonfire.Social.Activities do
            Bonfire.Social.FeedLoader.skip_types_default()
          ) do
       exclude_table_ids when is_list(exclude_table_ids) and exclude_table_ids != [] ->
+        debug(types, "filter by exclude_table_ids")
         maybe_filter(query, {:exclude_table_ids, exclude_table_ids}, [])
 
-      _ ->
+      other ->
+        debug(other, "other exclude_table_ids")
         query
     end
   end

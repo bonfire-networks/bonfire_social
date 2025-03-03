@@ -1,4 +1,4 @@
-defmodule Bonfire.Social.FeedsPreloadTest do
+defmodule Bonfire.Social.Feeds.PreloadCustomTest do
   use Bonfire.Social.DataCase, async: true
   use Bonfire.Common.Utils
 
