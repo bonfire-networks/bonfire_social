@@ -11,7 +11,7 @@ defmodule Bonfire.Social.FeedFilters do
   @primary_key false
   typed_embedded_schema do
     field :feed_name, Ecto.Enum,
-      values: [:my, :explore, :fediverse, :local, :curated, :likes, :bookmarks, :flags, :custom],
+      values: [:my, :explore, :remote, :local, :curated, :likes, :bookmarks, :flags, :custom],
       default: :custom
 
     field :feed_ids, StringList

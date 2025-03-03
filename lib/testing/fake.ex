@@ -126,6 +126,8 @@ defmodule Bonfire.Social.Fake do
             post_content: %{name: "flagged post", html_body: "content"}
           })
 
+        {:ok, post} = Bonfire.Posts.read(post.id, current_user: user)
+
         {:ok, flag} = Bonfire.Social.Flags.flag(user, post)
         {post, flag}
 

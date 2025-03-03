@@ -67,7 +67,8 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %FeedFilters{activity_types: :bookmark},
           current_user_required: true,
           parameterized: %FeedFilters{subjects: [:me]},
-          show_in_main_menu: true
+          show_in_main_menu: true,
+          base_query_fun: &Bonfire.Social.Bookmarks.base_query/0
         },
         my_requests: %{
           description: "Pending requests for me",
@@ -133,8 +134,9 @@ defmodule Bonfire.Social.RuntimeConfig do
             include_flags: true,
             show_objects_only_once: false
           },
-          parameterized: %FeedFilters{subjects: [:me]},
-          current_user_required: true
+          parameterized: %{subjects: [:me]},
+          current_user_required: true,
+          opts: [skip_boundary_check: true]
         },
         flagged_content: %{
           description: "Content flagged by anyone (mods only)",
@@ -145,7 +147,8 @@ defmodule Bonfire.Social.RuntimeConfig do
             show_objects_only_once: false
           },
           current_user_required: true,
-          role_required: :mod
+          role_required: :mod,
+          opts: [skip_boundary_check: true]
         },
 
         # Combined filters examples

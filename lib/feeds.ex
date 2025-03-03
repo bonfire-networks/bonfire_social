@@ -413,7 +413,7 @@ defmodule Bonfire.Social.Feeds do
   """
   def named_feed_id(name, opts \\ [])
   def named_feed_id(:explore, _), do: nil
-  def named_feed_id(:fediverse, _), do: named_feed_id(:activity_pub)
+  def named_feed_id(:remote, _), do: named_feed_id(:activity_pub)
   def named_feed_id(:notifications, opts), do: my_feed_id(:notifications, current_user(opts))
 
   def named_feed_id(name, _) when is_atom(name) and not is_nil(name),

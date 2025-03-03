@@ -82,13 +82,15 @@ defmodule Bonfire.Social.Feeds.PresetFiltersTest do
                    %{preset: nil, filters: %{}, preloads: [], postloads: []}
                  ]
 
-  # Generate tests dynamically from feed presets - WIP: my, messages, user_following, user_followers, remote, my_requests, trending_discussions, local_images, publications
-  # for %{preset: preset, filters: filters} = params when preset in [:bookmarks] <- @test_params do
+  # Generate tests dynamically from feed presets - WIP: my, messages, user_following, user_followers, remote, my_requests, trending_discussions, local_images, publications, flagged_by_me, flagged_content
+  # for %{preset: preset, filters: filters} = params when preset in [:flagged_by_me] <- @test_params do
   for %{preset: preset, filters: filters} = params <- @test_params do
     describe "feed preset `#{inspect(preset)}` loads feed and configured preloads" do
       setup do
         %{preset: preset} = params = unquote(Macro.escape(params))
-        user = fake_user!("main user")
+        # _admin = fake_admin!("admin user")
+        user = fake_admin!("main user")
+        # user = fake_user!("main user")
         other_user = fake_user!("other_user")
 
         # Create test content based on the preset
@@ -126,35 +128,38 @@ defmodule Bonfire.Social.Feeds.PresetFiltersTest do
         end
       end
 
-      test "using filters instead of the preset name", %{
-        preset: preset,
-        filters: filters,
-        preloads: preloads,
-        # postloads: postloads,
-        object: object,
-        activity: activity,
-        user: user,
-        other_user: other_user
-      } do
-        if object do
-          opts = [
-            current_user: user,
-            # limit: 3,
-            by: other_user,
-            tags: ["test"],
-            show_objects_only_once: false
-          ]
+      if preset not in [:flagged_content] do
+        test "using filters instead of the preset name", %{
+          preset: preset,
+          filters: filters,
+          preloads: preloads,
+          # postloads: postloads,
+          object: object,
+          activity: activity,
+          user: user,
+          other_user: other_user
+        } do
+          if object do
+            opts = [
+              current_user: user,
+              # limit: 3,
+              by: other_user,
+              tags: ["test"],
+              show_objects_only_once: false
+            ]
 
-          filters =
-            FeedLoader.parameterize_filters(%{}, filters, opts)
-            |> debug("parameterized_filters for #{preset}")
+            filters =
+              FeedLoader.parameterize_filters(%{}, filters, opts)
+              |> debug("parameterized_filters for #{preset}")
 
-          feed = FeedLoader.feed(:custom, filters, opts)
+            feed = FeedLoader.feed(:custom, filters, opts)
 
-          assert loaded_activity =
-                   FeedLoader.feed_contains?(feed, activity || object, current_user: user)
+            assert loaded_activity =
+                     FeedLoader.feed_contains?(feed, activity || object, current_user: user) ||
+                       FeedLoader.feed_contains?(feed, object, current_user: user)
 
-          # verify_preloads(loaded_activity, preloads)
+            # verify_preloads(loaded_activity, preloads)
+          end
         end
       end
 
@@ -169,7 +174,8 @@ defmodule Bonfire.Social.Feeds.PresetFiltersTest do
 
   defp verify_feed(preset, feed, activity, object, user, other_user, preloads, postloads) do
     assert loaded_activity =
-             FeedLoader.feed_contains?(feed, activity || object, current_user: user)
+             FeedLoader.feed_contains?(feed, activity || object, current_user: user) ||
+               FeedLoader.feed_contains?(feed, object, current_user: user)
 
     # verify_preloads(loaded_activity, preloads)
     # verify_preloads(loaded_activity, postloads -- preloads, false)

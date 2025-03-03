@@ -10,7 +10,7 @@ defmodule Bonfire.Social.Bookmarks do
   # alias Bonfire.Data.Social.LikeCount
   # alias Bonfire.Boundaries.Verbs
 
-  # alias Bonfire.Social.Activities
+  alias Bonfire.Social.Activities
   alias Bonfire.Social.Edges
   # alias Bonfire.Social.Feeds
   # alias Bonfire.Social.FeedActivities
@@ -161,8 +161,8 @@ defmodule Bonfire.Social.Bookmarks do
     # delete the Bookmark
     Edges.delete_by_both(bookmarker, Bookmark, bookmarked)
 
-    # delete the bookmark activity & feed entries (NOTE: does not apply since Bookmark is not a declared verb or added to Feeds)
-    # Activities.delete_by_subject_verb_object(bookmarker, :bookmark, bookmarked)
+    # delete the bookmark activity & feed entries (if any)
+    Activities.delete_by_subject_verb_object(bookmarker, :bookmark, bookmarked)
 
     # Note: the bookmark count is automatically decremented by DB triggers
   end
@@ -249,12 +249,17 @@ defmodule Bonfire.Social.Bookmarks do
     )
   end
 
+  def base_query(), do: from(p in Bookmark, as: :main_object)
+
   defp create(bookmarker, bookmarked, opts) do
     insert(bookmarker, bookmarked, opts)
   end
 
-  defp insert(subject, object, options) do
-    Edges.changeset_base(Bookmark, subject, object, options)
+  defp insert(subject, object, opts) do
+    # Edges.changeset_base(Bookmark, subject, object, options)
+    # |> Edges.insert(subject, object)
+    Edges.changeset(Bookmark, subject, :bookmark, object, opts)
+    |> debug("cssss")
     |> Edges.insert(subject, object)
   end
 end

@@ -92,12 +92,14 @@ defmodule Bonfire.Social.FeedLoader do
     debug(custom_filters)
 
     case feed_definition_if_permitted(feed_name, opts) |> debug("feed_definition") do
-      {:ok, %{parameterized: %{} = parameters, filters: preset_filters}} ->
+      {:ok, %{parameterized: %{} = parameters, filters: preset_filters} = feed_def} ->
         preset_filters
         |> IO.inspect(label: "preset_filters")
 
         custom_filters
         |> IO.inspect(label: "custom_filters")
+
+        opts = Keyword.merge(opts, feed_def[:opts] || [])
 
         with {:ok, filters} <-
                merge_feed_filters(preset_filters, custom_filters, opts)
@@ -107,10 +109,17 @@ defmodule Bonfire.Social.FeedLoader do
              {filters, opts} <-
                prepare_filters_and_opts(filters, opts)
                |> IO.inspect(label: "prepared feed_filters and opts") do
-          feed_filtered(filters[:feed_name], filters, opts)
+          if is_function(feed_def[:base_query_fun]) do
+            feed_def[:base_query_fun].()
+          else
+            filters[:feed_name]
+          end
+          |> feed_filtered(filters, opts)
         end
 
-      {:ok, %{filters: preset_filters}} ->
+      {:ok, %{filters: preset_filters} = feed_def} ->
+        opts = Keyword.merge(opts, feed_def[:opts] || [])
+
         with {:ok, filters} <-
                merge_feed_filters(preset_filters, custom_filters, opts)
                |> FeedFilters.validate()
@@ -118,7 +127,12 @@ defmodule Bonfire.Social.FeedLoader do
              {filters, opts} <-
                prepare_filters_and_opts(filters, opts)
                |> debug("prepared feed_filters and opts") do
-          feed_filtered(filters[:feed_name], filters, opts)
+          if is_function(feed_def[:base_query_fun]) do
+            feed_def[:base_query_fun].()
+          else
+            filters[:feed_name]
+          end
+          |> feed_filtered(filters, opts)
         end
 
       other ->
@@ -129,7 +143,7 @@ defmodule Bonfire.Social.FeedLoader do
 
   def feed(%{feed_name: _nil} = custom_filters, opts) do
     opts = to_options(opts)
-    debug(custom_filters, "custom filters")
+    error(custom_filters, "custom filters")
 
     filters =
       merge_feed_filters(custom_filters, opts)
@@ -218,10 +232,23 @@ defmodule Bonfire.Social.FeedLoader do
     feed_filtered(feed_ids, filters, opts)
   end
 
+  def feed_filtered({feed_name, nil}, filters, opts) do
+    feed_filtered(feed_name, filters, opts)
+  end
+
   def feed_filtered({feed_name, feed_name_again}, filters, opts)
       when is_atom(feed_name) and not is_nil(feed_name) and is_atom(feed_name_again) do
     feed_filtered(feed_name, filters, opts)
   end
+
+  # def feed_filtered(
+  #       _feed,
+  #       %Bonfire.Social.FeedFilters{base_query_fun: base_query_fun} = filters,
+  #       opts
+  #     )
+  #     when is_function(base_query_fun) do
+  #   feed_filtered(base_query_fun.(), filters, opts)
+  # end
 
   def feed_filtered(%Ecto.Query{} = custom_query, filters, opts) do
     # opts = to_feed_options(filters, opts)
@@ -271,8 +298,8 @@ defmodule Bonfire.Social.FeedLoader do
         |> prepare_feed(filters, opts)
 
       _ ->
-        IO.inspect(other, label: "Not a recognised feed to query, defaulting to explore")
-        IO.inspect(filters, label: "with any provided filters")
+        warn(other, "Not a recognised feed to query, defaulting to explore?")
+        debug(filters, label: "with any provided filters")
         # raise e
         query_extras(filters, opts)
         |> paginate_and_boundarise_feed(filters, opts)
@@ -690,8 +717,8 @@ defmodule Bonfire.Social.FeedLoader do
 
     specific_feed_ids = Types.uids(feed_id_or_ids)
 
-    # local_feed_id = Feeds.named_feed_id(:local)
-    # federated_feed_id = Feeds.named_feed_id(:activity_pub)
+    local_feed_id = Feeds.named_feed_id(:local)
+    federated_feed_id = Feeds.named_feed_id(:activity_pub)
     # fetcher_user_id = "1ACT1V1TYPVBREM0TESFETCHER"
 
     cond do
@@ -727,6 +754,12 @@ defmodule Bonfire.Social.FeedLoader do
       #       (not is_nil(subject_peered.id) or not is_nil(object_peered.id)) or
       #       activity.subject_id == ^fetcher_user_id
       #   )
+
+      :local in specific_feed_ids or :activity_pub in specific_feed_ids or
+        federated_feed_id in specific_feed_ids or local_feed_id in specific_feed_ids ->
+        debug(feed_id_or_ids, "local or remote feed")
+
+        query_extras(filters, opts)
 
       specific_feed_ids != [] ->
         debug(feed_id_or_ids, "specific feed(s)")
@@ -963,7 +996,7 @@ defmodule Bonfire.Social.FeedLoader do
       query
       # |> maybe_filter(filter, opts)
       |> Activities.maybe_filter(filter, opts)
-      |> debug("Activities #{inspect(filter_key)} filter applied")
+      |> debug("Activities filter #{inspect(filter_key)} applied")
       #  TODO: can we avoid loading the object if not needed by a filter?
       # |> proload(activity: [:object])
       |> Objects.maybe_filter(filter, opts)

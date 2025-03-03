@@ -458,6 +458,23 @@ defmodule Bonfire.Social.Objects do
     end
   end
 
+  def maybe_filter(query, {:tags, tag_ids}, _opts) when is_list(tag_ids) and tag_ids != [] do
+    case Types.uids(tag_ids) do
+      [] ->
+        query
+
+      ids ->
+        query
+        |> proload(:inner, activity: [:object])
+        #   |> reusable_join(:inner, [object: object], object_tagged in Tagged,
+        #   as: :object_tagged,
+        #   on: tagged.tag_id in ^ids and object_tagged.object_id == object.id
+        # )
+        |> proload(:inner, activity: [object: [:tagged]])
+        |> where([tagged: tagged], tagged.tag_id in ^ids)
+    end
+  end
+
   def maybe_filter(query, filters, _opts) do
     warn(filters, "no supported object-related filters defined")
     query
