@@ -14,12 +14,61 @@ defmodule Bonfire.Social.Fake do
     user
   end
 
+  def feed_preset_test_params do
+    # Get feed presets from config and transform them into test parameters
+    feed_presets = Application.fetch_env!(:bonfire_social, Bonfire.Social.Feeds)[:feed_presets]
+
+    preload_rules =
+      Application.fetch_env!(:bonfire_social, Bonfire.Social.FeedLoader)[
+        :preload_rules
+      ]
+
+    # preload_default_include = Application.compile_env(:bonfire_social, Bonfire.Social.FeedLoader)[
+    #                            :preload_defaults
+    #                          ][:feed][:include]
+    preload_by_context =
+      Application.fetch_env!(:bonfire_social, Bonfire.Social.FeedLoader)[
+        :preload_by_context
+      ]
+
+    # Generate test parameters from config
+    for {preset, %{filters: filters} = preset_details} <- feed_presets do
+      filters =
+        Map.merge(filters, preset_details[:parameterized] || %{})
+        |> IO.inspect(label: "filters for #{preset}")
+
+      # |> Enums.struct_to_map()
+      # |> Map.drop([:__typename])
+
+      # Get preloads from preload rules based on feed config
+      postloads =
+        Bonfire.Social.FeedLoader.preloads_from_filters(filters, preload_rules)
+
+      context_preloads = preload_by_context[:query] || []
+
+      preloads =
+        postloads
+        |> Enum.filter(&Enum.member?(context_preloads, &1))
+
+      preloads =
+        if preset in [:local, :remote] do
+          preloads ++ [:with_peered]
+        else
+          preloads
+        end
+
+      %{preset: preset, filters: filters, preloads: preloads, postloads: postloads}
+    end ++
+      [
+        # no filters
+        %{preset: nil, filters: %{}, preloads: [], postloads: []}
+      ]
+  end
+
   # Helper to create appropriate test content based on feed type
   def create_test_content(preset, user, other_user) do
     case preset do
       :my ->
-        other_user = Bonfire.Me.Fake.fake_user!("other_user")
-
         {:ok, %Bonfire.Data.Social.Follow{} = follow} =
           Bonfire.Social.Graph.Follows.follow(user, other_user)
 
@@ -38,7 +87,7 @@ defmodule Bonfire.Social.Fake do
         {post, nil}
 
       :remote ->
-        remote_user = Bonfire.Me.Fake.fake_user!("remote_user")
+        remote_user = Bonfire.Me.Fake.fake_user!("test_remote_user")
 
         instance_domain = "example.local"
         instance_url = "https://#{instance_domain}"
@@ -74,7 +123,7 @@ defmodule Bonfire.Social.Fake do
       :likes ->
         post =
           Bonfire.Posts.Fake.fake_post!(other_user, "public", %{
-            post_content: %{name: "likeable post", html_body: "content"}
+            post_content: %{name: "likeable post", html_body: "likeable content"}
           })
 
         {:ok, like} = Bonfire.Social.Likes.like(user, post)
@@ -97,7 +146,7 @@ defmodule Bonfire.Social.Fake do
       :bookmarks ->
         post =
           Bonfire.Posts.Fake.fake_post!(user, "public", %{
-            post_content: %{name: "bookmarkable post", html_body: "content"}
+            post_content: %{name: "bookmarkable post", html_body: "bookmarkable content"}
           })
 
         {:ok, bookmark} = Bonfire.Social.Bookmarks.bookmark(user, post)
@@ -115,7 +164,7 @@ defmodule Bonfire.Social.Fake do
       :mentions ->
         post =
           Bonfire.Posts.Fake.fake_post!(other_user, "public", %{
-            post_content: %{name: "mention me", html_body: "@#{user.character.username}"}
+            post_content: %{name: "mention me", html_body: "@#{user.character.username} hey"}
           })
 
         {post, nil}
@@ -133,9 +182,13 @@ defmodule Bonfire.Social.Fake do
 
       :flagged_content ->
         post =
-          Bonfire.Posts.Fake.fake_post!(Bonfire.Me.Fake.fake_user!(), "mentions", %{
-            post_content: %{name: "flagged post", html_body: "content"}
-          })
+          Bonfire.Posts.Fake.fake_post!(
+            Bonfire.Me.Fake.fake_user!("author of flagged content"),
+            "mentions",
+            %{
+              post_content: %{name: "flagged post", html_body: "content"}
+            }
+          )
 
         {:ok, flag} = Bonfire.Social.Flags.flag(other_user, post)
         {post, flag}
@@ -145,7 +198,7 @@ defmodule Bonfire.Social.Fake do
 
         post =
           Bonfire.Posts.Fake.fake_post!(user, "public", %{
-            post_content: %{name: "media post", html_body: "content"},
+            post_content: %{name: "media post", html_body: "media content post"},
             uploaded_media: [media]
           })
 
@@ -178,11 +231,25 @@ defmodule Bonfire.Social.Fake do
         # TODO?
         {nil, nil}
 
-      other
-      when is_nil(other) or other in [:local, :explore, :user_by_object_type, :user_activities] ->
+      :local ->
+        original_post =
+          Bonfire.Posts.Fake.fake_post!(other_user, "public", %{
+            post_content: %{name: "original post", html_body: "original post content"}
+          })
+
         post =
           Bonfire.Posts.Fake.fake_post!(other_user, "public", %{
-            post_content: %{name: "default post", html_body: "content"}
+            reply_to_id: original_post.id,
+            post_content: %{html_body: "default post content (as reply)"}
+          })
+
+        {post, nil}
+
+      other
+      when is_nil(other) or other in [:explore, :user_by_object_type, :user_activities] ->
+        post =
+          Bonfire.Posts.Fake.fake_post!(other_user, "public", %{
+            post_content: %{html_body: "default post content"}
           })
 
         {post, nil}

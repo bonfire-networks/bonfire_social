@@ -37,54 +37,9 @@ defmodule Bonfire.Social.Feeds.PresetFiltersTest do
     :ok
   end
 
-  # Get feed presets from config and transform them into test parameters
-  @feed_presets Application.compile_env(:bonfire_social, Bonfire.Social.Feeds)[:feed_presets]
-  @preload_rules Application.compile_env(:bonfire_social, Bonfire.Social.FeedLoader)[
-                   :preload_rules
-                 ]
-  @preload_default_include Application.compile_env(:bonfire_social, Bonfire.Social.FeedLoader)[
-                             :preload_defaults
-                           ][:feed][:include]
-  @preload_by_context Application.compile_env(:bonfire_social, Bonfire.Social.FeedLoader)[
-                        :preload_by_context
-                      ]
-
-  # Generate test parameters from config
-  @test_params (for {preset, %{filters: filters} = preset_details} <- @feed_presets do
-                  filters =
-                    Map.merge(filters, preset_details[:parameterized] || %{})
-                    |> IO.inspect(label: "filters for #{preset}")
-
-                  # |> Enums.struct_to_map()
-                  # |> Map.drop([:__typename])
-
-                  # Get preloads from preload rules based on feed config
-                  postloads =
-                    FeedLoader.preloads_from_filters(filters, @preload_rules)
-
-                  context_preloads = @preload_by_context[:query] || []
-
-                  preloads =
-                    postloads
-                    |> Enum.filter(&Enum.member?(context_preloads, &1))
-
-                  preloads =
-                    if preset in [:local, :remote] do
-                      preloads ++ [:with_peered]
-                    else
-                      preloads
-                    end
-
-                  %{preset: preset, filters: filters, preloads: preloads, postloads: postloads}
-                end) ++
-                 [
-                   # no filters
-                   %{preset: nil, filters: %{}, preloads: [], postloads: []}
-                 ]
-
   # Generate tests dynamically from feed presets - WIP: my, messages, user_following, user_followers, remote, my_requests, trending_discussions, local_images, publications, flagged_by_me, flagged_content
-  # for %{preset: preset, filters: filters} = params when preset in [:flagged_by_me] <- @test_params do
-  for %{preset: preset, filters: filters} = params <- @test_params do
+  # for %{preset: preset, filters: filters} = params when preset in [:flagged_by_me] <- feed_preset_test_params() do
+  for %{preset: preset, filters: filters} = params <- feed_preset_test_params() do
     describe "feed preset `#{inspect(preset)}` loads feed and configured preloads" do
       setup do
         %{preset: preset} = params = unquote(Macro.escape(params))
