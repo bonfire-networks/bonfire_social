@@ -1,5 +1,6 @@
 defmodule Bonfire.Social.RuntimeConfig do
   @behaviour Bonfire.Common.ConfigModule
+  use Bonfire.Common.Localise
 
   alias Bonfire.Social.FeedFilters
 
@@ -11,66 +12,89 @@ defmodule Bonfire.Social.RuntimeConfig do
     config :bonfire_social, Bonfire.Social.Feeds,
       feed_presets: [
         my: %{
-          description: "Activities of people I follow",
+          name: l("Following"),
+          built_in: true,
+          description: l("Activities of people I follow"),
           filters: %FeedFilters{feed_name: :my},
           current_user_required: true,
-          show_in_main_menu: true
+          exclude_from_nav: false,
+          icon: "carbon:home"
         },
         explore: %{
-          description: "All activities",
+          name: l("Explore"),
+          built_in: true,
+          description: l("All activities"),
           filters: %FeedFilters{feed_name: :explore, exclude_activity_types: [:like]},
-          show_in_main_menu: true
+          exclude_from_nav: false,
+          icon: "carbon:explore"
         },
         local: %{
-          description: "Local instance activities",
+          name: l("Local"),
+          built_in: true,
+          description: l("Local instance activities"),
           filters: %FeedFilters{
             feed_name: :local,
             origin: :local,
             exclude_activity_types: [:like]
           },
-          show_in_main_menu: true
+          # exclude_from_nav: false
+          icon: "material-symbols:camping-rounded"
         },
         remote: %{
-          description: "Remote activities from other federated instances",
+          name: l("Remote"),
+          built_in: true,
+          description: l("Remote activities from other federated instances"),
           filters: %FeedFilters{
             feed_name: :remote,
             origin: :remote,
             exclude_activity_types: [:like]
-          },
-          show_in_main_menu: true
+          }
+          # exclude_from_nav: false
         },
         notifications: %{
-          description: "Notifications for me",
+          name: l("Notifications"),
+          built_in: true,
+          description: l("Notifications for me"),
           filters: %FeedFilters{
             feed_name: :notifications,
             # so we can show flags to admins in notifications
             include_flags: :mod,
             show_objects_only_once: false
           },
-          current_user_required: true
+          current_user_required: true,
+          icon: "carbon:bookmark-filled"
         },
-        messages: %{
-          description: "Messages for me",
-          filters: %FeedFilters{feed_name: :messages},
-          current_user_required: true
-        },
+        # messages: %{
+        #   name: l("Messages"),
+        #   built_in: true, description: ("Messages for me"),
+        #   filters: %FeedFilters{feed_name: :messages},
+        #   current_user_required: true
+        # },
 
         # User interaction feeds
         likes: %{
-          description: "Posts I've liked",
+          name: l("Likes"),
+          built_in: true,
+          description: l("Activities I've liked"),
           filters: %FeedFilters{activity_types: [:like]},
           parameterized: %FeedFilters{subjects: [:me]},
-          show_in_main_menu: true
+          exclude_from_nav: false,
+          icon: "mingcute:fire-line"
         },
         bookmarks: %{
-          description: "Posts I've bookmarked",
+          name: l("Bookmarks"),
+          built_in: true,
+          description: l("Activities I've bookmarked"),
           filters: %FeedFilters{activity_types: :bookmark},
           current_user_required: true,
           parameterized: %FeedFilters{subjects: [:me]},
-          show_in_main_menu: true,
-          base_query_fun: &Bonfire.Social.Bookmarks.base_query/0
+          exclude_from_nav: false,
+          base_query_fun: &Bonfire.Social.Bookmarks.base_query/0,
+          icon: "carbon:bookmark-filled"
         },
         my_requests: %{
+          name: l("Requests"),
+          built_in: true,
           description: "Pending requests for me",
           filters: %FeedFilters{feed_name: :notifications, activity_types: [:request]},
           current_user_required: true
@@ -78,49 +102,57 @@ defmodule Bonfire.Social.RuntimeConfig do
 
         # User-specific feeds
         user_activities: %{
+          built_in: true,
           description: "A specific user's activities",
           # $username is replaced at runtime
           filters: %FeedFilters{},
           parameterized: %FeedFilters{subjects: [:by]}
         },
         user_followers: %{
+          built_in: true,
           description: "Followers of a specific user",
           filters: %FeedFilters{activity_types: [:follow]},
           parameterized: %FeedFilters{objects: [:by]}
         },
         user_following: %{
+          built_in: true,
           description: "Users followed by a specific user",
           filters: %FeedFilters{activity_types: [:follow]},
           parameterized: %FeedFilters{subjects: [:by]}
         },
         user_by_object_type: %{
+          built_in: true,
           description: "Posts by a specific user",
           filters: %{creators: [:by]},
           parameterized: %FeedFilters{creators: :by, object_types: [:post]}
         },
         # user_research: %{
-        #   description: "Publications by a specific user",
+        #   built_in: true, description: "Publications by a specific user",
         #   filters: %{media_types: [:research]},
         #   parameterized: %{creators: :by}
         # },
 
         # Content type feeds
         research: %{
+          built_in: true,
           description: "All known research publications",
           filters: %FeedFilters{media_types: [:research]}
         },
         local_images: %{
+          built_in: true,
           description: "All known images",
           filters: %FeedFilters{media_types: ["image"]}
         },
 
         # Hashtag feeds
         hashtag: %{
+          built_in: true,
           description: "Activities with a specific hashtag",
           filters: %FeedFilters{},
           parameterized: %{tags: [:hashtag]}
         },
         mentions: %{
+          built_in: true,
           description: "Activities with a specific @ mention",
           filters: %FeedFilters{},
           parameterized: %{tags: [:mentioned]}
@@ -128,6 +160,7 @@ defmodule Bonfire.Social.RuntimeConfig do
 
         # Moderation feeds
         flagged_by_me: %{
+          built_in: true,
           description: "Content I've flagged",
           filters: %FeedFilters{
             activity_types: [:flag],
@@ -139,6 +172,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           opts: [skip_boundary_check: true]
         },
         flagged_content: %{
+          built_in: true,
           description: "Content flagged by anyone (mods only)",
           filters: %FeedFilters{
             activity_types: [:flag],
@@ -153,6 +187,7 @@ defmodule Bonfire.Social.RuntimeConfig do
 
         # Combined filters examples
         trending_discussions: %{
+          built_in: true,
           description: "Popular discussions from the last 7 days",
           filters: %FeedFilters{
             time_limit: 7,
@@ -161,6 +196,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           }
         },
         local_media: %{
+          built_in: true,
           description: "Media from local instance",
           filters: %FeedFilters{
             feed_name: :local,
