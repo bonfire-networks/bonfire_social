@@ -18,7 +18,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %FeedFilters{feed_name: :my},
           current_user_required: true,
           exclude_from_nav: false,
-          icon: "carbon:home"
+          icon: "mingcute:home-4-fill"
         },
         explore: %{
           name: l("Explore"),
@@ -26,7 +26,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           description: l("All activities"),
           filters: %FeedFilters{feed_name: :explore, exclude_activity_types: [:like]},
           exclude_from_nav: false,
-          icon: "carbon:explore"
+          icon: "mingcute:compass-fill"
         },
         local: %{
           name: l("Local"),
@@ -38,7 +38,7 @@ defmodule Bonfire.Social.RuntimeConfig do
             exclude_activity_types: [:like]
           },
           # exclude_from_nav: false
-          icon: "material-symbols:camping-rounded"
+          icon: "mingcute:campground-fill"
         },
         remote: %{
           name: l("Remote"),
@@ -48,7 +48,8 @@ defmodule Bonfire.Social.RuntimeConfig do
             feed_name: :remote,
             origin: :remote,
             exclude_activity_types: [:like]
-          }
+          },
+          icon: "ph:planet-fill"
           # exclude_from_nav: false
         },
         notifications: %{
@@ -62,7 +63,7 @@ defmodule Bonfire.Social.RuntimeConfig do
             show_objects_only_once: false
           },
           current_user_required: true,
-          icon: "carbon:bookmark-filled"
+          icon: "carbon:notification-filled"
         },
         # messages: %{
         #   name: l("Messages"),
@@ -79,7 +80,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %FeedFilters{activity_types: [:like]},
           parameterized: %FeedFilters{subjects: [:me]},
           exclude_from_nav: false,
-          icon: "mingcute:fire-line"
+          icon: "mingcute:fire-fill"
         },
         bookmarks: %{
           name: l("Bookmarks"),
@@ -97,7 +98,8 @@ defmodule Bonfire.Social.RuntimeConfig do
           built_in: true,
           description: "Pending requests for me",
           filters: %FeedFilters{feed_name: :notifications, activity_types: [:request]},
-          current_user_required: true
+          current_user_required: true,
+          icon: "garden:user-follow-fill-16"
         },
 
         # User-specific feeds
@@ -134,14 +136,18 @@ defmodule Bonfire.Social.RuntimeConfig do
 
         # Content type feeds
         research: %{
+          name: l("Research"),
           built_in: true,
           description: "All known research publications",
-          filters: %FeedFilters{media_types: [:research]}
+          filters: %FeedFilters{media_types: [:research]},
+          icon: "mingcute:paper-fill"
         },
         local_images: %{
+          name: l("Images"),
           built_in: true,
           description: "All known images",
-          filters: %FeedFilters{media_types: ["image"]}
+          filters: %FeedFilters{media_types: ["image"]},
+          icon: "ic:round-image"
         },
 
         # Hashtag feeds
@@ -160,6 +166,7 @@ defmodule Bonfire.Social.RuntimeConfig do
 
         # Moderation feeds
         flagged_by_me: %{
+          name: l("My Flags"),
           built_in: true,
           description: "Content I've flagged",
           filters: %FeedFilters{
@@ -169,9 +176,11 @@ defmodule Bonfire.Social.RuntimeConfig do
           },
           parameterized: %{subjects: [:me]},
           current_user_required: true,
-          opts: [skip_boundary_check: true]
+          opts: [skip_boundary_check: true],
+          icon: "heroicons-solid:flag"
         },
         flagged_content: %{
+          name: l("All flags"),
           built_in: true,
           description: "Content flagged by anyone (mods only)",
           filters: %FeedFilters{
@@ -182,26 +191,31 @@ defmodule Bonfire.Social.RuntimeConfig do
           },
           current_user_required: true,
           role_required: :mod,
-          opts: [skip_boundary_check: true]
+          opts: [skip_boundary_check: true],
+          icon: "heroicons-solid:flag"
         },
 
         # Combined filters examples
         trending_discussions: %{
+          name: l("Top discussions"),
           built_in: true,
           description: "Popular discussions from the last 7 days",
           filters: %FeedFilters{
             time_limit: 7,
             sort_by: :num_replies,
             sort_order: :desc
-          }
+          },
+          icon: "mingcute:comment-fill"
         },
         local_media: %{
+          name: l("Local Media"),
           built_in: true,
           description: "Media from local instance",
           filters: %FeedFilters{
             feed_name: :local,
             media_types: ["*"]
-          }
+          },
+          icon: "mingcute:folder-fill"
         }
       ]
 
@@ -329,7 +343,7 @@ defmodule Bonfire.Social.RuntimeConfig do
 
     config :bonfire_social, Bonfire.Social.FeedLoader,
       preload_presets: [
-        # Default groupings, 
+        # Default groupings,
         thread_postload: [
           :with_replied,
           :with_object_more
