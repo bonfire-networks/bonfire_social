@@ -91,7 +91,8 @@ defmodule Bonfire.Social.FeedLoader do
     opts = to_options(opts)
     debug(custom_filters)
 
-    case feed_definition_if_permitted(feed_name, opts) |> debug("feed_definition") do
+    case Bonfire.Social.Feeds.feed_preset_if_permitted(feed_name, opts)
+         |> debug("feed_definition") do
       {:ok, %{parameterized: %{} = parameters, filters: preset_filters} = feed_def} ->
         preset_filters
         |> IO.inspect(label: "preset_filters")
@@ -134,6 +135,9 @@ defmodule Bonfire.Social.FeedLoader do
           end
           |> feed_filtered(filters, opts)
         end
+
+      {:error, e} ->
+        error(e)
 
       other ->
         error(other, "No such feed configured or allowed: #{inspect(feed_name)}")
@@ -1229,7 +1233,7 @@ defmodule Bonfire.Social.FeedLoader do
   """
   @spec preset_feed_filters(String.t(), map()) :: {:ok, map()} | {:error, atom()}
   def preset_feed_filters(name, opts \\ []) do
-    case feed_definition_if_permitted(name, opts) do
+    case Bonfire.Social.Feeds.feed_preset_if_permitted(name, opts) do
       {:error, e} ->
         {:error, e}
 
@@ -1238,36 +1242,6 @@ defmodule Bonfire.Social.FeedLoader do
 
       {:ok, %{filters: filters}} ->
         {:ok, filters}
-    end
-  end
-
-  defp feed_definition_if_permitted(name, opts) when is_atom(name) do
-    presets = Bonfire.Social.Feeds.feed_presets()
-
-    case presets[name] do
-      nil ->
-        debug(presets, "Feed `#{name}` not found")
-        {:error, :not_found}
-
-      # %{admin_required: true} = alias when not user.is_admin ->
-      #   {:error, :unauthorized} # TODO
-      # %{mod_required: true} = alias when not user.is_moderator ->
-      #   {:error, :unauthorized} # TODO
-      %{current_user_required: true} = feed_def ->
-        if current_user_required!(opts), do: {:ok, feed_def}
-
-      feed_def ->
-        {:ok, feed_def}
-    end
-  end
-
-  defp feed_definition_if_permitted(name, opts) do
-    case Types.maybe_to_atom!(name) do
-      nil ->
-        {:error, :not_found}
-
-      name ->
-        feed_definition_if_permitted(name, opts)
     end
   end
 
@@ -1343,10 +1317,6 @@ defmodule Bonfire.Social.FeedLoader do
       iex> replace_parameters(:current_user_required, %{}, current_user: nil)
       ** (Bonfire.Fail.Auth) You need to log in first. 
 
-      # Failing with `{:instance_permission_required, verbs}` parameter if we have no current user
-      iex> replace_parameters({:instance_permission_required, :moderate}, %{}, current_user: nil)
-      ** (Bonfire.Fail.Auth) Error (not_permitted) 
-
       # Handling a parameter that is in the opts
       iex> replace_parameters(:type, %{}, type: "post")
       "post"
@@ -1381,11 +1351,6 @@ defmodule Bonfire.Social.FeedLoader do
 
   def replace_parameters(:current_user_required, _filters, opts) do
     current_user_required!(opts)
-  end
-
-  def replace_parameters(:instance_permission_required, filters, opts) do
-    debug(filters, "filtersfilters")
-    Bonfire.Boundaries.can!(current_user(opts), nil, :instance)
   end
 
   def replace_parameters(:by, filters, opts) do

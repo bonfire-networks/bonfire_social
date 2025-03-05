@@ -29,8 +29,65 @@ defmodule Bonfire.Social.Feeds do
   @behaviour Bonfire.Common.QueryModule
   def schema_module, do: Feed
 
-  def feed_presets do
-    Config.get([__MODULE__, :feed_presets], [])
+  def feed_presets(opts) do
+    if current_user_id(opts) do
+      Settings.get([__MODULE__, :feed_presets], [], opts)
+    else
+      Config.get([__MODULE__, :feed_presets], [])
+    end
+  end
+
+  def feed_presets_permitted(opts) do
+    Bonfire.Social.Feeds.feed_presets(opts)
+    |> Enum.filter(fn {_slug, preset} ->
+      case check_feed_preset_permitted(preset, opts) |> debug(inspect(preset)) do
+        true -> true
+        _error -> false
+      end
+    end)
+  end
+
+  def feed_preset_if_permitted(name, opts) when is_atom(name) do
+    presets = Bonfire.Social.Feeds.feed_presets(opts)
+
+    case presets[name] do
+      nil ->
+        debug(presets, "Feed `#{name}` not found")
+        {:error, :not_found}
+
+      preset ->
+        case check_feed_preset_permitted(preset, opts) do
+          true -> {:ok, preset}
+          other -> other
+        end
+    end
+  end
+
+  def feed_preset_if_permitted(name, opts) do
+    case Types.maybe_to_atom!(name) do
+      nil ->
+        {:error, :not_found}
+
+      name ->
+        feed_preset_if_permitted(name, opts)
+    end
+  end
+
+  defp check_feed_preset_permitted(nil, _opts), do: {:error, :not_found}
+
+  defp check_feed_preset_permitted(preset, opts) do
+    case preset do
+      # NOTE: the order of these matters
+
+      %{instance_permission_required: verbs} = feed_def ->
+        Bonfire.Boundaries.can?(current_user(opts), verbs, :instance) || {:error, :not_permitted}
+
+      %{current_user_required: true} = feed_def ->
+        if !current_user(opts), do: {:error, :unauthorized}, else: true
+
+      _ ->
+        true
+    end
   end
 
   @doc """
