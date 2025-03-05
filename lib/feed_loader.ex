@@ -30,6 +30,51 @@ defmodule Bonfire.Social.FeedLoader do
 
   # ==== START OF CODE TO REFACTOR ====
 
+  def prepare_feed_filters(preset \\ nil, feed_name, opts)
+
+  def prepare_feed_filters(%{} = preset, filters, opts) do
+    prepare_feed_filters({:ok, preset}, filters, opts)
+  end
+
+  def prepare_feed_filters(preset, feed_name, opts)
+      when (not is_nil(feed_name) and is_atom(feed_name)) or is_binary(feed_name) do
+    prepare_feed_filters(preset, %{feed_name: feed_name}, opts)
+  end
+
+  def prepare_feed_filters(preset_tuple, %{feed_name: feed_name} = custom_filters, opts)
+      when (not is_nil(feed_name) and is_atom(feed_name)) or is_binary(feed_name) or
+             is_tuple(preset_tuple) do
+    opts = to_options(opts)
+
+    case preset_tuple ||
+           Bonfire.Social.Feeds.feed_preset_if_permitted(feed_name, opts)
+           |> debug("feed_definition") do
+      {:ok, %{parameterized: %{} = parameters, filters: preset_filters} = feed_def} ->
+        merge_feed_filters(preset_filters, custom_filters, opts)
+        |> parameterize_filters(parameters, opts)
+        |> FeedFilters.validate()
+        |> debug("validated & parameterized feed_filters")
+
+      {:ok, %{filters: preset_filters} = feed_def} ->
+        merge_feed_filters(preset_filters, custom_filters, opts)
+        |> FeedFilters.validate()
+        |> debug("validated & merged feed_filters")
+
+      {:error, e} ->
+        error(e)
+        {:error, e}
+    end
+  end
+
+  def prepare_feed_filters(_preset, %{feed_name: nil} = custom_filters, opts) do
+    opts = to_options(opts)
+    warn(custom_filters, "custom filters")
+
+    merge_feed_filters(custom_filters, opts)
+    |> FeedFilters.validate()
+    |> debug("merged & validated custom feed_filters")
+  end
+
   @doc """
   Gets a feed based on filters and options.
 
@@ -81,79 +126,34 @@ defmodule Bonfire.Social.FeedLoader do
   #   Bonfire.Social.Flags.list_preloaded(opts ++ [include_flags: :mod])
   # end
 
-  def feed(feed_name, opts)
-      when (not is_nil(feed_name) and is_atom(feed_name)) or is_binary(feed_name) do
-    feed(%{feed_name: feed_name}, opts)
-  end
+  def feed(%FeedFilters{} = filters, opts) do
+    with preset <-
+           opts[:feed_preset] ||
+             Bonfire.Social.Feeds.feed_preset_if_permitted(filters, opts) |> ok_unwrap() || [],
+         {filters, opts} <-
+           prepare_filters_and_opts(filters, Keyword.merge(opts, preset[:opts] || [])) do
+      base_query =
+        if is_function(opts[:base_query_fun]),
+          do: opts[:base_query_fun].(),
+          else: filters[:feed_name]
 
-  def feed(%{feed_name: feed_name} = custom_filters, opts)
-      when (not is_nil(feed_name) and is_atom(feed_name)) or is_binary(feed_name) do
-    opts = to_options(opts)
-    debug(custom_filters)
-
-    case Bonfire.Social.Feeds.feed_preset_if_permitted(feed_name, opts)
-         |> debug("feed_definition") do
-      {:ok, %{parameterized: %{} = parameters, filters: preset_filters} = feed_def} ->
-        preset_filters
-        |> IO.inspect(label: "preset_filters")
-
-        custom_filters
-        |> IO.inspect(label: "custom_filters")
-
-        opts = Keyword.merge(opts, feed_def[:opts] || [])
-
-        with {:ok, filters} <-
-               merge_feed_filters(preset_filters, custom_filters, opts)
-               |> parameterize_filters(parameters, opts)
-               |> FeedFilters.validate()
-               |> IO.inspect(label: "parameterized feed_filters"),
-             {filters, opts} <-
-               prepare_filters_and_opts(filters, opts)
-               |> IO.inspect(label: "prepared feed_filters and opts") do
-          if is_function(feed_def[:base_query_fun]) do
-            feed_def[:base_query_fun].()
-          else
-            filters[:feed_name]
-          end
-          |> feed_filtered(filters, opts)
-        end
-
-      {:ok, %{filters: preset_filters} = feed_def} ->
-        opts = Keyword.merge(opts, feed_def[:opts] || [])
-
-        with {:ok, filters} <-
-               merge_feed_filters(preset_filters, custom_filters, opts)
-               |> FeedFilters.validate()
-               |> debug("merged feed_filters"),
-             {filters, opts} <-
-               prepare_filters_and_opts(filters, opts)
-               |> debug("prepared feed_filters and opts") do
-          if is_function(feed_def[:base_query_fun]) do
-            feed_def[:base_query_fun].()
-          else
-            filters[:feed_name]
-          end
-          |> feed_filtered(filters, opts)
-        end
-
-      {:error, e} ->
+      feed_filtered(base_query, filters, opts)
+    else
+      e ->
         error(e)
-
-      other ->
-        error(other, "No such feed configured or allowed: #{inspect(feed_name)}")
-        feed(%{custom_filters | feed_name: nil}, opts)
+        feed(%{feed_name: nil}, opts)
     end
   end
 
-  def feed(%{feed_name: _nil} = custom_filters, opts) do
-    opts = to_options(opts)
-    error(custom_filters, "custom filters")
-
-    filters =
-      merge_feed_filters(custom_filters, opts)
-      |> debug("merged feed_filters")
-
-    feed_filtered(nil, filters, opts)
+  def feed(%{} = filters, opts) do
+    with {:ok, preset} <- Bonfire.Social.Feeds.feed_preset_if_permitted(filters, opts),
+         {:ok, %FeedFilters{} = filters} <- prepare_feed_filters(preset, filters, opts) do
+      feed(filters, Keyword.put(opts, :feed_preset, preset))
+    else
+      e ->
+        error(e)
+        feed(%{feed_name: nil}, opts)
+    end
   end
 
   def feed([feed_name], opts)

@@ -481,7 +481,7 @@ defmodule Bonfire.Social.Objects do
   end
 
   defp prepare_media_type(types) do
-    if :link in types, do: ["link", "article", "profile", "website"], else: types
+    if :link in types, do: ["link", "article", "profile", "website"] ++ types, else: types
   end
 
   @doc """

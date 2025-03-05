@@ -47,10 +47,14 @@ defmodule Bonfire.Social.Feeds do
     end)
   end
 
-  def feed_preset_if_permitted(name, opts) when is_atom(name) do
+  def feed_preset_if_permitted(%{feed_name: name}, opts) when is_atom(name) do
+    feed_preset_if_permitted(name, opts)
+  end
+
+  def feed_preset_if_permitted(name, opts) do
     presets = Bonfire.Social.Feeds.feed_presets(opts)
 
-    case presets[name] do
+    case presets[Types.maybe_to_atom(name)] do
       nil ->
         debug(presets, "Feed `#{name}` not found")
         {:error, :not_found}
@@ -60,16 +64,6 @@ defmodule Bonfire.Social.Feeds do
           true -> {:ok, preset}
           other -> other
         end
-    end
-  end
-
-  def feed_preset_if_permitted(name, opts) do
-    case Types.maybe_to_atom!(name) do
-      nil ->
-        {:error, :not_found}
-
-      name ->
-        feed_preset_if_permitted(name, opts)
     end
   end
 
