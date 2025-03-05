@@ -176,7 +176,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           },
           parameterized: %{subjects: [:me]},
           current_user_required: true,
-          opts: [skip_boundary_check: true],
+          # opts: [skip_boundary_check: true],
           icon: "heroicons-solid:flag"
         },
         flagged_content: %{
@@ -190,7 +190,7 @@ defmodule Bonfire.Social.RuntimeConfig do
             show_objects_only_once: false
           },
           current_user_required: true,
-          role_required: :mod,
+          instance_permission_required: :moderate,
           opts: [skip_boundary_check: true],
           icon: "heroicons-solid:flag"
         },

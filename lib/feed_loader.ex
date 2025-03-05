@@ -1207,24 +1207,24 @@ defmodule Bonfire.Social.FeedLoader do
       iex> {:ok, %{feed_name: :local, exclude_activity_types: [:like]}} =preset_feed_filters(:local, [])
 
       # 2: Retrieve a preset feed with parameters
-      iex> {:ok, %{subjects: "alice"}} = preset_feed_filters(:user_activities, [by: "alice"])
+      iex> {:ok, %{subjects: ["alice"]}} = preset_feed_filters(:user_activities, [by: "alice"])
 
       # 3: Feed not found (error case)
       iex> preset_feed_filters("unknown_feed", [])
       {:error, :not_found}
 
       # 4: Preset feed with parameterized filters
-      iex> {:ok, %{activity_types: :like, subjects: %{id: "alice"}}} = preset_feed_filters(:likes, current_user: %{id: "alice"})
+      iex> {:ok, %{activity_types: [:like], subjects: [%{id: "alice"}]}} = preset_feed_filters(:likes, current_user: %{id: "alice"})
 
       # 5: Feed with `current_user_required` should check for current user
-      iex> {:ok, %{feed_name: :messages}} = preset_feed_filters(:messages, current_user: %{id: "alice"})
+      iex> {:ok, %{activity_types: [:flag]}} = preset_feed_filters(:flagged_by_me, current_user: %{id: "alice"})
 
       # 6: Feed with `current_user_required` and no current user
-      iex> preset_feed_filters(:messages, [])
-      ** (Bonfire.Fail.Auth) You need to log in first.
+      iex> preset_feed_filters(:flagged_by_me, [])
+      ** (Bonfire.Fail.Auth) You need to log in first. 
 
       # 7: Custom feed with additional parameters
-      iex> {:ok, %{activity_types: :follow, objects: "alice"}} = preset_feed_filters(:user_followers, [by: "alice"])
+      iex> {:ok, %{activity_types: [:follow], objects: ["alice"]}} = preset_feed_filters(:user_followers, [by: "alice"])
 
   """
   @spec preset_feed_filters(String.t(), map()) :: {:ok, map()} | {:error, atom()}
@@ -1301,6 +1301,7 @@ defmodule Bonfire.Social.FeedLoader do
   def parameterize_filters(filters, parameters, opts) do
     parameters =
       parameters
+      |> debug()
       |> Enum.map(fn
         {k, v} when is_list(v) ->
           {k, Enum.map(v, &replace_parameters(&1, filters, opts))}
@@ -1340,7 +1341,11 @@ defmodule Bonfire.Social.FeedLoader do
 
       # Failing with `:current_user_required` parameter if we have no current user
       iex> replace_parameters(:current_user_required, %{}, current_user: nil)
-      ** (Bonfire.Fail.Auth) You need to log in first.
+      ** (Bonfire.Fail.Auth) You need to log in first. 
+
+      # Failing with `{:instance_permission_required, verbs}` parameter if we have no current user
+      iex> replace_parameters({:instance_permission_required, :moderate}, %{}, current_user: nil)
+      ** (Bonfire.Fail.Auth) Error (not_permitted) 
 
       # Handling a parameter that is in the opts
       iex> replace_parameters(:type, %{}, type: "post")
@@ -1370,12 +1375,17 @@ defmodule Bonfire.Social.FeedLoader do
     current_user(opts)
   end
 
+  def replace_parameters(:me, _filters, opts) do
+    current_user(opts)
+  end
+
   def replace_parameters(:current_user_required, _filters, opts) do
     current_user_required!(opts)
   end
 
-  def replace_parameters(:me, _filters, opts) do
-    current_user(opts)
+  def replace_parameters(:instance_permission_required, filters, opts) do
+    debug(filters, "filtersfilters")
+    Bonfire.Boundaries.can!(current_user(opts), nil, :instance)
   end
 
   def replace_parameters(:by, filters, opts) do
