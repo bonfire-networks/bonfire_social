@@ -12,6 +12,7 @@ defmodule Bonfire.Social.FeedLoader do
   use Bonfire.Common.Repo
   import Bonfire.Common.Utils
   alias Bonfire.Common.Config
+  alias Bonfire.Common.Settings
   alias Bonfire.Common.Enums
   alias Bonfire.Common.Types
   alias Bonfire.Data.Social.Activity
@@ -52,14 +53,18 @@ defmodule Bonfire.Social.FeedLoader do
             Bonfire.Social.Feeds.feed_preset_if_permitted(feed_name, opts))
          |> debug("feed_definition") do
       {:ok, %{parameterized: %{} = parameters, filters: preset_filters} = feed_def} ->
-        merge_feed_filters(preset_filters, custom_filters, opts)
+        preset_filters
+        |> merge_some_defaults(opts)
+        |> merge_feed_filters(custom_filters, opts)
         # |> debug("merged feed_filters")
         |> parameterize_filters(parameters, opts)
         |> FeedFilters.validate()
         |> debug("validated & parameterized feed_filters")
 
       {:ok, %{filters: preset_filters} = feed_def} ->
-        merge_feed_filters(preset_filters, custom_filters, opts)
+        preset_filters
+        |> merge_some_defaults(opts)
+        |> merge_feed_filters(custom_filters, opts)
         |> debug("merged feed_filters")
         |> FeedFilters.validate()
         |> debug("validated feed_filters")
@@ -76,7 +81,9 @@ defmodule Bonfire.Social.FeedLoader do
     opts = to_options(opts)
     warn(custom_filters, "custom filters")
 
-    merge_feed_filters(custom_filters, opts)
+    custom_filters
+    |> merge_some_defaults(opts)
+    |> merge_feed_filters(opts)
     |> FeedFilters.validate()
     |> debug("merged & validated custom feed_filters")
   end
@@ -219,6 +226,18 @@ defmodule Bonfire.Social.FeedLoader do
 
   #   feed(:explore, opts)
   # end
+
+  defp merge_some_defaults(filters, opts) do
+    Enums.merge_as_map(
+      #  TODO: optimise by only loading if none is set in preset_filters/custom_filters
+      %{
+        sort_by: Settings.get([Bonfire.UI.Social.FeedLive, :sort_by], nil, opts),
+        time_limit: Settings.get([Bonfire.UI.Social.FeedLive, :time_limit], 7, opts)
+      }
+      |> IO.inspect(label: "m0"),
+      filters
+    )
+  end
 
   defp merge_feed_filters(custom_filters, opts) do
     # Enums.merge_to_struct(FeedFilters, custom_filters, opts[:feed_filters] || %{})

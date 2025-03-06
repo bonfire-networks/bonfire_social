@@ -447,9 +447,11 @@ defmodule Bonfire.Social.Objects do
       [first | rest] ->
         rest
         |> Enum.reduce(
-          where(query, [media: media], not ilike(media.media_type, ^"#{first}%")),
+          query
+          |> proload(:inner, activity: [:media])
+          |> where([media: media], not ilike(media.media_type, ^"#{first}%")),
           fn type, query ->
-            or_where(query, [media: media], not ilike(media.media_type, ^"#{type}%"))
+            where(query, [media: media], not ilike(media.media_type, ^"#{type}%"))
           end
         )
 

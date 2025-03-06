@@ -47,7 +47,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %FeedFilters{
             feed_name: :remote,
             origin: :remote,
-            exclude_activity_types: [:like]
+            exclude_activity_types: [:like, :follow]
           },
           icon: "ph:planet-fill"
           # exclude_from_nav: false

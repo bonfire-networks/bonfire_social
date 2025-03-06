@@ -38,6 +38,7 @@ defmodule Bonfire.Social.FeedFilters do
     field :creator_circles, StringList
 
     field :media_types, AtomOrStringList
+    field :exclude_media_types, AtomOrStringList
     field :tags, StringList
 
     #  can be :local, :remote, or ID(s) or domain name(s) of remote instance(s)
@@ -47,7 +48,7 @@ defmodule Bonfire.Social.FeedFilters do
     field :sort_order, Ecto.Enum, values: [:asc, :desc], default: :desc
 
     field :sort_by, Ecto.Enum,
-      values: [nil, :date_created, :num_replies, :num_boosts, :num_likes],
+      values: [nil, false, :date_created, :num_replies, :num_boosts, :num_likes],
       default: nil
 
     # NOTE: the following are meant for internal use
@@ -77,6 +78,7 @@ defmodule Bonfire.Social.FeedFilters do
       :exclude_creators,
       :creator_circles,
       :media_types,
+      :exclude_media_types,
       :tags,
       :origin,
       :time_limit,
