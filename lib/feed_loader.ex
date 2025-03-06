@@ -60,12 +60,15 @@ defmodule Bonfire.Social.FeedLoader do
 
       {:ok, %{filters: preset_filters} = feed_def} ->
         merge_feed_filters(preset_filters, custom_filters, opts)
+        |> debug("merged feed_filters")
         |> FeedFilters.validate()
-        |> debug("validated & merged feed_filters")
+        |> debug("validated feed_filters")
+
+      {:error, :not_found} ->
+        prepare_feed_filters(nil, custom_filters |> Map.put(:feed_name, nil), opts)
 
       {:error, e} ->
         error(e)
-        {:error, e}
     end
   end
 
@@ -132,7 +135,10 @@ defmodule Bonfire.Social.FeedLoader do
   def feed(%FeedFilters{} = filters, opts) do
     with preset <-
            opts[:feed_preset] ||
-             Bonfire.Social.Feeds.feed_preset_if_permitted(filters, opts) |> ok_unwrap() || [],
+             (case Bonfire.Social.Feeds.feed_preset_if_permitted(filters, opts) do
+                {:ok, preset} -> preset
+                _ -> %{}
+              end),
          # NOTE: we're not calling prepare_feed_filters/3 here because they must have already been prepared/validated since we're getting a FeedFilters struct
          {filters, opts} <-
            prepare_filters_and_opts(filters, Keyword.merge(opts, preset[:opts] || [])) do
