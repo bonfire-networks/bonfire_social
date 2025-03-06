@@ -44,13 +44,16 @@ defmodule Bonfire.Social.FeedLoader do
   def prepare_feed_filters(preset_tuple, %{feed_name: feed_name} = custom_filters, opts)
       when (not is_nil(feed_name) and is_atom(feed_name)) or is_binary(feed_name) or
              is_tuple(preset_tuple) do
-    opts = to_options(opts)
+    opts =
+      to_options(opts)
+      |> debug("opts with data for parameters")
 
-    case preset_tuple ||
-           Bonfire.Social.Feeds.feed_preset_if_permitted(feed_name, opts)
-           |> debug("feed_definition") do
+    case (preset_tuple ||
+            Bonfire.Social.Feeds.feed_preset_if_permitted(feed_name, opts))
+         |> debug("feed_definition") do
       {:ok, %{parameterized: %{} = parameters, filters: preset_filters} = feed_def} ->
         merge_feed_filters(preset_filters, custom_filters, opts)
+        # |> debug("merged feed_filters")
         |> parameterize_filters(parameters, opts)
         |> FeedFilters.validate()
         |> debug("validated & parameterized feed_filters")
@@ -123,36 +126,50 @@ defmodule Bonfire.Social.FeedLoader do
 
   # def feed(:flags, opts) do
   #   # TODO: refactor to use `feed_filtered` like any others rather than delegating to the context
-  #   Bonfire.Social.Flags.list_preloaded(opts ++ [include_flags: :mod])
+  #   Bonfire.Social.Flags.list_preloaded(opts ++ [include_flags: :mediate])
   # end
 
   def feed(%FeedFilters{} = filters, opts) do
     with preset <-
            opts[:feed_preset] ||
              Bonfire.Social.Feeds.feed_preset_if_permitted(filters, opts) |> ok_unwrap() || [],
+         # NOTE: we're not calling prepare_feed_filters/3 here because they must have already been prepared/validated since we're getting a FeedFilters struct
          {filters, opts} <-
            prepare_filters_and_opts(filters, Keyword.merge(opts, preset[:opts] || [])) do
-      base_query =
-        if is_function(opts[:base_query_fun]),
-          do: opts[:base_query_fun].(),
-          else: filters[:feed_name]
+      case preset[:base_query_fun] || opts[:base_query_fun] do
+        fun when is_function(fun, 0) ->
+          fun.()
 
-      feed_filtered(base_query, filters, opts)
+        fun when is_function(fun, 1) ->
+          fun.(opts)
+
+        _ ->
+          filters[:feed_name] || preset[:filters][:feed_name]
+      end
+      |> feed_filtered(filters, opts)
     else
       e ->
-        error(e)
-        feed(%{feed_name: nil}, opts)
+        error(e, "Could not process pre-prepared filters")
+        # feed(%{feed_name: nil}, opts)
     end
   end
 
   def feed(%{} = filters, opts) do
+    feed_name = filters[:feed_name]
+
     with {:ok, preset} <- Bonfire.Social.Feeds.feed_preset_if_permitted(filters, opts),
          {:ok, %FeedFilters{} = filters} <- prepare_feed_filters(preset, filters, opts) do
       feed(filters, Keyword.put(opts, :feed_preset, preset))
     else
+      {:error, :not_found} when is_nil(feed_name) or feed_name == :custom ->
+        filters
+        |> Map.put(:feed_name, nil)
+        |> prepare_feed_filters(opts)
+        ~> feed(opts)
+
       e ->
-        error(e)
-        feed(%{feed_name: nil}, opts)
+        error(e, "Could not find a preset or prepare filters")
+        # feed(%{feed_name: nil}, opts)
     end
   end
 
@@ -872,8 +889,10 @@ defmodule Bonfire.Social.FeedLoader do
 
     include_all_objects =
       case include_flags do
-        :mod -> Bonfire.Boundaries.can?(opts, :mediate, :instance)
         :admins -> maybe_apply(Bonfire.Me.Accounts, :is_admin?, [opts], fallback_return: nil)
+        nil -> false
+        false -> false
+        verb when is_atom(verb) or is_list(verb) -> Bonfire.Boundaries.can?(opts, verb, :instance)
         _ -> false
       end
 
@@ -1026,8 +1045,21 @@ defmodule Bonfire.Social.FeedLoader do
 
   def feed_contains?(feed_name, object, opts \\ [])
 
+  def feed_contains?({:error, e}, object, opts) do
+    error(e, "Feed returned an error")
+    false
+  end
+
   def feed_contains?(%{edges: edges}, object, opts) do
     feed_contains?(edges, object, opts)
+  end
+
+  def feed_contains?(feed, objects, opts) when is_list(objects) do
+    Enum.all?(objects, &feed_contains?(feed, &1, opts))
+  end
+
+  def feed_contains?(feed, %{objects: objects}, opts) do
+    feed_contains?(feed, objects, opts)
   end
 
   def feed_contains?(feed, id_or_html_body, _opts)
@@ -1255,7 +1287,7 @@ defmodule Bonfire.Social.FeedLoader do
       %{subjects: [%{id: "alice"}]}
 
       # 2: Parameterizing multiple filters
-      iex> parameterize_filters(%{}, %{subjects: [:me], tags: [:hashtag]}, current_user: %{id: "alice"}, hashtag: "elixir")
+      iex> parameterize_filters(%{}, %{subjects: [:me], tags: [:hashtags]}, current_user: %{id: "alice"}, hashtags: "elixir")
       %{subjects: [%{id: "alice"}], tags: ["elixir"]}
 
       # 3: Parameterizing with undefined options
@@ -1355,14 +1387,14 @@ defmodule Bonfire.Social.FeedLoader do
 
   def replace_parameters(:by, filters, opts) do
     e(filters, :by, fn ->
-      IO.inspect(
+      debug(
         filters,
         label: "parameter `:by` was not found in filters"
       )
 
       e(opts, :by, fn ->
-        IO.warn(
-          # opts,
+        warn(
+          opts,
           "parameter `:by` was not found in filters or opts, defaulting to current_user if available instead"
         )
 

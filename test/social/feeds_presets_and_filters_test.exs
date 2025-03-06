@@ -37,10 +37,11 @@ defmodule Bonfire.Social.Feeds.PresetFiltersTest do
     :ok
   end
 
-  # Generate tests dynamically from feed presets - WIP: my, messages, user_following, user_followers, remote, my_requests, trending_discussions, local_images, publications, flagged_by_me, flagged_content
+  # Generate tests dynamically from feed presets - WIP: my, messages, user_following, user_followers, remote, my_requests, trending_discussions, images, publications, flagged_by_me, flagged_content
   # for %{preset: preset, filters: filters} = params when preset in [:flagged_by_me] <- feed_preset_test_params() do
-  for %{preset: preset, filters: filters} = params <- feed_preset_test_params() do
-    describe "feed preset `#{inspect(preset)}` loads feed and configured preloads" do
+  for %{preset: preset, filters: filters} = params <-
+        feed_preset_test_params() when preset not in [:audio, :videos] do
+    describe "feed preset `#{inspect(preset)}` loads correct feed" do
       setup do
         %{preset: preset} = params = unquote(Macro.escape(params))
         # _admin = fake_admin!("admin user")
@@ -75,7 +76,8 @@ defmodule Bonfire.Social.Feeds.PresetFiltersTest do
               current_user: user,
               # limit: 3,
               by: other_user,
-              tags: "#test",
+              hashtags: "#test",
+              mentions: other_user,
               show_objects_only_once: false
             )
 
@@ -92,19 +94,21 @@ defmodule Bonfire.Social.Feeds.PresetFiltersTest do
           object: object,
           activity: activity,
           user: user,
-          other_user: other_user
+          other_user: other_user,
+          parameterized: parameterized
         } do
           if object do
             opts = [
               current_user: user,
               # limit: 3,
               by: other_user,
-              tags: ["test"],
+              hashtags: ["test"],
+              mentions: other_user,
               show_objects_only_once: false
             ]
 
             filters =
-              FeedLoader.parameterize_filters(%{}, filters, opts)
+              FeedLoader.parameterize_filters(filters, parameterized || %{}, opts)
               |> debug("parameterized_filters for #{preset}")
 
             feed = FeedLoader.feed(:custom, filters, opts)

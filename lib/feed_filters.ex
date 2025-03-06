@@ -11,9 +11,9 @@ defmodule Bonfire.Social.FeedFilters do
 
   @primary_key false
   typed_embedded_schema do
-    field :feed_name, Ecto.Enum,
-      values: [:my, :explore, :remote, :local, :curated, :likes, :bookmarks, :flags, :custom],
-      default: :custom
+    field :feed_name, Bonfire.Social.FeedFilters.Atom, default: :custom
+
+    # Ecto.Enum, values: [:my, :explore, :remote, :local, :curated, :likes, :bookmarks, :flags, :custom]
 
     field :feed_ids, StringList
 
@@ -51,7 +51,9 @@ defmodule Bonfire.Social.FeedFilters do
       default: nil
 
     # NOTE: the following are meant for internal use
-    field :include_flags, Ecto.Enum, values: [nil, false, true, :mod, :admins], default: false
+    field :include_flags, Bonfire.Social.FeedFilters.Atom, default: false
+    # Ecto.Enum, values: [nil, false, true, :mod, :admins]
+
     field :show_objects_only_once, :boolean, default: true
   end
 

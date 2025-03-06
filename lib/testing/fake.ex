@@ -33,9 +33,9 @@ defmodule Bonfire.Social.Fake do
 
     # Generate test parameters from config
     for {preset, %{filters: filters} = preset_details} <- feed_presets do
-      filters =
-        Map.merge(filters, preset_details[:parameterized] || %{})
-        |> IO.inspect(label: "filters for #{preset}")
+      # filters =
+      #   Map.merge(filters, preset_details[:parameterized] || %{})
+      #   |> IO.inspect(label: "filters for #{preset}")
 
       # |> Enums.struct_to_map()
       # |> Map.drop([:__typename])
@@ -57,11 +57,17 @@ defmodule Bonfire.Social.Fake do
           preloads
         end
 
-      %{preset: preset, filters: filters, preloads: preloads, postloads: postloads}
+      %{
+        preset: preset,
+        filters: filters,
+        preloads: preloads,
+        postloads: postloads,
+        parameterized: preset_details[:parameterized]
+      }
     end ++
       [
         # no filters
-        %{preset: nil, filters: %{}, preloads: [], postloads: []}
+        %{preset: nil, filters: %{}, preloads: [], postloads: [], parameterized: %{}}
       ]
   end
 
@@ -193,7 +199,7 @@ defmodule Bonfire.Social.Fake do
         {:ok, flag} = Bonfire.Social.Flags.flag(other_user, post)
         {post, flag}
 
-      :local_images ->
+      :images ->
         {:ok, media} = Bonfire.Files.upload(Bonfire.Files.ImageUploader, user, icon_file())
 
         post =
