@@ -812,7 +812,7 @@ defmodule Bonfire.Social.FeedLoader do
   # NOT boundarised!
   defp do_query(filters \\ [], opts \\ [], query \\ default_query())
 
-  defp do_query(filters, opts, query) when is_list(filters) do
+  defp do_query(filters, opts, query) when is_list(filters) or is_map(filters) do
     query
     |> query_extras(filters, opts)
     |> query_filter(filters, nil, nil)

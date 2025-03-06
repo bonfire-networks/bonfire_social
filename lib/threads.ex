@@ -378,7 +378,11 @@ defmodule Bonfire.Social.Threads do
         [:with_subject, :with_reply_to, :tags],
         opts
       )
-      |> debug("activity_or_object")
+      |> debug("activity_or_object to find participants for")
+
+    thread_or_object_id =
+      thread_or_object_id || e(activity_or_object, :replied, :thread_id, nil) ||
+        e(activity_or_object, :replied, :thread_id, nil)
 
     # add author of root message
     # add author of the message it was replying to
@@ -403,7 +407,9 @@ defmodule Bonfire.Social.Threads do
        [e(activity_or_object, :subject, nil)] ++
        [e(activity_or_object, :created, :creator, nil)] ++
        [e(activity_or_object, :object, :created, :creator, nil)] ++
+       [e(activity_or_object, :replied, :reply_to, :created, :creator, nil)] ++
        [e(activity_or_object, :reply_to, :created, :creator, nil)] ++
+       [e(activity_or_object, :object, :replied, :reply_to, :created, :creator, nil)] ++
        [e(activity_or_object, :object, :reply_to, :created, :creator, nil)] ++
        e(activity_or_object, :tags, []) ++
        e(activity_or_object, :activity, :tags, []))
@@ -419,11 +425,12 @@ defmodule Bonfire.Social.Threads do
   @doc "List participants in a thread (depending on user's boundaries)"
   defp fetch_participants(thread_id, opts \\ [])
 
-  defp fetch_participants(thread_id, opts)
-       when is_binary(thread_id) or
-              (is_list(thread_id) and thread_id != []) do
+  defp fetch_participants(thread_ids, opts)
+       when is_binary(thread_ids) or
+              (is_list(thread_ids) and thread_ids != []) do
     Bonfire.Social.FeedLoader.feed_paginated(
-      [in_thread: {thread_id, &filter/3}],
+      [in_thread: thread_ids],
+      # [in_thread: {thread_ids, &filter/3}],
       opts ++ [preload: :with_subject, base_query: q_subjects(opts)]
     )
   end
@@ -485,13 +492,20 @@ defmodule Bonfire.Social.Threads do
   end
 
   defp q_by_verb(opts) do
-    verb_id = Verbs.get_id!(opts[:verb] || :create)
+    do_q_by_verb(opts[:query] || base_query(), opts[:verb] || [:create, :reply])
+  end
 
-    (opts[:query] || base_query())
+  defp do_q_by_verb(query, verbs) do
+    verb_ids =
+      verbs
+      |> List.wrap()
+      |> Enum.map(&Verbs.get_id!(&1))
+
+    query
     |> proload(:activity)
     |> where(
       [activity: activity],
-      activity.verb_id == ^verb_id
+      activity.verb_id in ^verb_ids
     )
   end
 

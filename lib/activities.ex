@@ -1442,6 +1442,20 @@ defmodule Bonfire.Social.Activities do
   def maybe_filter(query, {:origin, origin}, opts) when not is_nil(origin),
     do: maybe_filter(query, {:origin, List.wrap(origin)}, opts)
 
+  # TODO? put somewhere more relevant:
+
+  def maybe_filter(query, {:in_thread, threads}, _opts) do
+    query
+    # |> proload(activity: [:replied])
+    |> Bonfire.Social.Threads.filter(:in_thread, threads, ...)
+  end
+
+  def maybe_filter(query, {:tree_parent, parents}, _opts) do
+    query
+    |> proload(activity: [:tree])
+    |> where([tree: tree], tree.parent_id in ^uids(parents))
+  end
+
   def maybe_filter(query, filters, _opts) do
     warn(filters, "no supported activity-related filters defined")
     query
