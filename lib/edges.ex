@@ -368,7 +368,7 @@ defmodule Bonfire.Social.Edges do
     from(root in query_schema)
     |> reusable_join([root], edge in assoc(root, :edge), as: :edge)
     |> boundarise(edge.object_id, opts)
-    |> maybe_proload(opts[:preload], filters[:object_types])
+    |> maybe_proload(debug(opts[:preload]), filters[:object_types])
     |> filter(filters, opts)
   end
 
@@ -432,11 +432,11 @@ defmodule Bonfire.Social.Edges do
     )
   end
 
-  # defp maybe_proload(query, preloads, _object_type) when is_list(preloads) do
-  #   Enum.reduce(preloads, query, fn preload, query ->
-  #     maybe_proload(query, preload)
-  #   end)
-  # end
+  defp maybe_proload(query, preloads, _object_type) when is_list(preloads) do
+    Enum.reduce(preloads, query, fn preload, query ->
+      maybe_proload(query, preload)
+    end)
+  end
 
   # default
   defp maybe_proload(query, _, object_type) do
