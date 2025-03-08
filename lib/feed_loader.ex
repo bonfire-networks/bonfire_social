@@ -432,7 +432,12 @@ defmodule Bonfire.Social.FeedLoader do
         # infinite_pages tells Paginator to always give us ab `after` cursor
         with %Ecto.Query{} = query <-
                maybe_paginate_and_boundarise_feed_deferred_query(query, filters, opts),
-             %{edges: []} <- feed_many_paginated(query, filters, opts ++ [infinite_pages: true]) do
+             %{edges: []} <-
+               feed_many_paginated(
+                 query,
+                 filters,
+                 opts ++ [infinite_pages: !!Settings.get([:ui, :infinite_scroll], :preload, opts)]
+               ) do
           debug(
             "there were no results, try without the deferred query in case some were missing because of boundaries"
           )
