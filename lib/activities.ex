@@ -389,35 +389,6 @@ defmodule Bonfire.Social.Activities do
       > activity_preloads(object_or_query, [:feed, :with_reply_to, :with_media, :with_object_more, :maybe_with_labelled])
       # Object or query several extra assoc preloads
 
-   Other possible preloads:
-      :default
-      :all
-      :feed
-      :feed_postload
-      :feed_metadata
-      :feed_by_subject
-      :feed_by_creator
-      :notifications
-      :object_with_creator
-      :posts
-      :posts_with_thread
-      :posts_with_reply_to
-      :with_creator
-      :with_subject
-      :with_verb
-      :with_object
-      :with_post_content
-      :with_object_more
-      :with_replied
-      :with_thread_name
-      :with_parent
-      :with_reply_to
-      :with_seen
-      :with_media
-      :per_media
-      :tags
-      :maybe_with_labelled
-
   """
   def activity_preloads([], _, _) do
     debug("skip because we have an empty list")
@@ -653,6 +624,10 @@ defmodule Bonfire.Social.Activities do
         :with_seen ->
           query_preload_seen(query, opts)
 
+        :extra_info ->
+          query
+          |> proload(activity: [object: [:extra_info]])
+
         nil ->
           query
 
@@ -756,6 +731,9 @@ defmodule Bonfire.Social.Activities do
         :with_seen ->
           subquery = subquery_preload_seen(opts)
           if subquery, do: [seen: subquery], else: []
+
+        :extra_info ->
+          [object: [:extra_info]]
 
         nil ->
           []

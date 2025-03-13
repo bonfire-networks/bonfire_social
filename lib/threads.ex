@@ -595,11 +595,11 @@ defmodule Bonfire.Social.Threads do
         Activities.order_pagination_opts(opts[:sort_by], opts[:sort_order])
     )
     # preloaded after so we can get more than 1
-    |> repo().maybe_preload(
-      # :pinned, 
-      # FIXME: this should happen via `Activities.activity_preloads`
-      activity: [:media]
-    )
+    # |> repo().maybe_preload(
+    #   # :pinned, 
+    #   # FIXME: this should happen via `Activities.activity_preloads`
+    #   activity: [:media]
+    # )
     |> repo().maybe_preload(
       # FIXME: this should happen via `Activities.activity_preloads`
       [activity: Activities.maybe_with_labelled()],
