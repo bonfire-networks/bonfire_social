@@ -516,7 +516,7 @@ defmodule Bonfire.Social.PostContents do
            # TODO: apply the preparation/sanitation functions?
            |> debug()
            |> PostContent.changeset(post_content, ...),
-         #  create the v1 entry if this is the first edir
+         #  create the v1 entry if this is the first edit
          {:ok, updated_post_content} <-
            save_edit(current_user, post_content, changeset)
            |> debug() do
@@ -527,17 +527,32 @@ defmodule Bonfire.Social.PostContents do
         )
         ~> Map.put(:post_content, updated_post_content)
 
-      if Social.federate_outgoing?(current_user),
+      # WIP: hook to edit special types based on verb
+      post = repo().maybe_preload(post, [:activity])
+
+      if verb = e(post, :activity, :verb_id, nil) |> debug() do
+        if verb_slug = Bonfire.Boundaries.Verbs.get_slug(verb) |> debug() do
+          with {:ok, verb_context} <-
+                 Bonfire.Common.ContextModule.context_module(verb_slug) |> debug() do
+            maybe_apply(
+              verb_context,
+              :edit_post_content,
+              [post, current_user: current_user]
+            )
+          end
+        end
+      end
+
+      if post && Social.federate_outgoing?(current_user),
         do:
-          post
-          |> Social.maybe_federate(
+          Social.maybe_federate(
             current_user,
             :edit,
-            ...,
+            post,
             nil
           )
 
-      {:ok, post}
+      {:ok, updated_post_content || post}
       # {:ok, updated_post_content}
     end
   end

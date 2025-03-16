@@ -641,8 +641,25 @@ defmodule Bonfire.Social.Objects do
 
     id = uid!(object)
 
+    # WIP: load Activity if we don't have it, get the verb, check for a context module for the verb with `Bonfire.Common.ContextModule.context_module(verb)` and call the `delete_activity` function on that module if it exists 
+    object = repo().maybe_preload(object, [:activity])
+
+    if verb = e(object, :activity, :verb_id, nil) |> debug() do
+      if verb_slug = Bonfire.Boundaries.Verbs.get_slug(verb) |> debug() do
+        with {:ok, verb_context} <-
+               Bonfire.Common.ContextModule.context_module(verb_slug) |> debug() do
+          maybe_apply(
+            verb_context,
+            :delete_activity,
+            [object, opts],
+            &delete_apply_error/2
+          )
+        end
+      end
+    end
+
     Activities.delete_by_object(id)
-    |> debug("Delete it from feeds first and foremost")
+    |> debug("Delete the object's Activity and remove from feeds first")
 
     object_type = Bonfire.Common.Types.object_type(object)
 
