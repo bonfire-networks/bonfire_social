@@ -307,7 +307,7 @@ defmodule Bonfire.Social.LivePush do
   end
 
   defp maybe_push_thread(
-         %{thread_id: thread_id, reply_to_id: _reply_to_id},
+         %{thread_id: thread_id, reply_to_id: reply_to_id},
          activity
        )
        when is_binary(thread_id) do
@@ -321,7 +321,18 @@ defmodule Bonfire.Social.LivePush do
       {{Bonfire.Social.Threads.LiveHandler, :new_reply}, {thread_id, activity}}
     )
 
-    # PubSub.broadcast(reply_to_id, {{Bonfire.Social.Threads.LiveHandler, :new_reply}, {reply_to_id, activity}})
+    # Also broadcast to the specific reply_to_id if it's different from thread_id
+    if is_binary(reply_to_id) and reply_to_id != thread_id do
+      debug(
+        reply_to_id,
+        "also broadcasting to the specific reply within the thread"
+      )
+
+      PubSub.broadcast(
+        reply_to_id,
+        {{Bonfire.Social.Threads.LiveHandler, :new_reply}, {reply_to_id, activity}}
+      )
+    end
   end
 
   defp maybe_push_thread(replied, _activity) do
