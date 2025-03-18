@@ -95,7 +95,11 @@ defmodule Bonfire.Social.FeedFilters do
 
       iex> #Ecto.Changeset<changes: %{feed_name: :explore, object_types: ["post"]}, errors: [], valid?: true> = changeset(%{feed_name: "explore", object_types: ["post"]})
   """
-  def changeset(filters \\ %__MODULE__{}, attrs) do
+  def changeset(filters \\ %__MODULE__{}, attrs) 
+  def changeset(filters, %{feed_name: feed_name} = attrs) when is_binary(feed_name) do
+    changeset(filters, Map.drop(attrs, [:feed_name]))
+  end
+  def changeset(filters, attrs) do
     filters
     |> cast(
       Enums.input_to_atoms(attrs, also_discard_unknown_nested_keys: false),

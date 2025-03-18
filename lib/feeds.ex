@@ -47,20 +47,20 @@ defmodule Bonfire.Social.Feeds do
     end)
   end
 
-  def feed_preset_if_permitted(%{feed_name: name}, opts) when is_atom(name) do
+  def feed_preset_if_permitted(%{feed_name: name}, opts) when is_atom(name) or is_binary(name) do
     feed_preset_if_permitted(name, opts)
   end
 
-  def feed_preset_if_permitted(%{feed_name: {name, _}}, opts) when is_atom(name) do
+  def feed_preset_if_permitted(%{feed_name: {name, _}}, opts) when is_atom(name) or is_binary(name) do
     feed_preset_if_permitted(name, opts)
   end
 
-  def feed_preset_if_permitted(name, opts) do
+  def feed_preset_if_permitted(name, opts) when not is_nil(name) and not is_struct(name) do
     presets = Bonfire.Social.Feeds.feed_presets(opts)
 
     case e(presets, Types.maybe_to_atom(name), nil) do
       nil ->
-        debug(presets, "Feed `#{name}` not found")
+        debug(presets, "Feed `#{inspect name}` not found")
         {:error, :not_found}
 
       preset ->
