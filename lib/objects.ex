@@ -1082,14 +1082,6 @@ defmodule Bonfire.Social.Objects do
     |> debug("ap_maybe_deleted")
   end
 
-  def maybe_unindex(object) do
-    if Bonfire.Common.Extend.module_enabled?(Bonfire.Search.Indexer) do
-      Bonfire.Search.Indexer.maybe_delete_object(object)
-    else
-      :ok
-    end
-  end
-
   @doc """
   Gets the permalink for an object.
 

@@ -516,7 +516,7 @@ defmodule Bonfire.Social.PostContents do
            # TODO: apply the preparation/sanitation functions?
            |> debug()
            |> PostContent.changeset(post_content, ...),
-         #  create the v1 entry if this is the first edit
+         #  create the v1 entry if this is the first edit
          {:ok, updated_post_content} <-
            save_edit(current_user, post_content, changeset)
            |> debug() do
@@ -551,6 +551,14 @@ defmodule Bonfire.Social.PostContents do
             post,
             nil
           )
+
+      # Update search index after editing
+      # Determine if content is public or not based on boundaries
+
+      # Use the appropriate index based on content privacy
+      maybe_apply(Bonfire.Search, :maybe_index, [post, nil, current_user: current_user],
+        current_user: current_user
+      )
 
       {:ok, updated_post_content || post}
       # {:ok, updated_post_content}
