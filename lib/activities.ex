@@ -624,6 +624,11 @@ defmodule Bonfire.Social.Activities do
         :with_seen ->
           query_preload_seen(query, opts)
 
+        :emoji ->
+          # TODO: optimise so we don't load the Edge for non-like activities
+          query
+          |> proload(activity: [:emoji])
+
         :extra_info ->
           query
           |> proload(activity: [object: [:extra_info]])
@@ -731,6 +736,9 @@ defmodule Bonfire.Social.Activities do
         :with_seen ->
           subquery = subquery_preload_seen(opts)
           if subquery, do: [seen: subquery], else: []
+
+        :emoji ->
+          [:emoji]
 
         :extra_info ->
           [object: [:extra_info]]

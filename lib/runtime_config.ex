@@ -277,7 +277,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         },
         "Notifications Feed (Only for me)" => %{
           match: %{feed_name: :notifications},
-          include: [:with_seen, :with_reply_to]
+          include: [:with_seen, :with_reply_to, :emoji]
         },
         # "Messages Feed (Only for me)" => %{
         #   match: %{feed_name: :messages},
