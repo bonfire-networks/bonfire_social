@@ -95,22 +95,44 @@ defmodule Bonfire.Social.LivePush do
   end
 
   def notify_of_message(subject, verb, object, users) do
-    activity_from_object(object)
-    |> prepare_activity()
-    |> maybe_push_thread()
+    activity =
+      activity_from_object(object)
+      |> prepare_activity()
+
+    # show the message in the thread if user has it open
+    maybe_push_thread(activity)
 
     subject_id = uid(subject)
 
-    users =
+    users_excluding_me =
       users
       |> Enum.reject(&(uid(&1) == subject_id))
       |> debug()
 
-    # FIXME: avoid querying this again
-    FeedActivities.get_publish_feed_ids(inbox: users)
+    # FIXME: avoid querying this several times
+    FeedActivities.get_publish_feed_ids(inbox: users_excluding_me)
+    |> normalise_feed_ids()
+    # increment the badge in nav
     |> increment_counters(:inbox)
 
-    notify_users(subject, verb, object, users)
+    # FIXME: avoid querying this several times
+    inbox_feed_ids =
+      FeedActivities.get_publish_feed_ids(inbox: users ++ [subject])
+      |> normalise_feed_ids()
+
+    # show the thread in messages list view if the user has it open
+    PubSub.broadcast(inbox_feed_ids, {
+      :new_message,
+      %{
+        feed_ids: inbox_feed_ids,
+        thread_id: e(object, :replied, :thread_id, nil) || e(activity, :replied, :thread_id, nil)
+        # TODO: include the message?
+        # activity: activity
+      }
+    })
+
+    # finally send a regular notification too
+    notify_users(subject, verb, object, users_excluding_me)
   end
 
   @doc """
