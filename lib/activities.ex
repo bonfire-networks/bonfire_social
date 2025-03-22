@@ -215,7 +215,7 @@ defmodule Bonfire.Social.Activities do
 
   """
   def delete(id) when is_binary(id) or is_struct(id) do
-    Objects.maybe_unindex(id)
+    maybe_apply(Bonfire.Search, :maybe_unindex, [id])
     delete({:id, id})
   end
 

@@ -78,45 +78,6 @@ defmodule Bonfire.Social.FeedActivities do
     )
   end
 
-  # defp make_distinct(query, _) do
-  # query
-  # |> group_by([fp], fp.id)
-  # |> select([fp], max(fp.feed_id))
-  # end
-
-  defp make_distinct(%Ecto.Query{distinct: distinct} = query, _, _, _opts)
-       when not is_nil(distinct) do
-    debug("skip because we already have a distinct clause")
-    query
-  end
-
-  defp make_distinct(query, nil, :asc, _opts) do
-    distinct(query, [activity: activity], asc: activity.id)
-  end
-
-  defp make_distinct(query, nil, _, _opts) do
-    distinct(query, [activity: activity], desc: activity.id)
-  end
-
-  defp make_distinct(query, _, :asc, opts) do
-    distinct(query, [activity: activity], asc: activity.id)
-    |> make_distinct_subquery(opts)
-  end
-
-  defp make_distinct(query, _, _, opts) do
-    distinct(query, [activity: activity], desc: activity.id)
-    |> make_distinct_subquery(opts)
-  end
-
-  defp make_distinct_subquery(query, opts) do
-    subquery =
-      query
-      |> repo().make_subquery()
-
-    FeedLoader.default_or_filtered_query(FeedLoader.default_query(), opts)
-    |> join(:inner, [fp], ^subquery, on: [id: fp.id])
-  end
-
   def query_order(query, :num_replies = sort_by, sort_order) do
     query
     |> maybe_preload_replied()

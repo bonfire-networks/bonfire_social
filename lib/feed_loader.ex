@@ -488,7 +488,7 @@ defmodule Bonfire.Social.FeedLoader do
         initial_query
         |> select([:id])
         # to avoid 'cannot preload in subquery' error
-        |> FeedActivities.make_distinct(filters[:sort_order], filters[:sort_order], opts)
+        |> make_distinct(filters[:sort_by], filters[:sort_order], opts)
         |> FeedActivities.query_order(filters[:sort_by], filters[:sort_order])
         |> feed_many_paginated(
           filters,
@@ -512,6 +512,7 @@ defmodule Bonfire.Social.FeedLoader do
 
   defp paginate_and_boundarise_feed_non_deferred_query(query, filters, opts) do
     query
+    |> make_distinct(filters[:sort_order], filters[:sort_order], opts)
     |> Activities.activity_preloads(
       opts[:preload],
       opts
@@ -757,6 +758,45 @@ defmodule Bonfire.Social.FeedLoader do
         default_query
         |> proload(:activity)
     end
+  end
+
+  # defp make_distinct(query, _) do
+  # query
+  # |> group_by([fp], fp.id)
+  # |> select([fp], max(fp.feed_id))
+  # end
+
+  defp make_distinct(%Ecto.Query{distinct: distinct} = query, _, _, _opts)
+       when not is_nil(distinct) do
+    debug("skip because we already have a distinct clause")
+    query
+  end
+
+  defp make_distinct(query, nil, :asc, _opts) do
+    distinct(query, [activity: activity], asc: activity.id)
+  end
+
+  defp make_distinct(query, nil, _, _opts) do
+    distinct(query, [activity: activity], desc: activity.id)
+  end
+
+  defp make_distinct(query, _, :asc, opts) do
+    distinct(query, [activity: activity], asc: activity.id)
+    |> make_distinct_subquery(opts)
+  end
+
+  defp make_distinct(query, _, _, opts) do
+    distinct(query, [activity: activity], desc: activity.id)
+    |> make_distinct_subquery(opts)
+  end
+
+  defp make_distinct_subquery(query, opts) do
+    subquery =
+      query
+      |> repo().make_subquery()
+
+    default_or_filtered_query(default_query(), opts)
+    |> join(:inner, [fp], ^subquery, on: [id: fp.id])
   end
 
   # @decorate time()
@@ -1211,7 +1251,10 @@ defmodule Bonfire.Social.FeedLoader do
 
   defp prepare_feed(%{edges: edges} = result, filters, _opts)
        when is_list(edges) and edges != [] do
-    debug(length(edges), "7. Starting prepare_feed with X edges")
+    edges
+    # |> length()
+    |> debug("Starting prepare_feed with edges")
+
     # debug(edges, "7a. edges to prepare")
 
     Map.put(
@@ -1253,8 +1296,12 @@ defmodule Bonfire.Social.FeedLoader do
       # TODO: try doing this in queries in a way that it's not needed here?
       edges
       # |> Enum.uniq_by(&id(&1))
-      |> Enum.uniq_by(&e(&1, :activity, :object_id, nil))
+      |> Enum.uniq_by(
+        &(e(&1, :activity, :object_id, nil) || e(&1, :activity, :id, nil) || Enums.id(&1))
+      )
+      |> debug("deduped edges")
     else
+      # FIXME: we're getting repeated activities 
       edges
     end
   end
