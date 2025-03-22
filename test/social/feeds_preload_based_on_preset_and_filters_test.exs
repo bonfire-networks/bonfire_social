@@ -80,8 +80,7 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
               current_user: user,
               # limit: 3,
               by: other_user,
-              hashtags: "#test",
-              mentions: other_user,
+              tags: ["#test", other_user],
               show_objects_only_once: false
             )
 
@@ -119,8 +118,7 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
               current_user: user,
               # limit: 3,
               by: other_user,
-              hashtags: "#test",
-              mentions: other_user,
+              tags: ["#test", other_user],
               show_objects_only_once: false
             ]
 

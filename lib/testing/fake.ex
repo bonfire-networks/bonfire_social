@@ -72,7 +72,7 @@ defmodule Bonfire.Social.Fake do
   end
 
   # Helper to create appropriate test content based on feed type
-  def create_test_content(preset, user, other_user) do
+  def create_test_content(preset, user, other_user, i \\ 1) do
     case preset do
       :my ->
         {:ok, %Bonfire.Data.Social.Follow{} = follow} =
@@ -84,8 +84,8 @@ defmodule Bonfire.Social.Fake do
         post =
           Bonfire.Posts.Fake.fake_post!(other_user, "public", %{
             post_content: %{
-              name: "followed user post",
-              html_body: "content from someone I follow"
+              name: "followed user post #{i}",
+              html_body: "content from someone I follow #{i}"
             }
           })
 
@@ -110,8 +110,8 @@ defmodule Bonfire.Social.Fake do
         remote_post =
           Bonfire.Posts.Fake.fake_post!(remote_user, "public", %{
             post_content: %{
-              name: "remote post",
-              html_body: "content from fediverse"
+              name: "remote post #{i}",
+              html_body: "content from fediverse #{i}"
             }
           })
 
@@ -124,12 +124,12 @@ defmodule Bonfire.Social.Fake do
         {remote_post, nil}
 
       :notifications ->
-        create_test_content(:mentions, user, other_user)
+        create_test_content(:mentions, user, other_user, i)
 
       :likes ->
         post =
           Bonfire.Posts.Fake.fake_post!(other_user, "public", %{
-            post_content: %{name: "likeable post", html_body: "likeable content"}
+            post_content: %{name: "likeable post #{i}", html_body: "likeable content #{i}"}
           })
 
         {:ok, like} = Bonfire.Social.Likes.like(user, post)
@@ -152,7 +152,10 @@ defmodule Bonfire.Social.Fake do
       :bookmarks ->
         post =
           Bonfire.Posts.Fake.fake_post!(user, "public", %{
-            post_content: %{name: "bookmarkable post", html_body: "bookmarkable content"}
+            post_content: %{
+              name: "bookmarkable post #{i}",
+              html_body: "bookmarkable content #{i}"
+            }
           })
 
         {:ok, bookmark} = Bonfire.Social.Bookmarks.bookmark(user, post)
@@ -162,7 +165,7 @@ defmodule Bonfire.Social.Fake do
       :hashtag ->
         post =
           Bonfire.Posts.Fake.fake_post!(user, "public", %{
-            post_content: %{name: "tagged post", html_body: "post with #test"}
+            post_content: %{name: "tagged post #{i}", html_body: "post with #test #{i}"}
           })
 
         {post, nil}
@@ -170,7 +173,10 @@ defmodule Bonfire.Social.Fake do
       :mentions ->
         post =
           Bonfire.Posts.Fake.fake_post!(other_user, "public", %{
-            post_content: %{name: "mention me", html_body: "@#{user.character.username} hey"}
+            post_content: %{
+              name: "mention me #{i}",
+              html_body: "@#{user.character.username} hey #{i}"
+            }
           })
 
         {post, nil}
@@ -178,7 +184,7 @@ defmodule Bonfire.Social.Fake do
       :flagged_by_me ->
         post =
           Bonfire.Posts.Fake.fake_post!(other_user, "public", %{
-            post_content: %{name: "flagged post", html_body: "content"}
+            post_content: %{name: "flagged post #{i}", html_body: "content #{i}"}
           })
 
         {:ok, post} = Bonfire.Posts.read(post.id, current_user: user)
@@ -189,10 +195,10 @@ defmodule Bonfire.Social.Fake do
       :flagged_content ->
         post =
           Bonfire.Posts.Fake.fake_post!(
-            Bonfire.Me.Fake.fake_user!("author of flagged content"),
+            Bonfire.Me.Fake.fake_user!("author of flagged content #{i}"),
             "mentions",
             %{
-              post_content: %{name: "flagged post", html_body: "content"}
+              post_content: %{name: "flagged post #{i}", html_body: "content #{i}"}
             }
           )
 
@@ -204,7 +210,7 @@ defmodule Bonfire.Social.Fake do
 
         post =
           Bonfire.Posts.Fake.fake_post!(user, "public", %{
-            post_content: %{name: "media post", html_body: "media content post"},
+            post_content: %{name: "Image post #{i}", html_body: "media content post #{i}"},
             uploaded_media: [media]
           })
 
@@ -240,13 +246,13 @@ defmodule Bonfire.Social.Fake do
       :local ->
         original_post =
           Bonfire.Posts.Fake.fake_post!(other_user, "public", %{
-            post_content: %{name: "original post", html_body: "original post content"}
+            post_content: %{name: "original post #{i}", html_body: "original post content #{i}"}
           })
 
         post =
           Bonfire.Posts.Fake.fake_post!(other_user, "public", %{
             reply_to_id: original_post.id,
-            post_content: %{html_body: "default post content (as reply)"}
+            post_content: %{html_body: "default post content (as reply of #{i})"}
           })
 
         {post, nil}
@@ -255,7 +261,7 @@ defmodule Bonfire.Social.Fake do
       when is_nil(other) or other in [:explore, :user_by_object_type, :user_activities] ->
         post =
           Bonfire.Posts.Fake.fake_post!(other_user, "public", %{
-            post_content: %{html_body: "default post content"}
+            post_content: %{html_body: "default post content #{i}"}
           })
 
         {post, nil}

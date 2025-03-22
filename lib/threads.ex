@@ -144,8 +144,10 @@ defmodule Bonfire.Social.Threads do
       {:ok, %{id: "123", ...}}
   """
   def find_reply_to(attrs, user) do
-    find_reply_id(attrs)
-    |> debug()
+    attrs
+    |> debug("attrs")
+    |> find_reply_id()
+    |> debug("reply_id")
     |> maybe_replyable(user)
   end
 
@@ -291,10 +293,11 @@ defmodule Bonfire.Social.Threads do
     Replied.changeset(replied, attrs)
   end
 
-  defp find_reply_id(%{reply_to_id: id}) when is_binary(id) and id != "", do: id
-  defp find_reply_id(%{reply_to: attrs}), do: find_reply_id(attrs)
+  defp find_reply_id(%{reply_to_id: id}), do: Enums.id(id)
+  defp find_reply_id(%{reply_to: id}), do: Enums.id(id)
   # defp find_reply_id(%{thread_id: id}) when is_binary(id) and id != "", do: id
   defp find_reply_id(_), do: nil
+
   defp find_thread_id(%{thread_id: id}) when is_binary(id) and id != "", do: id
   defp find_thread_id(%{reply_to: attrs}), do: find_thread_id(attrs)
   defp find_thread_id(_), do: nil

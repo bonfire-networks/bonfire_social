@@ -57,7 +57,7 @@ defmodule Bonfire.Social.Feeds do
   end
 
   def feed_preset_if_permitted(name, opts) when not is_nil(name) and not is_struct(name) do
-    presets = Bonfire.Social.Feeds.feed_presets(opts)
+    presets = feed_presets(opts)
 
     case e(presets, Types.maybe_to_atom(name), nil) do
       nil ->
@@ -71,6 +71,8 @@ defmodule Bonfire.Social.Feeds do
         end
     end
   end
+
+  def feed_preset_if_permitted(_, _opts), do: {:error, :not_found}
 
   defp check_feed_preset_permitted(nil, _opts), do: {:error, :not_found}
 

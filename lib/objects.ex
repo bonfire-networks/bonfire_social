@@ -425,6 +425,11 @@ defmodule Bonfire.Social.Objects do
 
   def maybe_filter(query, {:media_types, types}, _opts) when is_list(types) and types != [] do
     case prepare_media_type(types) do
+      :all ->
+        query
+        |> proload(:inner, activity: [:media])
+        |> where([media: media], not is_nil(media.media_type))
+
       [first | rest] ->
         rest
         |> Enum.reduce(
@@ -444,6 +449,11 @@ defmodule Bonfire.Social.Objects do
   def maybe_filter(query, {:exclude_media_types, types}, opts)
       when is_list(types) and types != [] do
     case prepare_media_type(types) do
+      :all ->
+        query
+        |> proload(:inner, activity: [:media])
+        |> where([media: media], is_nil(media.media_type))
+
       [first | rest] ->
         rest
         |> Enum.reduce(
@@ -483,7 +493,19 @@ defmodule Bonfire.Social.Objects do
   end
 
   defp prepare_media_type(types) do
-    if :link in types, do: ["link", "article", "profile", "website"] ++ types, else: types
+    cond do
+      "*" in types ->
+        :all
+
+      :* in types ->
+        :all
+
+      :link in types ->
+        ["link", "article", "profile", "website"] ++ types
+
+      true ->
+        types
+    end
   end
 
   @doc """

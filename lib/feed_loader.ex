@@ -180,6 +180,10 @@ defmodule Bonfire.Social.FeedLoader do
         |> prepare_feed_filters(opts)
         ~> feed(opts)
 
+      # {:error, %Ecto.Changeset{} = cs} ->
+      #   warn(filters, "Invalid filters")
+      #   error(cs, "Could not validate feed filters")
+
       e ->
         error(e, "Could not find a preset or prepare filters")
         # feed(%{feed_name: nil}, opts)
@@ -1364,7 +1368,7 @@ defmodule Bonfire.Social.FeedLoader do
       %{subjects: [%{id: "alice"}]}
 
       # 2: Parameterizing multiple filters
-      iex> parameterize_filters(%{}, %{subjects: [:me], tags: [:hashtags]}, current_user: %{id: "alice"}, hashtags: "elixir")
+      iex> parameterize_filters(%{}, %{subjects: [:me], tags: [:tags]}, current_user: %{id: "alice"}, tags: "elixir")
       %{subjects: [%{id: "alice"}], tags: ["elixir"]}
 
       # 3: Parameterizing with undefined options
@@ -1387,7 +1391,7 @@ defmodule Bonfire.Social.FeedLoader do
       |> debug()
       |> Enum.map(fn
         {k, v} when is_list(v) ->
-          {k, Enum.map(v, &replace_parameters(&1, filters, opts))}
+          {k, Enum.map(v, &replace_parameters(&1, filters, opts)) |> List.flatten()}
 
         {k, v} ->
           {k, replace_parameters(v, filters, opts)}
@@ -1483,7 +1487,8 @@ defmodule Bonfire.Social.FeedLoader do
   def replace_parameters(value, filters, opts) do
     ed(filters, value, fn ->
       ed(opts, value, fn ->
-        error(opts, "parameter #{inspect(value)} was not found in filters or opts")
+        warn(filters, "parameter #{inspect(value)} was not found in filters")
+        error(opts, "parameter #{inspect(value)} was not found (in filters or) opts")
         value
       end)
     end)

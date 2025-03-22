@@ -154,12 +154,9 @@ defmodule Bonfire.Social.FeedFilters do
       %{valid?: true} = changeset ->
         {:ok, Ecto.Changeset.apply_changes(changeset)}
 
-      changeset ->
-        {
-          :error,
-          changeset
-          # |> changeset_error_to_map()
-        }
+      cs ->
+        warn(attrs, "Invalid filters")
+        error(cs)
     end
   end
 

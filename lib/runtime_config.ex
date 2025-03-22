@@ -169,13 +169,13 @@ defmodule Bonfire.Social.RuntimeConfig do
           built_in: true,
           description: "Activities with a specific hashtag",
           filters: %FeedFilters{},
-          parameterized: %{tags: [:hashtags]}
+          parameterized: %{tags: [:tags]}
         },
         mentions: %{
           built_in: true,
           description: "Activities with a specific @ mention",
           filters: %FeedFilters{},
-          parameterized: %{tags: [:mentions]}
+          parameterized: %{tags: [:tags]}
         },
 
         # Moderation feeds
@@ -336,7 +336,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         },
         "Media" => %{
           match: %{media_types: "*"},
-          include: [:per_media, :with_creator, :with_peered],
+          include: [:per_media, :with_creator, :with_post_content, :with_peered],
           exclude: [:with_subject, :with_media, :with_object, :with_object_more]
         }
       }
