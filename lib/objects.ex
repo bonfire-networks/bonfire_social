@@ -1005,7 +1005,7 @@ defmodule Bonfire.Social.Objects do
 
   ## Examples
 
-      iex> reset_preset_boundary(%User{}, %Object{}, "public", [], __MODULE__)
+      iex> reset_preset_boundary(%User{}, %Object{}, "public", [to_boundaries: "local"], __MODULE__)
       {:ok, %Boundary{}}
 
   """
