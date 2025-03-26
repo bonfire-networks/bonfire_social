@@ -6,6 +6,7 @@
 assets/node_modules
 assets/*.log
 priv/cldr
+.DS_Store
 
 # If you run "mix test --cover", coverage assets end up here.
 /cover/
