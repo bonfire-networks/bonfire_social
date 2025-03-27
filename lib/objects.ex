@@ -1016,22 +1016,31 @@ defmodule Bonfire.Social.Objects do
         opts_or_attrs \\ [],
         for_module \\ nil
       ) do
-    # debug(thing, "reset boundary of")
-    set_opts =
-      [
-        remove_previous_preset: previous_preset,
-        to_boundaries:
-          e(opts_or_attrs, :attrs, :to_boundaries, nil) || e(opts_or_attrs, :to_boundaries, nil),
-        to_circles:
-          e(opts_or_attrs, :attrs, :to_circles, nil) || e(opts_or_attrs, :to_circles, nil),
-        context_id:
-          e(thing, :context_id, nil) || e(opts_or_attrs, :attrs, :context_id, nil) ||
-            e(opts_or_attrs, :context_id, nil)
-      ]
-      |> debug("opts")
-      |> set_boundaries(creator, thing, ..., for_module || object_type(thing) || __MODULE__)
+    to_boundaries =
+      e(opts_or_attrs, :attrs, :to_boundaries, nil) || e(opts_or_attrs, :to_boundaries, nil)
 
-    set_opts[:boundaries_as_set] || error("Boundaries not enabled")
+    if to_boundaries == "private" do
+      # do it here to skip the rest of the logic
+      with {num, nil} <- Bonfire.Boundaries.Controlleds.remove_all_acls(thing) do
+        {:ok, num}
+      end
+    else
+      # debug(thing, "reset boundary of")
+      set_opts =
+        [
+          remove_previous_preset: previous_preset,
+          to_boundaries: to_boundaries,
+          to_circles:
+            e(opts_or_attrs, :attrs, :to_circles, nil) || e(opts_or_attrs, :to_circles, nil),
+          context_id:
+            e(thing, :context_id, nil) || e(opts_or_attrs, :attrs, :context_id, nil) ||
+              e(opts_or_attrs, :context_id, nil)
+        ]
+        |> debug("opts")
+        |> set_boundaries(creator, thing, ..., for_module || object_type(thing) || __MODULE__)
+
+      set_opts[:boundaries_as_set] || error("Boundaries not enabled")
+    end
   end
 
   @doc """
