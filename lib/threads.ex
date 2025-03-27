@@ -294,9 +294,9 @@ defmodule Bonfire.Social.Threads do
   end
 
   defp find_reply_id(%{reply_to_id: id}), do: Enums.id(id)
-  defp find_reply_id(%{reply_to: id}), do: Enums.id(id)
+  defp find_reply_id(%{reply_to: attrs_or_object}), do: find_reply_id(attrs_or_object)
   # defp find_reply_id(%{thread_id: id}) when is_binary(id) and id != "", do: id
-  defp find_reply_id(_), do: nil
+  defp find_reply_id(attrs_or_object), do: Enums.id(attrs_or_object)
 
   defp find_thread_id(%{thread_id: id}) when is_binary(id) and id != "", do: id
   defp find_thread_id(%{reply_to: attrs}), do: find_thread_id(attrs)
