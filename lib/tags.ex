@@ -158,24 +158,22 @@ defmodule Bonfire.Social.Tags do
 
   """
   def auto_boost(categories_auto_boost, object) when is_list(categories_auto_boost) do
+    debug(categories_auto_boost, "many")
+
     categories_auto_boost
     |> Enum.each(&auto_boost(&1, object))
   end
 
-  def auto_boost(%{} = category, object) do
+  def auto_boost(%{} = category, object) when is_struct(object) or is_binary(object) do
     category =
       category
       |> repo().maybe_preload(:character)
 
-    if e(category, :character, nil) do
-      # category
-      # |> debug("auto_boost_object")
+    if inbox_id = e(category, :character, :notifications_id, nil) do
+      category
+      |> debug("auto_boost_object to")
 
       Bonfire.Social.Boosts.maybe_boost(category, object, notify_creator: false)
-
-      inbox_id =
-        e(category, :character, :notifications_id, nil)
-        |> debug()
 
       # remove it from the inbox ("Submitted" tab)
       if inbox_id,

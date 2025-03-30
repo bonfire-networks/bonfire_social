@@ -146,7 +146,8 @@ defmodule Bonfire.Social.Boosts do
   end
 
   def maybe_boost(%{} = booster, %{} = boosted, opts \\ []) do
-    case Config.get([Bonfire.Social.Boosts, :can_reboost_after], false) |> debug("bconf") do
+    case Config.get([Bonfire.Social.Boosts, :can_reboost_after], false)
+         |> debug("can_reboost_after?") do
       seconds when is_integer(seconds) ->
         # max 1 re-boost every X seconds
         case date_last_boosted(booster, boosted) do

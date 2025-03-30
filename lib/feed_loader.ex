@@ -1124,20 +1124,35 @@ defmodule Bonfire.Social.FeedLoader do
     false
   end
 
-  def feed_contains?(%{edges: edges}, object, opts) do
+  def feed_contains?(%{edges: edges}, object, opts) when is_list(edges) and edges != [] do
+    debug(edges, "edges")
     feed_contains?(edges, object, opts)
   end
 
-  def feed_contains?(feed, objects, opts) when is_list(objects) do
-    Enum.all?(objects, &feed_contains?(feed, &1, opts))
+  def feed_contains?(feed, objects_or_filters, opts)
+      when is_list(objects_or_filters) and objects_or_filters != [] do
+    debug(objects_or_filters, "some kinda list")
+
+    if Keyword.keyword?(objects_or_filters) and is_atom(feed) do
+      case feed_contains_query(feed, objects_or_filters, opts)
+           |> repo().many() do
+        [] -> false
+        items -> items
+      end
+    else
+      Enum.all?(objects_or_filters, &feed_contains?(feed, &1, opts))
+    end
   end
 
-  def feed_contains?(feed, %{objects: objects}, opts) do
+  def feed_contains?(feed, %{objects: objects}, opts) when is_list(objects) and objects != [] do
+    debug(objects, "objects")
     feed_contains?(feed, objects, opts)
   end
 
   def feed_contains?(feed, id_or_html_body, _opts)
       when is_list(feed) and (is_binary(id_or_html_body) or is_map(id_or_html_body)) do
+    debug(id_or_html_body, "id_or_html_body")
+
     q_id =
       e(id_or_html_body, :object_id, nil) || Enums.id(e(id_or_html_body, :object, nil)) ||
         e(id_or_html_body, :activity, :object_id, nil) ||
@@ -1175,15 +1190,9 @@ defmodule Bonfire.Social.FeedLoader do
       )
   end
 
-  def feed_contains?(feed_name, filters, opts) when is_list(filters) do
-    case feed_contains_query(feed_name, filters, opts)
-         |> repo().many() do
-      [] -> false
-      items -> items
-    end
-  end
-
   def feed_contains?(feed, object, opts) when is_map(object) or is_binary(object) do
+    debug(object, "object")
+
     case Types.uid(object) do
       nil ->
         do_feed(feed, opts[:feed_filters] || %{}, opts)
@@ -1194,7 +1203,8 @@ defmodule Bonfire.Social.FeedLoader do
     end
   end
 
-  def feed_contains_single?(feed_name, filters, opts) when is_list(filters) do
+  def feed_contains_single?(feed_name, filters, opts)
+      when is_list(filters) and is_atom(feed_name) do
     feed_contains_query(feed_name, filters, opts)
     |> repo().one()
 
