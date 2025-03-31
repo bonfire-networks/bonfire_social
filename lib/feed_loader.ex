@@ -238,7 +238,7 @@ defmodule Bonfire.Social.FeedLoader do
         sort_by: Settings.get([Bonfire.UI.Social.FeedLive, :sort_by], nil, opts),
         time_limit: Settings.get([Bonfire.UI.Social.FeedLive, :time_limit], 7, opts)
       }
-      |> IO.inspect(label: "m0"),
+      |> debug("m0"),
       filters
     )
   end
@@ -250,12 +250,12 @@ defmodule Bonfire.Social.FeedLoader do
 
   # TODO: optimise
   defp merge_feed_filters(preset_filters, custom_filters, opts) do
-    # Enums.merge_to_struct(FeedFilters, preset_filters, merge_feed_filters(custom_filters, opts) |> IO.inspect(label: "m1"))
+    # Enums.merge_to_struct(FeedFilters, preset_filters, merge_feed_filters(custom_filters, opts) |> debug("m1"))
     Enums.merge_as_map(
       preset_filters,
-      merge_feed_filters(custom_filters, opts) |> IO.inspect(label: "m1")
+      merge_feed_filters(custom_filters, opts) |> debug("m1")
     )
-    |> IO.inspect(label: "m2")
+    |> debug("m2")
   end
 
   # TODO: put in config
@@ -267,7 +267,7 @@ defmodule Bonfire.Social.FeedLoader do
 
     {feed_ids, opts} =
       feed_ids_and_opts(feed_name, opts)
-      |> IO.inspect(label: "feed_ids_and_opts")
+      |> debug("feed_ids_and_opts")
 
     feed_filtered(feed_ids, filters, opts)
   end
@@ -277,7 +277,7 @@ defmodule Bonfire.Social.FeedLoader do
              (is_binary(feed_id_or_ids) or is_list(feed_id_or_ids)) do
     {feed_ids, opts} =
       feed_ids_and_opts({feed_name, feed_id_or_ids}, opts)
-      |> IO.inspect(label: "feed_ids_and_opts")
+      |> debug("feed_ids_and_opts")
 
     feed_filtered(feed_ids, filters, opts)
   end
@@ -375,7 +375,7 @@ defmodule Bonfire.Social.FeedLoader do
     filters = Map.new(filters)
 
     do_query(filters, opts, opts[:base_query] || default_query())
-    |> IO.inspect(label: "feed query")
+    |> debug("feed query")
     |> paginate_and_boundarise_feed(filters, opts)
 
     # |> prepare_feed(filters, opts)
@@ -395,7 +395,7 @@ defmodule Bonfire.Social.FeedLoader do
 
     Social.many(
       query
-      |> IO.inspect(label: "feed query"),
+      |> debug("feed query"),
       opts[:paginate] || opts,
       Keyword.merge(
         opts,

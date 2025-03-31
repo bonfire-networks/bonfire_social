@@ -451,7 +451,7 @@ defmodule Bonfire.Social.Feeds do
   def maybe_custom_feeds(preset_and_custom_boundary),
     do:
       preset_and_custom_boundary
-      |> IO.inspect(label: "preset_and_custom_boundary")
+      # |> debug("preset_and_custom_boundary")
       |> maybe_from_opts(:to_feeds, [])
 
   @doc """
@@ -736,14 +736,14 @@ defmodule Bonfire.Social.Feeds do
       # Inbox feed ID of the object's creator
   """
   def inbox_of_obj_creator(object) do
-    # |> IO.inspect
+    # |> debug
     Objects.preload_creator(object) |> Objects.object_creator() |> feed_id(:notifications, ...)
   end
 
   # def admins_inboxes(), do: Bonfire.Me.Users.list_admins() |> admins_inboxes()
   # def admins_inboxes(admins) when is_list(admins), do: Enum.map(admins, fn x -> admin_inbox(x) end)
   # def admin_inbox(admin) do
-  #   admin = admin |> repo().maybe_preload([:character]) # |> IO.inspect
+  #   admin = admin |> repo().maybe_preload([:character]) # |> debug
   #   #|> debug()
   #   e(admin, :character, :inbox_id, nil)
   #     || feed_id(:inbox, admin)

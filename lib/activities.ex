@@ -1108,7 +1108,7 @@ defmodule Bonfire.Social.Activities do
     # |> debug("permitted query")
 
     #  #|> repo().maybe_preload(controlled: [acl: [grants: [access: [:interacts]]]])
-    # |> IO.inspect
+    # |> debug
   end
 
   def read_query(filters, opts) when is_map(filters) or is_list(filters) do
@@ -1128,15 +1128,15 @@ defmodule Bonfire.Social.Activities do
   end
 
   def maybe_filter(query, {:activity_types, types}, _opts) do
-    IO.inspect(types, label: "filter by activity_types")
+    # debug(types, label: "filter by activity_types")
 
     case Verbs.ids(types) do
       verb_ids when is_list(verb_ids) and verb_ids != [] ->
-        IO.inspect(verb_ids, label: "filter by verb_ids")
+        # debug(verb_ids, label: "filter by verb_ids")
         where(query, [activity: activity], activity.verb_id in ^verb_ids)
 
       other ->
-        IO.inspect(other, label: "no verb_ids")
+        # debug(other, label: "no verb_ids")
         query
     end
   end
@@ -1819,7 +1819,7 @@ defmodule Bonfire.Social.Activities do
       ]
     end)
 
-    # |> IO.inspect(label: "Making all verb names localisable")
+    # |> debug(label: "Making all verb names localisable")
   end
 
   # workaround `Verbs` bug

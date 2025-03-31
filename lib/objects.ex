@@ -240,10 +240,10 @@ defmodule Bonfire.Social.Objects do
   """
   def preload_reply_creator(object) do
     object
-    # |> IO.inspect
+    # |> debug
     |> repo().maybe_preload(replied: [reply_to: [created: [creator: [:character]]]])
-    # |> repo().maybe_preload([replied: [:reply_to]]) #|> IO.inspect
-    # |> IO.inspect
+    # |> repo().maybe_preload([replied: [:reply_to]]) #|> debug
+    # |> debug
     #  FIXME: is this loaded the same creator twice?
     |> repo().maybe_preload(replied: [reply_to: [creator: [:character]]])
   end

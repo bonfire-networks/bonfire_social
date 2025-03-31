@@ -35,7 +35,7 @@ defmodule Bonfire.Social.Fake do
     for {preset, %{filters: filters} = preset_details} <- feed_presets do
       # filters =
       #   Map.merge(filters, preset_details[:parameterized] || %{})
-      #   |> IO.inspect(label: "filters for #{preset}")
+      #   |> debug("filters for #{preset}")
 
       # |> Enums.struct_to_map()
       # |> Map.drop([:__typename])

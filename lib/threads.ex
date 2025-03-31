@@ -171,7 +171,7 @@ defmodule Bonfire.Social.Threads do
   end
 
   defp maybe_replyable(id, user) do
-    if is_binary(id) and id !="" do
+    if is_binary(id) and id != "" do
       case load_replyable(user, id) do
         %{} = reply ->
           {:ok, reply}
@@ -963,7 +963,7 @@ defmodule Bonfire.Social.Threads do
   #   |> Enum.reverse()
   #   |> Enum.map(&Map.from_struct/1)
   #   |> Enum.reduce(%{}, &Map.put(&2, &1.id, &1))
-  #   # |> IO.inspect
+  #   # |> debug
 
   #   do_reply_tree = fn
   #     {_id, %{reply_to_id: reply_to_id, thread_id: thread_id} =_reply} = reply_with_id,
@@ -980,7 +980,7 @@ defmodule Bonfire.Social.Threads do
   #               [reply_to_id, :direct_replies],
   #               Bonfire.Common.Enums.maybe_get(acc[reply_to_id], :direct_replies, []) ++ [reply_with_id]
   #             )
-  #           # |> IO.inspect
+  #           # |> debug
   #           # |> Map.delete(id)
 
   #       else
@@ -995,7 +995,7 @@ defmodule Bonfire.Social.Threads do
 
   #   Enum.reduce(thread, thread, do_reply_tree)
   #   |> Enum.reduce(thread, do_reply_tree)
-  #   # |> IO.inspect
+  #   # |> debug
   #   |> Enum.reduce(%{}, fn
 
   #     {id, %{reply_to_id: reply_to_id, thread_id: thread_id} =reply} = reply_with_id, acc when not is_binary(reply_to_id) or reply_to_id == thread_id ->

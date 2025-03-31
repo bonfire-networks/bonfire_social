@@ -65,7 +65,7 @@ defmodule Bonfire.Social.Feeds.PreloadCustomTest do
                   sensitive: %Ecto.Association.NotLoaded{}
                 } <- activity
 
-    # |> IO.inspect(label: "feed_contains in me?")
+    # |> debug("feed_contains in me?")
     postloads1 = [:with_subject, :with_object_more, :with_peered]
 
     activity =
