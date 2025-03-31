@@ -171,7 +171,7 @@ defmodule Bonfire.Social.Threads do
   end
 
   defp maybe_replyable(id, user) do
-    if is_binary(id) do
+    if is_binary(id) and id !="" do
       case load_replyable(user, id) do
         %{} = reply ->
           {:ok, reply}
