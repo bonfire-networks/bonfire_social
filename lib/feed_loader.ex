@@ -188,7 +188,7 @@ defmodule Bonfire.Social.FeedLoader do
       #   error(cs, "Could not validate feed filters")
 
       e ->
-        error(e, "Could not find a preset or prepare filters")
+        error(e, "Could not find a preset for #{feed_name} or prepare filters")
         # feed(%{feed_name: nil}, opts)
     end
   end
@@ -1211,7 +1211,8 @@ defmodule Bonfire.Social.FeedLoader do
   end
 
   def feed_contains?(feed, object, opts) when is_map(object) or is_binary(object) do
-    debug(object, "object")
+    # debug(object, "object")
+    opts = to_options(opts)
 
     case Types.uid(object) do
       nil ->
@@ -1221,7 +1222,7 @@ defmodule Bonfire.Social.FeedLoader do
         |> feed_contains?(object, opts)
 
       id ->
-        debug(object, "lookup by ID")
+        debug(id, "lookup by ID")
         feed_contains?(feed, [objects: id], opts)
     end
   end
@@ -1234,15 +1235,18 @@ defmodule Bonfire.Social.FeedLoader do
     # |> id()
   end
 
-  defp feed_contains_query(feed_name, filters, opts) when is_list(filters) do
-    {feed_ids, opts} = feed_ids_and_opts(feed_name, to_options(opts) ++ [limit: 10])
+  defp feed_contains_query(feed_name, filters, opts) when is_list(filters) or is_map(filters) do
+    opts = to_options(opts)
+    feed(feed_name, Map.new(filters), Keyword.put(opts, :return, :query))
 
-    feed_query(
-      feed_ids,
-      Map.new(filters),
-      opts
-    )
-    |> Activities.as_permitted_for(opts)
+    # {feed_ids, opts} = feed_ids_and_opts(feed_name, to_options(opts) ++ [limit: 10])
+
+    # feed_query(
+    #   feed_ids,
+    #   Map.new(filters),
+    #   opts
+    # )
+    # |> Activities.as_permitted_for(opts)
   end
 
   @doc """

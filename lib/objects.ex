@@ -306,13 +306,17 @@ defmodule Bonfire.Social.Objects do
   """
   def list_paginated(filters, opts \\ [])
 
+  def list_paginated(%Ecto.Query{} = query, opts) do
+    # debug(opts)
+    list_query(query, opts)
+    |> FeedLoader.feed_many_paginated(%{}, opts)
+  end
+
   def list_paginated(filters, opts)
       when is_list(filters) or is_struct(filters) do
     # debug(opts)
-    filters
-    # |> debug("filters")
-    # |> query_paginated(opts)
-    |> FeedLoader.feed_many_paginated(opts)
+    list_query(filters, opts)
+    |> FeedLoader.feed_many_paginated(filters, opts)
   end
 
   def list_query(type_or_query \\ nil, opts)
