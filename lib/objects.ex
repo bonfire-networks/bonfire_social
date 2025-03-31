@@ -471,19 +471,37 @@ defmodule Bonfire.Social.Objects do
   end
 
   def maybe_filter(query, {:tags, tag_ids}, _opts) when is_list(tag_ids) and tag_ids != [] do
-    case Types.uids(tag_ids) do
-      [] ->
+    case Types.partition_uids(tag_ids,
+           prepare_non_uid_fun: fn tag ->
+             maybe_apply(Bonfire.Tag.Hashtag, :normalize_name, [tag], fallback_return: tag)
+           end
+         ) do
+      {[], []} ->
         query
 
-      ids ->
+      {ids, []} ->
         query
-        |> proload(:inner, activity: [:object])
+        # |> proload(:inner, activity: [:object])
         #   |> reusable_join(:inner, [object: object], object_tagged in Tagged,
         #   as: :object_tagged,
         #   on: tagged.tag_id in ^ids and object_tagged.object_id == object.id
         # )
         |> proload(:inner, activity: [object: [:tagged]])
         |> where([tagged: tagged], tagged.tag_id in ^ids)
+
+      {[], hashtags} ->
+        query
+        |> proload(:inner, activity: [object: [tagged: {"tagged_", [:named]}]])
+        |> where([tagged_named: tagged_named], tagged_named.name in ^hashtags)
+
+      {ids, hashtags} ->
+        query
+        |> proload(:inner, activity: [object: [:tagged]])
+        |> proload(activity: [object: [tagged: {"tagged_", [:named]}]])
+        |> where(
+          [tagged: tagged, tagged_named: tagged_named],
+          tagged.tag_id in ^ids or tagged_named.name in ^hashtags
+        )
     end
   end
 

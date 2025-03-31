@@ -79,13 +79,14 @@ defmodule Bonfire.Social.FeedLoader do
 
   def prepare_feed_filters(_preset, %{feed_name: nil} = custom_filters, opts) do
     opts = to_options(opts)
-    warn(custom_filters, "custom filters")
+    debug(custom_filters, "custom filters")
 
     custom_filters
     |> merge_some_defaults(opts)
     |> merge_feed_filters(opts)
+    |> debug("merged feed_filters")
     |> FeedFilters.validate()
-    |> debug("merged & validated custom feed_filters")
+    |> debug("validated custom feed_filters")
   end
 
   @doc """
@@ -97,20 +98,20 @@ defmodule Bonfire.Social.FeedLoader do
 
   ## Examples
 
-      iex> %{edges: _, page_info: %Paginator.PageInfo{}} = Bonfire.Social.FeedActivities.feed(:explore)
+      iex> %{edges: _, page_info: %Paginator.PageInfo{}} = feed(:explore)
 
-      iex> %{edges: _, page_info: %Paginator.PageInfo{}} = Bonfire.Social.FeedActivities.feed(%{feed_name: :explore})
+      iex> %{edges: _, page_info: %Paginator.PageInfo{}} = feed(%{feed_name: :explore})
 
-      > Bonfire.Social.FeedActivities.feed("feed123", [])
+      > feed("feed123", [])
       %{edges: [%{activity: %{}}], page_info: %Paginator.PageInfo{}}
 
   """
   @spec feed(map() | atom() | String.t(), Keyword.t()) :: map()
-  def feed(feed_name, %{feed_name: feed_name} = filters, opts) do
+  def feed(feed_name, %{feed_name: feed_name} = filters, opts) when is_list(opts) do
     feed(filters, opts)
   end
 
-  def feed(feed_name, filters, opts) do
+  def feed(feed_name, filters, opts) when is_list(opts) do
     feed(filters |> Map.put(:feed_name, feed_name), opts)
   end
 
@@ -139,7 +140,7 @@ defmodule Bonfire.Social.FeedLoader do
   #   Bonfire.Social.Flags.list_preloaded(opts ++ [include_flags: :mediate])
   # end
 
-  def feed(%FeedFilters{} = filters, opts) do
+  def feed(%FeedFilters{} = filters, opts) when is_list(opts) do
     with preset <-
            opts[:feed_preset] ||
              (case Bonfire.Social.Feeds.feed_preset_if_permitted(filters, opts) do
@@ -167,8 +168,10 @@ defmodule Bonfire.Social.FeedLoader do
     end
   end
 
-  def feed(%{} = filters, opts) do
-    feed_name = filters[:feed_name]
+  def feed(%{} = filters, opts) when is_list(opts) do
+    feed_name =
+      filters[:feed_name]
+      |> debug("feed_name")
 
     with {:ok, preset} <- Bonfire.Social.Feeds.feed_preset_if_permitted(filters, opts),
          {:ok, %FeedFilters{} = filters} <- prepare_feed_filters(preset, filters, opts) do
@@ -191,17 +194,26 @@ defmodule Bonfire.Social.FeedLoader do
   end
 
   def feed([feed_name], opts)
-      when (not is_nil(feed_name) and is_atom(feed_name)) or is_binary(feed_name),
+      when ((not is_nil(feed_name) and is_atom(feed_name)) or is_binary(feed_name)) and
+             is_list(opts),
       do: feed(feed_name, opts)
 
   def feed({feed_name, feed_id_or_ids}, opts)
-      when is_atom(feed_name) and not is_nil(feed_name) do
+      when is_atom(feed_name) and not is_nil(feed_name) and is_list(opts) do
     warn(feed_id_or_ids, "should we do something with feed_id_or_ids?")
 
     feed(%{feed_name: feed_name}, opts)
   end
 
-  def feed(custom_filters, opts) do
+  def feed(feed_name, opts)
+      when ((not is_nil(feed_name) and is_atom(feed_name)) or is_binary(feed_name)) and
+             is_list(opts) do
+    feed(%{feed_name: feed_name}, opts)
+  end
+
+  def feed(custom_filters, opts)
+      when (is_list(custom_filters) or is_map(custom_filters) or is_nil(custom_filters)) and
+             is_list(opts) do
     # debug(custom_filters)
     Enum.into(custom_filters || %{}, %{feed_name: default_feed_name(opts)})
     |> feed(opts)
@@ -245,7 +257,7 @@ defmodule Bonfire.Social.FeedLoader do
 
   defp merge_feed_filters(custom_filters, opts) do
     # Enums.merge_to_struct(FeedFilters, custom_filters, opts[:feed_filters] || %{})
-    Enums.merge_as_map(custom_filters, opts[:feed_filters] || %{})
+    Enums.merge_as_map(opts[:feed_filters] || %{}, custom_filters)
   end
 
   # TODO: optimise
@@ -390,18 +402,16 @@ defmodule Bonfire.Social.FeedLoader do
       %{edges: edges, page_info: page_info}
   """
   def feed_many_paginated(query, filters, opts) do
-    opts = to_options(opts)
-    # debug(opts)
+    opts =
+      to_options(opts)
+      |> Keyword.merge(Activities.order_pagination_opts(filters[:sort_by], filters[:sort_order]))
+      |> debug("opts with pagination opts")
 
     Social.many(
       query
       |> debug("feed query"),
       opts[:paginate] || opts,
-      Keyword.merge(
-        opts,
-        Activities.order_pagination_opts(filters[:sort_by], filters[:sort_order])
-      )
-      |> debug()
+      opts
     )
   end
 
@@ -516,7 +526,7 @@ defmodule Bonfire.Social.FeedLoader do
 
   defp paginate_and_boundarise_feed_non_deferred_query(query, filters, opts) do
     query
-    |> make_distinct(filters[:sort_order], filters[:sort_order], opts)
+    |> make_distinct(filters[:sort_by], filters[:sort_order], opts)
     |> Activities.activity_preloads(
       opts[:preload],
       opts
@@ -596,7 +606,7 @@ defmodule Bonfire.Social.FeedLoader do
       Keyword.put(
         opts,
         :feed_filters,
-        Map.merge(
+        Enum.into(
           e(opts, :feed_filters, %{}),
           %{objects: object}
         )
@@ -776,25 +786,30 @@ defmodule Bonfire.Social.FeedLoader do
     query
   end
 
-  defp make_distinct(query, nil, :asc, _opts) do
+  defp make_distinct(query, id, :asc, _opts) when is_nil(id) or id == :id do
     distinct(query, [activity: activity], asc: activity.id)
   end
 
-  defp make_distinct(query, nil, _, _opts) do
+  defp make_distinct(query, id, _, _opts) when is_nil(id) or id == :id do
     distinct(query, [activity: activity], desc: activity.id)
   end
 
-  defp make_distinct(query, _, :asc, opts) do
+  defp make_distinct(query, other, :asc, opts) do
+    debug(other, "making a subquery to show distinct activities with field other than :id")
+
     distinct(query, [activity: activity], asc: activity.id)
     |> make_distinct_subquery(opts)
   end
 
-  defp make_distinct(query, _, _, opts) do
+  defp make_distinct(query, other, _, opts) do
+    debug(other, "making a subquery to show distinct activities with field other than :id")
+
     distinct(query, [activity: activity], desc: activity.id)
     |> make_distinct_subquery(opts)
   end
 
   defp make_distinct_subquery(query, opts) do
+    # FIXME: if `query` already has some preloads those should be applied at the top level
     subquery =
       query
       |> repo().make_subquery()
@@ -959,7 +974,9 @@ defmodule Bonfire.Social.FeedLoader do
 
     # postload = opts[:postload] || contextual_preloads_from_filters(filters, :post)
 
-    include_flags = filters[:include_flags] || opts[:include_flags]
+    include_flags =
+      (filters[:include_flags] || opts[:include_flags])
+      |> debug("include_flags?")
 
     include_all_objects =
       case include_flags do
@@ -1124,6 +1141,14 @@ defmodule Bonfire.Social.FeedLoader do
     false
   end
 
+  def feed_contains?(%{edges: []}, object, opts) do
+    false
+  end
+
+  def feed_contains?([], object, opts) do
+    false
+  end
+
   def feed_contains?(%{edges: edges}, object, opts) when is_list(edges) and edges != [] do
     debug(edges, "edges")
     feed_contains?(edges, object, opts)
@@ -1144,13 +1169,8 @@ defmodule Bonfire.Social.FeedLoader do
     end
   end
 
-  def feed_contains?(feed, %{objects: objects}, opts) when is_list(objects) and objects != [] do
-    debug(objects, "objects")
-    feed_contains?(feed, objects, opts)
-  end
-
   def feed_contains?(feed, id_or_html_body, _opts)
-      when is_list(feed) and (is_binary(id_or_html_body) or is_map(id_or_html_body)) do
+      when is_list(feed) and (is_binary(id_or_html_body) or is_struct(id_or_html_body)) do
     debug(id_or_html_body, "id_or_html_body")
 
     q_id =
@@ -1195,16 +1215,19 @@ defmodule Bonfire.Social.FeedLoader do
 
     case Types.uid(object) do
       nil ->
+        debug(object, "assume we want to look up a string in the object fields")
+
         do_feed(feed, opts[:feed_filters] || %{}, opts)
         |> feed_contains?(object, opts)
 
       id ->
-        feed_contains?(feed, %{objects: id}, opts)
+        debug(object, "lookup by ID")
+        feed_contains?(feed, [objects: id], opts)
     end
   end
 
   def feed_contains_single?(feed_name, filters, opts)
-      when is_list(filters) and is_atom(feed_name) do
+      when (is_atom(feed_name) and is_list(filters)) or is_map(filters) do
     feed_contains_query(feed_name, filters, opts)
     |> repo().one()
 
@@ -1216,7 +1239,7 @@ defmodule Bonfire.Social.FeedLoader do
 
     feed_query(
       feed_ids,
-      filters,
+      Map.new(filters),
       opts
     )
     |> Activities.as_permitted_for(opts)
@@ -1348,7 +1371,8 @@ defmodule Bonfire.Social.FeedLoader do
 
       # 6: Feed with `current_user_required` and no current user
       iex> preset_feed_filters(:flagged_by_me, [])
-      ** (Bonfire.Fail.Auth) You need to log in first. 
+      {:error, :unauthorized}
+      # ** (Bonfire.Fail.Auth) You need to log in first. 
 
       # 7: Custom feed with additional parameters
       iex> {:ok, %{activity_types: [:follow], objects: ["alice"]}} = preset_feed_filters(:user_followers, [by: "alice"])

@@ -8,4 +8,7 @@ defmodule Bonfire.Social.Feeds.DocTest do
   doctest Bonfire.Social.FeedActivities, import: true
   doctest Bonfire.Social.FeedLoader, import: true
   doctest Bonfire.Social.FeedFilters, import: true
+  doctest Bonfire.Social.FeedFilters.Atom
+  doctest Bonfire.Social.FeedFilters.StringList
+  doctest Bonfire.Social.FeedFilters.AtomOrStringList
 end

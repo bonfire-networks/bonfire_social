@@ -151,7 +151,7 @@ defmodule Bonfire.Social.Fake do
 
       :bookmarks ->
         post =
-          Bonfire.Posts.Fake.fake_post!(user, "public", %{
+          Bonfire.Posts.Fake.fake_post!(other_user, "public", %{
             post_content: %{
               name: "bookmarkable post #{i}",
               html_body: "bookmarkable content #{i}"

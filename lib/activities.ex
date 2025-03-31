@@ -599,6 +599,7 @@ defmodule Bonfire.Social.Activities do
           query
           |> proload(activity: [:sensitive])
           |> proload(:inner, activity: [:media])
+          |> Ecto.Query.exclude(:distinct)
           |> distinct([media: media], desc: media.id)
 
         :maybe_with_labelled ->
@@ -1246,15 +1247,15 @@ defmodule Bonfire.Social.Activities do
       :visible ->
         boundarise(query, activity.subject_id, opts)
 
-      _ when is_list(subject) ->
-        where(query, [activity: activity], activity.subject_id in ^uids(subject))
-
-      _ when is_map(subject) or is_binary(subject) ->
-        where(query, [activity: activity], activity.subject_id == ^uid(subject))
-
       _ ->
-        warn(subject, "unrecognised subject")
-        query
+        case uids(subject) do
+          [] ->
+            debug(subject, "unrecognised subject")
+            query
+
+          ids ->
+            where(query, [activity: activity], activity.subject_id in ^ids)
+        end
     end
   end
 

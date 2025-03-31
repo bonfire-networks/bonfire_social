@@ -86,7 +86,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           name: l("Bookmarks"),
           built_in: true,
           description: l("Activities I've bookmarked"),
-          filters: %FeedFilters{activity_types: :bookmark},
+          filters: %FeedFilters{feed_name: :bookmarks, activity_types: :bookmark},
           current_user_required: true,
           parameterized: %{subjects: [:me]},
           exclude_from_nav: false,

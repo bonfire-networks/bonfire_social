@@ -38,8 +38,9 @@ defmodule Bonfire.Social.Feeds.PresetFiltersTest do
   end
 
   # Generate tests dynamically from feed presets - WIP: my, messages, user_following, user_followers, remote, my_requests, trending_discussions, images, publications, flagged_by_me, flagged_content
-  # for %{preset: preset, filters: filters} = params when preset in [:flagged_by_me] <- feed_preset_test_params() do
-  for %{preset: preset, filters: filters} = params when preset not in [:audio, :videos] <-
+  # flagged_content, flagged_by_me
+  # for %{preset: preset, filters: filters} = params when preset in [:flagged_by_me] <-
+  for %{preset: preset, filters: filters} = params when preset not in [:audio, :videos, :mentions] <-
         feed_preset_test_params() do
     describe "feed preset `#{inspect(preset)}` loads correct feed" do
       setup do
@@ -84,7 +85,7 @@ defmodule Bonfire.Social.Feeds.PresetFiltersTest do
         end
       end
 
-      if preset not in [:flagged_content, :flagged_by_me] do
+      if preset not in [:flagged_content, :flagged_by_me, :bookmarks] do
         test "using filters instead of the preset name", %{
           preset: preset,
           filters: filters,

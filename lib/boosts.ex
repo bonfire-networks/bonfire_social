@@ -155,7 +155,8 @@ defmodule Bonfire.Social.Boosts do
             do_boost(booster, boosted, opts)
 
           date_last_boosted ->
-            if DateTime.diff(DateTime.now!("Etc/UTC"), date_last_boosted, :second) >
+            if DateTime.diff(DateTime.now!("Etc/UTC"), date_last_boosted, :second)
+               |> debug("last boosted X seconds ago") >
                  seconds,
                do: do_boost(booster, boosted, opts),
                else: {:error, l("You already boosted this recently.")}

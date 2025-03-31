@@ -5,6 +5,7 @@ defmodule Bonfire.Social.FeedFilters do
   import Untangle
 
   alias Bonfire.Common.Enums
+  alias Bonfire.Common.Types
   alias Bonfire.Social.FeedFilters
   alias FeedFilters.StringList
   alias FeedFilters.AtomOrStringList
@@ -35,7 +36,7 @@ defmodule Bonfire.Social.FeedFilters do
 
     field :creators, StringList
     field :exclude_creators, StringList
-    field :creator_circles, StringList
+    # field :creator_circles, StringList
 
     field :media_types, AtomOrStringList
     field :exclude_media_types, AtomOrStringList
@@ -58,6 +59,7 @@ defmodule Bonfire.Social.FeedFilters do
     field :show_objects_only_once, :boolean, default: true
   end
 
+  # TODO: how can we generate this from the list above to make sure they stay in sync?
   def supported_filters,
     do: [
       :feed_name,
@@ -67,6 +69,7 @@ defmodule Bonfire.Social.FeedFilters do
       :subjects,
       :exclude_subjects,
       :subject_circles,
+      :exclude_subject_circles,
       :subject_types,
       :exclude_subject_types,
       :objects,
@@ -76,7 +79,7 @@ defmodule Bonfire.Social.FeedFilters do
       :exclude_object_types,
       :creators,
       :exclude_creators,
-      :creator_circles,
+      # :creator_circles,
       :media_types,
       :exclude_media_types,
       :tags,
@@ -84,7 +87,8 @@ defmodule Bonfire.Social.FeedFilters do
       :time_limit,
       :sort_by,
       :sort_order,
-      # :include_flags,
+      #  FIXME should only be set in config
+      :include_flags,
       :show_objects_only_once
     ]
 
@@ -98,13 +102,16 @@ defmodule Bonfire.Social.FeedFilters do
   def changeset(filters \\ %__MODULE__{}, attrs)
 
   def changeset(filters, %{feed_name: feed_name} = attrs) when is_binary(feed_name) do
-    changeset(filters, Map.drop(attrs, [:feed_name]))
+    case Types.maybe_to_atom!(feed_name) do
+      nil -> changeset(filters, Map.drop(attrs, [:feed_name]))
+      feed_name -> changeset(filters, Map.put(attrs, :feed_name, feed_name))
+    end
   end
 
   def changeset(filters, attrs) do
     filters
     |> cast(
-      Enums.input_to_atoms(attrs, also_discard_unknown_nested_keys: false),
+      Enums.input_to_atoms(attrs, also_discard_unknown_nested_keys: false) |> debug("input"),
       supported_filters()
     )
     # |> validate_length(:feed_ids, min: 1, message: "must have at least one feed ID")
@@ -138,8 +145,8 @@ defmodule Bonfire.Social.FeedFilters do
       iex> {:ok, %FeedFilters{object_types: [:post]}} = 
       ...> validate(%{object_types: "post"})
 
-      iex> {:error, %Ecto.Changeset{errors: [feed_name: {"is invalid", _}]}} = 
-      ...> validate(%{feed_name: :unknown}) 
+      iex> {:ok, %FeedFilters{feed_name: :custom}} = 
+      ...> validate(%{feed_name: "my_custom_feed"}) 
   """
   # TODO: re-validate?
   def validate(%FeedFilters{} = attrs), do: {:ok, attrs}

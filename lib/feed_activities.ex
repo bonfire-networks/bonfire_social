@@ -59,7 +59,8 @@ defmodule Bonfire.Social.FeedActivities do
     |> Changesets.put_assoc!(changeset, :feed_publishes, ...)
   end
 
-  defdelegate feed(name \\ nil, opts), to: FeedLoader
+  defdelegate feed(name \\ nil, opts \\ []), to: FeedLoader
+  defdelegate feed(name, filters, opts), to: FeedLoader
 
   def base_query(_opts \\ []) do
     # feeds = from fp in FeedPublish, # why the subquery?..

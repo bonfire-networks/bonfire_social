@@ -34,8 +34,7 @@ defmodule Bonfire.Social.BoostsTest do
     assert true == Boosts.boosted?(me, boosted)
   end
 
-  # FIXME: this may not be the current behaviour
-  test "cannot boost something repeatedly in a short time" do
+  test "cannot boost something repeatedly in too short a time" do
     me = Fake.fake_user!()
 
     attrs = %{
@@ -56,22 +55,22 @@ defmodule Bonfire.Social.BoostsTest do
     assert {:ok, boost} = Boosts.boost(me, boosted)
     assert true == Boosts.boosted?(me, boosted)
 
-    Config.put([Bonfire.Social.Boosts, :can_reboost_after], true)
+    Process.put([:bonfire_social, Bonfire.Social.Boosts, :can_reboost_after], true)
 
     assert {:ok, boost} = Boosts.boost(me, boosted)
     assert 2 == Boosts.count(me, boosted)
 
-    Config.put([Bonfire.Social.Boosts, :can_reboost_after], false)
+    Process.put([:bonfire_social, Bonfire.Social.Boosts, :can_reboost_after], false)
 
     assert {:error, _} = Boosts.boost(me, boosted)
     assert 2 == Boosts.count(me, boosted)
 
-    Config.put([Bonfire.Social.Boosts, :can_reboost_after], 60)
+    Process.put([:bonfire_social, Bonfire.Social.Boosts, :can_reboost_after], 60)
 
     assert {:error, _} = Boosts.boost(me, boosted)
     assert 2 == Boosts.count(me, boosted)
 
-    Config.put([Bonfire.Social.Boosts, :can_reboost_after], 1)
+    Process.put([:bonfire_social, Bonfire.Social.Boosts, :can_reboost_after], 0)
     Process.sleep(1000)
     assert {:ok, boost} = Boosts.boost(me, boosted)
     assert 3 == Boosts.count(me, boosted)
