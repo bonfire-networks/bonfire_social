@@ -1,6 +1,6 @@
 defmodule Bonfire.Social.LikesTest do
   # use Bonfire.Social.DataCase, async: true
-  use Bonfire.Social.ConnCase
+  use Bonfire.Social.DataCase
 
   import Bonfire.Files.Simulation
 

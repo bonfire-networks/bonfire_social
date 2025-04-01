@@ -1,6 +1,6 @@
 defmodule Bonfire.Social.NotificationEmailsTest do
   # Use the module
-  use Bonfire.Social.ConnCase, async: true
+  use Bonfire.Social.DataCase, async: true
 
   import Swoosh.TestAssertions
   alias Bonfire.Posts
