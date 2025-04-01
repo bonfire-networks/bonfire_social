@@ -91,7 +91,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           parameterized: %{subjects: [:me]},
           exclude_from_nav: false,
           base_query_fun: &Bonfire.Social.Bookmarks.base_query/0,
-          icon: "carbon:bookmark-filled"
+          icon: "lucide:bookmark-filled"
         },
         my_requests: %{
           name: l("Requests"),
