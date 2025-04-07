@@ -975,10 +975,10 @@ defmodule Bonfire.Social.FeedLoader do
     # postload = opts[:postload] || contextual_preloads_from_filters(filters, :post)
 
     include_flags =
-      (filters[:include_flags] || opts[:include_flags])
+      opts[:include_flags]
       |> debug("include_flags?")
 
-    include_all_objects =
+    skip_boundary_check =
       case include_flags do
         :admins -> maybe_apply(Bonfire.Me.Accounts, :is_admin?, [opts], fallback_return: nil)
         nil -> false
@@ -986,6 +986,7 @@ defmodule Bonfire.Social.FeedLoader do
         verb when is_atom(verb) or is_list(verb) -> Bonfire.Boundaries.can?(opts, verb, :instance)
         _ -> false
       end
+      |> debug("skip_boundary_check?")
 
     {filters
      |> Map.put_new_lazy(:exclude_table_ids, fn ->
@@ -1046,7 +1047,7 @@ defmodule Bonfire.Social.FeedLoader do
                do: [],
                else: [:label]
              ) ++
-             (if include_flags == true or include_all_objects do
+             (if include_flags == true or skip_boundary_check do
                 []
               end || skip_verbs_default())
 
@@ -1054,18 +1055,20 @@ defmodule Bonfire.Social.FeedLoader do
 
          exclude_activity_types
          |> Enums.filter_empty([])
+         |> debug("computed exclude_activity_types")
          |> Enum.map(&Bonfire.Social.Activities.verb_id(&1))
          |> Enum.uniq()
        end
      end)
-     |> Map.put_new(
-       :skip_boundary_check,
-       include_all_objects
-     )
+     #  |> Map.put_new(
+     #    :skip_boundary_check,
+     #    skip_boundary_check
+     #  )
      |> Map.drop([:exclude_object_types, :exclude_activity_types]),
      opts
      |> Keyword.merge(
-       preload: preload
+       preload: preload,
+       skip_boundary_check: skip_boundary_check
        #  postload: postload
      )}
     |> debug("feed query filters & opts")

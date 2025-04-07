@@ -59,11 +59,11 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %FeedFilters{
             feed_name: :notifications,
             # so we can show flags to admins in notifications
-            include_flags: :mediate,
             show_objects_only_once: false,
             exclude_activity_types: false
           },
           current_user_required: true,
+          opts: [include_flags: :mediate],
           icon: "carbon:notification-filled"
         },
         # messages: %{
@@ -186,12 +186,11 @@ defmodule Bonfire.Social.RuntimeConfig do
           description: "Content I've flagged",
           filters: %FeedFilters{
             activity_types: [:flag],
-            include_flags: true,
             show_objects_only_once: false
           },
           parameterized: %{subjects: [:me]},
           current_user_required: true,
-          # opts: [skip_boundary_check: true],
+          opts: [include_flags: true],
           icon: "heroicons-solid:flag"
         },
         flagged_content: %{
@@ -201,12 +200,14 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %FeedFilters{
             activity_types: [:flag],
             # so we can show flags to admins in notifications
-            include_flags: :mediate,
             show_objects_only_once: false
           },
           current_user_required: true,
           instance_permission_required: :mediate,
-          opts: [skip_boundary_check: true],
+          opts: [
+            include_flags: :mediate
+            # skip_boundary_check: true
+          ],
           icon: "heroicons-solid:flag"
         },
 

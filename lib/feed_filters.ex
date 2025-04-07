@@ -53,7 +53,7 @@ defmodule Bonfire.Social.FeedFilters do
       default: nil
 
     # NOTE: the following are meant for internal use
-    field :include_flags, Bonfire.Social.FeedFilters.Atom, default: false
+    # field :include_flags, Bonfire.Social.FeedFilters.Atom, default: false
     # Ecto.Enum, values: [nil, false, true, :mod, :admins]
 
     field :show_objects_only_once, :boolean, default: true
@@ -88,7 +88,7 @@ defmodule Bonfire.Social.FeedFilters do
       :sort_by,
       :sort_order,
       #  FIXME should only be set in config
-      :include_flags,
+      # :include_flags,
       :show_objects_only_once
     ]
 
