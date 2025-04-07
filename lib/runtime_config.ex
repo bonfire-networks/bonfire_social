@@ -18,7 +18,13 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %FeedFilters{feed_name: :my},
           current_user_required: true,
           exclude_from_nav: false,
-          icon: "mingcute:home-4-fill"
+          icon: "mingcute:home-4-fill",
+          # New structured UI-specific settings
+          assigns: [
+            selected_tab: "following",
+            page: "following",
+            feed_title: l("Following")
+          ]
         },
         explore: %{
           name: l("Explore"),
@@ -26,7 +32,17 @@ defmodule Bonfire.Social.RuntimeConfig do
           description: l("All activities"),
           filters: %FeedFilters{feed_name: :explore, exclude_activity_types: [:like]},
           exclude_from_nav: false,
-          icon: "mingcute:compass-fill"
+          icon: "mingcute:compass-fill",
+          assigns: [
+            selected_tab: :explore,
+            page: "explore",
+            page_title: "Explore activities",
+            feedback_title: l("There is no activities to explore"),
+            feedback_message:
+              l(
+                "It seems like the paint is still fresh and there are no activities to explore..."
+              )
+          ]
         },
         local: %{
           name: l("Local"),
@@ -37,8 +53,14 @@ defmodule Bonfire.Social.RuntimeConfig do
             origin: :local,
             exclude_activity_types: [:like]
           },
-          # exclude_from_nav: false
-          icon: "mingcute:campground-fill"
+          icon: "mingcute:campground-fill",
+          assigns: [
+            selected_tab: :local,
+            page: "local",
+            page_title: l("Explore local activities"),
+            feedback_title: l("Your local feed is empty"),
+            feedback_message: l("It seems like the paint is still fresh on this instance...")
+          ]
         },
         remote: %{
           name: l("Remote"),
@@ -49,8 +71,17 @@ defmodule Bonfire.Social.RuntimeConfig do
             origin: :remote,
             exclude_activity_types: [:like, :follow]
           },
-          icon: "ph:planet-fill"
-          # exclude_from_nav: false
+          icon: "ph:planet-fill",
+          assigns: [
+            selected_tab: :remote,
+            page: "remote",
+            page_title: "Activities from the fediverse",
+            feedback_title: l("Your fediverse feed is empty"),
+            feedback_message:
+              l(
+                "It seems you and other local users do not follow anyone on a different federated instance"
+              )
+          ]
         },
         notifications: %{
           name: l("Notifications"),
@@ -58,22 +89,33 @@ defmodule Bonfire.Social.RuntimeConfig do
           description: l("Notifications for me"),
           filters: %FeedFilters{
             feed_name: :notifications,
-            # so we can show flags to admins in notifications
             show_objects_only_once: false,
             exclude_activity_types: false
           },
           current_user_required: true,
           opts: [include_flags: :mediate],
-          icon: "carbon:notification-filled"
+          icon: "carbon:notification-filled",
+          assigns: [
+            page: "notifications",
+            selected_tab: "notifications",
+            showing_within: :notifications,
+            back: true,
+            page_header_icon: "carbon:notification",
+            page_title: l("Notifications"),
+            feedback_title: l("You have no notifications"),
+            feedback_message:
+              l(
+                "Did you know you can customise which activities you want to be notified for in your settings ?"
+              ),
+            page_header_aside: [
+              {Bonfire.UI.Social.HeaderAsideNotificationsSeenLive,
+               [
+                 feed_id: :notifications,
+                 feed_name: "notifications"
+               ]}
+            ]
+          ]
         },
-        # messages: %{
-        #   name: l("Messages"),
-        #   built_in: true, description: ("Messages for me"),
-        #   filters: %FeedFilters{feed_name: :messages},
-        #   current_user_required: true
-        # },
-
-        # User interaction feeds
         likes: %{
           name: l("Likes"),
           built_in: true,
@@ -81,7 +123,16 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %FeedFilters{activity_types: [:like]},
           parameterized: %{subjects: [:me]},
           exclude_from_nav: false,
-          icon: "mingcute:fire-fill"
+          icon: "mingcute:fire-fill",
+          assigns: [
+            selected_tab: :likes,
+            hide_filters: true,
+            showing_within: :feed_by_subject,
+            page: "likes",
+            page_title: "Likes",
+            no_header: false,
+            feedback_title: l("Have you not liked anything yet?")
+          ]
         },
         bookmarks: %{
           name: l("Bookmarks"),
@@ -92,7 +143,16 @@ defmodule Bonfire.Social.RuntimeConfig do
           parameterized: %{subjects: [:me]},
           exclude_from_nav: false,
           base_query_fun: &Bonfire.Social.Bookmarks.base_query/0,
-          icon: "mingcute:bookmark-filled"
+          icon: "mingcute:bookmark-filled",
+          assigns: [
+            selected_tab: :bookmarks,
+            hide_filters: true,
+            showing_within: :feed_by_subject,
+            page: "bookmarks",
+            page_title: "Bookmarks",
+            no_header: false,
+            feedback_title: l("Have you not bookmarked anything yet?")
+          ]
         },
         my_requests: %{
           name: l("Requests"),
@@ -178,8 +238,20 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %FeedFilters{},
           parameterized: %{tags: [:tags]}
         },
-
-        # Moderation feeds
+        curated: %{
+          name: l("Curated"),
+          built_in: true,
+          description: l("Curated activities"),
+          filters: %FeedFilters{feed_name: :curated},
+          assigns: [
+            selected_tab: :curated,
+            showing_within: :feed_by_subject,
+            page: "curated",
+            page_title: "Curated feed",
+            no_header: :current_user_id,
+            feedback_title: l("Nothing curated yet?")
+          ]
+        },
         flagged_by_me: %{
           name: l("My Flags"),
           built_in: true,
@@ -191,7 +263,13 @@ defmodule Bonfire.Social.RuntimeConfig do
           parameterized: %{subjects: [:me]},
           current_user_required: true,
           opts: [include_flags: true],
-          icon: "heroicons-solid:flag"
+          icon: "heroicons-solid:flag",
+          assigns: [
+            selected_tab: :flags,
+            scope: :instance,
+            page: "flags",
+            feedback_title: l("You have not flagged any activities...")
+          ]
         },
         flagged_content: %{
           name: l("All flags"),
@@ -199,17 +277,26 @@ defmodule Bonfire.Social.RuntimeConfig do
           description: "Content flagged by anyone (mods only)",
           filters: %FeedFilters{
             activity_types: [:flag],
-            # so we can show flags to admins in notifications
             show_objects_only_once: false
           },
           current_user_required: true,
           instance_permission_required: :mediate,
-          opts: [
-            include_flags: :mediate
-            # skip_boundary_check: true
-          ],
-          icon: "heroicons-solid:flag"
+          opts: [include_flags: :mediate],
+          icon: "heroicons-solid:flag",
+          assigns: [
+            selected_tab: "all flags",
+            scope: :instance,
+            page: "flags",
+            feedback_title: l("You have no flagged activities to review...")
+          ]
         },
+
+        # messages: %{
+        #   name: l("Messages"),
+        #   built_in: true, description: ("Messages for me"),
+        #   filters: %FeedFilters{feed_name: :messages},
+        #   current_user_required: true
+        # },
 
         # Combined filters examples
         trending_discussions: %{

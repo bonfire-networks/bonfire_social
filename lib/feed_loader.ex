@@ -30,19 +30,28 @@ defmodule Bonfire.Social.FeedLoader do
   alias Needle.Pointer
 
   # ==== START OF CODE TO REFACTOR ====
-
-  def prepare_feed_filters(preset \\ nil, feed_name, opts)
-
-  def prepare_feed_filters(%{} = preset, filters, opts) do
-    prepare_feed_filters({:ok, preset}, filters, opts)
+  def prepare_feed_filters(preset \\ nil, feed_name, opts) do
+    with {:ok, _preset, filters} <- prepare_feed_preset_and_filters(preset, feed_name, opts) do
+      {:ok, filters}
+    end
   end
 
-  def prepare_feed_filters(preset, feed_name, opts)
+  def prepare_feed_preset_and_filters(preset \\ nil, feed_name, opts)
+
+  def prepare_feed_preset_and_filters(%{} = preset, filters, opts) do
+    prepare_feed_preset_and_filters({:ok, preset}, filters, opts)
+  end
+
+  def prepare_feed_preset_and_filters(preset, feed_name, opts)
       when (not is_nil(feed_name) and is_atom(feed_name)) or is_binary(feed_name) do
-    prepare_feed_filters(preset, %{feed_name: feed_name}, opts)
+    prepare_feed_preset_and_filters(preset, %{feed_name: feed_name}, opts)
   end
 
-  def prepare_feed_filters(preset_tuple, %{feed_name: feed_name} = custom_filters, opts)
+  def prepare_feed_preset_and_filters(
+        preset_tuple,
+        %{feed_name: feed_name} = custom_filters,
+        opts
+      )
       when (not is_nil(feed_name) and is_atom(feed_name)) or is_binary(feed_name) or
              is_tuple(preset_tuple) do
     opts =
@@ -52,7 +61,7 @@ defmodule Bonfire.Social.FeedLoader do
     case (preset_tuple ||
             Bonfire.Social.Feeds.feed_preset_if_permitted(feed_name, opts))
          |> debug("feed_definition") do
-      {:ok, %{parameterized: %{} = parameters, filters: preset_filters} = feed_def} ->
+      {:ok, %{parameterized: %{} = parameters, filters: preset_filters} = preset} ->
         preset_filters
         |> merge_some_defaults(opts)
         |> merge_feed_filters(custom_filters, opts)
@@ -60,24 +69,26 @@ defmodule Bonfire.Social.FeedLoader do
         |> parameterize_filters(parameters, opts)
         |> FeedFilters.validate()
         |> debug("validated & parameterized feed_filters")
+        ~> {:ok, preset, ...}
 
-      {:ok, %{filters: preset_filters} = feed_def} ->
+      {:ok, %{filters: preset_filters} = preset} ->
         preset_filters
         |> merge_some_defaults(opts)
         |> merge_feed_filters(custom_filters, opts)
         |> debug("merged feed_filters")
         |> FeedFilters.validate()
         |> debug("validated feed_filters")
+        ~> {:ok, preset, ...}
 
       {:error, :not_found} ->
-        prepare_feed_filters(nil, custom_filters |> Map.put(:feed_name, nil), opts)
+        prepare_feed_preset_and_filters(nil, custom_filters |> Map.put(:feed_name, nil), opts)
 
       {:error, e} ->
         error(e)
     end
   end
 
-  def prepare_feed_filters(_preset, %{feed_name: nil} = custom_filters, opts) do
+  def prepare_feed_preset_and_filters(preset, %{feed_name: nil} = custom_filters, opts) do
     opts = to_options(opts)
     debug(custom_filters, "custom filters")
 
@@ -87,6 +98,7 @@ defmodule Bonfire.Social.FeedLoader do
     |> debug("merged feed_filters")
     |> FeedFilters.validate()
     |> debug("validated custom feed_filters")
+    ~> {:ok, preset, ...}
   end
 
   @doc """
