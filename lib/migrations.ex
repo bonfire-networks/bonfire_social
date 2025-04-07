@@ -87,7 +87,7 @@ defmodule Bonfire.Social.Migrations do
       Bonfire.Data.Social.PostContent.Migration.migrate_post_content()
       Bonfire.Data.Social.Post.Migration.migrate_post()
       Bonfire.Data.Social.Like.Migration.migrate_like()
-      Bonfire.Data.Social.Follow.Migration.migrate_follow()
+      # Bonfire.Data.Social.Follow.Migration.migrate_follow()
       Bonfire.Data.Social.Bookmark.Migration.migrate_bookmark()
       # Bonfire.Data.Social.Block.Migration.migrate_block()
       Bonfire.Data.Social.Created.Migration.migrate_created()
