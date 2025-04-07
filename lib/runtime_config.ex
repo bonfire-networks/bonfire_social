@@ -60,7 +60,8 @@ defmodule Bonfire.Social.RuntimeConfig do
             feed_name: :notifications,
             # so we can show flags to admins in notifications
             include_flags: :mediate,
-            show_objects_only_once: false
+            show_objects_only_once: false,
+            exclude_activity_types: false
           },
           current_user_required: true,
           icon: "carbon:notification-filled"

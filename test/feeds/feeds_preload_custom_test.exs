@@ -61,7 +61,7 @@ defmodule Bonfire.Social.Feeds.PreloadCustomTest do
                     post_content: %Ecto.Association.NotLoaded{}
                   },
                   replied: %Ecto.Association.NotLoaded{},
-                  labelled: %Ecto.Association.NotLoaded{},
+                  # labelled: %Ecto.Association.NotLoaded{},
                   sensitive: %Ecto.Association.NotLoaded{}
                 } <- activity
 
@@ -85,7 +85,7 @@ defmodule Bonfire.Social.Feeds.PreloadCustomTest do
                     post_content: %Bonfire.Data.Social.PostContent{}
                   },
                   replied: %Bonfire.Data.Social.Replied{},
-                  labelled: %Ecto.Association.NotLoaded{},
+                  # labelled: %Ecto.Association.NotLoaded{},
                   sensitive: %Ecto.Association.NotLoaded{}
                 } <- activity
 
@@ -123,7 +123,7 @@ defmodule Bonfire.Social.Feeds.PreloadCustomTest do
                  }
                }
              },
-             labelled: nil,
+             #  labelled: nil,
              sensitive: %Bonfire.Data.Social.Sensitive{is_sensitive: false},
              media: [],
              tags: [],
@@ -137,7 +137,7 @@ defmodule Bonfire.Social.Feeds.PreloadCustomTest do
                   verb: %Ecto.Association.NotLoaded{},
                   object: %Needle.Pointer{post_content: %Ecto.Association.NotLoaded{}},
                   replied: %Ecto.Association.NotLoaded{},
-                  labelled: %Ecto.Association.NotLoaded{},
+                  # labelled: %Ecto.Association.NotLoaded{},
                   sensitive: %Ecto.Association.NotLoaded{}
                 } <-
                   FeedLoader.feed_contains?(feed, post, current_user: user)

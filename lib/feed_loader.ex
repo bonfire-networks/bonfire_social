@@ -995,9 +995,13 @@ defmodule Bonfire.Social.FeedLoader do
        )
      end)
      |> Map.put_new_lazy(:exclude_verb_ids, fn ->
-       exclude_activity_types = filters[:exclude_activity_types] || opts[:exclude_activity_types]
+       exclude_activity_types =
+         debug(
+           opts[:exclude_activity_types] || filters[:exclude_activity_types],
+           "exclude_activity_typess"
+         )
 
-       if exclude_activity_types == false do
+       if exclude_activity_types == false or exclude_activity_types == [false] do
          []
        else
          exclude_activity_types = List.wrap(exclude_activity_types)
