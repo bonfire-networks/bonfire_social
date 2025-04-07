@@ -594,7 +594,7 @@ defmodule Bonfire.Social.Threads do
     |> debug("quuuery")
     # return a page of items + pagination metadata
     |> repo().many_paginated(
-      maybe_set_high_limit(opts, opts[:thread_mode]) ++
+      maybe_set_high_limit(opts[:paginate] || opts, opts[:thread_mode]) ++
         Activities.order_pagination_opts(opts[:sort_by], opts[:sort_order])
     )
     # preloaded after so we can get more than 1
@@ -620,7 +620,7 @@ defmodule Bonfire.Social.Threads do
       opts
       |> Keyword.put_new(
         :limit,
-        Config.get(:pagination_hard_max_limit, 500)
+        Config.get(:pagination_hard_max_limit, 500) |> debug()
       )
 
   @doc """
