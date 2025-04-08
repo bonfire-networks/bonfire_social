@@ -63,18 +63,18 @@ defmodule Bonfire.Social.FeedLoader do
          |> debug("feed_definition") do
       {:ok, %{parameterized: %{} = parameters, filters: preset_filters} = preset} ->
         preset_filters
-        |> merge_some_defaults(opts)
         |> merge_feed_filters(custom_filters, opts)
-        # |> debug("merged feed_filters")
         |> parameterize_filters(parameters, opts)
+        |> merge_some_defaults(opts)
+        |> debug("merged feed_filters")
         |> FeedFilters.validate()
         |> debug("validated & parameterized feed_filters")
         ~> {:ok, preset, ...}
 
       {:ok, %{filters: preset_filters} = preset} ->
         preset_filters
-        |> merge_some_defaults(opts)
         |> merge_feed_filters(custom_filters, opts)
+        |> merge_some_defaults(opts)
         |> debug("merged feed_filters")
         |> FeedFilters.validate()
         |> debug("validated feed_filters")
@@ -270,6 +270,7 @@ defmodule Bonfire.Social.FeedLoader do
   defp merge_feed_filters(custom_filters, opts) do
     # Enums.merge_to_struct(FeedFilters, custom_filters, opts[:feed_filters] || %{})
     Enums.merge_as_map(opts[:feed_filters] || %{}, custom_filters)
+    |> debug("m2")
   end
 
   # TODO: optimise
@@ -277,9 +278,9 @@ defmodule Bonfire.Social.FeedLoader do
     # Enums.merge_to_struct(FeedFilters, preset_filters, merge_feed_filters(custom_filters, opts) |> debug("m1"))
     Enums.merge_as_map(
       preset_filters,
-      merge_feed_filters(custom_filters, opts) |> debug("m1")
+      merge_feed_filters(custom_filters, opts)
     )
-    |> debug("m2")
+    |> debug("m3")
   end
 
   # TODO: put in config
@@ -373,7 +374,7 @@ defmodule Bonfire.Social.FeedLoader do
 
       _ ->
         warn(other, "Not a recognised feed to query, defaulting to explore?")
-        debug(filters, label: "with any provided filters")
+        debug(filters, "with any provided filters")
         # raise e
         query_extras(filters, opts)
         |> paginate_and_boundarise_feed(filters, opts)
@@ -1452,10 +1453,13 @@ defmodule Bonfire.Social.FeedLoader do
       |> debug()
       |> Enum.map(fn
         {k, v} when is_list(v) ->
-          {k, Enum.map(v, &replace_parameters(&1, filters, opts)) |> List.flatten()}
+          # TODO: optimise by not iterating over params already set in filters
+          {k,
+           ed(filters, k, nil) ||
+             Enum.map(v, &replace_parameters(&1, filters, opts)) |> List.flatten()}
 
         {k, v} ->
-          {k, replace_parameters(v, filters, opts)}
+          {k, ed(filters, k, nil) || replace_parameters(v, filters, opts)}
       end)
       |> Map.new()
 
@@ -1531,7 +1535,7 @@ defmodule Bonfire.Social.FeedLoader do
     e(filters, :by, fn ->
       debug(
         filters,
-        label: "parameter `:by` was not found in filters"
+        "parameter `:by` was not found in filters"
       )
 
       e(opts, :by, fn ->
