@@ -717,7 +717,11 @@ defmodule Bonfire.Social.FeedLoader do
     if not is_nil(current_user_id(opts)) do
       # || current_account(socket)
       # my feed
-      :my
+      Settings.get(
+        [Bonfire.UI.Social.FeedLive, :default_feed],
+        :my,
+        opts
+      )
     else
       # fallback to showing instance feed
       :local
