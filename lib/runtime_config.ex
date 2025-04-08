@@ -186,8 +186,8 @@ defmodule Bonfire.Social.RuntimeConfig do
         user_by_object_type: %{
           built_in: true,
           description: "Posts by a specific user",
-          filters: %{creators: [:by]},
-          parameterized: %{creators: :by, object_types: [:post]}
+          filters: %FeedFilters{creators: [:by], object_types: [:post]},
+          parameterized: %{creators: :by}
         },
         # user_research: %{
         #   built_in: true, description: "Publications by a specific user",

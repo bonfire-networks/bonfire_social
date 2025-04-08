@@ -1454,12 +1454,27 @@ defmodule Bonfire.Social.FeedLoader do
       |> Enum.map(fn
         {k, v} when is_list(v) ->
           # TODO: optimise by not iterating over params already set in filters
+          existing_v = ed(filters, k, :none) |> debug("existing?")
+
           {k,
-           ed(filters, k, nil) ||
-             Enum.map(v, &replace_parameters(&1, filters, opts)) |> List.flatten()}
+           if existing_v == :none or existing_v == v or List.wrap(existing_v) == v do
+             Enum.map(v, &replace_parameters(&1, filters, opts))
+             |> List.flatten()
+             |> debug("replaced")
+           else
+             existing_v
+           end}
 
         {k, v} ->
-          {k, ed(filters, k, nil) || replace_parameters(v, filters, opts)}
+          existing_v = ed(filters, k, :none) |> debug("existing?")
+
+          {k,
+           if existing_v == :none or existing_v == v or List.wrap(v) == existing_v do
+             replace_parameters(v, filters, opts)
+             |> debug("replaced")
+           else
+             existing_v
+           end}
       end)
       |> Map.new()
 
