@@ -199,8 +199,11 @@ defmodule Bonfire.Social.FeedLoader do
       #   warn(filters, "Invalid filters")
       #   error(cs, "Could not validate feed filters")
 
+      {:error, e} ->
+        {:error, e}
+
       e ->
-        error(e, "Could not find a preset for #{feed_name} or prepare filters")
+        error(e, "Could not find a preset for `#{feed_name}` or could not prepare filters")
         # feed(%{feed_name: nil}, opts)
     end
   end
@@ -611,20 +614,6 @@ defmodule Bonfire.Social.FeedLoader do
     |> feed_query(filters, opts)
     |> paginate_and_boundarise_feed(filters, opts)
     |> prepare_feed(filters, opts)
-  end
-
-  def feed_with_object(feed_name, object, opts \\ []) do
-    feed(
-      feed_name,
-      Keyword.put(
-        opts,
-        :feed_filters,
-        Enum.into(
-          e(opts, :feed_filters, %{}),
-          %{objects: object}
-        )
-      )
-    )
   end
 
   # def filters_from_opts(opts) do
@@ -1183,8 +1172,7 @@ defmodule Bonfire.Social.FeedLoader do
     debug(objects_or_filters, "some kinda list")
 
     if Keyword.keyword?(objects_or_filters) and is_atom(feed) do
-      case feed_contains_query(feed, objects_or_filters, opts)
-           |> repo().many() do
+      case feed_contains_many(feed, objects_or_filters, opts) do
         [] -> false
         items -> items
       end
@@ -1211,7 +1199,12 @@ defmodule Bonfire.Social.FeedLoader do
         id_or_html_body
       end
 
-    Enum.find_value(feed, fn fi ->
+    feed =
+      feed
+      |> repo().maybe_preload(activity: [object: [:post_content]])
+
+    feed
+    |> Enum.find_value(fn fi ->
       a_body = e(fi.activity, :object, :post_content, :html_body, nil)
 
       if fi.activity.object_id == q_id or
@@ -1222,7 +1215,8 @@ defmodule Bonfire.Social.FeedLoader do
     end) ||
       (
         dump(
-          Enum.map(feed, fn fi ->
+          feed
+          |> Enum.map(fn fi ->
             # e(fi, :activity, :object, nil) ||
             e(fi, :activity, :object, :post_content, nil) ||
               e(fi, :activity, nil) || fi
@@ -1240,28 +1234,44 @@ defmodule Bonfire.Social.FeedLoader do
 
     case Types.uid(object) do
       nil ->
-        debug(object, "assume we want to look up a string in the object fields")
+        debug(
+          object,
+          "assume we want to look up a string in the object fields, so query the feed first"
+        )
 
-        do_feed(feed, opts[:feed_filters] || %{}, opts)
+        feed_contains_many(feed, opts[:feed_filters] || %{}, opts)
         |> feed_contains?(object, opts)
 
       id ->
         debug(id, "lookup by ID")
+
         feed_contains?(feed, [objects: id], opts)
+        |> feed_contains?(object, opts)
     end
   end
 
   def feed_contains_single?(feed_name, filters, opts)
       when (is_atom(feed_name) and is_list(filters)) or is_map(filters) do
-    feed_contains_query(feed_name, filters, opts)
-    |> repo().one()
+    case feed_contains_query(feed_name, filters, opts) do
+      %Ecto.Query{} = query ->
+        repo().one(query)
 
-    # |> id()
+      # |> id()
+      e ->
+        error(e)
+    end
+  end
+
+  defp feed_contains_many(feed_name, filters, opts) do
+    case feed_contains_query(feed_name, filters, opts) do
+      %Ecto.Query{} = query -> repo().many(query)
+      e -> error(e)
+    end
   end
 
   defp feed_contains_query(feed_name, filters, opts) when is_list(filters) or is_map(filters) do
     opts = to_options(opts)
-    feed(feed_name, Map.new(filters), Keyword.put(opts, :return, :query))
+    feed(feed_name, Enum.into(filters, %{time_limit: 0}), Keyword.put(opts, :return, :query))
 
     # {feed_ids, opts} = feed_ids_and_opts(feed_name, to_options(opts) ++ [limit: 10])
 

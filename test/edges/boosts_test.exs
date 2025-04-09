@@ -195,8 +195,7 @@ defmodule Bonfire.Social.BoostsTest do
 
     assert {:ok, boost} = Boosts.boost(someone, post)
 
-    assert %{edges: [fetched_boost]} = FeedActivities.feed(:notifications, current_user: me)
-
-    assert fetched_boost.activity.object_id == post.id
+    assert activity =
+             Bonfire.Social.FeedLoader.feed_contains?(:notifications, post, current_user: me)
   end
 end

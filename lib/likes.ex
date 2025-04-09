@@ -36,7 +36,15 @@ defmodule Bonfire.Social.Likes do
 
   @behaviour Bonfire.Federate.ActivityPub.FederationModules
   def federation_module,
-    do: ["Like", {"Create", "Like"}, {"Undo", "Like"}, {"Delete", "Like"}]
+    do: [
+      "Like",
+      "EmojiReact",
+      {"Create", "Like"},
+      {"Create", "EmojiReact"},
+      {"Delete", "EmojiReact"},
+      {"Undo", "Like"},
+      {"Delete", "Like"}
+    ]
 
   @doc """
   Checks if a user has liked an object.
@@ -481,6 +489,23 @@ defmodule Bonfire.Social.Likes do
       verbs: [:like]
     )
     ~> like(liker, ..., local: false)
+  end
+
+  # TODO: also support custom emoji
+  def ap_receive_activity(
+        liker,
+        %{data: %{"type" => "EmojiReact", "content" => emoji}} = _activity,
+        object
+      )
+      when is_binary(emoji) do
+    Bonfire.Federate.ActivityPub.AdapterUtils.return_pointable(object,
+      current_user: liker,
+      verbs: [:like]
+    )
+    ~> like(liker, ...,
+      local: false,
+      reaction_emoji: {emoji, %{label: emoji}}
+    )
   end
 
   def ap_receive_activity(

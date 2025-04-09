@@ -26,6 +26,8 @@ defmodule Bonfire.Social.DataCase do
       use Bonfire.Common.Utils
       import Bonfire.UI.Common.Testing.Helpers
       import Bonfire.Social
+
+      @moduletag :backend
     end
   end
 
