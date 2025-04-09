@@ -496,11 +496,8 @@ defmodule Bonfire.Social.Edges do
       :visible ->
         boundarise(query, edge.subject_id, opts)
 
-      _ when is_list(subject) ->
+      _ when is_map(subject) or is_binary(subject) or is_list(subject) ->
         where(query, [edge: edge], edge.subject_id in ^uids(subject))
-
-      _ when is_map(subject) or is_binary(subject) ->
-        where(query, [edge: edge], edge.subject_id == ^uid(subject))
 
       _ ->
         warn(subject, "unrecognised subject")
@@ -513,11 +510,8 @@ defmodule Bonfire.Social.Edges do
       :visible ->
         boundarise(query, edge.object_id, opts)
 
-      _ when is_list(object) ->
+      _ when is_map(object) or is_binary(object) or is_list(object) ->
         where(query, [edge: edge], edge.object_id in ^uids(object))
-
-      _ when is_map(object) or is_binary(object) ->
-        where(query, [edge: edge], edge.object_id == ^uid!(object))
 
       _ ->
         warn(object, "unrecognised object")
