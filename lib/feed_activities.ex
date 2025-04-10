@@ -55,7 +55,7 @@ defmodule Bonfire.Social.FeedActivities do
       %Ecto.Changeset{}
   """
   def cast(changeset, feed_ids) do
-    Enum.map(feed_ids, &%{feed_id: &1})
+    Enum.map(feed_ids || [], &%{feed_id: &1})
     |> Changesets.put_assoc!(changeset, :feed_publishes, ...)
   end
 
