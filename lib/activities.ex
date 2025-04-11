@@ -58,27 +58,32 @@ defmodule Bonfire.Social.Activities do
       # Changeset with associations set
 
   """
-  def cast(changeset, verb, creator, opts) do
+  def cast(changeset, verb, creator, opts \\ []) do
     # verb_id = verb_id(verb)
     creator = repo().maybe_preload(creator, :character)
     # |> debug("creator")
     # debug(changeset)
     changeset
-    |> put_assoc(verb, creator)
+    |> put_assoc(verb, creator, opts[:object_id])
     |> FeedActivities.cast(opts[:feed_ids])
 
     # |> debug("csss")
   end
 
-  def put_assoc(changeset, verb, subject),
+  def put_assoc(changeset, verb, subject, object_id \\ nil)
+
+  def put_assoc(changeset, verb, subject, nil),
     do: put_assoc(changeset, verb, subject, changeset)
 
-  def put_assoc(changeset, verb, subject, object) do
+  def put_assoc(changeset, verb, subject, object_id) do
     verb = Changesets.set_state(struct(Verb, Verbs.get(verb)), :loaded)
     verb_id = verb.id
 
-    %{subject_id: uid(subject), object_id: uid(object), verb_id: verb_id}
-    |> Changesets.put_assoc!(changeset, :activity, ...)
+    %{subject_id: uid(subject), object_id: uid(object_id), verb_id: verb_id}
+    |> Changesets.put_assoc(changeset, :activity, ...)
+    |> Changeset.foreign_key_constraint(:activity_id,
+      name: "bonfire_data_social_activity_object_id_fkey"
+    )
     # |> Changeset.update_change(:activity, &put_data(&1, :subject, maybe_to_struct(subject, Needle.Pointer)))
     |> Changeset.update_change(:activity, &put_data(&1, :verb, verb))
 

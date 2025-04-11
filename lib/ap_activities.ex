@@ -69,11 +69,11 @@ defmodule Bonfire.Social.APActivities do
   """
   def create(character, activity, object, public \\ nil)
 
-  def create(character, %{data: %{} = activity, public: public}, object, public_initial),
-    do: create(character, activity, object, public_initial || public)
+  def create(character, activity, %{data: %{} = object} = struct, public_initial),
+    do: create(character, activity, object, public_initial || e(struct, :public, nil))
 
-  def create(character, activity, %{data: %{} = object, public: public}, public_initial),
-    do: create(character, activity, object, public_initial || public)
+  def create(character, %{data: %{} = activity} = struct, object, public_initial),
+    do: create(character, activity, object, public_initial || e(struct, :public, nil))
 
   # def create(character, %{verb: verb} = activity, object) when verb in ["update", "Update", :update, :edit, "edit"] is_map(activity) or is_map(object) do
   #   # TODO: store version history
@@ -141,7 +141,7 @@ defmodule Bonfire.Social.APActivities do
   end
 
   defp the_object(object) do
-    ActivityPub.Object.normalize(object, true)
+    ActivityPub.Object.normalize(object, false)
     |> ret_object()
   end
 
@@ -155,20 +155,22 @@ defmodule Bonfire.Social.APActivities do
 
   defp insert(character, json, opts) do
     # TODO: add type field(s) to the table to be able to quickly filter without JSONB?
-    # TODO: add creator (to be used when showing in reply_to)
     activity =
       %APActivity{}
       |> APActivity.changeset(%{json: json})
-      |> Objects.cast_caretaker(character)
+      # TODO: process and save thread, reply_to, mentions & hashtags
+      |> Objects.cast_creator_caretaker(character)
+      # TODO: set boundary and to_circles
       |> Objects.cast_acl(character, opts)
       |> maybe_attach_video_oembed(json, character)
 
-    # TODO: process and save mentions & hashtags
-
-    id = opts[:id] || Changeset.get_change(activity, :id)
-
     activity
-    |> Activities.put_assoc(opts[:verb], character, id)
+    |> Activities.cast(
+      opts[:verb] || :create,
+      character,
+      Keyword.put(opts, :object_id, opts[:id] || Changeset.get_change(activity, :id))
+    )
+    |> debug()
     |> repo().insert()
     |> debug()
   end
