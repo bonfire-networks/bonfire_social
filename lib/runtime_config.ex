@@ -222,7 +222,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           built_in: true,
           description: "All known audio",
           filters: %FeedFilters{media_types: ["audio"]},
-          icon: "majesticons:music"
+          icon: "lucide:audio-lines"
         },
 
         # Hashtag feeds
