@@ -429,16 +429,14 @@ defmodule Bonfire.Social.FeedsFiltersTest do
       local_post =
         fake_post!(user, "public", %{
           post_content: %{
-            name: "a local post",
-            html_body: "content"
+            html_body: "a local post"
           }
         })
 
       remote_post =
         fake_post!(other_user, "public", %{
           post_content: %{
-            name: "a remote post",
-            html_body: "content"
+            html_body: "a remote post"
           }
         })
 
@@ -499,16 +497,14 @@ defmodule Bonfire.Social.FeedsFiltersTest do
       local_post =
         fake_post!(user, "public", %{
           post_content: %{
-            name: "a local post",
-            html_body: "content"
+            html_body: "a local post"
           }
         })
 
       remote_post =
         fake_post!(other_user, "public", %{
           post_content: %{
-            name: "a remote post",
-            html_body: "content"
+            html_body: "a remote post"
           }
         })
 
@@ -544,11 +540,11 @@ defmodule Bonfire.Social.FeedsFiltersTest do
     } do
       feed = FeedLoader.feed(:custom, %{origin: Enums.id(instance)}, current_user: user)
 
-      assert FeedLoader.feed_contains?(feed, remote_post, current_user: user)
       refute FeedLoader.feed_contains?(feed, local_post, current_user: user)
+      assert FeedLoader.feed_contains?(feed, remote_post, current_user: user)
     end
 
-    test "with  instance domain name", %{
+    test "with instance domain name", %{
       user: user,
       other_user: other_user,
       local_post: local_post,
@@ -557,8 +553,8 @@ defmodule Bonfire.Social.FeedsFiltersTest do
     } do
       feed = FeedLoader.feed(:custom, %{origin: instance_domain}, current_user: user)
 
-      assert FeedLoader.feed_contains?(feed, remote_post, current_user: user)
       refute FeedLoader.feed_contains?(feed, local_post, current_user: user)
+      assert FeedLoader.feed_contains?(feed, remote_post, current_user: user)
     end
   end
 end

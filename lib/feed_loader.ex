@@ -1181,14 +1181,14 @@ defmodule Bonfire.Social.FeedLoader do
     end
   end
 
-  def feed_contains?(feed, id_or_html_body, _opts)
+  def feed_contains?(feed, id_or_html_body, opts)
       when is_list(feed) and (is_binary(id_or_html_body) or is_struct(id_or_html_body)) do
     debug(id_or_html_body, "id_or_html_body")
 
     q_id =
       e(id_or_html_body, :object_id, nil) || Enums.id(e(id_or_html_body, :object, nil)) ||
         e(id_or_html_body, :activity, :object_id, nil) ||
-        Enums.id(e(id_or_html_body, :activity, :object, nil)) || Enums.id(id_or_html_body)
+        Enums.id(e(id_or_html_body, :activity, :object, nil)) || Types.uid(id_or_html_body)
 
     q_body =
       if is_map(id_or_html_body) do
@@ -1196,21 +1196,32 @@ defmodule Bonfire.Social.FeedLoader do
           e(id_or_html_body, :object, :post_content, :html_body, nil) ||
           e(id_or_html_body, :activity, :object, :post_content, :html_body, nil)
       else
-        id_or_html_body
+        if !q_id, do: id_or_html_body
       end
+      |> debug("q_body")
 
     feed =
-      feed
-      |> repo().maybe_preload(activity: [object: [:post_content]])
+      if opts[:postload] != false do
+        feed
+        |> repo().maybe_preload(activity: [object: [:post_content]])
+      else
+        feed
+      end
 
     feed
     |> Enum.find_value(fn fi ->
-      a_body = e(fi.activity, :object, :post_content, :html_body, nil)
+      a_body =
+        e(fi.activity, :object, :post_content, :html_body, nil)
+        |> debug("a_body")
 
-      if fi.activity.object_id == q_id or
-           (a_body && q_body &&
-              a_body =~ q_body) do
-        fi.activity
+      if q_id do
+        if fi.activity.object_id == q_id, do: fi.activity
+      else
+        if(
+          a_body && q_body &&
+            a_body =~ q_body,
+          do: fi.activity
+        )
       end
     end) ||
       (

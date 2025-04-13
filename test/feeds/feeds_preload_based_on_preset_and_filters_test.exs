@@ -85,8 +85,11 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
             )
 
           assert loaded_activity =
-                   FeedLoader.feed_contains?(feed, activity || object, current_user: user) ||
-                     FeedLoader.feed_contains?(feed, object, current_user: user)
+                   FeedLoader.feed_contains?(feed, activity || object,
+                     current_user: user,
+                     postload: false
+                   ) ||
+                     FeedLoader.feed_contains?(feed, object, current_user: user, postload: false)
 
           verify_preloads(loaded_activity, preloads)
           verify_preloads(loaded_activity, postloads -- preloads, false)
@@ -130,16 +133,28 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
             feed = FeedLoader.feed(:custom, filters, opts)
 
             assert loaded_activity =
-                     FeedLoader.feed_contains?(feed, activity || object, current_user: user) ||
-                       FeedLoader.feed_contains?(feed, object, current_user: user)
+                     FeedLoader.feed_contains?(feed, activity || object,
+                       current_user: user,
+                       postload: false
+                     ) ||
+                       FeedLoader.feed_contains?(feed, object,
+                         current_user: user,
+                         postload: false
+                       )
 
             verify_preloads(loaded_activity, preloads, true, true) ||
               (
                 feed = FeedLoader.feed(:custom, filters, opts)
 
                 if loaded_activity =
-                     FeedLoader.feed_contains?(feed, activity || object, current_user: third_user) ||
-                       FeedLoader.feed_contains?(feed, object, current_user: user) do
+                     FeedLoader.feed_contains?(feed, activity || object,
+                       current_user: third_user,
+                       postload: false
+                     ) ||
+                       FeedLoader.feed_contains?(feed, object,
+                         current_user: user,
+                         postload: false
+                       ) do
                   verify_preloads(loaded_activity, preloads, true, false)
                 end
               )

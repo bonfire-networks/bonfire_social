@@ -48,7 +48,7 @@ defmodule Bonfire.Social.Feeds.PreloadCustomTest do
 
     feed = FeedLoader.feed(:my, current_user: user)
 
-    activity = FeedLoader.feed_contains?(feed, post, current_user: user)
+    activity = FeedLoader.feed_contains?(feed, post, current_user: user, postload: false)
 
     auto_assert %Bonfire.Data.Social.Activity{
                   # because current_user is the subject
@@ -92,7 +92,7 @@ defmodule Bonfire.Social.Feeds.PreloadCustomTest do
     # |> dump("after postloads?")
 
     assert activity =
-             FeedLoader.feed_contains?(feed, reply, current_user: user)
+             FeedLoader.feed_contains?(feed, reply, current_user: user, postload: false)
              |> Bonfire.Social.Activities.activity_preloads(:all,
                current_user: user,
                activity_preloads: {postloads1, nil}
@@ -140,7 +140,7 @@ defmodule Bonfire.Social.Feeds.PreloadCustomTest do
                   # labelled: %Ecto.Association.NotLoaded{},
                   sensitive: %Ecto.Association.NotLoaded{}
                 } <-
-                  FeedLoader.feed_contains?(feed, post, current_user: user)
+                  FeedLoader.feed_contains?(feed, post, current_user: user, postload: false)
 
     # |> dump( "feed_contains in local?")
 
