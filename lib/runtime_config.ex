@@ -405,7 +405,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         "Activities with a Specific Hashtag or @ mention" => %{
           match: %{tags: "*"},
           include: [],
-          exclude: [:with_subject]
+          exclude: []
         },
         "Created by a Specific User" => %{
           match: %{creators: "*"},

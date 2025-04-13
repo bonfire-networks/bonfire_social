@@ -1603,7 +1603,8 @@ defmodule Bonfire.Social.FeedLoader do
       ) do
     preloads_from_filters =
       preloads_from_filters(feed_filters)
-      |> debug("all preloads for filter")
+
+    # |> debug("all preloads for filter")
 
     case context_rules[context] do
       context_preloads when is_list(context_preloads) and context_preloads != [] ->
