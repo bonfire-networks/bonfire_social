@@ -143,7 +143,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           parameterized: %{subjects: [:me]},
           exclude_from_nav: false,
           base_query_fun: &Bonfire.Social.Bookmarks.base_query/0,
-          icon: "lucide:bookmark-filled",
+          icon: "carbon:bookmark-filled",
           assigns: [
             selected_tab: :bookmarks,
             hide_filters: true,
