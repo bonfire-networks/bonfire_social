@@ -157,6 +157,7 @@ defmodule Bonfire.Social.Flags do
       opts
       |> Keyword.put_new(:current_user, flagger)
       |> Keyword.put_new_lazy(:to_feeds, fn -> flag_feeds(id(object), object_type(object)) end)
+      |> debug("opts")
 
     case check_flag(flagger, object, opts)
          ~> create(flagger, ..., opts) do
@@ -235,7 +236,7 @@ defmodule Bonfire.Social.Flags do
       [%Bonfire.Data.Identity.User{}, ...]
   """
   # FIXME: should list actual instance moderators rather than admins
-  def instance_moderators, do: Bonfire.Me.Users.list_admins()
+  def instance_moderators, do: Bonfire.Me.Users.list_admins(preload: :internal)
 
   defp check_flag(_flagger, object, opts) do
     #  NOTE: currently allowing anyone to flag anything regardless of boundaries - TODO: make configurable?
@@ -601,13 +602,25 @@ defmodule Bonfire.Social.Flags do
   """
   def ap_receive_activity(
         creator,
+        activity,
+        [object]
+      ) do
+    ap_receive_activity(
+      creator,
+      activity,
+      object
+    )
+  end
+
+  def ap_receive_activity(
+        creator,
         %{data: %{"type" => "Flag"}} = activity,
         objects
       )
       when is_list(objects) do
     case objects
          |> Enum.map(&ap_receive_activity(creator, activity, &1))
-         # TODO: put this list of :ok / :error tuples logic somewhere reusable
+         # TODO: use reusable fn from Enums
          |> Enum.group_by(
            fn
              {:ok, _} -> :ok
@@ -646,9 +659,17 @@ defmodule Bonfire.Social.Flags do
 
   def ap_receive_activity(
         _creator,
-        _activity,
-        other
+        %{data: %{"type" => "Flag"}} = _activity,
+        object
       ) do
-    error(other, "Could not find an object(s) to be flagged")
+    error(object, "Could not find object(s) to be flagged")
+  end
+
+  def ap_receive_activity(
+        _creator,
+        activity,
+        _object
+      ) do
+    error(activity, "Did not recognise flag activity")
   end
 end
