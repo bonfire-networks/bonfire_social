@@ -736,7 +736,9 @@ defmodule Bonfire.Social.Objects do
         ]
 
     if options[:delete_caretaken] do
+      debug("first delete all objects that we're the caretaker of")
       delete_caretaken(object)
+      # TODO: handle returns?
     end
 
     object = repo().maybe_preload(object, [:media])
@@ -791,6 +793,8 @@ defmodule Bonfire.Social.Objects do
       )
 
     caretaker_ids = Types.uids(caretakers)
+
+    # TODO: some types of Objects (eg. Feed, Circle) may not need to use a whole Epic but can simply be deleted from DB directly, as long as they cascade deletes to eg. FeedPublish and Encircle
 
     care_taken(caretaker_ids)
     |> Enum.reject(&(Enums.id(&1) in caretaker_ids))
@@ -1055,9 +1059,13 @@ defmodule Bonfire.Social.Objects do
     ap_maybe_delete(creator, pointer)
   end
 
+  def ap_receive_activity(creator, _activity, %struct{id: id} = object)
+      when struct not in [ActivityPub.Actor, ActivityPub.Object] do
+    ap_maybe_delete(creator, object)
+  end
+
   def ap_receive_activity(_creator, _activity, object) do
-    error(object, "dunno how to delete object without a pointer ID")
-    {:ok, nil}
+    error(object, "Could not recognise the object to delete")
   end
 
   def ap_maybe_delete(_creator, nil) do
@@ -1065,8 +1073,8 @@ defmodule Bonfire.Social.Objects do
   end
 
   def ap_maybe_delete(creator, object) do
-    debug(creator)
-    debug(object)
+    debug(creator, "creator")
+    debug(object, "object")
 
     delete(object, creator)
     |> debug("ap_maybe_deleted")

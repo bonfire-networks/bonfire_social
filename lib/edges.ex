@@ -364,7 +364,8 @@ defmodule Bonfire.Social.Edges do
 
   @doc "TODOC"
   def query_parent(query_schema, filters, opts) do
-    # debug(opts)
+    debug(opts, "Edge query opts")
+
     from(root in query_schema)
     |> reusable_join([root], edge in assoc(root, :edge), as: :edge)
     |> boundarise(edge.object_id, opts)

@@ -90,7 +90,7 @@ defmodule Bonfire.Social.Acts.Federate do
             [verb: :update, ap_object: epic.assigns[ap_on], ap_bcc: epic.assigns[:ap_bcc]]
         )
 
-      # TODO: deletion
+      # WIP: deletion
       action == :delete ->
         maybe_debug(epic, act, action, "Maybe queue delete for federation")
 

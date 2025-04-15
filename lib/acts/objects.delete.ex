@@ -56,9 +56,13 @@ defmodule Bonfire.Social.Acts.Objects.Delete do
         epic
         |> Epic.assign(as, object)
         |> Epic.assign(ap_on, ap_object)
-        |> Epic.assign(:ap_bcc, ActivityPub.Actor.get_external_followers(ap_object))
+        |> Epic.assign(
+          :ap_bcc,
+          ActivityPub.Actor.get_external_followers(ap_object, :deletion)
+          |> Bonfire.Federate.ActivityPub.AdapterUtils.ids_or_object_ids()
+        )
+        |> IO.inspect(label: "deletion epic setup")
 
-        # |> IO.inspect(label: "eppppic")
         # |> Work.add(:object)
     end
   end
