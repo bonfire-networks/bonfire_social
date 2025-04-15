@@ -1065,7 +1065,7 @@ defmodule Bonfire.Social.Objects do
   end
 
   def ap_receive_activity(_creator, _activity, object) do
-    error(object, "Could not recognise the object to delete")
+    error(object, "Could not find the object to delete")
   end
 
   def ap_maybe_delete(_creator, nil) do

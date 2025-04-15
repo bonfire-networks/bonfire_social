@@ -61,8 +61,8 @@ defmodule Bonfire.Social.Acts.Objects.Delete do
           ActivityPub.Actor.get_external_followers(ap_object, :deletion)
           |> Bonfire.Federate.ActivityPub.AdapterUtils.ids_or_object_ids()
         )
-        |> IO.inspect(label: "deletion epic setup")
 
+        # |> IO.inspect(label: "deletion epic setup")
         # |> Work.add(:object)
     end
   end

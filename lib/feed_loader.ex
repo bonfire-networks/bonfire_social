@@ -1155,10 +1155,12 @@ defmodule Bonfire.Social.FeedLoader do
   end
 
   def feed_contains?(%{edges: []}, object, opts) do
+    debug("empty feed")
     false
   end
 
   def feed_contains?([], object, opts) do
+    debug("empty list")
     false
   end
 
