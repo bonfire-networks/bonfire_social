@@ -1056,7 +1056,8 @@ defmodule Bonfire.Social.Objects do
   end
 
   def ap_receive_activity(_creator, _activity, object) do
-    error(object, "dunno how to delete object")
+    error(object, "dunno how to delete object without a pointer ID")
+    {:ok, nil}
   end
 
   def ap_maybe_delete(_creator, nil) do
