@@ -25,7 +25,6 @@ defmodule Bonfire.Social.Activities do
   # alias Bonfire.Data.Social.Like
   # alias Bonfire.Data.Social.Boost
   # alias Bonfire.Data.Social.Flag
-  # alias Bonfire.Data.Social.PostContent
   # alias Bonfire.Data.Social.Replied
   alias Bonfire.Data.Social.Seen
 
