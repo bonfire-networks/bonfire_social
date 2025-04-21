@@ -1011,8 +1011,13 @@ defmodule Bonfire.Social.FeedLoader do
        if exclude_activity_types == false or exclude_activity_types == [false] do
          []
        else
-         exclude_activity_types = List.wrap(exclude_activity_types)
-         activity_types = List.wrap(filters[:activity_types] || opts[:activity_types])
+         exclude_activity_types =
+           List.wrap(exclude_activity_types)
+           |> List.flatten()
+
+         activity_types =
+           List.wrap(filters[:activity_types] || opts[:activity_types])
+           |> List.flatten()
 
          exclude_activity_types =
            exclude_activity_types ++
@@ -1060,6 +1065,7 @@ defmodule Bonfire.Social.FeedLoader do
          # end
 
          exclude_activity_types
+         |> List.flatten()
          |> Enums.filter_empty([])
          |> debug("computed exclude_activity_types")
          |> Enum.map(&Bonfire.Social.Activities.verb_id(&1))
