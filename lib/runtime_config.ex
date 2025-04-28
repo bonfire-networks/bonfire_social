@@ -361,7 +361,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         },
         "Remote Feed (From the Fediverse)" => %{
           match: %{origin: :remote},
-          include: [],
+          include: [:with_peered],
           exclude: []
         },
         "Notifications Feed (Only for me)" => %{

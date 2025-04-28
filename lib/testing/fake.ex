@@ -50,12 +50,12 @@ defmodule Bonfire.Social.Fake do
         postloads
         |> Enum.filter(&Enum.member?(context_preloads, &1))
 
-      preloads =
-        if preset in [:local, :remote] do
-          preloads ++ [:with_peered]
-        else
-          preloads
-        end
+      # preloads =
+      #   if preset in [:local, :remote] do
+      #     preloads ++ [:with_peered]
+      #   else
+      #     preloads
+      #   end
 
       %{
         preset: preset,

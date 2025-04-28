@@ -205,7 +205,7 @@ defmodule Bonfire.Social.FeedActivities do
   """
   def put_feed_publishes(changeset, options) do
     get_feed_publishes(options)
-    |> debug()
+    |> debug("got_feed_publishes")
     |> Changesets.put_assoc!(changeset, :feed_publishes, ...)
   end
 
@@ -225,7 +225,7 @@ defmodule Bonfire.Social.FeedActivities do
     # |> info()
     |> get_publish_feed_ids()
     # |> info()
-    # Dedupe
+    # Dedup
     |> MapSet.new()
     |> MapSet.delete(nil)
     # turn into attrs

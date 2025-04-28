@@ -150,7 +150,7 @@ defmodule Bonfire.Social.Feeds do
       nil
   """
   def maybe_my_outbox_feed_id(me, boundary) do
-    if boundary not in ["mentions", "admins"] do
+    if boundary != "admins" do
       case my_feed_id(:outbox, me) do
         nil ->
           warn("Cannot find my outbox to publish!")

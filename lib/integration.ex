@@ -343,8 +343,8 @@ defmodule Bonfire.Social do
 
   def many(query, paginate?, opts) do
     case opts[:return] do
-      :query ->
-        query
+      # :query -> # NOTE: let repo module handle this
+      #   query
 
       :stream ->
         repo().transaction(

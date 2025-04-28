@@ -418,11 +418,18 @@ defmodule Bonfire.Social.FeedLoader do
       %{edges: edges, page_info: page_info}
   """
   def feed_many_paginated(query, filters, opts) do
-    opts =
-      to_options(opts)
-      |> Keyword.merge(Activities.order_pagination_opts(filters[:sort_by], filters[:sort_order]))
-      |> debug("opts with pagination opts")
+    do_feed_many_paginated(query, filters, prepare_opts_for_pagination(query, filters, opts))
+  end
 
+  defp prepare_opts_for_pagination(query, filters, opts) do
+    to_options(opts)
+    |> Keyword.merge(
+      Activities.order_pagination_opts(filters[:sort_by], filters[:sort_order])
+      |> debug("pagination opts")
+    )
+  end
+
+  defp do_feed_many_paginated(query, filters, opts) do
     Social.many(
       query
       |> debug("feed query"),
@@ -434,6 +441,13 @@ defmodule Bonfire.Social.FeedLoader do
   @decorate time()
   defp paginate_and_boundarise_feed(query, filters, opts) do
     debug("6. Starting paginate_and_boundarise_feed")
+
+    #  TODO: config
+    enable_deferred_by_default? = true
+
+    opts =
+      prepare_opts_for_pagination(query, filters, opts)
+      |> Keyword.put_new(:query_with_deferred_join, enable_deferred_by_default?)
 
     case opts[:return] do
       :explain ->
@@ -459,27 +473,34 @@ defmodule Bonfire.Social.FeedLoader do
         end)
 
       _ ->
-        # infinite_pages tells Paginator to always give us ab `after` cursor
-        with %Ecto.Query{} = query <-
-               maybe_paginate_and_boundarise_feed_deferred_query(query, filters, opts),
-             %{edges: []} <-
-               feed_many_paginated(
-                 query,
-                 filters,
-                 opts ++ [infinite_pages: !!Settings.get([:ui, :infinite_scroll], :preload, opts)]
-               ) do
-          debug(
-            "there were no results, try without the deferred query in case some were missing because of boundaries"
+        deferred_opts =
+          Keyword.put(
+            opts,
+            :infinite_pages,
+            !!Settings.get([:ui, :infinite_scroll], :preload, opts)
           )
 
-          paginate_and_boundarise_feed_non_deferred_query(query, filters, opts)
-          |> feed_many_paginated(filters, opts)
+        # NOTE: `infinite_pages = true` tells Paginator to always give us an `after` cursor, needed with deferred join since there may be more activities available than those that the join window is allowing Paginator to see
+
+        with %Ecto.Query{} = deferred_query <-
+               maybe_paginate_and_boundarise_feed_deferred_query(query, filters, deferred_opts),
+             %{edges: []} <-
+               do_feed_many_paginated(
+                 deferred_query,
+                 filters,
+                 deferred_opts
+               ) do
+          # WIP: Try paginating to the next window of results if the initial one is empty
+          paginate_and_boundarise_feed_deferred_fallback(query, filters, opts)
         else
           nil ->
             debug("deferred join is not enabled")
 
             paginate_and_boundarise_feed_non_deferred_query(query, filters, opts)
-            |> feed_many_paginated(filters, opts)
+            |> do_feed_many_paginated(filters, opts)
+
+          %Ecto.Query{} = query ->
+            query
 
           result ->
             debug("we got results")
@@ -489,47 +510,37 @@ defmodule Bonfire.Social.FeedLoader do
     end
   end
 
-  # defp paginate_and_boundarise_feed(query, filters, opts) do
-  #   paginate = e(opts, :paginate, nil) || e(opts, :after, nil) || opts
-
-  #   # WIP: BOUNDARISE with deferred join to speed up queries!
-
-  #   (from top_root in subquery(
-  #     query
-  #     # |> as(:root)
-  #     |> Ecto.Query.exclude(:preload) # to avoid 'cannot preload in subquery' error
-  #     |> feed_many_paginated(filters, paginate ++ [return: :query])
-  #   ), as: :top_root)
-  #   # |> Activities.as_permitted_for_subqueried(opts)
-  #   |> Activities.as_permitted_for(opts)
-  #   |> select([:top_root])
-  #   |> debug()
-  #   # |> preload([top_root, activity], activity: activity)
-  #   # |> proload(top_root: :activity)
-  #   # |> Activities.activity_preloads(opts[:preload], opts)
-  #   |> feed_many_paginated(filters, paginate)
-  # end
-
   defp maybe_paginate_and_boundarise_feed_deferred_query(initial_query, filters, opts) do
-    # speeds up queries by applying filters (incl. pagination) in a deferred join before boundarising and extra joins/preloads
+    # tries to speed up queries by applying filters (incl. pagination) in a deferred join before boundarising and extra joins/preloads
 
-    if opts[:query_with_deferred_join] do
+    if Keyword.get(opts, :query_with_deferred_join) do
+      if Enum.any?(initial_query.joins, &(&1.as == :deferred_join_subquery)),
+        do: throw("Already deferred")
+
       initial_query =
         initial_query
+        # |> debug()
+        |> Ecto.Query.exclude(:select)
         |> select([:id])
         # to avoid 'cannot preload in subquery' error
         |> make_distinct(filters[:sort_by], filters[:sort_order], opts)
         |> FeedActivities.query_order(filters[:sort_by], filters[:sort_order])
-        |> feed_many_paginated(
+        |> do_feed_many_paginated(
           filters,
-          Keyword.merge(opts, paginate: true, return: :query, multiply_limit: 2)
+          opts
+          |> Keyword.merge(
+            paginate: true,
+            return: :query,
+            multiply_limit: opts[:deferred_join_multiply_limit] || 2
+          )
         )
+        |> offset(^(opts[:deferred_join_offset] || 0))
         |> repo().make_subquery()
 
       # |> debug("deferred subquery")
 
       default_or_filtered_query(FeedActivities.base_query(opts), opts)
-      |> join(:inner, [fp], ^initial_query, on: [id: fp.id])
+      |> join(:inner, [fp], ^initial_query, on: [id: fp.id], as: :deferred_join_subquery)
       |> Activities.activity_preloads(
         opts[:preload],
         opts
@@ -537,6 +548,44 @@ defmodule Bonfire.Social.FeedLoader do
       |> Activities.as_permitted_for(opts)
       |> FeedActivities.query_order(filters[:sort_by], filters[:sort_order])
       |> debug("query with deferred join")
+    end
+  end
+
+  def paginate_and_boundarise_feed_deferred_fallback(query, filters, opts) do
+    # WIP: Try paginating to the next window of results if the initial one is empty
+
+    # Create new pagination options with the cursor from the empty result
+    deferred_join_multiply_limit =
+      opts[:deferred_join_multiply_limit] || opts[:multiply_limit] || 2
+
+    # FIXME: avoid computing twice
+    opts = repo().pagination_opts(opts)
+
+    next_page_opts =
+      Keyword.merge(
+        opts,
+        [
+          # after: after_cursor,
+          deferred_join_offset: deferred_join_multiply_limit * (opts[:limit] || 1),
+          # Increase the limit to fetch more results
+          deferred_join_multiply_limit: deferred_join_multiply_limit * 2
+        ]
+        |> debug("Empty results in first join window, attempting pagination to next window")
+      )
+
+    # Try the query again with the new cursor
+    with %Ecto.Query{} = deferred_query <-
+           maybe_paginate_and_boundarise_feed_deferred_query(query, filters, next_page_opts),
+         %{edges: []} <-
+           do_feed_many_paginated(
+             deferred_query,
+             filters,
+             next_page_opts
+           ) do
+      debug("No results in next window either, falling back to non-deferred query")
+
+      paginate_and_boundarise_feed_non_deferred_query(query, filters, opts)
+      |> do_feed_many_paginated(filters, opts)
     end
   end
 
@@ -769,8 +818,8 @@ defmodule Bonfire.Social.FeedLoader do
 
   defp default_query(), do: select(Needle.Pointers.query_base(), [p], p)
 
-  defp default_or_filtered_query(filters \\ nil, default_query, opts) do
-    case filters || e(opts, :feed_filters, nil) do
+  defp default_or_filtered_query(filtered \\ nil, default_query, opts) do
+    case filtered || e(opts, :feed_filters, nil) do
       %Ecto.Query{} = query ->
         query
 
@@ -1343,61 +1392,57 @@ defmodule Bonfire.Social.FeedLoader do
   @decorate time()
   defp prepare_feed(result, filters, opts)
 
-  defp prepare_feed(%{edges: edges} = result, filters, _opts)
+  defp prepare_feed(%{edges: edges, page_info: page_info}, filters, opts)
        when is_list(edges) and edges != [] do
-    edges
-    # |> length()
-    |> debug("Starting prepare_feed with edges")
-
     # debug(edges, "7a. edges to prepare")
 
-    Map.put(
-      result,
-      :edges,
-      edges
-      |> maybe_dedup_feed_objects(filters)
-      # |> debug("7b. after dedup")
+    if filters[:show_objects_only_once] != false and opts[:show_objects_only_once] != false do
+      # TODO: try doing this in queries in a way that it's not needed here?
+      edges =
+        edges
+        # |> debug("Starting prepare_feed with #{length(edges)} edges")
+        # |> Enum.uniq_by(&id(&1))
+        |> Enum.uniq_by(
+          &(e(&1, :activity, :object_id, nil) || e(&1, :activity, :id, nil) || Enums.id(&1))
+        )
 
-      # TODO: where best to do these postloads? and try to optimise into one call
+      # |> debug("deduped edges")
 
-      # |> Bonfire.Common.Needles.Preload.maybe_preload_nested_pointers(
-      #   [activity: [replied: [:reply_to]]],
-      #   opts
-      # )
-      # |> Bonfire.Common.Needles.Preload.maybe_preload_nested_pointers(
-      #   [activity: [:object]],
-      #   opts
-      # )
-      # |> repo().maybe_preload(
-      #   # FIXME: this should happen in `Activities.activity_preloads`
-      #   [activity: Activities.maybe_with_labelled()],
-      #   opts |> Keyword.put_new(:follow_pointers, false)
-      # )
+      %{edges: edges, page_info: page_info}
+    else
+      %{edges: edges, page_info: page_info}
+    end
 
-      # run post-preloads to follow pointers and catch anything else missing - TODO: only follow some pointers
-      # |> Activities.activity_preloads(opts[:preload], opts |> Keyword.put_new(:follow_pointers, true))
-      # |> Activities.activity_preloads(opts[:preload], opts |> Keyword.put_new(:follow_pointers, false))
-    )
+    # |> debug("7b. after dedup")
+
+    # TODO: where best to do these postloads? and try to optimise into one call
+
+    # |> Bonfire.Common.Needles.Preload.maybe_preload_nested_pointers(
+    #   [activity: [replied: [:reply_to]]],
+    #   opts
+    # )
+    # |> Bonfire.Common.Needles.Preload.maybe_preload_nested_pointers(
+    #   [activity: [:object]],
+    #   opts
+    # )
+    # |> repo().maybe_preload(
+    #   # FIXME: this should happen in `Activities.activity_preloads`
+    #   [activity: Activities.maybe_with_labelled()],
+    #   opts |> Keyword.put_new(:follow_pointers, false)
+    # )
+
+    # run post-preloads to follow pointers and catch anything else missing - TODO: only follow some pointers
+    # |> Activities.activity_preloads(opts[:preload], opts |> Keyword.put_new(:follow_pointers, true))
+    # |> Activities.activity_preloads(opts[:preload], opts |> Keyword.put_new(:follow_pointers, false))
+  end
+
+  defp prepare_feed(%Ecto.Query{} = query, _filters, _opts) do
+    query
   end
 
   defp prepare_feed(result, _filters, _opts) do
     debug(result, "seems like empty feed")
     result
-  end
-
-  defp maybe_dedup_feed_objects(edges, filters) do
-    if filters[:show_objects_only_once] != false do
-      # TODO: try doing this in queries in a way that it's not needed here?
-      edges
-      # |> Enum.uniq_by(&id(&1))
-      |> Enum.uniq_by(
-        &(e(&1, :activity, :object_id, nil) || e(&1, :activity, :id, nil) || Enums.id(&1))
-      )
-      |> debug("deduped edges")
-    else
-      # FIXME: we're getting repeated activities 
-      edges
-    end
   end
 
   # ==== END OF CODE TO REFACTOR ====
