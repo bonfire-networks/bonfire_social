@@ -218,7 +218,7 @@ defmodule Bonfire.Social.Objects do
   def query_maybe_time_limit(query, x_days) when is_integer(x_days) do
     limit_pointer =
       DatesTimes.past(x_days, :day)
-      |> debug("from date")
+      |> info("from date")
       |> Needle.UID.generate()
       |> debug("UID")
 

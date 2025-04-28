@@ -448,6 +448,12 @@ defmodule Bonfire.Social.FeedLoader do
         Config.get([Bonfire.Social.Feeds, :query_with_deferred_join], true)
       end)
 
+    opts =
+      opts
+      |> Keyword.put_new(:infinite_pages, fn ->
+        opts[:query_with_deferred_join]
+      end)
+
     case opts[:return] do
       :explain ->
         (maybe_paginate_and_boundarise_feed_deferred_query(query, filters, opts) ||
@@ -472,23 +478,23 @@ defmodule Bonfire.Social.FeedLoader do
         end)
 
       _ ->
-        deferred_opts =
-          opts
-          |> Keyword.put(
-            :infinite_pages,
-            true
-            # !!Settings.get([:ui, :infinite_scroll], :preload, opts)
-          )
+        # deferred_opts =
+        #   opts
+        #   |> Keyword.put(
+        #     :infinite_pages,
+        #     true
+        #     # !!Settings.get([:ui, :infinite_scroll], :preload, opts)
+        #   )
 
         # NOTE: `infinite_pages = true` tells Paginator to always give us an `after` cursor, needed with deferred join since there may be more activities available than those that the join window is allowing Paginator to see
 
         with %Ecto.Query{} = deferred_query <-
-               maybe_paginate_and_boundarise_feed_deferred_query(query, filters, deferred_opts),
+               maybe_paginate_and_boundarise_feed_deferred_query(query, filters, opts),
              %{edges: []} <-
                do_feed_many_paginated(
                  deferred_query,
                  filters,
-                 deferred_opts
+                 opts
                ) do
           # WIP: Try paginating to the next window of results if the initial one is empty
           paginate_and_boundarise_feed_deferred_fallback(query, filters, opts)
@@ -518,9 +524,10 @@ defmodule Bonfire.Social.FeedLoader do
         do: throw("Already deferred")
 
       opts =
-        if opts[:deferred_join_multiply_limit] do
-          debug("paginate the deferred join window from the get-go")
+        if is_integer(opts[:deferred_join_multiply_limit]) and
+             opts[:deferred_join_multiply_limit] > 1 do
           paginate_and_boundarise_feed_deferred_fallback_opts(opts)
+          |> info("paginate the deferred join window from the get-go")
         else
           opts
         end
@@ -562,7 +569,11 @@ defmodule Bonfire.Social.FeedLoader do
   defp paginate_and_boundarise_feed_deferred_fallback_opts(opts) do
     # Create new pagination options with the cursor from the empty result
     deferred_join_multiply_limit =
-      opts[:deferred_join_multiply_limit] || 2
+      case opts[:deferred_join_multiply_limit] do
+        0 -> 2
+        limit when is_integer(limit) -> limit
+        _ -> 2
+      end
 
     # FIXME: avoid computing twice
     opts = repo().pagination_opts(opts)
@@ -575,7 +586,7 @@ defmodule Bonfire.Social.FeedLoader do
         # Increase the limit to fetch more results
         deferred_join_multiply_limit: deferred_join_multiply_limit * 2
       ]
-      |> debug("Empty results in first join window, attempting pagination to next window")
+      |> info("Empty results in first join window, attempting pagination to next window")
     )
   end
 
@@ -593,7 +604,7 @@ defmodule Bonfire.Social.FeedLoader do
              filters,
              next_page_opts
            ) do
-      debug("No results in next window either, falling back to non-deferred query")
+      info("No results in next window either, falling back to non-deferred query")
 
       paginate_and_boundarise_feed_non_deferred_query(query, filters, opts)
       |> do_feed_many_paginated(filters, opts)
@@ -609,8 +620,8 @@ defmodule Bonfire.Social.FeedLoader do
     )
     |> Activities.as_permitted_for(opts)
     |> FeedActivities.query_order(filters[:sort_by], filters[:sort_order])
+    |> info("non_deferred query")
 
-    # |> debug("final query")
     # |> debug()
   end
 
@@ -1210,7 +1221,9 @@ defmodule Bonfire.Social.FeedLoader do
     #   filters,
     #   opts |> Keyword.put(:replied_preload_fun, &FeedActivities.maybe_preload_replied/1)
     # )
-    |> Objects.query_maybe_time_limit(e(filters, :time_limit, nil) || opts[:time_limit])
+    |> Objects.query_maybe_time_limit(
+      info(e(filters, :time_limit, nil) || opts[:time_limit], "apply_time_limit")
+    )
   end
 
   def feed_contains?(feed_name, object, opts \\ [])
@@ -1408,10 +1421,12 @@ defmodule Bonfire.Social.FeedLoader do
     # debug(edges, "7a. edges to prepare")
 
     if filters[:show_objects_only_once] != false and opts[:show_objects_only_once] != false do
+      info("Starting prepare_feed with #{length(edges)} edges")
+
       # TODO: try doing this in queries in a way that it's not needed here?
       edges =
         edges
-        |> debug("Starting prepare_feed with #{length(edges)} edges")
+        # |> debug("Starting prepare_feed with #{length(edges)} edges")
         # |> Enum.uniq_by(&id(&1))
         |> Enum.uniq_by(
           &(e(&1, :activity, :object_id, nil) || e(&1, :activity, :id, nil) || Enums.id(&1))
@@ -1452,7 +1467,8 @@ defmodule Bonfire.Social.FeedLoader do
   end
 
   defp prepare_feed(result, _filters, _opts) do
-    debug(result, "seems like empty feed")
+    info(result, "seems like empty feed")
+    # debug(result, "seems like empty feed")
     result
   end
 
