@@ -47,6 +47,17 @@ defmodule Bonfire.Social.FeedPaginationTest do
           })
         end
 
+      # Save the original config
+      original_config = Config.get([Bonfire.Social.Feeds, :query_with_deferred_join])
+
+      # Ensure deferred join is enabled for these tests
+      Config.put([Bonfire.Social.Feeds, :query_with_deferred_join], true)
+
+      # Return the original config to be used in on_exit
+      on_exit(fn ->
+        Config.put([Bonfire.Social.Feeds, :query_with_deferred_join], original_config)
+      end)
+
       # Return the context for tests
       %{
         user: user,
@@ -274,8 +285,8 @@ defmodule Bonfire.Social.FeedPaginationTest do
         limit: limit,
         query_with_deferred_join: true,
         return: :query,
-        deferred_join_offset: deferred_join_multiply_limit * limit,
-        deferred_join_multiply_limit: deferred_join_multiply_limit * 2
+        # deferred_join_offset: deferred_join_multiply_limit * limit,
+        deferred_join_multiply_limit: deferred_join_multiply_limit
       )
 
     # Verify next window query structure

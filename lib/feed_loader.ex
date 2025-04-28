@@ -473,8 +473,8 @@ defmodule Bonfire.Social.FeedLoader do
 
       _ ->
         deferred_opts =
-          Keyword.put(
-            opts,
+          opts
+          |> Keyword.put(
             :infinite_pages,
             true
             # !!Settings.get([:ui, :infinite_scroll], :preload, opts)
@@ -517,6 +517,14 @@ defmodule Bonfire.Social.FeedLoader do
       if Enum.any?(initial_query.joins, &(&1.as == :deferred_join_subquery)),
         do: throw("Already deferred")
 
+      opts =
+        if opts[:deferred_join_multiply_limit] do
+          debug("paginate the deferred join window from the get-go")
+          paginate_and_boundarise_feed_deferred_fallback_opts(opts)
+        else
+          opts
+        end
+
       initial_query =
         initial_query
         # |> debug()
@@ -551,27 +559,30 @@ defmodule Bonfire.Social.FeedLoader do
     end
   end
 
-  def paginate_and_boundarise_feed_deferred_fallback(query, filters, opts) do
-    # WIP: Try paginating to the next window of results if the initial one is empty
-
+  defp paginate_and_boundarise_feed_deferred_fallback_opts(opts) do
     # Create new pagination options with the cursor from the empty result
     deferred_join_multiply_limit =
-      opts[:deferred_join_multiply_limit] || opts[:multiply_limit] || 2
+      opts[:deferred_join_multiply_limit] || 2
 
     # FIXME: avoid computing twice
     opts = repo().pagination_opts(opts)
 
-    next_page_opts =
-      Keyword.merge(
-        opts,
-        [
-          # after: after_cursor,
-          deferred_join_offset: deferred_join_multiply_limit * (opts[:limit] || 1),
-          # Increase the limit to fetch more results
-          deferred_join_multiply_limit: deferred_join_multiply_limit * 2
-        ]
-        |> debug("Empty results in first join window, attempting pagination to next window")
-      )
+    Keyword.merge(
+      opts,
+      [
+        # after: after_cursor,
+        deferred_join_offset: deferred_join_multiply_limit * (opts[:limit] || 1),
+        # Increase the limit to fetch more results
+        deferred_join_multiply_limit: deferred_join_multiply_limit * 2
+      ]
+      |> debug("Empty results in first join window, attempting pagination to next window")
+    )
+  end
+
+  defp paginate_and_boundarise_feed_deferred_fallback(query, filters, opts) do
+    # WIP: Try paginating to the next window of results if the initial one is empty
+
+    next_page_opts = paginate_and_boundarise_feed_deferred_fallback_opts(opts)
 
     # Try the query again with the new cursor
     with %Ecto.Query{} = deferred_query <-
