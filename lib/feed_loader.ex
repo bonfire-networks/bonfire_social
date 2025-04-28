@@ -445,7 +445,7 @@ defmodule Bonfire.Social.FeedLoader do
     opts =
       prepare_opts_for_pagination(query, filters, opts)
       |> Keyword.put_new_lazy(:query_with_deferred_join, fn ->
-        Config.get(Bonfire.Social.Feeds, :query_with_deferred_join, true)
+        Config.get([Bonfire.Social.Feeds, :query_with_deferred_join], true)
       end)
 
     case opts[:return] do
