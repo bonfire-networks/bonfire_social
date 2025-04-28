@@ -259,15 +259,19 @@ defmodule Bonfire.Social.FeedLoader do
   # end
 
   defp merge_some_defaults(filters, opts) do
-    Enums.merge_as_map(
-      #  TODO: optimise by only loading if none is set in preset_filters/custom_filters
-      %{
-        sort_by: Settings.get([Bonfire.UI.Social.FeedLive, :sort_by], nil, opts),
-        time_limit: Settings.get([Bonfire.UI.Social.FeedLive, :time_limit], 7, opts)
-      }
-      |> debug("m0"),
-      filters
+    # WIP: optimise by only loading if none is set in preset_filters/custom_filters
+    filters
+    |> Map.put(
+      :sort_by,
+      filters[:sort_by] || opts[:sort_by] ||
+        Settings.get([Bonfire.UI.Social.FeedLive, :sort_by], nil, opts)
     )
+    |> Map.put(
+      :time_limit,
+      filters[:time_limit] || opts[:time_limit] ||
+        Settings.get([Bonfire.UI.Social.FeedLive, :time_limit], 7, opts)
+    )
+    |> debug("m0")
   end
 
   defp merge_feed_filters(custom_filters, opts) do
@@ -450,9 +454,10 @@ defmodule Bonfire.Social.FeedLoader do
 
     opts =
       opts
-      |> Keyword.put_new(:infinite_pages, fn ->
+      |> Keyword.put_new(
+        :infinite_pages,
         opts[:query_with_deferred_join]
-      end)
+      )
 
     case opts[:return] do
       :explain ->
@@ -989,15 +994,15 @@ defmodule Bonfire.Social.FeedLoader do
     )
   end
 
-  @doc "add assocs needed in timelines/feeds"
-  def query_extras_boundarised(query \\ nil, filters, opts) do
-    query_extras(query, filters, opts)
-    |> Activities.as_permitted_for(opts)
-    |> Activities.activity_preloads(
-      opts[:preload],
-      opts
-    )
-  end
+  # @doc "add assocs needed in timelines/feeds"
+  # def query_extras_boundarised(query \\ nil, filters, opts) do
+  #   query_extras(query, filters, opts)
+  #   |> Activities.as_permitted_for(opts)
+  #   |> Activities.activity_preloads(
+  #     opts[:preload],
+  #     opts
+  #   )
+  # end
 
   @doc "add assocs needed in lists of objects"
   def query_object_extras_boundarised(query \\ nil, filters, opts) do

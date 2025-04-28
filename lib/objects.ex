@@ -410,12 +410,16 @@ defmodule Bonfire.Social.Objects do
     end
   end
 
-  def maybe_filter(query, {:tags, tag_ids}, _opts) when is_list(tag_ids) and tag_ids != [] do
-    case Types.partition_uids(tag_ids,
+  def maybe_filter(query, {:tags, tags}, _opts)
+      when is_binary(tags) or (is_list(tags) and tags != []) do
+    case tags
+         |> debug("tags provided")
+         |> Types.partition_uids(
            prepare_non_uid_fun: fn tag ->
              maybe_apply(Bonfire.Tag.Hashtag, :normalize_name, [tag], fallback_return: tag)
            end
-         ) do
+         )
+         |> debug("partitioned") do
       {[], []} ->
         query
 
