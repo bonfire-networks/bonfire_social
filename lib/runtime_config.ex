@@ -10,6 +10,7 @@ defmodule Bonfire.Social.RuntimeConfig do
     import Config
 
     config :bonfire_social, Bonfire.Social.Feeds,
+      query_with_deferred_join: true,
       feed_presets: [
         my: %{
           name: l("Following"),

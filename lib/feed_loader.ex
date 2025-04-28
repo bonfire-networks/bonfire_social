@@ -442,12 +442,11 @@ defmodule Bonfire.Social.FeedLoader do
   defp paginate_and_boundarise_feed(query, filters, opts) do
     debug("6. Starting paginate_and_boundarise_feed")
 
-    #  TODO: config
-    enable_deferred_by_default? = true
-
     opts =
       prepare_opts_for_pagination(query, filters, opts)
-      |> Keyword.put_new(:query_with_deferred_join, enable_deferred_by_default?)
+      |> Keyword.put_new_lazy(:query_with_deferred_join, fn ->
+        Config.get(Bonfire.Social.Feeds, :query_with_deferred_join, true)
+      end)
 
     case opts[:return] do
       :explain ->
@@ -477,7 +476,8 @@ defmodule Bonfire.Social.FeedLoader do
           Keyword.put(
             opts,
             :infinite_pages,
-            !!Settings.get([:ui, :infinite_scroll], :preload, opts)
+            true
+            # !!Settings.get([:ui, :infinite_scroll], :preload, opts)
           )
 
         # NOTE: `infinite_pages = true` tells Paginator to always give us an `after` cursor, needed with deferred join since there may be more activities available than those that the join window is allowing Paginator to see
@@ -522,7 +522,6 @@ defmodule Bonfire.Social.FeedLoader do
         # |> debug()
         |> Ecto.Query.exclude(:select)
         |> select([:id])
-        # to avoid 'cannot preload in subquery' error
         |> make_distinct(filters[:sort_by], filters[:sort_order], opts)
         |> FeedActivities.query_order(filters[:sort_by], filters[:sort_order])
         |> do_feed_many_paginated(
@@ -545,8 +544,9 @@ defmodule Bonfire.Social.FeedLoader do
         opts[:preload],
         opts
       )
-      |> Activities.as_permitted_for(opts)
+      |> make_distinct(filters[:sort_by], filters[:sort_order], opts)
       |> FeedActivities.query_order(filters[:sort_by], filters[:sort_order])
+      |> Activities.as_permitted_for(opts)
       |> debug("query with deferred join")
     end
   end
@@ -1400,7 +1400,7 @@ defmodule Bonfire.Social.FeedLoader do
       # TODO: try doing this in queries in a way that it's not needed here?
       edges =
         edges
-        # |> debug("Starting prepare_feed with #{length(edges)} edges")
+        |> debug("Starting prepare_feed with #{length(edges)} edges")
         # |> Enum.uniq_by(&id(&1))
         |> Enum.uniq_by(
           &(e(&1, :activity, :object_id, nil) || e(&1, :activity, :id, nil) || Enums.id(&1))
