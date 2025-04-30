@@ -379,7 +379,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         "A Specific User's Activities" => %{
           match: %{subjects: "*"},
           include: [:with_creator],
-          exclude: [:with_subject, :with_peered]
+          exclude: [:with_subject]
         },
         "Requests for Me" => %{
           match: %{activity_types: [:request]},
