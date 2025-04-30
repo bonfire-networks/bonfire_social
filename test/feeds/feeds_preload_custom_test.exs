@@ -54,44 +54,46 @@ defmodule Bonfire.Social.Feeds.PreloadCustomTest do
     # assert activity = FeedLoader.feed_contains?(feed, post, current_user: user, postload: false)
     assert activity = List.last(feed.edges).activity
 
-    auto_assert %Bonfire.Data.Social.Activity{
-                  # because current_user is the subject
-                  subject: nil,
-                  verb: %Ecto.Association.NotLoaded{},
-                  object: %Needle.Pointer{
-                    created: %Bonfire.Data.Social.Created{creator: nil},
-                    peered: %Ecto.Association.NotLoaded{},
-                    #  because :with_creator preloads the object
-                    post_content: %Ecto.Association.NotLoaded{}
-                  },
-                  replied: %Ecto.Association.NotLoaded{},
-                  # labelled: %Ecto.Association.NotLoaded{},
-                  sensitive: %Ecto.Association.NotLoaded{}
-                } <- activity
+    assert %Bonfire.Data.Social.Activity{
+             # because current_user is the subject
+             subject: nil,
+             verb: %Ecto.Association.NotLoaded{},
+             object: %Needle.Pointer{
+               # created: %Bonfire.Data.Social.Created{creator: nil},
+               created: nil,
+               peered: %Ecto.Association.NotLoaded{},
+               #  because :with_creator preloads the object
+               post_content: %Ecto.Association.NotLoaded{}
+             },
+             replied: %Ecto.Association.NotLoaded{},
+             # labelled: %Ecto.Association.NotLoaded{},
+             sensitive: %Ecto.Association.NotLoaded{}
+           } = activity
 
     # |> debug("feed_contains in me?")
-    postloads1 = [:with_subject, :with_object_more, :with_peered]
+    postloads1 = [:with_subject, :with_object_more, :with_object_peered]
 
     activity =
       Bonfire.Social.Activities.activity_preloads(activity, postloads1, current_user: user)
 
-    auto_assert %Bonfire.Data.Social.Activity{
-                  # subject: %Needle.Pointer{
-                  #   character: %Bonfire.Data.Identity.Character{},
-                  #   profile: %Bonfire.Data.Social.Profile{}
-                  # },
-                  # because current_user is the subject
-                  subject: nil,
-                  verb: %Ecto.Association.NotLoaded{},
-                  object: %Needle.Pointer{
-                    created: %Bonfire.Data.Social.Created{creator: nil},
-                    peered: nil,
-                    post_content: %Bonfire.Data.Social.PostContent{}
-                  },
-                  replied: %Bonfire.Data.Social.Replied{},
-                  # labelled: %Ecto.Association.NotLoaded{},
-                  sensitive: %Ecto.Association.NotLoaded{}
-                } <- activity
+    assert %Bonfire.Data.Social.Activity{
+             # subject: %Needle.Pointer{
+             #   character: %Bonfire.Data.Identity.Character{},
+             #   profile: %Bonfire.Data.Social.Profile{}
+             # },
+             # because current_user is the subject
+             subject: nil,
+             verb: %Ecto.Association.NotLoaded{},
+             object: %Needle.Pointer{
+               # created: %Bonfire.Data.Social.Created{creator: nil},
+               created: nil,
+               peered: nil,
+               post_content: %Bonfire.Data.Social.PostContent{}
+             },
+             replied: %Bonfire.Data.Social.Replied{},
+             # labelled: %Ecto.Association.NotLoaded{},
+             sensitive: %Ecto.Association.NotLoaded{}
+           } = activity
 
     # |> dump("after postloads?")
 
@@ -110,7 +112,8 @@ defmodule Bonfire.Social.Feeds.PreloadCustomTest do
              verb: %Bonfire.Data.AccessControl.Verb{verb: "Reply"},
              object: %Needle.Pointer{
                post_content: %Bonfire.Data.Social.PostContent{html_body: "epic html"},
-               created: %Bonfire.Data.Social.Created{creator: nil}
+               #  created: %Bonfire.Data.Social.Created{creator: nil}
+               created: nil
              },
              replied: %Bonfire.Data.Social.Replied{
                # FIXME: create named mixin only when not empty
@@ -136,18 +139,18 @@ defmodule Bonfire.Social.Feeds.PreloadCustomTest do
 
     feed = FeedLoader.feed(:local, limit: 5, current_user: another_local_user)
 
-    auto_assert %Bonfire.Data.Social.Activity{
-                  subject: %Needle.Pointer{character: %Bonfire.Data.Identity.Character{}},
-                  verb: %Ecto.Association.NotLoaded{},
-                  object: %Needle.Pointer{post_content: %Ecto.Association.NotLoaded{}},
-                  replied: %Ecto.Association.NotLoaded{},
-                  # labelled: %Ecto.Association.NotLoaded{},
-                  sensitive: %Ecto.Association.NotLoaded{}
-                } <-
-                  FeedLoader.feed_contains?(feed, post,
-                    current_user: another_local_user,
-                    postload: false
-                  )
+    assert %Bonfire.Data.Social.Activity{
+             subject: %Needle.Pointer{character: %Bonfire.Data.Identity.Character{}},
+             verb: %Ecto.Association.NotLoaded{},
+             object: %Needle.Pointer{post_content: %Ecto.Association.NotLoaded{}},
+             replied: %Ecto.Association.NotLoaded{},
+             # labelled: %Ecto.Association.NotLoaded{},
+             sensitive: %Ecto.Association.NotLoaded{}
+           } =
+             FeedLoader.feed_contains?(feed, post,
+               current_user: another_local_user,
+               postload: false
+             )
 
     # |> dump( "feed_contains in local?")
 

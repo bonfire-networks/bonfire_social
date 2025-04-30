@@ -329,7 +329,7 @@ defmodule Bonfire.Social.RuntimeConfig do
       :with_object_more,
       :with_media,
       :with_reply_to,
-      :with_peered
+      :with_object_peered
     ]
 
     config :bonfire_social, Bonfire.Social.FeedLoader,
@@ -358,11 +358,11 @@ defmodule Bonfire.Social.RuntimeConfig do
         "Local Feed (From the local instance)" => %{
           match: %{origin: :local},
           include: [],
-          exclude: [:with_peered]
+          exclude: [:with_object_peered]
         },
         "Remote Feed (From the Fediverse)" => %{
           match: %{origin: :remote},
-          include: [:with_peered],
+          include: [:with_object_peered],
           exclude: []
         },
         "Notifications Feed (Only for me)" => %{
@@ -388,7 +388,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         },
         "Followed by a Specific User" => %{
           match: %{activity_types: :follow, subjects: "*"},
-          include: [:with_object, :with_peered],
+          include: [:with_object, :with_object_peered],
           exclude: [:with_subject, :with_creator, :with_object_more, :with_media, :with_reply_to]
         },
         "Followers of a Specific User" => %{
@@ -398,7 +398,7 @@ defmodule Bonfire.Social.RuntimeConfig do
             :with_object,
             :with_creator,
             :with_object_more,
-            :with_peered,
+            :with_object_peered,
             :with_media,
             :with_reply_to
           ]
@@ -410,7 +410,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         },
         "Created by a Specific User" => %{
           match: %{creators: "*"},
-          exclude: [:with_creator, :with_subject, :with_peered]
+          exclude: [:with_creator, :with_subject]
         },
 
         # Different Types of Feeds
@@ -421,12 +421,12 @@ defmodule Bonfire.Social.RuntimeConfig do
         },
         "Posts" => %{
           match: %{object_types: :post},
-          include: [:with_creator, :with_post_content, :with_media, :with_peered],
+          include: [:with_creator, :with_post_content, :with_media, :with_object_peered],
           exclude: [:with_object, :with_object_more]
         },
         "Media" => %{
           match: %{media_types: "*"},
-          include: [:per_media, :with_creator, :with_post_content, :with_peered],
+          include: [:per_media, :with_creator, :with_post_content, :with_object_peered],
           exclude: [:with_subject, :with_media, :with_object, :with_object_more]
         }
       }
@@ -441,7 +441,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           :with_object,
           #  FIXME? why media?
           :per_media
-          # :with_peered
+          # :with_object_peered
         ]
       ]
 

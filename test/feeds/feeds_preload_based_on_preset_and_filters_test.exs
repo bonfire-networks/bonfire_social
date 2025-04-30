@@ -225,7 +225,7 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
               match?(
                 %{
                   object: %Needle.Pointer{
-                    created: %{creator: nil}
+                    created: nil
                   }
                 },
                 activity
@@ -356,7 +356,7 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
                 )
           end
 
-        :with_peered ->
+        :with_object_peered ->
           pattern_matched? =
             match?(%{object: %{peered: nil}}, activity) or
               match?(%{object: %{peered: %{id: _}}}, activity)

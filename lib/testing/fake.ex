@@ -52,7 +52,7 @@ defmodule Bonfire.Social.Fake do
 
       # preloads =
       #   if preset in [:local, :remote] do
-      #     preloads ++ [:with_peered]
+      #     preloads ++ [:with_object_peered]
       #   else
       #     preloads
       #   end

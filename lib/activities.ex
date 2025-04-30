@@ -455,11 +455,11 @@ defmodule Bonfire.Social.Activities do
           # |> proload(activity: [:object])
           |> proload(
             activity: [
-              object:
-                {"object_",
-                 [
-                   :created
-                 ]}
+              :object
+              # {"object_",
+              #  [
+              #    :created # FIXME: we don't need to preload it here
+              #  ]}
             ]
           )
           |> maybe_join_creator(skip_loading_user_ids)
@@ -494,7 +494,7 @@ defmodule Bonfire.Social.Activities do
             ]
           )
 
-        :with_peered ->
+        :with_object_peered ->
           proload(query,
             activity: [
               object: {"object_", [:peered]}
@@ -547,7 +547,7 @@ defmodule Bonfire.Social.Activities do
             |> preload(
               activity: [
                 replied: [
-                  reply_to: ^maybe_preload_reply_to(opts)
+                  reply_to: ^maybe_preload_reply_to(skip_loading_user_ids, opts)
                 ]
               ]
             )
@@ -706,7 +706,7 @@ defmodule Bonfire.Social.Activities do
             # object: [:post_content, :peered, :character, profile: :icon]
           ]
 
-        :with_peered ->
+        :with_object_peered ->
           #  NOTE: :peered info is needed to correctly render remote posts, but only loaded when unknown, depending on feed type
           [
             object: [:peered]
@@ -728,7 +728,7 @@ defmodule Bonfire.Social.Activities do
         :with_reply_to ->
           [
             replied: [
-              reply_to: maybe_preload_reply_to(opts)
+              reply_to: maybe_preload_reply_to(skip_loading_user_ids, opts)
             ]
           ]
 
@@ -797,7 +797,7 @@ defmodule Bonfire.Social.Activities do
       else: []
   end
 
-  defp maybe_preload_reply_to(opts) do
+  defp maybe_preload_reply_to([], opts) do
     # If the root replied to anything, fetch that and its creator too. e.g.
     # * Alice's post that replied to Bob's post
     # * Bob liked alice's post
@@ -813,26 +813,51 @@ defmodule Bonfire.Social.Activities do
       # [{"reply_to_",
       [
         :post_content,
-        :peered,
+        # :peered # should not be needed as we can assume if it's remote from the creator peered (and we don't display a canonical link for reply_to)
         created: [
-          creator: [:character, profile: :icon]
+          creator: [character: [:peered], profile: :icon]
         ]
       ]
       # }]
     )
     |> debug("query to attempt loading reply_to")
+  end
 
-    # |> debug("reply_query subquery that applies boundaries")
+  defp maybe_preload_reply_to(skip_loading_user_ids, opts) do
+    # If the root replied to anything, fetch that and its creator too. e.g.
+    # * Alice's post that replied to Bob's post
+    # * Bob liked alice's post
 
-    # (from reply_to in Pointer)
-    # |> proload([
-    #            :post_content,
-    #            created: [
-    #              creator: {"reply_to_creator_", [:character, profile: :icon]}
-    #            ]
-    #     ]
-    # )
-    # |> Activities.reply_to_as_permitted_for(opts)
+    Common.Needles.pointer_query(
+      [],
+      Enums.merge_uniq(opts,
+        skip_boundary_check: false
+        # preload: [:with_content, :creator_of_reply_to]
+      )
+    )
+    |> preload(
+      # [{"reply_to_",
+      [
+        :post_content
+        # :peered # should not be needed as we can assume if it's remote from the creator peered (and we don't display a canonical link for reply_to)
+      ]
+      # }]
+    )
+    |> reusable_join(
+      :left,
+      [reply_to],
+      created in assoc(reply_to, :created),
+      as: :created,
+      on: created.creator_id not in ^skip_loading_user_ids
+    )
+    |> preload(
+      # [{"reply_to_",
+      created: [
+        creator: [character: [:peered], profile: :icon]
+      ]
+      # }]
+    )
+    |> debug("query to attempt loading reply_to")
   end
 
   @doc """
@@ -871,7 +896,7 @@ defmodule Bonfire.Social.Activities do
     |> reusable_join(
       :left,
       [activity: activity],
-      subject in Pointer,
+      subject in assoc(activity, :subject),
       as: :subject,
       on:
         activity.subject_id not in ^skip_loading_user_ids and
@@ -908,27 +933,35 @@ defmodule Bonfire.Social.Activities do
   """
   def maybe_join_creator(query, []) do
     query
-    #  join subject, since creator will only be loaded if different from the subject
+    # first join subject, since creator will only be loaded if different from the subject
     |> maybe_join_subject([])
-    |> proload(
-      activity: [
-        object:
-          {"object_",
-           [
-             :created
-           ]}
-      ]
-    )
     |> reusable_join(
       :left,
-      [activity: activity, object_created: object_created],
-      creator in Pointer,
-      as: :object_creator,
-      #  only includes the creator if different than the subject
-      on:
-        object_created.creator_id != activity.subject_id and
-          object_created.creator_id == creator.id
+      [activity: activity],
+      object_created in assoc(activity, :created),
+      as: :object_created,
+      # only includes the creator if different than the subject
+      on: object_created.creator_id != activity.subject_id
     )
+    # |> proload(
+    #   activity: [
+    #     object:
+    #       {"object_",
+    #        [
+    #          :created
+    #        ]}
+    #   ]
+    # )
+    # |> reusable_join(
+    #   :left,
+    #   [activity: activity, object_created: object_created],
+    #   creator in Pointer,
+    #   as: :object_creator,
+    #   #  only includes the creator if different than the subject
+    #   on:
+    #     object_created.creator_id != activity.subject_id and
+    #       object_created.creator_id == creator.id
+    # )
     |> proload(
       activity: [
         object:
@@ -954,26 +987,36 @@ defmodule Bonfire.Social.Activities do
     query
     #  join subject? since creator will only be loaded if different from the subject
     # |> maybe_join_subject(skip_loading_user_ids)
-    |> proload(
-      activity: [
-        object:
-          {"object_",
-           [
-             :created
-           ]}
-      ]
-    )
     |> reusable_join(
       :left,
-      [activity: activity, object_created: object_created],
-      creator in Pointer,
-      as: :object_creator,
-      #  only includes the creator if different than the subject
+      [activity: activity],
+      object_created in assoc(activity, :created),
+      as: :object_created,
+      # only includes the creator if different than the subject
       on:
         object_created.creator_id != activity.subject_id and
-          object_created.creator_id not in ^skip_loading_user_ids and
-          object_created.creator_id == creator.id
+          object_created.creator_id not in ^skip_loading_user_ids
     )
+    # |> proload(
+    #   activity: [
+    #     object:
+    #       {"object_",
+    #        [
+    #          :created
+    #        ]}
+    #   ]
+    # )
+    # |> reusable_join(
+    #   :left,
+    #   [activity: activity, object_created: object_created],
+    #   creator in Pointer,
+    #   as: :object_creator,
+    #   #  only includes the creator if different than the subject
+    #   on:
+    #     object_created.creator_id != activity.subject_id and
+    #       object_created.creator_id not in ^skip_loading_user_ids and
+    #       object_created.creator_id == creator.id
+    # )
     |> proload(
       activity: [
         object:
@@ -1374,8 +1417,31 @@ defmodule Bonfire.Social.Activities do
         local_feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
 
         query
-        |> proload(
-          activity: [subject: {"subject_", character: [:peered]}, object: {"object_", [:peered]}]
+        # WIP: optimise by avoiding subject and object :peered preloads (only need to join them)
+        |> proload(activity: [:object])
+        |> reusable_join(
+          :left,
+          [activity: activity],
+          subject in assoc(activity, :subject),
+          as: :subject
+        )
+        |> reusable_join(
+          :left,
+          [subject: subject],
+          subject_character in assoc(subject, :character),
+          as: :subject_character
+        )
+        |> reusable_join(
+          :left,
+          [subject_character: subject_character],
+          subject_peered in assoc(subject_character, :peered),
+          as: :subject_peered
+        )
+        |> reusable_join(
+          :left,
+          [object: object],
+          object_peered in assoc(object, :peered),
+          as: :object_peered
         )
         |> where(
           [fp, activity: activity, subject_peered: subject_peered, object_peered: object_peered],

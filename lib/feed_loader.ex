@@ -407,7 +407,7 @@ defmodule Bonfire.Social.FeedLoader do
     filters = Map.new(filters)
 
     do_query(filters, opts, opts[:base_query] || default_query())
-    |> debug("feed query")
+    # |> debug("feed query")
     |> paginate_and_boundarise_feed(filters, opts)
 
     # |> prepare_feed(filters, opts)
@@ -435,8 +435,8 @@ defmodule Bonfire.Social.FeedLoader do
 
   defp do_feed_many_paginated(query, filters, opts) do
     Social.many(
-      query
-      |> debug("feed query"),
+      query,
+      # |> debug("feed query"),
       opts[:paginate] || opts,
       opts
     )
@@ -560,14 +560,17 @@ defmodule Bonfire.Social.FeedLoader do
 
       default_or_filtered_query(FeedActivities.base_query(opts), opts)
       |> join(:inner, [fp], ^initial_query, on: [id: fp.id], as: :deferred_join_subquery)
+      # NOTE make_distinct needs to come before preloads as it may create a subquery
+      |> make_distinct(filters[:sort_by], filters[:sort_order], opts)
       |> Activities.activity_preloads(
         opts[:preload],
         opts
       )
-      |> make_distinct(filters[:sort_by], filters[:sort_order], opts)
       |> FeedActivities.query_order(filters[:sort_by], filters[:sort_order])
       |> Activities.as_permitted_for(opts)
-      |> debug("query with deferred join")
+
+      # |> IO.inspect(label: "feed query")
+      # |> debug("query with deferred join")
     end
   end
 
@@ -868,11 +871,11 @@ defmodule Bonfire.Social.FeedLoader do
     query
   end
 
-  defp make_distinct(query, id, :asc, _opts) when is_nil(id) or id == :id do
+  defp make_distinct(query, id, :asc, _opts) when is_nil(id) or id == false or id == :id do
     distinct(query, [activity: activity], asc: activity.id)
   end
 
-  defp make_distinct(query, id, _, _opts) when is_nil(id) or id == :id do
+  defp make_distinct(query, id, _desc, _opts) when is_nil(id) or id == false or id == :id do
     distinct(query, [activity: activity], desc: activity.id)
   end
 
@@ -883,7 +886,7 @@ defmodule Bonfire.Social.FeedLoader do
     |> make_distinct_subquery(opts)
   end
 
-  defp make_distinct(query, other, _, opts) do
+  defp make_distinct(query, other, _desc, opts) do
     debug(other, "making a subquery to show distinct activities with field other than :id")
 
     distinct(query, [activity: activity], desc: activity.id)
@@ -1727,19 +1730,19 @@ defmodule Bonfire.Social.FeedLoader do
 
       iex> filters = %{feed_name: "remote"}
       iex> preloads_from_filters(filters) |> Enum.sort()
-      [:with_creator, :with_media, :with_object_more, :with_peered, :with_reply_to, :with_subject]
+      [:with_creator, :with_media, :with_object_more, :with_object_peered, :with_reply_to, :with_subject]
 
       iex> filters = %{feed_name: :remote}
       iex> preloads_from_filters(filters) |> Enum.sort()
-      [:with_creator, :with_media, :with_object_more, :with_peered, :with_reply_to, :with_subject]
+      [:with_creator, :with_media, :with_object_more, :with_object_peered, :with_reply_to, :with_subject]
 
       iex> filters = %{feed_name: ["remote"]}
       iex> preloads_from_filters(filters) |> Enum.sort()
-      [:with_creator, :with_media, :with_object_more, :with_peered, :with_reply_to, :with_subject]
+      [:with_creator, :with_media, :with_object_more, :with_object_peered, :with_reply_to, :with_subject]
 
       iex> filters = %{feed_name: [:remote]}
       iex> preloads_from_filters(filters) |> Enum.sort()
-      [:with_creator, :with_media, :with_object_more, :with_peered, :with_reply_to, :with_subject]
+      [:with_creator, :with_media, :with_object_more, :with_object_peered, :with_reply_to, :with_subject]
 
       iex> filters = %{subjects: ["alice"]}
       iex> preloads_from_filters(filters) |> Enum.sort()
@@ -1751,7 +1754,7 @@ defmodule Bonfire.Social.FeedLoader do
         :with_creator,
         :with_media,
         :with_object_more,
-        :with_peered,
+        :with_object_peered,
         :with_reply_to,
         :with_subject
       ]
