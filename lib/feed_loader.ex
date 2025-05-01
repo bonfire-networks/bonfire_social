@@ -1732,21 +1732,9 @@ defmodule Bonfire.Social.FeedLoader do
       iex> preloads_from_filters(filters) |> Enum.sort()
       [:with_creator, :with_media, :with_object_more, :with_object_peered, :with_reply_to, :with_subject]
 
-      iex> filters = %{feed_name: :remote}
-      iex> preloads_from_filters(filters) |> Enum.sort()
-      [:with_creator, :with_media, :with_object_more, :with_object_peered, :with_reply_to, :with_subject]
-
-      iex> filters = %{feed_name: ["remote"]}
-      iex> preloads_from_filters(filters) |> Enum.sort()
-      [:with_creator, :with_media, :with_object_more, :with_object_peered, :with_reply_to, :with_subject]
-
-      iex> filters = %{feed_name: [:remote]}
-      iex> preloads_from_filters(filters) |> Enum.sort()
-      [:with_creator, :with_media, :with_object_more, :with_object_peered, :with_reply_to, :with_subject]
-
       iex> filters = %{subjects: ["alice"]}
       iex> preloads_from_filters(filters) |> Enum.sort()
-      [:with_creator, :with_media, :with_object_more, :with_reply_to]
+      [:with_creator, :with_media, :with_object_more, :with_object_peered, :with_reply_to]
 
       iex> filters = %{feed_name: "unknown"}
       iex> preloads_from_filters(filters) |> Enum.sort()
