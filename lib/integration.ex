@@ -2,7 +2,7 @@ defmodule Bonfire.Social do
   @moduledoc "./README.md" |> File.stream!() |> Enum.drop(1) |> Enum.join()
 
   use Arrows
-  alias Bonfire.Common.Config
+  use Bonfire.Common.Config
   use Bonfire.Common.Utils
   # alias Bonfire.Data.Social.Follow
   import Untangle

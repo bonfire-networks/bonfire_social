@@ -11,8 +11,8 @@ defmodule Bonfire.Social.FeedLoader do
   use Bonfire.Common.Localise
   use Bonfire.Common.Repo
   import Bonfire.Common.Utils
-  alias Bonfire.Common.Config
-  alias Bonfire.Common.Settings
+  use Bonfire.Common.Config
+  use Bonfire.Common.Settings
   alias Bonfire.Common.Enums
   alias Bonfire.Common.Types
   alias Bonfire.Data.Social.Activity
