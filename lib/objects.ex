@@ -367,7 +367,7 @@ defmodule Bonfire.Social.Objects do
     case prepare_media_type(types) do
       :all ->
         query
-        |> Activities.join_per_media()
+        |> Activities.join_per_media(:inner)
         |> proload(:left, activity: [:media])
         |> where([media: media], not is_nil(media.media_type))
 
@@ -375,7 +375,7 @@ defmodule Bonfire.Social.Objects do
         rest
         |> Enum.reduce(
           query
-          |> Activities.join_per_media()
+          |> Activities.join_per_media(:inner)
           |> proload(:left, activity: [:media])
           |> where([media: media], ilike(media.media_type, ^"#{first}%")),
           fn type, query ->
@@ -399,11 +399,11 @@ defmodule Bonfire.Social.Objects do
         |> where([media: media], is_nil(media.media_type))
 
       [first | rest] ->
-        # NOTE: when excluding media types do we want to show only media or any object types (in both cases excluding media of specified types)? for now going with the first option
+        # NOTE: when excluding media types do we want to show only media or any object types (in both cases excluding media of specified types)? for now going with the second option
         rest
         |> Enum.reduce(
           query
-          |> Activities.join_per_media()
+          |> Activities.join_per_media(:left)
           |> proload(activity: [:media])
           |> where([media: media], is_nil(media.id) or not ilike(media.media_type, ^"#{first}%")),
           fn type, query ->

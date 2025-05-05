@@ -200,7 +200,7 @@ defmodule Bonfire.Social.Fake do
             post_content: %{name: "flagged post #{i}", html_body: "content #{i}"}
           })
 
-        {:ok, post} = Bonfire.Posts.read(post.id, current_user: user)
+        # {:ok, post} = Bonfire.Posts.read(post.id, current_user: user)
 
         {:ok, flag} = Bonfire.Social.Flags.flag(user, post)
         {post, flag}
@@ -240,11 +240,7 @@ defmodule Bonfire.Social.Fake do
         #  FIXME: feed ends up empty
         {nil, nil}
 
-      :local_media ->
-        # first create a Media as object
-        create_test_content(:images, user, other_user, i)
-
-        # also create a media to attach to a post
+      :image_post ->
         {:ok, media} =
           Bonfire.Files.upload(Bonfire.Files.ImageUploader, user, icon_file(), %{
             metadata: %{label: "Post Media"}
@@ -257,6 +253,13 @@ defmodule Bonfire.Social.Fake do
           })
 
         {media, post}
+
+      :local_media ->
+        # first create a Media as object
+        create_test_content(:images, user, other_user, i)
+
+        # also create a media to attach to a post
+        create_test_content(:image_post, user, other_user, i)
 
       :trending_discussions ->
         # TODO

@@ -596,13 +596,14 @@ defmodule Bonfire.Social.Activities do
         :with_media ->
           query
           |> proload(activity: [:sensitive])
+          |> join_per_media(:left)
           # use preload instead of proload because there can be many media
           |> preload(activity: [:media])
 
         :per_media ->
           query
           |> proload(activity: [:sensitive])
-          |> join_per_media()
+          |> join_per_media(:left)
           |> proload(activity: [:media])
 
         # |> Ecto.Query.exclude(:distinct)
@@ -762,7 +763,8 @@ defmodule Bonfire.Social.Activities do
   end
 
   @doc "join media"
-  def join_per_media(query) do
+
+  def join_per_media(query, :inner) do
     query
     # |> reusable_join(:inner, [activity: activity], media in Bonfire.Files.Media,
     #     as: :media,
@@ -778,6 +780,23 @@ defmodule Bonfire.Social.Activities do
     )
     |> reusable_join(
       :inner,
+      [activity: activity, files: files],
+      media in Bonfire.Files.Media,
+      as: :media,
+      on: files.media_id == media.id or activity.object_id == media.id
+    )
+  end
+
+  def join_per_media(query, _) do
+    query
+    |> reusable_join(
+      :left,
+      [activity: activity],
+      files in assoc(activity, :files),
+      as: :files
+    )
+    |> reusable_join(
+      :left,
       [activity: activity, files: files],
       media in Bonfire.Files.Media,
       as: :media,
