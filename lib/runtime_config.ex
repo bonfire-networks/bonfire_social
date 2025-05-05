@@ -446,11 +446,18 @@ defmodule Bonfire.Social.RuntimeConfig do
           match: %{media_types: "*"},
           include: [
             :per_media,
+            # :with_media,
             :with_creator,
             :with_post_content
             # :with_object_peered (since not loading the object)
           ],
-          exclude: [:with_subject, :with_media, :with_object, :with_object_more]
+          exclude: [
+            :with_media,
+            :with_subject,
+            :with_object,
+            :with_object_more,
+            :with_reply_to
+          ]
         }
       }
 
@@ -462,7 +469,6 @@ defmodule Bonfire.Social.RuntimeConfig do
           :with_creator,
           # we join in first query to filter out deleted objects and/or filter by type
           :with_object,
-          #  FIXME? why media?
           :per_media
           # :with_object_peered
         ]

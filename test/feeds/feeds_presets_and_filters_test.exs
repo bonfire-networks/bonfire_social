@@ -39,7 +39,7 @@ defmodule Bonfire.Social.Feeds.PresetFiltersTest do
 
   # Generate tests dynamically from feed presets - WIP: my, messages, user_following, user_followers, remote, my_requests, trending_discussions, images, publications, my_flags, flagged_content
   # flagged_content, my_flags
-  # for %{preset: preset, filters: filters} = params when preset in [:my_flags] <-
+  # for %{preset: preset, filters: filters} = params when preset in [:images, :local_media] <- 
   for %{preset: preset, filters: filters} = params
       when preset not in [:audio, :videos, :mentions, :curated] <-
         feed_preset_test_params() do
@@ -73,6 +73,8 @@ defmodule Bonfire.Social.Feeds.PresetFiltersTest do
         other_user: other_user
       } do
         if preset && object do
+          Process.put([:bonfire, :default_pagination_limit], 5)
+
           feed =
             FeedLoader.feed(preset, %{},
               current_user: user,
@@ -81,6 +83,10 @@ defmodule Bonfire.Social.Feeds.PresetFiltersTest do
               tags: ["#test", other_user],
               show_objects_only_once: false
             )
+            |> IO.inspect(label: "preset feed results")
+
+          FeedLoader.feed(:explore, %{}, current_user: user)
+          |> IO.inspect(label: "unfiltered feed results")
 
           verify_feed(preset, feed, activity, object, user, other_user, preloads, postloads)
         end
@@ -99,6 +105,8 @@ defmodule Bonfire.Social.Feeds.PresetFiltersTest do
           parameterized: parameterized
         } do
           if object do
+            Process.put([:bonfire, :default_pagination_limit], 5)
+
             opts = [
               current_user: user,
               # limit: 3,

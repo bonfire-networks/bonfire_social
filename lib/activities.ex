@@ -602,9 +602,12 @@ defmodule Bonfire.Social.Activities do
         :per_media ->
           query
           |> proload(activity: [:sensitive])
-          |> proload(:inner, activity: [:media])
-          |> Ecto.Query.exclude(:distinct)
-          |> distinct([media: media], desc: media.id)
+          |> join_per_media()
+          |> proload(activity: [:media])
+
+        # |> Ecto.Query.exclude(:distinct)
+        # |> distinct([media: media], desc: media.id) 
+        # ^ NOTE: the media id should be equivalent to the object id so not necessary to customise
 
         :maybe_with_labelled ->
           if Extend.extension_enabled?(:bonfire_label),
@@ -756,6 +759,30 @@ defmodule Bonfire.Social.Activities do
           []
       end
     end
+  end
+
+  @doc "join media"
+  def join_per_media(query) do
+    query
+    # |> reusable_join(:inner, [activity: activity], media in Bonfire.Files.Media,
+    #     as: :media,
+    #     on:
+    #       activity.object_id == media.id
+    #   )
+    # ^ adds a join to show ONLY media objects in activities (does not include media attached to an object)
+    |> reusable_join(
+      :left,
+      [activity: activity],
+      files in assoc(activity, :files),
+      as: :files
+    )
+    |> reusable_join(
+      :inner,
+      [activity: activity, files: files],
+      media in Bonfire.Files.Media,
+      as: :media,
+      on: files.media_id == media.id or activity.object_id == media.id
+    )
   end
 
   defp query_preload_seen(q, opts) do
@@ -1223,7 +1250,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   def maybe_filter(query, {:activity_types, types}, _opts) do
-    # debug(types, label: "filter by activity_types")
+    debug(types, "filter by activity_types")
 
     case Verbs.ids(types) do
       verb_ids when is_list(verb_ids) and verb_ids != [] ->
@@ -1766,6 +1793,130 @@ defmodule Bonfire.Social.Activities do
     else
       # {:ok, obj} -> obj
       _ -> nil
+    end
+  end
+
+  # Helper to inject subject and creator data into activities
+  def prepare_subject_and_creator(%{edges: edges}, opts) when is_list(edges) do
+    Enum.map(edges, &prepare_subject_and_creator(&1, opts))
+  end
+
+  def prepare_subject_and_creator(edges, opts) when is_list(edges) do
+    Enum.map(edges, &prepare_subject_and_creator(&1, opts))
+  end
+
+  def prepare_subject_and_creator(
+        %{activity: %Bonfire.Data.Social.Activity{} = activity} = e,
+        opts
+      ) do
+    Map.put(e, :activity, prepare_subject_and_creator(activity, opts))
+  end
+
+  def prepare_subject_and_creator(%Bonfire.Data.Social.Activity{object: object} = activity, opts) do
+    # Find subject for this activity
+    subject = find_subject(activity, opts)
+    # Find creator for this activity
+    creator = find_creator(activity, object, opts)
+
+    # Update the activity with subject 
+    activity = if subject, do: Map.put(activity, :subject, subject), else: activity
+
+    # Update the creator in the creator 
+    cond do
+      creator && is_map(object) ->
+        created =
+          e(object, :created, %{})
+          |> Map.put(:creator, creator)
+
+        object = Map.put(object, :created, created)
+
+        Map.put(activity, :object, object)
+
+      creator ->
+        created =
+          e(activity, :created, %{})
+          |> Map.put(:creator, creator)
+
+        Map.put(activity, :created, created)
+
+      true ->
+        activity
+    end
+  end
+
+  def prepare_subject_and_creator(object, _opts), do: object
+
+  def find_subject(opts) do
+    find_subject(e(opts, :activity, nil), opts)
+  end
+
+  def find_subject(activity, opts) do
+    subject =
+      e(activity, :subject, nil)
+
+    subject_id =
+      (id(subject) || e(activity, :subject_id, nil))
+      |> debug("subject_id")
+
+    subject || user_if_loaded(subject_id, opts) || subject_id
+  end
+
+  def find_creator(opts) do
+    find_creator(e(opts, :activity, nil), opts)
+  end
+
+  def find_creator(activity, opts) do
+    find_creator(activity, e(opts, :object, nil) || e(activity, :object, nil), opts)
+  end
+
+  def find_creator(activity, object, opts) do
+    creator = creator(activity, object)
+
+    creator_id =
+      id(creator) || creator_id(activity, object)
+
+    # |> debug("creator_id")
+
+    creator || user_if_loaded(creator_id, opts) || creator_id
+  end
+
+  def creator(activity, object),
+    do:
+      (e(object, :created, :creator, nil) || e(activity, :created, :creator, nil) ||
+         e(object, :creator, nil))
+      |> debug()
+
+  def creator_id(activity, object),
+    do:
+      (e(object, :created, :creator_id, nil) ||
+         e(activity, :created, :creator_id, nil) || e(object, :creator_id, nil))
+      |> debug()
+
+  defp user_if_loaded(creator_or_subject_id, opts) do
+    current_user =
+      current_user(opts)
+      |> debug("current_user")
+
+    subject_user =
+      e(opts, :subject_user, nil)
+      |> debug("subject_user")
+
+    user_if_loaded(creator_or_subject_id, subject_user, current_user)
+  end
+
+  defp user_if_loaded(creator_or_subject_id, subject_user, current_user) do
+    creator_or_subject_id = id(creator_or_subject_id)
+
+    # Determine which user data to use based on matching IDs
+    cond do
+      current_user && creator_or_subject_id == id(current_user) ->
+        current_user
+
+      subject_user && creator_or_subject_id == id(subject_user) ->
+        subject_user
+
+      true ->
+        nil
     end
   end
 

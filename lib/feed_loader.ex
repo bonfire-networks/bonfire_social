@@ -1440,6 +1440,7 @@ defmodule Bonfire.Social.FeedLoader do
         |> Enum.uniq_by(
           &(e(&1, :activity, :object_id, nil) || e(&1, :activity, :id, nil) || Enums.id(&1))
         )
+        |> Activities.prepare_subject_and_creator(opts)
 
       # |> debug("deduped edges")
 

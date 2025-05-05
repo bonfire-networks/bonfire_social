@@ -125,10 +125,10 @@ defmodule Bonfire.Social.Fake do
         {remote_post, nil}
 
       :notifications ->
-        create_test_content(:mentions, user, other_user, i)
+        create_test_content(:likes, other_user, user, i)
+        create_test_content(:my_boosts, other_user, user, i)
 
-      # create_test_content(:likes, other_user, user, i)
-      # create_test_content(:my_boosts, other_user, user, i)
+        create_test_content(:mentions, user, other_user, i)
 
       :likes ->
         post =
@@ -219,7 +219,10 @@ defmodule Bonfire.Social.Fake do
         {post, flag}
 
       :images ->
-        {:ok, media} = Bonfire.Files.upload(Bonfire.Files.ImageUploader, user, icon_file())
+        {:ok, media} =
+          Bonfire.Files.upload(Bonfire.Files.ImageUploader, user, icon_file(), %{
+            metadata: %{label: "Standalone Media"}
+          })
 
         {:ok, activity} =
           Bonfire.Files.Media.publish(
@@ -238,7 +241,14 @@ defmodule Bonfire.Social.Fake do
         {nil, nil}
 
       :local_media ->
-        {:ok, media} = Bonfire.Files.upload(Bonfire.Files.ImageUploader, user, icon_file())
+        # first create a Media as object
+        create_test_content(:images, user, other_user, i)
+
+        # also create a media to attach to a post
+        {:ok, media} =
+          Bonfire.Files.upload(Bonfire.Files.ImageUploader, user, icon_file(), %{
+            metadata: %{label: "Post Media"}
+          })
 
         post =
           Bonfire.Posts.Fake.fake_post!(user, "public", %{
