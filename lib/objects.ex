@@ -580,7 +580,7 @@ defmodule Bonfire.Social.Objects do
     Enum.map(objects, &do_delete(&1, opts))
   end
 
-  def do_delete(%{__struct__: type} = object, opts) do
+  def do_delete(%{__struct__: type, id: id} = object, opts) do
     always_delete_associations = [
       :created,
       :caretaker,
@@ -622,8 +622,6 @@ defmodule Bonfire.Social.Objects do
     #   Bonfire.Data.Identity.Self,
     #   Bonfire.Data.Social.PostContent
     # ]
-
-    id = uid!(object)
 
     # WIP: load Activity if we don't have it, get the verb, check for a context module for the verb with `Bonfire.Common.ContextModule.context_module(verb)` and call the `delete_activity` function on that module if it exists 
     object = repo().maybe_preload(object, [:activity])
@@ -693,8 +691,13 @@ defmodule Bonfire.Social.Objects do
         if opts[:socket_connected], do: Activities.maybe_remove_for_deleters_feeds(id)
         {:ok, del}
 
+      %{id: deleted_id} = del when deleted_id == id ->
+        debug(del, "deleted!")
+        if opts[:socket_connected], do: Activities.maybe_remove_for_deleters_feeds(id)
+        {:ok, del}
+
       other ->
-        error(other)
+        error(other, "Unknown deletion error")
     end
   end
 

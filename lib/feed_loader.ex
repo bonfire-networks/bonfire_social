@@ -1505,10 +1505,10 @@ defmodule Bonfire.Social.FeedLoader do
       iex> {:ok, %{activity_types: [:like], subjects: [%{id: "alice"}]}} = preset_feed_filters(:likes, current_user: %{id: "alice"})
 
       # 5: Feed with `current_user_required` should check for current user
-      iex> {:ok, %{activity_types: [:flag]}} = preset_feed_filters(:flagged_by_me, current_user: %{id: "alice"})
+      iex> {:ok, %{activity_types: [:flag]}} = preset_feed_filters(:my_flags, current_user: %{id: "alice"})
 
       # 6: Feed with `current_user_required` and no current user
-      iex> preset_feed_filters(:flagged_by_me, [])
+      iex> preset_feed_filters(:my_flags, [])
       {:error, :unauthorized}
       # ** (Bonfire.Fail.Auth) You need to log in first. 
 

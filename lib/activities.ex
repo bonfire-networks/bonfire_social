@@ -402,7 +402,7 @@ defmodule Bonfire.Social.Activities do
   def activity_preloads(query_or_object_or_objects, preloads, opts) when is_list(preloads) do
     # debug(query, "query or data")
     debug(preloads, "preloads inputted")
-    opts = to_options(debug(opts))
+    opts = to_options(opts) |> Keyword.put(:preloads, preloads)
 
     if not is_nil(query_or_object_or_objects) and
          Ecto.Queryable.impl_for(query_or_object_or_objects) do
@@ -462,7 +462,7 @@ defmodule Bonfire.Social.Activities do
               #  ]}
             ]
           )
-          |> maybe_join_creator(skip_loading_user_ids)
+          |> maybe_join_creator(skip_loading_user_ids, opts)
 
         # :tags ->
         #   # Tags/mentions (this actual needs to be done by Repo.preload to be able to list more than one)
@@ -470,7 +470,7 @@ defmodule Bonfire.Social.Activities do
         #     activity: [tags:  {"tag_", [:character, profile: :icon]}]
         :with_subject ->
           query
-          |> maybe_join_subject(skip_loading_user_ids)
+          |> maybe_join_subject(skip_loading_user_ids, opts)
 
         :with_verb ->
           proload(query, activity: [:verb])
@@ -867,29 +867,30 @@ defmodule Bonfire.Social.Activities do
 
   ## Examples
 
-      > maybe_join_subject(query, [])
+      > maybe_join_subject(query, [], [])
       # returns query with subject preloaded
 
-      > maybe_join_subject(query, [1, 2, 3])
+      > maybe_join_subject(query, [1, 2, 3], [])
       # returns query with subject included only if subject.id not in [1, 2, 3]
   """
-  def maybe_join_subject(query, []),
-    do:
-      query
-      |> proload(
-        activity: [
-          subject:
-            {"subject_",
-             [
-               character: [
-                 # :peered
-               ],
-               profile: [:icon]
-             ]}
-        ]
-      )
+  def maybe_join_subject(query, [], opts) do
+    query
+    |> proload(
+      activity: [
+        subject:
+          {"subject_",
+           [
+             character: [
+               # :peered
+             ],
+             profile: [:icon]
+           ]}
+      ]
+    )
+    |> maybe_preload_subject_peered(:with_object_peered not in (opts[:preloads] || []))
+  end
 
-  def maybe_join_subject(query, skip_loading_user_ids) do
+  def maybe_join_subject(query, skip_loading_user_ids, opts) do
     # optimisation: only includes the subject if different current_user
     query
     |> proload([:activity])
@@ -914,6 +915,24 @@ defmodule Bonfire.Social.Activities do
            ]}
       ]
     )
+    |> maybe_preload_subject_peered(:with_object_peered not in (opts[:preloads] || []))
+  end
+
+  defp maybe_preload_subject_peered(query, true) do
+    query
+    |> proload(
+      activity: [
+        subject:
+          {"subject_",
+           [
+             character: [:peered]
+           ]}
+      ]
+    )
+  end
+
+  defp maybe_preload_subject_peered(query, _false) do
+    query
   end
 
   @doc """
@@ -925,20 +944,21 @@ defmodule Bonfire.Social.Activities do
 
   ## Examples
 
-      > maybe_join_creator(query, [])
+      > maybe_join_creator(query, [], [])
       # returns query with creator preloaded if different from the subject
 
-      > maybe_join_creator(query, [1, 2, 3])
+      > maybe_join_creator(query, [1, 2, 3], [])
       # returns query with creator included only if creator.id not in [1, 2, 3]
   """
-  def maybe_join_creator(query, []) do
+  def maybe_join_creator(query, [], opts) do
     query
     # first join subject, since creator will only be loaded if different from the subject
-    |> maybe_join_subject([])
+    |> maybe_join_subject([], opts)
     |> reusable_join(
       :left,
-      [activity: activity],
-      object_created in assoc(activity, :created),
+      [activity: activity, object: object],
+      object_created in assoc(object, :created),
+      # object_created in assoc(activity, :object_created),
       as: :object_created,
       # only includes the creator if different than the subject
       on: object_created.creator_id != activity.subject_id
@@ -983,14 +1003,15 @@ defmodule Bonfire.Social.Activities do
     )
   end
 
-  def maybe_join_creator(query, skip_loading_user_ids) do
+  def maybe_join_creator(query, skip_loading_user_ids, opts) do
     query
     #  join subject? since creator will only be loaded if different from the subject
-    # |> maybe_join_subject(skip_loading_user_ids)
+    # |> maybe_join_subject(skip_loading_user_ids, opts)
     |> reusable_join(
       :left,
-      [activity: activity],
-      object_created in assoc(activity, :created),
+      [activity: activity, object: object],
+      object_created in assoc(object, :created),
+      # object_created in assoc(activity, :created),
       as: :object_created,
       # only includes the creator if different than the subject
       on:
@@ -1036,6 +1057,32 @@ defmodule Bonfire.Social.Activities do
            ]}
       ]
     )
+    |> maybe_preload_creator_peered(:with_object_peered not in (opts[:preloads] || []))
+  end
+
+  defp maybe_preload_creator_peered(query, true) do
+    query
+    |> proload(
+      activity: [
+        object:
+          {"object_",
+           [
+             created: [
+               creator:
+                 {"creator_",
+                  [
+                    character: [
+                      :peered
+                    ]
+                  ]}
+             ]
+           ]}
+      ]
+    )
+  end
+
+  defp maybe_preload_creator_peered(query, _false) do
+    query
   end
 
   defp maybe_repo_preload_activity(%{edges: list} = page, preloads, opts)
@@ -1444,10 +1491,17 @@ defmodule Bonfire.Social.Activities do
           as: :object_peered
         )
         |> where(
-          [fp, activity: activity, subject_peered: subject_peered, object_peered: object_peered],
-          (fp.feed_id == ^local_feed_id or
-             (is_nil(subject_peered.id) and is_nil(object_peered.id))) and
-            activity.subject_id != ^fetcher_user_id
+          [
+            fp,
+            activity: activity,
+            subject_character: subject_character,
+            subject_peered: subject_peered,
+            object: object,
+            object_peered: object_peered
+          ],
+          activity.subject_id != ^fetcher_user_id and fp.feed_id == ^local_feed_id and
+            ((is_nil(subject_character.id) or is_nil(subject_peered.peer_id)) and
+               (is_nil(object.id) or is_nil(object_peered.peer_id)))
         )
 
       :remote in origin ->
@@ -1460,9 +1514,8 @@ defmodule Bonfire.Social.Activities do
         )
         |> where(
           [fp, activity: activity, subject_peered: subject_peered, object_peered: object_peered],
-          fp.feed_id == ^federated_feed_id or
-            (not is_nil(subject_peered.id) or not is_nil(object_peered.id)) or
-            activity.subject_id == ^fetcher_user_id
+          fp.feed_id == ^federated_feed_id or activity.subject_id == ^fetcher_user_id or
+            not is_nil(subject_peered.peer_id) or not is_nil(object_peered.peer_id)
         )
 
       true ->

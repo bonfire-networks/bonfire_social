@@ -37,9 +37,9 @@ defmodule Bonfire.Social.Feeds.PresetFiltersTest do
     :ok
   end
 
-  # Generate tests dynamically from feed presets - WIP: my, messages, user_following, user_followers, remote, my_requests, trending_discussions, images, publications, flagged_by_me, flagged_content
-  # flagged_content, flagged_by_me
-  # for %{preset: preset, filters: filters} = params when preset in [:flagged_by_me] <-
+  # Generate tests dynamically from feed presets - WIP: my, messages, user_following, user_followers, remote, my_requests, trending_discussions, images, publications, my_flags, flagged_content
+  # flagged_content, my_flags
+  # for %{preset: preset, filters: filters} = params when preset in [:my_flags] <-
   for %{preset: preset, filters: filters} = params
       when preset not in [:audio, :videos, :mentions, :curated] <-
         feed_preset_test_params() do
@@ -86,7 +86,7 @@ defmodule Bonfire.Social.Feeds.PresetFiltersTest do
         end
       end
 
-      if preset not in [:flagged_content, :flagged_by_me, :bookmarks] do
+      if preset not in [:flagged_content, :my_flags, :bookmarks] do
         test "using filters instead of the preset name", %{
           preset: preset,
           filters: filters,
@@ -114,8 +114,17 @@ defmodule Bonfire.Social.Feeds.PresetFiltersTest do
             feed = FeedLoader.feed(:custom, filters, opts)
 
             assert loaded_activity =
-                     FeedLoader.feed_contains?(feed, activity || object, current_user: user) ||
-                       FeedLoader.feed_contains?(feed, object, current_user: user)
+                     FeedLoader.feed_contains?(feed, activity || object,
+                       current_user: user,
+                       postload: false
+                     ) ||
+                       if(activity,
+                         do:
+                           FeedLoader.feed_contains?(feed, object,
+                             current_user: user,
+                             postload: false
+                           )
+                       )
 
             # verify_preloads(loaded_activity, preloads)
           end
@@ -133,8 +142,17 @@ defmodule Bonfire.Social.Feeds.PresetFiltersTest do
 
   defp verify_feed(preset, feed, activity, object, user, other_user, preloads, postloads) do
     assert loaded_activity =
-             FeedLoader.feed_contains?(feed, activity || object, current_user: user) ||
-               FeedLoader.feed_contains?(feed, object, current_user: user)
+             FeedLoader.feed_contains?(feed, activity || object,
+               current_user: user,
+               postload: false
+             ) ||
+               if(activity,
+                 do:
+                   FeedLoader.feed_contains?(feed, object,
+                     current_user: user,
+                     postload: false
+                   )
+               )
 
     # verify_preloads(loaded_activity, preloads)
     # verify_preloads(loaded_activity, postloads -- preloads, false)

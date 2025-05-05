@@ -150,7 +150,7 @@ defmodule Bonfire.Social.RuntimeConfig do
             hide_filters: true,
             showing_within: :feed_by_subject,
             page: "bookmarks",
-            page_title: "Bookmarks",
+            page_title: l("Bookmarks"),
             no_header: false,
             feedback_title: l("Have you not bookmarked anything yet?")
           ]
@@ -158,10 +158,28 @@ defmodule Bonfire.Social.RuntimeConfig do
         my_requests: %{
           name: l("Requests"),
           built_in: true,
-          description: "Pending requests for me",
+          description: l("Pending requests for me"),
           filters: %FeedFilters{feed_name: :notifications, activity_types: [:request]},
           current_user_required: true,
           icon: "garden:user-follow-fill-16"
+        },
+        my_boosts: %{
+          name: l("My boosts"),
+          built_in: true,
+          description: l("Activities I've shared"),
+          filters: %FeedFilters{activity_types: [:boost]},
+          parameterized: %{subjects: [:me]},
+          exclude_from_nav: false,
+          icon: "mingcute:fire-fill",
+          assigns: [
+            selected_tab: "my_boosts",
+            hide_filters: true,
+            showing_within: :feed_by_subject,
+            page: "boosts",
+            page_title: l("My boosts"),
+            no_header: false,
+            feedback_title: l("Have you not boosted anything yet?")
+          ]
         },
 
         # User-specific feeds
@@ -253,7 +271,7 @@ defmodule Bonfire.Social.RuntimeConfig do
             feedback_title: l("Nothing curated yet?")
           ]
         },
-        flagged_by_me: %{
+        my_flags: %{
           name: l("My Flags"),
           built_in: true,
           description: "Content I've flagged",
@@ -426,7 +444,12 @@ defmodule Bonfire.Social.RuntimeConfig do
         },
         "Media" => %{
           match: %{media_types: "*"},
-          include: [:per_media, :with_creator, :with_post_content, :with_object_peered],
+          include: [
+            :per_media,
+            :with_creator,
+            :with_post_content
+            # :with_object_peered (since not loading the object)
+          ],
           exclude: [:with_subject, :with_media, :with_object, :with_object_more]
         }
       }

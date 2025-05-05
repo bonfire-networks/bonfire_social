@@ -117,14 +117,18 @@ defmodule Bonfire.Social.Fake do
 
         post_url = "#{instance_url}/post/1"
 
-        {:ok, peered} =
-          Bonfire.Federate.ActivityPub.Peered.save_canonical_uri(remote_post, post_url)
-          |> debug("post attached to instance")
+        # NOTE: it should still work without this
+        # {:ok, peered} =
+        #   Bonfire.Federate.ActivityPub.Peered.save_canonical_uri(remote_post, post_url)
+        #   |> debug("post attached to instance")
 
         {remote_post, nil}
 
       :notifications ->
         create_test_content(:mentions, user, other_user, i)
+
+      # create_test_content(:likes, other_user, user, i)
+      # create_test_content(:my_boosts, other_user, user, i)
 
       :likes ->
         post =
@@ -134,6 +138,15 @@ defmodule Bonfire.Social.Fake do
 
         {:ok, like} = Bonfire.Social.Likes.like(user, post)
         {post, like}
+
+      :my_boosts ->
+        post =
+          Bonfire.Posts.Fake.fake_post!(other_user, "public", %{
+            post_content: %{name: "boostable post #{i}", html_body: "boostable content #{i}"}
+          })
+
+        {:ok, boost} = Bonfire.Social.Boosts.boost(user, post)
+        {post, boost}
 
       :user_followers ->
         {:ok, follow} = Bonfire.Social.Graph.Follows.follow(user, other_user)
@@ -181,7 +194,7 @@ defmodule Bonfire.Social.Fake do
 
         {post, nil}
 
-      :flagged_by_me ->
+      :my_flags ->
         post =
           Bonfire.Posts.Fake.fake_post!(other_user, "public", %{
             post_content: %{name: "flagged post #{i}", html_body: "content #{i}"}
@@ -208,13 +221,14 @@ defmodule Bonfire.Social.Fake do
       :images ->
         {:ok, media} = Bonfire.Files.upload(Bonfire.Files.ImageUploader, user, icon_file())
 
-        post =
-          Bonfire.Posts.Fake.fake_post!(user, "public", %{
-            post_content: %{name: "Image post #{i}", html_body: "media content post #{i}"},
-            uploaded_media: [media]
-          })
+        {:ok, activity} =
+          Bonfire.Files.Media.publish(
+            user,
+            media,
+            boundary: "public"
+          )
 
-        {media, post}
+        {media, activity}
 
       :research ->
         #    {:ok, media} = Bonfire.OpenScience.APIs.fetch_and_publish_work(user, "https://doi.org/10.1080/1047840X.2012.720832")
@@ -224,8 +238,15 @@ defmodule Bonfire.Social.Fake do
         {nil, nil}
 
       :local_media ->
-        # TODO: with both image and publication?
-        {nil, nil}
+        {:ok, media} = Bonfire.Files.upload(Bonfire.Files.ImageUploader, user, icon_file())
+
+        post =
+          Bonfire.Posts.Fake.fake_post!(user, "public", %{
+            post_content: %{name: "Image post #{i}", html_body: "media content post #{i}"},
+            uploaded_media: [media]
+          })
+
+        {media, post}
 
       :trending_discussions ->
         # TODO
@@ -257,8 +278,14 @@ defmodule Bonfire.Social.Fake do
 
         {post, nil}
 
+      :explore ->
+        {local_post, _} = create_test_content(:local, user, other_user, i)
+        {remote_post, _} = create_test_content(:remote, user, other_user, i)
+
+        {local_post, remote_post}
+
       other
-      when is_nil(other) or other in [:explore, :user_by_object_type, :user_activities] ->
+      when is_nil(other) or other in [:user_by_object_type, :user_activities] ->
         post =
           Bonfire.Posts.Fake.fake_post!(other_user, "public", %{
             post_content: %{html_body: "default post content #{i}"}
