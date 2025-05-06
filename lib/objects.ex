@@ -216,13 +216,18 @@ defmodule Bonfire.Social.Objects do
   def query_maybe_time_limit(query, 0), do: query
 
   def query_maybe_time_limit(query, x_days) when is_integer(x_days) do
-    limit_pointer =
-      DatesTimes.past(x_days, :day)
-      |> info("from date")
-      |> Needle.UID.generate()
-      |> debug("UID")
-
-    where(query, [activity: activity], activity.id > ^limit_pointer)
+    # we add 12h of leeway 
+    with limit_pointer when is_binary(limit_pointer) <-
+           DatesTimes.past(x_days * 24 + 12, :hour)
+           # |> info("from date")
+           |> DatesTimes.generate_ulid()
+           |> debug("date-based UID") do
+      where(query, [activity: activity], activity.id > ^limit_pointer)
+    else
+      e ->
+        error(e)
+        raise ArgumentError, "Invalid time limit"
+    end
   end
 
   def query_maybe_time_limit(query, x_days) when is_binary(x_days) do

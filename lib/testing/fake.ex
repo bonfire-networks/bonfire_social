@@ -89,7 +89,6 @@ defmodule Bonfire.Social.Fake do
             }
           })
 
-        # FIXME: why is post not appearing in my feed?
         {post, nil}
 
       :remote ->
@@ -126,9 +125,9 @@ defmodule Bonfire.Social.Fake do
 
       :notifications ->
         create_test_content(:likes, other_user, user, i)
-        create_test_content(:my_boosts, other_user, user, i)
 
         create_test_content(:mentions, user, other_user, i)
+        create_test_content(:my_boosts, other_user, user, i)
 
       :likes ->
         post =

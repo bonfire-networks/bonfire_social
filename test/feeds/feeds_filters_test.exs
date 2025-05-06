@@ -390,7 +390,6 @@ defmodule Bonfire.Social.FeedsFiltersTest do
       }
     end
 
-    # fixme
     test "filter order, or use of lists or not, shouldn't affect results", %{
       user: user,
       other_user: other_user,
@@ -555,6 +554,89 @@ defmodule Bonfire.Social.FeedsFiltersTest do
 
       refute FeedLoader.feed_contains?(feed, local_post, current_user: user)
       assert FeedLoader.feed_contains?(feed, remote_post, current_user: user)
+    end
+  end
+
+  describe "time_limit filter" do
+    setup do
+      user = fake_user!("main user")
+
+      # Generate post IDs based on dates
+      # now = DatesTimes.now()
+
+      # Create posts with different dates
+      today_post =
+        fake_post!(user, "public", %{
+          post_content: %{name: "today post", html_body: "posted today"}
+          # id: DatesTimes.generate_ulid(now)
+        })
+
+      week_ago_post =
+        fake_post!(user, "public", %{
+          post_content: %{name: "week old post", html_body: "posted a week ago"},
+          id: DatesTimes.past(7, :day) |> DatesTimes.generate_ulid()
+        })
+
+      month_ago_post =
+        fake_post!(user, "public", %{
+          post_content: %{name: "month old post", html_body: "posted a month ago"},
+          id: DatesTimes.past(30, :day) |> DatesTimes.generate_ulid()
+        })
+
+      %{
+        user: user,
+        today_post: today_post,
+        week_ago_post: week_ago_post,
+        month_ago_post: month_ago_post
+      }
+    end
+
+    test "can apply simple time_limit in days", %{
+      user: user,
+      today_post: today_post,
+      week_ago_post: week_ago_post,
+      month_ago_post: month_ago_post
+    } do
+      # Filter for posts within the last 2 days
+      feed = FeedLoader.feed(:custom, %{time_limit: 2}, current_user: user)
+
+      assert FeedLoader.feed_contains?(feed, today_post, current_user: user)
+      refute FeedLoader.feed_contains?(feed, week_ago_post, current_user: user)
+      refute FeedLoader.feed_contains?(feed, month_ago_post, current_user: user)
+
+      # Filter for posts within the last 10 days
+      feed = FeedLoader.feed(:custom, %{time_limit: 10}, current_user: user)
+
+      assert FeedLoader.feed_contains?(feed, today_post, current_user: user)
+      assert FeedLoader.feed_contains?(feed, week_ago_post, current_user: user)
+      refute FeedLoader.feed_contains?(feed, month_ago_post, current_user: user)
+
+      # Filter for posts within the last 60 days (should include all)
+      feed = FeedLoader.feed(:custom, %{time_limit: 60}, current_user: user, limit: 5)
+
+      assert FeedLoader.feed_contains?(feed, today_post, current_user: user)
+      assert FeedLoader.feed_contains?(feed, week_ago_post, current_user: user)
+      assert FeedLoader.feed_contains?(feed, month_ago_post, current_user: user)
+    end
+
+    test "handles time_limit with other filters", %{
+      user: user,
+      today_post: today_post,
+      week_ago_post: week_ago_post
+    } do
+      # Create a post with a hashtag for combined filtering
+      tagged_post_today =
+        fake_post!(user, "public", %{
+          post_content: %{name: "tagged today", html_body: "posted today with #test"},
+          id: DatesTimes.generate_ulid(DatesTimes.now())
+        })
+
+      # Combine time_limit with tags filter
+      feed = FeedLoader.feed(:custom, %{time_limit: 2, tags: "test"}, current_user: user)
+
+      assert FeedLoader.feed_contains?(feed, tagged_post_today, current_user: user)
+      refute FeedLoader.feed_contains?(feed, today_post, current_user: user)
+      refute FeedLoader.feed_contains?(feed, week_ago_post, current_user: user)
     end
   end
 end
