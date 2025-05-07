@@ -445,7 +445,7 @@ defmodule Bonfire.Social.FeedLoader do
 
   @decorate time()
   defp paginate_and_boundarise_feed(query, filters, opts) do
-    debug("6. Starting paginate_and_boundarise_feed")
+    debug("Starting paginate_and_boundarise_feed")
 
     opts =
       prepare_opts_for_pagination(query, filters, opts)
@@ -453,12 +453,16 @@ defmodule Bonfire.Social.FeedLoader do
         Config.get([Bonfire.Social.Feeds, :query_with_deferred_join], true)
       end)
 
-    opts =
-      opts
-      |> Keyword.put_new(
-        :infinite_pages,
-        opts[:query_with_deferred_join]
-      )
+    #   time_limit = e(debug(filters), :time_limit, nil)
+
+    # opts =
+    #   opts
+    #   |> Keyword.put_new(
+    #     :infinite_pages,
+    #     opts[:query_with_deferred_join] || (is_integer(time_limit) and
+    #     time_limit != 0)
+    #   )
+    #   |> debug("prepared opts")
 
     case opts[:return] do
       :explain ->
