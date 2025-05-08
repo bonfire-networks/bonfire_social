@@ -261,12 +261,14 @@ defmodule Bonfire.Social.FeedLoader do
 
   defp merge_some_defaults(filters, opts) do
     # WIP: optimise by only loading if none is set in preset_filters/custom_filters
+    current_user = current_user(opts)
+
     filters
     |> Map.put(
       :sort_by,
       filters[:sort_by] || opts[:sort_by] ||
         Settings.get([Bonfire.UI.Social.FeedLive, :sort_by], nil,
-          context: opts,
+          current_user: current_user,
           name: l("Default Sort Order"),
           description: l("Default sorting order for feeds.")
         )
@@ -275,7 +277,7 @@ defmodule Bonfire.Social.FeedLoader do
       :time_limit,
       filters[:time_limit] || opts[:time_limit] ||
         Settings.get([Bonfire.UI.Social.FeedLive, :time_limit], 7,
-          context: opts,
+          current_user: current_user,
           name: l("Default Time Limit"),
           description: l("Default time window for feed content (in days).")
         )
@@ -799,13 +801,15 @@ defmodule Bonfire.Social.FeedLoader do
   end
 
   def default_feed_name(opts) do
-    if not is_nil(current_user_id(opts)) do
+    current_user = current_user(opts)
+
+    if not is_nil(current_user) do
       # || current_account(socket)
       # my feed
       Settings.get(
         [Bonfire.UI.Social.FeedLive, :default_feed],
         :my,
-        context: opts,
+        current_user: current_user,
         name: l("Default Feed"),
         description: l("Default feed to display when visiting the feed page.")
       )
@@ -1069,6 +1073,7 @@ defmodule Bonfire.Social.FeedLoader do
   """
   def prepare_filters_and_opts(filters, opts) do
     opts = to_options(opts)
+    current_user = current_user(opts)
 
     preload =
       opts[:preload] ||
@@ -1124,7 +1129,7 @@ defmodule Bonfire.Social.FeedLoader do
                     !Bonfire.Common.Settings.get(
                       [Bonfire.Social.Feeds, :include, :follow],
                       false,
-                      context: opts,
+                      current_user: current_user,
                       name: l("Include Follows in Feed"),
                       description: l("Show follow activities in your feed.")
                     )),
@@ -1137,7 +1142,7 @@ defmodule Bonfire.Social.FeedLoader do
                     !Bonfire.Common.Settings.get(
                       [Bonfire.Social.Feeds, :include, :boost],
                       true,
-                      context: opts,
+                      current_user: current_user,
                       name: l("Include Boosts in Feed"),
                       description: l("Show boosted/reshared content in your feed.")
                     )),
@@ -1150,7 +1155,7 @@ defmodule Bonfire.Social.FeedLoader do
                     !Bonfire.Common.Settings.get(
                       [Bonfire.Social.Feeds, :include, :reply],
                       true,
-                      context: opts,
+                      current_user: current_user,
                       name: l("Include Replies in Feed"),
                       description: l("Show reply activities in your feed.")
                     )),

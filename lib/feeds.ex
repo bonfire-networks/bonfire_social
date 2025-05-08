@@ -30,9 +30,9 @@ defmodule Bonfire.Social.Feeds do
   def schema_module, do: Feed
 
   def feed_presets(opts) do
-    if current_user_id(opts) do
+    if current_user = current_user(opts) do
       Settings.get([__MODULE__, :feed_presets], [],
-        context: opts,
+        current_user: current_user,
         name: l("Feed Presets"),
         description: l("Predefined feed configurations.")
       )
@@ -529,7 +529,7 @@ defmodule Bonfire.Social.Feeds do
       if Bonfire.Common.Settings.get(
            [Bonfire.Social.Feeds, :include, :outbox],
            true,
-           context: socket_or_opts,
+           current_user: current_user,
            name: l("Include my content"),
            description: l("Include my own posts in your feed.")
          ),
@@ -540,7 +540,7 @@ defmodule Bonfire.Social.Feeds do
       if Bonfire.Common.Settings.get(
            [Bonfire.Social.Feeds, :include, :notifications],
            true,
-           context: socket_or_opts,
+           current_user: current_user,
            name: l("Include Notifications"),
            description: l("Include notifications in my main feed.")
          ),
@@ -556,7 +556,7 @@ defmodule Bonfire.Social.Feeds do
                Bonfire.Common.Settings.get(
                  [Bonfire.Social.Feeds, :include, :followed_categories],
                  true,
-                 context: socket_or_opts,
+                 current_user: current_user,
                  name: l("Include Followed Categories"),
                  description: l("Include content from categories you follow in your feed.")
                ),
