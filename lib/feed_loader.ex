@@ -265,12 +265,20 @@ defmodule Bonfire.Social.FeedLoader do
     |> Map.put(
       :sort_by,
       filters[:sort_by] || opts[:sort_by] ||
-        Settings.get([Bonfire.UI.Social.FeedLive, :sort_by], nil, opts)
+        Settings.get([Bonfire.UI.Social.FeedLive, :sort_by], nil,
+          context: opts,
+          name: l("Default Sort Order"),
+          description: l("Default sorting order for feeds.")
+        )
     )
     |> Map.put(
       :time_limit,
       filters[:time_limit] || opts[:time_limit] ||
-        Settings.get([Bonfire.UI.Social.FeedLive, :time_limit], 7, opts)
+        Settings.get([Bonfire.UI.Social.FeedLive, :time_limit], 7,
+          context: opts,
+          name: l("Default Time Limit"),
+          description: l("Default time window for feed content (in days).")
+        )
     )
     |> debug("m0")
   end
@@ -450,7 +458,10 @@ defmodule Bonfire.Social.FeedLoader do
     opts =
       prepare_opts_for_pagination(query, filters, opts)
       |> Keyword.put_new_lazy(:query_with_deferred_join, fn ->
-        Config.get([Bonfire.Social.Feeds, :query_with_deferred_join], true)
+        Config.get([Bonfire.Social.Feeds, :query_with_deferred_join], true,
+          name: l("Use Deferred Joins"),
+          description: l("Technical setting for query performance optimization.")
+        )
       end)
 
     #   time_limit = e(debug(filters), :time_limit, nil)
@@ -794,7 +805,9 @@ defmodule Bonfire.Social.FeedLoader do
       Settings.get(
         [Bonfire.UI.Social.FeedLive, :default_feed],
         :my,
-        opts
+        context: opts,
+        name: l("Default Feed"),
+        description: l("Default feed to display when visiting the feed page.")
       )
     else
       # fallback to showing instance feed
@@ -1111,7 +1124,9 @@ defmodule Bonfire.Social.FeedLoader do
                     !Bonfire.Common.Settings.get(
                       [Bonfire.Social.Feeds, :include, :follow],
                       false,
-                      opts
+                      context: opts,
+                      name: l("Include Follows in Feed"),
+                      description: l("Show follow activities in your feed.")
                     )),
                do: [:follow],
                else: [exclude_activity_types]
@@ -1122,7 +1137,9 @@ defmodule Bonfire.Social.FeedLoader do
                     !Bonfire.Common.Settings.get(
                       [Bonfire.Social.Feeds, :include, :boost],
                       true,
-                      opts
+                      context: opts,
+                      name: l("Include Boosts in Feed"),
+                      description: l("Show boosted/reshared content in your feed.")
                     )),
                do: [:boost],
                else: []
@@ -1133,7 +1150,9 @@ defmodule Bonfire.Social.FeedLoader do
                     !Bonfire.Common.Settings.get(
                       [Bonfire.Social.Feeds, :include, :reply],
                       true,
-                      opts
+                      context: opts,
+                      name: l("Include Replies in Feed"),
+                      description: l("Show reply activities in your feed.")
                     )),
                do: [:reply],
                else: []
@@ -1693,12 +1712,18 @@ defmodule Bonfire.Social.FeedLoader do
 
   def preloads_from_filters_rules do
     # Default Rules, TODO: move to config
-    Config.get([__MODULE__, :preload_rules], %{})
+    Config.get([__MODULE__, :preload_rules], %{},
+      name: l("Preload Rules"),
+      description: l("Rules for preloading data based on filters (technical setting).")
+    )
   end
 
   def preloads_by_context_rules do
     # Default Rules, TODO: move to config
-    Config.get([__MODULE__, :preload_by_context], %{})
+    Config.get([__MODULE__, :preload_by_context], %{},
+      name: l("Context Preload Rules"),
+      description: l("Rules for preloading data based on context (technical setting).")
+    )
   end
 
   def contextual_preloads_from_filters(
@@ -1863,7 +1888,9 @@ defmodule Bonfire.Social.FeedLoader do
   def preload_presets do
     Config.get(
       [__MODULE__, :preload_presets],
-      []
+      [],
+      name: l("Feed Preload Presets"),
+      description: l("Predefined preload settings for feeds (technical setting).")
     )
   end
 

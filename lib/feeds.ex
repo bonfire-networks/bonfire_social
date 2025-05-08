@@ -31,9 +31,16 @@ defmodule Bonfire.Social.Feeds do
 
   def feed_presets(opts) do
     if current_user_id(opts) do
-      Settings.get([__MODULE__, :feed_presets], [], opts)
+      Settings.get([__MODULE__, :feed_presets], [],
+        context: opts,
+        name: l("Feed Presets"),
+        description: l("Predefined feed configurations.")
+      )
     else
-      Config.get([__MODULE__, :feed_presets], [])
+      Config.get([__MODULE__, :feed_presets], [],
+        name: l("Feed Presets"),
+        description: l("Predefined feed configurations available to users.")
+      )
     end
   end
 
@@ -274,7 +281,11 @@ defmodule Bonfire.Social.Feeds do
   defp notify_emails(users) do
     users
     |> Enum.filter(
-      &(Settings.get([:email_notifications, :reply_or_mentions], false, &1)
+      &(Settings.get([:email_notifications, :reply_or_mentions], false,
+          context: &1,
+          name: l("Email on Mentions/Replies"),
+          description: l("Get email notifications for replies or mentions.")
+        )
         |> debug("notify_enabled?"))
     )
     |> repo().maybe_preload(accounted: [account: [:email]])
@@ -518,7 +529,9 @@ defmodule Bonfire.Social.Feeds do
       if Bonfire.Common.Settings.get(
            [Bonfire.Social.Feeds, :include, :outbox],
            true,
-           socket_or_opts
+           context: socket_or_opts,
+           name: l("Include my content"),
+           description: l("Include my own posts in your feed.")
          ),
          do: my_feed_id(:outbox, current_user)
 
@@ -527,7 +540,9 @@ defmodule Bonfire.Social.Feeds do
       if Bonfire.Common.Settings.get(
            [Bonfire.Social.Feeds, :include, :notifications],
            true,
-           socket_or_opts
+           context: socket_or_opts,
+           name: l("Include Notifications"),
+           description: l("Include notifications in my main feed.")
          ),
          do: my_feed_id(:notifications, current_user)
 
@@ -541,7 +556,9 @@ defmodule Bonfire.Social.Feeds do
                Bonfire.Common.Settings.get(
                  [Bonfire.Social.Feeds, :include, :followed_categories],
                  true,
-                 socket_or_opts
+                 context: socket_or_opts,
+                 name: l("Include Followed Categories"),
+                 description: l("Include content from categories you follow in your feed.")
                ),
              skip_boundary_check: true
            ) do
