@@ -644,7 +644,9 @@ defmodule Bonfire.Social.Threads do
     opts =
       to_options(opts)
       # |> Keyword.put_new(:thread_id, thread_id)
-      |> Keyword.put_new_lazy(:max_depth, fn -> Config.get(:thread_default_max_depth, 3) end)
+      |> Keyword.put_new_lazy(:max_depth, fn ->
+        Settings.get(:thread_default_max_depth, 3, opts)
+      end)
       |> Keyword.put_new(:preload, preloads)
 
     # |> debug("thread opts")

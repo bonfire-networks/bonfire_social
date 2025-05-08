@@ -301,9 +301,19 @@ defmodule Bonfire.Social.FeedLoader do
     |> debug("m3")
   end
 
-  # TODO: put in config
-  def skip_verbs_default, do: [:flag, :message]
-  def skip_types_default, do: [Message]
+  def skip_verbs_default,
+    do:
+      Bonfire.Common.Config.get([Bonfire.Social.Feeds, :skip_verbs], [:flag, :message],
+        name: l("Feeds"),
+        description: l("Verbs to exclude by default")
+      )
+
+  def skip_types_default,
+    do:
+      Bonfire.Common.Config.get([Bonfire.Social.Feeds, :skip_types], [Message],
+        name: l("Feeds"),
+        description: l("Object types to exclude by default")
+      )
 
   def feed_filtered(feed_name, filters, opts) when is_atom(feed_name) and not is_nil(feed_name) do
     debug(feed_name, "Starting feed with name")
