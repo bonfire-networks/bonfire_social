@@ -64,7 +64,7 @@ defmodule Bonfire.Social.FeedLoader do
          |> debug("feed_definition") do
       {:ok, %{parameterized: %{} = parameters, filters: preset_filters} = preset} ->
         preset_filters
-        |> merge_feed_filters(custom_filters, opts)
+        |> merge_feed_filters(custom_filters, opts[:feed_filters])
         |> parameterize_filters(parameters, opts)
         |> merge_some_defaults(opts)
         |> debug("merged feed_filters")
@@ -74,7 +74,7 @@ defmodule Bonfire.Social.FeedLoader do
 
       {:ok, %{filters: preset_filters} = preset} ->
         preset_filters
-        |> merge_feed_filters(custom_filters, opts)
+        |> merge_feed_filters(custom_filters, opts[:feed_filters])
         |> merge_some_defaults(opts)
         |> debug("merged feed_filters")
         |> FeedFilters.validate()
@@ -94,8 +94,8 @@ defmodule Bonfire.Social.FeedLoader do
     debug(custom_filters, "custom filters")
 
     custom_filters
+    |> merge_feed_filters(opts[:feed_filters])
     |> merge_some_defaults(opts)
-    |> merge_feed_filters(opts)
     |> debug("merged feed_filters")
     |> FeedFilters.validate()
     |> debug("validated custom feed_filters")
@@ -282,21 +282,27 @@ defmodule Bonfire.Social.FeedLoader do
           description: l("Default time window for feed content (in days).")
         )
     )
-    |> debug("m0")
+    |> debug("set sort_by and time_limit")
   end
 
-  defp merge_feed_filters(custom_filters, opts) do
+  defp merge_feed_filters(nil, feed_filters), do: feed_filters
+  defp merge_feed_filters(custom_filters, nil), do: custom_filters
+
+  defp merge_feed_filters(custom_filters, feed_filters) do
     # Enums.merge_to_struct(FeedFilters, custom_filters, opts[:feed_filters] || %{})
-    Enums.merge_as_map(opts[:feed_filters] || %{}, custom_filters)
+    Enums.merge_as_map(
+      Enums.filter_empty_enum(feed_filters, true) |> debug("m0"),
+      Enums.filter_empty_enum(custom_filters, true) |> debug("m1")
+    )
     |> debug("m2")
   end
 
   # TODO: optimise
-  defp merge_feed_filters(preset_filters, custom_filters, opts) do
-    # Enums.merge_to_struct(FeedFilters, preset_filters, merge_feed_filters(custom_filters, opts) |> debug("m1"))
+  defp merge_feed_filters(preset_filters, custom_filters, feed_filters) do
+    # Enums.merge_to_struct(FeedFilters, preset_filters, merge_feed_filters(custom_filters, feed_filters) |> debug("m1"))
     Enums.merge_as_map(
       preset_filters,
-      merge_feed_filters(custom_filters, opts)
+      merge_feed_filters(custom_filters, feed_filters)
     )
     |> debug("m3")
   end

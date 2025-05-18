@@ -83,10 +83,10 @@ defmodule Bonfire.Social.Feeds.PresetFiltersTest do
               tags: ["#test", other_user],
               show_objects_only_once: false
             )
-            |> IO.inspect(label: "preset feed results")
+            |> debug("preset feed results")
 
           FeedLoader.feed(:explore, %{}, current_user: user)
-          |> IO.inspect(label: "unfiltered feed results")
+          |> debug("unfiltered feed results")
 
           verify_feed(preset, feed, activity, object, user, other_user, preloads, postloads)
         end
