@@ -222,13 +222,15 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
           pattern_matched? =
             match?(
               %{
-                subject: %Needle.Pointer{
+                subject: %{
                   character: %Bonfire.Data.Identity.Character{},
                   profile: %Bonfire.Data.Social.Profile{}
                 }
               },
               activity
-            ) or match?(%{subject: nil}, activity)
+            )
+
+          # or match?(%{subject: nil}, activity)
 
           if return_bool? do
             if expected?, do: pattern_matched?, else: !pattern_matched?
@@ -253,9 +255,9 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
           pattern_matched? =
             match?(
               %{
-                object: %Needle.Pointer{
+                object: %{
                   created: %{
-                    creator: %Needle.Pointer{
+                    creator: %{
                       character: %Bonfire.Data.Identity.Character{},
                       profile: %Bonfire.Data.Social.Profile{}
                     }
@@ -266,7 +268,7 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
             ) or
               match?(
                 %{
-                  object: %Needle.Pointer{
+                  object: %{
                     created: nil
                   }
                 },

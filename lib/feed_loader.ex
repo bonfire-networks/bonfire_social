@@ -1473,25 +1473,23 @@ defmodule Bonfire.Social.FeedLoader do
        when is_list(edges) and edges != [] do
     # debug(edges, "7a. edges to prepare")
 
-    if filters[:show_objects_only_once] != false and opts[:show_objects_only_once] != false do
-      info("Starting prepare_feed with #{length(edges)} edges")
+    edges =
+      if filters[:show_objects_only_once] != false and opts[:show_objects_only_once] != false do
+        info(length(edges), "Starting prepare_feed with N edges")
 
-      # TODO: try doing this in queries in a way that it's not needed here?
-      edges =
+        # TODO: try doing this in queries in a way that it's not needed here?
+
         edges
         # |> debug("Starting prepare_feed with #{length(edges)} edges")
         # |> Enum.uniq_by(&id(&1))
         |> Enum.uniq_by(
           &(e(&1, :activity, :object_id, nil) || e(&1, :activity, :id, nil) || Enums.id(&1))
         )
-        |> Activities.prepare_subject_and_creator(opts)
 
-      # |> debug("deduped edges")
-
-      %{edges: edges, page_info: page_info}
-    else
-      %{edges: edges, page_info: page_info}
-    end
+        # |> debug("deduped edges")
+      else
+        edges
+      end
 
     # |> debug("7b. after dedup")
 
@@ -1514,6 +1512,8 @@ defmodule Bonfire.Social.FeedLoader do
     # run post-preloads to follow pointers and catch anything else missing - TODO: only follow some pointers
     # |> Activities.activity_preloads(opts[:preload], opts |> Keyword.put_new(:follow_pointers, true))
     # |> Activities.activity_preloads(opts[:preload], opts |> Keyword.put_new(:follow_pointers, false))
+
+    %{edges: Activities.prepare_subject_and_creator(edges, opts), page_info: page_info}
   end
 
   defp prepare_feed(%Ecto.Query{} = query, _filters, _opts) do

@@ -1053,37 +1053,37 @@ defmodule Bonfire.Social.Activities do
     query
     #  join subject? since creator will only be loaded if different from the subject
     # |> maybe_join_subject(skip_loading_user_ids, opts)
-    |> reusable_join(
-      :left,
-      [activity: activity, object: object],
-      object_created in assoc(object, :created),
-      # object_created in assoc(activity, :created),
-      as: :object_created,
-      # only includes the creator if different than the subject
-      on:
-        object_created.creator_id != activity.subject_id and
-          object_created.creator_id not in ^skip_loading_user_ids
-    )
-    # |> proload(
-    #   activity: [
-    #     object:
-    #       {"object_",
-    #        [
-    #          :created
-    #        ]}
-    #   ]
-    # )
     # |> reusable_join(
     #   :left,
-    #   [activity: activity, object_created: object_created],
-    #   creator in Pointer,
-    #   as: :object_creator,
-    #   #  only includes the creator if different than the subject
+    #   [activity: activity, object: object],
+    #   object_created in assoc(object, :created),
+    #   # object_created in assoc(activity, :created),
+    #   as: :object_created,
+    #   # only includes the creator if different than the subject
     #   on:
     #     object_created.creator_id != activity.subject_id and
-    #       object_created.creator_id not in ^skip_loading_user_ids and
-    #       object_created.creator_id == creator.id
+    #       object_created.creator_id not in ^skip_loading_user_ids
     # )
+    |> proload(
+      activity: [
+        object:
+          {"object_",
+           [
+             :created
+           ]}
+      ]
+    )
+    |> reusable_join(
+      :left,
+      [activity: activity, object_created: object_created],
+      object_creator in Pointer,
+      as: :object_creator,
+      #  only includes the creator if different than the subject
+      on:
+        object_created.creator_id != activity.subject_id and
+          object_created.creator_id not in ^skip_loading_user_ids and
+          object_created.creator_id == object_creator.id
+    )
     |> proload(
       activity: [
         object:
@@ -1859,6 +1859,7 @@ defmodule Bonfire.Social.Activities do
         Map.put(activity, :created, created)
 
       true ->
+        debug(creator, "no creator found")
         activity
     end
   end
@@ -1903,22 +1904,24 @@ defmodule Bonfire.Social.Activities do
     do:
       (e(object, :created, :creator, nil) || e(activity, :created, :creator, nil) ||
          e(object, :creator, nil))
-      |> debug()
+      |> debug("maybe creator")
 
   def creator_id(activity, object),
     do:
       (e(object, :created, :creator_id, nil) ||
          e(activity, :created, :creator_id, nil) || e(object, :creator_id, nil))
-      |> debug()
+      |> debug("creator_id")
 
   defp user_if_loaded(creator_or_subject_id, opts) do
     current_user =
       current_user(opts)
-      |> debug("current_user")
+
+    debug(id(current_user), "current_user id")
 
     subject_user =
       e(opts, :subject_user, nil)
-      |> debug("subject_user")
+
+    debug(id(subject_user), "subject_user id")
 
     user_if_loaded(creator_or_subject_id, subject_user, current_user)
   end
