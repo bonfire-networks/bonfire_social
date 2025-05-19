@@ -1,0 +1,11 @@
+[main]
+host = https://app.transifex.com
+
+[o:bonfire:p:bonfire:r:bonfire_social]
+file_filter            = priv/localisation/<lang>/LC_MESSAGES/bonfire_social.po
+source_file            = priv/localisation/bonfire_social.pot
+type                   = PO
+minimum_perc           = 0
+replace_edited_strings = false
+keep_translations      = false
+
