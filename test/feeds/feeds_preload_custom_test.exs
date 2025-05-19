@@ -56,11 +56,11 @@ defmodule Bonfire.Social.Feeds.PreloadCustomTest do
 
     assert %Bonfire.Data.Social.Activity{
              # because current_user is the subject
-             subject: nil,
+             subject: %{},
              verb: %Ecto.Association.NotLoaded{},
              object: %Needle.Pointer{
-               # created: %Bonfire.Data.Social.Created{creator: nil},
-               created: nil,
+               created: %Bonfire.Data.Social.Created{creator: %{}},
+               #  created: nil,
                peered: %Ecto.Association.NotLoaded{},
                #  because :with_creator preloads the object
                post_content: %Ecto.Association.NotLoaded{}
@@ -82,11 +82,11 @@ defmodule Bonfire.Social.Feeds.PreloadCustomTest do
              #   profile: %Bonfire.Data.Social.Profile{}
              # },
              # because current_user is the subject
-             subject: nil,
+             subject: %{},
              verb: %Ecto.Association.NotLoaded{},
              object: %Needle.Pointer{
-               # created: %Bonfire.Data.Social.Created{creator: nil},
-               created: nil,
+               created: %Bonfire.Data.Social.Created{creator: %{}},
+               #  created: nil,
                peered: nil,
                post_content: %Bonfire.Data.Social.PostContent{}
              },
@@ -108,12 +108,12 @@ defmodule Bonfire.Social.Feeds.PreloadCustomTest do
 
     assert %Bonfire.Data.Social.Activity{
              # because current_user is the subject
-             subject: nil,
+             subject: %{},
              verb: %Bonfire.Data.AccessControl.Verb{verb: "Reply"},
              object: %Needle.Pointer{
                post_content: %Bonfire.Data.Social.PostContent{html_body: "epic html"},
                #  created: %Bonfire.Data.Social.Created{creator: nil}
-               created: nil
+               created: %{creator: %{}}
              },
              replied: %Bonfire.Data.Social.Replied{
                # FIXME: create named mixin only when not empty

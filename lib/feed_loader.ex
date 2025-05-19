@@ -291,8 +291,8 @@ defmodule Bonfire.Social.FeedLoader do
   defp merge_feed_filters(custom_filters, feed_filters) do
     # Enums.merge_to_struct(FeedFilters, custom_filters, opts[:feed_filters] || %{})
     Enums.merge_as_map(
-      Enums.filter_empty_enum(feed_filters, true) |> debug("m0"),
-      Enums.filter_empty_enum(custom_filters, true) |> debug("m1")
+      Enums.filter_empty_enum(feed_filters, true) |> Map.new() |> debug("m0"),
+      Enums.filter_empty_enum(custom_filters, true) |> Map.new() |> debug("m1")
     )
     |> debug("m2")
   end
@@ -1709,12 +1709,14 @@ defmodule Bonfire.Social.FeedLoader do
       )
 
       e(opts, :by, fn ->
-        warn(
+        error(
           opts,
           "parameter `:by` was not found in filters or opts, defaulting to current_user if available instead"
         )
 
-        current_user(opts)
+        # current_user(opts)
+
+        raise "Dunno who's feed to show"
       end)
     end)
   end

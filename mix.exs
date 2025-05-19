@@ -29,6 +29,9 @@ defmodule Bonfire.Social.MixProject do
           {:bonfire_api_graphql,
            git: "https://github.com/bonfire-networks/bonfire_api_graphql",
            optional: true, runtime: false},
+           {:bonfire_files,
+           git: "https://github.com/bonfire-networks/bonfire_files",
+           optional: true, runtime: false, only: if(System.get_env("CI"), do: [], else: [:test, :prod])},
           {:absinthe, "~> 1.7", optional: true}
         ])
     ]

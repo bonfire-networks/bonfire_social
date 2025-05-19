@@ -1,5 +1,5 @@
 defmodule Bonfire.Social.Fake do
-  import Bonfire.Files.Simulation
+  # import Bonfire.Files.Simulation
   import Untangle
   # alias Bonfire.Common.Utils
   # alias Bonfire.Posts
@@ -219,9 +219,14 @@ defmodule Bonfire.Social.Fake do
 
       :images ->
         {:ok, media} =
-          Bonfire.Files.upload(Bonfire.Files.ImageUploader, user, icon_file(), %{
-            metadata: %{label: "Standalone Media"}
-          })
+          Bonfire.Files.upload(
+            Bonfire.Files.ImageUploader,
+            user,
+            Bonfire.Files.Simulation.icon_file(),
+            %{
+              metadata: %{label: "Standalone Media"}
+            }
+          )
 
         {:ok, activity} =
           Bonfire.Files.Media.publish(
@@ -241,9 +246,14 @@ defmodule Bonfire.Social.Fake do
 
       :image_post ->
         {:ok, media} =
-          Bonfire.Files.upload(Bonfire.Files.ImageUploader, user, icon_file(), %{
-            metadata: %{label: "Post Media"}
-          })
+          Bonfire.Files.upload(
+            Bonfire.Files.ImageUploader,
+            user,
+            Bonfire.Files.Simulation.icon_file(),
+            %{
+              metadata: %{label: "Post Media"}
+            }
+          )
 
         post =
           Bonfire.Posts.Fake.fake_post!(user, "public", %{
