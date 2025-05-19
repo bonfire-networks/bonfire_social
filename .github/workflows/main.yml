@@ -32,78 +32,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  lint:
-
-    name: lint
+  build_and_test:
+    name: Prepare Localisation, Test, Lint
     runs-on: ubuntu-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-         # the following can be uncommented if viable resource-wise
-         # - pair: # Test very old Elixir and Erlang
-         #     elixir: "1.14"
-         #     otp: "25"
-         # - pair: # Test Erlang without -doc attribute support
-         #     elixir: "1.16"
-         #     otp: "26"
-          - pair: # Test Erlang with -doc attribute support
-              elixir: "1.17.3"
-              otp: "27"
-
+    
     steps:
-    - uses: actions/checkout@v4
 
-    - name: Set up Elixir
-      uses: erlef/setup-beam@v1
-      with:
-        elixir-version: ${{ matrix.pair.elixir }}
-        otp-version: ${{ matrix.pair.otp }}
-
-    - name: Add Prebuilt-MPR Repository
-      run: |
-        wget -qO - 'https://proget.makedeb.org/debian-feeds/prebuilt-mpr.pub' | gpg --dearmor | sudo tee /usr/share/keyrings/prebuilt-mpr-archive-keyring.gpg 1> /dev/null
-        echo "deb [arch=all,$(dpkg --print-architecture) signed-by=/usr/share/keyrings/prebuilt-mpr-archive-keyring.gpg] https://proget.makedeb.org prebuilt-mpr $(lsb_release -cs)" | sudo tee /etc/apt/sources.list.d/prebuilt-mpr.list
-        sudo apt update
-      shell: bash
-
-    - name: Install just
-      run: sudo apt install just
-      shell: bash
-
-    - name: Setup deps
-      run: just deps-get deps-compile
-
-    - name: Dialyzer
-      run: just dialyzer --format github
-
-    - name: Lint
-      run: just lint
-
-
-  test:
-    name: Build and test
-    runs-on: ubuntu-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-         # the following can be uncommented if viable resource-wise
-         # - pair: # Test very old Elixir and Erlang
-         #     elixir: "1.14"
-         #     otp: "25"
-         # - pair: # Test Erlang without -doc attribute support
-         #     elixir: "1.16"
-         #     otp: "26"
-          - pair: # Test Erlang with -doc attribute support
-              elixir: "1.17.3"
-              otp: "27"
-
-    steps:
-    - name: Run tests
+    - name: Run CI 
       uses: bonfire-networks/bonfire-extension-ci-action@latest
       with:
-        elixir-version: ${{ matrix.pair.elixir }}
-        otp-version: ${{ matrix.pair.otp }}
+        tx-token: ${{ secrets.TX_TOKEN || vars.TX_TOKEN }}
