@@ -3,7 +3,7 @@ defmodule Bonfire.Social.Activities do
   Helpers to create or query (though that's usually done through `Bonfire.Social.FeedActivities`) activities, preload relevant associations, and otherwise massage activity-related data.
 
   This is the [context](https://hexdocs.pm/phoenix/contexts.html) for `Bonfire.Data.Social.Activity`, which has these fields:
-  - id: primary key (which when the verb is Create usually matches the related Object) 
+  - id: primary key (which when the verb is Create usually matches the related Object)
   - subject: references the who (eg. a user)
   - verb: what kind of action (eg. references Like or Follow in `Bonfire.Data.AccessControl.Verb`)
   - object: references the what (eg. a specific post)
@@ -210,7 +210,7 @@ defmodule Bonfire.Social.Activities do
 
       > delete(activity)
       # Number of deleted activities
-      
+
       > delete("1")
       # Number of deleted activities
 
@@ -404,7 +404,7 @@ defmodule Bonfire.Social.Activities do
     debug(preloads, "preloads inputted")
     opts = to_options(opts) |> Keyword.put(:preloads, preloads)
 
-    if not is_nil(query_or_object_or_objects) and
+    result = if not is_nil(query_or_object_or_objects) and
          Ecto.Queryable.impl_for(query_or_object_or_objects) do
       preloads
       |> Bonfire.Social.FeedLoader.map_activity_preloads()
@@ -425,6 +425,9 @@ defmodule Bonfire.Social.Activities do
 
       # |> debug()
     end
+
+    # Ensure subject data is properly attached regardless of preloading path
+    ensure_complete_subject_data(result, opts)
   end
 
   def activity_preloads(query, false, _opts) do
@@ -607,7 +610,7 @@ defmodule Bonfire.Social.Activities do
           |> proload(activity: [:media])
 
         # |> Ecto.Query.exclude(:distinct)
-        # |> distinct([media: media], desc: media.id) 
+        # |> distinct([media: media], desc: media.id)
         # ^ NOTE: the media id should be equivalent to the object id so not necessary to customise
 
         :maybe_with_labelled ->
@@ -620,7 +623,7 @@ defmodule Bonfire.Social.Activities do
                     {"labelled_",
                      [
                        :post_content
-                       # :media, 
+                       # :media,
                        # subject: [:profile]
                      ]}
                 ]
@@ -1625,7 +1628,7 @@ defmodule Bonfire.Social.Activities do
       > query(filters)
 
       iex> query([my: :feed], [current_user: nil])
-      ** (Bonfire.Fail.Auth) You need to log in first. 
+      ** (Bonfire.Fail.Auth) You need to log in first.
   """
   def query(filters \\ [], opts_or_current_user \\ [])
 
@@ -1650,7 +1653,7 @@ defmodule Bonfire.Social.Activities do
   ## Examples
 
       iex> %{id: 1, activity: %{id: 2}} = activity_under_object(%{activity: %Bonfire.Data.Social.Activity{id: 2, object: %{id: 1}}})
-      
+
   """
   # this is a hack to mimic the old structure of the data provided to
   # the activity component, which will we refactor soon(tm)
@@ -1688,7 +1691,7 @@ defmodule Bonfire.Social.Activities do
   ## Examples
 
       iex> %{id: 1, activity: %{id: 2}} = activity_under_media(%{activity: %Bonfire.Data.Social.Activity{id: 2, media: %{id: 1}}})
-      
+
   """
   # this is a hack to mimic the old structure of the data provided to
   # the activity component, which will we refactor soon(tm)
@@ -1837,10 +1840,10 @@ defmodule Bonfire.Social.Activities do
     # Find creator for this activity
     creator = find_creator(activity, object, opts)
 
-    # Update the activity with subject 
+    # Update the activity with subject
     activity = if subject, do: Map.put(activity, :subject, subject), else: activity
 
-    # Update the creator in the creator 
+    # Update the creator in the creator
     cond do
       creator && is_map(object) ->
         created =
@@ -1941,6 +1944,85 @@ defmodule Bonfire.Social.Activities do
         nil
     end
   end
+
+
+   @doc """
+    Ensures that the subject data is complete and properly attached for all activities.
+    This function is used to fix cases where the subject data might be incomplete due to
+    optimization that avoids loading subject data when it's the current user or already loaded elsewhere.
+
+    It works by finding the correct subject for each activity, including character and profile data,
+    and ensuring it's properly attached even when preloading has been optimized.
+    """
+         def ensure_complete_subject_data(results, opts \\ [])
+
+         # Handle lists of activities
+         def ensure_complete_subject_data(results, opts) when is_list(results) do
+           Enum.map(results, &ensure_complete_subject_data(&1, opts))
+         end
+
+         # Handle activity maps with nested object structure
+         def ensure_complete_subject_data(%{activity: %Bonfire.Data.Social.Activity{} = activity} = item,
+          opts) do
+           # Update the activity with proper subject data
+           updated_activity = ensure_complete_subject_data(activity, opts)
+           Map.put(item, :activity, updated_activity)
+         end
+
+         # Handle direct activity structs
+         def ensure_complete_subject_data(%Bonfire.Data.Social.Activity{} = activity, opts) do
+           # Find the appropriate subject data
+           subject = find_subject(activity, opts)
+
+           if is_map(subject) do
+             # Ensure subject has complete profile and character data
+             complete_subject = ensure_subject_has_required_fields(subject, opts)
+             # Update activity with the complete subject
+             Map.put(activity, :subject, complete_subject)
+           else
+             # No usable subject data found, return unchanged
+             activity
+           end
+         end
+
+         # Default case - return unchanged
+         def ensure_complete_subject_data(item, _opts), do: item
+
+         # Helper to ensure subject has all required fields
+         defp ensure_subject_has_required_fields(subject, opts) do
+           current_user = current_user(opts)
+           subject_user = e(opts, :subject_user, nil)
+
+           cond do
+             # If subject is current user, use that complete data
+             current_user && id(subject) == id(current_user) ->
+               current_user
+
+             # If subject is subject_user, use that complete data
+            subject_user && id(subject) == id(subject_user) ->
+              subject_user
+
+            # If subject has minimal data, check if profile and character are missing
+            is_map(subject) && (is_nil(e(subject, :profile, nil)) || is_nil(e(subject, :character, nil)))
+           ->
+              # Try to find complete user data
+              complete_user = if id = id(subject) do
+                user_if_loaded(id, subject_user, current_user)
+              end
+
+              if complete_user do
+                complete_user
+              else
+                # Try to ensure at least the character and profile are loaded
+                repo().maybe_preload(subject, [:character, profile: :icon])
+              end
+
+            # Subject already has complete data
+            true ->
+              subject
+          end
+         end
+
 
   @doc """
   Returns the name of a verb based on its slug or identifier.
