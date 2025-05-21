@@ -404,7 +404,7 @@ defmodule Bonfire.Social.Activities do
     debug(preloads, "preloads inputted")
     opts = to_options(opts) |> Keyword.put(:preloads, preloads)
 
-    result = if not is_nil(query_or_object_or_objects) and
+    if not is_nil(query_or_object_or_objects) and
          Ecto.Queryable.impl_for(query_or_object_or_objects) do
       preloads
       |> Bonfire.Social.FeedLoader.map_activity_preloads()
@@ -425,9 +425,6 @@ defmodule Bonfire.Social.Activities do
 
       # |> debug()
     end
-
-    # No longer needed as prepare_subject_and_creator now handles this directly
-    result
   end
 
   def activity_preloads(query, false, _opts) do
@@ -1835,78 +1832,70 @@ defmodule Bonfire.Social.Activities do
   end
 
   def prepare_subject_and_creator(%Bonfire.Data.Social.Activity{object: object} = activity, opts) do
-    # Find subject for this activity and ensure it has complete data
-    subject = 
-      find_subject(activity, opts)
-      |> ensure_subject_completeness(opts)
-    
-    # Find creator for this activity
-    creator = find_creator(activity, object, opts)
+    # Find subject for this activity 
+    subject_id = e(activity, :subject_id, :nil!)
+
+    subject =
+      find_subject(activity, subject_id, opts)
+      |> subject_or_creator_ensure_completeness()
+
+    subject_id = subject_id || id(subject)
+    creator_id = creator_id(activity, object)
 
     # Update the activity with subject
     activity = if subject, do: Map.put(activity, :subject, subject), else: activity
 
-    # Update the creator in the creator
-    cond do
-      creator && is_map(object) ->
-        created =
-          e(object, :created, %{})
-          |> Map.put(:creator, creator)
+    # Find creator for this activity
+    if creator_id != subject_id do
+      creator =
+        find_creator(activity, object, creator_id, opts)
+        |> subject_or_creator_ensure_completeness()
 
-        object = Map.put(object, :created, created)
+      cond do
+        # Update the creator in the creator
+        creator && is_map(object) ->
+          created =
+            e(object, :created, %{})
+            |> Map.put(:creator, creator)
 
-        Map.put(activity, :object, object)
+          object = Map.put(object, :created, created)
 
-      creator ->
-        created =
-          e(activity, :created, %{})
-          |> Map.put(:creator, creator)
+          Map.put(activity, :object, object)
 
-        Map.put(activity, :created, created)
+        creator ->
+          created =
+            e(activity, :created, %{})
+            |> Map.put(:creator, creator)
 
-      true ->
-        debug(creator, "no creator found")
-        activity
+          Map.put(activity, :created, created)
+
+        true ->
+          debug(creator, "no creator found")
+          activity
+      end
+    else
+      # If the creator is the same as the subject, we don't need to load it again
+      activity
     end
   end
 
   def prepare_subject_and_creator(object, _opts), do: object
-  
+
   # Helper function to ensure subject has complete data
-  defp ensure_subject_completeness(subject, opts) do
-    # Handle non-map subjects (like IDs or nil)
-    if not is_map(subject) do
-      subject
+  defp subject_or_creator_ensure_completeness(data) do
+    if not is_map(data) do
+      err(data, "Subject or creator's data is invalid")
+      data
     else
-      current_user = current_user(opts)
-      subject_user = e(opts, :subject_user, nil)
-
-      cond do
-        # If subject is current user, use that complete data
-        current_user && id(subject) == id(current_user) ->
-          current_user
-
-        # If subject is subject_user, use that complete data
-        subject_user && id(subject) == id(subject_user) ->
-          subject_user
-
-        # If subject has minimal data, check if profile and character are missing
-        is_nil(e(subject, :profile, nil)) || is_nil(e(subject, :character, nil)) ->
-          # Try to find complete user data
-          complete_user = if id = id(subject) do
-            user_if_loaded(id, subject_user, current_user)
-          end
-
-          if complete_user do
-            complete_user
-          else
-            # Try to ensure at least the character and profile are loaded
-            repo().maybe_preload(subject, [:character, profile: :icon])
-          end
-
+      # If subject has minimal data, check if profile and character are missing
+      if !e(data, :profile, nil) || !e(data, :character, nil) do
+        # We could preload here to ensure at least the character and profile are loaded, but that would cause n+1 queries, so we raise instead, to reveal the issue in dev/test so that the data can be preloaded in activity_preloads instead
+        # repo().maybe_preload(subject_data, [:character, profile: :icon])
+        err(data, "Subject or creator's profile or character are not loaded")
+        data
+      else
         # Subject already has complete data
-        true ->
-          subject
+        data
       end
     end
   end
@@ -1916,14 +1905,20 @@ defmodule Bonfire.Social.Activities do
   end
 
   def find_subject(activity, opts) do
+    find_subject(activity, e(activity, :subject_id, :nil!), opts)
+  end
+
+  def find_subject(activity, subject_id, opts) do
     subject =
       e(activity, :subject, nil)
 
     subject_id =
-      (id(subject) || e(activity, :subject_id, nil))
+      (subject_id || id(subject))
       |> debug("subject_id")
 
-    subject || user_if_loaded(subject_id, opts) || subject_id
+    # Get subject or try to find it using user_if_loaded
+    # || subject_id
+    subject || user_if_loaded(:subject, subject_id, opts)
   end
 
   def find_creator(opts) do
@@ -1935,14 +1930,18 @@ defmodule Bonfire.Social.Activities do
   end
 
   def find_creator(activity, object, opts) do
+    find_creator(activity, object, creator_id(activity, object), opts)
+  end
+
+  def find_creator(activity, object, creator_id, opts) do
     creator = creator(activity, object)
 
-    creator_id =
-      id(creator) || creator_id(activity, object)
+    creator_id = creator_id || id(creator)
 
     # |> debug("creator_id")
 
-    creator || user_if_loaded(creator_id, opts) || creator_id
+    # || creator_id
+    creator || user_if_loaded(:creator, creator_id, opts)
   end
 
   def creator(activity, object),
@@ -1957,7 +1956,7 @@ defmodule Bonfire.Social.Activities do
          e(activity, :created, :creator_id, nil) || e(object, :creator_id, nil))
       |> debug("creator_id")
 
-  defp user_if_loaded(creator_or_subject_id, opts) do
+  defp user_if_loaded(type, creator_or_subject_id, opts) do
     current_user =
       current_user(opts)
 
@@ -1968,10 +1967,10 @@ defmodule Bonfire.Social.Activities do
 
     debug(id(subject_user), "subject_user id")
 
-    user_if_loaded(creator_or_subject_id, subject_user, current_user)
+    user_if_loaded(type, creator_or_subject_id, subject_user, current_user)
   end
 
-  defp user_if_loaded(creator_or_subject_id, subject_user, current_user) do
+  defp user_if_loaded(type, creator_or_subject_id, subject_user, current_user) do
     creator_or_subject_id = id(creator_or_subject_id)
 
     # Determine which user data to use based on matching IDs
@@ -1983,12 +1982,14 @@ defmodule Bonfire.Social.Activities do
         subject_user
 
       true ->
+        err(
+          creator_or_subject_id,
+          "No current_user or subject_user found matching this #{type} ID"
+        )
+
         nil
     end
   end
-
-
-
 
   @doc """
   Returns the name of a verb based on its slug or identifier.

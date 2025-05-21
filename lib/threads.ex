@@ -874,6 +874,11 @@ defmodule Bonfire.Social.Threads do
 
   defp maybe_max_depth(query, _max_depth), do: query
 
+  def prepare_replies_tree(replies, opts \\ []) do
+    Activities.prepare_subject_and_creator(replies, opts)
+    |> arrange_replies_tree(opts)
+  end
+
   @doc """
   Arranges replies into a tree structure.
 
