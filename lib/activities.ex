@@ -426,8 +426,8 @@ defmodule Bonfire.Social.Activities do
       # |> debug()
     end
 
-    # Ensure subject data is properly attached regardless of preloading path
-    ensure_complete_subject_data(result, opts)
+    # No longer needed as prepare_subject_and_creator now handles this directly
+    result
   end
 
   def activity_preloads(query, false, _opts) do
@@ -1835,8 +1835,11 @@ defmodule Bonfire.Social.Activities do
   end
 
   def prepare_subject_and_creator(%Bonfire.Data.Social.Activity{object: object} = activity, opts) do
-    # Find subject for this activity
-    subject = find_subject(activity, opts)
+    # Find subject for this activity and ensure it has complete data
+    subject = 
+      find_subject(activity, opts)
+      |> ensure_subject_completeness(opts)
+    
     # Find creator for this activity
     creator = find_creator(activity, object, opts)
 
@@ -1868,6 +1871,45 @@ defmodule Bonfire.Social.Activities do
   end
 
   def prepare_subject_and_creator(object, _opts), do: object
+  
+  # Helper function to ensure subject has complete data
+  defp ensure_subject_completeness(subject, opts) do
+    # Handle non-map subjects (like IDs or nil)
+    if not is_map(subject) do
+      subject
+    else
+      current_user = current_user(opts)
+      subject_user = e(opts, :subject_user, nil)
+
+      cond do
+        # If subject is current user, use that complete data
+        current_user && id(subject) == id(current_user) ->
+          current_user
+
+        # If subject is subject_user, use that complete data
+        subject_user && id(subject) == id(subject_user) ->
+          subject_user
+
+        # If subject has minimal data, check if profile and character are missing
+        is_nil(e(subject, :profile, nil)) || is_nil(e(subject, :character, nil)) ->
+          # Try to find complete user data
+          complete_user = if id = id(subject) do
+            user_if_loaded(id, subject_user, current_user)
+          end
+
+          if complete_user do
+            complete_user
+          else
+            # Try to ensure at least the character and profile are loaded
+            repo().maybe_preload(subject, [:character, profile: :icon])
+          end
+
+        # Subject already has complete data
+        true ->
+          subject
+      end
+    end
+  end
 
   def find_subject(opts) do
     find_subject(e(opts, :activity, nil), opts)
@@ -1946,82 +1988,6 @@ defmodule Bonfire.Social.Activities do
   end
 
 
-   @doc """
-    Ensures that the subject data is complete and properly attached for all activities.
-    This function is used to fix cases where the subject data might be incomplete due to
-    optimization that avoids loading subject data when it's the current user or already loaded elsewhere.
-
-    It works by finding the correct subject for each activity, including character and profile data,
-    and ensuring it's properly attached even when preloading has been optimized.
-    """
-         def ensure_complete_subject_data(results, opts \\ [])
-
-         # Handle lists of activities
-         def ensure_complete_subject_data(results, opts) when is_list(results) do
-           Enum.map(results, &ensure_complete_subject_data(&1, opts))
-         end
-
-         # Handle activity maps with nested object structure
-         def ensure_complete_subject_data(%{activity: %Bonfire.Data.Social.Activity{} = activity} = item,
-          opts) do
-           # Update the activity with proper subject data
-           updated_activity = ensure_complete_subject_data(activity, opts)
-           Map.put(item, :activity, updated_activity)
-         end
-
-         # Handle direct activity structs
-         def ensure_complete_subject_data(%Bonfire.Data.Social.Activity{} = activity, opts) do
-           # Find the appropriate subject data
-           subject = find_subject(activity, opts)
-
-           if is_map(subject) do
-             # Ensure subject has complete profile and character data
-             complete_subject = ensure_subject_has_required_fields(subject, opts)
-             # Update activity with the complete subject
-             Map.put(activity, :subject, complete_subject)
-           else
-             # No usable subject data found, return unchanged
-             activity
-           end
-         end
-
-         # Default case - return unchanged
-         def ensure_complete_subject_data(item, _opts), do: item
-
-         # Helper to ensure subject has all required fields
-         defp ensure_subject_has_required_fields(subject, opts) do
-           current_user = current_user(opts)
-           subject_user = e(opts, :subject_user, nil)
-
-           cond do
-             # If subject is current user, use that complete data
-             current_user && id(subject) == id(current_user) ->
-               current_user
-
-             # If subject is subject_user, use that complete data
-            subject_user && id(subject) == id(subject_user) ->
-              subject_user
-
-            # If subject has minimal data, check if profile and character are missing
-            is_map(subject) && (is_nil(e(subject, :profile, nil)) || is_nil(e(subject, :character, nil)))
-           ->
-              # Try to find complete user data
-              complete_user = if id = id(subject) do
-                user_if_loaded(id, subject_user, current_user)
-              end
-
-              if complete_user do
-                complete_user
-              else
-                # Try to ensure at least the character and profile are loaded
-                repo().maybe_preload(subject, [:character, profile: :icon])
-              end
-
-            # Subject already has complete data
-            true ->
-              subject
-          end
-         end
 
 
   @doc """
