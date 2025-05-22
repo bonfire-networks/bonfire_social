@@ -351,6 +351,15 @@ defmodule Bonfire.Social.Threads do
     end
   end
 
+  # Try to find the thread_id for a comment 
+  def fetch_thread_id(comment_id, opts \\ []) do
+    base_query()
+    |> query_filter(id: comment_id)
+    |> select([c], c.thread_id)
+    |> IO.inspect()
+    |> repo().one()
+  end
+
   @doc """
   Lists participants of a thread or individual object.
 
