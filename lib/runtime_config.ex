@@ -16,7 +16,10 @@ defmodule Bonfire.Social.RuntimeConfig do
           name: l("Following"),
           built_in: true,
           description: l("Activities of people I follow"),
-          filters: %FeedFilters{feed_name: :my},
+          filters: %FeedFilters{
+            feed_name: :my,
+            exclude_activity_types: [:follow]
+          },
           current_user_required: true,
           exclude_from_nav: false,
           icon: "mingcute:home-4-fill",
@@ -31,7 +34,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           name: l("Explore"),
           built_in: true,
           description: l("All activities"),
-          filters: %FeedFilters{feed_name: :explore, exclude_activity_types: [:like]},
+          filters: %FeedFilters{feed_name: :explore, exclude_activity_types: [:like, :follow]},
           exclude_from_nav: false,
           icon: "mingcute:compass-fill",
           assigns: [
@@ -52,7 +55,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %FeedFilters{
             feed_name: :local,
             origin: :local,
-            exclude_activity_types: [:like]
+            exclude_activity_types: [:like, :follow]
           },
           icon: "mingcute:campground-fill",
           assigns: [
@@ -187,7 +190,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           built_in: true,
           description: "A specific user's activities",
           # $username is replaced at runtime
-          filters: %FeedFilters{},
+          filters: %FeedFilters{exclude_activity_types: [:like, :follow]},
           parameterized: %{subjects: [:by]}
         },
         user_followers: %{

@@ -1139,45 +1139,45 @@ defmodule Bonfire.Social.FeedLoader do
 
          exclude_activity_types =
            exclude_activity_types ++
-             if(
-               :follow in exclude_activity_types or
-                 (:follow not in activity_types and
-                    !Bonfire.Common.Settings.get(
-                      [Bonfire.Social.Feeds, :include, :follow],
-                      false,
-                      current_user: current_user,
-                      name: l("Include Follows in Feed"),
-                      description: l("Show follow activities in your feed.")
-                    )),
-               do: [:follow],
-               else: [exclude_activity_types]
-             ) ++
-             if(
-               :boost in exclude_activity_types or
-                 (:boost not in activity_types and
-                    !Bonfire.Common.Settings.get(
-                      [Bonfire.Social.Feeds, :include, :boost],
-                      true,
-                      current_user: current_user,
-                      name: l("Include Boosts in Feed"),
-                      description: l("Show boosted/reshared content in your feed.")
-                    )),
-               do: [:boost],
-               else: []
-             ) ++
-             if(
-               :reply in exclude_activity_types or
-                 (:reply not in activity_types and
-                    !Bonfire.Common.Settings.get(
-                      [Bonfire.Social.Feeds, :include, :reply],
-                      true,
-                      current_user: current_user,
-                      name: l("Include Replies in Feed"),
-                      description: l("Show reply activities in your feed.")
-                    )),
-               do: [:reply],
-               else: []
-             ) ++
+            #  if(
+            #    :follow in exclude_activity_types or
+            #      (:follow not in activity_types and
+            #         !Bonfire.Common.Settings.get(
+            #           [Bonfire.Social.Feeds, :include, :follow],
+            #           false,
+            #           current_user: current_user,
+            #           name: l("Include Follows in Feed"),
+            #           description: l("Show follow activities in your feed.")
+            #         )),
+            #    do: [:follow],
+            #    else: [exclude_activity_types]
+            #  ) ++
+            #  if(
+            #    :boost in exclude_activity_types or
+            #      (:boost not in activity_types and
+            #         !Bonfire.Common.Settings.get(
+            #           [Bonfire.Social.Feeds, :include, :boost],
+            #           true,
+            #           current_user: current_user,
+            #           name: l("Include Boosts in Feed"),
+            #           description: l("Show boosted/reshared content in your feed.")
+            #         )),
+            #    do: [:boost],
+            #    else: []
+            #  ) ++
+            #  if(
+            #    :reply in exclude_activity_types or
+            #      (:reply not in activity_types and
+            #         !Bonfire.Common.Settings.get(
+            #           [Bonfire.Social.Feeds, :include, :reply],
+            #           true,
+            #           current_user: current_user,
+            #           name: l("Include Replies in Feed"),
+            #           description: l("Show reply activities in your feed.")
+            #         )),
+            #    do: [:reply],
+            #    else: []
+            #  ) ++
              if(:label in activity_types or opts[:include_labelling],
                do: [],
                else: [:label]
@@ -1555,7 +1555,7 @@ defmodule Bonfire.Social.FeedLoader do
       # 6: Feed with `current_user_required` and no current user
       iex> preset_feed_filters(:my_flags, [])
       {:error, :unauthorized}
-      # ** (Bonfire.Fail.Auth) You need to log in first. 
+      # ** (Bonfire.Fail.Auth) You need to log in first.
 
       # 7: Custom feed with additional parameters
       iex> {:ok, %{activity_types: [:follow], objects: ["alice"]}} = preset_feed_filters(:user_followers, [by: "alice"])
@@ -1663,7 +1663,7 @@ defmodule Bonfire.Social.FeedLoader do
 
       # Failing with `:current_user_required` parameter if we have no current user
       iex> replace_parameters(:current_user_required, %{}, current_user: nil)
-      ** (Bonfire.Fail.Auth) You need to log in first. 
+      ** (Bonfire.Fail.Auth) You need to log in first.
 
       # Handling a parameter that is in the opts
       iex> replace_parameters(:type, %{}, type: "post")
