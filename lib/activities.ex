@@ -1846,7 +1846,9 @@ defmodule Bonfire.Social.Activities do
     activity = if subject, do: Map.put(activity, :subject, subject), else: activity
 
     # Find creator for this activity
-    if creator_id != subject_id do
+    # For media contexts, always load creator since subject is excluded
+    media_context = Enum.any?(e(opts, :preload, []), &(&1 == :per_media))
+    if creator_id != subject_id or media_context do
       creator =
         find_creator(activity, object, creator_id, opts)
         |> subject_or_creator_ensure_completeness()
