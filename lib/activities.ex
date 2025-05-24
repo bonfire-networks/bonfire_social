@@ -1103,7 +1103,7 @@ defmodule Bonfire.Social.Activities do
         subject in assoc(activity, :subject),
         as: :subject,
         on: # preload subject if the object has no created info
-          is_nil(object_created.id)
+          is_nil(object_created.id) and activity.subject_id not in ^skip_loading_user_ids
       )
       |> maybe_preload_subject(skip_loading_user_ids, opts)
     end
