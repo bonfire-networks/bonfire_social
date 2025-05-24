@@ -1067,7 +1067,7 @@ defmodule Bonfire.Social.FeedLoader do
     |> reusable_join(:inner, [root], assoc(root, :activity), as: :activity)
     |> proload([:activity])
     |> query_optional_extras(filters, opts)
-    |> maybe_filter(filters)
+    |> maybe_filter(filters, opts)
 
     # where: fp.feed_id not in ^exclude_feed_ids,
 
@@ -1092,9 +1092,17 @@ defmodule Bonfire.Social.FeedLoader do
     current_user = current_user(opts)
 
     preload =
-      opts[:preload] ||
-        contextual_preloads_from_filters(filters, :query)
-        |> debug("preloads to apply based on filters")
+      case opts[:preload] do
+        false ->
+          []
+
+        preloads when is_list(preloads) ->
+          preloads
+
+        _ ->
+          contextual_preloads_from_filters(filters, :query)
+          |> debug("preloads to apply based on filters")
+      end
 
     # postload = opts[:postload] || contextual_preloads_from_filters(filters, :post)
 
@@ -1137,47 +1145,47 @@ defmodule Bonfire.Social.FeedLoader do
            List.wrap(filters[:activity_types] || opts[:activity_types])
            |> List.flatten()
 
+         #  if(
+         #    :follow in exclude_activity_types or
+         #      (:follow not in activity_types and
+         #         !Bonfire.Common.Settings.get(
+         #           [Bonfire.Social.Feeds, :include, :follow],
+         #           false,
+         #           current_user: current_user,
+         #           name: l("Include Follows in Feed"),
+         #           description: l("Show follow activities in your feed.")
+         #         )),
+         #    do: [:follow],
+         #    else: [exclude_activity_types]
+         #  ) ++
+         #  if(
+         #    :boost in exclude_activity_types or
+         #      (:boost not in activity_types and
+         #         !Bonfire.Common.Settings.get(
+         #           [Bonfire.Social.Feeds, :include, :boost],
+         #           true,
+         #           current_user: current_user,
+         #           name: l("Include Boosts in Feed"),
+         #           description: l("Show boosted/reshared content in your feed.")
+         #         )),
+         #    do: [:boost],
+         #    else: []
+         #  ) ++
+         #  if(
+         #    :reply in exclude_activity_types or
+         #      (:reply not in activity_types and
+         #         !Bonfire.Common.Settings.get(
+         #           [Bonfire.Social.Feeds, :include, :reply],
+         #           true,
+         #           current_user: current_user,
+         #           name: l("Include Replies in Feed"),
+         #           description: l("Show reply activities in your feed.")
+         #         )),
+         #    do: [:reply],
+         #    else: []
+         #  ) ++
          exclude_activity_types =
            exclude_activity_types ++
-            #  if(
-            #    :follow in exclude_activity_types or
-            #      (:follow not in activity_types and
-            #         !Bonfire.Common.Settings.get(
-            #           [Bonfire.Social.Feeds, :include, :follow],
-            #           false,
-            #           current_user: current_user,
-            #           name: l("Include Follows in Feed"),
-            #           description: l("Show follow activities in your feed.")
-            #         )),
-            #    do: [:follow],
-            #    else: [exclude_activity_types]
-            #  ) ++
-            #  if(
-            #    :boost in exclude_activity_types or
-            #      (:boost not in activity_types and
-            #         !Bonfire.Common.Settings.get(
-            #           [Bonfire.Social.Feeds, :include, :boost],
-            #           true,
-            #           current_user: current_user,
-            #           name: l("Include Boosts in Feed"),
-            #           description: l("Show boosted/reshared content in your feed.")
-            #         )),
-            #    do: [:boost],
-            #    else: []
-            #  ) ++
-            #  if(
-            #    :reply in exclude_activity_types or
-            #      (:reply not in activity_types and
-            #         !Bonfire.Common.Settings.get(
-            #           [Bonfire.Social.Feeds, :include, :reply],
-            #           true,
-            #           current_user: current_user,
-            #           name: l("Include Replies in Feed"),
-            #           description: l("Show reply activities in your feed.")
-            #         )),
-            #    do: [:reply],
-            #    else: []
-            #  ) ++
              if(:label in activity_types or opts[:include_labelling],
                do: [],
                else: [:label]

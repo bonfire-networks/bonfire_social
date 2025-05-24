@@ -83,6 +83,7 @@ defmodule Bonfire.Social.Requests do
       {:ok, request}
   """
   def ignore(request, opts) do
+    # TODO: should we just delete it instead?
     with {:ok, request} <- requested(request, opts) do
       Request.changeset(request, %{ignored_at: DateTime.now!("Etc/UTC")})
       |> repo().update()
@@ -121,8 +122,14 @@ defmodule Bonfire.Social.Requests do
       iex> exists?(subject, Follow, object, opts)
       true
   """
-  def exists?(subject, type, object, opts \\ []),
-    do: Edges.exists?({__MODULE__, type}, subject, object, opts)
+  def exists?(subject, type, object, opts \\ []) do
+    # Edges.exists?({__MODULE__, type}, subject, object, opts)
+
+    Edges.edge_query({__MODULE__, type}, subject, object, Keyword.put(opts, :preload, false))
+    |> where([r], is_nil(r.ignored_at))
+    |> debug()
+    |> repo().exists?()
+  end
 
   @doc """
   Retrieves a request.
@@ -282,7 +289,8 @@ defmodule Bonfire.Social.Requests do
     opts = to_options(opts)
 
     query([subjects: user_id], opts[:type], opts)
-    # |> maybe_with_requested_profile_only(opts[:with_profile_only])
+    # Exclude ignored requests
+    |> where([r], is_nil(r.ignored_at))
     |> many(opts)
   end
 
@@ -313,7 +321,8 @@ defmodule Bonfire.Social.Requests do
     opts = to_options(opts)
 
     query([objects: user_id], opts[:type], opts)
-    # |> maybe_with_requester_profile_only(opts[:with_profile_only])
+    # Exclude ignored requests
+    |> where([r], is_nil(r.ignored_at))
     |> many(opts)
   end
 

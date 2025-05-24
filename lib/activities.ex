@@ -1255,7 +1255,7 @@ defmodule Bonfire.Social.Activities do
   def read_query(filters, opts) when is_map(filters) or is_list(filters) do
     # current_user = current_user(opts)
     Activity
-    |> maybe_filter(filters)
+    |> maybe_filter(filters, opts)
     |> read_query(opts)
   end
 
@@ -1282,22 +1282,46 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
-  def maybe_filter(query, {:exclude_activity_types, types}, _opts) do
+  def maybe_filter(query, {:exclude_activity_types, types}, opts) do
     debug(types, "filter by exclude_activity_types")
 
     case Verbs.ids(types) do
       verb_ids when is_list(verb_ids) and verb_ids != [] ->
-        maybe_filter(query, {:exclude_verb_ids, verb_ids}, [])
+        # FIXME: would this work if any exclude_verb_ids are also set?
+        maybe_filter(query, {:exclude_verb_ids, verb_ids}, opts)
 
       _ ->
         query
     end
   end
 
-  def maybe_filter(query, {:exclude_verb_ids, verb_ids}, _opts)
-      when is_list(verb_ids) and verb_ids != [] do
-    debug(verb_ids, "filter by exclude_verb_ids")
-    where(query, [activity: activity], activity.verb_id not in ^verb_ids)
+  def maybe_filter(query, {:exclude_verb_ids, exclude_verb_ids}, opts) do
+    exclude_verb_ids =
+      List.wrap(exclude_verb_ids)
+      |> debug("filter by exclude_verb_ids")
+      |> IO.inspect(label: "00")
+
+    user_id =
+      current_user_id(opts)
+      |> IO.inspect(label: "11")
+
+    request_verb_id = "1NEEDPERM1SS10NT0D0TH1SN0W"
+
+    if user_id && request_verb_id not in exclude_verb_ids do
+      IO.inspect("22")
+      exclude_verb_ids = exclude_verb_ids ++ [request_verb_id]
+
+      # FIXME: would this also be triggered if no exclude_activity_types or exclude_verb_ids are provided?
+      query
+      |> where(
+        [activity: activity],
+        activity.verb_id not in ^exclude_verb_ids or
+          (activity.verb_id == ^request_verb_id and activity.object_id == ^user_id)
+      )
+    else
+      exclude_verb_ids = exclude_verb_ids ++ [request_verb_id]
+      where(query, [activity: activity], activity.verb_id not in ^exclude_verb_ids)
+    end
   end
 
   def maybe_filter(query, {:exclude_object_types, types}, _opts) when not is_nil(types) do
@@ -1837,7 +1861,7 @@ defmodule Bonfire.Social.Activities do
 
     subject =
       find_subject(activity, subject_id, opts)
-      |> subject_or_creator_ensure_completeness()
+      |> subject_or_creator_ensure_completeness(opts)
 
     subject_id = subject_id || id(subject)
     creator_id = creator_id(activity, object)
@@ -1848,10 +1872,11 @@ defmodule Bonfire.Social.Activities do
     # Find creator for this activity
     # For media contexts, always load creator since subject is excluded
     media_context = Enum.any?(e(opts, :preload, []), &(&1 == :per_media))
+
     if creator_id != subject_id or media_context do
       creator =
         find_creator(activity, object, creator_id, opts)
-        |> subject_or_creator_ensure_completeness()
+        |> subject_or_creator_ensure_completeness(opts)
 
       cond do
         # Update the creator in the creator
@@ -1883,22 +1908,26 @@ defmodule Bonfire.Social.Activities do
 
   def prepare_subject_and_creator(object, _opts), do: object
 
-  # Helper function to ensure subject has complete data
-  defp subject_or_creator_ensure_completeness(data) do
-    if not is_map(data) do
-      err(data, "Subject or creator's data is invalid")
-      data
-    else
-      # If subject has minimal data, check if profile and character are missing
-      if !e(data, :profile, nil) || !e(data, :character, nil) do
-        # We could preload here to ensure at least the character and profile are loaded, but that would cause n+1 queries, so we raise instead, to reveal the issue in dev/test so that the data can be preloaded in activity_preloads instead
-        # repo().maybe_preload(subject_data, [:character, profile: :icon])
-        err(data, "Subject or creator's profile or character are not loaded")
+  # NOTE: only for testing purposes, should be able to remove once preloads are all working
+  defp subject_or_creator_ensure_completeness(data, opts) do
+    if opts[:preload] != [] do
+      if not is_map(data) do
+        err(data, "Subject or creator's data is invalid")
         data
       else
-        # Subject already has complete data
-        data
+        # If subject has minimal data, check if profile and character are missing
+        if !e(data, :profile, nil) || !e(data, :character, nil) do
+          # We could preload here to ensure at least the character and profile are loaded, but that would cause n+1 queries, so we raise instead, to reveal the issue in dev/test so that the data can be preloaded in activity_preloads instead
+          # repo().maybe_preload(subject_data, [:character, profile: :icon])
+          err(data, "Subject or creator's profile or character are not loaded")
+          data
+        else
+          # Subject already has complete data
+          data
+        end
       end
+    else
+      data
     end
   end
 
@@ -1969,10 +1998,10 @@ defmodule Bonfire.Social.Activities do
 
     debug(id(subject_user), "subject_user id")
 
-    user_if_loaded(type, creator_or_subject_id, subject_user, current_user)
+    user_if_loaded(type, creator_or_subject_id, subject_user, current_user, opts)
   end
 
-  defp user_if_loaded(type, creator_or_subject_id, subject_user, current_user) do
+  defp user_if_loaded(type, creator_or_subject_id, subject_user, current_user, opts) do
     creator_or_subject_id = id(creator_or_subject_id)
 
     # Determine which user data to use based on matching IDs
@@ -1984,10 +2013,12 @@ defmodule Bonfire.Social.Activities do
         subject_user
 
       true ->
-        err(
-          creator_or_subject_id,
-          "No current_user or subject_user found matching this #{type} ID"
-        )
+        if opts[:preload] != [],
+          do:
+            err(
+              creator_or_subject_id,
+              "No current_user or subject_user found matching this #{type} ID"
+            )
 
         nil
     end

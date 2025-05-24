@@ -212,13 +212,13 @@ defmodule Bonfire.Social.Edges do
   def get(schema_or_context, subject, object, opts \\ [])
 
   def get(schema_or_context, filters, opts, []) when is_list(filters) and is_list(opts) do
-    do_query(schema_or_context, filters, opts)
+    edge_query(schema_or_context, filters, opts)
     # |> debug
     |> repo().single()
   end
 
   def get(schema_or_context, subject, object, opts) do
-    do_query(schema_or_context, subject, object, opts)
+    edge_query(schema_or_context, subject, object, opts)
     |> repo().single()
   end
 
@@ -226,12 +226,12 @@ defmodule Bonfire.Social.Edges do
   def get!(_, _subject, [], _opts), do: []
 
   def get!(schema_or_context, subject, objects, opts) when is_list(objects) do
-    do_query(schema_or_context, subject, objects, opts)
+    edge_query(schema_or_context, subject, objects, opts)
     |> repo().all()
   end
 
   def get!(schema_or_context, subject, object, opts) do
-    do_query(schema_or_context, subject, object, opts)
+    edge_query(schema_or_context, subject, object, opts)
     |> limit(1)
     |> repo().one()
   end
@@ -244,7 +244,7 @@ defmodule Bonfire.Social.Edges do
       iex> last(MySchema, %User{id: 1}, %Post{id: 2}, [])
   """
   def last(schema_or_context, subject, object, opts) do
-    do_query(schema_or_context, subject, object, opts)
+    edge_query(schema_or_context, subject, object, opts)
     |> limit(1)
     |> repo().one()
   end
@@ -271,7 +271,7 @@ defmodule Bonfire.Social.Edges do
       true
   """
   def exists?(schema_or_context, subject, object, opts) do
-    do_query(schema_or_context, subject, object, Keyword.put(opts, :preload, false))
+    edge_query(schema_or_context, subject, object, Keyword.put(opts, :preload, false))
     # |> info()
     |> repo().exists?()
   end
@@ -295,7 +295,7 @@ defmodule Bonfire.Social.Edges do
   end
 
   def count(type, filters, opts) when is_list(filters) and is_list(opts) do
-    do_query(type, filters, Keyword.put(opts, :preload, :skip))
+    edge_query(type, filters, Keyword.put(opts, :preload, :skip))
     |> Ecto.Query.exclude(:select)
     # |> Ecto.Query.exclude(:distinct)
     |> Ecto.Query.exclude(:preload)
@@ -313,7 +313,7 @@ defmodule Bonfire.Social.Edges do
       42
   """
   def count_for_subject(type, subject, object, opts) do
-    do_query(type, subject, object, Keyword.put(opts, :preload, :skip))
+    edge_query(type, subject, object, Keyword.put(opts, :preload, :skip))
     |> Ecto.Query.exclude(:select)
     # |> Ecto.Query.exclude(:distinct)
     |> Ecto.Query.exclude(:preload)
@@ -322,14 +322,12 @@ defmodule Bonfire.Social.Edges do
     |> repo().one()
   end
 
-  # defp do_query(type, subject, object, opts \\ [])
-
-  defp do_query(schema_or_context, filters, opts)
-       when is_list(filters) and is_list(opts) do
+  def edge_query(schema_or_context, filters, opts)
+      when is_list(filters) and is_list(opts) do
     edge_module_query(schema_or_context, [filters, opts])
   end
 
-  defp do_query({schema_or_context, type}, subject, object, opts) do
+  def edge_query({schema_or_context, type}, subject, object, opts) do
     edge_module_query(schema_or_context, [
       [subjects: subject, objects: object],
       type,
@@ -337,7 +335,7 @@ defmodule Bonfire.Social.Edges do
     ])
   end
 
-  defp do_query(schema_or_context, subject, object, opts) do
+  def edge_query(schema_or_context, subject, object, opts) do
     edge_module_query(
       schema_or_context,
       [
@@ -347,7 +345,7 @@ defmodule Bonfire.Social.Edges do
     )
   end
 
-  def edge_module_query(schema_or_context, args) do
+  defp edge_module_query(schema_or_context, args) do
     if function_exported?(schema_or_context, :query, length(args)) do
       apply(schema_or_context, :query, args)
     else

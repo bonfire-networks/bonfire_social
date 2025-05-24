@@ -34,7 +34,10 @@ defmodule Bonfire.Social.RuntimeConfig do
           name: l("Explore"),
           built_in: true,
           description: l("All activities"),
-          filters: %FeedFilters{feed_name: :explore, exclude_activity_types: [:like, :follow]},
+          filters: %FeedFilters{
+            feed_name: :explore,
+            exclude_activity_types: [:like, :follow, :request]
+          },
           exclude_from_nav: false,
           icon: "mingcute:compass-fill",
           assigns: [
@@ -55,7 +58,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %FeedFilters{
             feed_name: :local,
             origin: :local,
-            exclude_activity_types: [:like, :follow]
+            exclude_activity_types: [:like, :follow, :request]
           },
           icon: "mingcute:campground-fill",
           assigns: [
@@ -73,7 +76,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %FeedFilters{
             feed_name: :remote,
             origin: :remote,
-            exclude_activity_types: [:like, :follow]
+            exclude_activity_types: [:like, :follow, :request]
           },
           icon: "ph:planet-fill",
           assigns: [
