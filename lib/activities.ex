@@ -945,8 +945,7 @@ defmodule Bonfire.Social.Activities do
       [activity: activity],
       subject in assoc(activity, :subject),
       as: :subject,
-      on:
-        activity.subject_id not in ^skip_loading_user_ids 
+      on: activity.subject_id not in ^skip_loading_user_ids
     )
     |> proload(
       activity: [
@@ -1050,8 +1049,8 @@ defmodule Bonfire.Social.Activities do
         [activity: activity, object_created: object_created],
         subject in assoc(activity, :subject),
         as: :subject,
-        on: # preload subject if the object has no created info
-          is_nil(object_created.id)
+        #  preload subject if the object has no created info
+        on: is_nil(object_created.id)
       )
       |> maybe_preload_subject([], opts)
     end
@@ -1102,8 +1101,8 @@ defmodule Bonfire.Social.Activities do
         [activity: activity, object_created: object_created],
         subject in assoc(activity, :subject),
         as: :subject,
-        on: # preload subject if the object has no created info
-          is_nil(object_created.id) and activity.subject_id not in ^skip_loading_user_ids
+        #  preload subject if the object has no created info
+        on: is_nil(object_created.id) and activity.subject_id not in ^skip_loading_user_ids
       )
       |> maybe_preload_subject(skip_loading_user_ids, opts)
     end
