@@ -946,8 +946,7 @@ defmodule Bonfire.Social.Activities do
       subject in assoc(activity, :subject),
       as: :subject,
       on:
-        activity.subject_id not in ^skip_loading_user_ids and
-          activity.subject_id == subject.id
+        activity.subject_id not in ^skip_loading_user_ids 
     )
     |> proload(
       activity: [
@@ -1037,16 +1036,25 @@ defmodule Bonfire.Social.Activities do
       )
     else
       query
+      |> proload(
+        activity: [
+          object:
+            {"object_",
+             [
+               :created
+             ]}
+        ]
+      )
+      |> reusable_join(
+        :left,
+        [activity: activity, object_created: object_created],
+        subject in assoc(activity, :subject),
+        as: :subject,
+        on: # preload subject if the object has no created info
+          is_nil(object_created.id)
+      )
+      |> maybe_preload_subject([], opts)
     end
-    |> proload(
-      activity: [
-        object:
-          {"object_",
-           [
-             created: [:creator]
-           ]}
-      ]
-    )
   end
 
   def maybe_join_creator(query, skip_loading_user_ids, opts) do
@@ -1089,6 +1097,15 @@ defmodule Bonfire.Social.Activities do
         # only includes the creator if not excluded
         on: object_created.creator_id not in ^skip_loading_user_ids
       )
+      |> reusable_join(
+        :left,
+        [activity: activity, object_created: object_created],
+        subject in assoc(activity, :subject),
+        as: :subject,
+        on: # preload subject if the object has no created info
+          is_nil(object_created.id)
+      )
+      |> maybe_preload_subject(skip_loading_user_ids, opts)
     end
   end
 
