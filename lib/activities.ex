@@ -462,7 +462,7 @@ defmodule Bonfire.Social.Activities do
               #  ]}
             ]
           )
-          |> maybe_join_creator(skip_loading_user_ids, opts)
+          |> maybe_preload_creator(skip_loading_user_ids, opts)
 
         # :tags ->
         #   # Tags/mentions (this actual needs to be done by Repo.preload to be able to list more than one)
@@ -470,7 +470,7 @@ defmodule Bonfire.Social.Activities do
         #     activity: [tags:  {"tag_", [:character, profile: :icon]}]
         :with_subject ->
           query
-          |> maybe_join_subject(skip_loading_user_ids, opts)
+          |> maybe_preload_subject(skip_loading_user_ids, opts)
 
         :with_verb ->
           proload(query, activity: [:verb])
@@ -913,13 +913,13 @@ defmodule Bonfire.Social.Activities do
 
   ## Examples
 
-      > maybe_join_subject(query, [], [])
+      > maybe_preload_subject(query, [], [])
       # returns query with subject preloaded
 
-      > maybe_join_subject(query, [1, 2, 3], [])
+      > maybe_preload_subject(query, [1, 2, 3], [])
       # returns query with subject included only if subject.id not in [1, 2, 3]
   """
-  def maybe_join_subject(query, [], opts) do
+  def maybe_preload_subject(query, [], opts) do
     query
     |> proload(
       activity: [
@@ -936,7 +936,7 @@ defmodule Bonfire.Social.Activities do
     |> maybe_preload_subject_peered(:with_object_peered not in (opts[:preloads] || []))
   end
 
-  def maybe_join_subject(query, skip_loading_user_ids, opts) do
+  def maybe_preload_subject(query, skip_loading_user_ids, opts) do
     # optimisation: only includes the subject if different current_user
     query
     |> proload([:activity])
@@ -990,100 +990,15 @@ defmodule Bonfire.Social.Activities do
 
   ## Examples
 
-      > maybe_join_creator(query, [], [])
+      > maybe_preload_creator(query, [], [])
       # returns query with creator preloaded if different from the subject
 
-      > maybe_join_creator(query, [1, 2, 3], [])
+      > maybe_preload_creator(query, [1, 2, 3], [])
       # returns query with creator included only if creator.id not in [1, 2, 3]
   """
-  def maybe_join_creator(query, [], opts) do
+  def maybe_preload_creator(query, skip_loading_user_ids, opts) do
     query
-    # first join subject, since creator will only be loaded if different from the subject
-    |> maybe_join_subject([], opts)
-    |> reusable_join(
-      :left,
-      [activity: activity, object: object],
-      object_created in assoc(object, :created),
-      # object_created in assoc(activity, :object_created),
-      as: :object_created,
-      # only includes the creator if different than the subject
-      on: object_created.creator_id != activity.subject_id
-    )
-    # |> proload(
-    #   activity: [
-    #     object:
-    #       {"object_",
-    #        [
-    #          :created
-    #        ]}
-    #   ]
-    # )
-    # |> reusable_join(
-    #   :left,
-    #   [activity: activity, object_created: object_created],
-    #   creator in Pointer,
-    #   as: :object_creator,
-    #   #  only includes the creator if different than the subject
-    #   on:
-    #     object_created.creator_id != activity.subject_id and
-    #       object_created.creator_id == creator.id
-    # )
-    |> proload(
-      activity: [
-        object:
-          {"object_",
-           [
-             # reusable_join should mean the above is respected and the creator mixins are only loaded when needed
-             created: [
-               creator:
-                 {"creator_",
-                  [
-                    character: [
-                      # :peered
-                    ],
-                    profile: [:icon]
-                  ]}
-             ]
-           ]}
-      ]
-    )
-  end
-
-  def maybe_join_creator(query, skip_loading_user_ids, opts) do
-    query
-    #  join subject? since creator will only be loaded if different from the subject
-    # |> maybe_join_subject(skip_loading_user_ids, opts)
-    # |> reusable_join(
-    #   :left,
-    #   [activity: activity, object: object],
-    #   object_created in assoc(object, :created),
-    #   # object_created in assoc(activity, :created),
-    #   as: :object_created,
-    #   # only includes the creator if different than the subject
-    #   on:
-    #     object_created.creator_id != activity.subject_id and
-    #       object_created.creator_id not in ^skip_loading_user_ids
-    # )
-    |> proload(
-      activity: [
-        object:
-          {"object_",
-           [
-             :created
-           ]}
-      ]
-    )
-    |> reusable_join(
-      :left,
-      [activity: activity, object_created: object_created],
-      object_creator in Pointer,
-      as: :object_creator,
-      #  only includes the creator if different than the subject
-      on:
-        object_created.creator_id != activity.subject_id and
-          object_created.creator_id not in ^skip_loading_user_ids and
-          object_created.creator_id == object_creator.id
-    )
+    |> maybe_join_creator(skip_loading_user_ids, opts)
     |> proload(
       activity: [
         object:
@@ -1104,6 +1019,77 @@ defmodule Bonfire.Social.Activities do
       ]
     )
     |> maybe_preload_creator_peered(:with_object_peered not in (opts[:preloads] || []))
+    |> IO.inspect(label: "maybe_preload_creator")
+  end
+
+  def maybe_join_creator(query, [], opts) do
+    if :with_subject in e(opts, :preload, []) do
+      query
+      # first join subject, since creator will only be loaded if different from the subject
+      |> maybe_preload_subject([], opts)
+      |> reusable_join(
+        :left,
+        [activity: activity, object: object],
+        object_created in assoc(object, :created),
+        as: :object_created,
+        #  only includes the created with creator_id if different than the subject
+        on: object_created.creator_id != activity.subject_id
+      )
+    else
+      query
+    end
+    |> proload(
+      activity: [
+        object:
+          {"object_",
+           [
+             created: [:creator]
+           ]}
+      ]
+    )
+  end
+
+  def maybe_join_creator(query, skip_loading_user_ids, opts) do
+    if :with_subject in e(opts, :preload, []) do
+      query
+      # first join subject, since creator will only be loaded if different from the subject
+      |> maybe_preload_subject(skip_loading_user_ids, opts)
+      |> reusable_join(
+        :left,
+        [activity: activity, object: object],
+        object_created in assoc(object, :created),
+        as: :object_created,
+        #  only includes the created with creator_id if different than the subject
+        on: object_created.creator_id != activity.subject_id
+      )
+      |> reusable_join(
+        :left,
+        [activity: activity, object_created: object_created],
+        creator in assoc(object_created, :creator),
+        as: :object_creator,
+        # only includes the creator if not excluded
+        on: object_created.creator_id not in ^skip_loading_user_ids
+      )
+    else
+      query
+      |> proload(
+        activity: [
+          object:
+            {"object_",
+             [
+               :created
+             ]}
+        ]
+      )
+      |> reusable_join(
+        :left,
+        [activity: activity, object_created: object_created],
+        creator in assoc(object_created, :creator),
+        as: :object_creator,
+        # only includes the creator if not excluded
+        on: object_created.creator_id not in ^skip_loading_user_ids
+      )
+    end
   end
 
   defp maybe_preload_creator_peered(query, true) do
@@ -1861,7 +1847,7 @@ defmodule Bonfire.Social.Activities do
 
     subject =
       find_subject(activity, subject_id, opts)
-      |> subject_or_creator_ensure_completeness(opts)
+      |> ensure_completeness(:subject, opts)
 
     subject_id = subject_id || id(subject)
     creator_id = creator_id(activity, object)
@@ -1870,13 +1856,11 @@ defmodule Bonfire.Social.Activities do
     activity = if subject, do: Map.put(activity, :subject, subject), else: activity
 
     # Find creator for this activity
-    # For media contexts, always load creator since subject is excluded
-    media_context = Enum.any?(e(opts, :preload, []), &(&1 == :per_media))
 
-    if creator_id != subject_id or media_context do
+    if creator_id != subject_id do
       creator =
         find_creator(activity, object, creator_id, opts)
-        |> subject_or_creator_ensure_completeness(opts)
+        |> ensure_completeness(:creator, opts)
 
       cond do
         # Update the creator in the creator
@@ -1909,17 +1893,17 @@ defmodule Bonfire.Social.Activities do
   def prepare_subject_and_creator(object, _opts), do: object
 
   # NOTE: only for testing purposes, should be able to remove once preloads are all working
-  defp subject_or_creator_ensure_completeness(data, opts) do
+  defp ensure_completeness(data, type, opts) do
     if opts[:preload] != [] do
       if not is_map(data) do
-        err(data, "Subject or creator's data is invalid")
+        err(data, "#{type}'s data is invalid")
         data
       else
         # If subject has minimal data, check if profile and character are missing
         if !e(data, :profile, nil) || !e(data, :character, nil) do
           # We could preload here to ensure at least the character and profile are loaded, but that would cause n+1 queries, so we raise instead, to reveal the issue in dev/test so that the data can be preloaded in activity_preloads instead
           # repo().maybe_preload(subject_data, [:character, profile: :icon])
-          err(data, "Subject or creator's profile or character are not loaded")
+          err(data, "#{type}'s profile or character are not loaded")
           data
         else
           # Subject already has complete data
