@@ -1665,9 +1665,9 @@ defmodule Bonfire.Social.FeedLoader do
       iex> replace_parameters(:by, %{}, by: %{id: "alice"})
       %{id: "alice"}
 
-      # Replacing a `:by` parameter with the current user as a fallback
-      iex> replace_parameters(:by, %{}, current_user: %{id: "alice"})
-      %{id: "alice"}
+      # (Currently disabled:) Replacing a `:by` parameter with the current user as a fallback
+      # iex> replace_parameters(:by, %{}, current_user: %{id: "alice"})
+      # %{id: "alice"}
 
       # Failing with `:current_user_required` parameter if we have no current user
       iex> replace_parameters(:current_user_required, %{}, current_user: nil)

@@ -127,28 +127,38 @@ defmodule Bonfire.Social.Objects do
   """
   def read(object_id, opts) when is_binary(object_id) do
     # |> debug
-    opts = Keyword.merge(to_options(opts), skip_opts_check: true, verbs: [:read])
+    opts =
+      to_options(opts)
+      |> Keyword.merge(skip_opts_check: true, verbs: [:read])
 
     Common.Needles.pointer_query([id: object_id], opts)
     # |> debug()
-    # why skipping here? is Needles.pointer_query checking the boundary?
-    |> Activities.read(skip_boundary_check: true)
+    |> Activities.read(
+      opts
+      |> Keyword.put(:skip_boundary_check, true)
+      # ^ skipping because Needles.pointer_query already checks the boundary
+    )
     # |> debug("object with activity")
     ~> maybe_preload_activity_object(opts)
-    ~> Activities.activity_under_object(...)
     ~> to_ok()
-    |> debug("final object")
+
+    # |> debug("final object")
   end
 
   def read(%Ecto.Query{} = query, opts \\ []) do
-    opts = Keyword.merge(to_options(opts), verbs: [:read])
+    opts =
+      to_options(opts)
+      |> Keyword.put(:verbs, [:read])
 
     with {:ok, object} <-
            query
            |> Activities.read_query(opts)
            |> as_permitted_for(opts)
+           #  |> flood("q")
            |> repo().single() do
-      {:ok, Activities.activity_under_object(object)}
+      {:ok,
+       object
+       |> maybe_preload_activity_object(opts)}
     end
   end
 
@@ -156,14 +166,20 @@ defmodule Bonfire.Social.Objects do
         %{activity: %{object: _}} = pointer,
         opts
       ) do
-    Common.Needles.Preload.maybe_preload_nested_pointers(
-      pointer,
+    pointer
+    |> Activities.prepare_subject_and_creator(opts)
+    |> Common.Needles.Preload.maybe_preload_nested_pointers(
       [activity: [:object]],
       opts
     )
+    |> Activities.activity_under_object()
   end
 
-  def maybe_preload_activity_object(pointer, _current_user), do: pointer
+  def maybe_preload_activity_object(pointer, opts),
+    do:
+      pointer
+      |> Activities.prepare_subject_and_creator(opts)
+      |> Activities.activity_under_object()
 
   @doc """
   Preloads the reply creator for an object.

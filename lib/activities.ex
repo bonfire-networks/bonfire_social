@@ -1017,7 +1017,8 @@ defmodule Bonfire.Social.Activities do
       ]
     )
     |> maybe_preload_creator_peered(:with_object_peered not in (opts[:preloads] || []))
-    |> IO.inspect(label: "maybe_preload_creator")
+
+    # |> IO.inspect(label: "maybe_preload_creator")
   end
 
   def maybe_join_creator(query, [], opts) do
@@ -1219,15 +1220,8 @@ defmodule Bonfire.Social.Activities do
     do:
       read_query(query, opts)
       |> as_permitted_for(opts, [:read])
+      # |> flood("a")
       |> repo().single()
-
-  def read_query(query, opts \\ [])
-
-  def read_query(object_id, opts) when is_binary(object_id),
-    do: read_query([object_id: object_id], opts)
-
-  def read_query(%Ecto.Query{} = query, %User{} = user),
-    do: read_query(query, current_user: user)
 
   @doc """
   Constructs a query for reading activities based on input.
@@ -1238,6 +1232,14 @@ defmodule Bonfire.Social.Activities do
 
       > read_query(object_id, opts)
   """
+  def read_query(query, opts \\ [])
+
+  def read_query(object_id, opts) when is_binary(object_id),
+    do: read_query([object_id: object_id], opts)
+
+  def read_query(%Ecto.Query{} = query, %User{} = user),
+    do: read_query(query, current_user: user)
+
   def read_query(%Ecto.Query{} = query, opts) do
     opts = to_options(opts)
     # debug(opts, "opts")
