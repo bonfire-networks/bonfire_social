@@ -26,12 +26,12 @@ defmodule Bonfire.Social.Objects do
   alias Bonfire.Data.Identity.CareClosure
   alias Bonfire.Data.Social.Activity
   alias Bonfire.Boundaries.Acls
+  alias Bonfire.Boundaries.Verbs
   alias Bonfire.Social.Activities
   alias Bonfire.Social.FeedActivities
   alias Bonfire.Social.FeedLoader
   alias Bonfire.Social.Tags
   alias Bonfire.Social.Threads
-  alias Bonfire.Boundaries.Verbs
 
   alias Needle.Changesets
   alias Needle.Pointer
@@ -210,11 +210,70 @@ defmodule Bonfire.Social.Objects do
 
   """
   # TODO: does not take permissions into consideration
-  def preload_creator(object),
-    do:
-      object
-      |> repo().maybe_preload(created: [creator: [:character]])
-      |> repo().maybe_preload(creator: [:character])
+  def preload_creator(object) do
+    debug("preload_creator starting with type: #{inspect(object.__struct__)}")
+    
+    # First resolve if it's a Pointer
+    object = case object do
+      %Needle.Pointer{} = pointer ->
+        debug("Resolving Needle.Pointer")
+        # Need to properly resolve the pointer to the actual object
+        resolved = repo().maybe_preload(pointer, :pointed)
+        pointed = e(resolved, :pointed, nil)
+        if pointed do
+          debug("Resolved pointer via :pointed")
+          pointed
+        else
+          # Fallback to loading specific associations
+          with_post = repo().maybe_preload(pointer, :post)
+          if post = e(with_post, :post, nil) do
+            debug("Resolved pointer via :post")
+            post
+          else
+            warn("Could not resolve pointer!")
+            pointer
+          end
+        end
+      other -> 
+        debug("Not a pointer")
+        other
+    end
+    
+    # Try preloading created association
+    with_created = repo().maybe_preload(object, created: [creator: [:character]])
+    debug("Preloaded :created association")
+    
+    # If no created association, try loading via activity
+    result = if is_nil(e(with_created, :created, nil)) do
+      debug("No :created association, checking activity")
+      
+      # Load the activity that created this object
+      with_activity = repo().maybe_preload(with_created, activity: [:subject, :verb])
+      
+      if activity = e(with_activity, :activity, nil) do
+        verb_id = e(activity, :verb_id, nil)
+        debug("Found activity with verb_id: #{inspect(verb_id)}")
+        
+        # Check if this is a create activity
+        if verb_id == Bonfire.Data.AccessControl.Verbs.get_id!(:create) do
+          debug("Loading creator from create activity subject")
+          repo().maybe_preload(with_activity, activity: [subject: [:character]])
+        else
+          debug("Not a create activity")
+          with_created
+        end
+      else
+        debug("No activity found")
+        with_created
+      end
+    else
+      debug("Has :created association")
+      with_created
+    end
+    
+    debug("preload_creator completed")
+    result
+  end
 
   @doc """
   Gets the creator of an object (if preloaded)
@@ -226,7 +285,29 @@ defmodule Bonfire.Social.Objects do
 
   """
   def object_creator(object) do
-    e(object, :created, :creator, nil) || e(object, :creator, nil)
+    debug(object, "object_creator: checking object")
+    
+    # Try standard paths first
+    creator = e(object, :created, :creator, nil) || e(object, :creator, nil)
+    
+    # If no creator found and we have an activity, check if it's a create activity
+    creator = if is_nil(creator) and not is_nil(e(object, :activity, nil)) do
+      activity = e(object, :activity, nil)
+      verb_id = e(activity, :verb_id, nil)
+      
+      # If this is a create activity, the subject is the creator
+      if verb_id == Bonfire.Data.AccessControl.Verbs.get_id!(:create) do
+        debug("object_creator: found creator via create activity subject")
+        e(activity, :subject, nil)
+      else
+        nil
+      end
+    else
+      creator
+    end
+    
+    debug(creator, "object_creator: found creator")
+    creator
   end
 
   def query_maybe_time_limit(query, 0), do: query

@@ -734,11 +734,18 @@ defmodule Bonfire.Social.Feeds do
       []
   """
   def maybe_creator_notification(subject, object_creator, opts \\ []) do
-    if id(subject) != id(object_creator) and
-         (opts[:local] != false or Bonfire.Social.federating?(object_creator)) do
-      [notifications: object_creator]
-    else
+    if is_nil(object_creator) do
+      debug("Creator notification: no creator found, returning empty list")
       []
+    else
+      if id(subject) != id(object_creator) and
+           (opts[:local] != false or Bonfire.Social.federating?(object_creator)) do
+        debug("Creator notification: notifying creator #{inspect(id(object_creator))}")
+        [notifications: object_creator]
+      else
+        debug("Creator notification: skipping (same user or federation check failed)")
+        []
+      end
     end
   end
 

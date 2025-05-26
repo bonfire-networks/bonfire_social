@@ -7,6 +7,7 @@ defmodule Bonfire.Social.Boosts do
 
   # alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Boost
+  alias Bonfire.Data.Social.Activity
   # alias Bonfire.Boundaries.Verbs
 
   alias Bonfire.Social.Activities
@@ -178,9 +179,33 @@ defmodule Bonfire.Social.Boosts do
     boosted = Objects.preload_creator(boosted)
     boosted_creator = Objects.object_creator(boosted)
 
-    opts = [
+    # Fallback: if no creator found, try to get it from activity or created association
+    boosted_creator =
+      if is_nil(boosted_creator) do
+        # Check if we're dealing with an Activity and need to get its object's creator
+        case boosted do
+          %Activity{} = activity ->
+            activity = repo().maybe_preload(activity, object: [created: [creator: :character]])
+            e(activity, :object, :created, :creator, nil) || e(activity, :subject, nil)
+
+          _ ->
+            # Try different paths to find the creator for non-Activity objects
+            e(boosted, :activity, :subject, nil) ||
+              e(boosted, :created, :creator, nil) ||
+              e(boosted, :post_content, :created, :creator, nil)
+        end
+      else
+        boosted_creator
+      end
+
+    debug("do_boost: booster=#{id(booster)}, creator=#{inspect(id(boosted_creator))}")
+
+    # Use "public_remote" boundary for federated boosts
+    boundary = if e(opts, :local, true), do: "public", else: "public_remote"
+
+    new_opts = [
       # TODO: get the preset for boosting from config and/or user's settings
-      boundary: "public",
+      boundary: boundary,
       to_circles: [id(boosted_creator)],
       to_feeds:
         [outbox: booster] ++
@@ -190,7 +215,7 @@ defmodule Bonfire.Social.Boosts do
           )
     ]
 
-    with {:ok, boost} <- create(booster, boosted, opts) do
+    with {:ok, boost} <- create(booster, boosted, new_opts) do
       # livepush will need a list of feed IDs we published to
       feed_ids = for fp <- boost.feed_publishes, do: fp.feed_id
 

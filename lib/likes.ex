@@ -10,19 +10,16 @@ defmodule Bonfire.Social.Likes do
 
   # alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Like
+  alias Bonfire.Data.Social.Activity
   # alias Bonfire.Data.Social.LikeCount
   # alias Bonfire.Boundaries.Verbs
 
+  alias Bonfire.Social
   alias Bonfire.Social.Activities
   alias Bonfire.Social.Edges
   alias Bonfire.Social.Feeds
   # alias Bonfire.Social.FeedActivities
-  alias Bonfire.Social
   alias Bonfire.Social.Objects
-
-  alias Bonfire.Social.Edges
-  alias Bonfire.Social.Objects
-  alias Bonfire.Social.Feeds
 
   # import Ecto.Query
   # import Bonfire.Social
@@ -195,10 +192,33 @@ defmodule Bonfire.Social.Likes do
   end
 
   def do_like(%{} = liker, %{} = liked, opts \\ []) do
+    debug("do_like: liker=#{id(liker)}, liked=#{inspect(liked.__struct__)}, id=#{id(liked)}")
+
     liked = Objects.preload_creator(liked)
     liked_object_creator = Objects.object_creator(liked)
 
-    opts =
+    # Fallback: if no creator found, try to get it from activity or other associations
+    liked_object_creator =
+      if is_nil(liked_object_creator) do
+        # Check if we're dealing with an Activity and need to get its object's creator
+        case liked do
+          %Activity{} = activity ->
+            activity = repo().maybe_preload(activity, object: [created: [creator: :character]])
+            e(activity, :object, :created, :creator, nil) || e(activity, :subject, nil)
+
+          _ ->
+            # Try different paths to find the creator for non-Activity objects
+            e(liked, :activity, :subject, nil) ||
+              e(liked, :created, :creator, nil) ||
+              e(liked, :post_content, :created, :creator, nil)
+        end
+      else
+        liked_object_creator
+      end
+
+    debug("do_like: found creator #{inspect(id(liked_object_creator))}")
+
+    new_opts =
       [
         # TODO: make configurable
         boundary: "mentions",
@@ -206,7 +226,7 @@ defmodule Bonfire.Social.Likes do
         to_feeds: Feeds.maybe_creator_notification(liker, liked_object_creator, opts)
       ] ++ List.wrap(opts)
 
-    case create(liker, liked, opts) do
+    case create(liker, liked, new_opts) do
       {:ok, like} ->
         Social.maybe_federate_and_gift_wrap_activity(liker, like)
 
@@ -373,9 +393,7 @@ defmodule Bonfire.Social.Likes do
   end
 
   defp do_create(subject, object, emoji_id, _, opts) when is_binary(emoji_id) do
-    Edges.changeset({Like, Types.uid!(emoji_id)}, subject, :like, object, opts)
-    |> debug("cssss")
-    |> Edges.insert(subject, object)
+    Edges.insert({Like, Types.uid!(emoji_id)}, subject, :like, object, opts)
   end
 
   defp do_create(subject, object, {emoji, meta}, _, opts) when is_binary(emoji) and emoji != "" do
@@ -383,8 +401,7 @@ defmodule Bonfire.Social.Likes do
     with {:ok, emoji} <-
            get_or_create_emoji(emoji, meta)
            |> debug() do
-      Edges.changeset({Like, Types.uid!(emoji)}, subject, :like, object, opts)
-      |> Edges.insert(subject, object)
+      Edges.insert({Like, Types.uid!(emoji)}, subject, :like, object, opts)
     else
       e ->
         error(e)
