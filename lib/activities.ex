@@ -1303,16 +1303,13 @@ defmodule Bonfire.Social.Activities do
     exclude_verb_ids =
       List.wrap(exclude_verb_ids)
       |> debug("filter by exclude_verb_ids")
-      |> IO.inspect(label: "00")
 
     user_id =
       current_user_id(opts)
-      |> IO.inspect(label: "11")
 
     request_verb_id = "1NEEDPERM1SS10NT0D0TH1SN0W"
 
     if user_id && request_verb_id not in exclude_verb_ids do
-      IO.inspect("22")
       exclude_verb_ids = exclude_verb_ids ++ [request_verb_id]
 
       # FIXME: would this also be triggered if no exclude_activity_types or exclude_verb_ids are provided?

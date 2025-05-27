@@ -266,7 +266,6 @@ defmodule Bonfire.Social.LikesTest do
     #   }
     # } = like
 
-    # TODO
     refute like.edge.table_id == "11KES11KET0BE11KEDY0VKN0WS"
 
     assert %{edges: [fetched_liked]} = Likes.list_my(current_user: me)
