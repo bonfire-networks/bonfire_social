@@ -192,41 +192,19 @@ defmodule Bonfire.Social.Likes do
   end
 
   def do_like(%{} = liker, %{} = liked, opts \\ []) do
-    debug("do_like: liker=#{id(liker)}, liked=#{inspect(liked.__struct__)}, id=#{id(liked)}")
-
     liked = Objects.preload_creator(liked)
     liked_object_creator = Objects.object_creator(liked)
 
-    # Fallback: if no creator found, try to get it from activity or other associations
-    liked_object_creator =
-      if is_nil(liked_object_creator) do
-        # Check if we're dealing with an Activity and need to get its object's creator
-        case liked do
-          %Activity{} = activity ->
-            activity = repo().maybe_preload(activity, object: [created: [creator: :character]])
-            e(activity, :object, :created, :creator, nil) || e(activity, :subject, nil)
-
-          _ ->
-            # Try different paths to find the creator for non-Activity objects
-            e(liked, :activity, :subject, nil) ||
-              e(liked, :created, :creator, nil) ||
-              e(liked, :post_content, :created, :creator, nil)
-        end
-      else
-        liked_object_creator
-      end
-
-    debug("do_like: found creator #{inspect(id(liked_object_creator))}")
-
-    new_opts =
-      [
+    opts =
+      opts
+      |> Keyword.merge(
         # TODO: make configurable
         boundary: "mentions",
         to_circles: [id(liked_object_creator)],
         to_feeds: Feeds.maybe_creator_notification(liker, liked_object_creator, opts)
-      ] ++ List.wrap(opts)
+      )
 
-    case create(liker, liked, new_opts) do
+    case create(liker, liked, opts) do
       {:ok, like} ->
         Social.maybe_federate_and_gift_wrap_activity(liker, like)
 
