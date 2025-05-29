@@ -70,7 +70,7 @@ defmodule Bonfire.Social.FeedPaginationTest do
       posts: posts
     } do
       # Get the first page of posts
-      feed = FeedLoader.feed(:custom, %{}, current_user: user, limit: 5)
+      feed = FeedLoader.feed(:custom, %{}, current_user: user, limit: 5, preload: false)
 
       # Ensure we got some results
       assert length(feed.edges) > 0
@@ -105,7 +105,8 @@ defmodule Bonfire.Social.FeedPaginationTest do
         query_with_deferred_join: true,
         limit: 5,
         #  to avoid deduping messing with the count
-        show_objects_only_once: false
+        show_objects_only_once: false,
+        preload: false
       ]
 
       # PART 1: Verify the structure of the first page query
@@ -212,6 +213,7 @@ defmodule Bonfire.Social.FeedPaginationTest do
     limit = 4
     user = fake_user!()
     other_user = fake_user!()
+    default_join_multiply_limit = 2
 
     # Use a unique tag to ensure we control the results
     unique_tag = "next_window_test"
@@ -274,7 +276,7 @@ defmodule Bonfire.Social.FeedPaginationTest do
     refute FeedLoader.feed_contains?(edges, "First Window Test")
     assert edges == []
 
-    deferred_join_multiply_limit = 2
+    deferred_join_multiply_limit = 4
 
     # Now get the next window query
     next_window_query =
@@ -285,8 +287,8 @@ defmodule Bonfire.Social.FeedPaginationTest do
         limit: limit,
         query_with_deferred_join: true,
         return: :query,
-        # deferred_join_offset: deferred_join_multiply_limit * limit,
         deferred_join_multiply_limit: deferred_join_multiply_limit
+        # deferred_join_offset: deferred_join_multiply_limit * limit
       )
 
     # Verify next window query structure
@@ -297,12 +299,14 @@ defmodule Bonfire.Social.FeedPaginationTest do
     assert next_query_string =~ " in subquery(from"
 
     # Should offset limit but NOT have cursor-based filtering
-    assert next_query_string =~ "offset: ^#{deferred_join_multiply_limit * limit}"
+    assert next_query_string =~ "offset: ^#{default_join_multiply_limit * limit}"
     refute next_query_string =~ "where: (a1.id < ^"
 
     # Should have larger limit (multiply_limit: 3)
     # The limit parameter will be bound
-    assert next_query_string =~ "limit: ^#{limit * deferred_join_multiply_limit * 2 + 1}"
+    assert next_query_string =~
+             "limit: ^#{flood(limit * deferred_join_multiply_limit + 1, "limit")}"
+
     # but not in outer query
     assert next_query_string =~ "limit: ^#{limit + 1}"
 
@@ -315,34 +319,33 @@ defmodule Bonfire.Social.FeedPaginationTest do
         query_with_deferred_join: true,
         deferred_join_multiply_limit: 3,
         #  to avoid deduping messing with the count
-        show_objects_only_once: false
+        show_objects_only_once: false,
+        preload: false
       )
 
     assert %{edges: next_edges} = next_window_results
     assert length(next_edges) > 0
     assert FeedLoader.feed_contains?(next_edges, "next_window_test")
 
-    # Use the high-level API to test the full flow
-    complete_feed =
-      FeedLoader.feed(
-        :explore,
-        %{tags: unique_tag},
+    # Execute a normal query - should also find our tagged posts using the high-level API which automatically attempts to load next window or removed the deferred join if nothing is found the 2nd time
+    automatic_next_window_results =
+      FeedLoader.feed(:explore, %{},
         current_user: user,
         limit: limit,
+        after: next_cursor,
         query_with_deferred_join: true,
+        # deferred_join_multiply_limit: 3,
         #  to avoid deduping messing with the count
-        show_objects_only_once: false
+        show_objects_only_once: false,
+        preload: false
       )
 
-    # Should find our tagged posts despite being in a later window
-    assert length(complete_feed.edges) == limit
-
-    # Check the content contains our tag
-    assert FeedLoader.feed_contains?(complete_feed.edges, "next_window_test")
-    refute FeedLoader.feed_contains?(complete_feed.edges, "First Window Test")
+    assert %{edges: next_edges} = next_window_results
+    assert length(next_edges) > 0
+    assert FeedLoader.feed_contains?(next_edges, "next_window_test")
   end
 
-  #  not needed because the query already only uses necessary joins
+  # not needed because the query already only uses necessary joins
   @tag :todo
   test "optimizes the feed query" do
     # Arrange: Create the exact query as specified

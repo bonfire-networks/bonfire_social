@@ -180,7 +180,7 @@ defmodule Bonfire.Social.Boosts do
     boosted_creator = Objects.object_creator(boosted)
 
     # Use "public_remote" boundary for federated boosts
-    boundary = if e(opts, :local, true), do: "public", else: "public_remote"
+    boundary = if e(opts, :local, true) != false, do: "public", else: "public_remote"
 
     opts =
       opts

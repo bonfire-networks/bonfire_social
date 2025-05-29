@@ -453,7 +453,17 @@ defmodule Bonfire.Social.FeedLoader do
   end
 
   defp prepare_opts_for_pagination(query, filters, opts) do
-    to_options(opts)
+    opts = to_options(opts)
+
+    deferred_join_multiply_limit = opts[:deferred_join_multiply_limit]
+
+    if is_integer(deferred_join_multiply_limit) and
+         deferred_join_multiply_limit > 1 do
+      paginate_and_boundarise_feed_deferred_multiplied_opts(deferred_join_multiply_limit, opts)
+      |> info("paginate the deferred join window from the get-go")
+    else
+      opts
+    end
     |> Keyword.merge(
       Activities.order_pagination_opts(filters[:sort_by], filters[:sort_order])
       |> debug("pagination opts")
@@ -560,16 +570,7 @@ defmodule Bonfire.Social.FeedLoader do
 
     if Keyword.get(opts, :query_with_deferred_join) do
       if Enum.any?(initial_query.joins, &(&1.as == :deferred_join_subquery)),
-        do: throw("Already deferred")
-
-      opts =
-        if is_integer(opts[:deferred_join_multiply_limit]) and
-             opts[:deferred_join_multiply_limit] > 1 do
-          paginate_and_boundarise_feed_deferred_fallback_opts(opts)
-          |> info("paginate the deferred join window from the get-go")
-        else
-          opts
-        end
+        do: throw("Feed query already deferred")
 
       initial_query =
         initial_query
@@ -608,25 +609,29 @@ defmodule Bonfire.Social.FeedLoader do
     end
   end
 
-  defp paginate_and_boundarise_feed_deferred_fallback_opts(opts) do
+  defp paginate_and_boundarise_feed_deferred_multiplied_opts(
+         previous_deferred_join_multiply_limit \\ nil,
+         deferred_join_multiply_limit,
+         opts
+       ) do
     # Create new pagination options with the cursor from the empty result
     deferred_join_multiply_limit =
-      case opts[:deferred_join_multiply_limit] do
+      case deferred_join_multiply_limit do
         0 -> 2
         limit when is_integer(limit) -> limit
         _ -> 2
       end
 
-    # FIXME: avoid computing twice
-    opts = repo().pagination_opts(opts)
-
     Keyword.merge(
-      opts,
+      repo().pagination_opts(opts),
       [
         # after: after_cursor,
-        deferred_join_offset: deferred_join_multiply_limit * (opts[:limit] || 1),
-        # Increase the limit to fetch more results
-        deferred_join_multiply_limit: deferred_join_multiply_limit * 2
+        # Increase the limit to fetch more results 
+        deferred_join_multiply_limit: deferred_join_multiply_limit,
+        # Change the pagination offset to match - FIXME: shouldn't this use the previous limit?
+        deferred_join_offset:
+          (previous_deferred_join_multiply_limit || 2) *
+            (opts[:limit] || Bonfire.Common.Config.get(:default_pagination_limit, 10))
       ]
       |> info("Empty results in first join window, attempting pagination to next window")
     )
@@ -635,7 +640,14 @@ defmodule Bonfire.Social.FeedLoader do
   defp paginate_and_boundarise_feed_deferred_fallback(query, filters, opts) do
     # WIP: Try paginating to the next window of results if the initial one is empty
 
-    next_page_opts = paginate_and_boundarise_feed_deferred_fallback_opts(opts)
+    previous_deferred_join_multiply_limit = opts[:deferred_join_multiply_limit] || 2
+
+    next_page_opts =
+      paginate_and_boundarise_feed_deferred_multiplied_opts(
+        previous_deferred_join_multiply_limit,
+        previous_deferred_join_multiply_limit * 2,
+        opts
+      )
 
     # Try the query again with the new cursor
     with %Ecto.Query{} = deferred_query <-

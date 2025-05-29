@@ -1872,7 +1872,7 @@ defmodule Bonfire.Social.Activities do
 
     # Find creator for this activity
 
-    if creator_id != subject_id do
+    if not is_nil(creator_id) and creator_id != subject_id do
       creator =
         find_creator(activity, object, creator_id, opts)
         |> ensure_completeness(:creator, opts)
