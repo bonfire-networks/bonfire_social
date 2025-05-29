@@ -26,12 +26,12 @@ defmodule Bonfire.Social.Objects do
   alias Bonfire.Data.Identity.CareClosure
   alias Bonfire.Data.Social.Activity
   alias Bonfire.Boundaries.Acls
+  alias Bonfire.Boundaries.Verbs
   alias Bonfire.Social.Activities
   alias Bonfire.Social.FeedActivities
   alias Bonfire.Social.FeedLoader
   alias Bonfire.Social.Tags
   alias Bonfire.Social.Threads
-  alias Bonfire.Boundaries.Verbs
 
   alias Needle.Changesets
   alias Needle.Pointer
@@ -210,11 +210,27 @@ defmodule Bonfire.Social.Objects do
 
   """
   # TODO: does not take permissions into consideration
-  def preload_creator(object),
-    do:
-      object
-      |> repo().maybe_preload(created: [creator: [:character]])
-      |> repo().maybe_preload(creator: [:character])
+  def preload_creator(object) do
+    # debug("preload_creator starting with type: #{inspect(object.__struct__)}")
+
+    # First resolve if it's a Pointer using Bonfire.Common.Needles
+    object =
+      case object do
+        %Needle.Pointer{} = pointer ->
+          # Use Bonfire.Common.Needles for proper pointer resolution
+          Common.Needles.follow!(pointer) || pointer
+
+        other ->
+          other
+      end
+
+    # Preload all creator-related associations at once
+    object
+    |> repo().maybe_preload(
+      created: [creator: [:character]],
+      activity: [:subject, :verb, object: [created: [creator: [:character]]]]
+    )
+  end
 
   @doc """
   Gets the creator of an object (if preloaded)
@@ -226,7 +242,39 @@ defmodule Bonfire.Social.Objects do
 
   """
   def object_creator(object) do
-    e(object, :created, :creator, nil) || e(object, :creator, nil)
+    # debug(object, "object_creator: checking object")
+
+    # Try standard paths first
+    creator = e(object, :created, :creator, nil) || e(object, :creator, nil)
+
+    # If no creator found, try various fallback paths
+    creator =
+      if is_nil(creator) do
+        case object do
+          # For activities, check if it's a create activity or get object's creator
+          %Activity{} = activity ->
+            verb_id = e(activity, :verb_id, nil)
+
+            if verb_id == Bonfire.Data.AccessControl.Verbs.get_id!(:create) do
+              # For create activities, the subject is the creator
+              e(activity, :subject, nil)
+            else
+              # For other activities, try to get the object's creator
+              activity = repo().maybe_preload(activity, object: [created: [creator: :character]])
+              e(activity, :object, :created, :creator, nil) || e(activity, :subject, nil)
+            end
+
+          _ ->
+            # Try different paths to find the creator for non-Activity objects
+            e(object, :activity, :subject, nil) ||
+              e(object, :post_content, :created, :creator, nil)
+        end
+      else
+        creator
+      end
+
+    # debug(creator, "object_creator: found creator")
+    creator
   end
 
   def query_maybe_time_limit(query, 0), do: query

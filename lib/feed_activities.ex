@@ -221,6 +221,8 @@ defmodule Bonfire.Social.FeedActivities do
       [%{feed_id: "feed123"}, %{feed_id: "feed456"}]
   """
   def get_feed_publishes(options) do
+    debug(options, "get_feed_publishes input")
+
     options
     # |> info()
     |> get_publish_feed_ids()
@@ -254,10 +256,13 @@ defmodule Bonfire.Social.FeedActivities do
     keys = [:inbox, :outbox, :notifications]
     # process all the specifications
     options = get_feed_publishes_options(options)
+    debug(options, "processed feed options")
     # build an index to look up the feed types by id
     index = get_feed_publishes_index(options, keys)
+    debug(index, "feed publish index")
     # preload them all together
     all = Enum.flat_map(keys, &Keyword.get(options, &1, []))
+    debug(all, "all characters to preload")
     all = repo().maybe_preload(all, :character)
     # and finally, look up the appropriate feed from the loaded characters
     ids =
@@ -266,6 +271,8 @@ defmodule Bonfire.Social.FeedActivities do
         feed <- index[uid(character)],
         do: Feeds.feed_id(feed, character)
       )
+
+    debug(ids, "resolved feed IDs")
 
     ids ++ Keyword.get(options, :feeds, [])
   end

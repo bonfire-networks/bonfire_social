@@ -176,7 +176,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %FeedFilters{activity_types: [:boost]},
           parameterized: %{subjects: [:me]},
           exclude_from_nav: false,
-          icon: "mingcute:fire-fill",
+          icon: "lucide:refresh-cw",
           assigns: [
             selected_tab: "my_boosts",
             hide_filters: true,

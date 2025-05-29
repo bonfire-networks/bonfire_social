@@ -7,6 +7,7 @@ defmodule Bonfire.Social.Boosts do
 
   # alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Boost
+  alias Bonfire.Data.Social.Activity
   # alias Bonfire.Boundaries.Verbs
 
   alias Bonfire.Social.Activities
@@ -178,17 +179,22 @@ defmodule Bonfire.Social.Boosts do
     boosted = Objects.preload_creator(boosted)
     boosted_creator = Objects.object_creator(boosted)
 
-    opts = [
-      # TODO: get the preset for boosting from config and/or user's settings
-      boundary: "public",
-      to_circles: [id(boosted_creator)],
-      to_feeds:
-        [outbox: booster] ++
-          if(e(opts, :notify_creator, true),
-            do: Feeds.maybe_creator_notification(booster, boosted_creator, opts),
-            else: []
-          )
-    ]
+    # Use "public_remote" boundary for federated boosts
+    boundary = if e(opts, :local, true), do: "public", else: "public_remote"
+
+    opts =
+      opts
+      |> Keyword.merge(
+        # TODO: get the preset for boosting from config and/or user's settings
+        boundary: boundary,
+        to_circles: [id(boosted_creator)],
+        to_feeds:
+          [outbox: booster] ++
+            if(e(opts, :notify_creator, true),
+              do: Feeds.maybe_creator_notification(booster, boosted_creator, opts),
+              else: []
+            )
+      )
 
     with {:ok, boost} <- create(booster, boosted, opts) do
       # livepush will need a list of feed IDs we published to

@@ -10,19 +10,16 @@ defmodule Bonfire.Social.Likes do
 
   # alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Social.Like
+  alias Bonfire.Data.Social.Activity
   # alias Bonfire.Data.Social.LikeCount
   # alias Bonfire.Boundaries.Verbs
 
+  alias Bonfire.Social
   alias Bonfire.Social.Activities
   alias Bonfire.Social.Edges
   alias Bonfire.Social.Feeds
   # alias Bonfire.Social.FeedActivities
-  alias Bonfire.Social
   alias Bonfire.Social.Objects
-
-  alias Bonfire.Social.Edges
-  alias Bonfire.Social.Objects
-  alias Bonfire.Social.Feeds
 
   # import Ecto.Query
   # import Bonfire.Social
@@ -199,12 +196,13 @@ defmodule Bonfire.Social.Likes do
     liked_object_creator = Objects.object_creator(liked)
 
     opts =
-      [
+      opts
+      |> Keyword.merge(
         # TODO: make configurable
         boundary: "mentions",
         to_circles: [id(liked_object_creator)],
         to_feeds: Feeds.maybe_creator_notification(liker, liked_object_creator, opts)
-      ] ++ List.wrap(opts)
+      )
 
     case create(liker, liked, opts) do
       {:ok, like} ->
@@ -373,9 +371,7 @@ defmodule Bonfire.Social.Likes do
   end
 
   defp do_create(subject, object, emoji_id, _, opts) when is_binary(emoji_id) do
-    Edges.changeset({Like, Types.uid!(emoji_id)}, subject, :like, object, opts)
-    |> debug("cssss")
-    |> Edges.insert(subject, object)
+    Edges.insert({Like, Types.uid!(emoji_id)}, subject, :like, object, opts)
   end
 
   defp do_create(subject, object, {emoji, meta}, _, opts) when is_binary(emoji) and emoji != "" do
@@ -383,8 +379,7 @@ defmodule Bonfire.Social.Likes do
     with {:ok, emoji} <-
            get_or_create_emoji(emoji, meta)
            |> debug() do
-      Edges.changeset({Like, Types.uid!(emoji)}, subject, :like, object, opts)
-      |> Edges.insert(subject, object)
+      Edges.insert({Like, Types.uid!(emoji)}, subject, :like, object, opts)
     else
       e ->
         error(e)
