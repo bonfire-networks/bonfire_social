@@ -245,6 +245,7 @@ defmodule Bonfire.Social.Objects do
 
   def preload_creator(object) do
     warn(object, "unrecognised object, skipping creator preload")
+    object
   end
 
   @doc """
