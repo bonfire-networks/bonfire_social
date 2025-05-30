@@ -450,9 +450,9 @@ defmodule Bonfire.Social.Activities do
           # This actually loads the creator of the object:
           # * In the case of a post, creator of the post
           # * In the case of like of a post, creator of the post
-          # TODO: in feeds, maybe load the creator with a where clause to skip it when creator==subject
+          # in feeds, we join the creator with a where clause to skip it when creator==subject
           query
-          |> proload(activity: [:object, object: {"object_", [:created]}])
+          |> proload(activity: [object: {"object_", [:created]}])
           |> maybe_preload_creator(skip_loading_user_ids, opts)
 
         # :tags ->
@@ -668,7 +668,8 @@ defmodule Bonfire.Social.Activities do
           [
             object: [
               created: [
-                creator: {repo().reject_preload_ids(skip_loading_user_ids), [:character, profile: :icon]}
+                creator:
+                  {repo().reject_preload_ids(skip_loading_user_ids), [:character, profile: :icon]}
               ]
             ]
           ]
