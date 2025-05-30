@@ -41,7 +41,7 @@ defmodule Bonfire.Social.Feeds.PresetFiltersTest do
   # flagged_content, my_flags
   # for %{preset: preset, filters: filters} = params when preset in [:images, :local_media] <- 
   for %{preset: preset, filters: filters} = params
-      when preset not in [:audio, :videos, :mentions, :curated] <-
+      when preset not in [:audio, :videos, :mentions, :curated, :user_following] <-
         feed_preset_test_params() do
     describe "feed preset `#{inspect(preset)}` loads correct feed" do
       setup do

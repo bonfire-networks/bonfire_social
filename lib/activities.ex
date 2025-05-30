@@ -452,7 +452,12 @@ defmodule Bonfire.Social.Activities do
           # * In the case of like of a post, creator of the post
           # in feeds, we join the creator with a where clause to skip it when creator==subject
           query
-          |> proload(activity: [object: {"object_", [:created]}])
+          |> proload(
+            activity: [
+              :object
+              # object: {"object_", [:created]}
+            ]
+          )
           |> maybe_preload_creator(skip_loading_user_ids, opts)
 
         # :tags ->
@@ -1641,7 +1646,7 @@ defmodule Bonfire.Social.Activities do
       > query(filters)
 
       iex> query([my: :feed], [current_user: nil])
-      ** (Bonfire.Fail.Auth) You need to log in first.
+      ** (Bonfire.Fail.Auth) You need to log in first. 
   """
   def query(filters \\ [], opts_or_current_user \\ [])
 

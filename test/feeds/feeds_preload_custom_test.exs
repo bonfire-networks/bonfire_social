@@ -59,8 +59,8 @@ defmodule Bonfire.Social.Feeds.PreloadCustomTest do
              subject: %{},
              verb: %Ecto.Association.NotLoaded{},
              object: %Needle.Pointer{
-               created: %Bonfire.Data.Social.Created{creator: %{}},
-               #  created: nil,
+               #  created: %Bonfire.Data.Social.Created{creator: %{}},
+               created: nil,
                peered: %Ecto.Association.NotLoaded{},
                #  because :with_creator preloads the object
                post_content: %Ecto.Association.NotLoaded{}
@@ -85,8 +85,8 @@ defmodule Bonfire.Social.Feeds.PreloadCustomTest do
              subject: %{},
              verb: %Ecto.Association.NotLoaded{},
              object: %Needle.Pointer{
-               created: %Bonfire.Data.Social.Created{creator: %{}},
-               #  created: nil,
+               #  created: %Bonfire.Data.Social.Created{creator: %{}},
+               created: nil,
                peered: nil,
                post_content: %Bonfire.Data.Social.PostContent{}
              },
@@ -113,7 +113,8 @@ defmodule Bonfire.Social.Feeds.PreloadCustomTest do
              object: %Needle.Pointer{
                post_content: %Bonfire.Data.Social.PostContent{html_body: "epic html"},
                #  created: %Bonfire.Data.Social.Created{creator: nil}
-               created: %{creator: %{}}
+               #  created: %{creator: %{}}
+               created: nil
              },
              replied: %Bonfire.Data.Social.Replied{
                # FIXME: create named mixin only when not empty

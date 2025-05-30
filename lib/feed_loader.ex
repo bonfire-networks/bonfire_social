@@ -1575,7 +1575,7 @@ defmodule Bonfire.Social.FeedLoader do
       # 6: Feed with `current_user_required` and no current user
       iex> preset_feed_filters(:my_flags, [])
       {:error, :unauthorized}
-      # ** (Bonfire.Fail.Auth) You need to log in first.
+      # ** (Bonfire.Fail.Auth) You need to log in first. 
 
       # 7: Custom feed with additional parameters
       iex> {:ok, %{activity_types: [:follow], objects: ["alice"]}} = preset_feed_filters(:user_followers, [by: "alice"])
@@ -1683,7 +1683,7 @@ defmodule Bonfire.Social.FeedLoader do
 
       # Failing with `:current_user_required` parameter if we have no current user
       iex> replace_parameters(:current_user_required, %{}, current_user: nil)
-      ** (Bonfire.Fail.Auth) You need to log in first.
+      ** (Bonfire.Fail.Auth) You need to log in first. 
 
       # Handling a parameter that is in the opts
       iex> replace_parameters(:type, %{}, type: "post")
