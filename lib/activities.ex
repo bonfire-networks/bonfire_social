@@ -1853,7 +1853,8 @@ defmodule Bonfire.Social.Activities do
 
     subject =
       find_subject(activity, subject_id, opts)
-      |> ensure_completeness(:subject, opts)
+
+    # |> ensure_completeness!(:subject, opts)
 
     subject_id = subject_id || id(subject)
     creator_id = creator_id(activity, object)
@@ -1866,7 +1867,8 @@ defmodule Bonfire.Social.Activities do
     if not is_nil(creator_id) and creator_id != subject_id do
       creator =
         find_creator(activity, object, creator_id, opts)
-        |> ensure_completeness(:creator, opts)
+
+      # |> ensure_completeness!(:creator, opts)
 
       cond do
         # Update the creator in the creator
@@ -1899,7 +1901,7 @@ defmodule Bonfire.Social.Activities do
   def prepare_subject_and_creator(object, _opts), do: object
 
   # NOTE: only for testing purposes, should be able to remove once preloads are all working
-  defp ensure_completeness(data, type, opts) do
+  defp ensure_completeness!(data, type, opts) do
     if opts[:preload] != [] do
       if not is_map(data) do
         err(data, "#{type}'s data is invalid")
@@ -2003,15 +2005,30 @@ defmodule Bonfire.Social.Activities do
         subject_user
 
       true ->
-        if opts[:preload] != [],
-          do:
-            err(
-              creator_or_subject_id,
-              "No current_user or subject_user found matching this #{type} ID"
-            )
+        ensure_user_loaded!(type, creator_or_subject_id, opts[:preload] || [])
 
         nil
     end
+  end
+
+  defp ensure_user_loaded!(type, creator_or_subject_id, []), do: :ok
+
+  defp ensure_user_loaded!(:creator = type, creator_or_subject_id, preload) do
+    if :with_subject not in preload,
+      do:
+        err(
+          creator_or_subject_id,
+          "No current_user or subject_user found matching this #{type} ID"
+        )
+  end
+
+  defp ensure_user_loaded!(:subject = type, creator_or_subject_id, preload) do
+    if :with_creator not in preload,
+      do:
+        err(
+          creator_or_subject_id,
+          "No current_user or subject_user found matching this #{type} ID"
+        )
   end
 
   @doc """

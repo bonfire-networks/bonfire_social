@@ -1554,10 +1554,10 @@ defmodule Bonfire.Social.FeedLoader do
   ## Examples
 
       # 1: Retrieve a preset feed without parameters
-      iex> {:ok, %{feed_name: :local, exclude_activity_types: [:like]}} = preset_feed_filters(:local, [])
+      iex> {:ok, %{feed_name: :local}} = preset_feed_filters(:local, [])
 
       # 1: Retrieve a preset feed without parameters
-      iex> {:ok, %{feed_name: :local, exclude_activity_types: [:like]}} =preset_feed_filters(:local, [])
+      iex> {:ok, %{feed_name: :local}} =preset_feed_filters(:local, [])
 
       # 2: Retrieve a preset feed with parameters
       iex> {:ok, %{subjects: ["alice"]}} = preset_feed_filters(:user_activities, [by: "alice"])
