@@ -1,5 +1,5 @@
 defmodule Bonfire.Social.Feeds.PresetFiltersTest do
-  use Bonfire.Social.DataCase, async: true
+  use Bonfire.Social.DataCase, async: false
   use Bonfire.Common.Utils
 
   import Bonfire.Files.Simulation

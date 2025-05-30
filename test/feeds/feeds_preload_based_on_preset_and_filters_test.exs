@@ -1,5 +1,5 @@
 defmodule Bonfire.Social.Feeds.PreloadPresetTest do
-  use Bonfire.Social.DataCase, async: true
+  use Bonfire.Social.DataCase, async: false
   use Bonfire.Common.Utils
 
   import Bonfire.Files.Simulation
@@ -40,9 +40,9 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
   end
 
   # Generate tests dynamically from feed presets - WIP: my, messages, user_following, user_followers, remote, my_requests, trending_discussions, images, publications
-  # for %{preset: preset, filters: filters} = params
-  #     when preset not in [:user_followers, :user_following, :audio, :videos, :mentions, :curated] <-
-  for %{preset: preset, filters: filters} = params when preset in [:hashtag] <-
+  # for %{preset: preset, filters: filters} = params when preset in [:hashtag] <-
+  for %{preset: preset, filters: filters} = params
+      when preset not in [:user_followers, :user_following, :audio, :videos, :mentions, :curated] <-
         feed_preset_test_params() do
     describe "feed preset `#{inspect(preset)}` loads feed and configured preloads" do
       setup do
