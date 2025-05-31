@@ -221,6 +221,20 @@ defmodule Bonfire.Social.RuntimeConfig do
         # },
 
         # Content type feeds
+        posts: %{
+          built_in: true,
+          name: l("Posts"),
+          description: "Posts (not including replies)",
+          filters: %FeedFilters{object_types: [:post], exclude_activity_types: [:reply]},
+          icon: "dashicons:text-page"
+        },
+        discussions: %{
+          built_in: true,
+          name: l("Discussions"),
+          description: "Posts and replies",
+          filters: %FeedFilters{object_types: [:post]},
+          icon: "mingcute:comment-fill"
+        },
         research: %{
           name: l("Research"),
           built_in: true,

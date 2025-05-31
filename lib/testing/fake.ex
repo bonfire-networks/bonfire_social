@@ -286,7 +286,7 @@ defmodule Bonfire.Social.Fake do
         # TODO?
         {nil, nil}
 
-      :local ->
+      :discussions ->
         original_post =
           Bonfire.Posts.Fake.fake_post!(other_user, "public", %{
             post_content: %{name: "original post #{i}", html_body: "original post content #{i}"}
@@ -300,6 +300,9 @@ defmodule Bonfire.Social.Fake do
 
         {post, nil}
 
+      :local ->
+        create_test_content(:discussions, user, other_user, i)
+
       :explore ->
         {local_post, _} = create_test_content(:local, user, other_user, i)
         {remote_post, _} = create_test_content(:remote, user, other_user, i)
@@ -307,7 +310,7 @@ defmodule Bonfire.Social.Fake do
         {local_post, remote_post}
 
       other
-      when is_nil(other) or other in [:user_by_object_type, :user_activities] ->
+      when is_nil(other) or other in [:posts, :user_by_object_type, :user_activities] ->
         post =
           Bonfire.Posts.Fake.fake_post!(other_user, "public", %{
             post_content: %{html_body: "default post content #{i}"}
