@@ -713,7 +713,11 @@ defmodule Bonfire.Social.PostContents do
           date: post_data["published"]
         },
         sensitive: post_data["sensitive"],
-        uploaded_media: Bonfire.Files.ap_receive_attachments(creator, post_data["attachment"])
+        uploaded_media: Bonfire.Files.ap_receive_attachments(creator, post_data["attachment"]),
+        opts: [
+          emoji: e(post_data, "emoji", nil),
+          do_not_strip_html: e(post_data, "source", "mediaType", nil) == "text/x.misskeymarkdown"
+        ]
       },
       "remote post attrs"
     )

@@ -996,7 +996,8 @@ defmodule Bonfire.Social.Objects do
   def set_boundaries(creator, thing, opts_or_attrs \\ [], for_module \\ __MODULE__) do
     # TODO: make default audience configurable & per object audience selectable by user in API and UI (note: also in `Federation.ap_prepare_activity`)
     boundary_preset =
-      e(opts_or_attrs, :attrs, :to_boundaries, nil) || e(opts_or_attrs, :to_boundaries, nil) ||
+      e(opts_or_attrs, :boundary, nil) || e(opts_or_attrs, :attrs, :to_boundaries, nil) ||
+        e(opts_or_attrs, :to_boundaries, nil) ||
         if(e(opts_or_attrs, :is_public, nil) == false or e(opts_or_attrs, :public, nil) == false,
           do: "mentions"
         ) ||

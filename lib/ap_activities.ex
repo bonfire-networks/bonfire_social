@@ -40,7 +40,14 @@ defmodule Bonfire.Social.APActivities do
 
   """
   def ap_receive_activity(creator, activity, object) do
-    create(creator, activity, object)
+    is_public? = Bonfire.Federate.ActivityPub.AdapterUtils.is_public?(activity, object)
+
+    create(
+      creator,
+      e(activity, :data, nil) || activity,
+      e(object, :data, nil) || object,
+      is_public?
+    )
   end
 
   @doc """
@@ -58,8 +65,8 @@ defmodule Bonfire.Social.APActivities do
   ## Examples
 
       iex> character = %Character{id: "user123"}
-      iex> activity = %{data: %{"type" => "Create", "object" => %{"content" => "Hello, world!"}}}
-      iex> object = %{data: %{"type" => "Note"}}
+      iex> activity = %{"type" => "Create", "object" => %{"content" => "Hello, world!"}}
+      iex> object = %{"type" => "Note"}
       iex> Bonfire.Social.APActivities.create(character, activity, object)
       {:ok, %APActivity{}}
 
@@ -69,12 +76,6 @@ defmodule Bonfire.Social.APActivities do
   """
   def create(character, activity, object, public \\ nil)
 
-  def create(character, activity, %{data: %{} = object} = struct, public_initial),
-    do: create(character, activity, object, public_initial || e(struct, :public, nil))
-
-  def create(character, %{data: %{} = activity} = struct, object, public_initial),
-    do: create(character, activity, object, public_initial || e(struct, :public, nil))
-
   # def create(character, %{verb: verb} = activity, object) when verb in ["update", "Update", :update, :edit, "edit"] is_map(activity) or is_map(object) do
   #   # TODO: store version history
   # end
@@ -83,13 +84,14 @@ defmodule Bonfire.Social.APActivities do
     if uid(character) do
       do_create(character, activity, object, public)
     else
+      #  TODO: use a utility function to extract actor ID
       with actor_id when is_binary(actor_id) <-
-             e(activity, :data, "actor", "id", nil) ||
-               e(activity, :data, "actor", nil) ||
-               e(object, :data, "attributedTo", "id", nil) ||
-               e(object, :data, "attributedTo", nil) ||
-               e(object, :data, "actor", "id", nil) ||
-               e(object, :data, "actor", nil),
+             e(activity, "actor", "id", nil) ||
+               e(activity, "actor", nil) ||
+               e(object, "attributedTo", "id", nil) ||
+               e(object, "attributedTo", nil) ||
+               e(object, "actor", "id", nil) ||
+               e(object, "actor", nil),
            {:ok, character} <-
              Utils.maybe_apply(
                Bonfire.Federate.ActivityPub.AdapterUtils,
@@ -112,21 +114,30 @@ defmodule Bonfire.Social.APActivities do
     debug(activity, "activity")
     debug(object, "object")
 
+    {boundary, to_circles} =
+      Bonfire.Federate.ActivityPub.AdapterUtils.incoming_boundary_circles(
+        activity,
+        object,
+        public
+      )
+      |> debug("incoming_boundary_circles")
+
     json =
       if is_map(object) do
-        Enum.into(%{"object" => the_object(object) || object}, activity || %{})
+        Enum.into(%{"object" => object}, activity || %{})
       else
         activity || %{}
       end
       |> debug("json to store")
 
-    boundary =
-      if(public, do: "public_remote", else: "mentions")
-      |> debug("set boundary")
-
     # TODO: reuse logic from Posts for targeting the audience
     opts =
-      [boundary: boundary, id: uid(object), verb: e(activity, :verb, :create)]
+      [
+        boundary: boundary,
+        to_circles: to_circles,
+        id: uid(object),
+        verb: e(activity, :verb, :create)
+      ]
       |> debug("ap_opts")
 
     with {:ok, apactivity} <- insert(character, json, opts) do
@@ -136,22 +147,19 @@ defmodule Bonfire.Social.APActivities do
     end
   end
 
-  defp do_create(character, activity, object) do
-    do_create(character, activity, Enum.into(object, %{public: false}))
-  end
+  # defp the_object(object) do
+  #   # NOTE: not using as it should come to us already normalised 
+  #   ActivityPub.Object.normalize(object, false)
+  #   |> ret_object()
+  # end
 
-  defp the_object(object) do
-    ActivityPub.Object.normalize(object, false)
-    |> ret_object()
-  end
+  # defp ret_object(%{data: data}) do
+  #   data
+  # end
 
-  defp ret_object(%{data: data}) do
-    data
-  end
-
-  defp ret_object(data) do
-    data
-  end
+  # defp ret_object(data) do
+  #   data
+  # end
 
   defp insert(character, json, opts) do
     # TODO: add type field(s) to the table to be able to quickly filter without JSONB?

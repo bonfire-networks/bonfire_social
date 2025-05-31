@@ -1065,4 +1065,21 @@ defmodule Bonfire.Social.Threads do
       end
     end
   end
+
+  def reply_to_ap_object(activity_data, post_data) do
+    # TODO: also take the `context` into account as thread_id
+    reply_to =
+      post_data["inReplyTo"] ||
+        activity_data["inReplyTo"]
+        |> debug("inReplyTo")
+
+    if reply_to,
+      do:
+        (e(reply_to, "items", nil) || e(reply_to, "id", nil) || reply_to)
+        |> List.wrap()
+        |> List.first()
+        |> debug("reply_to_single_ap_id")
+        |> ActivityPub.Object.get_cached!(ap_id: ...)
+        |> debug()
+  end
 end
