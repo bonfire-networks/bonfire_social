@@ -305,7 +305,7 @@ defmodule Bonfire.Social.FeedPaginationTest do
     # Should have larger limit (multiply_limit: 3)
     # The limit parameter will be bound
     assert next_query_string =~
-             "limit: ^#{flood(limit * deferred_join_multiply_limit + 1, "limit")}"
+             "limit: ^#{limit * deferred_join_multiply_limit + 1}"
 
     # but not in outer query
     assert next_query_string =~ "limit: ^#{limit + 1}"

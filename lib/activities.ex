@@ -1216,7 +1216,7 @@ defmodule Bonfire.Social.Activities do
     do:
       read_query(query, opts)
       |> as_permitted_for(opts, [:read])
-      # |> flood("a")
+      # |> debug("a")
       |> repo().single()
 
   @doc """

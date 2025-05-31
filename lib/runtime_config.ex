@@ -345,7 +345,8 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %FeedFilters{
             time_limit: 7,
             sort_by: :num_replies,
-            sort_order: :desc
+            sort_order: :desc,
+            exclude_activity_types: [:boost, :like, :follow]
           },
           icon: "mingcute:comment-fill"
         },

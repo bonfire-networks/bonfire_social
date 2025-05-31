@@ -154,7 +154,7 @@ defmodule Bonfire.Social.Objects do
            query
            |> Activities.read_query(opts)
            |> as_permitted_for(opts)
-           #  |> flood("q")
+           #  |> debug("q")
            |> repo().single() do
       {:ok,
        object
