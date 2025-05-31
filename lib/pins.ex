@@ -178,14 +178,22 @@ defmodule Bonfire.Social.Pins do
   end
 
   defp do_pin(pinner, %{} = pinned, opts \\ []) do
-    pinned = Objects.preload_creator(pinned)
-    pinned_creator = Objects.object_creator(pinned)
+    object_creator =
+      (opts[:object_creator] ||
+         (
+           pinned =
+             Objects.preload_creator(pinned)
+             |> debug("pinned object")
+
+           Objects.object_creator(pinned)
+         ))
+      |> debug("the creator")
 
     opts = [
       # TODO: make configurable
       boundary: "mentions",
-      to_circles: [uid(pinned_creator)],
-      to_feeds: Feeds.maybe_creator_notification(pinner, pinned_creator, opts)
+      to_circles: [uid(object_creator)],
+      to_feeds: Feeds.maybe_creator_notification(pinner, object_creator, opts)
     ]
 
     case create(pinner, pinned, opts) do

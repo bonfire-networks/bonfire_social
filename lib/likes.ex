@@ -192,16 +192,24 @@ defmodule Bonfire.Social.Likes do
   end
 
   def do_like(%{} = liker, %{} = liked, opts \\ []) do
-    liked = Objects.preload_creator(liked)
-    liked_object_creator = Objects.object_creator(liked)
+    object_creator =
+      (opts[:object_creator] ||
+         (
+           liked =
+             Objects.preload_creator(liked)
+             |> debug("liked object")
+
+           Objects.object_creator(liked)
+         ))
+      |> debug("the creator")
 
     opts =
       opts
       |> Keyword.merge(
         # TODO: make configurable
         boundary: "mentions",
-        to_circles: [id(liked_object_creator)],
-        to_feeds: Feeds.maybe_creator_notification(liker, liked_object_creator, opts)
+        to_circles: [id(object_creator)],
+        to_feeds: Feeds.maybe_creator_notification(liker, object_creator, opts)
       )
 
     case create(liker, liked, opts) do
