@@ -602,6 +602,14 @@ defmodule Bonfire.Social.Activities do
           |> join_per_media(:left)
           |> proload(activity: [:media])
 
+        :sensitivity ->
+          query
+          |> proload(activity: [:sensitive])
+
+        :activity_name ->
+          query
+          |> proload(activity: [:named])
+
         # |> Ecto.Query.exclude(:distinct)
         # |> distinct([media: media], desc: media.id)
         # ^ NOTE: the media id should be equivalent to the object id so not necessary to customise
@@ -734,6 +742,12 @@ defmodule Bonfire.Social.Activities do
 
         :with_media ->
           [:media, :sensitive]
+
+        :sensitivity ->
+          [:sensitive]
+
+        :activity_name ->
+          [:named]
 
         :maybe_with_labelled ->
           maybe_with_labelled()

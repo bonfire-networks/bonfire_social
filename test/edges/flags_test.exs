@@ -123,6 +123,7 @@ defmodule Bonfire.Social.FlagsTest do
 
     assert {:ok, flag} = Flags.flag(me, flagged)
 
+    # NOTE: we now use feed queries to list flags instead
     assert %{edges: [fetched_flag]} = Flags.list_paginated([subject: me], current_user: me)
 
     assert flag.id == fetched_flag.id
@@ -154,7 +155,68 @@ defmodule Bonfire.Social.FlagsTest do
 
     assert {:ok, flag} = Flags.flag(someone, flagged)
 
+    # NOTE: we now use feed queries to list flags instead
     assert %{edges: [fetched_flag]} = Flags.list_paginated([:all], current_user: me)
+
+    assert flag.id == fetched_flag.id
+    assert flag.edge.object_id == fetched_flag.edge.object_id
+    assert flag.edge.subject_id == fetched_flag.edge.subject_id
+  end
+
+  test "can list something's flaggers (as an admin)" do
+    me = Fake.fake_user!()
+    {:ok, me} = Users.make_admin(me)
+    someone = Fake.fake_user!()
+
+    attrs = %{
+      post_content: %{
+        summary: "summary",
+        name: "name",
+        html_body: "<p>epic html message</p>"
+      }
+    }
+
+    assert {:ok, flagged} =
+             Posts.publish(
+               current_user: me,
+               post_attrs: attrs,
+               boundary: "public"
+             )
+
+    assert {:ok, flag} = Flags.flag(someone, flagged)
+
+    # NOTE: we now use feed queries to list flags instead
+    assert %{edges: [fetched_flag]} = Flags.list_paginated([object: flagged], current_user: me)
+
+    assert flag.id == fetched_flag.id
+    assert flag.edge.object_id == fetched_flag.edge.object_id
+    assert flag.edge.subject_id == fetched_flag.edge.subject_id
+  end
+
+  test "can list someone else's flags (as an admin)" do
+    me = Fake.fake_user!()
+    {:ok, me} = Users.make_admin(me)
+    someone = Fake.fake_user!()
+
+    attrs = %{
+      post_content: %{
+        summary: "summary",
+        name: "name",
+        html_body: "<p>epic html message</p>"
+      }
+    }
+
+    assert {:ok, flagged} =
+             Posts.publish(
+               current_user: me,
+               post_attrs: attrs,
+               boundary: "public"
+             )
+
+    assert {:ok, flag} = Flags.flag(someone, flagged)
+
+    # NOTE: we now use feed queries to list flags instead
+    assert %{edges: [fetched_flag]} = Flags.list_paginated([subject: someone], current_user: me)
 
     assert flag.id == fetched_flag.id
     assert flag.edge.object_id == fetched_flag.edge.object_id
@@ -186,70 +248,29 @@ defmodule Bonfire.Social.FlagsTest do
     comment = "this is spam"
     assert {:ok, flag} = Flags.flag(someone, flagged, comment: comment)
 
+    # NOTE: we now use feed queries to list flags instead
     assert %{edges: [fetched_flag]} = Flags.list_paginated([:all], current_user: me)
 
     assert flag.id == fetched_flag.id
     assert flag.edge.object_id == fetched_flag.edge.object_id
     assert flag.edge.subject_id == fetched_flag.edge.subject_id
     assert comment == fetched_flag.named.name
-  end
 
-  test "can list something's flaggers (as an admin)" do
-    me = Fake.fake_user!()
-    {:ok, me} = Users.make_admin(me)
-    someone = Fake.fake_user!()
-
-    attrs = %{
-      post_content: %{
-        summary: "summary",
-        name: "name",
-        html_body: "<p>epic html message</p>"
-      }
-    }
-
-    assert {:ok, flagged} =
-             Posts.publish(
-               current_user: me,
-               post_attrs: attrs,
-               boundary: "public"
-             )
-
-    assert {:ok, flag} = Flags.flag(someone, flagged)
-
-    assert %{edges: [fetched_flag]} = Flags.list_paginated([object: flagged], current_user: me)
+    assert %{edges: [%{activity: fetched_flag}]} =
+             FeedActivities.feed(:notifications, current_user: me, preload_context: :all)
 
     assert flag.id == fetched_flag.id
-    assert flag.edge.object_id == fetched_flag.edge.object_id
-    assert flag.edge.subject_id == fetched_flag.edge.subject_id
-  end
+    assert flag.edge.object_id == fetched_flag.object_id
+    assert flag.edge.subject_id == fetched_flag.subject_id
+    assert comment == fetched_flag.named.name
 
-  test "can list someone else's flags (as an admin)" do
-    me = Fake.fake_user!()
-    {:ok, me} = Users.make_admin(me)
-    someone = Fake.fake_user!()
-
-    attrs = %{
-      post_content: %{
-        summary: "summary",
-        name: "name",
-        html_body: "<p>epic html message</p>"
-      }
-    }
-
-    assert {:ok, flagged} =
-             Posts.publish(
-               current_user: me,
-               post_attrs: attrs,
-               boundary: "public"
-             )
-
-    assert {:ok, flag} = Flags.flag(someone, flagged)
-
-    assert %{edges: [fetched_flag]} = Flags.list_paginated([subject: someone], current_user: me)
+    assert %{edges: [%{activity: fetched_flag}]} =
+             FeedActivities.feed(:flagged_content, current_user: me, preload_context: :all)
 
     assert flag.id == fetched_flag.id
-    assert flag.edge.object_id == fetched_flag.edge.object_id
-    assert flag.edge.subject_id == fetched_flag.edge.subject_id
+    assert flag.edge.object_id == fetched_flag.object_id
+    assert flag.edge.subject_id == fetched_flag.subject_id
+    assert comment == fetched_flag.named.name
   end
 
   test "see a flag of something in my notifications (as an admin)" do

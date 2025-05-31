@@ -406,7 +406,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         },
         "Notifications Feed (Only for me)" => %{
           match: %{feed_name: :notifications},
-          include: [:with_seen, :with_reply_to, :emoji]
+          include: [:with_seen, :with_reply_to, :emoji, :sensitivity, :activity_name]
         },
         # "Messages Feed (Only for me)" => %{
         #   match: %{feed_name: :messages},
@@ -451,7 +451,11 @@ defmodule Bonfire.Social.RuntimeConfig do
           match: %{creators: "*"},
           exclude: [:with_creator, :with_subject]
         },
-
+        "Flags" => %{
+          match: %{activity_types: [:flag]},
+          include: [:sensitivity, :activity_name],
+          exclude: []
+        },
         # Different Types of Feeds
         "By object type" => %{
           match: %{object_types: "*"},

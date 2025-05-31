@@ -1112,7 +1112,7 @@ defmodule Bonfire.Social.FeedLoader do
           preloads
 
         _ ->
-          contextual_preloads_from_filters(filters, :query)
+          contextual_preloads_from_filters(filters, opts[:preload_context] || :query)
           |> debug("preloads to apply based on filters")
       end
 
