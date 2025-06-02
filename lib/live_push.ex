@@ -245,8 +245,8 @@ defmodule Bonfire.Social.LivePush do
       icon: icon || Config.get([:ui, :theme, :instance_icon], nil)
     }
 
-    # TODO: send email notif?
-    warn(notify_emails, "TODO")
+    # WIP: send email notif?
+    debug(notify_emails, "WIP")
     # debug(Bonfire.UI.Social.ActivityLive.activity_components(
     #      %{subject: subject, verb: verb},
     #      object,
