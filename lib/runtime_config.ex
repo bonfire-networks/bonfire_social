@@ -239,28 +239,44 @@ defmodule Bonfire.Social.RuntimeConfig do
           name: l("Research"),
           built_in: true,
           description: "All known research publications",
-          filters: %FeedFilters{media_types: [:research]},
+          filters: %FeedFilters{
+            media_types: [:research],
+            # temp workaround because booster subject not showing
+            exclude_activity_types: [:boost]
+          },
           icon: "mingcute:paper-fill"
         },
         images: %{
           name: l("Images"),
           built_in: true,
           description: "All known images",
-          filters: %FeedFilters{media_types: ["image"]},
+          filters: %FeedFilters{
+            media_types: ["image"],
+            # temp workaround because booster subject not showing
+            exclude_activity_types: [:boost]
+          },
           icon: "ic:round-image"
         },
         videos: %{
           name: l("Videos"),
           built_in: true,
           description: "All known videos",
-          filters: %FeedFilters{media_types: ["video"]},
+          filters: %FeedFilters{
+            media_types: ["video"],
+            # temp workaround because booster subject not showing
+            exclude_activity_types: [:boost]
+          },
           icon: "majesticons:video"
         },
         audio: %{
           name: l("Audio"),
           built_in: true,
           description: "All known audio",
-          filters: %FeedFilters{media_types: ["audio"]},
+          filters: %FeedFilters{
+            media_types: ["audio"],
+            # temp workaround because booster subject not showing
+            exclude_activity_types: [:boost]
+          },
           icon: "lucide:audio-lines"
         },
 
@@ -356,7 +372,9 @@ defmodule Bonfire.Social.RuntimeConfig do
           description: "All media shared on the local instance",
           filters: %FeedFilters{
             origin: :local,
-            media_types: ["*"]
+            media_types: ["*"],
+            # temp workaround because booster subject not showing
+            exclude_activity_types: [:boost]
           },
           icon: "mingcute:folder-fill"
         }
