@@ -240,9 +240,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           built_in: true,
           description: "All known research publications",
           filters: %FeedFilters{
-            media_types: [:research],
-            # temp workaround because booster subject not showing
-            exclude_activity_types: [:boost]
+            media_types: [:research]
           },
           icon: "mingcute:paper-fill"
         },
@@ -251,9 +249,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           built_in: true,
           description: "All known images",
           filters: %FeedFilters{
-            media_types: ["image"],
-            # temp workaround because booster subject not showing
-            exclude_activity_types: [:boost]
+            media_types: ["image"]
           },
           icon: "ic:round-image"
         },
@@ -262,9 +258,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           built_in: true,
           description: "All known videos",
           filters: %FeedFilters{
-            media_types: ["video"],
-            # temp workaround because booster subject not showing
-            exclude_activity_types: [:boost]
+            media_types: ["video"]
           },
           icon: "majesticons:video"
         },
@@ -273,9 +267,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           built_in: true,
           description: "All known audio",
           filters: %FeedFilters{
-            media_types: ["audio"],
-            # temp workaround because booster subject not showing
-            exclude_activity_types: [:boost]
+            media_types: ["audio"]
           },
           icon: "lucide:audio-lines"
         },
@@ -372,9 +364,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           description: "All media shared on the local instance",
           filters: %FeedFilters{
             origin: :local,
-            media_types: ["*"],
-            # temp workaround because booster subject not showing
-            exclude_activity_types: [:boost]
+            media_types: ["*"]
           },
           icon: "mingcute:folder-fill"
         }
@@ -496,7 +486,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           ],
           exclude: [
             :with_media,
-            :with_subject,
+            # :with_subject,
             :with_object,
             :with_object_more,
             :with_reply_to
