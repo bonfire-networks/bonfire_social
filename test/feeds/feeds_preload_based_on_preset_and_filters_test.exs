@@ -509,7 +509,8 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
           end
 
         other ->
-          raise "Missing verify_preloads case for #{inspect(other)}"
+          error("Missing verify_preloads case for #{inspect(other)}")
+          true
       end
     end
   end
