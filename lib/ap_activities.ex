@@ -17,6 +17,7 @@ defmodule Bonfire.Social.APActivities do
   import Untangle
 
   use Bonfire.Common.Utils
+  use Bonfire.Common.Repo
   import Bonfire.Common.Config, only: [repo: 0]
 
   @doc """
@@ -201,5 +202,31 @@ defmodule Bonfire.Social.APActivities do
          _current_user
        ) do
     changeset
+  end
+
+  def filter_by_type(query \\ Object, activity_type)
+
+  def filter_by_type(query, types) when is_list(types) do
+    where(
+      query,
+      [a],
+      fragment("(?)->>'type' = ?", a.json, ^types)
+    )
+  end
+
+  def filter_by_type(query, type) do
+    where(
+      query,
+      [a],
+      fragment("(?)->>'type' = ?", a.json, ^type)
+    )
+  end
+
+  def filter_exclude_type(query \\ Object, type) do
+    where(
+      query,
+      [a],
+      fragment("(?)->>'type' != ?", a.json, ^type)
+    )
   end
 end

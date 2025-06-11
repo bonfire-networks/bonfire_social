@@ -1132,13 +1132,22 @@ defmodule Bonfire.Social.FeedLoader do
       end
       |> debug("skip_boundary_check?")
 
+    {exclude_table_ids, exclude_other_object_types} =
+      Objects.prepare_object_types(
+        e(filters, :exclude_object_types, []) ++
+          e(opts, :exclude_object_types, []) ++
+          skip_types_default()
+      )
+
     {filters
-     |> Map.put_new_lazy(:exclude_table_ids, fn ->
-       Objects.prepare_exclude_object_types(
-         e(filters, :exclude_object_types, []) ++ e(opts, :exclude_object_types, []),
-         skip_types_default()
-       )
-     end)
+     |> Map.put(
+       :exclude_table_ids,
+       exclude_table_ids ++ e(filters, :exclude_table_ids, []) ++ e(opts, :exclude_table_ids, [])
+     )
+     |> Map.put(
+       :exclude_object_types,
+       exclude_other_object_types
+     )
      |> Map.put_new_lazy(:exclude_verb_ids, fn ->
        exclude_activity_types =
          debug(
@@ -1220,7 +1229,10 @@ defmodule Bonfire.Social.FeedLoader do
      #    :skip_boundary_check,
      #    skip_boundary_check
      #  )
-     |> Map.drop([:exclude_object_types, :exclude_activity_types]),
+     |> Map.drop([
+       # :exclude_object_types, 
+       :exclude_activity_types
+     ]),
      opts
      |> Keyword.merge(
        preload: preload,
@@ -1234,7 +1246,7 @@ defmodule Bonfire.Social.FeedLoader do
 
   defp maybe_filter(query, filters, opts) when is_list(filters) or is_map(filters) do
     #  TODO: put in config
-    priority_filters_ordered = [:exclude_object_types, :exclude_table_ids]
+    priority_filters_ordered = [:object_types, :exclude_object_types, :exclude_table_ids]
 
     {to_run_first, remaining} =
       Enums.struct_to_map(filters)

@@ -814,6 +814,19 @@ defmodule Bonfire.Social.Activities do
     )
   end
 
+  def join_per_ap_activity(query, _inner) do
+    query
+    |> reusable_join(
+      :inner,
+      [activity: activity],
+      object in Bonfire.Data.Social.APActivity,
+      as: :object,
+      on: activity.object_id == object.id
+    )
+
+    # ^ adds a join to show ONLY APActivity objects in activities 
+  end
+
   defp query_preload_seen(q, opts) do
     user_id = uid(current_user(opts))
 
@@ -1335,21 +1348,43 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
+  def maybe_filter(query, {:object_types, types}, _opts) when not is_nil(types) do
+    case Objects.partition_table_types(types) |> debug("object_type_tables") do
+      {table_ids, []} when is_list(table_ids) and table_ids != [] ->
+        where(query, [object: object], object.table_id in ^table_ids)
+
+      {[], other_types} when is_list(other_types) and other_types != [] ->
+        query
+        |> join_per_ap_activity(:inner)
+        |> proload(:left, activity: [:object])
+        |> where(
+          [object: object],
+          fragment("(?)->'object'->>'type' = ANY(?)", object.json, ^other_types) or
+            fragment("(?)->>'type' = ANY(?)", object.json, ^other_types)
+        )
+
+      other ->
+        warn(other, "Unrecognised prepare_object_types for '#{inspect(types)}'")
+        query
+    end
+  end
+
   def maybe_filter(query, {:exclude_object_types, types}, _opts) when not is_nil(types) do
     debug(types, "filter by exclude_object_types")
 
-    case Objects.prepare_exclude_object_types(
-           types,
-           Bonfire.Social.FeedLoader.skip_types_default()
-         ) do
-      exclude_table_ids when is_list(exclude_table_ids) and exclude_table_ids != [] ->
-        debug(types, "filter by exclude_table_ids")
-        maybe_filter(query, {:exclude_table_ids, exclude_table_ids}, [])
+    # case Objects.prepare_exclude_object_types(
+    #        types ++ Bonfire.Social.FeedLoader.skip_types_default()
+    #      ) do
+    #   exclude_table_ids when is_list(exclude_table_ids) and exclude_table_ids != [] ->
+    #     debug(types, "filter by exclude_table_ids")
+    #     maybe_filter(query, {:exclude_table_ids, exclude_table_ids}, [])
 
-      other ->
-        debug(other, "other exclude_table_ids")
-        query
-    end
+    #   #
+    #   other ->
+    # TODO: support custom APActivity types 
+    # debug(other, "other exclude_table_ids")
+    query
+    # end
   end
 
   def maybe_filter(query, {:exclude_table_ids, exclude_table_ids}, _opts)

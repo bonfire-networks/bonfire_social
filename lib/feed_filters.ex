@@ -23,14 +23,18 @@ defmodule Bonfire.Social.FeedFilters do
 
     field :subjects, StringList
     field :exclude_subjects, StringList
+
     field :subject_circles, StringList
     field :exclude_subject_circles, StringList
+
     field :subject_types, AtomOrStringList
     field :exclude_subject_types, AtomOrStringList
 
     field :objects, StringList
     field :exclude_objects, StringList
+
     field :object_circles, StringList
+
     field :object_types, AtomOrStringList
     field :exclude_object_types, AtomOrStringList
 
@@ -40,6 +44,7 @@ defmodule Bonfire.Social.FeedFilters do
 
     field :media_types, AtomOrStringList
     field :exclude_media_types, AtomOrStringList
+
     field :tags, StringList
 
     #  can be :local, :remote, or ID(s) or domain name(s) of remote instance(s)

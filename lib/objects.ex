@@ -367,60 +367,51 @@ defmodule Bonfire.Social.Objects do
     end
   end
 
-  def maybe_filter(query, {:objects, object}, _opts) do
-    # TODO? for cases where we're not already filtering by object_id in Activities.maybe_filter
-    query
-    # case Types.uid_or_uids(object) do
-    #   id when is_binary(id) ->
-    #     where(query, [object: object], object.id == ^id)
+  # def maybe_filter(query, {:objects, object}, _opts) do
+  #   # TODO? for cases where we're not already filtering by object_id in Activities.maybe_filter
+  #   query
+  #   # case Types.uid_or_uids(object) do
+  #   #   id when is_binary(id) ->
+  #   #     where(query, [object: object], object.id == ^id)
 
-    #   ids when is_list(ids) and ids != [] ->
-    #     where(query, [object: object], object.id in ^ids)
+  #   #   ids when is_list(ids) and ids != [] ->
+  #   #     where(query, [object: object], object.id in ^ids)
 
-    #   _ ->
-    #     query
-    # end
-  end
+  #   #   _ ->
+  #   #     query
+  #   # end
+  # end
 
-  def maybe_filter(query, {:object_types, object_type}, _opts) when not is_nil(object_type) do
-    case Bonfire.Common.Types.table_types(object_type) |> debug("object_type_tables") do
-      table_ids when is_list(table_ids) and table_ids != [] ->
-        where(query, [object: object], object.table_id in ^table_ids)
+  # def maybe_filter(query, {:exclude_object_types, types}, opts) do
+  #   # TODO? for cases where we're not already filtering by table_ids in Activities.maybe_filter
+  #   case prepare_object_types(types)
+  #        |> debug("exclude_object_types_tables") do
+  #     {table_ids, []} when is_list(table_ids) and table_ids != [] ->
+  #       maybe_filter(query, {:exclude_table_ids, table_ids}, opts)
 
-      other ->
-        warn(other, "Unrecognised object_type '#{object_type}'")
-        query
-    end
-  end
-
-  def maybe_filter(query, {:exclude_object_types, types}, opts) do
-    case prepare_exclude_object_types(types)
-         |> debug("exclude_object_types_tables") do
-      table_ids when is_list(table_ids) and table_ids != [] ->
-        maybe_filter(query, {:exclude_table_ids, table_ids}, opts)
-
-      _ ->
-        query
-    end
-  end
+  #       other ->
+  #         warn(other, "Unrecognised prepare_object_types for '#{inspect types}'")
+  #       query
+  #   end
+  # end
 
   # def maybe_filter(query, {:exclude_object_types, types}, _opts) do
   #   # TODO? for cases where we're not already filtering by object_id in Activities.maybe_filter
   #   query
   # end
 
-  def maybe_filter(query, {:exclude_table_ids, table_ids}, _opts)
-      when is_list(table_ids) and table_ids != [] do
-    # TODO? for cases where we're not already filtering by table_ids in Activities.maybe_filter
-    query
-    # |> reusable_join(:inner, [activity: activity], object in Pointer,
-    #   as: :object,
-    #   # Don't show certain object types (like messages) or anything deleted
-    #   on:
-    #     object.id == activity.object_id and
-    #       is_nil(object.deleted_at) and object.table_id not in ^table_ids
-    # )
-  end
+  # def maybe_filter(query, {:exclude_table_ids, table_ids}, _opts)
+  #     when is_list(table_ids) and table_ids != [] do
+  #   # TODO? for cases where we're not already filtering by table_ids in Activities.maybe_filter
+  #   query
+  #   # |> reusable_join(:inner, [activity: activity], object in Pointer,
+  #   #   as: :object,
+  #   #   # Don't show certain object types (like messages) or anything deleted
+  #   #   on:
+  #   #     object.id == activity.object_id and
+  #   #       is_nil(object.deleted_at) and object.table_id not in ^table_ids
+  #   # )
+  # end
 
   def maybe_filter(query, {:media_types, types}, _opts) when is_list(types) and types != [] do
     case prepare_media_type(types) do
@@ -536,31 +527,83 @@ defmodule Bonfire.Social.Objects do
     end
   end
 
+  def prepare_object_types(types) do
+    cond do
+      "*" in types ->
+        {[], []}
+
+      :* in types ->
+        {[], []}
+
+      true ->
+        partition_table_types(types)
+    end
+  end
+
+  @doc """
+  Takes a list of types and returns a tuple containing:
+  1. A list of valid table type IDs extracted from the types
+  2. A list of types that couldn't be converted to table IDs
+
+  This is useful when you need to process known table types and unknown types differently.
+
+  ## Examples
+
+      iex> partition_table_types([Bonfire.Data.Social.Post, "unknown_type", %{table_id: "30NF1REAPACTTAB1ENVMBER0NE"}])
+      {["30NF1REP0STTAB1ENVMBER0NEE", "30NF1REAPACTTAB1ENVMBER0NE"], ["unknown_type"]}
+
+      iex> partition_table_types(Bonfire.Data.Social.Post)
+      {["30NF1REP0STTAB1ENVMBER0NEE"], []}
+
+      iex> partition_table_types("unknown_type")
+      {[], ["unknown_type"]}
+
+      iex> partition_table_types([])
+      {[], []}
+  """
+  def partition_table_types(types) do
+    case types do
+      nil ->
+        {[], []}
+
+      [] ->
+        {[], []}
+
+      types ->
+        # Prepare the types
+        types = List.wrap(types) |> List.flatten()
+
+        # Process each item to attempt table type extraction
+        Enum.reduce(types, {[], []}, fn type, {valid_table_ids, unknown_types} ->
+          case Types.table_type(type) do
+            table_id when is_binary(table_id) ->
+              # Successfully extracted a table ID
+              {valid_table_ids ++ [table_id], unknown_types}
+
+            _ ->
+              if is_binary(type) or (is_atom(type) and not is_nil(type) and type != false) do
+                {valid_table_ids, unknown_types ++ [to_string(type)]}
+              else
+                warn(type, "Unrecognised type")
+                {valid_table_ids, unknown_types}
+              end
+          end
+        end)
+        # Return the accumulated lists with duplicates removed
+        |> then(fn {valid_table_ids, unknown_types} ->
+          {
+            valid_table_ids |> Enum.dedup() |> Enums.filter_empty([]),
+            unknown_types |> Enum.dedup() |> Enums.filter_empty([])
+          }
+        end)
+    end
+  end
+
   @doc """
   Returns a basic query over undeleted pointable objects in the system,
   optionally limited to one or more types.
   """
   def query_base(type \\ nil), do: Needle.Pointers.query_base(type)
-
-  # @doc """
-  # Modifies the query to exclude records of the provided type or types,
-  # which may be ULID table IDs or schema module names.
-
-  # Note: expects you to be querying against `Pointer`, i.e. to not have limited the types already.
-  # """
-  # def exclude_object_types(query, types) do
-  #   types = Enum.map(List.wrap(types), &get_table_id!/1)
-  #   from(q in query, where: q.table_id not in ^types)
-  # end
-
-  def prepare_exclude_object_types(extras \\ [], defaults \\ []) do
-    # eg. private messages should never appear in feeds
-
-    (defaults ++ extras)
-    |> Bonfire.Common.Types.table_types()
-
-    # |> debug("exxclude_tables")
-  end
 
   @doc """
   Sets the name/title of an object.
