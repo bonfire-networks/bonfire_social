@@ -474,7 +474,7 @@ defmodule Bonfire.Social.FeedsFiltersTest do
       refute FeedLoader.feed_contains?(feed, local_post, current_user: user)
     end
 
-    test "with  instance domain name", %{
+    test "with instance domain name", %{
       user: user,
       other_user: other_user,
       local_post: local_post,

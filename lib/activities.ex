@@ -35,7 +35,7 @@ defmodule Bonfire.Social.Activities do
   alias Bonfire.Boundaries.Verbs
   alias Ecto.Changeset
   # alias Bonfire.Social.Edges
-  # alias Bonfire.Social.Feeds
+  alias Bonfire.Social.Feeds
   alias Bonfire.Social.FeedActivities
   alias Bonfire.Social.Objects
 
@@ -64,7 +64,7 @@ defmodule Bonfire.Social.Activities do
     # debug(changeset)
     changeset
     |> put_assoc(verb, creator, opts[:object_id])
-    |> FeedActivities.cast(opts[:feed_ids])
+    |> FeedActivities.cast(opts[:feed_ids] || Feeds.target_feeds(changeset, creator, opts))
 
     # |> debug("csss")
   end
