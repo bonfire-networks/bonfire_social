@@ -12,7 +12,6 @@ defmodule Bonfire.Social.BoostsTest do
     attrs = %{
       post_content: %{
         summary: "summary",
-        name: "name",
         html_body: "<p>epic html message</p>"
       }
     }
@@ -40,7 +39,6 @@ defmodule Bonfire.Social.BoostsTest do
     attrs = %{
       post_content: %{
         summary: "summary",
-        name: "name",
         html_body: "<p>epic html message</p>"
       }
     }
@@ -82,7 +80,6 @@ defmodule Bonfire.Social.BoostsTest do
     attrs = %{
       post_content: %{
         summary: "summary",
-        name: "name",
         html_body: "<p>epic html message</p>"
       }
     }
@@ -106,7 +103,6 @@ defmodule Bonfire.Social.BoostsTest do
     attrs = %{
       post_content: %{
         summary: "summary",
-        name: "name",
         html_body: "<p>epic html message</p>"
       }
     }
@@ -132,7 +128,6 @@ defmodule Bonfire.Social.BoostsTest do
     attrs = %{
       post_content: %{
         summary: "summary",
-        name: "name",
         html_body: "<p>epic html message</p>"
       }
     }
@@ -159,7 +154,6 @@ defmodule Bonfire.Social.BoostsTest do
     attrs = %{
       post_content: %{
         summary: "summary",
-        name: "name",
         html_body: "<p>epic html message</p>"
       }
     }

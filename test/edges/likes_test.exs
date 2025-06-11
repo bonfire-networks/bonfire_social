@@ -17,7 +17,6 @@ defmodule Bonfire.Social.LikesTest do
     attrs = %{
       post_content: %{
         summary: "summary",
-        name: "name",
         html_body: "<p>epic html message</p>"
       }
     }
@@ -41,7 +40,6 @@ defmodule Bonfire.Social.LikesTest do
     attrs = %{
       post_content: %{
         summary: "summary",
-        name: "name",
         html_body: "<p>epic html message</p>"
       }
     }
@@ -63,7 +61,6 @@ defmodule Bonfire.Social.LikesTest do
     attrs = %{
       post_content: %{
         summary: "summary",
-        name: "name",
         html_body: "<p>epic html message</p>"
       }
     }
@@ -84,7 +81,6 @@ defmodule Bonfire.Social.LikesTest do
     attrs = %{
       post_content: %{
         summary: "summary",
-        name: "name",
         html_body: "<p>epic html message</p>"
       }
     }
@@ -107,7 +103,6 @@ defmodule Bonfire.Social.LikesTest do
     attrs = %{
       post_content: %{
         summary: "summary",
-        name: "name",
         html_body: "<p>epic html message</p>"
       }
     }
@@ -133,7 +128,6 @@ defmodule Bonfire.Social.LikesTest do
     attrs = %{
       post_content: %{
         summary: "summary",
-        name: "name",
         html_body: "<p>epic html message</p>"
       }
     }
@@ -173,7 +167,6 @@ defmodule Bonfire.Social.LikesTest do
     attrs = %{
       post_content: %{
         summary: "summary",
-        name: "name",
         html_body: "<p>epic html message</p>"
       }
     }
@@ -198,7 +191,6 @@ defmodule Bonfire.Social.LikesTest do
     attrs = %{
       post_content: %{
         summary: "summary",
-        name: "name",
         html_body: "<p>epic html message</p>"
       }
     }

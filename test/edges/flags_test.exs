@@ -16,7 +16,6 @@ defmodule Bonfire.Social.FlagsTest do
     attrs = %{
       post_content: %{
         summary: "summary",
-        name: "name",
         html_body: "<p>epic html message</p>"
       }
     }
@@ -40,7 +39,6 @@ defmodule Bonfire.Social.FlagsTest do
     attrs = %{
       post_content: %{
         summary: "summary",
-        name: "name",
         html_body: "<p>epic html message</p>"
       }
     }
@@ -63,7 +61,6 @@ defmodule Bonfire.Social.FlagsTest do
     attrs = %{
       post_content: %{
         summary: "summary",
-        name: "name",
         html_body: "<p>epic html message</p>"
       }
     }
@@ -84,7 +81,6 @@ defmodule Bonfire.Social.FlagsTest do
     attrs = %{
       post_content: %{
         summary: "summary",
-        name: "name",
         html_body: "<p>epic html message</p>"
       }
     }
@@ -109,7 +105,6 @@ defmodule Bonfire.Social.FlagsTest do
     attrs = %{
       post_content: %{
         summary: "summary",
-        name: "name",
         html_body: "<p>epic html message</p>"
       }
     }
@@ -139,7 +134,6 @@ defmodule Bonfire.Social.FlagsTest do
     attrs = %{
       post_content: %{
         summary: "summary",
-        name: "name",
         html_body: "<p>epic html message</p>"
       }
     }
@@ -171,7 +165,6 @@ defmodule Bonfire.Social.FlagsTest do
     attrs = %{
       post_content: %{
         summary: "summary",
-        name: "name",
         html_body: "<p>epic html message</p>"
       }
     }
@@ -201,7 +194,6 @@ defmodule Bonfire.Social.FlagsTest do
     attrs = %{
       post_content: %{
         summary: "summary",
-        name: "name",
         html_body: "<p>epic html message</p>"
       }
     }
@@ -231,7 +223,6 @@ defmodule Bonfire.Social.FlagsTest do
     attrs = %{
       post_content: %{
         summary: "summary",
-        name: "name",
         html_body: "<p>epic html message</p>"
       }
     }

@@ -26,7 +26,7 @@ defmodule Bonfire.Social.NotificationEmailsTest do
     # Follows.follow(alice, bob)
 
     attrs = %{
-      post_content: %{summary: "summary", name: "test post name", html_body: "<p>first post</p>"}
+      post_content: %{summary: "summary", html_body: "<p>first post</p>"}
     }
 
     assert {:ok, post} = Posts.publish(current_user: alice, post_attrs: attrs, boundary: "public")

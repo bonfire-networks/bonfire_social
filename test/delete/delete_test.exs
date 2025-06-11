@@ -24,7 +24,6 @@ defmodule Bonfire.Social.DeleteTest do
       fake_post!(user, "public", %{
         post_content: %{
           summary: "summary",
-          name: "name",
           html_body: "epic html"
         }
       })
@@ -73,7 +72,6 @@ defmodule Bonfire.Social.DeleteTest do
       fake_post!(user, "public", %{
         post_content: %{
           summary: "summary",
-          name: "name",
           html_body: "epic html"
         }
       })
