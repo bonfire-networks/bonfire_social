@@ -1353,13 +1353,14 @@ defmodule Bonfire.Social.Activities do
       {table_ids, []} when is_list(table_ids) and table_ids != [] ->
         query
         |> reusable_join(:inner, [activity: activity], object in Pointer,
-        as: :object,
-        # FIXME: should run the :exclude_object_types filter first in this case
-        on:
-          object.id == activity.object_id and
-            is_nil(object.deleted_at) # and object.table_id not in ^exclude_table_ids
-      )
-      |> where([object: object], object.table_id in ^table_ids)
+          as: :object,
+          # FIXME: should run the :exclude_object_types filter first in this case
+          # and object.table_id not in ^exclude_table_ids
+          on:
+            object.id == activity.object_id and
+              is_nil(object.deleted_at)
+        )
+        |> where([object: object], object.table_id in ^table_ids)
 
       {[], other_types} when is_list(other_types) and other_types != [] ->
         query
