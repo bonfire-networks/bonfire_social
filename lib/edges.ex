@@ -596,6 +596,6 @@ defmodule Bonfire.Social.Edges do
       q
       |> Ecto.Query.exclude(:preload)
       |> Ecto.Query.exclude(:order_by)
-      |> repo().delete_all()
+      |> repo().delete_many()
       |> elem(1)
 end
