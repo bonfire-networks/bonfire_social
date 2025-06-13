@@ -200,7 +200,7 @@ defmodule Bonfire.Social.Activities do
     # FIXME? does cascading delete take care of this?
     FeedActivities.delete(repo().many(q), :id)
     # TODO? maybe_remove_for_deleters_feeds(id)
-    elem(repo().delete_all(q), 1)
+    elem(repo().delete_many(q), 1)
   end
 
   @doc """
