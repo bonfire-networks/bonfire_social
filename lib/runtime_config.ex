@@ -299,6 +299,28 @@ defmodule Bonfire.Social.RuntimeConfig do
             feedback_title: l("Nothing curated yet?")
           ]
         },
+        events: %{
+          name: l("Events"),
+          built_in: true,
+          description: l("Events and gatherings"),
+          filters: %FeedFilters{
+            feed_name: :events,
+            # ActivityPub Event type
+            object_types: ["Event"],
+            exclude_activity_types: [:like, :boost, :flag]
+          },
+          icon: "ph:calendar-blank-bold",
+          assigns: [
+            selected_tab: :events,
+            page: "events",
+            page_title: l("Events"),
+            feedback_title: l("No events found"),
+            feedback_message:
+              l(
+                "There are no upcoming events to show. Events from other federated platforms like Mobilizon will appear here."
+              )
+          ]
+        },
         my_flags: %{
           name: l("My Flags"),
           built_in: true,
@@ -463,6 +485,11 @@ defmodule Bonfire.Social.RuntimeConfig do
           match: %{activity_types: [:flag]},
           include: [:sensitivity, :activity_name],
           exclude: []
+        },
+        "Events Feed" => %{
+          match: %{feed_name: :events},
+          include: [:with_object_more, :tags, :maybe_sensitive_for_me],
+          exclude: [:with_parent, :notifications_object_creator]
         },
         # Different Types of Feeds
         "By object type" => %{
