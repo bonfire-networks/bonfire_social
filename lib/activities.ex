@@ -882,6 +882,7 @@ defmodule Bonfire.Social.Activities do
       # [{"reply_to_",
       [
         :post_content,
+        :media,
         # :peered # should not be needed as we can assume if it's remote from the creator peered (and we don't display a canonical link for reply_to)
         created: [
           creator: [character: [:peered], profile: :icon]
@@ -907,7 +908,8 @@ defmodule Bonfire.Social.Activities do
     |> preload(
       # [{"reply_to_",
       [
-        :post_content
+        :post_content,
+        :media
         # :peered # should not be needed as we can assume if it's remote from the creator peered (and we don't display a canonical link for reply_to)
       ]
       # }]
