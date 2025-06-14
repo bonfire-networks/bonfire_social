@@ -1360,7 +1360,7 @@ defmodule Bonfire.Social.Activities do
         |> where(
           [post_content: post_content],
           fragment("LENGTH(?)", post_content.name) > 2 and
-            fragment("CHAR_LENGTH(?)", post_content.html_body) > 888
+            fragment("CHAR_LENGTH(?)", post_content.html_body) > ^article_char_threshold()
         )
 
       {table_ids, [], false} when is_list(table_ids) and table_ids != [] ->
@@ -1721,6 +1721,8 @@ defmodule Bonfire.Social.Activities do
         (is_nil(activity_pointer.table_id) or activity_pointer.table_id not in ^exclude_table_ids)
     )
   end
+
+  def article_char_threshold, do: Config.get([:bonfire_posts, :article_char_threshold], 888)
 
   @doc """
   Constructs a query based on filters and optional user context.
