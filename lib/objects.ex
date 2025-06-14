@@ -530,10 +530,10 @@ defmodule Bonfire.Social.Objects do
   def prepare_object_types(types) do
     cond do
       "*" in types ->
-        {[], []}
+        {[], [], false}
 
       :* in types ->
-        {[], []}
+        {[], [], false}
 
       true ->
         partition_table_types(types)
@@ -564,10 +564,10 @@ defmodule Bonfire.Social.Objects do
   def partition_table_types(types) do
     case types do
       nil ->
-        {[], []}
+        {[], [], nil}
 
       [] ->
-        {[], []}
+        {[], [], nil}
 
       types ->
         # Prepare the types
@@ -591,9 +591,12 @@ defmodule Bonfire.Social.Objects do
         end)
         # Return the accumulated lists with duplicates removed
         |> then(fn {valid_table_ids, unknown_types} ->
+          unknown_types = unknown_types |> Enum.dedup() |> Enums.filter_empty([])
+
           {
             valid_table_ids |> Enum.dedup() |> Enums.filter_empty([]),
-            unknown_types |> Enum.dedup() |> Enums.filter_empty([])
+            unknown_types,
+            Enum.any?(unknown_types, &(&1 in ["article", :article]))
           }
         end)
     end

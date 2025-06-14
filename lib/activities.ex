@@ -1350,22 +1350,33 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
-  def maybe_filter(query, {:object_types, types}, _opts) when not is_nil(types) do
-    case Objects.partition_table_types(types) |> debug("object_type_tables") do
-      {table_ids, []} when is_list(table_ids) and table_ids != [] ->
-        query
-        |> reusable_join(:inner, [activity: activity], object in Pointer,
-          as: :object,
-          # FIXME: should run the :exclude_object_types filter first in this case
-          # and object.table_id not in ^exclude_table_ids
-          on:
-            object.id == activity.object_id and
-              is_nil(object.deleted_at)
-        )
-        |> where([object: object], object.table_id in ^table_ids)
+  def maybe_filter(query, {:object_types, types}, opts) when not is_nil(types) and types != [] do
+    exclude_table_ids = e(opts, :filters, :exclude_table_ids, [])
 
-      {[], other_types} when is_list(other_types) and other_types != [] ->
+    case Objects.partition_table_types(types) |> debug("object_type_tables") do
+      #  articles
+      {[], [_], true} ->
         query
+        |> maybe_join_filter_activity(exclude_table_ids)
+        |> proload(:inner, activity: [object: [:post_content]])
+        |> where(
+          [post_content: post_content],
+          fragment("LENGTH(?)", post_content.name) > 2 and
+            fragment("CHAR_LENGTH(?)", post_content.html_body) > ^article_char_threshold()
+        )
+
+      {table_ids, [], false} when is_list(table_ids) and table_ids != [] ->
+        query
+        |> maybe_join_filter_activity(exclude_table_ids)
+        |> where(
+          [object: object],
+          object.table_id in ^table_ids and
+            is_nil(object.deleted_at) and object.table_id not in ^exclude_table_ids
+        )
+
+      {[], other_types, false} when is_list(other_types) and other_types != [] ->
+        query
+        |> maybe_join_filter_activity(exclude_table_ids)
         |> join_per_ap_activity(:inner)
         |> proload(:left, activity: [:object])
         |> where(
@@ -1374,9 +1385,19 @@ defmodule Bonfire.Social.Activities do
             fragment("(?)->>'type' = ANY(?)", object.json, ^other_types)
         )
 
-      other ->
-        warn(other, "Unrecognised prepare_object_types for '#{inspect(types)}'")
+      {[], [], false} ->
+        # no object types to filter by
         query
+
+      other ->
+        msg =
+          l(
+            "Sorry, you cannot currently combine these filters (%{types_list}), please try removing the last filter you added.",
+            types_list: inspect(types)
+          )
+
+        error(other, msg)
+        raise msg
     end
   end
 
@@ -1403,17 +1424,7 @@ defmodule Bonfire.Social.Activities do
     debug(exclude_table_ids, "filter by exclude_table_ids")
 
     query
-    # |> proload([:activity])
-    # this loads the Pointer for the Activity, only in cases where the Activity ID does not match the Object ID which means this isn't a Create activity, and allows us to check that the Object (which may be boosted/liked/flagged/etc in this Activity) is not deleted or an excluded type
-    |> reusable_join(:left, [activity: activity], activity_pointer in Pointer,
-      as: :activity_pointer,
-      on: activity.object_id != activity.id and activity_pointer.id == activity.id
-    )
-    |> where(
-      [activity_pointer: activity_pointer],
-      is_nil(activity_pointer.deleted_at) and
-        (is_nil(activity_pointer.table_id) or activity_pointer.table_id not in ^exclude_table_ids)
-    )
+    |> maybe_join_filter_activity(exclude_table_ids)
     |> reusable_join(:inner, [activity: activity], object in Pointer,
       as: :object,
       # Don't show certain object types (like messages) or anything deleted
@@ -1697,6 +1708,23 @@ defmodule Bonfire.Social.Activities do
     warn(filters, "no supported activity-related filters defined")
     query
   end
+
+  def maybe_join_filter_activity(query, exclude_table_ids) do
+    query
+    # |> proload([:activity])
+    # this loads the Pointer for the Activity, only in cases where the Activity ID does not match the Object ID which means this isn't a Create activity, and allows us to check that the Object (which may be boosted/liked/flagged/etc in this Activity) is not deleted or an excluded type
+    |> reusable_join(:left, [activity: activity], activity_pointer in Pointer,
+      as: :activity_pointer,
+      on: activity.object_id != activity.id and activity_pointer.id == activity.id
+    )
+    |> where(
+      [activity_pointer: activity_pointer],
+      is_nil(activity_pointer.deleted_at) and
+        (is_nil(activity_pointer.table_id) or activity_pointer.table_id not in ^exclude_table_ids)
+    )
+  end
+
+  def article_char_threshold, do: Config.get([:bonfire_posts, :article_char_threshold], 888)
 
   @doc """
   Constructs a query based on filters and optional user context.

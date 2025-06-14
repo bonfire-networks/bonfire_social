@@ -1132,7 +1132,7 @@ defmodule Bonfire.Social.FeedLoader do
       end
       |> debug("skip_boundary_check?")
 
-    {exclude_table_ids, exclude_other_object_types} =
+    {exclude_table_ids, exclude_other_object_types, _show_articles?} =
       Objects.prepare_object_types(
         e(filters, :exclude_object_types, []) ++
           e(opts, :exclude_object_types, []) ++
@@ -1245,6 +1245,10 @@ defmodule Bonfire.Social.FeedLoader do
   defp maybe_filter(query, filters, opts \\ [])
 
   defp maybe_filter(query, filters, opts) when is_list(filters) or is_map(filters) do
+    opts
+    #  so the rest of filters are available in filter functions
+    |> Keyword.put(:filters, filters)
+
     #  TODO: put in config
     priority_filters_ordered = [:object_types, :exclude_object_types, :exclude_table_ids]
 
