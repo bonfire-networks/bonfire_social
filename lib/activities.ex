@@ -1178,13 +1178,49 @@ defmodule Bonfire.Social.Activities do
     object
   end
 
+  defp preload_nested_throuple(already_preloaded \\ nil, opts) do
+    already_preloaded =
+      already_preloaded |||
+        already_preloaded_from_opts(opts)
+        |> flood("already_preloaded")
+
+    preloads =
+      ((opts[:preloads] || []) ++ (already_preloaded || []))
+      |> flood("preloads")
+
+    {nested_under, preload_nested} = opts[:preload_nested] || {nil, []}
+
+    # TODO: put in config 
+    preload_nested =
+      [if(:per_media not in preloads, do: Bonfire.Files.Media), Bonfire.Data.Social.APActivity] ++
+        preload_nested
+
+    {nested_under, preload_nested, :with_reply_to in preloads}
+    |> flood("preload_nested_throuple")
+  end
+
+  defp already_preloaded_from_opts(opts) do
+    is_tuple(opts[:activity_preloads]) &&
+      elem(opts[:activity_preloads], 0) |> debug()
+  end
+
   defp maybe_repo_preload_activity_cases(example_object, objects, preloads, opts) do
     # debug(example_object)
+
+    {nested_under, preload_nested, with_reply_to?} = preload_nested_throuple(opts)
 
     case example_object || objects do
       %Bonfire.Data.Social.Activity{} ->
         debug("preload with Activity")
+
         do_maybe_repo_preload(objects, List.wrap(preloads), opts)
+        |> maybe_preload_nested_activity_and_reply_to(
+          [],
+          nested_under,
+          preload_nested,
+          with_reply_to?,
+          opts
+        )
 
       %Bonfire.Data.Edges.Edge{} ->
         debug(
@@ -1192,15 +1228,38 @@ defmodule Bonfire.Social.Activities do
         )
 
         do_maybe_repo_preload(objects, List.wrap(preloads), opts)
+        |> maybe_preload_nested_activity_and_reply_to(
+          [],
+          nested_under,
+          preload_nested,
+          with_reply_to?,
+          opts
+        )
 
       %{activity: _, __struct__: _} = _map ->
         debug("activity within a parent struct")
+
         do_maybe_repo_preload(objects, [activity: preloads], opts)
+        |> maybe_preload_nested_activity_and_reply_to(
+          [:activity],
+          nested_under,
+          preload_nested,
+          with_reply_to?,
+          opts
+        )
 
       %{activity: %{__struct__: _} = _activity} = _map ->
         # if is_list(objects) do
         debug("list of maps with activities")
+
         do_maybe_repo_preload(objects, [activity: preloads], opts)
+        |> maybe_preload_nested_activity_and_reply_to(
+          [:activity],
+          nested_under,
+          preload_nested,
+          with_reply_to?,
+          opts
+        )
 
       # else
       #   debug("activity within a map")
@@ -1214,9 +1273,49 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
+  defp maybe_preload_nested_activity_and_reply_to(
+         objects,
+         activity_nested_under,
+         object_nested_under,
+         preload_nested,
+         _with_reply_to? = true,
+         opts
+       ) do
+    objects
+    |> maybe_preload_nested_activity_and_reply_to(
+      activity_nested_under,
+      object_nested_under,
+      preload_nested,
+      nil,
+      opts
+    )
+    |> Bonfire.Common.Repo.Preload.maybe_preloads_per_nested_schema(
+      activity_nested_under ++ [:replied, :reply_to],
+      preload_nested,
+      opts
+    )
+    |> flood("attempted_reply_to_nested")
+  end
+
+  defp maybe_preload_nested_activity_and_reply_to(
+         objects,
+         activity_nested_under,
+         object_nested_under,
+         preload_nested,
+         _,
+         opts
+       ) do
+    objects
+    |> Bonfire.Common.Repo.Preload.maybe_preloads_per_nested_schema(
+      object_nested_under || activity_nested_under ++ [:object],
+      preload_nested,
+      opts
+    )
+  end
+
   defp do_maybe_repo_preload(objects, preloads, opts) do
     opts
-    #  why not?
+    #  NOTE: avoid following all pointers (using preload_nested_throuple and maybe_preloads_per_nested_schema for specific ones instead)
     |> Keyword.put_new(:follow_pointers, false)
     |> repo().maybe_preload(objects, preloads, ...)
   end
