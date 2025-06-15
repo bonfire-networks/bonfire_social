@@ -401,8 +401,11 @@ defmodule Bonfire.Social.Activities do
 
   def activity_preloads(query_or_object_or_objects, preloads, opts) when is_list(preloads) do
     # debug(query, "query or data")
-    debug(preloads, "preloads inputted")
-    opts = to_options(opts) |> Keyword.put(:preloads, preloads)
+    # debug(preloads, "preloads inputted")
+    opts =
+      to_options(opts)
+      |> Keyword.put(:preloads, preloads)
+      |> debug("opts with preloads inputted")
 
     if not is_nil(query_or_object_or_objects) and
          Ecto.Queryable.impl_for(query_or_object_or_objects) do
@@ -412,9 +415,7 @@ defmodule Bonfire.Social.Activities do
       |> Enum.reduce(query_or_object_or_objects, &prepare_activity_preloads(&2, &1, opts))
       |> debug("query with accumulated proloads")
     else
-      already_preloaded =
-        is_tuple(opts[:activity_preloads]) &&
-          elem(opts[:activity_preloads], 0) |> debug("already_preloaded")
+      already_preloaded = already_preloaded_from_opts(opts)
 
       preloads
       |> Bonfire.Social.FeedLoader.map_activity_preloads(already_preloaded)
@@ -1178,11 +1179,9 @@ defmodule Bonfire.Social.Activities do
     object
   end
 
-  defp preload_nested_throuple(already_preloaded \\ nil, opts) do
+  defp preload_nested_throuple(opts) do
     already_preloaded =
-      already_preloaded |||
-        already_preloaded_from_opts(opts)
-        |> debug("already_preloaded")
+      already_preloaded_from_opts(opts)
 
     preloads =
       ((opts[:preloads] || []) ++ (already_preloaded || []))
@@ -1200,8 +1199,9 @@ defmodule Bonfire.Social.Activities do
   end
 
   defp already_preloaded_from_opts(opts) do
-    is_tuple(opts[:activity_preloads]) &&
-      elem(opts[:activity_preloads], 0) |> debug()
+    (is_tuple(opts[:activity_preloads]) &&
+       elem(opts[:activity_preloads], 0))
+    |> debug("already_preloaded_from_opts")
   end
 
   defp maybe_repo_preload_activity_cases(example_object, objects, preloads, opts) do
