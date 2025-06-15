@@ -1195,7 +1195,7 @@ defmodule Bonfire.Social.Activities do
       [if(:per_media not in preloads, do: Bonfire.Files.Media), Bonfire.Data.Social.APActivity] ++
         preload_nested
 
-    {nested_under, preload_nested, :with_reply_to in preloads}
+    {nested_under, preload_nested, :with_reply_to in preloads and !opts[:skip_follow_reply_to]}
     |> debug("preload_nested_throuple")
   end
 
