@@ -1467,6 +1467,7 @@ defmodule Bonfire.Social.Activities do
       {table_ids, [], false} when is_list(table_ids) and table_ids != [] ->
         query
         |> maybe_join_filter_activity(exclude_table_ids)
+        |> proload(:left, activity: [:object])
         |> where(
           [object: object],
           object.table_id in ^table_ids and

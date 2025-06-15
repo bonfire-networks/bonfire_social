@@ -274,6 +274,10 @@ defmodule Bonfire.Social.Fake do
         # TODO
         {nil, nil}
 
+      :events ->
+        # TODO
+        {nil, nil}
+
       :messages ->
         #   receiver = Fake.Bonfire.Me.Fake.fake_user!()
         #   attrs = %{
