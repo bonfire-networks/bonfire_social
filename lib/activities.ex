@@ -372,7 +372,6 @@ defmodule Bonfire.Social.Activities do
   """
   def activity_preloads(query_or_object_or_objects, opts) do
     opts = to_options(opts)
-    debug(opts, "preloads")
     activity_preloads(query_or_object_or_objects, opts[:preload], opts)
   end
 
@@ -404,7 +403,7 @@ defmodule Bonfire.Social.Activities do
     # debug(preloads, "preloads inputted")
     opts =
       to_options(opts)
-      |> Keyword.put(:preloads, preloads)
+      |> Keyword.put(:preload, preloads)
       |> debug("opts with preloads inputted")
 
     if not is_nil(query_or_object_or_objects) and
@@ -959,7 +958,7 @@ defmodule Bonfire.Social.Activities do
            ]}
       ]
     )
-    |> maybe_preload_subject_peered(:with_object_peered not in (opts[:preloads] || []))
+    |> maybe_preload_subject_peered(:with_object_peered not in (opts[:preload] || []))
   end
 
   def maybe_preload_subject(query, skip_loading_user_ids, opts) do
@@ -985,7 +984,7 @@ defmodule Bonfire.Social.Activities do
            ]}
       ]
     )
-    |> maybe_preload_subject_peered(:with_object_peered not in (opts[:preloads] || []))
+    |> maybe_preload_subject_peered(:with_object_peered not in (opts[:preload] || []))
   end
 
   defp maybe_preload_subject_peered(query, true) do
@@ -1042,7 +1041,7 @@ defmodule Bonfire.Social.Activities do
            ]}
       ]
     )
-    |> maybe_preload_creator_peered(:with_object_peered not in (opts[:preloads] || []))
+    |> maybe_preload_creator_peered(:with_object_peered not in (opts[:preload] || []))
 
     # |> IO.inspect(label: "maybe_preload_creator")
   end
@@ -1184,7 +1183,7 @@ defmodule Bonfire.Social.Activities do
       already_preloaded_from_opts(opts)
 
     preloads =
-      ((opts[:preloads] || []) ++ (already_preloaded || []))
+      ((opts[:preload] || []) ++ (already_preloaded || []))
       |> debug("preloads")
 
     {nested_under, preload_nested} = opts[:preload_nested] || {nil, []}
