@@ -577,7 +577,8 @@ defmodule Bonfire.Social.RuntimeConfig do
         ],
         posts_with_reply_to: [
           :with_subject,
-          :with_post_content
+          :with_post_content,
+          :with_replied
         ],
         posts_with_thread: [
           :with_subject,

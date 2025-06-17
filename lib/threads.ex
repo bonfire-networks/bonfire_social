@@ -646,17 +646,16 @@ defmodule Bonfire.Social.Threads do
       %Ecto.Query{}
   """
   def query([thread_id: thread_id], opts) do
-    preloads =
-      if(opts[:thread_mode] == :flat, do: [:posts_with_reply_to], else: [:posts]) ++
-        if opts[:showing_within] == :messages, do: [:with_seen], else: []
-
     opts =
       to_options(opts)
       # |> Keyword.put_new(:thread_id, thread_id)
       |> Keyword.put_new_lazy(:max_depth, fn ->
         Settings.get(:thread_default_max_depth, 3, opts)
       end)
-      |> Keyword.put_new(:preload, preloads)
+      |> Keyword.put_new_lazy(:preload, fn ->
+        if(opts[:thread_mode] == :flat, do: [:posts_with_reply_to], else: [:posts]) ++
+          if opts[:showing_within] == :messages, do: [:with_seen], else: []
+      end)
 
     # |> debug("thread opts")
 
