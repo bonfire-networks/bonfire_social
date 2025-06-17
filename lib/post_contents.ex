@@ -304,7 +304,10 @@ defmodule Bonfire.Social.PostContents do
   end
 
   def merge_with_body_or_nil(attrs, map) do
-    Map.merge(attrs, map)
+    merged = Map.merge(attrs, map)
+
+    # Set truncation flag based on html_body content
+    Map.put(merged, :needs_truncation, needs_truncation?(merged[:html_body]))
   end
 
   def maybe_detect_languages(_attrs, fields \\ [:name, :summary, :html_body]) do
@@ -333,6 +336,60 @@ defmodule Bonfire.Social.PostContents do
   defp get_attr(attrs, key) do
     ed(attrs, key, nil) || ed(attrs, :post, :post_content, key, nil) ||
       e(attrs, :post_content, key, nil) || e(attrs, :post, key, nil)
+  end
+
+  @doc """
+  Determines if content needs truncation based on:
+  - Text length exceeding threshold
+  - Number of block elements (paragraphs, headers, lists, etc.)
+  - Presence of large elements (images, videos, embeds)
+  """
+  def needs_truncation?(html_body) when is_binary(html_body) do
+    # Strip HTML tags to get approximate text length
+    text_length =
+      html_body
+      |> String.replace(~r/<[^>]+>/, " ")
+      |> String.replace(~r/\s+/, " ")
+      |> String.trim()
+      |> String.length()
+
+    cond do
+      # If text is longer than ~500 chars, likely needs truncation
+      text_length > 500 ->
+        true
+
+      # Check for multiple paragraphs/blocks (4+ lines worth of content)
+      count_block_elements(html_body) > 4 ->
+        true
+
+      # Check for media elements that take up space
+      String.contains?(html_body, ["<img", "<video", "<iframe", "<audio"]) ->
+        true
+
+      # Otherwise, doesn't need truncation
+      true ->
+        false
+    end
+  end
+
+  def needs_truncation?(_), do: false
+
+  defp count_block_elements(html) do
+    # Count block-level elements that affect height
+    block_patterns = [
+      ~r/<p[^>]*>/i,
+      ~r/<h[1-6][^>]*>/i,
+      ~r/<div[^>]*>/i,
+      ~r/<ul[^>]*>/i,
+      ~r/<ol[^>]*>/i,
+      ~r/<blockquote[^>]*>/i,
+      ~r/<pre[^>]*>/i,
+      ~r/<br[^>]*>/i
+    ]
+
+    Enum.reduce(block_patterns, 0, fn pattern, acc ->
+      acc + length(Regex.scan(pattern, html))
+    end)
   end
 
   def prepare_text(text, creator, opts) when is_binary(text) and text != "" do
