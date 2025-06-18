@@ -25,7 +25,6 @@ defmodule Bonfire.Social.RuntimeConfig do
           icon: "mingcute:home-4-fill",
           # New structured UI-specific settings
           assigns: [
-            selected_tab: "following",
             page: "following",
             feed_title: l("Following")
           ]
@@ -41,7 +40,6 @@ defmodule Bonfire.Social.RuntimeConfig do
           exclude_from_nav: false,
           icon: "mingcute:compass-fill",
           assigns: [
-            selected_tab: :explore,
             page: "explore",
             page_title: "Explore activities",
             feedback_title: l("There is no activities to explore"),
@@ -62,7 +60,6 @@ defmodule Bonfire.Social.RuntimeConfig do
           },
           icon: "mingcute:campground-fill",
           assigns: [
-            selected_tab: :local,
             page: "local",
             page_title: l("Explore local activities"),
             feedback_title: l("Your local feed is empty"),
@@ -80,7 +77,6 @@ defmodule Bonfire.Social.RuntimeConfig do
           },
           icon: "ph:planet-fill",
           assigns: [
-            selected_tab: :remote,
             page: "remote",
             page_title: "Activities from the fediverse",
             feedback_title: l("Your fediverse feed is empty"),
@@ -104,7 +100,6 @@ defmodule Bonfire.Social.RuntimeConfig do
           icon: "carbon:notification-filled",
           assigns: [
             page: "notifications",
-            selected_tab: "notifications",
             showing_within: :notifications,
             back: true,
             page_header_icon: "carbon:notification",
@@ -132,7 +127,6 @@ defmodule Bonfire.Social.RuntimeConfig do
           exclude_from_nav: false,
           icon: "mingcute:fire-fill",
           assigns: [
-            selected_tab: :likes,
             hide_filters: true,
             showing_within: :feed_by_subject,
             page: "likes",
@@ -145,14 +139,13 @@ defmodule Bonfire.Social.RuntimeConfig do
           name: l("Bookmarks"),
           built_in: true,
           description: l("Activities I've bookmarked"),
-          filters: %FeedFilters{feed_name: :bookmarks, activity_types: :bookmark},
+          filters: %FeedFilters{activity_types: :bookmark},
           current_user_required: true,
           parameterized: %{subjects: [:me]},
           exclude_from_nav: false,
           base_query_fun: &Bonfire.Social.Bookmarks.base_query/0,
           icon: "carbon:bookmark-filled",
           assigns: [
-            selected_tab: :bookmarks,
             hide_filters: true,
             showing_within: :feed_by_subject,
             page: "bookmarks",
@@ -178,7 +171,6 @@ defmodule Bonfire.Social.RuntimeConfig do
           exclude_from_nav: false,
           icon: "lucide:refresh-cw",
           assigns: [
-            selected_tab: "my_boosts",
             hide_filters: true,
             showing_within: :feed_by_subject,
             page: "boosts",
@@ -224,21 +216,43 @@ defmodule Bonfire.Social.RuntimeConfig do
         posts: %{
           built_in: true,
           name: l("Posts"),
-          description: "Posts (not including replies)",
+          description: l("Posts (not including replies)"),
+          #  TODO: exclude articles?
           filters: %FeedFilters{object_types: [:post], exclude_activity_types: [:reply]},
           icon: "dashicons:text-page"
         },
-        discussions: %{
+        articles: %{
+          name: l("Articles"),
           built_in: true,
-          name: l("Discussions"),
-          description: "Posts and replies",
-          filters: %FeedFilters{object_types: [:post]},
-          icon: "mingcute:comment-fill"
+          description: l("All known articles"),
+          filters: %FeedFilters{
+            # ActivityPub Event type
+            object_types: ["article"],
+            exclude_activity_types: [:like, :boost, :flag]
+          },
+          icon: "icomoon-free:blog",
+          assigns: [
+            page: "articles",
+            page_title: l("Articles"),
+            feedback_title: l("No articles found"),
+            feedback_message:
+              l(
+                "There are no known articles to show. Articles from other federated platforms like WriteFreely or Ghost will appear here."
+              )
+          ]
         },
+        # TODO?
+        # discussions: %{
+        #   built_in: true,
+        #   name: l("Discussions"),
+        #   description: l("Posts and replies"),
+        #   filters: %FeedFilters{object_types: [:post]},
+        #   icon: "mingcute:comment-fill"
+        # },
         research: %{
           name: l("Research"),
           built_in: true,
-          description: "All known research publications",
+          description: l("All known research publications"),
           filters: %FeedFilters{
             media_types: [:research]
           },
@@ -247,7 +261,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         images: %{
           name: l("Images"),
           built_in: true,
-          description: "All known images",
+          description: l("All known images"),
           filters: %FeedFilters{
             media_types: ["image"]
           },
@@ -256,7 +270,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         videos: %{
           name: l("Videos"),
           built_in: true,
-          description: "All known videos",
+          description: l("All known videos"),
           filters: %FeedFilters{
             media_types: ["video"]
           },
@@ -265,7 +279,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         audio: %{
           name: l("Audio"),
           built_in: true,
-          description: "All known audio",
+          description: l("All known audio"),
           filters: %FeedFilters{
             media_types: ["audio"]
           },
@@ -275,7 +289,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         # Hashtag feeds
         hashtag: %{
           built_in: true,
-          description: "Activities with a specific hashtag",
+          description: l("Activities with a specific hashtag"),
           filters: %FeedFilters{},
           parameterized: %{tags: [:tags]}
         },
@@ -291,12 +305,31 @@ defmodule Bonfire.Social.RuntimeConfig do
           description: l("Curated activities"),
           filters: %FeedFilters{feed_name: :curated},
           assigns: [
-            selected_tab: :curated,
             showing_within: :feed_by_subject,
             page: "curated",
-            page_title: "Curated feed",
+            page_title: l("(Curated activities)"),
             no_header: :current_user_id,
             feedback_title: l("Nothing curated yet?")
+          ]
+        },
+        books: %{
+          name: l("Books"),
+          built_in: true,
+          description: l("All known books"),
+          filters: %FeedFilters{
+            # ActivityPub Event type
+            object_types: ["Edition", "Book"],
+            exclude_activity_types: [:like, :boost, :flag]
+          },
+          icon: "mdi:bookshelf",
+          assigns: [
+            page: "books",
+            page_title: l("Books"),
+            feedback_title: l("No books found"),
+            feedback_message:
+              l(
+                "There are no known books to show. Books from other federated platforms like BookWyrm will appear here."
+              )
           ]
         },
         events: %{
@@ -304,14 +337,12 @@ defmodule Bonfire.Social.RuntimeConfig do
           built_in: true,
           description: l("Events and gatherings"),
           filters: %FeedFilters{
-            feed_name: :events,
             # ActivityPub Event type
             object_types: ["Event"],
             exclude_activity_types: [:like, :boost, :flag]
           },
           icon: "ph:calendar-blank-bold",
           assigns: [
-            selected_tab: :events,
             page: "events",
             page_title: l("Events"),
             feedback_title: l("No events found"),
