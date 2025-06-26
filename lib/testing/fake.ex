@@ -278,6 +278,10 @@ defmodule Bonfire.Social.Fake do
         # TODO
         {nil, nil}
 
+      :books ->
+        # TODO
+        {nil, nil}
+
       :messages ->
         #   receiver = Fake.Bonfire.Me.Fake.fake_user!()
         #   attrs = %{
@@ -312,6 +316,19 @@ defmodule Bonfire.Social.Fake do
         {remote_post, _} = create_test_content(:remote, user, other_user, i)
 
         {local_post, remote_post}
+
+      :articles ->
+        attrs = %{
+          post_content: %{
+            name: "article with title #{i}",
+            html_body: String.duplicate("very long content ", 100)
+          }
+        }
+
+        post =
+          Bonfire.Posts.Fake.fake_post!(other_user, "public", attrs)
+
+        {post, nil}
 
       other
       when is_nil(other) or other in [:posts, :user_by_object_type, :user_activities] ->
