@@ -428,7 +428,7 @@ defmodule Bonfire.Social.Threads do
     # |> debug("participants grab bag")
     |> filter_empty([])
     |> Enum.reject(&(e(&1, :table_id, nil) in exclude_table_ids))
-    |> Enum.uniq_by(&e(&1, :character, :id, nil))
+    |> Enum.uniq_by(&(e(&1, :character, :id, nil) || id(&1)))
     |> Enum.take(limit)
 
     # |> debug("participants")

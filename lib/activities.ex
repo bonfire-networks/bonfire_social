@@ -585,8 +585,6 @@ defmodule Bonfire.Social.Activities do
 
         :tags ->
           query
-
-          query
           |> proload(activity: [tags: [:character, profile: :icon]])
 
         :with_media ->
@@ -1859,13 +1857,16 @@ defmodule Bonfire.Social.Activities do
 
   ## Examples
 
-      iex> %{id: 1, activity: %{id: 2}} = activity_under_object(%{activity: %Bonfire.Data.Social.Activity{id: 2, object: %{id: 1}}})
+      iex> %{id: 1, activity: %{id: 2}} = activity_under_object(%{id: 1, activity: %Bonfire.Data.Social.Activity{id: 2}})
 
   """
   # this is a hack to mimic the old structure of the data provided to
   # the activity component, which will we refactor soon(tm)
-  def activity_under_object(%{activity: %{object: %{id: _} = object} = activity} = top_object) do
-    activity_under_object(activity, Map.merge(top_object, object))
+  def activity_under_object(
+        %{activity: %{object: %{id: _} = enclosed_object} = activity} = top_object
+      ) do
+    Map.drop(activity, [:object])
+    |> activity_under_object(Map.merge(top_object, enclosed_object))
   end
 
   def activity_under_object(%{activity: %{id: _} = activity} = top_object) do
@@ -1877,7 +1878,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   def activity_under_object(%Activity{object: %{id: _} = activity_object} = activity) do
-    Map.put(activity_object, :activity, Map.drop(activity, [:object]))
+    activity_under_object(activity_object, Map.drop(activity, [:object]))
   end
 
   def activity_under_object(%{} = object_without_activity) do
@@ -2092,7 +2093,10 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
-  def prepare_subject_and_creator(object, _opts), do: object
+  def prepare_subject_and_creator(object, _opts) do
+    err(object, "unrecognised object format, skipping subject and creator preload")
+    object
+  end
 
   # NOTE: only for testing purposes, should be able to remove once preloads are all working
   defp ensure_completeness!(data, type, opts) do

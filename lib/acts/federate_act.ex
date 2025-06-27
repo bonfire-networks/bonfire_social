@@ -94,7 +94,7 @@ defmodule Bonfire.Social.Acts.Federate do
       action == :delete ->
         maybe_debug(epic, act, action, "Maybe queue delete for federation")
 
-        # flood(epic.assigns[ap_on], "ap_on")
+        # debug(epic.assigns[ap_on], "ap_on")
 
         Bonfire.Social.maybe_federate_and_gift_wrap_activity(
           current_user,

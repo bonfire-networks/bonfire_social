@@ -163,7 +163,7 @@ defmodule Bonfire.Social.Objects do
   end
 
   def maybe_preload_activity_object(
-        %{activity: %{object: _}} = pointer,
+        %{activity: %{object: %{id: _}}} = pointer,
         opts
       ) do
     pointer
