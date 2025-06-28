@@ -585,19 +585,20 @@ defmodule Bonfire.Social.Threads do
       iex> list_replies("thread_123", limit: 10)
       %{edges: [%{id: "reply1", ...}, %{id: "reply2", ...}]}
   """
-  def list_replies(thread, opts \\ [])
+  def list_replies(thread_or_comment, opts \\ [])
 
   def list_replies(%{thread_id: thread_id}, opts),
     do: list_replies(thread_id, opts)
 
-  def list_replies(%{id: thread_id}, opts), do: list_replies(thread_id, opts)
+  def list_replies(%{id: thread_or_comment_id}, opts),
+    do: list_replies(thread_or_comment_id, opts)
 
-  def list_replies(thread_id, opts) when is_binary(thread_id) do
+  def list_replies(thread_or_comment_id, opts) when is_binary(thread_or_comment_id) do
     opts = to_options(opts)
 
     query(
       # note this won't query by thread_id but rather by path
-      [thread_id: thread_id],
+      [thread_id: thread_or_comment_id],
       opts
     )
     |> debug("quuuery")
@@ -661,13 +662,14 @@ defmodule Bonfire.Social.Threads do
 
     %Replied{id: Bonfire.Common.Needles.id_binary(thread_id)}
     # TODO: change the order of the or_where to make the DB check the thread_id before the path
+    #  uses EctoMaterializedPath
     |> Replied.descendants()
     |> or_where(
       [replied],
       replied.thread_id == ^thread_id or replied.reply_to_id == ^thread_id
     )
     |> where([replied], replied.id != ^thread_id)
-    |> maybe_max_depth(opts[:max_depth])
+    |> maybe_max_depth(opts[:max_depth], opts[:include_path_ids])
     |> maybe_with_pins(thread_id, opts)
 
     # |> debug("Thread nested query")
@@ -876,11 +878,15 @@ defmodule Bonfire.Social.Threads do
     |> Bonfire.Social.Seen.mark_seen(current_user, ...)
   end
 
-  defp maybe_max_depth(query, max_depth) when is_integer(max_depth) do
-    Replied.where_depth(query, is_smaller_than_or_equal_to: max_depth)
+  defp maybe_max_depth(query, max_depth, include_path_ids) when is_integer(max_depth) do
+    # uses EctoMaterializedPath
+    Replied.where_depth(query,
+      is_smaller_than_or_equal_to: max_depth,
+      include_path_ids: include_path_ids
+    )
   end
 
-  defp maybe_max_depth(query, _max_depth), do: query
+  defp maybe_max_depth(query, _max_depth, _include_path_ids), do: query
 
   def prepare_replies_tree(replies, opts \\ []) do
     Activities.prepare_subject_and_creator(replies, opts)
