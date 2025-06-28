@@ -352,12 +352,37 @@ defmodule Bonfire.Social.Threads do
   end
 
   # Try to find the thread_id for a comment 
-  def fetch_thread_id(comment_id, opts \\ []) do
+  def fetch_thread_id(comment_id, _opts \\ []) do
     base_query()
     |> query_filter(id: comment_id)
     |> select([c], c.thread_id)
-    |> IO.inspect()
+    # |> debug()
     |> repo().one()
+  end
+
+  def fetch_thread_path(comment_id, _opts \\ []) do
+    base_query()
+    |> query_filter(id: comment_id)
+    |> select([c], c.path)
+    # |> debug("fetching_thread_path")
+    |> repo().one()
+
+    # |> debug("fetch_thread_path")
+  end
+
+  def thread_ancestors_path(reply_id, opts \\ []) do
+    (fetch_thread_path(reply_id, opts) || []) ++
+      [
+        reply_id
+      ]
+  end
+
+  def compute_include_path_ids(reply_id, opts \\ []) do
+    level = Types.maybe_to_integer(opts[:level], nil)
+
+    if !level or level > (opts[:max_depth] || Settings.get(:thread_default_max_depth, 3, opts)) do
+      thread_ancestors_path(reply_id)
+    end || reply_id
   end
 
   @doc """
@@ -665,12 +690,13 @@ defmodule Bonfire.Social.Threads do
     #  uses EctoMaterializedPath
     |> Replied.descendants()
     |> or_where(
+      #  add any comments that don't have a path for some reason
       [replied],
       replied.thread_id == ^thread_id or replied.reply_to_id == ^thread_id
     )
-    |> where([replied], replied.id != ^thread_id)
     |> maybe_max_depth(opts[:max_depth], opts[:include_path_ids])
     |> maybe_with_pins(thread_id, opts)
+    |> where([replied], replied.id != ^thread_id)
 
     # |> debug("Thread nested query")
   end
