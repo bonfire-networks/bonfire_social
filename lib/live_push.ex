@@ -32,7 +32,7 @@ defmodule Bonfire.Social.LivePush do
 
     if Keyword.get(opts, :push_to_thread, true), do: maybe_push_thread(activity)
 
-    notify(activity, Keyword.put(opts, :feed_ids, to_feeds))
+    notify(activity, Keyword.put_new(opts, :feed_ids, to_feeds))
 
     activity
   end
@@ -111,14 +111,14 @@ defmodule Bonfire.Social.LivePush do
 
     # FIXME: avoid querying this several times
     FeedActivities.get_publish_feed_ids(inbox: users_excluding_me)
-    |> normalise_feed_ids()
+    |> uids()
     # increment the badge in nav
     |> increment_counters(:inbox)
 
     # FIXME: avoid querying this several times
     inbox_feed_ids =
       FeedActivities.get_publish_feed_ids(inbox: users ++ [subject])
-      |> normalise_feed_ids()
+      |> uids()
 
     # show the thread in messages list view if the user has it open
     PubSub.broadcast(inbox_feed_ids, {
@@ -146,7 +146,7 @@ defmodule Bonfire.Social.LivePush do
     users
     |> Enum.reject(&(uid(&1) == subject_id))
     |> FeedActivities.get_publish_feed_ids(notifications: ...)
-    |> normalise_feed_ids()
+    |> uids()
     |> notify(subject, verb, object, ...)
   end
 
@@ -176,122 +176,150 @@ defmodule Bonfire.Social.LivePush do
         true -> Config.get([:ui, :theme, :instance_icon], "/images/bonfire-icon.png")
       end
 
-    {feed_ids, notify_emails} =
-      case (Keyword.keyword?(opts) && Keyword.get(opts, :notify)) || opts do
-        %{notify_feeds: notify_feeds, notify_emails: notify_emails} ->
-          {notify_feeds, notify_emails}
+    opt_notify = e(opts, :notify, nil)
 
-        %{notify_emails: notify_emails} ->
-          {[], notify_emails}
+    notify_feed_ids =
+      cond do
+        opt_notify == true ->
+          e(opts, :feed_ids, [])
 
-        %{notify_feeds: notify_feeds} ->
-          {notify_feeds, []}
+        notify_feeds = e(opt_notify, :notify_feeds, nil) || e(opts, :notify_feeds, nil) ->
+          notify_feeds
 
-        notify_feeds when is_list(notify_feeds) and notify_feeds != [] ->
-          {notify_feeds, []}
+        is_list(opt_notify) ->
+          opt_notify
 
         true ->
-          {Keyword.get(opts, :feed_ids, []), []}
-
-        _ ->
-          {[], []}
+          []
       end
+      |> flood("send_notify_feed_ids")
+      |> uids()
 
-    feed_ids = normalise_feed_ids(feed_ids)
+    notify_emails =
+      cond do
+        notify_emails = e(opt_notify, :notify_emails, nil) || e(opts, :notify_emails, nil) ->
+          notify_emails
+
+        true ->
+          []
+      end
+      |> uids()
+
+    # {notify_feed_ids, notify_emails} =
+    #   case (Keyword.keyword?(opts) && Keyword.get(opts, :notify)) || opts do
+    #     %{notify_feeds: notify_feeds, notify_emails: notify_emails} ->
+    #       {notify_feeds, notify_emails}
+
+    #     %{notify_emails: notify_emails} ->
+    #       {[], notify_emails}
+
+    #     %{notify_feeds: notify_feeds} ->
+    #       {notify_feeds, []}
+
+    #     notify_feeds when is_list(notify_feeds) and notify_feeds != [] ->
+    #       {notify_feeds, []}
+
+    #     true ->
+    #       {Keyword.get(opts, :feed_ids, []), []}
+
+    #     _ ->
+    #       {[], []}
+    #   end
+
+    # notify_feed_ids = uids(notify_feed_ids)
 
     # increment currently visible unread counters
-    increment_counters(feed_ids, :notifications)
+    if notify_feed_ids != [] do
+      increment_counters(notify_feed_ids, :notifications)
+    end
 
-    content =
-      e(
-        object,
-        :post_content,
-        :name,
-        nil
-      ) ||
-        e(
-          object,
-          :named,
-          :name,
-          nil
-        ) ||
-        e(
-          object,
-          :name,
-          nil
-        ) ||
+    if notify_feed_ids != [] or notify_emails != [] do
+      content =
         e(
           object,
           :post_content,
-          :summary,
+          :name,
           nil
         ) ||
-        Text.maybe_markdown_to_html(
+          e(
+            object,
+            :named,
+            :name,
+            nil
+          ) ||
+          e(
+            object,
+            :name,
+            nil
+          ) ||
           e(
             object,
             :post_content,
-            :html_body,
+            :summary,
             nil
+          ) ||
+          Text.maybe_markdown_to_html(
+            e(
+              object,
+              :post_content,
+              :html_body,
+              nil
+            )
+          ) || e(object, :profile, :name, nil) ||
+          e(object, :character, :username, nil)
+
+      preview_assigns = %{
+        title:
+          (e(subject, :profile, :name, nil) || e(subject, :character, :username, "")) <>
+            " #{verb_display}",
+        message: Text.text_only(content || ""),
+        url: path(object),
+        icon: icon || Config.get([:ui, :theme, :instance_icon], nil)
+      }
+
+      # WIP: send email notif?
+      if is_list(notify_emails) and notify_emails != [] do
+        debug(notify_emails, "WIP - send email notifications")
+        # debug(Bonfire.UI.Social.ActivityLive.activity_components(
+        #      %{subject: subject, verb: verb},
+        #      object,
+        #      :email
+        #    ))
+
+        url = URIs.based_url(preview_assigns[:url])
+
+        assigns =
+          Bonfire.UI.Social.ActivityLive.prepare(%{
+            activity: activity,
+            object: object,
+            permalink: url
+          })
+
+        email =
+          Bonfire.Mailer.new(
+            subject: "[Bonfire] " <> preview_assigns[:title]
+            # html_body: preview_assigns[:title] <> "<p> #{content}<p><a href='#{url}'>See details</a>",
+            # text_body: preview_assigns[:title] <> "\n\n" <> preview_assigns[:message] <> "\n\n" <> url
           )
-        ) || e(object, :profile, :name, nil) ||
-        e(object, :character, :username, nil)
+          |> Bonfire.Mailer.Render.templated(Bonfire.UI.Social.ActivityLive, assigns,
+            layout: Bonfire.UI.Common.Email.Basic
+          )
+          |> debug()
 
-    preview_assigns = %{
-      title:
-        (e(subject, :profile, :name, nil) || e(subject, :character, :username, "")) <>
-          " #{verb_display}",
-      message: Text.text_only(content || ""),
-      url: path(object),
-      icon: icon || Config.get([:ui, :theme, :instance_icon], nil)
-    }
+        Enum.map(notify_emails, &(Bonfire.Mailer.send_now(email, &1) |> debug()))
+      end
 
-    # WIP: send email notif?
-    debug(notify_emails, "WIP")
-    # debug(Bonfire.UI.Social.ActivityLive.activity_components(
-    #      %{subject: subject, verb: verb},
-    #      object,
-    #      :email
-    #    ))
-
-    if is_list(notify_emails) and notify_emails != [] do
-      url = URIs.based_url(preview_assigns[:url])
-
-      assigns =
-        Bonfire.UI.Social.ActivityLive.prepare(%{
-          activity: activity,
-          object: object,
-          permalink: url
-        })
-
-      email =
-        Bonfire.Mailer.new(
-          subject: "[Bonfire] " <> preview_assigns[:title]
-          # html_body: preview_assigns[:title] <> "<p> #{content}<p><a href='#{url}'>See details</a>",
-          # text_body: preview_assigns[:title] <> "\n\n" <> preview_assigns[:message] <> "\n\n" <> url
-        )
-        |> Bonfire.Mailer.Render.templated(Bonfire.UI.Social.ActivityLive, assigns,
-          layout: Bonfire.UI.Common.Email.Basic
-        )
-        |> debug()
-
-      Enum.map(notify_emails, &(Bonfire.Mailer.send_now(email, &1) |> debug()))
+      maybe_apply(Bonfire.UI.Common.Notifications, :notify_broadcast, [
+        notify_feed_ids,
+        preview_assigns
+      ])
     end
-
-    maybe_apply(Bonfire.UI.Common.Notifications, :notify_broadcast, [feed_ids, preview_assigns])
   end
 
   defp increment_counters(feed_ids, box) do
     feed_ids
     |> Enum.map(&"unseen_count:#{box}:#{&1}")
     |> PubSub.broadcast({{Bonfire.Social.Feeds, :count_increment}, box})
-  end
-
-  defp normalise_feed_ids(feed_ids) do
-    feed_ids
-    # |> debug("input")
-    |> uids()
-
-    # |> debug("normalised")
   end
 
   defp activity_from_object(%{id: _, activity: _activity} = object) do
