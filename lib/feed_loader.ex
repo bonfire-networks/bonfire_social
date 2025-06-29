@@ -1142,17 +1142,6 @@ defmodule Bonfire.Social.FeedLoader do
 
     {filters
      |> Map.put(
-       :exclude_subjects,
-       # Merge all sources: :exclude_mine, :exclude_subjects in filters, and in opts
-       (if current_user_id && e(filters, :include_my_activities, nil) == false do
-          [current_user_id]
-        else
-          []
-        end ++
-          List.wrap(e(filters, :exclude_subjects, [])))
-       |> Enum.uniq()
-     )
-     |> Map.put(
        :exclude_table_ids,
        exclude_table_ids ++ e(filters, :exclude_table_ids, []) ++ e(opts, :exclude_table_ids, [])
      )
@@ -1243,8 +1232,7 @@ defmodule Bonfire.Social.FeedLoader do
      #  )
      |> Map.drop([
        # :exclude_object_types, 
-       :exclude_activity_types,
-       :include_my_activities
+       :exclude_activity_types
      ]),
      opts
      |> Keyword.merge(
