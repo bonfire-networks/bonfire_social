@@ -1573,15 +1573,26 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
-  def maybe_filter(query, {:subjects, subject}, opts) do
-    case subject do
+  def maybe_filter(query, {:subjects, subjects}, opts) do
+    case subjects do
       :visible ->
         boundarise(query, activity.subject_id, opts)
 
+      [:visible] ->
+        boundarise(query, activity.subject_id, opts)
+
       _ ->
-        case uids(subject) do
+        current_user_id = current_user_id(opts)
+
+        case subjects
+             |> List.wrap()
+             |> Enum.map(fn
+               :me -> current_user_id
+               id -> id
+             end)
+             |> Types.uids() do
           [] ->
-            debug(subject, "unrecognised subject")
+            debug(subjects, "unrecognised subject")
             query
 
           ids ->
@@ -1590,10 +1601,18 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
-  def maybe_filter(query, {:exclude_subjects, subject}, opts) do
-    case Types.uids(subject) do
-      nil ->
-        warn(subject, "unrecognised subject")
+  def maybe_filter(query, {:exclude_subjects, subjects}, opts) do
+    current_user_id = current_user_id(opts)
+
+    case subjects
+         |> List.wrap()
+         |> Enum.map(fn
+           :me -> current_user_id
+           id -> id
+         end)
+         |> Types.uids() do
+      [] ->
+        debug(subjects, "unrecognised subject")
         query
 
       ids ->

@@ -21,8 +21,8 @@ defmodule Bonfire.Social.FeedFilters do
     field :activity_types, AtomOrStringList
     field :exclude_activity_types, AtomOrStringList
 
-    field :subjects, StringList
-    field :exclude_subjects, StringList
+    field :subjects, AtomOrStringList
+    field :exclude_subjects, AtomOrStringList
 
     field :subject_circles, StringList
     field :exclude_subject_circles, StringList
