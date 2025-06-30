@@ -42,7 +42,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           assigns: [
             page: "explore",
             page_title: "Explore activities",
-            feedback_title: l("There is no activities to explore"),
+            feedback_title: l("There are no activities to explore"),
             feedback_message:
               l(
                 "It seems like the paint is still fresh and there are no activities to explore..."

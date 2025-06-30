@@ -192,7 +192,7 @@ defmodule Bonfire.Social.LivePush do
         true ->
           []
       end
-      |> flood("send_notify_feed_ids")
+      # |> debug("send_notify_feed_ids")
       |> uids()
 
     notify_emails =
