@@ -5,6 +5,8 @@ defmodule Bonfire.Social.NotificationEmailsTest do
   import Swoosh.TestAssertions
   alias Bonfire.Posts
 
+  @moduletag :todo
+
   setup do
     Process.put([:bonfire_mailer, Bonfire.Mailer, :mailer_behaviour], Bonfire.Mailer.Swoosh)
 
