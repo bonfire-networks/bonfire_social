@@ -523,56 +523,61 @@ defmodule Bonfire.Social.Feeds do
 
     current_user = current_user(socket_or_opts)
 
-    # include my outbox
-    # |> debug("my_outbox_id")
-    my_outbox_id =
-      if Bonfire.Common.Settings.get(
-           [Bonfire.Social.Feeds, :include, :outbox],
-           true,
-           current_user: current_user,
-           name: l("Include my content"),
-           description: l("Include my own posts in your feed.")
-         ),
-         do: my_feed_id(:outbox, current_user)
+    if current_user do
+      # include my outbox
+      # |> debug("my_outbox_id")
+      my_outbox_id =
+        if Bonfire.Common.Settings.get(
+             [Bonfire.Social.Feeds, :include, :outbox],
+             true,
+             current_user: current_user,
+             name: l("Include my content"),
+             description: l("Include my own posts in your feed.")
+           ),
+           do: my_feed_id(:outbox, current_user)
 
-    # include my notifications?
-    my_notifications_id =
-      if Bonfire.Common.Settings.get(
-           [Bonfire.Social.Feeds, :include, :notifications],
-           true,
-           current_user: current_user,
-           name: l("Include Notifications"),
-           description: l("Include notifications in my main feed.")
-         ),
-         do: my_feed_id(:notifications, current_user)
+      # include my notifications?
+      my_notifications_id =
+        if Bonfire.Common.Settings.get(
+             [Bonfire.Social.Feeds, :include, :notifications],
+             true,
+             current_user: current_user,
+             name: l("Include Notifications"),
+             description: l("Include notifications in my main feed.")
+           ),
+           do: my_feed_id(:notifications, current_user)
 
-    extra_feeds = extra_feeds ++ [my_outbox_id] ++ [my_notifications_id]
+      extra_feeds = extra_feeds ++ [my_outbox_id] ++ [my_notifications_id]
 
-    # include outboxes of everyone I follow
-    with _ when not is_nil(current_user) <- current_user,
-         followings when is_list(followings) <-
-           Follows.all_followed_outboxes(current_user,
-             include_followed_categories:
-               Bonfire.Common.Settings.get(
-                 [Bonfire.Social.Feeds, :include, :followed_categories],
-                 true,
-                 current_user: current_user,
-                 name: l("Include Followed Categories"),
-                 description: l("Include content from categories you follow in your feed.")
-               ),
-             skip_boundary_check: true
-           ) do
-      # debug(followings, "followings")
-      extra_feeds ++ followings
+      # include outboxes of everyone I follow
+      with _ when not is_nil(current_user) <- current_user,
+           followings when is_list(followings) <-
+             Follows.all_followed_outboxes(current_user,
+               include_followed_categories:
+                 Bonfire.Common.Settings.get(
+                   [Bonfire.Social.Feeds, :include, :followed_categories],
+                   true,
+                   current_user: current_user,
+                   name: l("Include Followed Categories"),
+                   description: l("Include content from categories you follow in your feed.")
+                 ),
+               skip_boundary_check: true
+             ) do
+        # debug(followings, "followings")
+        extra_feeds ++ followings
+      else
+        _e ->
+          # debug(e: e)
+          extra_feeds
+      end
+      |> Enums.filter_empty([])
+      |> Enum.uniq()
     else
-      _e ->
-        # debug(e: e)
-        extra_feeds
+      # debug("no current user, just returning extra feeds")
+      extra_feeds
     end
-    |> Enums.filter_empty([])
-    |> Enum.uniq()
 
-    # |> debug("all")
+    # |> debug("final")
   end
 
   def my_home_feed_ids(_, extra_feeds), do: extra_feeds
