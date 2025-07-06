@@ -360,29 +360,32 @@ defmodule Bonfire.Social.Threads do
     |> repo().one()
   end
 
-  def fetch_thread_path(comment_id, _opts \\ []) do
+  def determine_thread_path(comment_id, _opts \\ [])
+  def determine_thread_path(%{path: path}, _opts) when is_list(path), do: path
+
+  def determine_thread_path(comment_id, _opts) when is_binary(comment_id) do
     base_query()
     |> query_filter(id: comment_id)
     |> select([c], c.path)
     # |> debug("fetching_thread_path")
     |> repo().one()
 
-    # |> debug("fetch_thread_path")
+    # |> debug()
   end
 
-  def thread_ancestors_path(reply_id, opts \\ []) do
-    (fetch_thread_path(reply_id, opts) || []) ++
+  def thread_ancestors_path(reply, opts \\ []) do
+    (determine_thread_path(reply, opts) || []) ++
       [
-        reply_id
+        Enums.id(reply)
       ]
   end
 
-  def compute_include_path_ids(reply_id, opts \\ []) do
+  def compute_include_path_ids(reply, opts \\ []) do
     level = Types.maybe_to_integer(opts[:level], nil)
 
     if !level or level > (opts[:max_depth] || Settings.get(:thread_default_max_depth, 3, opts)) do
-      thread_ancestors_path(reply_id)
-    end || reply_id
+      thread_ancestors_path(reply)
+    end || Enums.id(reply)
   end
 
   @doc """
@@ -960,10 +963,11 @@ defmodule Bonfire.Social.Threads do
     do: EctoMaterializedPath.arrange_nodes(replies, :path, arrange_opts(opts))
 
   defp arrange_opts(opts) do
-    if opts[:sort_by] == :latest_reply do
+    if (e(opts, :sort_by, nil) || e(opts, :feed_filters, :sort_by, nil)) == :latest_reply do
       # sorting requires: `sort_order` (desc or asc), `struct_sort_key` (a virtual field on the struct that contains the path to store the data to sort by), and `sort_by_key` or `sort_by_key_fun`
       Keyword.merge(opts,
-        sort_order: opts[:sort_order] || :desc,
+        # WIP: override to get correct behaviour in messages (which are sorted by :asc) # opts[:sort_order] || :desc,
+        sort_order: :desc,
         struct_sort_key: :path_sorter,
         sort_by_key_fun: &custom_nodes_sorter_latest_reply/2
       )
@@ -975,25 +979,26 @@ defmodule Bonfire.Social.Threads do
       #   sort_by_key_fun: &custom_nodes_sorter_pin/2
       # )
     end
-    |> debug("arrange_opts")
+    |> flood("arrange_opts")
   end
 
   defp custom_nodes_sorter_latest_reply(nodes, opts) do
-    # FIXME: pins should always be at the top
     order = opts[:sort_order] == :desc
 
     nodes
     |> Enum.map(fn
-      %{pinned: %{id: _}, id: id} -> {!order, id}
-      %{pinned: _, id: id} -> {order, id}
-      %{pinned: %{id: _}} -> {!order, !order}
+      # FIXME: pins should always be at the top
+      # %{pinned: %{id: _}, id: id} -> {!order, id}
+      # %{pinned: _, id: id} -> {order, id}
+      # %{pinned: %{id: _}} -> {!order, !order}
       %{id: id} -> id
       _ -> !order
     end)
+    |> flood("custom_nodes_sorter_latest_reply")
   end
 
   defp custom_nodes_sorter_pin(nodes, opts) do
-    # FIXME: pins should always be at the top
+    # WIP: pins should always be at the top
     order = opts[:sort_order] == :desc
 
     nodes
