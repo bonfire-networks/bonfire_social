@@ -222,7 +222,7 @@ defmodule Bonfire.Social.Boosts do
       maybe_apply(Bonfire.Social.LivePush, :push_activity_object, [
         feed_ids,
         boost,
-        boosted,
+        Objects.preload_creator(boosted, force: true),
         [push_to_thread: false, notify: true]
       ])
 

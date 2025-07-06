@@ -165,4 +165,42 @@ defmodule Bonfire.Social.FeedsPubTest do
 
     assert_receive {:new_message, _}
   end
+
+  test "PubSub broadcasts boost activity with correct subject and object" do
+    original_author = fake_user!("original_author")
+    booster = fake_user!("booster")
+
+    # Create original post
+    {:ok, %{id: post_id} = post} =
+      Posts.publish(
+        current_user: original_author,
+        post_attrs: %{post_content: %{html_body: "Original post to be boosted"}},
+        boundary: "public"
+      )
+
+    # Subscribe to booster's outbox feed
+    booster_feed_id = Bonfire.Social.Feeds.my_feed_id(:outbox, booster)
+    :ok = PubSub.subscribe(booster_feed_id, current_user: booster)
+
+    # Boost the post
+    {:ok, boost} = Bonfire.Social.Boosts.boost(booster, post)
+
+    # Should receive the boost activity via PubSub
+    assert_receive {
+      {Bonfire.Social.Feeds, :new_activity},
+      [
+        feed_ids: feed_ids,
+        activity: received_activity
+      ]
+    }
+
+    # Verify the boost structure
+    assert received_activity.subject.id == booster.id
+    assert received_activity.object.id == post_id
+    assert received_activity.verb.verb == "Boost"
+    assert received_activity.verb_id == "300ST0R0RANN0VCEANACT1V1TY"
+
+    # Verify the original author is preserved in the boosted object
+    assert received_activity.object.created.creator.id == original_author.id
+  end
 end

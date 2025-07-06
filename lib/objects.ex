@@ -209,23 +209,24 @@ defmodule Bonfire.Social.Objects do
       %Object{}
 
   """
+  def preload_creator(activity, opts \\ [])
   # TODO: does not take permissions into consideration
-  def preload_creator(%Activity{} = activity) do
+  def preload_creator(%Activity{} = activity, opts) do
     activity
-    |> repo().maybe_preload([:subject, object: [created: [creator: [:character]]]])
+    |> repo().maybe_preload([:subject, object: [created: [creator: [:character]]]], opts)
   end
 
-  def preload_creator(%{created: _} = object) do
+  def preload_creator(%{created: _} = object, opts) do
     object
-    |> repo().maybe_preload(created: [creator: [:character]])
+    |> repo().maybe_preload([created: [creator: [:character]]], opts)
   end
 
-  def preload_creator(%{creator: _} = object) do
+  def preload_creator(%{creator: _} = object, opts) do
     object
-    |> repo().maybe_preload(creator: [:character])
+    |> repo().maybe_preload([creator: [:character]], opts)
   end
 
-  def preload_creator(%{activity: _} = object) do
+  def preload_creator(%{activity: _} = object, opts) do
     # debug("preload_creator starting with type: #{inspect(object.__struct__)}")
 
     # NOTE: not sure we need this? First resolve if it's a Pointer using Bonfire.Common.Needles
@@ -240,10 +241,13 @@ defmodule Bonfire.Social.Objects do
 
     # Preload all creator-related associations at once
     object
-    |> repo().maybe_preload(activity: [:subject, object: [created: [creator: [:character]]]])
+    |> repo().maybe_preload(
+      [activity: [:subject, object: [created: [creator: [:character]]]]],
+      opts
+    )
   end
 
-  def preload_creator(object) do
+  def preload_creator(object, _opts) do
     warn(object, "unrecognised object, skipping creator preload")
     object
   end
