@@ -1153,10 +1153,31 @@ defmodule Bonfire.Social.Objects do
       {:ok, %Object{}}
 
   """
-  # TODO: also support setting with an ID, or with an object that doesn't have a `sensitive` assoc
-  def set_sensitivity(%{sensitive: _} = pointer, true) do
+  def set_sensitivity(pointer, nil), do: set_sensitivity(pointer, false)
+
+  def set_sensitivity(%{sensitive: _} = pointer, new_sensitive) do
+    pointer =
+      pointer
+      |> repo().preload([:sensitive])
+
+    # Check if sensitivity has actually changed to avoid unnecessary updates
+    current_sensitive = e(pointer, :sensitive, :is_sensitive, false)
+
+    if new_sensitive != current_sensitive do
+      do_set_sensitivity(pointer, new_sensitive)
+    else
+      {:ok, pointer}
+    end
+  end
+
+  # TODO: also support setting with an ID, or with an object that doesn't have a `sensitive` assoc?
+  # def set_sensitivity(pointer, new_sensitive) do
+  #   pointer
+  #   |> set_sensitivity(new_sensitive)
+  # end
+
+  defp do_set_sensitivity(pointer, true) do
     pointer
-    |> repo().preload([:sensitive])
     |> Changesets.put_assoc(:sensitive, %{
       is_sensitive: true
     })
@@ -1164,13 +1185,14 @@ defmodule Bonfire.Social.Objects do
     |> repo().update()
   end
 
-  def set_sensitivity(%{sensitive: _} = pointer, _) do
+  defp do_set_sensitivity(pointer, _) do
     # delete mixin
     pointer
-    |> repo().preload([:sensitive])
     |> Map.get(:sensitive)
     |> debug()
     |> repo().delete()
+
+    {:ok, pointer |> Map.put(:sensitive, nil)}
   end
 
   def ap_receive_activity(creator, _activity, %{pointer: %{id: _} = pointer} = _object) do

@@ -15,13 +15,13 @@ defmodule Bonfire.Social.PostContents do
   use Bonfire.Common.Utils
   use Bonfire.Common.Repo
 
-  @behaviour Bonfire.Federate.ActivityPub.FederationModules
-  def federation_module,
-    do: [
-      {"Update", "Note"},
-      {"Update", "Article"},
-      {"Update", "ChatMessage"}
-    ]
+  # @behaviour Bonfire.Federate.ActivityPub.FederationModules
+  # def federation_module,
+  #   do: [
+  #     {"Update", "Note"},
+  #     {"Update", "Article"},
+  #     {"Update", "ChatMessage"}
+  #   ]
 
   @doc """
   Given a set of filters, returns an Ecto.Query for matching post contents.
@@ -596,33 +596,6 @@ defmodule Bonfire.Social.PostContents do
     ap_receive_activity(creator, activity_data, post_data)
   end
 
-  def ap_receive_activity(
-        creator,
-        %{"type" => "Update"} = activity_data,
-        post_data
-      ) do
-    debug(activity_data, "do_an_update")
-
-    #  with %{pointer_id: pointer_id} = _original_object when is_binary(pointer_id) <-
-    #    ActivityPub.Object.get_activity_for_object_ap_id(post_data) do
-    with {:ok, %{pointer_id: pointer_id} = _original_object} when is_binary(pointer_id) <-
-           ActivityPub.Object.get_cached(ap_id: post_data) do
-      debug(pointer_id, "original_object")
-
-      #  TODO: update metadata too:
-      #   sensitive
-      #   hashtags
-      #   mentions (and also notify?)
-      #   media
-
-      ap_receive_attrs_prepare(creator, activity_data, post_data)
-      |> edit(creator, pointer_id, ...)
-    else
-      e ->
-        error(e, "Could not find the object being updated.")
-    end
-  end
-
   def ap_receive_attrs_prepare(creator, activity_data, post_data, direct_recipients \\ []) do
     tags =
       (List.wrap(activity_data["tag"]) ++
@@ -631,9 +604,9 @@ defmodule Bonfire.Social.PostContents do
 
     #  TODO: put somewhere reusable by other types
     hashtags =
-      for %{"type" => "Hashtag"} = tag <- tags do
-        with {:ok, hashtag} <- Bonfire.Tag.get_or_create_hashtag(tag["name"]) do
-          {tag["href"], hashtag}
+      for %{"type" => "Hashtag", "name" => name} = tag <- tags do
+        with {:ok, hashtag} <- Bonfire.Tag.get_or_create_hashtag(name) do
+          {tag["href"] || name, hashtag}
         else
           none ->
             warn(none, "could not create Hashtag for #{tag["name"]}")
@@ -642,7 +615,8 @@ defmodule Bonfire.Social.PostContents do
       end
       |> filter_empty([])
       |> Map.new()
-      |> info("incoming hashtags")
+
+    # |> debug("incoming hashtags")
 
     #  TODO: put somewhere reusable by other types
     mentions =
@@ -713,12 +687,8 @@ defmodule Bonfire.Social.PostContents do
           date: post_data["published"]
         },
         sensitive: post_data["sensitive"],
-        uploaded_media:
-          Bonfire.Files.ap_receive_attachments(
-            creator,
-            post_data["image"] || post_data["icon"],
-            post_data["attachment"]
-          ),
+        primary_image: e(post_data, "image", nil) || e(post_data, "icon", nil),
+        attachments: e(post_data, "attachment", nil),
         opts: [
           emoji: e(post_data, "emoji", nil),
           do_not_strip_html: e(post_data, "source", "mediaType", nil) == "text/x.misskeymarkdown"
@@ -726,6 +696,19 @@ defmodule Bonfire.Social.PostContents do
       },
       "remote post attrs"
     )
+  end
+
+  def ap_receive_update(
+        creator,
+        activity_data,
+        post_data,
+        pointer_id
+      ) do
+    attrs = ap_receive_attrs_prepare(creator, activity_data, post_data)
+
+    with {:ok, edited} <- edit(creator, pointer_id, attrs) do
+      {:ok, attrs, edited}
+    end
   end
 
   def query_base(), do: from(p in PostContent, as: :main_object)

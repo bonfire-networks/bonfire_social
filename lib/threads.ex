@@ -979,7 +979,8 @@ defmodule Bonfire.Social.Threads do
       #   sort_by_key_fun: &custom_nodes_sorter_pin/2
       # )
     end
-    |> flood("arrange_opts")
+
+    # |> debug("arrange_opts")
   end
 
   defp custom_nodes_sorter_latest_reply(nodes, opts) do
@@ -994,7 +995,8 @@ defmodule Bonfire.Social.Threads do
       %{id: id} -> id
       _ -> !order
     end)
-    |> flood("custom_nodes_sorter_latest_reply")
+
+    # |> debug("custom_nodes_sorter_latest_reply")
   end
 
   defp custom_nodes_sorter_pin(nodes, opts) do
