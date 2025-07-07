@@ -1141,6 +1141,10 @@ defmodule Bonfire.Social.Objects do
       %Changeset{}
 
   """
+  def cast_sensitivity(changeset, skip) when skip in [nil, false] do
+    changeset
+  end
+
   def cast_sensitivity(changeset, sensitive?) do
     changeset
     |> Changesets.put_assoc!(:sensitive, %{

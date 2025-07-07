@@ -587,6 +587,73 @@ defmodule Bonfire.Social.PostContents do
     end
   end
 
+  @doc "Prepare an outgoing ActivityPub Note object for publishing."
+  def ap_prepare_object_note(subject, verb, post, actor, mentions, context, reply_to) do
+    html_body = e(post, :post_content, :html_body, nil)
+
+    hashtags =
+      e(post, :tags, [])
+      #  |> info("tags")
+      #  non-characters
+      |> Enum.reject(fn tag ->
+        not is_nil(e(tag, :character, nil))
+      end)
+      |> filter_empty([])
+      |> Bonfire.Common.Needles.list!(skip_boundary_check: true)
+      #  |> repo().maybe_preload(:named)
+      |> debug("include_as_hashtags")
+
+    {primary_image, other_media} = Bonfire.Files.split_primary_image(e(post, :media, nil))
+    # |> debug("splitss")
+
+    %{
+      "type" => "Note",
+      #  "actor" => actor.ap_id,
+      "attributedTo" => actor.ap_id,
+      #  "to" => to,
+      #  "cc" => cc,
+      # TODO: put somewhere reusable by other types:
+      "indexable" => Bonfire.Common.Extend.module_enabled?(Bonfire.Search.Indexer, subject),
+      # TODO: put somewhere reusable by other types:
+      "sensitive" => e(post, :sensitive, :is_sensitive, false),
+      "name" => e(post, :post_content, :name, nil),
+      "summary" => e(post, :post_content, :summary, nil),
+      "content" =>
+        Text.maybe_markdown_to_html(
+          html_body,
+          # we don't want to escape HTML in local content
+          sanitize: true
+        ),
+      "source" => %{
+        "content" => html_body,
+        "mediaType" => "text/markdown"
+      },
+      "image" =>
+        maybe_apply(Bonfire.Files, :ap_publish_activity, [primary_image], fallback_return: nil),
+      "attachment" =>
+        maybe_apply(Bonfire.Files, :ap_publish_activity, [other_media], fallback_return: nil),
+      "inReplyTo" => reply_to,
+      "context" => context,
+      "tag" =>
+        Enum.map(mentions, fn actor ->
+          %{
+            "href" => actor.ap_id,
+            "name" => actor.username,
+            "type" => "Mention"
+          }
+        end) ++
+          Enum.map(hashtags, fn tag ->
+            %{
+              "href" => URIs.canonical_url(tag),
+              "name" => "##{e(tag, :name, nil) || e(tag, :named, :name, nil)}",
+              "type" => "Hashtag"
+            }
+          end)
+    }
+    |> Enum.filter(fn {_, v} -> not is_nil(v) end)
+    |> Enum.into(%{})
+  end
+
   # edit an existing post
   def ap_receive_activity(creator, %{data: activity_data}, object) do
     ap_receive_activity(creator, activity_data, object)

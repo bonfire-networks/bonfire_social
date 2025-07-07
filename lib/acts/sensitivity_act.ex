@@ -55,10 +55,9 @@ defmodule Bonfire.Social.Acts.Sensitivity do
         attrs_key = Keyword.get(act.options, :attrs, :post_attrs)
         attrs = Keyword.get(epic.assigns[:options], attrs_key, %{})
 
+        # || e(changeset, :changes, :post_content, :changes, :summary, nil) || e(attrs, :post_content, :summary, nil) || e(attrs, :summary, nil)
         sensitive =
-          e(attrs, :sensitive, nil) ||
-            e(changeset, :changes, :post_content, :changes, :summary, nil) ||
-            e(attrs, :post_content, :summary, nil) || e(attrs, :summary, nil)
+          e(attrs, :sensitive, nil)
 
         Objects.cast_sensitivity(changeset, sensitive)
         |> Epic.assign(epic, on, ...)

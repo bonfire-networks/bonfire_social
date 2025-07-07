@@ -1087,7 +1087,7 @@ defmodule Bonfire.Social.Threads do
     |> ap_prepare()
   end
 
-  def ap_prepare(thread_or_reply_to_id, _) do
+  def ap_prepare(thread_or_reply_to_id, _) when is_binary(thread_or_reply_to_id) do
     if thread_or_reply_to_id do
       with {:ok, ap_object} <-
              ActivityPub.Object.get_cached(thread_or_reply_to_id) do
