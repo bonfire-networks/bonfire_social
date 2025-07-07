@@ -28,7 +28,7 @@ defmodule Bonfire.Social.APActivities do
   ## Parameters
 
     - creator: The character (user) associated with the activity.
-    - activity: The ActivityPub activity data.
+    - activity: The ActivityPub activity.
     - object: The object associated with the activity.
 
   ## Examples
@@ -43,7 +43,7 @@ defmodule Bonfire.Social.APActivities do
   def ap_receive_activity(creator, activity, object) do
     is_public? = Bonfire.Federate.ActivityPub.AdapterUtils.is_public?(activity, object)
 
-    create(
+    ap_receive(
       creator,
       e(activity, :data, nil) || activity,
       e(object, :data, nil) || object,
@@ -60,7 +60,7 @@ defmodule Bonfire.Social.APActivities do
 
     - character: The character (user) creating the activity.
     - activity: The activity data.
-    - object: The object associated with the activity.
+    - object: The object data.
     - public: A boolean indicating whether the activity is public (optional).
 
   ## Examples
@@ -68,20 +68,20 @@ defmodule Bonfire.Social.APActivities do
       iex> character = %Character{id: "user123"}
       iex> activity = %{"type" => "Create", "object" => %{"content" => "Hello, world!"}}
       iex> object = %{"type" => "Note"}
-      iex> Bonfire.Social.APActivities.create(character, activity, object)
+      iex> ap_receive(character, activity, object)
       {:ok, %APActivity{}}
 
-      iex> Bonfire.Social.APActivities.create(character, activity, object, true)
+      iex> ap_receive(character, activity, object, true)
       {:ok, %APActivity{}}
 
   """
-  def create(character, activity, object, public \\ nil)
+  def ap_receive(character, activity, object, public \\ nil)
 
-  # def create(character, %{verb: verb} = activity, object) when verb in ["update", "Update", :update, :edit, "edit"] is_map(activity) or is_map(object) do
+  # def ap_receive(character, %{verb: verb} = activity, object) when verb in ["update", "Update", :update, :edit, "edit"] is_map(activity) or is_map(object) do
   #   # TODO: store version history
   # end
 
-  def create(character, activity, object, public) when is_map(activity) or is_map(object) do
+  def ap_receive(character, activity, object, public) when is_map(activity) or is_map(object) do
     if uid(character) do
       do_create(character, activity, object, public)
     else
