@@ -1104,6 +1104,11 @@ defmodule Bonfire.Social.Threads do
     end
   end
 
+  def ap_prepare(thread_or_reply_to_id, _key) do
+    error(thread_or_reply_to_id, "Unexpected input, cannot get the thread or reply AP object")
+    nil
+  end
+
   def reply_to_ap_object(activity_data, post_data) do
     # TODO: also take the `context` into account as thread_id
     reply_to =
