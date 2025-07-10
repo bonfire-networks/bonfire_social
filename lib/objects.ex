@@ -672,14 +672,17 @@ defmodule Bonfire.Social.Objects do
   end
 
   def delete(object, opts) when is_binary(object) do
-    opts = to_options(opts)
+    opts =
+      to_options(opts)
+      |> Keyword.put(:verbs, [:delete])
+      |> Keyword.put_new(:skip_boundary_check, :admins)
 
     # load & check permission
     # TODO: don't load if being passed an obj
     with %{__struct__: _type} = object <-
            Bonfire.Common.Needles.get(
              object,
-             opts ++ [verbs: [:delete], skip_boundary_check: :admins]
+             opts
            )
            ~> debug("WIP: deletion") do
       do_delete(object, opts)
