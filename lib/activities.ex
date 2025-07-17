@@ -1218,6 +1218,7 @@ defmodule Bonfire.Social.Activities do
           nested_under,
           preload_nested,
           with_reply_to?,
+          preloads,
           opts
         )
 
@@ -1232,6 +1233,7 @@ defmodule Bonfire.Social.Activities do
           nested_under,
           preload_nested,
           with_reply_to?,
+          preloads,
           opts
         )
 
@@ -1244,6 +1246,7 @@ defmodule Bonfire.Social.Activities do
           nested_under,
           preload_nested,
           with_reply_to?,
+          preloads,
           opts
         )
 
@@ -1257,6 +1260,7 @@ defmodule Bonfire.Social.Activities do
           nested_under,
           preload_nested,
           with_reply_to?,
+          preloads,
           opts
         )
 
@@ -1278,6 +1282,7 @@ defmodule Bonfire.Social.Activities do
          object_nested_under,
          preload_nested,
          _with_reply_to? = true,
+         preloads,
          opts
        ) do
     objects
@@ -1286,6 +1291,7 @@ defmodule Bonfire.Social.Activities do
       object_nested_under,
       preload_nested,
       nil,
+      preloads,
       opts
     )
     |> Bonfire.Common.Repo.Preload.maybe_preloads_per_nested_schema(
@@ -1293,6 +1299,8 @@ defmodule Bonfire.Social.Activities do
       preload_nested,
       opts
     )
+    # Handle APActivity pointer preloading if needed
+    |> maybe_preload_ap_activity_pointers(opts)
     |> debug("attempted_reply_to_nested")
   end
 
@@ -1302,6 +1310,7 @@ defmodule Bonfire.Social.Activities do
          object_nested_under,
          preload_nested,
          _,
+         preloads,
          opts
        ) do
     objects
@@ -1310,6 +1319,18 @@ defmodule Bonfire.Social.Activities do
       preload_nested,
       opts
     )
+    # Handle APActivity pointer preloading if needed
+    |> maybe_preload_ap_activity_pointers(opts)
+  end
+
+  defp maybe_preload_ap_activity_pointers(objects, opts) do
+    if Keyword.get(opts, :preload_ap_activity_embedded, true) do
+      # debug("we need to preload AP activity pointers")
+      Bonfire.Social.APActivities.preload_ap_activity_pointers(objects, opts)
+    else
+      # debug("no need to preload AP activity pointers")
+      objects
+    end
   end
 
   defp do_maybe_repo_preload(objects, preloads, opts) do
