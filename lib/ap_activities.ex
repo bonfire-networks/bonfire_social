@@ -305,7 +305,7 @@ defmodule Bonfire.Social.APActivities do
     end
   end
 
-  defp detect_and_fetch_nested_object(value, _options) do
+  defp detect_and_fetch_nested_objects(value, _options) do
     #  debug(value, "Skip fetching nested value")
     :skip
   end
