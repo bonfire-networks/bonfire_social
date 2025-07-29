@@ -428,6 +428,7 @@ defmodule Bonfire.Social.RuntimeConfig do
       :with_creator,
       :with_object_more,
       :with_media,
+      :with_replied,
       :with_reply_to,
       :with_object_peered
     ]
@@ -467,7 +468,14 @@ defmodule Bonfire.Social.RuntimeConfig do
         },
         "Notifications Feed (Only for me)" => %{
           match: %{feed_name: :notifications},
-          include: [:with_seen, :with_reply_to, :emoji, :sensitivity, :activity_name]
+          include: [
+            :with_seen,
+            :with_replied,
+            :with_reply_to,
+            :emoji,
+            :sensitivity,
+            :activity_name
+          ]
         },
         # "Messages Feed (Only for me)" => %{
         #   match: %{feed_name: :messages},
@@ -560,6 +568,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           :with_creator,
           # we join in first query to filter out deleted objects and/or filter by type
           :with_object,
+          :with_replied,
           :per_media
           # :with_object_peered
         ]

@@ -1508,25 +1508,74 @@ defmodule Bonfire.Social.FeedLoader do
 
   defp prepare_feed(%{edges: edges, page_info: page_info}, filters, opts)
        when is_list(edges) and edges != [] do
-    # debug(edges, "7a. edges to prepare")
+    # debug(length(edges), "Starting prepare_feed with N edges")
+
+    show_objects_only_once? =
+      filters[:show_objects_only_once] != false and opts[:show_objects_only_once] != false
 
     edges =
-      if filters[:show_objects_only_once] != false and opts[:show_objects_only_once] != false do
-        info(length(edges), "Starting prepare_feed with N edges")
+      edges
+      |> Enum.group_by(fn item ->
+        case e(item, :activity, :verb_id, nil) do
+          "71TCREAT1NGA11NKEDRESP0NSE" = verb_id when show_objects_only_once? == true ->
+            # TODO: add a setting to define whether to group by thread_id, reply_to_id, or not
+            {verb_id,
+             e(item, :activity, :replied, :reply_to_id, nil) ||
+               e(item, :activity, :replied, :thread_id, nil) ||
+               e(item, :activity, :object_id, nil) || e(item, :activity, :id, nil) ||
+               Enums.id(item)}
 
-        # TODO: try doing this in queries in a way that it's not needed here?
+          verb_id ->
+            {verb_id,
+             e(item, :activity, :object_id, nil) || e(item, :activity, :id, nil) || Enums.id(item)}
+        end
+      end)
+      # |> debug("grouped edges by verb_id and object_id")
+      |> Enum.flat_map(fn
+        # Replies
+        {{"71TCREAT1NGA11NKEDRESP0NSE", _reply_to_or_thread_id}, [first | rest] = _items}
+        when rest != [] ->
+          [
+            Map.update(first, :activity, %{}, fn activity ->
+              activity
+              |> Map.put(
+                :replies_more_count,
+                length(rest)
+              )
 
-        edges
-        # |> debug("Starting prepare_feed with #{length(edges)} edges")
-        # |> Enum.uniq_by(&id(&1))
-        |> Enum.uniq_by(
-          &(e(&1, :activity, :object_id, nil) || e(&1, :activity, :id, nil) || Enums.id(&1))
-        )
+              # TODO: also include the reply objects?
+              # |> Map.put(
+              #   :replies_more,
+              #   rest
+              # )
+            end)
+          ]
 
-        # |> debug("deduped edges")
-      else
-        edges
-      end
+        # Likes and Boosts
+        {{verb_id, _object_id}, [first | rest] = _items}
+        when verb_id in ["11KES1ND1CATEAM11DAPPR0VA1", "300ST0R0RANN0VCEANACT1V1TY"] and
+               rest != [] ->
+          [
+            Map.update(first, :activity, %{}, fn activity ->
+              Map.put(
+                activity,
+                :subjects_more,
+                Enum.map(
+                  rest,
+                  &(e(&1, :activity, :subject, nil) || e(&1, :activity, :subject_id, nil))
+                )
+              )
+            end)
+          ]
+
+        # Default
+        {{_verb_id, _object_id}, [first | _rest] = items} ->
+          if show_objects_only_once? do
+            [first]
+          else
+            items
+          end
+      end)
 
     # |> debug("7b. after dedup")
 
