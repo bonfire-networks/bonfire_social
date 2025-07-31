@@ -22,7 +22,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           },
           current_user_required: true,
           exclude_from_nav: false,
-          icon: "mingcute:home-4-fill",
+          icon: "ph:house-duotone",
           # New structured UI-specific settings
           assigns: [
             page: "following",
@@ -38,7 +38,7 @@ defmodule Bonfire.Social.RuntimeConfig do
             exclude_activity_types: [:like, :follow, :request]
           },
           exclude_from_nav: false,
-          icon: "mingcute:compass-fill",
+          icon: "ph:compass-duotone",
           assigns: [
             page: "explore",
             page_title: "Explore activities",
@@ -58,7 +58,7 @@ defmodule Bonfire.Social.RuntimeConfig do
             origin: :local,
             exclude_activity_types: [:like, :follow, :request]
           },
-          icon: "mingcute:campground-fill",
+          icon: "ph:campfire-duotone",
           assigns: [
             page: "local",
             page_title: l("Explore local activities"),
@@ -75,7 +75,7 @@ defmodule Bonfire.Social.RuntimeConfig do
             origin: :remote,
             exclude_activity_types: [:like, :follow, :request]
           },
-          icon: "ph:planet-fill",
+          icon: "ph:planet-duotone",
           assigns: [
             page: "remote",
             page_title: "Activities from the fediverse",
@@ -97,7 +97,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           },
           current_user_required: true,
           opts: [include_flags: :mediate],
-          icon: "carbon:notification-filled",
+          icon: "ph:bell-duotone",
           assigns: [
             page: "notifications",
             showing_within: :notifications,
@@ -125,7 +125,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %FeedFilters{activity_types: [:like]},
           parameterized: %{subjects: [:me]},
           exclude_from_nav: false,
-          icon: "mingcute:fire-fill",
+          icon: "ph:fire-duotone",
           assigns: [
             hide_filters: true,
             showing_within: :feed_by_subject,
@@ -144,7 +144,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           parameterized: %{subjects: [:me]},
           exclude_from_nav: false,
           base_query_fun: &Bonfire.Social.Bookmarks.base_query/0,
-          icon: "carbon:bookmark-filled",
+          icon: "ph:bookmark-duotone",
           assigns: [
             hide_filters: true,
             showing_within: :feed_by_subject,
@@ -160,7 +160,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           description: l("Pending requests for me"),
           filters: %FeedFilters{feed_name: :notifications, activity_types: [:request]},
           current_user_required: true,
-          icon: "garden:user-follow-fill-16"
+          icon: "ph:user-plus-duotone"
         },
         my_boosts: %{
           name: l("My boosts"),
@@ -169,7 +169,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %FeedFilters{activity_types: [:boost]},
           parameterized: %{subjects: [:me]},
           exclude_from_nav: false,
-          icon: "lucide:refresh-cw",
+          icon: "ph:rocket-launch-duotone",
           assigns: [
             hide_filters: true,
             showing_within: :feed_by_subject,
@@ -219,7 +219,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           description: l("Posts (not including replies)"),
           #  TODO: exclude articles?
           filters: %FeedFilters{object_types: [:post], exclude_activity_types: [:reply]},
-          icon: "dashicons:text-page"
+          icon: "ph:note-duotone"
         },
         articles: %{
           name: l("Articles"),
@@ -230,7 +230,7 @@ defmodule Bonfire.Social.RuntimeConfig do
             object_types: ["article"],
             exclude_activity_types: [:like, :boost, :flag]
           },
-          icon: "icomoon-free:blog",
+          icon: "ph:article-ny-times-duotone",
           assigns: [
             page: "articles",
             page_title: l("Articles"),
@@ -256,7 +256,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %FeedFilters{
             media_types: [:research]
           },
-          icon: "mingcute:paper-fill"
+          icon: "ph:microscope-duotone"
         },
         images: %{
           name: l("Images"),
@@ -265,7 +265,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %FeedFilters{
             media_types: ["image"]
           },
-          icon: "ic:round-image"
+          icon: "ph:image-duotone"
         },
         videos: %{
           name: l("Videos"),
@@ -274,7 +274,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %FeedFilters{
             media_types: ["video"]
           },
-          icon: "majesticons:video"
+          icon: "ph:video-duotone"
         },
         audio: %{
           name: l("Audio"),
@@ -283,7 +283,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %FeedFilters{
             media_types: ["audio"]
           },
-          icon: "lucide:audio-lines"
+          icon: "ph:waveform-duotone"
         },
 
         # Hashtag feeds
@@ -303,6 +303,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           name: l("Curated"),
           built_in: true,
           description: l("Curated activities"),
+          icon: "ph:push-pin-duotone",
           filters: %FeedFilters{feed_name: :curated},
           assigns: [
             showing_within: :feed_by_subject,
@@ -321,7 +322,7 @@ defmodule Bonfire.Social.RuntimeConfig do
             object_types: ["Edition", "Book"],
             exclude_activity_types: [:like, :boost, :flag]
           },
-          icon: "mdi:bookshelf",
+          icon: "ph:book-duotone",
           assigns: [
             page: "books",
             page_title: l("Books"),
@@ -341,7 +342,7 @@ defmodule Bonfire.Social.RuntimeConfig do
             object_types: ["Event"],
             exclude_activity_types: [:like, :boost, :flag]
           },
-          icon: "ph:calendar-blank-bold",
+          icon: "ph:calendar-blank-duotone",
           assigns: [
             page: "events",
             page_title: l("Events"),
@@ -363,7 +364,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           parameterized: %{subjects: [:me]},
           current_user_required: true,
           opts: [include_flags: true],
-          icon: "heroicons-solid:flag",
+          icon: "ph:flag-duotone",
           assigns: [
             selected_tab: :flags,
             scope: :instance,
@@ -382,7 +383,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           current_user_required: true,
           instance_permission_required: :mediate,
           opts: [include_flags: :mediate],
-          icon: "heroicons-solid:flag",
+          icon: "ph:flag-duotone",
           assigns: [
             selected_tab: "all flags",
             scope: :instance,
@@ -409,7 +410,7 @@ defmodule Bonfire.Social.RuntimeConfig do
             sort_order: :desc,
             exclude_activity_types: [:boost, :like, :follow]
           },
-          icon: "mingcute:comment-fill"
+          icon: "ph:chats-circle-duotone"
         },
         local_media: %{
           name: l("Local Media"),
@@ -419,7 +420,7 @@ defmodule Bonfire.Social.RuntimeConfig do
             origin: :local,
             media_types: ["*"]
           },
-          icon: "mingcute:folder-fill"
+          icon: "ph:file-duotone"
         }
       ]
 
