@@ -1515,7 +1515,8 @@ defmodule Bonfire.Social.FeedLoader do
 
     edges =
       edges
-      |> Enum.group_by(fn item ->
+      |> Enum.with_index()
+      |> Enum.group_by(fn {item, _idx} ->
         case e(item, :activity, :verb_id, nil) do
           "71TCREAT1NGA11NKEDRESP0NSE" = verb_id when show_objects_only_once? == true ->
             # TODO: add a setting to define whether to group by thread_id, reply_to_id, or not
@@ -1530,52 +1531,50 @@ defmodule Bonfire.Social.FeedLoader do
              e(item, :activity, :object_id, nil) || e(item, :activity, :id, nil) || Enums.id(item)}
         end
       end)
-      # |> debug("grouped edges by verb_id and object_id")
       |> Enum.flat_map(fn
-        # Replies
-        {{"71TCREAT1NGA11NKEDRESP0NSE", _reply_to_or_thread_id}, [first | rest] = _items}
+        {{"71TCREAT1NGA11NKEDRESP0NSE", _reply_to_or_thread_id}, [{first, idx} | rest] = items}
         when rest != [] ->
           [
-            Map.update(first, :activity, %{}, fn activity ->
-              activity
-              |> Map.put(
-                :replies_more_count,
-                length(rest)
-              )
+            {Map.update(first, :activity, %{}, fn activity ->
+               activity
+               |> Map.put(:replies_more_count, length(rest))
 
-              # TODO: also include the reply objects?
-              # |> Map.put(
-              #   :replies_more,
-              #   rest
-              # )
-            end)
+               # TODO: also include the reply objects?
+               # |> Map.put(
+               #   :replies_more,
+               #   rest
+               # )
+             end), idx}
           ]
 
-        # Likes and Boosts
-        {{verb_id, _object_id}, [first | rest] = _items}
+        {{verb_id, _object_id}, [{first, idx} | rest] = items}
         when verb_id in ["11KES1ND1CATEAM11DAPPR0VA1", "300ST0R0RANN0VCEANACT1V1TY"] and
                rest != [] ->
           [
-            Map.update(first, :activity, %{}, fn activity ->
-              Map.put(
-                activity,
-                :subjects_more,
-                Enum.map(
-                  rest,
-                  &(e(&1, :activity, :subject, nil) || e(&1, :activity, :subject_id, nil))
-                )
-              )
-            end)
+            {Map.update(first, :activity, %{}, fn activity ->
+               Map.put(
+                 activity,
+                 :subjects_more,
+                 Enum.map(rest, fn {item, _} ->
+                   e(item, :activity, :subject, nil) || e(item, :activity, :subject_id, nil)
+                 end)
+               )
+             end), idx}
           ]
 
-        # Default
-        {{_verb_id, _object_id}, [first | _rest] = items} ->
+        {{_other_verb_id, _object_id}, [first | _rest] = items} ->
           if show_objects_only_once? do
-            [first]
+            [
+              first
+              # Enum.min_by(items, fn {_item, idx} -> idx end)
+            ]
           else
             items
           end
       end)
+      # Resort by original index
+      |> Enum.sort_by(fn {_item, idx} -> idx end)
+      |> Enum.map(fn {item, _idx} -> item end)
 
     # |> debug("7b. after dedup")
 

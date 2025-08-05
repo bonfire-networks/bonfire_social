@@ -96,7 +96,10 @@ defmodule Bonfire.Social.FeedsMergingActivitiesTest do
     assert boost_group
     # assert Map.has_key?(boost_group.activity, :subjects_more)
     subject_ids =
-      Enum.map([boost_group.activity.subject] ++ boost_group.activity.subjects_more, &Enums.id/1)
+      Enum.map(
+        [boost_group.activity.subject] ++ e(boost_group.activity, :subjects_more, []),
+        &Enums.id/1
+      )
 
     assert [booster.id] == subject_ids
 
