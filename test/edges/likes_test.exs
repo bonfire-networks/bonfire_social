@@ -272,10 +272,11 @@ defmodule Bonfire.Social.LikesTest do
     label = "test custom emoji"
     shortcode = ":test:"
 
-    {:ok, settings} = Bonfire.Files.EmojiUploader.add_emoji(me, icon_file(), label, shortcode)
+    {:ok, context} = Bonfire.Files.EmojiUploader.add_emoji(me, icon_file(), label, shortcode)
+    me = current_user(context)
 
     assert %{id: media_id, url: url} =
-             Bonfire.Common.Settings.get([:custom_emoji, shortcode], nil, settings)
+             Bonfire.Common.Settings.get([:custom_emoji, shortcode], nil, me)
 
     # assert url =~ path
 
