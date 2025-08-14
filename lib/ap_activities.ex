@@ -322,7 +322,11 @@ defmodule Bonfire.Social.APActivities do
         {:ok, build_pointer_map(id, fetched_object, embedded_object["type"])}
 
       e ->
-        err(e, "Could not fetch and/or save embedded object, falling back to using embedded data")
+        warn(
+          e,
+          "Could not fetch and/or save embedded object, falling back to using embedded data"
+        )
+
         # Fallback: create object from embedded data if available
         create_object_from_embedded_data(embedded_object, options)
     end
