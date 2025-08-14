@@ -520,11 +520,7 @@ defmodule Bonfire.Social.FeedLoader do
         throw("Explanation printed.")
 
       :stream ->
-        repo().transaction(fn ->
-          opts[:stream_callback].(
-            repo().stream(Ecto.Query.exclude(query, :preload), max_rows: 100)
-          )
-        end)
+        Bonfire.Social.many_stream(query, opts)
 
       _ ->
         # deferred_opts =

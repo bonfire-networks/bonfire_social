@@ -4,6 +4,7 @@ defmodule Bonfire.Social do
   use Arrows
   use Bonfire.Common.Config
   use Bonfire.Common.Utils
+  require Ecto.Query
   # alias Bonfire.Data.Social.Follow
   import Untangle
 
@@ -347,15 +348,7 @@ defmodule Bonfire.Social do
       #   query
 
       :stream ->
-        repo().transaction(
-          fn ->
-            opts[:stream_callback].(
-              repo().stream(Ecto.Query.exclude(query, :preload), max_rows: 100)
-            )
-          end,
-          #   1h
-          timeout: 3_600_000
-        )
+        many_stream(query, opts)
 
       _ ->
         if paginate? == false do
@@ -364,5 +357,39 @@ defmodule Bonfire.Social do
           repo().many_paginated(query, opts)
         end
     end
+  end
+
+  def many_stream(query, opts) do
+    repo().transaction(
+      fn ->
+        opts[:stream_callback].(
+          Ecto.Query.exclude(query, :preload)
+          |> maybe_only_id(opts)
+          |> repo().stream(max_rows: opts[:max_rows] || 100)
+        )
+      end,
+      #   1h
+      timeout: opts[:timeout] || 3_600_000
+    )
+  end
+
+  defp maybe_only_id(query, opts) do
+    if opts[:select_only_activity_id] do
+      query
+      |> Ecto.Query.exclude(:select)
+      |> Ecto.Query.select([activity], activity.id)
+    else
+      query
+    end
+  end
+
+  def maybe_can?(context, verb, object, object_boundary \\ nil) do
+    current_user_id(context) ==
+      (e(object, :created, :creator_id, nil) ||
+         e(object, :created, :creator, :id, nil) ||
+         e(object, :creator, :id, nil) ||
+         e(object, :creator_id, nil)) or
+      (Bonfire.Boundaries.can?(context, verb, object_boundary) ||
+         Bonfire.Boundaries.can?(context, verb, :instance))
   end
 end

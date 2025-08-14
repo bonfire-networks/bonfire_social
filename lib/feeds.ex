@@ -465,6 +465,13 @@ defmodule Bonfire.Social.Feeds do
       # |> debug("preset_and_custom_boundary")
       |> maybe_from_opts(:to_feeds, [])
 
+  def user_named_or_feed_id(name, opts) do
+    if current_user = current_user(opts) do
+      feed_id(name, current_user)
+    end ||
+      named_feed_id(name, opts)
+  end
+
   @doc """
   Gets the feed ID for a named feed.
 
@@ -483,7 +490,12 @@ defmodule Bonfire.Social.Feeds do
   def named_feed_id(name, opts \\ [])
   def named_feed_id(:explore, _), do: nil
   def named_feed_id(:remote, _), do: named_feed_id(:activity_pub)
-  def named_feed_id(:notifications, opts), do: my_feed_id(:notifications, current_user(opts))
+
+  def named_feed_id(:notifications, opts) do
+    if current_user = current_user(opts) do
+      my_feed_id(:notifications, current_user)
+    end
+  end
 
   def named_feed_id(name, _) when is_atom(name) and not is_nil(name),
     do: Bonfire.Boundaries.Circles.get_id(name) || name

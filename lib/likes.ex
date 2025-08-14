@@ -214,6 +214,18 @@ defmodule Bonfire.Social.Likes do
 
     case create(liker, liked, opts) do
       {:ok, like} ->
+        # livepush will need a list of feed IDs we published to
+        feed_ids =
+          for fp <- e(like, :feed_publishes, []),
+              do: e(fp, :feed_id, nil)
+
+        maybe_apply(Bonfire.Social.LivePush, :push_activity_object, [
+          feed_ids,
+          like,
+          Objects.preload_creator(liked, force: true),
+          [push_to_thread: false, notify: true]
+        ])
+
         Social.maybe_federate_and_gift_wrap_activity(liker, like)
 
       {:error, e} ->

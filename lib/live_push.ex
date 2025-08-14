@@ -42,7 +42,7 @@ defmodule Bonfire.Social.LivePush do
         %{id: _, activity: _activity} = object,
         opts
       ) do
-    debug(to_notify, "push an object as :new_activity")
+    # debug(to_notify, "push an object as :new_activity")
 
     activity_from_object(object)
     |> push_activity(to_notify, ..., opts)
