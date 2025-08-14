@@ -8,7 +8,7 @@ defmodule Bonfire.Social do
   import Untangle
 
   declare_extension("Social",
-    icon: "ph:rss-simple-bold",
+    icon: "ph:rss-simple-duotone",
     # emoji: "📰",
     description: l("Basic social networking functionality, such as feeds and discussions.")
   )
