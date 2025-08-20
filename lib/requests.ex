@@ -394,7 +394,7 @@ defmodule Bonfire.Social.Requests do
             {:ok, object}
 
           e ->
-            error(e, "Could not make the request")
+            err(e, "Could not make the request")
         end
     end
   end
