@@ -38,7 +38,9 @@ defmodule Bonfire.Social.Edges do
     :after,
     :before,
     :paginate,
-    :paginate?
+    :paginate?,
+    :return,
+    :stream_callback
   ]
 
   @doc """

@@ -194,7 +194,7 @@ defmodule Bonfire.Social.Bookmarks do
     query(filters, opts)
     # |> Activities.query_object_preload_activity(:bookmark, :bookmarked_id, opts)
     # |> Activities.as_permitted_for(opts, [:see])
-    # |> debug()
+    |> flood("qqqq")
     |> Social.many(opts[:paginate], opts)
   end
 
@@ -208,7 +208,7 @@ defmodule Bonfire.Social.Bookmarks do
 
   """
   def list_my(opts) do
-    list_by(current_user_required!(opts), opts ++ [preload: :object_with_creator])
+    list_by(current_user_required!(opts), to_options(opts) ++ [preload: :object_with_creator])
   end
 
   @doc """

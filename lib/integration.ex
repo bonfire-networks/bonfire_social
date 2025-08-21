@@ -360,24 +360,35 @@ defmodule Bonfire.Social do
   end
 
   def many_stream(query, opts) do
-    repo().transaction(
-      fn ->
-        opts[:stream_callback].(
-          Ecto.Query.exclude(query, :preload)
-          |> maybe_only_id(opts)
-          |> repo().stream(max_rows: opts[:max_rows] || 100)
+    case opts[:stream_callback] do
+      nil ->
+        stream = repo().stream(query, max_rows: opts[:max_rows] || 100)
+
+        repo().transact(fn ->
+          Enum.to_list(stream)
+        end)
+
+      callback ->
+        repo().transaction(
+          fn ->
+            callback.(
+              query
+              |> Ecto.Query.exclude(:preload)
+              |> maybe_only_id(opts)
+              |> repo().stream(max_rows: opts[:max_rows] || 100)
+            )
+          end,
+          #   1h
+          timeout: opts[:timeout] || 3_600_000
         )
-      end,
-      #   1h
-      timeout: opts[:timeout] || 3_600_000
-    )
+    end
   end
 
   defp maybe_only_id(query, opts) do
     if opts[:select_only_activity_id] do
       query
       |> Ecto.Query.exclude(:select)
-      |> Ecto.Query.select([activity], activity.id)
+      |> Ecto.Query.select([activity: activity], activity.id)
     else
       query
     end
