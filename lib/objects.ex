@@ -261,14 +261,22 @@ defmodule Bonfire.Social.Objects do
       %User{}
 
   """
-  def object_creator(object_or_activity) do
-    # debug(object, "object_creator: checking object")
+  def object_creator(%{} = object_or_activity) do
+    # debug(object_or_activity, "object_creator: checking object")
 
     e(object_or_activity, :created, :creator, nil) || e(object_or_activity, :creator, nil) ||
       e(object_or_activity, :object, :created, :creator, nil) ||
       e(object_or_activity, :activity, :object, :created, :creator, nil) ||
       e(object_or_activity, :post_content, :created, :creator, nil) ||
       e(object_or_activity, :subject, nil) || e(object_or_activity, :activity, :subject, nil)
+  end
+
+  def object_creator(object_id) when is_binary(object_id) do
+    # Look up the object by ID and get its creator
+    object =
+      repo().get(Created, object_id)
+      |> repo().maybe_preload([:creator])
+      |> e(:creator, nil)
   end
 
   def query_maybe_time_limit(query, 0), do: query
