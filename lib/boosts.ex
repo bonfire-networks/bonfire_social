@@ -320,9 +320,7 @@ defmodule Bonfire.Social.Boosts do
     filters
     |> query(opts)
     # |> debug()
-    |> repo().many_paginated(opts)
-
-    # TODO: activity preloads
+    |> Social.many(opts[:paginate?], opts)
   end
 
   defp query_base(filters, opts) do

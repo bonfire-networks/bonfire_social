@@ -226,7 +226,11 @@ defmodule Bonfire.Social.Likes do
           [push_to_thread: false, notify: true]
         ])
 
-        Social.maybe_federate_and_gift_wrap_activity(liker, like)
+        if !opts[:skip_federation],
+          do:
+            Social.maybe_federate_and_gift_wrap_activity(liker, like)
+            |> debug("maybe_federated the boost"),
+          else: {:ok, like}
 
       {:error, e} ->
         case get(liker, liked) do
