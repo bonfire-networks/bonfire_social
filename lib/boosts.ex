@@ -226,8 +226,11 @@ defmodule Bonfire.Social.Boosts do
         [push_to_thread: false, notify: true]
       ])
 
-      Social.maybe_federate_and_gift_wrap_activity(booster, boost)
-      |> debug("maybe_federated the boost")
+      if !opts[:skip_federation],
+        do:
+          Social.maybe_federate_and_gift_wrap_activity(booster, boost)
+          |> debug("maybe_federated the boost"),
+        else: {:ok, boost}
     end
   end
 
@@ -383,7 +386,16 @@ defmodule Bonfire.Social.Boosts do
            ActivityPub.Object.get_cached(
              pointer: e(boost, :edge, :object, nil) || e(boost, :edge, :object_id, nil)
            ) do
-      ActivityPub.announce(%{actor: booster, object: object, pointer: uid(boost)})
+      id = uid(boost)
+
+      ActivityPub.announce(%{
+        actor: booster,
+        object: object,
+        pointer: id,
+        published:
+          DatesTimes.date_from_pointer(id)
+          |> DateTime.to_iso8601()
+      })
     else
       {:error, :not_found} ->
         :ignore

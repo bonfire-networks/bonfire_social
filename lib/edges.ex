@@ -166,10 +166,16 @@ defmodule Bonfire.Social.Edges do
   def changeset_base(schema, subject, object, options) when is_atom(schema),
     do: changeset_base({schema, schema}, subject, object, options)
 
-  def changeset_base({main_schema, type_of_edge_schema}, subject, object, _options) do
+  def changeset_base({main_schema, type_of_edge_schema}, subject, object, options) do
     Changesets.cast(struct(main_schema), %{}, [])
+    |> maybe_overwrite_id(options[:pointer_id])
     |> put_edge_assoc(type_of_edge_schema, subject, object)
   end
+
+  defp maybe_overwrite_id(changeset, nil), do: changeset
+
+  defp maybe_overwrite_id(changeset, id),
+    do: Changeset.put_change(changeset, :id, id)
 
   def put_edge_assoc(changeset, subject, object),
     do: put_edge_assoc(changeset, changeset.data.__struct__, subject, object)
