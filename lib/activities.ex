@@ -2252,7 +2252,7 @@ defmodule Bonfire.Social.Activities do
   defp ensure_user_loaded!(type, creator_or_subject_id, []), do: :ok
 
   defp ensure_user_loaded!(:creator = type, creator_or_subject_id, preload) do
-    if :with_subject not in preload,
+    if :with_creator in preload and :with_subject not in preload,
       do:
         err(
           creator_or_subject_id,
@@ -2261,7 +2261,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   defp ensure_user_loaded!(:subject = type, creator_or_subject_id, preload) do
-    if :with_creator not in preload,
+    if :with_subject in preload and :with_creator not in preload,
       do:
         err(
           creator_or_subject_id,

@@ -22,6 +22,7 @@ defmodule Bonfire.Social.Acts.LivePush do
       case epic.assigns[on] do
         nil ->
           maybe_debug(epic, act, on, "Skipping: no activity at")
+          epic
 
         activity ->
           ## {inspect activity}
