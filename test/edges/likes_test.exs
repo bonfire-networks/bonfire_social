@@ -266,6 +266,7 @@ defmodule Bonfire.Social.LikesTest do
     assert true == Likes.liked?(me, post)
   end
 
+  # @tag :todo
   test "can react with a custom emoji (i.e. a Media)" do
     me = fake_user!()
 
@@ -276,7 +277,7 @@ defmodule Bonfire.Social.LikesTest do
     me = current_user(context)
 
     assert %{id: media_id, url: url} =
-             Bonfire.Common.Settings.get([:custom_emoji, shortcode], nil, me)
+             Bonfire.Common.Settings.get([:custom_emoji, shortcode], nil, me) |> Map.new()
 
     # assert url =~ path
 

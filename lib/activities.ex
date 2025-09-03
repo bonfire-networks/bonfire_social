@@ -2134,7 +2134,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   def prepare_subject_and_creator(object, _opts) do
-    err(object, "unrecognised object format, skipping subject and creator preload")
+    error(object, "unrecognised object format, skipping subject and creator preload")
     object
   end
 

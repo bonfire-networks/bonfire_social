@@ -340,7 +340,7 @@ defmodule Bonfire.Social.APActivities do
         {:ok, build_pointer_map(id, created_object, embedded_object["type"])}
 
       e ->
-        err(e, "Could not insert embedded data as Object, falling back to using as-is")
+        error(e, "Could not insert embedded data as Object, falling back to using as-is")
         :skip
     end
   end

@@ -173,89 +173,127 @@ defmodule Bonfire.Social.PostContents do
   # post from local user
   def maybe_prepare_contents(attrs, creator, _boundary, opts) do
     if module_enabled?(Bonfire.Social.Tags, creator) do
-      debug("process post contents for tags/mentions")
-
-      # TODO: refactor this?
-      with {:ok,
-            %{
-              text: html_body,
-              mentions: mentions1,
-              hashtags: hashtags1,
-              urls: urls1
-            }} <-
-             Bonfire.Social.Tags.maybe_process(
-               creator,
-               get_attr(attrs, :html_body)
-               |> maybe_sane_html(e(opts, :do_not_strip_html, nil), true),
-               opts
-             ),
-           {:ok, %{text: name, mentions: mentions2, hashtags: hashtags2, urls: urls2}} <-
-             Bonfire.Social.Tags.maybe_process(
-               creator,
-               get_attr(attrs, :name) |> maybe_sane_html(e(opts, :do_not_strip_html, nil), true),
-               opts
-             ),
-           {:ok,
-            %{
-              text: summary,
-              mentions: mentions3,
-              hashtags: hashtags3,
-              urls: urls3
-            }} <-
-             Bonfire.Social.Tags.maybe_process(
-               creator,
-               get_attr(attrs, :summary)
-               |> maybe_sane_html(e(opts, :do_not_strip_html, nil), true),
-               opts
-             ) do
-        merge_with_body_or_nil(
-          attrs,
-          %{
-            name: prepare_text(name, creator, opts ++ [do_not_strip_html: true]),
-            summary: prepare_text(summary, creator, opts ++ [do_not_strip_html: true]),
-            html_body: prepare_text(html_body, creator, opts ++ [do_not_strip_html: true]),
-            mentions: e(attrs, :mentions, []) ++ mentions1 ++ mentions2 ++ mentions3,
-            hashtags: hashtags1 ++ hashtags2 ++ hashtags3,
-            urls: urls1 ++ urls2 ++ urls3,
-            # TODO: show languages to user, then save the one they confirm
-            languages: maybe_detect_languages(attrs)
-          }
-        )
-      end
+      parse_and_prepare_contents(attrs, creator, opts)
     else
       only_prepare_content(attrs, creator, opts)
     end
     |> debug()
   end
 
+  def parse_and_prepare_contents(attrs, creator, opts) do
+    debug("process post contents for tags/mentions")
+
+    # TODO: refactor this?
+    with {:ok,
+          %{
+            text: html_body,
+            mentions: mentions1,
+            hashtags: hashtags1,
+            urls: urls1
+          }} <-
+           Bonfire.Social.Tags.maybe_process(
+             creator,
+             get_attr(attrs, :html_body)
+             |> maybe_sane_html(e(opts, :do_not_strip_html, nil), true),
+             opts
+           ),
+         {:ok, %{text: name, mentions: mentions2, hashtags: hashtags2, urls: urls2}} <-
+           Bonfire.Social.Tags.maybe_process(
+             creator,
+             get_attr(attrs, :name) |> maybe_sane_html(e(opts, :do_not_strip_html, nil), true),
+             opts
+           ),
+         {:ok,
+          %{
+            text: summary,
+            mentions: mentions3,
+            hashtags: hashtags3,
+            urls: urls3
+          }} <-
+           Bonfire.Social.Tags.maybe_process(
+             creator,
+             get_attr(attrs, :summary)
+             |> maybe_sane_html(e(opts, :do_not_strip_html, nil), true),
+             opts
+           ) do
+      merge_with_body_or_nil(
+        attrs,
+        %{
+          name: prepare_text(name, creator, opts ++ [do_not_strip_html: true]),
+          summary: prepare_text(summary, creator, opts ++ [do_not_strip_html: true]),
+          html_body: prepare_text(html_body, creator, opts ++ [do_not_strip_html: true]),
+          mentions: e(attrs, :mentions, []) ++ mentions1 ++ mentions2 ++ mentions3,
+          hashtags: e(attrs, :hashtags, []) ++ hashtags1 ++ hashtags2 ++ hashtags3,
+          urls: urls1 ++ urls2 ++ urls3,
+          # TODO: show languages to user, then save the one they confirm
+          languages: maybe_detect_languages(attrs)
+        }
+      )
+    end
+  end
+
   @doc "Given attributes of a remote post, prepares it for processing by detecting languages, and rewriting mentions, hashtags, and urls"
   defp prepare_remote_content(attrs, creator, opts) do
     # debug(creator)
-    debug(
-      opts,
-      "WIP: find mentions with `[...] mention` class, and hashtags with `class=\"[...] hashtag\" rel=\"tag\"` and rewrite the URLs to point to local instance OR use the `tags` AS field to know what hashtag/user URLs are likely to be found in the body and just find and replace those?"
-    )
 
     mentions = e(attrs, :mentions, %{})
     hashtags = e(attrs, :hashtags, %{})
 
-    merge_with_body_or_nil(attrs, %{
-      html_body:
-        get_attr(attrs, :html_body)
-        |> rewrite_remote_links(mentions, hashtags)
-        |> prepare_text(creator, opts),
-      name:
-        get_attr(attrs, :name)
-        |> rewrite_remote_links(mentions, hashtags)
-        |> prepare_text(creator, opts),
-      summary:
-        get_attr(attrs, :summary)
-        |> rewrite_remote_links(mentions, hashtags)
-        |> prepare_text(creator, opts),
-      languages: maybe_detect_languages(attrs),
-      mentions: Map.values(mentions) || [],
-      hashtags: Map.values(hashtags) || []
-    })
+    # If link processing is enabled, use the same implementation as local posts
+    if opts[:parse_remote_links] and module_enabled?(Bonfire.Social.Tags, creator) do
+      debug("process remote post contents for links (but not mentions/hashtags)")
+
+      # Extract mention/hashtag URLs to filter them out from link processing
+      mention_urls = Map.keys(mentions) |> Enums.filter_empty([])
+      hashtag_urls = Map.keys(hashtags) |> Enums.filter_empty([])
+
+      # Use same processing as local posts but disable mentions/hashtags
+
+      attrs =
+        attrs
+        |> Map.put(:mentions, Map.values(mentions) || [])
+        |> Map.put(:hashtags, Map.values(hashtags) || [])
+        |> parse_and_prepare_contents(creator, opts ++ [mentions: false, hashtags: false])
+        |> Map.update(:urls, [], fn links ->
+          Enum.reject(links, fn url ->
+            url in mention_urls or url in hashtag_urls
+          end)
+          |> debug("filtered urls")
+        end)
+
+      merge_with_body_or_nil(attrs, %{
+        html_body:
+          get_attr(attrs, :html_body)
+          |> rewrite_remote_links(mentions, hashtags, mention_urls, hashtag_urls),
+        name:
+          get_attr(attrs, :name)
+          |> rewrite_remote_links(mentions, hashtags, mention_urls, hashtag_urls),
+        summary:
+          get_attr(attrs, :summary)
+          |> rewrite_remote_links(mentions, hashtags, mention_urls, hashtag_urls)
+        # mentions: Map.values(mentions) || [],
+        # hashtags: Map.values(hashtags) || []
+      })
+    else
+      # Fallback to simple processing without link detection (existing behavior)
+      merge_with_body_or_nil(attrs, %{
+        html_body:
+          get_attr(attrs, :html_body)
+          |> rewrite_remote_links(mentions, hashtags)
+          |> prepare_text(creator, opts),
+        name:
+          get_attr(attrs, :name)
+          |> rewrite_remote_links(mentions, hashtags)
+          |> prepare_text(creator, opts),
+        summary:
+          get_attr(attrs, :summary)
+          |> rewrite_remote_links(mentions, hashtags)
+          |> prepare_text(creator, opts),
+        languages: maybe_detect_languages(attrs),
+        mentions: Map.values(mentions) || [],
+        hashtags: Map.values(hashtags) || []
+      })
+    end
     |> debug()
   end
 
@@ -270,19 +308,23 @@ defmodule Bonfire.Social.PostContents do
     })
   end
 
-  defp rewrite_remote_links(text, mentions, hashtags)
+  defp rewrite_remote_links(text, mentions, hashtags, mention_urls \\ nil, hashtag_urls \\ nil)
        when is_binary(text) and (mentions != %{} or hashtags != %{}) do
+    # WIP: find mentions with `[...] mention` class, and hashtags with `class=\"[...] hashtag\" rel=\"tag\"` and rewrite the URLs to point to local instance OR use the `tags` AS field to know what hashtag/user URLs are likely to be found in the body and just find and replace those?"
+
     mention_urls =
-      mentions
-      |> debug()
-      |> Map.keys()
-      |> Enums.filter_empty([])
+      mention_urls ||
+        mentions
+        # |> debug()
+        |> Map.keys()
+        |> Enums.filter_empty([])
 
     hashtag_urls =
-      hashtags
-      |> debug()
-      |> Map.keys()
-      |> Enums.filter_empty([])
+      hashtag_urls ||
+        hashtags
+        # |> debug()
+        |> Map.keys()
+        |> Enums.filter_empty([])
 
     text
     |> String.replace(
@@ -292,7 +334,7 @@ defmodule Bonfire.Social.PostContents do
     |> String.replace(hashtag_urls, &(path(e(hashtags, &1, nil)) || &1))
   end
 
-  defp rewrite_remote_links(text, _, _), do: text
+  defp rewrite_remote_links(text, _, _, _, _), do: text
 
   def all_text_content(attrs) do
     "#{get_attr(attrs, :name)}\n#{get_attr(attrs, :summary)}\n#{get_attr(attrs, :html_body)}\n#{get_attr(attrs, :note)}"
@@ -603,8 +645,9 @@ defmodule Bonfire.Social.PostContents do
       #  |> repo().maybe_preload(:named)
       |> debug("include_as_hashtags")
 
-    {primary_image, other_media} = Bonfire.Files.split_primary_image(e(post, :media, nil))
-    # |> debug("splitss")
+    %{primary_image: primary_image, images: images, links: links} =
+      Bonfire.Files.split_media_by_type(e(post, :media, nil))
+      |> debug("media_splits")
 
     %{
       "type" => "Note",
@@ -631,7 +674,7 @@ defmodule Bonfire.Social.PostContents do
       "image" =>
         maybe_apply(Bonfire.Files, :ap_publish_activity, [primary_image], fallback_return: nil),
       "attachment" =>
-        maybe_apply(Bonfire.Files, :ap_publish_activity, [other_media], fallback_return: nil),
+        maybe_apply(Bonfire.Files, :ap_publish_activity, [images], fallback_return: nil),
       "inReplyTo" => reply_to,
       "context" => context,
       "tag" =>
@@ -647,6 +690,14 @@ defmodule Bonfire.Social.PostContents do
               "href" => URIs.canonical_url(tag),
               "name" => "##{e(tag, :name, nil) || e(tag, :named, :name, nil)}",
               "type" => "Hashtag"
+            }
+          end) ++
+          Enum.map(links, fn link ->
+            %{
+              "href" => e(link, :path, nil),
+              "name" => Bonfire.Files.Media.media_label(link),
+              "mediaType" => e(link, :metadata, "content_type", nil) || e(link, :media_type, nil),
+              "type" => "Link"
             }
           end)
     }
@@ -736,9 +787,25 @@ defmodule Bonfire.Social.PostContents do
       end
       |> filter_empty([])
       |> Map.new()
-      |> info("incoming mentions")
+      |> debug("incoming mentions")
 
-    info(
+    links =
+      for %{"type" => "Link", "href" => url} = tag <- tags do
+        tag
+
+        # with %{} = media <- Bonfire.Files.Acts.URLPreviews.maybe_save(creator, url, %{label: tag["name"]}) do
+        #   media
+        #   |> debug("created link media")
+        # else
+        #   none ->
+        #     error(none, "could not create Link Media for #{url}")
+        #     nil
+        # end
+      end
+
+    # |> filter_empty([])
+
+    debug(
       %{
         local: false,
         # huh?
@@ -755,10 +822,11 @@ defmodule Bonfire.Social.PostContents do
         },
         sensitive: post_data["sensitive"],
         primary_image: e(post_data, "image", nil) || e(post_data, "icon", nil),
-        attachments: e(post_data, "attachment", nil),
+        attachments: List.wrap(e(post_data, "attachment", [])) ++ links,
         opts: [
           emoji: e(post_data, "emoji", nil),
-          do_not_strip_html: e(post_data, "source", "mediaType", nil) == "text/x.misskeymarkdown"
+          do_not_strip_html: e(post_data, "source", "mediaType", nil) == "text/x.misskeymarkdown",
+          parse_remote_links: links == []
         ]
       },
       "remote post attrs"

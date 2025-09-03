@@ -48,7 +48,8 @@ defmodule Bonfire.Social.Tags do
            Bonfire.Tag.TextContent.Process.process(
              creator,
              text,
-             output_format
+             output_format,
+             opts
            ) do
       {:ok,
        %{

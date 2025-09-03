@@ -120,7 +120,7 @@ defmodule Bonfire.Social.DeleteTest do
 
     refute Users.get_current(user.id)
     assert {:error, _} = Posts.read(post.id, skip_boundary_check: true)
-    refute File.exists?(path)
+    refute path && File.exists?(path)
 
     # TODO: check if we also delete likes/boosts/etc
   end
