@@ -69,7 +69,7 @@ defmodule Bonfire.Social do
       ) do
     with {:ok, ap_activity} <-
            maybe_federate_activity(subject, object, opts[:verb], opts[:object], opts)
-           |> debug("result of maybe_federate_activity") do
+           |> flood("result of maybe_federate_activity") do
       {:ok,
        Enums.deep_merge(object, %{
          activity: %{
@@ -182,6 +182,21 @@ defmodule Bonfire.Social do
     maybe_federate(subject, :delete, object || activity, nil, opts)
   end
 
+  defp maybe_federate_activity(
+         subject,
+         %{edge: %Bonfire.Data.Edges.Edge{subject: edge_subject, object: _edge_object} = edge} =
+           parent_object,
+         verb,
+         object_override,
+         opts
+       ) do
+    debug(parent_object, "Federate an Edge (instead of Activity)")
+
+    # Use the edge subject and object as fallbacks for federation
+
+    maybe_federate(subject || edge_subject, verb, object_override || parent_object, nil, opts)
+  end
+
   defp maybe_federate_activity(_subject, activity, _verb, _object, _opts) do
     error(
       activity,
@@ -250,7 +265,7 @@ defmodule Bonfire.Social do
       )
     else
       # TODO: do not enqueue if federation is disabled in Settings
-      info("Federation is disabled or an adapter is not available")
+      flood("Federation is disabled or an adapter is not available")
       :ignore
     end
   end

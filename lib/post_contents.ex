@@ -229,6 +229,7 @@ defmodule Bonfire.Social.PostContents do
           languages: maybe_detect_languages(attrs)
         }
       )
+      |> flood("parsed and prepared contents")
     end
   end
 
@@ -634,16 +635,15 @@ defmodule Bonfire.Social.PostContents do
     html_body = e(post, :post_content, :html_body, nil)
 
     hashtags =
-      e(post, :tags, [])
-      #  |> info("tags")
-      #  non-characters
-      |> Enum.reject(fn tag ->
-        not is_nil(e(tag, :character, nil))
-      end)
-      |> filter_empty([])
+      Bonfire.Social.Tags.list_tags_hashtags(post)
+      # TODO: check why we're doing this?
       |> Bonfire.Common.Needles.list!(skip_boundary_check: true)
       #  |> repo().maybe_preload(:named)
       |> debug("include_as_hashtags")
+
+    quoted_objects =
+      Bonfire.Social.Tags.list_tags_quote(post)
+      |> flood("include_as_quotes")
 
     %{primary_image: primary_image, images: images, links: links} =
       Bonfire.Files.split_media_by_type(e(post, :media, nil))
@@ -677,6 +677,13 @@ defmodule Bonfire.Social.PostContents do
         maybe_apply(Bonfire.Files, :ap_publish_activity, [images], fallback_return: nil),
       "inReplyTo" => reply_to,
       "context" => context,
+      # Add Mastodon-style quote field for compatibility
+      "quote" =>
+        case quoted_objects do
+          [first_quote | _] -> Bonfire.Common.URIs.canonical_url(first_quote)
+          [] -> nil
+        end,
+      # Add quote objects as Link tags with proper rel value
       "tag" =>
         Enum.map(mentions, fn actor ->
           %{
@@ -698,6 +705,15 @@ defmodule Bonfire.Social.PostContents do
               "name" => Bonfire.Files.Media.media_label(link),
               "mediaType" => e(link, :metadata, "content_type", nil) || e(link, :media_type, nil),
               "type" => "Link"
+            }
+          end) ++
+          Enum.map(quoted_objects, fn quoted_object ->
+            %{
+              "href" => Bonfire.Common.URIs.canonical_url(quoted_object),
+              "type" => "Link",
+              "rel" => "https://misskey-hub.net/ns#_misskey_quote",
+              "mediaType" =>
+                "application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\""
             }
           end)
     }
@@ -789,29 +805,38 @@ defmodule Bonfire.Social.PostContents do
       |> Map.new()
       |> debug("incoming mentions")
 
-    links =
-      for %{"type" => "Link", "href" => url} = tag <- tags do
-        tag
+    # Handle quote posts and regular links separately
+    {quote_tags, regular_links} =
+      for %{"type" => "Link", "href" => url} = tag <- tags, reduce: {[], []} do
+        {quotes, links} ->
+          case tag["rel"] do
+            # All quote formats are now standardized as Link tags with quote-related rel values
+            "https://misskey-hub.net/ns#_misskey_quote" ->
+              case Bonfire.Federate.ActivityPub.AdapterUtils.get_or_fetch_and_create_by_uri(url) do
+                {:ok, quoted_object} ->
+                  debug(quoted_object, "fetched quoted object for link tag")
+                  {[quoted_object | quotes], links}
 
-        # with %{} = media <- Bonfire.Files.Acts.URLPreviews.maybe_save(creator, url, %{label: tag["name"]}) do
-        #   media
-        #   |> debug("created link media")
-        # else
-        #   none ->
-        #     error(none, "could not create Link Media for #{url}")
-        #     nil
-        # end
+                e ->
+                  error(e, "could not fetch quoted object from #{url}")
+                  {quotes, links}
+              end
+
+            # Regular link
+            _ ->
+              {quotes, [tag | links]}
+          end
       end
-
-    # |> filter_empty([])
+      |> flood("separated quote tags and regular links")
 
     debug(
       %{
         local: false,
-        # huh?
         canonical_url: nil,
         mentions: mentions,
         hashtags: hashtags,
+        # Add quote tags here
+        tags: quote_tags,
         post_content: %{
           name: post_data["name"],
           summary: post_data["summary"],
@@ -822,11 +847,11 @@ defmodule Bonfire.Social.PostContents do
         },
         sensitive: post_data["sensitive"],
         primary_image: e(post_data, "image", nil) || e(post_data, "icon", nil),
-        attachments: List.wrap(e(post_data, "attachment", [])) ++ links,
+        attachments: List.wrap(e(post_data, "attachment", [])) ++ regular_links,
         opts: [
           emoji: e(post_data, "emoji", nil),
           do_not_strip_html: e(post_data, "source", "mediaType", nil) == "text/x.misskeymarkdown",
-          parse_remote_links: links == []
+          parse_remote_links: regular_links == []
         ]
       },
       "remote post attrs"

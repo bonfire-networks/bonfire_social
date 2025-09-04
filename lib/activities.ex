@@ -460,10 +460,19 @@ defmodule Bonfire.Social.Activities do
           )
           |> maybe_preload_creator(skip_loading_user_ids, opts)
 
-        # :tags ->
-        #   # Tags/mentions (this actual needs to be done by Repo.preload to be able to list more than one)
-        #   proload query,
-        #     activity: [tags:  {"tag_", [:character, profile: :icon]}]
+        :tags ->
+          #   # Tags/mentions (this actual needs to be done by Repo.preload to be able to list more than one)
+          query
+
+        # |> proload( activity: [tags:  {"tag_", [:character, profile: :icon]}])
+
+        :quote_tags ->
+          # this actual needs to be done by Repo.preload to be able to list more than one
+          query
+
+        # |> proload(activity: [tags: {"tag_",   [:character, :post_content, created: [creator: {"creator_",   [:profile, :character]}]]}]
+        # )
+
         :with_subject ->
           query
           |> maybe_preload_subject(skip_loading_user_ids, opts)
@@ -583,10 +592,6 @@ defmodule Bonfire.Social.Activities do
         #   ]
         # )
 
-        :tags ->
-          query
-          |> proload(activity: [tags: [:character, profile: :icon]])
-
         :with_media ->
           query
           |> proload(activity: [:sensitive])
@@ -686,8 +691,12 @@ defmodule Bonfire.Social.Activities do
           ]
 
         :tags ->
-          # Tags/mentions (this actual needs to be done by Repo.preload to be able to list more than one)
+          # Tags/mentions 
           [tags: [:character, profile: :icon]]
+
+        :quote_tags ->
+          # Quote posts
+          [tags: [:character, :post_content, created: [creator: [:profile, :character]]]]
 
         :with_subject ->
           # Subject here is standing in for the creator of the root. One day it may be replaced with it.

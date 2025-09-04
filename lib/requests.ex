@@ -59,6 +59,27 @@ defmodule Bonfire.Social.Requests do
     ~> do_request(requester, type, ..., opts)
   end
 
+  def accept_and_delete(request, type_module, opts) do
+    debug(opts, "opts")
+
+    repo().transact_with(fn ->
+      with {:ok, %{edge: %{object: object, subject: subject}} = request} <-
+             accept(request, opts)
+             |> repo().maybe_preload(edge: [:subject, :object])
+             |> debug("accepted"),
+           # remove the Edge (helps so we can recreate one linked to the Follow, because of the unique key on subject/object/table_id)
+           _ <- Edges.delete_by_both(subject, type_module, object),
+           # remove the Request Activity from notifications
+           _ <-
+             Activities.delete_by_subject_verb_object(subject, :request, object) do
+        {:ok, request}
+      else
+        e ->
+          error(e, l("An error occurred while accepting the request"))
+      end
+    end)
+  end
+
   @doc """
   Accepts a request.
 
@@ -354,25 +375,31 @@ defmodule Bonfire.Social.Requests do
   # end
 
   defp do_request(requester, type, object, opts) do
-    opts = [
-      boundary: "mentions",
-      to_circles: [id(object)],
-      to_feeds: [notifications: object]
-    ]
+    opts =
+      Keyword.merge(opts,
+        boundary: "mentions",
+        to_circles: [id(object)],
+        to_feeds: [notifications: object]
+      )
 
     case create(requester, type, object, opts) do
       {:ok, request} ->
         if opts[:incoming] != true,
-          do: Social.maybe_federate_and_gift_wrap_activity(requester, request),
+          do:
+            Social.maybe_federate_and_gift_wrap_activity(
+              current_user(opts) || requester,
+              request,
+              opts
+            ),
           else: {:ok, request}
 
       e ->
-        warn(e)
+        warn(e, "Could not create the request, checking if it was made already")
         maybe_already(requester, type, object)
     end
   rescue
     e in Ecto.ConstraintError ->
-      warn(e)
+      err(e, "Could not create the request, checking if it was made already")
       maybe_already(requester, type, object)
   end
 
@@ -419,22 +446,20 @@ defmodule Bonfire.Social.Requests do
 
   ###
 
-  def ap_publish_activity(subject, {:accept, request}, action) do
+  def ap_publish_activity(requester, {:accept_from, accept_from}, request) do
     request_id = uid(request)
 
-    with false <- Social.is_local?(e(action.edge, :subject, nil)),
-         {:ok, object_actor} <-
-           ActivityPub.Actor.get_cached(
-             pointer: e(action.edge, :object, nil) || action.edge.object_id
-           ),
-         {:ok, subject_actor} <-
-           ActivityPub.Actor.get_cached(pointer: subject),
+    with false <- Social.is_local?(requester),
+         {:ok, accept_from_actor} <-
+           ActivityPub.Actor.get_cached(pointer: accept_from),
+         {:ok, requester_actor} <-
+           ActivityPub.Actor.get_cached(pointer: requester),
          {:ok, ap_object} <-
            ActivityPub.Object.get_cached(pointer: request_id) |> info(),
          {:ok, _} <-
            ActivityPub.accept(%{
-             actor: object_actor,
-             to: [subject_actor.data],
+             actor: accept_from_actor,
+             to: [requester_actor.data],
              object: ap_object.data,
              local: true
            }) do
@@ -457,6 +482,16 @@ defmodule Bonfire.Social.Requests do
       ) do
     # info(request)
     Bonfire.Social.Graph.Follows.ap_publish_activity(subject, verb, request)
+  end
+
+  # publish a quote request
+  def ap_publish_activity(
+        subject,
+        verb,
+        %{edge: %{table_id: _}} = request
+      ) do
+    # TODO: better way to know what's a quote request vs other kinds
+    Bonfire.Social.Quotes.ap_publish_activity(subject, verb, request)
   end
 
   def ap_publish_activity(_, _verb, request) do

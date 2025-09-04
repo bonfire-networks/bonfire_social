@@ -67,6 +67,7 @@ defmodule Bonfire.Social.Edges do
   def insert(changeset, subject \\ nil, object \\ nil) do
     changeset
     |> Changeset.unique_constraint([:subject_id, :object_id, :table_id])
+    |> flood("Inserting edge")
     |> repo().insert()
     |> preload_inserted(subject, object)
   end
@@ -112,6 +113,15 @@ defmodule Bonfire.Social.Edges do
       iex> changeset(MySchema, %User{id: 1}, :like, %Post{id: 2}, [])
       %Ecto.Changeset{}
   """
+  def changeset({main_schema, existing_struct}, subject, verb, object, options)
+      when is_struct(main_schema) or is_struct(existing_struct) do
+    changeset_base({main_schema, existing_struct}, subject, object, options)
+  end
+
+  def changeset(main_schema, subject, verb, object, options) when is_struct(main_schema) do
+    changeset_base(main_schema, subject, object, options)
+  end
+
   def changeset(schema, subject, verb, object, options) do
     changeset_extra(schema, subject, verb, object, options)
     |> Objects.cast_creator_caretaker(current_user(options) || subject)
@@ -163,14 +173,28 @@ defmodule Bonfire.Social.Edges do
   iex> changeset_base({Request, Follow}, %User{id: 1}, %User{id: 2}, [])
       %Ecto.Changeset{}
   """
-  def changeset_base(schema, subject, object, options) when is_atom(schema),
-    do: changeset_base({schema, schema}, subject, object, options)
+
+  # def changeset_base({main_schema, %{__struct__: type_of_edge_schema, id: pointer_id} = _existing_struct}, subject, object, options) do
+  #   # for cases where we already have an object to use as Edge and don't need/want to create one
+  #   %{
+  #     # subject: subject,
+  #     subject_id: uid(subject),
+  #     # object: object,
+  #     object_id: uid(object),
+  #     table_id: Bonfire.Common.Types.table_id(type_of_edge_schema) # NOTE: table_id has to be a Pointable
+  #   }
+  #   |> Edge.changeset()
+  #   |> maybe_overwrite_id(pointer_id)
+  # end
 
   def changeset_base({main_schema, type_of_edge_schema}, subject, object, options) do
     Changesets.cast(struct(main_schema), %{}, [])
     |> maybe_overwrite_id(options[:pointer_id])
     |> put_edge_assoc(type_of_edge_schema, subject, object)
   end
+
+  def changeset_base(schema, subject, object, options),
+    do: changeset_base({schema, schema}, subject, object, options)
 
   defp maybe_overwrite_id(changeset, nil), do: changeset
 
@@ -180,8 +204,19 @@ defmodule Bonfire.Social.Edges do
   def put_edge_assoc(changeset, subject, object),
     do: put_edge_assoc(changeset, changeset.data.__struct__, subject, object)
 
+  def put_edge_assoc(
+        changeset,
+        %{__struct__: type_of_edge_schema} = _edge_schema,
+        subject,
+        object
+      ) do
+    put_edge_assoc(changeset, type_of_edge_schema, subject, object)
+  end
+
   def put_edge_assoc(changeset, type_of_edge_schema, subject, object)
-      when is_atom(type_of_edge_schema) do
+      when is_atom(type_of_edge_schema) and not is_nil(type_of_edge_schema) do
+    # NOTE: type_of_edge_schema has to be a Pointable Ecto Schema
+
     put_edge_assoc(changeset, Bonfire.Common.Types.table_id(type_of_edge_schema), subject, object)
     |> Ecto.Changeset.unique_constraint([:subject_id, :object_id, :table_id],
       name:
@@ -197,6 +232,7 @@ defmodule Bonfire.Social.Edges do
       subject_id: uid(subject),
       # object: object,
       object_id: uid(object),
+      # NOTE: table_id has to be a Pointable
       table_id: type_id
     }
     |> debug()
@@ -359,6 +395,7 @@ defmodule Bonfire.Social.Edges do
     else
       Bonfire.Common.QueryModule.maybe_query(schema_or_context, args)
     end
+    |> flood("Edge query")
   end
 
   @doc "TODOC"

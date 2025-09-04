@@ -431,7 +431,9 @@ defmodule Bonfire.Social.RuntimeConfig do
       :with_media,
       :with_replied,
       :with_reply_to,
-      :with_object_peered
+      :with_object_peered,
+      #  TODO: only if quote posts are enabled?
+      :quote_tags
     ]
 
     config :bonfire_social, Bonfire.Social.FeedLoader,
@@ -578,10 +580,10 @@ defmodule Bonfire.Social.RuntimeConfig do
     config :bonfire_social, Bonfire.Social.FeedLoader,
       preload_presets: [
         # Default groupings,
-        thread_postload: [
-          :with_replied,
-          :with_object_more
-        ],
+        # thread_postload: [
+        #   :with_replied,
+        #   :with_object_more
+        # ],
         feed: [
           :with_subject,
           :feed_by_subject,
@@ -621,12 +623,12 @@ defmodule Bonfire.Social.RuntimeConfig do
           :with_post_content,
           :with_replied
         ],
-        posts_with_thread: [
-          :with_subject,
-          :with_post_content,
-          :with_replied,
-          :with_thread_name
-        ],
+        # posts_with_thread: [
+        #   :with_subject,
+        #   :with_post_content,
+        #   :with_replied,
+        #   :with_thread_name
+        # ],
         posts: [
           :with_subject,
           :with_post_content
@@ -635,7 +637,8 @@ defmodule Bonfire.Social.RuntimeConfig do
         default: [
           :with_subject,
           :with_post_content,
-          :with_replied
+          :with_replied,
+          :quote_tags
         ]
       ]
   end

@@ -187,6 +187,42 @@ defmodule Bonfire.Social.Tags do
 
   def auto_boost(_, _), do: debug("not auto-boosting (invalid inputs)")
 
+  def list_tags_quote(post) do
+    post
+    |> repo().maybe_preload(tags: [:character])
+    |> tags_quote()
+  end
+
+  def tags_quote(post) do
+    post
+    |> e(:tags, [])
+    |> flood("all tags")
+    |> Enum.reject(fn tag ->
+      # Reject hashtags and character mentions
+      not is_nil(e(tag, :character, nil))
+      # TODO: by type instead? also exclude hashtags
+    end)
+  end
+
+  def list_tags_hashtags(post) do
+    post
+    |> repo().maybe_preload(tags: [:character])
+    |> e(:tags, [])
+    |> Enum.reject(fn tag ->
+      not is_nil(e(tag, :character, nil))
+    end)
+  end
+
+  def list_tags_mentions(post, subject) do
+    post
+    |> repo().maybe_preload(tags: [:character])
+    |> e(:tags, [])
+    |> Enum.reject(fn tag ->
+      # all characters except me
+      is_nil(e(tag, :character, nil)) or id(tag) == id(subject)
+    end)
+  end
+
   def indexing_format_tags(tags) when is_list(tags) do
     if Bonfire.Common.Extend.module_enabled?(Bonfire.Tag) do
       tags

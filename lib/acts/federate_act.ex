@@ -74,11 +74,26 @@ defmodule Bonfire.Social.Acts.Federate do
       action in [:insert] ->
         maybe_debug(epic, act, action, "Maybe queue for federation")
 
-        Bonfire.Social.maybe_federate_and_gift_wrap_activity(
-          current_user,
-          object,
-          options
-        )
+        with {:ok, result} <-
+               Bonfire.Social.maybe_federate_and_gift_wrap_activity(
+                 current_user,
+                 object,
+                 options
+               ) do
+          if request_quotes = epic.assigns[:request_quotes] do
+            if Bonfire.Common.Extend.module_enabled?(Bonfire.Social.Quotes) do
+              Bonfire.Social.Quotes.create_pending_quote_requests(
+                current_user,
+                request_quotes,
+                object,
+                options
+              )
+            end
+          end
+
+          # return federation result
+          {:ok, result}
+        end
 
       action in [:update] ->
         maybe_debug(epic, act, action, "Maybe queue update for federation")
@@ -87,7 +102,12 @@ defmodule Bonfire.Social.Acts.Federate do
           current_user,
           object,
           options ++
-            [verb: :update, ap_object: epic.assigns[ap_on], ap_bcc: epic.assigns[:ap_bcc]]
+            [
+              verb: :update,
+              request_quotes: epic.assigns[:request_quotes],
+              ap_object: epic.assigns[ap_on],
+              ap_bcc: epic.assigns[:ap_bcc]
+            ]
         )
 
       # WIP: deletion
