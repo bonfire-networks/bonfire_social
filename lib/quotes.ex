@@ -29,8 +29,7 @@ defmodule Bonfire.Social.Quotes do
       {"Delete", "QuoteAuthorization"}
     ]
 
-
-    @doc """
+  @doc """
   Checks if a quote request has been made.
 
   ## Parameters
@@ -50,7 +49,7 @@ defmodule Bonfire.Social.Quotes do
   """
   def requested?(subject, quote_post, quoted_object),
     do: Requests.requested?(subject, id(quote_post), quoted_object)
-    
+
   @doc """
   Requests permission to quote a post, checking boundaries and creating requests as needed.
 
@@ -73,20 +72,7 @@ defmodule Bonfire.Social.Quotes do
     check_quote_permission(user, quoted_object, opts)
   end
 
-  @doc """
-  Creates quote requests for pending quotes after the post has been created.
-  """
-  def create_pending_quote_requests(user, pending_quotes, quote_post, opts \\ []) do
-    pending_quotes
-    |> flood("pending quote requests")
-    |> Enum.map(fn quoted_object ->
-      create_quote_request(user, quoted_object, quote_post, opts)
-    end)
-    |> flood("Created quote requests for pending quotes")
-    |> Enum.reject(&match?({:error, _}, &1))
-  end
-
-  defp check_quote_permission(user, quoted_object, _opts \\ []) do
+  def check_quote_permission(user, quoted_object, _opts \\ []) do
     user_id = id(user)
     quoted_object = repo().maybe_preload(quoted_object, [:created])
 
@@ -111,17 +97,43 @@ defmodule Bonfire.Social.Quotes do
     end
   end
 
+  @doc """
+  Creates quote requests for pending quotes after the post has been created.
+  """
+  def create_quote_requests(user, pending_quotes, quote_post, opts \\ []) do
+    pending_quotes
+    |> flood("pending quote requests")
+    |> Enum.map(fn quoted_object ->
+      create_quote_request(user, quoted_object, quote_post, opts)
+    end)
+    |> flood("Created quote requests for pending quotes")
+    |> Enum.reject(&match?({:error, _}, &1))
+  end
+
   defp create_quote_request(user, quoted_object, quote_post, opts) do
+    quoted_object =
+      quoted_object
+      |> repo().maybe_preload(created: [creator: [:character]])
+
+    # Get the creator of the quoted object for notifications
+    quoted_creator =
+      e(quoted_object, :created, :creator, nil) ||
+        e(quoted_object, :created, :creator_id, nil)
+
     # Store as a Request in our database and federate as QuoteRequest
     # subject: requester (user)
     # table_id: ID of the quote_post (the new post wanting to quote, also called instrument in AP FEP-044f )
     # object: quoted_object (the post being quoted)
+    # TODO: should store the quote_post as subject instead (since we can lookup creator from there) so we can put annotation verb in table_id?
     Requests.request(
       user,
       id(quote_post),
       quoted_object,
       opts
+      |> Keyword.put(:current_user, user)
       |> Keyword.put(:federation_module, __MODULE__)
+      |> Keyword.put(:to_circles, [id(quoted_creator)])
+      |> Keyword.put(:to_feeds, notifications: quoted_creator)
       # |> Keyword.put(:current_user, user)
     )
     |> flood("Created quote request")
@@ -378,6 +390,4 @@ defmodule Bonfire.Social.Quotes do
     debug(activity, "Unhandled quote activity")
     {:ignore, "Not a quote-related activity"}
   end
-
-
 end

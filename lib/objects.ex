@@ -525,13 +525,10 @@ defmodule Bonfire.Social.Objects do
 
   defp prepare_media_type(types) do
     cond do
-      "*" in types ->
+      "*" in types or :* in types ->
         :all
 
-      :* in types ->
-        :all
-
-      :link in types ->
+      :link in types or "link" in types ->
         ["link", "article", "profile", "website"] ++ types
 
       true ->

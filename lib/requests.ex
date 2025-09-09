@@ -376,11 +376,10 @@ defmodule Bonfire.Social.Requests do
 
   defp do_request(requester, type, object, opts) do
     opts =
-      Keyword.merge(opts,
-        boundary: "mentions",
-        to_circles: [id(object)],
-        to_feeds: [notifications: object]
-      )
+      opts
+      |> Keyword.put(:boundary, "mentions")
+      |> Keyword.put_new(:to_circles, [id(object)])
+      |> Keyword.put_new(:to_feeds, notifications: object)
 
     case create(requester, type, object, opts) do
       {:ok, request} ->
@@ -395,20 +394,20 @@ defmodule Bonfire.Social.Requests do
 
       e ->
         warn(e, "Could not create the request, checking if it was made already")
-        maybe_already(requester, type, object)
+        maybe_already(requester, type, object, opts)
     end
   rescue
     e in Ecto.ConstraintError ->
       err(e, "Could not create the request, checking if it was made already")
-      maybe_already(requester, type, object)
+      maybe_already(requester, type, object, opts)
   end
 
-  defp maybe_already(requester, type, object) do
+  defp maybe_already(requester, type, object, opts) do
     case get(requester, type, object, skip_boundary_check: true) do
       {:ok, request} ->
         if Social.is_local?(requester) and !Social.is_local?(object) do
           info(type, "was already requested, but will attempt re-federating the request")
-          Social.maybe_federate_and_gift_wrap_activity(requester, request)
+          Social.maybe_federate_and_gift_wrap_activity(current_user(opts) || requester, request)
         else
           debug(type, "was already requested")
           {:ok, request}

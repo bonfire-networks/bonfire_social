@@ -58,6 +58,14 @@ defmodule Bonfire.Social.Acts.Federate do
       options[:skip_federation] ->
         info("ActivityPub: skip_federation was set")
 
+        # do this anyway because we might need to create pending quote requests for local objects
+        maybe_create_pending_quote_requests(
+          current_user,
+          epic.assigns[:request_quotes],
+          object,
+          options
+        )
+
         nil
 
       Social.federate_outgoing?(current_user) != true ->
@@ -65,10 +73,27 @@ defmodule Bonfire.Social.Acts.Federate do
           "ActivityPub: Federation is disabled (possibly just for this user) or an adapter is not available"
         )
 
+        # do this anyway because we might need to create pending quote requests for local objects
+        maybe_create_pending_quote_requests(
+          current_user,
+          epic.assigns[:request_quotes],
+          object,
+          options
+        )
+
         nil
 
       not Social.is_local?(current_user) or not Social.is_local?(object) ->
         warn(current_user, "ActivityPub: Skip pushing remote object")
+
+        # do this anyway because we might need to create pending quote requests for local objects
+        maybe_create_pending_quote_requests(
+          current_user,
+          epic.assigns[:request_quotes],
+          object,
+          options
+        )
+
         nil
 
       action in [:insert] ->
@@ -78,18 +103,18 @@ defmodule Bonfire.Social.Acts.Federate do
                Bonfire.Social.maybe_federate_and_gift_wrap_activity(
                  current_user,
                  object,
-                 options
+                 options ++
+                   [
+                     ap_object: epic.assigns[ap_on],
+                     ap_bcc: epic.assigns[:ap_bcc]
+                   ]
                ) do
-          if request_quotes = epic.assigns[:request_quotes] do
-            if Bonfire.Common.Extend.module_enabled?(Bonfire.Social.Quotes) do
-              Bonfire.Social.Quotes.create_pending_quote_requests(
-                current_user,
-                request_quotes,
-                object,
-                options
-              )
-            end
-          end
+          maybe_create_pending_quote_requests(
+            current_user,
+            epic.assigns[:request_quotes],
+            object,
+            options
+          )
 
           # return federation result
           {:ok, result}
@@ -98,17 +123,27 @@ defmodule Bonfire.Social.Acts.Federate do
       action in [:update] ->
         maybe_debug(epic, act, action, "Maybe queue update for federation")
 
-        Bonfire.Social.maybe_federate_and_gift_wrap_activity(
-          current_user,
-          object,
-          options ++
-            [
-              verb: :update,
-              request_quotes: epic.assigns[:request_quotes],
-              ap_object: epic.assigns[ap_on],
-              ap_bcc: epic.assigns[:ap_bcc]
-            ]
-        )
+        with {:ok, result} <-
+               Bonfire.Social.maybe_federate_and_gift_wrap_activity(
+                 current_user,
+                 object,
+                 options ++
+                   [
+                     verb: :update,
+                     ap_object: epic.assigns[ap_on],
+                     ap_bcc: epic.assigns[:ap_bcc]
+                   ]
+               ) do
+          maybe_create_pending_quote_requests(
+            current_user,
+            epic.assigns[:request_quotes],
+            object,
+            options
+          )
+
+          # return federation result
+          {:ok, result}
+        end
 
       # WIP: deletion
       action == :delete ->
@@ -134,5 +169,21 @@ defmodule Bonfire.Social.Acts.Federate do
         nil
     end
     |> Epic.assign(epic, on, Utils.ok_unwrap(...) || object)
+  end
+
+  defp maybe_create_pending_quote_requests(
+         current_user,
+         request_quotes,
+         object,
+         options
+       ) do
+    if request_quotes && Bonfire.Common.Extend.module_enabled?(Bonfire.Social.Quotes) do
+      Bonfire.Social.Quotes.create_quote_requests(
+        current_user,
+        request_quotes,
+        object,
+        options
+      )
+    end
   end
 end

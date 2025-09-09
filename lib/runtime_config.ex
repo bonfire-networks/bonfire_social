@@ -97,7 +97,7 @@ defmodule Bonfire.Social.RuntimeConfig do
             exclude_activity_types: false
           },
           current_user_required: true,
-          opts: [include_flags: :mediate],
+          opts: [include_flags: :mediate, include_requests: true],
           icon: "ph:bell-duotone",
           assigns: [
             page: "notifications",
@@ -120,9 +120,9 @@ defmodule Bonfire.Social.RuntimeConfig do
           ]
         },
         likes: %{
-          name: l("Likes"),
+          name: l("Liked"),
           built_in: true,
-          description: l("Activities I've liked"),
+          description: l("Things I've liked"),
           filters: %FeedFilters{activity_types: [:like]},
           parameterized: %{subjects: [:me]},
           # exclude_from_nav: false,
@@ -137,9 +137,9 @@ defmodule Bonfire.Social.RuntimeConfig do
           ]
         },
         bookmarks: %{
-          name: l("Bookmarks"),
+          name: l("Bookmarked"),
           built_in: true,
-          description: l("Activities I've bookmarked"),
+          description: l("Content I've bookmarked"),
           filters: %FeedFilters{activity_types: :bookmark},
           current_user_required: true,
           parameterized: %{subjects: [:me]},
@@ -155,6 +155,25 @@ defmodule Bonfire.Social.RuntimeConfig do
             feedback_title: l("Have you not bookmarked anything yet?")
           ]
         },
+        # saved: %{ # TODO: seems we can't query by multiple activity types here?
+        #   name: l("Saved"),
+        #   built_in: true,
+        #   description: l("Activities I've found interesting and bookmarked, liked, or boosted"),
+        #   filters: %FeedFilters{activity_types: [ :bookmark, :like, :boost ]},
+        #   current_user_required: true,
+        #   parameterized: %{subjects: [:me]},
+        #   exclude_from_nav: false,
+        #   base_query_fun: &Bonfire.Social.Bookmarks.base_query/0,
+        #   icon: "ph:bookmark-duotone",
+        #   assigns: [
+        #     # hide_filters: true,
+        #     showing_within: :feed_by_subject,
+        #     page: "saved",
+        #     page_title: l("Saved"),
+        #     no_header: false,
+        #     feedback_title: l("Have you not saved anything yet?")
+        #   ]
+        # },
         my_requests: %{
           name: l("Requests"),
           built_in: true,
@@ -164,18 +183,18 @@ defmodule Bonfire.Social.RuntimeConfig do
           icon: "ph:user-plus-duotone"
         },
         my_boosts: %{
-          name: l("My boosts"),
+          name: l("Boosted"),
           built_in: true,
           description: l("Activities I've shared"),
           filters: %FeedFilters{activity_types: [:boost]},
           parameterized: %{subjects: [:me]},
-          exclude_from_nav: false,
+          # exclude_from_nav: false,
           icon: "ph:rocket-launch-duotone",
           assigns: [
             hide_filters: true,
             showing_within: :feed_by_subject,
             page: "boosts",
-            page_title: l("My boosts"),
+            page_title: l("Boosted"),
             no_header: false,
             feedback_title: l("Have you not boosted anything yet?")
           ]
@@ -355,7 +374,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           ]
         },
         my_flags: %{
-          name: l("My Flags"),
+          name: l("Flagged"),
           built_in: true,
           description: "Content I've flagged",
           filters: %FeedFilters{
@@ -374,9 +393,9 @@ defmodule Bonfire.Social.RuntimeConfig do
           ]
         },
         flagged_content: %{
-          name: l("All flags"),
+          name: l("Flagged (all)"),
           built_in: true,
-          description: "Content flagged by anyone (mods only)",
+          description: "Content flagged by anyone (for mods only)",
           filters: %FeedFilters{
             activity_types: [:flag],
             show_objects_only_once: false
@@ -386,7 +405,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           opts: [include_flags: :mediate],
           icon: "ph:flag-duotone",
           assigns: [
-            selected_tab: "all flags",
+            selected_tab: "flagged_content",
             scope: :instance,
             page: "flags",
             feedback_title: l("You have no flagged activities to review...")
@@ -433,23 +452,23 @@ defmodule Bonfire.Social.RuntimeConfig do
             feedback_message: l("Posts need to be boosted to appear in trending")
           ]
         },
-        news: %{
-          name: l("News"),
+        trending_links: %{
+          name: l("Trending links"),
           built_in: true,
           description: l("Most boosted posts with links"),
           filters: %FeedFilters{
-            feed_name: :news,
+            feed_name: :trending_links,
             exclude_activity_types: [:reply],
-            media_types: ["link"],
+            media_types: [:link],
             sort_by: :num_boosts,
             sort_order: :desc
           },
           exclude_from_nav: false,
           icon: "ph:newspaper-duotone",
           assigns: [
-            page: "news",
-            page_title: l("News"),
-            feedback_title: l("No news posts yet"),
+            page: "trending_links",
+            page_title: l("Trending links"),
+            feedback_title: l("No trending links yet"),
             feedback_message: l("Share interesting links to see them here")
           ]
         },

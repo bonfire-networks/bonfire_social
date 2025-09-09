@@ -1455,26 +1455,32 @@ defmodule Bonfire.Social.Activities do
   def maybe_filter(query, {:exclude_verb_ids, exclude_verb_ids}, opts) do
     exclude_verb_ids =
       List.wrap(exclude_verb_ids)
-      |> debug("filter by exclude_verb_ids")
 
-    user_id =
+    # |> debug("filter by exclude_verb_ids")
+
+    current_user_id =
       current_user_id(opts)
 
     request_verb_id = "1NEEDPERM1SS10NT0D0TH1SN0W"
 
-    if user_id && request_verb_id not in exclude_verb_ids do
-      exclude_verb_ids = exclude_verb_ids ++ [request_verb_id]
+    cond do
+      opts[:include_requests] ->
+        where(query, [activity: activity], activity.verb_id not in ^exclude_verb_ids)
 
-      # FIXME: would this also be triggered if no exclude_activity_types or exclude_verb_ids are provided?
-      query
-      |> where(
-        [activity: activity],
-        activity.verb_id not in ^exclude_verb_ids or
-          (activity.verb_id == ^request_verb_id and activity.object_id == ^user_id)
-      )
-    else
-      exclude_verb_ids = exclude_verb_ids ++ [request_verb_id]
-      where(query, [activity: activity], activity.verb_id not in ^exclude_verb_ids)
+      current_user_id && request_verb_id not in exclude_verb_ids ->
+        exclude_verb_ids = exclude_verb_ids ++ [request_verb_id]
+
+        # FIXME: would this also be triggered if no exclude_activity_types or exclude_verb_ids are provided?
+        query
+        |> where(
+          [activity: activity],
+          activity.verb_id not in ^exclude_verb_ids or
+            (activity.verb_id == ^request_verb_id and activity.object_id == ^current_user_id)
+        )
+
+      true ->
+        exclude_verb_ids = exclude_verb_ids ++ [request_verb_id]
+        where(query, [activity: activity], activity.verb_id not in ^exclude_verb_ids)
     end
   end
 
@@ -2306,7 +2312,15 @@ defmodule Bonfire.Social.Activities do
   def verb_maybe_modify(verb, activity \\ nil)
 
   # FIXME: temporary as we may later request other things
-  def verb_maybe_modify("Request", _), do: "Request to Follow"
+  def verb_maybe_modify("Request", activity) do
+    follow_table_id = Bonfire.Common.Types.table_id(Follow)
+
+    if e(activity, :edge, :table_id, nil) == follow_table_id do
+      "Request to Follow"
+    else
+      "Request"
+    end
+  end
 
   def verb_maybe_modify("Create", %{
         replied: %{reply_to: %{post_content: %{id: _}} = _reply_to}
