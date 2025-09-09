@@ -29,6 +29,28 @@ defmodule Bonfire.Social.Quotes do
       {"Delete", "QuoteAuthorization"}
     ]
 
+
+    @doc """
+  Checks if a quote request has been made.
+
+  ## Parameters
+
+  - `subject`: The subject (requester)
+  - `quote_post`: The quote post (instrument)
+  - `quoted_object`: The quoted object 
+
+  ## Returns
+
+  Boolean indicating if a quote request exists.
+
+  ## Examples
+
+      iex> Bonfire.Social.Quotes.requested?(user, quote_post, quoted_object)
+      true
+  """
+  def requested?(subject, quote_post, quoted_object),
+    do: Requests.requested?(subject, id(quote_post), quoted_object)
+    
   @doc """
   Requests permission to quote a post, checking boundaries and creating requests as needed.
 
@@ -356,4 +378,6 @@ defmodule Bonfire.Social.Quotes do
     debug(activity, "Unhandled quote activity")
     {:ignore, "Not a quote-related activity"}
   end
+
+
 end
