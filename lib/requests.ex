@@ -160,11 +160,19 @@ defmodule Bonfire.Social.Requests do
       iex> requested(request, current_user: me)
       {:ok, request}
   """
-  def requested(request, opts \\ [])
-  def requested(%Request{id: _} = request, _opts), do: {:ok, request}
+  defp requested(request, opts \\ [])
+  defp requested(%Request{id: _} = request, _opts), do: {:ok, request}
 
-  def requested(request, opts),
-    do: get([id: uid(request), objects: current_user(opts)], opts ++ [skip_boundary_check: true])
+  defp requested(request, opts),
+    do:
+      get(
+        [
+          id: uid(request)
+          # objects: current_user(opts)
+        ],
+        # ++ [skip_boundary_check: true]
+        opts
+      )
 
   # TODO: abstract the next few functions into Edges
 

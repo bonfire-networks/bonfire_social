@@ -48,7 +48,7 @@ defmodule Bonfire.Social.Quotes do
       true
   """
   def requested?(subject, quote_post, quoted_object),
-    do: Requests.requested?(subject, id(quote_post), quoted_object)
+    do: Requests.requested?(quote_post, :annotate, quoted_object)
 
   @doc """
   Requests permission to quote a post, checking boundaries and creating requests as needed.
@@ -121,55 +121,88 @@ defmodule Bonfire.Social.Quotes do
         e(quoted_object, :created, :creator_id, nil)
 
     # Store as a Request in our database and federate as QuoteRequest
-    # subject: requester (user)
-    # table_id: ID of the quote_post (the new post wanting to quote, also called instrument in AP FEP-044f )
+    # subject: quote_post (can lookup creator from here)
+    # table_id: :annotate (annotation verb) 
     # object: quoted_object (the post being quoted)
-    # TODO: should store the quote_post as subject instead (since we can lookup creator from there) so we can put annotation verb in table_id?
     Requests.request(
-      user,
-      id(quote_post),
+      quote_post,
+      quote_verb_id(),
       quoted_object,
       opts
       |> Keyword.put(:current_user, user)
       |> Keyword.put(:federation_module, __MODULE__)
       |> Keyword.put(:to_circles, [id(quoted_creator)])
       |> Keyword.put(:to_feeds, notifications: quoted_creator)
-      # |> Keyword.put(:current_user, user)
     )
     |> flood("Created quote request")
   end
 
-  def accept_quote_from(requester, quoted_object, opts \\ []) do
-    # Requests.get(requester, id(quote_post), original_post)
-    # TODO: we should accept the request of the specific quote post, not just any request from this user for this quoted object
+  def accept_quote(quote_object, quoted_object, opts \\ []) do
+    quote_creator =
+      e(quote_object, :created, :creator, nil) ||
+        e(quote_object, :created, :creator_id, nil)
 
-    Requests.get(requester, nil, quoted_object, opts)
+    Requests.get(quote_object, quote_verb_id(), quoted_object, opts)
     |> flood("got quote request to accept")
-    ~> accept(requester, opts)
+    ~> accept(quote_creator, opts)
   end
 
-  def accept(request, requester, opts) do
+  def quote_verb_id, do: Bonfire.Boundaries.Verbs.get_id(:annotate)
+
+  # def accept_quote_from(requester, quoted_object, opts \\ []) do
+  #     # Find quote request by requester and quoted object
+  #   # Since we store quote_post as subject, we need to find by the quote post creator
+  #   with {:ok, request} <- find_quote_request_by_creator(requester, quoted_object, opts) do
+  #     accept(request, requester, opts)
+  #   end
+  # end
+
+  # defp find_quote_request_by_creator(requester, quoted_object, opts) do
+  #   # Query for requests where the quote_post (subject) was created by the requester
+  #   # and the object is the quoted_object
+  #   query = from r in Request,
+  #     join: e in Edge, on: r.id == e.id,
+  #     join: p in Needle.Pointer, on: e.subject_id == p.id,
+  #     join: c in Bonfire.Data.Social.Created, on: p.id == c.id,
+  #     where: e.table_id == :annotate and
+  #            e.object_id == ^id(quoted_object) and
+  #            c.creator_id == ^id(requester) and
+  #            is_nil(r.ignored_at),
+  #     preload: [edge: [:subject, :object]]
+
+  #   case repo().one(query) do
+  #     %Request{} = request -> {:ok, request}
+  #     nil -> {:error, :not_found}
+  #   end
+  # end
+
+  def accept(request, requester \\ nil, opts) do
     debug(opts, "opts")
 
-    with {:ok,
-          %{edge: %{object: quoted_object, subject: subject, table_id: quote_post_id}} = request} <-
+    with {:ok, %{edge: %{object: quoted_object, subject: quote_post}} = request} <-
            Requests.accept(request, opts) |> flood("accepted_quote"),
-         {:ok, quote_post} <-
-           update_quote(subject, quote_post_id, quoted_object, opts)
+         requester =
+           requester ||
+             e(request, :edge, :subject, :created, :creator, nil) ||
+             e(quote_post, :created, :creator, nil) ||
+             e(request, :edge, :subject, :created, :creator_id, nil) ||
+             e(quote_post, :created, :creator_id, nil),
+         {:ok, updated_quote_post} <-
+           update_quote(requester, quote_post, quoted_object, opts)
            |> repo().maybe_preload([:post_content, :activity])
            |> flood("updated_quote"),
          :ok <-
            if(opts[:incoming] != true,
              do:
-               Requests.ap_publish_activity(subject, {:accept_from, requester}, request)
+               Requests.ap_publish_activity(requester, {:accept_from, requester}, request)
                |> flood("published_accept"),
              else: :ok
            ),
          # Then send Update for the now-authorized quote post (only if this is a local quote_post)
-         {:ok, quote_post} <-
+         {:ok, updated_quote_post} <-
            Social.maybe_federate_and_gift_wrap_activity(
-             subject,
-             quote_post,
+             requester,
+             updated_quote_post,
              opts ++ [verb: :update]
            )
            |> flood("published_update_for_quote_post") do
@@ -180,14 +213,14 @@ defmodule Bonfire.Social.Quotes do
     end
   end
 
-  def update_quote(subject, quote_post_id, quoted_object, opts) do
-    debug(subject, "update_quote subject (quote post)")
-    debug(quote_post_id, "update_quote quote_post_id (post with attached quote)")
+  def update_quote(subject, quote_post, quoted_object, opts) do
+    debug(subject, "update_quote subject (requester)")
+    debug(quote_post, "update_quote quote_post (post with attached quote)")
     debug(quoted_object, "update_quote object (quoted post)")
 
     Bonfire.Tag.tag_something(
       subject,
-      quote_post_id,
+      quote_post,
       [quoted_object],
       :skip_boundary_check
     )
@@ -210,6 +243,14 @@ defmodule Bonfire.Social.Quotes do
 
     error_msg = l("Could not federate the quote request")
 
+    # Get the creator of the quote post (which is the subject in our new structure)
+    quote_post =
+      e(request, :edge, :subject, nil)
+
+    # |> repo().maybe_preload(created: [:creator])
+
+    # requester = e(quote_post, :created, :creator, nil)
+
     with {:ok, actor} <-
            ActivityPub.Actor.get_cached(
              pointer:
@@ -222,7 +263,7 @@ defmodule Bonfire.Social.Quotes do
            )
            |> flood("quote request object"),
          {:ok, instrument} <-
-           ActivityPub.Object.get_cached(pointer: e(request, :edge, :table_id, nil))
+           ActivityPub.Object.get_cached(pointer: quote_post)
            |> flood("quote post"),
          {:ok, activity} <-
            ActivityPub.quote_request(%{
@@ -342,11 +383,11 @@ defmodule Bonfire.Social.Quotes do
            #  |> repo().maybe_preload(pointer: [:created])
            |> flood("loaded quoted object"),
          # quoted_creator = e(quoted_object, :pointer, :created, :creator, nil) || e(quoted_object, :pointer, :created, :creator_id, nil),
-         quote_post_creator =
-           e(local_quote_post, :pointer, :created, :creator, nil) ||
-             e(local_quote_post, :pointer, :created, :creator_id, nil),
+         #  quote_post_creator =
+         #    e(local_quote_post, :pointer, :created, :creator, nil) ||
+         #      e(local_quote_post, :pointer, :created, :creator_id, nil),
          {:ok, updated_quote_post} <-
-           accept_quote_from(quote_post_creator, quoted_object)
+           accept_quote(local_quote_post, quoted_object)
            #  update_quote(
            #    quoted_creator, 
            #    e(local_quote_post, :pointer, nil),

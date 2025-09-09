@@ -157,7 +157,7 @@ defmodule Bonfire.Social.Edges do
   def changeset_extra(schema, subject, verb, object, options) do
     changeset_base(schema, subject, object, options)
     |> Acls.cast(subject, options)
-    |> Activities.put_assoc(verb, subject, object)
+    |> Activities.put_assoc(verb, current_user(options) || subject, object)
     |> FeedActivities.put_feed_publishes(Keyword.get(options, :to_feeds, []))
   end
 

@@ -537,7 +537,8 @@ defmodule Bonfire.Social.RuntimeConfig do
             :with_reply_to,
             :emoji,
             :sensitivity,
-            :activity_name
+            :activity_name,
+            :with_quote_post_requested
           ]
         },
         # "Messages Feed (Only for me)" => %{

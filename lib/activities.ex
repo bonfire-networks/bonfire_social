@@ -649,6 +649,14 @@ defmodule Bonfire.Social.Activities do
           query
           |> proload(activity: [object: [:extra_info]])
 
+        # :with_quote_post_requested ->
+        #       quote_table_id = Bonfire.Social.Quotes.quote_verb_id()
+
+        #   posts_query = from e in Edge, where: e.table_id == ^quote_table_id
+
+        #   query
+        #   |> proload(activity: [edge: ^{posts_query, [subject: [:profile, :character]]}])
+
         nil ->
           query
 
@@ -768,6 +776,13 @@ defmodule Bonfire.Social.Activities do
 
         :extra_info ->
           [object: [:extra_info]]
+
+        :with_quote_post_requested ->
+          quote_table_id = Bonfire.Social.Quotes.quote_verb_id()
+
+          quote_edge_query = from e in Edge, where: e.table_id == ^quote_table_id
+
+          [edge: {quote_edge_query, [subject: [:post_content]]}]
 
         nil ->
           []
@@ -2314,11 +2329,12 @@ defmodule Bonfire.Social.Activities do
   # FIXME: temporary as we may later request other things
   def verb_maybe_modify("Request", activity) do
     follow_table_id = Bonfire.Common.Types.table_id(Follow)
+    quote_table_id = Bonfire.Social.Quotes.quote_verb_id()
 
-    if e(activity, :edge, :table_id, nil) == follow_table_id do
-      "Request to Follow"
-    else
-      "Request"
+    case e(activity, :edge, :table_id, nil) do
+      ^follow_table_id -> "Request to Follow"
+      ^quote_table_id -> "Request to Quote"
+      _ -> "Request"
     end
   end
 
