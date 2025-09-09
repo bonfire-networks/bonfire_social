@@ -58,6 +58,7 @@ defmodule Bonfire.Social.RuntimeConfig do
             origin: :local,
             exclude_activity_types: [:like, :follow, :request]
           },
+          exclude_from_nav: false,
           icon: "ph:campfire-duotone",
           assigns: [
             page: "local",
@@ -124,7 +125,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           description: l("Activities I've liked"),
           filters: %FeedFilters{activity_types: [:like]},
           parameterized: %{subjects: [:me]},
-          exclude_from_nav: false,
+          # exclude_from_nav: false,
           icon: "ph:fire-duotone",
           assigns: [
             hide_filters: true,
@@ -411,6 +412,46 @@ defmodule Bonfire.Social.RuntimeConfig do
             exclude_activity_types: [:boost, :like, :follow]
           },
           icon: "ph:chats-circle-duotone"
+        },
+        trending: %{
+          name: l("Trending"),
+          built_in: true,
+          description: l("Most boosted activities from the last week"),
+          filters: %FeedFilters{
+            feed_name: :trending,
+            exclude_activity_types: [:reply],
+            sort_by: :num_boosts,
+            sort_order: :desc,
+            time_limit: 7
+          },
+          exclude_from_nav: false,
+          icon: "ph:trend-up-duotone",
+          assigns: [
+            page: "trending",
+            page_title: l("Trending"),
+            feedback_title: l("No trending posts yet"),
+            feedback_message: l("Posts need to be boosted to appear in trending")
+          ]
+        },
+        news: %{
+          name: l("News"),
+          built_in: true,
+          description: l("Most boosted posts with links"),
+          filters: %FeedFilters{
+            feed_name: :news,
+            exclude_activity_types: [:reply],
+            media_types: ["link"],
+            sort_by: :num_boosts,
+            sort_order: :desc
+          },
+          exclude_from_nav: false,
+          icon: "ph:newspaper-duotone",
+          assigns: [
+            page: "news",
+            page_title: l("News"),
+            feedback_title: l("No news posts yet"),
+            feedback_message: l("Share interesting links to see them here")
+          ]
         },
         local_media: %{
           name: l("Local Media"),
