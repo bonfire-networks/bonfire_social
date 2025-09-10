@@ -204,7 +204,7 @@ defmodule Bonfire.Social.FeedLoader do
         {:error, e}
 
       e ->
-        error(e, "Could not find a preset for `#{feed_name}` or could not prepare filters")
+        err(e, "Could not find a preset for `#{feed_name}` or could not prepare filters")
         # feed(%{feed_name: nil}, opts)
     end
   end
@@ -1423,8 +1423,13 @@ defmodule Bonfire.Social.FeedLoader do
       id ->
         flood(id, "lookup by ID")
 
-        feed_contains?(feed, [objects: id], opts)
-        |> feed_contains?(object, opts)
+        case feed_contains?(feed, [objects: id], opts) do
+          result when is_list(result) ->
+            feed_contains?(result, object, opts)
+
+          other ->
+            other
+        end
     end
   end
 

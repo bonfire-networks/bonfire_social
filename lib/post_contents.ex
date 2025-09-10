@@ -241,7 +241,7 @@ defmodule Bonfire.Social.PostContents do
     hashtags = e(attrs, :hashtags, %{})
 
     # If link processing is enabled, use the same implementation as local posts
-    if opts[:parse_remote_links] and module_enabled?(Bonfire.Social.Tags, creator) do
+    if opts[:parse_remote_links] && module_enabled?(Bonfire.Social.Tags, creator) do
       debug("process remote post contents for links (but not mentions/hashtags)")
 
       # Extract mention/hashtag URLs to filter them out from link processing
@@ -639,15 +639,15 @@ defmodule Bonfire.Social.PostContents do
       # TODO: check why we're doing this?
       |> Bonfire.Common.Needles.list!(skip_boundary_check: true)
       #  |> repo().maybe_preload(:named)
-      |> debug("include_as_hashtags")
+      |> flood("include_as_hashtags")
 
     quoted_objects =
       Bonfire.Social.Tags.list_tags_quote(post)
       |> flood("include_as_quotes")
 
-    %{primary_image: primary_image, images: images, links: links} =
+    %{primary_image: primary_image, images: images, links: _links} =
       Bonfire.Files.split_media_by_type(e(post, :media, nil))
-      |> debug("media_splits")
+      |> flood("media_splits")
 
     %{
       "type" => "Note",
@@ -684,6 +684,15 @@ defmodule Bonfire.Social.PostContents do
           [] -> nil
         end,
       # Add quote objects as Link tags with proper rel value
+      # # TODO: https://github.com/bonfire-networks/bonfire-app/issues/1541
+      # Enum.map(links, fn link ->
+      #   %{
+      #     "href" => e(link, :path, nil),
+      #     "name" => Bonfire.Files.Media.media_label(link),
+      #     "mediaType" => e(link, :metadata, "content_type", nil) || e(link, :media_type, nil),
+      #     "type" => "Link"
+      #   }
+      # end) ++
       "tag" =>
         Enum.map(mentions, fn actor ->
           %{
@@ -697,14 +706,6 @@ defmodule Bonfire.Social.PostContents do
               "href" => URIs.canonical_url(tag),
               "name" => "##{e(tag, :name, nil) || e(tag, :named, :name, nil)}",
               "type" => "Hashtag"
-            }
-          end) ++
-          Enum.map(links, fn link ->
-            %{
-              "href" => e(link, :path, nil),
-              "name" => Bonfire.Files.Media.media_label(link),
-              "mediaType" => e(link, :metadata, "content_type", nil) || e(link, :media_type, nil),
-              "type" => "Link"
             }
           end) ++
           Enum.map(quoted_objects, fn quoted_object ->

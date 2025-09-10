@@ -198,7 +198,7 @@ defmodule Bonfire.Social do
   end
 
   defp maybe_federate_activity(_subject, activity, _verb, _object, _opts) do
-    error(
+    err(
       activity,
       "Cannot federate: Expected an Activity, or an object containing one"
     )

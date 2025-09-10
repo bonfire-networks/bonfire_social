@@ -63,12 +63,13 @@ defmodule Bonfire.Social.Feeds do
     feed_preset_if_permitted(name, opts)
   end
 
-  def feed_preset_if_permitted(name, opts) when not is_nil(name) and not is_struct(name) do
+  def feed_preset_if_permitted(name, opts)
+      when not is_nil(name) and not is_boolean(name) and not is_struct(name) do
     presets = feed_presets(opts)
 
     case e(presets, Types.maybe_to_atom(name), nil) do
       nil ->
-        debug(presets, "Feed `#{inspect(name)}` not found")
+        flood(presets, "Feed `#{inspect(name)}` not found")
         {:error, :not_found}
 
       preset ->
@@ -79,7 +80,10 @@ defmodule Bonfire.Social.Feeds do
     end
   end
 
-  def feed_preset_if_permitted(_, _opts), do: {:error, :not_found}
+  def feed_preset_if_permitted(other, _opts) do
+    flood(other, "Feed preset name is not valid")
+    {:error, :not_found}
+  end
 
   defp check_feed_preset_permitted(nil, _opts), do: {:error, :not_found}
 
