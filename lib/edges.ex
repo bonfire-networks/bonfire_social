@@ -628,7 +628,6 @@ defmodule Bonfire.Social.Edges do
   ## Examples
 
       iex> delete_by_both(%User{id: 1}, MySchema, %User{id: 2})
-      :ok
   """
   def delete_by_both(me, schema, object),
     do:

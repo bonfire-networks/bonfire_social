@@ -1353,9 +1353,10 @@ defmodule Bonfire.Social.FeedLoader do
     debug(id_or_html_body, "id_or_html_body")
 
     q_id =
-      e(id_or_html_body, :object_id, nil) || Enums.id(e(id_or_html_body, :object, nil)) ||
-        e(id_or_html_body, :activity, :object_id, nil) ||
-        Enums.id(e(id_or_html_body, :activity, :object, nil)) || Types.uid(id_or_html_body)
+      (e(id_or_html_body, :object_id, nil) || Enums.id(e(id_or_html_body, :object, nil)) ||
+         e(id_or_html_body, :activity, :object_id, nil) ||
+         Enums.id(e(id_or_html_body, :activity, :object, nil)) || Types.uid(id_or_html_body))
+      |> debug("id to look for in feed")
 
     q_body =
       if is_map(id_or_html_body) do
@@ -1365,7 +1366,7 @@ defmodule Bonfire.Social.FeedLoader do
       else
         if !q_id, do: id_or_html_body
       end
-      |> debug("q_body")
+      |> debug("body to look for in feed")
 
     feed =
       if opts[:postload] != false do
@@ -1379,7 +1380,7 @@ defmodule Bonfire.Social.FeedLoader do
     |> Enum.find_value(fn fi ->
       a_body =
         e(fi.activity, :object, :post_content, :html_body, nil)
-        |> debug("a_body")
+        |> debug("body in feed")
 
       if q_id do
         if fi.activity.object_id == q_id, do: fi.activity
@@ -1392,11 +1393,13 @@ defmodule Bonfire.Social.FeedLoader do
       end
     end) ||
       (
-        dump(
+        io_inspect(
           feed
           |> Enum.map(fn fi ->
             # e(fi, :activity, :object, nil) ||
-            e(fi, :activity, :object, :post_content, nil) ||
+            e(fi, :activity, :object, :post_content, :html_body, nil) ||
+              e(fi, :activity, :object, :post_content, :name, nil) ||
+              e(fi, :activity, :object, nil) ||
               e(fi, :activity, nil) || fi
           end),
           "object `#{q_body}` with ID `#{q_id}` not found in feed containing"

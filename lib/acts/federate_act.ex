@@ -168,7 +168,7 @@ defmodule Bonfire.Social.Acts.Federate do
 
         nil
     end
-    |> Epic.assign(epic, on, Utils.ok_unwrap(...) || object)
+    |> Epic.assign(epic, on, from_ok(...) || object)
   end
 
   defp maybe_create_pending_quote_requests(

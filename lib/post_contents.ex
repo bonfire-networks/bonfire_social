@@ -237,6 +237,8 @@ defmodule Bonfire.Social.PostContents do
   defp prepare_remote_content(attrs, creator, opts) do
     # debug(creator)
 
+    # opts = Keyword.put(opts, :custom_emoji, true)
+
     mentions = e(attrs, :mentions, %{})
     hashtags = e(attrs, :hashtags, %{})
 
@@ -254,7 +256,10 @@ defmodule Bonfire.Social.PostContents do
         attrs
         |> Map.put(:mentions, Map.values(mentions) || [])
         |> Map.put(:hashtags, Map.values(hashtags) || [])
-        |> parse_and_prepare_contents(creator, opts ++ [mentions: false, hashtags: false])
+        |> parse_and_prepare_contents(
+          creator,
+          opts ++ [mentions: false, hashtags: false, custom_emoji: false]
+        )
         |> Map.update(:urls, [], fn links ->
           Enum.reject(links, fn url ->
             url in mention_urls or url in hashtag_urls
@@ -391,7 +396,7 @@ defmodule Bonfire.Social.PostContents do
     # |> Text.normalise_links(:markdown)
     # maybe remove potentially dangerous or dirty markup
     |> maybe_sane_html(e(opts, :do_not_strip_html, nil))
-    |> Text.maybe_emote(creator, opts[:emoji])
+    |> Text.maybe_emote(creator, opts)
     # make sure we end up with valid HTML
     |> Text.maybe_normalize_html()
     |> debug()
@@ -763,7 +768,7 @@ defmodule Bonfire.Social.PostContents do
 
         with %{} = character <-
                e(direct_recipients, mention["href"], nil) ||
-                 ok_unwrap(
+                 from_ok(
                    Bonfire.Federate.ActivityPub.AdapterUtils.get_or_fetch_character_by_ap_id(
                      mention["href"] || mention["name"]
                    )
@@ -855,7 +860,7 @@ defmodule Bonfire.Social.PostContents do
           parse_remote_links: regular_links == []
         ]
       },
-      "remote post attrs"
+      "incoming remote post attrs"
     )
   end
 

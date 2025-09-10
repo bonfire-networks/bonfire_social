@@ -140,7 +140,7 @@ defmodule Bonfire.Social.Objects do
     )
     # |> debug("object with activity")
     ~> maybe_preload_activity_object(opts)
-    ~> to_ok()
+    |> ok()
 
     # |> debug("final object")
   end
@@ -980,7 +980,7 @@ defmodule Bonfire.Social.Objects do
         |> proload(:pointer)
       )
       |> repo().maybe_preload(:pointer)
-      |> Enum.map(&(e(&1, :pointer, nil) || Utils.id(&1)))
+      |> Enum.map(&(e(&1, :pointer, nil) || Enums.id(&1)))
 
   @doc """
   Runs an epic for a given type and options.
