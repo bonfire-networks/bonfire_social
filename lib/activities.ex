@@ -1071,6 +1071,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   def maybe_join_creator(query, [], opts) do
+    # TODO: reverse the logic here with subject, so we always join the creator, and only join subject if different from creator
     if :with_subject in e(opts, :preload, []) do
       query
       # first join subject, since creator will only be loaded if different from the subject
@@ -1080,8 +1081,15 @@ defmodule Bonfire.Social.Activities do
         [activity: activity, object: object],
         object_created in assoc(object, :created),
         as: :object_created,
-        #  only includes the created with creator_id if different than the subject
-        on: object_created.creator_id != activity.subject_id
+        # on: object_created.creator_id != activity.subject_id
+      )
+      |> reusable_join(
+        :left,
+        [activity: activity, object_created: object_created],
+        creator in assoc(object_created, :creator),
+        as: :object_creator,
+        # only includes the created with creator_id if different than the subject 
+        on: object_created.creator_id != activity.subject_id 
       )
     else
       query
@@ -1116,16 +1124,16 @@ defmodule Bonfire.Social.Activities do
         [activity: activity, object: object],
         object_created in assoc(object, :created),
         as: :object_created,
-        #  only includes the created with creator_id if different than the subject
-        on: object_created.creator_id != activity.subject_id
+        # only includes the created with creator_id if different than the subject
+        # on: object_created.creator_id != activity.subject_id
       )
       |> reusable_join(
         :left,
         [activity: activity, object_created: object_created],
         creator in assoc(object_created, :creator),
         as: :object_creator,
-        # only includes the creator if not excluded
-        on: object_created.creator_id not in ^skip_loading_user_ids
+        # only includes the created with creator_id if different than the subject AND not excluded
+        on: object_created.creator_id != activity.subject_id and object_created.creator_id not in ^skip_loading_user_ids 
       )
     else
       query
@@ -2116,9 +2124,7 @@ defmodule Bonfire.Social.Activities do
     # Find subject for this activity
     subject_id = e(activity, :subject_id, :nil!)
 
-    subject =
-      find_subject(activity, subject_id, opts)
-
+    subject = find_subject(activity, subject_id, opts)
     # |> ensure_completeness!(:subject, opts)
 
     subject_id = subject_id || id(subject)
@@ -2128,12 +2134,13 @@ defmodule Bonfire.Social.Activities do
     activity = if subject, do: Map.put(activity, :subject, subject), else: activity
 
     # Find creator for this activity
-
-    if not is_nil(creator_id) and creator_id != subject_id do
-      creator =
+    if not is_nil(creator_id) do
+      creator = if creator_id == subject_id do
+        subject
+      else
         find_creator(activity, object, creator_id, opts)
-
-      # |> ensure_completeness!(:creator, opts)
+        # |> ensure_completeness!(:creator, opts)
+      end
 
       cond do
         # Update the creator in the creator
@@ -2155,12 +2162,9 @@ defmodule Bonfire.Social.Activities do
 
         true ->
           debug(creator, "no creator found")
-          activity
+          nil
       end
-    else
-      # If the creator is the same as the subject, we don't need to load it again
-      activity
-    end
+    end || activity
   end
 
   def prepare_subject_and_creator(object, _opts) do
