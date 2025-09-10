@@ -406,7 +406,7 @@ defmodule Bonfire.Social.Requests do
     end
   rescue
     e in Ecto.ConstraintError ->
-      err(e, "Could not create the request, checking if it was made already")
+      warn(e, "Could not create the request, checking if it was made already")
       maybe_already(requester, type, object, opts)
   end
 

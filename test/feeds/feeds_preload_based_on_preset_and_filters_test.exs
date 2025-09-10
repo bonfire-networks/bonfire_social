@@ -49,7 +49,10 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
              :videos,
              :mentions,
              :curated,
-             :events
+             :events,
+             :trending_links,
+             :trending_discussions,
+             :trending
            ] <-
         feed_preset_test_params() do
     describe "feed preset `#{inspect(preset)}` loads feed and configured preloads" do

@@ -1875,22 +1875,15 @@ defmodule Bonfire.Social.FeedLoader do
 
       iex> filters = %{feed_name: "remote"}
       iex> preloads_from_filters(filters) |> Enum.sort()
-      [:with_creator, :with_media, :with_object_more, :with_object_peered, :with_reply_to, :with_subject]
+      [:quote_tags, :with_creator, :with_media, :with_object_more, :with_object_peered, :with_replied, :with_reply_to, :with_subject]
 
       iex> filters = %{subjects: ["alice"]}
       iex> preloads_from_filters(filters) |> Enum.sort()
-      [:with_creator, :with_media, :with_object_more, :with_object_peered, :with_reply_to]
+      [:quote_tags, :with_creator, :with_media, :with_object_more, :with_object_peered, :with_replied, :with_reply_to]
 
       iex> filters = %{feed_name: "unknown"}
       iex> preloads_from_filters(filters) |> Enum.sort()
-      [
-        :with_creator,
-        :with_media,
-        :with_object_more,
-        :with_object_peered,
-        :with_reply_to,
-        :with_subject
-      ]
+      [:quote_tags, :with_creator, :with_media, :with_object_more, :with_object_peered, :with_replied, :with_reply_to, :with_subject]
 
   """
   def preloads_from_filters(feed_filters, filter_rules \\ preloads_from_filters_rules()) do
@@ -2031,6 +2024,7 @@ defmodule Bonfire.Social.FeedLoader do
       iex> map_activity_preloads([:all]) |> Enum.sort()
       [
         :maybe_with_labelled,
+        :quote_tags,
         :tags,
         :with_creator,
         :with_media,
@@ -2055,12 +2049,7 @@ defmodule Bonfire.Social.FeedLoader do
 
       # Removes duplicates when preload lists overlap
       iex> map_activity_preloads([:posts, :posts_with_thread]) |> Enum.sort()
-      [
-        :with_post_content,
-        :with_replied,
-        :with_subject,
-        :with_thread_name
-      ]
+      [:posts_with_thread, :with_post_content, :with_subject]
   """
   def map_activity_preloads(
         preloads,
