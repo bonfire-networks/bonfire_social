@@ -67,7 +67,7 @@ defmodule Bonfire.Social.Edges do
   def insert(changeset, subject \\ nil, object \\ nil) do
     changeset
     |> Changeset.unique_constraint([:subject_id, :object_id, :table_id])
-    |> flood("Inserting edge")
+    |> debug("Inserting edge")
     |> repo().insert()
     |> preload_inserted(subject, object)
   end
@@ -395,7 +395,7 @@ defmodule Bonfire.Social.Edges do
     else
       Bonfire.Common.QueryModule.maybe_query(schema_or_context, args)
     end
-    |> flood("Edge query")
+    |> debug("Edge query")
   end
 
   @doc "TODOC"

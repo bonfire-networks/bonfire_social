@@ -229,7 +229,7 @@ defmodule Bonfire.Social.PostContents do
           languages: maybe_detect_languages(attrs)
         }
       )
-      |> flood("parsed and prepared contents")
+      |> debug("parsed and prepared contents")
     end
   end
 
@@ -639,15 +639,15 @@ defmodule Bonfire.Social.PostContents do
       # TODO: check why we're doing this?
       |> Bonfire.Common.Needles.list!(skip_boundary_check: true)
       #  |> repo().maybe_preload(:named)
-      |> flood("include_as_hashtags")
+      |> debug("include_as_hashtags")
 
     quoted_objects =
       Bonfire.Social.Tags.list_tags_quote(post)
-      |> flood("include_as_quotes")
+      |> debug("include_as_quotes")
 
     %{primary_image: primary_image, images: images, links: _links} =
       Bonfire.Files.split_media_by_type(e(post, :media, nil))
-      |> flood("media_splits")
+      |> debug("media_splits")
 
     %{
       "type" => "Note",
@@ -828,7 +828,7 @@ defmodule Bonfire.Social.PostContents do
               {quotes, [tag | links]}
           end
       end
-      |> flood("separated quote tags and regular links")
+      |> debug("separated quote tags and regular links")
 
     debug(
       %{

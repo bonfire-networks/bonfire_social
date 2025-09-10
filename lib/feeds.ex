@@ -69,7 +69,7 @@ defmodule Bonfire.Social.Feeds do
 
     case e(presets, Types.maybe_to_atom(name), nil) do
       nil ->
-        flood(presets, "Feed `#{inspect(name)}` not found")
+        debug(presets, "Feed `#{inspect(name)}` not found")
         {:error, :not_found}
 
       preset ->
@@ -81,7 +81,7 @@ defmodule Bonfire.Social.Feeds do
   end
 
   def feed_preset_if_permitted(other, _opts) do
-    flood(other, "Feed preset name is not valid")
+    debug(other, "Feed preset name is not valid")
     {:error, :not_found}
   end
 

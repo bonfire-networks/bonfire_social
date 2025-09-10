@@ -69,7 +69,7 @@ defmodule Bonfire.Social do
       ) do
     with {:ok, ap_activity} <-
            maybe_federate_activity(subject, object, opts[:verb], opts[:object], opts)
-           |> flood("result of maybe_federate_activity") do
+           |> debug("result of maybe_federate_activity") do
       {:ok,
        Enums.deep_merge(object, %{
          activity: %{
@@ -265,7 +265,7 @@ defmodule Bonfire.Social do
       )
     else
       # TODO: do not enqueue if federation is disabled in Settings
-      flood("Federation is disabled or an adapter is not available")
+      debug("Federation is disabled or an adapter is not available")
       :ignore
     end
   end

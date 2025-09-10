@@ -1320,12 +1320,12 @@ defmodule Bonfire.Social.FeedLoader do
   end
 
   def feed_contains?(%{edges: []}, object, opts) do
-    flood("empty feed")
+    debug("empty feed")
     false
   end
 
   def feed_contains?([], object, opts) do
-    flood("empty list")
+    debug("empty list")
     false
   end
 
@@ -1412,7 +1412,7 @@ defmodule Bonfire.Social.FeedLoader do
 
     case Types.uid(object) do
       nil ->
-        flood(
+        debug(
           object,
           "assume we want to look up a string in the object fields, so query the feed first"
         )
@@ -1421,7 +1421,7 @@ defmodule Bonfire.Social.FeedLoader do
         |> feed_contains?(object, opts)
 
       id ->
-        flood(id, "lookup by ID")
+        debug(id, "lookup by ID")
 
         case feed_contains?(feed, [objects: id], opts) do
           result when is_list(result) ->
@@ -1449,7 +1449,7 @@ defmodule Bonfire.Social.FeedLoader do
     case feed_contains_query(feed_name, filters, opts) do
       %Ecto.Query{} = query ->
         query
-        |> flood("feed_contains_query")
+        |> debug("feed_contains_query")
         |> repo().many()
 
       e ->

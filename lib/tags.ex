@@ -196,7 +196,7 @@ defmodule Bonfire.Social.Tags do
   def tags_quote(post) do
     post
     |> e(:tags, [])
-    |> flood("all tags")
+    |> debug("all tags")
     |> Enum.reject(fn tag ->
       # Reject hashtags and character mentions
       not is_nil(e(tag, :character, nil))
