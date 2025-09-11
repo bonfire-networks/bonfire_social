@@ -90,7 +90,7 @@ defmodule Bonfire.Social.Requests do
   """
   def accept(request, opts) do
     with {:ok, request} <- requested(request, opts) do
-      Request.changeset(request, %{accepted_at: DateTime.now!("Etc/UTC")})
+      Request.changeset(request, %{ignored_at: nil, accepted_at: DateTime.now!("Etc/UTC")})
       |> repo().update()
     end
   end
@@ -106,7 +106,7 @@ defmodule Bonfire.Social.Requests do
   def ignore(request, opts) do
     # TODO: should we just delete it instead?
     with {:ok, request} <- requested(request, opts) do
-      Request.changeset(request, %{ignored_at: DateTime.now!("Etc/UTC")})
+      Request.changeset(request, %{accepted_at: nil, ignored_at: DateTime.now!("Etc/UTC")})
       |> repo().update()
     end
   end
@@ -453,31 +453,41 @@ defmodule Bonfire.Social.Requests do
 
   ###
 
-  def ap_publish_activity(requester, {:accept_from, accept_from}, request) do
-    request_id = uid(request)
-
-    with false <- Social.is_local?(requester),
-         {:ok, accept_from_actor} <-
-           ActivityPub.Actor.get_cached(pointer: accept_from),
-         {:ok, requester_actor} <-
-           ActivityPub.Actor.get_cached(pointer: requester),
-         {:ok, ap_object} <-
-           ActivityPub.Object.get_cached(pointer: request_id) |> info(),
+  def ap_publish_activity(subject, {:accept_to, accept_to}, %ActivityPub.Object{data: object}) do
+    with false <- Social.is_local?(accept_to),
+         {:ok, subject_actor} <-
+           ActivityPub.Actor.get_cached(pointer: subject),
+         {:ok, accept_to_actor} <-
+           ActivityPub.Actor.get_cached(pointer: accept_to),
          {:ok, _} <-
            ActivityPub.accept(%{
-             actor: accept_from_actor,
-             to: [requester_actor.data],
-             object: ap_object.data,
+             actor: subject_actor,
+             to: [accept_to_actor.data],
+             object: object,
              local: true
-           }) do
+           })
+           |> flood("accept_done") do
       :ok
     else
       true ->
-        info("the subject is local")
+        flood("accept_to is local, so we don't need to federate the accept")
         :ok
 
       e ->
-        error(e, "Could not push the acceptation of request #{request_id}")
+        err(e, "Could not push the acceptation of request")
+    end
+  end
+
+  def ap_publish_activity(subject, {:accept_to, accept_to}, request) do
+    flood(request, "accept_to with request")
+    request_id = uid(request)
+
+    with {:ok, ap_object} <-
+           ActivityPub.Object.get_cached(pointer: request_id) |> flood("ap_object") do
+      ap_publish_activity(subject, {:accept_to, accept_to}, ap_object)
+    else
+      e ->
+        err(e, "Could not find the request to accept #{request_id}")
     end
   end
 
