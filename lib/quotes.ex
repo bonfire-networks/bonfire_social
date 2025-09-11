@@ -104,7 +104,7 @@ defmodule Bonfire.Social.Quotes do
   """
   def create_quote_requests(user, pending_quotes, quote_post, opts \\ []) do
     pending_quotes
-    |> flood("pending quote requests")
+    |> debug("pending quote requests")
     |> Enum.map(fn quoted_object ->
       create_quote_request(user, quoted_object, quote_post, opts)
     end)
@@ -136,12 +136,21 @@ defmodule Bonfire.Social.Quotes do
       |> Keyword.put(:to_circles, [id(quoted_creator)])
       |> Keyword.put(:to_feeds, notifications: quoted_creator)
     )
-    |> flood("Created quote request")
+    |> debug("Created quote request on #{repo()}")
+  end
+
+  def requested(quote_object, quoted_object, opts \\ []) do
+    Requests.get(
+      quote_object,
+      quote_verb_id(),
+      quoted_object,
+      opts |> Keyword.put(:skip_boundary_check, true)
+    )
   end
 
   def accept_quote(quote_object, quoted_object, opts \\ []) do
-    Requests.get(quote_object, quote_verb_id(), quoted_object, opts)
-    |> flood("got quote request to accept")
+    requested(quote_object, quoted_object, opts)
+    |> debug("got quote request to accept on #{repo()}")
     ~> accept_quote_request(quote_object, quoted_object, opts)
   end
 
@@ -169,25 +178,25 @@ defmodule Bonfire.Social.Quotes do
     # debug(opts, "opts")
 
     with {:ok, %{edge: %{object: quoted_object, subject: quote_post}} = request} <-
-           Requests.accept(request, opts) |> flood("accepted_quote"),
+           Requests.accept(request, opts) |> debug("accepted_quote"),
          quoted_creator =
            (quoted_creator ||
               e(request, :edge, :object, :created, :creator, nil) ||
               e(quoted_object, :created, :creator, nil) ||
               e(request, :edge, :object, :created, :creator_id, nil) ||
               e(quoted_object, :created, :creator_id, nil))
-           |> flood("determined_quoted_creator"),
+           |> debug("determined_quoted_creator"),
          quote_creator =
            (quote_creator ||
               e(request, :edge, :subject, :created, :creator, nil) ||
               e(quote_post, :created, :creator, nil) ||
               e(request, :edge, :subject, :created, :creator_id, nil) ||
               e(quote_post, :created, :creator_id, nil))
-           |> flood("determined_quote_creator"),
+           |> debug("determined_quote_creator"),
          {:ok, quote_post} <-
            update_quote_add(quote_creator, quote_post, quoted_object, opts)
            |> repo().maybe_preload([:post_content, :activity])
-           |> flood("updated_quote"),
+           |> debug("updated_quote"),
          :ok <-
            if(opts[:incoming] != true,
              #  TODO: the Accept activity should include "result": "https://example.com/users/alice/stamps/1" with a QuoteAuthorization
@@ -197,7 +206,7 @@ defmodule Bonfire.Social.Quotes do
                  {:accept_to, quote_creator},
                  opts[:request_activity] || request
                )
-               |> flood("published_accept"),
+               |> debug("published_accept"),
              else: :ok
            ),
          # Then send Update for the now-authorized quote post (only if this is a local quote_post)
@@ -207,7 +216,7 @@ defmodule Bonfire.Social.Quotes do
              quote_post,
              opts ++ [verb: :update]
            )
-           |> flood("published_update_for_quote_post") do
+           |> debug("published_update_for_quote_post") do
       {:ok, quote_post}
     else
       e ->
@@ -217,8 +226,8 @@ defmodule Bonfire.Social.Quotes do
 
   def reject_quote(quote_object, quoted_object, opts \\ []) do
     with {:ok, request} <-
-           Requests.get(quote_object, quote_verb_id(), quoted_object, skip_boundary_check: true)
-           |> flood("got quote request to reject"),
+           requested(quote_object, quoted_object, opts)
+           |> debug("got quote request to reject"),
          {:ok, request} <- reject(request, quote_object, quoted_object, opts) do
       {:ok, request}
     end
@@ -254,44 +263,61 @@ defmodule Bonfire.Social.Quotes do
       quoted_object
       |> repo().maybe_preload(created: [creator: [:character]])
 
-    with {:ok, request} <- Requests.ignore(request, opts) |> flood("ignored_quote_request"),
+    with {:ok, request} <- Requests.ignore(request, opts) |> debug("ignored_quote_request"),
          {:ok, _} <-
-           update_quote_remove(quote_object, quoted_object) |> flood("removed_quote_tag"),
-         quoted_creator =
-           e(quoted_object, :created, :creator, nil) ||
-             e(quoted_object, :created, :creator_id, nil),
-         quote_creator =
-           e(quote_object, :created, :creator, nil) ||
-             e(quote_object, :created, :creator_id, nil),
-         {:ok, ap_quoted_object} <-
+           update_quote_remove(quote_object, quoted_object) |> debug("removed_quote_tag"),
+         {:ok, _} <-
+           federate_reject(opts[:verb], request, quote_object, quoted_object)
+           |> debug("ap_rejected_quote_request") do
+      {:ok, request}
+    end
+  end
+
+  defp federate_reject(:delete, request, quote_object, quoted_object) do
+    with {:ok, ap_quote_object} <-
+           ActivityPub.Object.get_cached(pointer: quote_object)
+           |> debug("ap_quote_object"),
+         {:ok, quote_auth} <-
+           ActivityPub.Object.get_cached(ap_id: ap_quote_object.data["quoteAuthorization"])
+           |> debug("ap_quote_object"),
+         {:ok, result} <- ActivityPub.delete(quote_auth) do
+      {:ok, result}
+    end
+  end
+
+  defp federate_reject(_reject, request, quote_object, quoted_object) do
+    quoted_creator =
+      e(quoted_object, :created, :creator, nil) ||
+        e(quoted_object, :created, :creator_id, nil)
+
+    quote_creator =
+      e(quote_object, :created, :creator, nil) ||
+        e(quote_object, :created, :creator_id, nil)
+
+    with {:ok, ap_quoted_object} <-
            ActivityPub.Object.get_cached(pointer: quoted_object)
-           |> flood("ap_quoted_object"),
+           |> debug("ap_quoted_object"),
          {:ok, quoted_actor} <-
            if(quoted_creator,
-             do: ActivityPub.Actor.get_cached(pointer: quoted_creator) |> flood("quoted_creator"),
+             do: ActivityPub.Actor.get_cached(pointer: quoted_creator) |> debug("quoted_creator"),
              else: err(quoted_object, "quoted_creator not found")
            ),
          {:ok, quote_actor} <-
            if(quote_creator,
-             do: ActivityPub.Actor.get_cached(pointer: quote_creator) |> flood("quote_creator"),
+             do: ActivityPub.Actor.get_cached(pointer: quote_creator) |> debug("quote_creator"),
              else: err(quote_object, "quote_creator not found")
            ),
          %ActivityPub.Object{} = quote_request_activity <-
            ActivityPub.Object.fetch_latest_activity(quote_actor, ap_quoted_object, "QuoteRequest")
-           |> flood("latest"),
-         {:ok, _} <-
-           if(opts[:verb] == :delete,
-             do: ActivityPub.delete(quote_request_activity),
-             else:
-               ActivityPub.reject(%{
-                 actor: quoted_actor,
-                 to: [quote_actor],
-                 object: quote_request_activity.data,
-                 local: true
-               })
-           )
-           |> flood("ap_rejected_quote_request") do
-      {:ok, request}
+           |> debug("latest"),
+         {:ok, result} <-
+           ActivityPub.reject(%{
+             actor: quoted_actor,
+             to: [quote_actor],
+             object: quote_request_activity.data,
+             local: true
+           }) do
+      {:ok, result}
     end
   end
 
@@ -309,20 +335,156 @@ defmodule Bonfire.Social.Quotes do
   end
 
   def update_quote_remove(quote_post, quoted_object) do
-    flood(quote_post, "thing to remove tags from")
-    flood(quoted_object, "tags to remove from thing")
+    debug(quote_post, "thing to remove tags from")
+    debug(quoted_object, "tags to remove from thing")
 
     Bonfire.Tag.Tagged.thing_tags_remove(quote_post, quoted_object)
   end
 
-  # ActivityPub integration
+  @doc """
+  Fetches the QuoteAuthorization for a quote post using fresh data.
+
+  ## Parameters
+
+  - `quote_post`: The quote post to get authorization for
+  - `quoted_object`: The quoted object (optional - if not provided, gets first quoted object)
+
+  ## Returns
+
+  `{:ok, authorization}` if found, `{:error, :not_found}` otherwise.
+
+  ## Examples
+
+      iex> fetch_fresh_quote_authorization(quote_post)
+      {:ok, %ActivityPub.Object{}}
+
+      iex> fetch_fresh_quote_authorization(quote_post, quoted_object)
+      {:ok, %ActivityPub.Object{}}
+  """
+  def fetch_fresh_quote_authorization(quote_post, quoted_object \\ nil) do
+    quoted_object = quoted_object || get_first_quoted_object(quote_post)
+
+    with {:ok, %{data: ap_json}} <- ActivityPub.Object.get_cached(pointer: quote_post),
+         quote_auth_url when is_binary(quote_auth_url) <- ap_json["quoteAuthorization"],
+         {:ok, authorization} <-
+           ActivityPub.Federator.Fetcher.fetch_fresh_object_from_id(quote_auth_url,
+             return_tombstones: true
+           )
+           |> debug("fetched_fresh") do
+      {:ok, authorization}
+    else
+      nil ->
+        debug("No quoteAuthorization field in quote post")
+        {:error, :not_found}
+
+      other ->
+        other
+    end
+  end
+
+  @doc """
+  Verifies that a quote authorization is valid.
+
+  ## Parameters
+
+  - `quote_post`: The quote post to verify authorization for
+  - `quoted_object`: The quoted object (optional - will call get_quote_authorization to get it)
+
+  ## Returns
+
+  - `{:ok, :valid}` if authorization exists and is valid
+  - `{:error, :invalid}` if authorization exists but is invalid (wrong signatures, etc)  
+  - `{:error, :revoked}` if authorization was deleted/revoked or network errors
+
+  ## Examples
+
+      iex> Bonfire.Social.Quotes.verify_quote_authorization(quote_post)
+      {:ok, :valid}
+
+      iex> Bonfire.Social.Quotes.verify_quote_authorization(quote_post, quoted_object)
+      {:error, :invalid}
+  """
+  def verify_quote_authorization(quote_post, quoted_object \\ nil, authorization \\ nil) do
+    quoted_object = quoted_object || get_first_quoted_object(quote_post)
+
+    case authorization || fetch_fresh_quote_authorization(quote_post, quoted_object) do
+      {:ok, authorization} ->
+        case ActivityPub.Object.deleted?(authorization) do
+          true ->
+            {:not_authorized, "Quote authorization was revoked"}
+
+          false ->
+            case verify_authorization_data(authorization, quote_post, quoted_object) do
+              {:ok, :valid} -> {:ok, :authorization_verified}
+              {:error, reason} -> {:not_authorized, reason}
+            end
+        end
+
+      {:error, :network_error} ->
+        {:error, "Network error fetching quote authorization"}
+
+      {:error, :not_found} ->
+        {:not_authorized, "Quote authorization not found"}
+
+      {:error, other} ->
+        err(other, "Unexpected error fetching quote authorization")
+    end
+  end
+
+  defp get_first_quoted_object(quote_post) do
+    quote_tags = Bonfire.Social.Tags.list_tags_quote(quote_post)
+
+    case quote_tags do
+      [first_tag | _] -> first_tag
+      [] -> nil
+    end
+  end
+
+  defp verify_authorization_data(%{data: auth_data} = authorization, quote_post, quoted_object) do
+    quote_post = repo().maybe_preload(quote_post, [:created])
+    quoted_object = repo().maybe_preload(quoted_object, [:created])
+
+    quote_creator_id =
+      e(quote_post, :created, :creator_id, nil) || id(quote_post)
+
+    quoted_creator_id =
+      e(quoted_object, :created, :creator_id, nil) || id(quoted_object)
+
+    with {:ok, quote_ap_object} <- ActivityPub.Object.get_cached(pointer: quote_post),
+         {:ok, quoted_ap_object} <- ActivityPub.Object.get_cached(pointer: quoted_object),
+         {:ok, quoted_actor} <- ActivityPub.Actor.get_cached(pointer: quoted_creator_id) do
+      cond do
+        # Check that authorization references correct objects
+        auth_data["object"] != quote_ap_object.data["id"] ->
+          error(quote_ap_object.data["id"], "Quote post ID does not match authorization object")
+
+        auth_data["context"] != quoted_ap_object.data["id"] ->
+          error(
+            quoted_ap_object.data["id"],
+            "Quoted object ID does not match authorization context"
+          )
+
+        # Check that authorization is signed by quoted object's creator
+        auth_data["actor"] != quoted_actor.ap_id ->
+          error(auth_data["actor"], "Authorization actor does not match quoted object's creator")
+
+        true ->
+          {:ok, :valid}
+      end
+    else
+      e ->
+        error(e, "Error loading objects for authorization verification")
+    end
+  end
+
+  #### ActivityPub integration
 
   def ap_publish_activity(
         subject,
         verb,
         request
       ) do
-    flood(request, "Publishing QuoteRequest activity")
+    debug(request, "Publishing QuoteRequest activity")
 
     request =
       repo().maybe_preload(request,
@@ -344,24 +506,25 @@ defmodule Bonfire.Social.Quotes do
                subject || e(quote_post, :created, :creator, nil) ||
                  e(quote_post, :created, :creator_id, nil)
            )
-           |> flood("quote_actor"),
+           |> debug("quote_actor"),
          {:ok, ap_quoted_object} <-
            ActivityPub.Object.get_cached(pointer: quoted_object)
-           |> flood("quoted_object for #{inspect(quoted_object)}"),
+           |> debug("quoted_object for #{inspect(quoted_object)}"),
          {:ok, instrument} <-
            ActivityPub.Object.get_cached(pointer: id(quote_post))
-           |> flood("quote post for #{inspect(quote_post)}"),
+           |> debug("quote post for #{inspect(quote_post)}"),
          {:ok, activity} <-
            ActivityPub.quote_request(%{
              actor: actor,
              object: ap_quoted_object,
              instrument: instrument,
              local: true
-           }) do
+           })
+           |> debug("created AP quote request") do
       {:ok, activity}
     else
       {:error, :not_found} ->
-        flood("Actor, Object, or Quote Post not found", error_msg)
+        debug("Actor, Object, or Quote Post not found", error_msg)
         {:ok, :ignore}
 
       {:reject, reason} ->
@@ -378,7 +541,7 @@ defmodule Bonfire.Social.Quotes do
         %{data: %{"type" => "QuoteRequest", "actor" => actor} = data} = quote_request_activity,
         quoted_object
       ) do
-    flood(data, "Received QuoteRequest activity")
+    debug(data, "Received QuoteRequest activity")
     # debug(quoted_object, "quoted_object")
 
     # Extract request details and create local request
@@ -387,32 +550,32 @@ defmodule Bonfire.Social.Quotes do
          %{} = quoted_object <-
            quoted_object
            |> repo().maybe_preload(pointer: [:created])
-           |> flood("loaded quoted object"),
+           |> debug("loaded quoted object"),
          quoted_creator =
            e(quoted_object, :pointer, :created, :creator, nil) ||
              e(quoted_object, :pointer, :created, :creator_id, nil),
          {:ok, quoted_actor} <-
            if(quoted_creator,
-             do: ActivityPub.Actor.get_cached(pointer: quoted_creator) |> flood("quoted_creator"),
+             do: ActivityPub.Actor.get_cached(pointer: quoted_creator) |> debug("quoted_creator"),
              else: err(quoted_object, "quoted_creator not found")
            ) do
       case check_quote_permission(requester, quoted_object)
-           |> flood("checked_quote_permission") do
+           |> debug("checked_quote_permission") do
         {:auto_approve, quoted_object} ->
           with {:ok, quote_post} <-
                  Bonfire.Federate.ActivityPub.AdapterUtils.return_pointable(data["instrument"])
-                 |> flood("prepared quote post"),
+                 |> debug("prepared quote post"),
                %{} = quoted_post <- e(quoted_object, :pointer, nil),
                {:ok, request} <-
                  create_quote_request(requester, quoted_post, quote_post, incoming: true)
-                 |> flood("prepared quote request to auto-accept"),
+                 |> debug("prepared quote request to auto-accept"),
                # Auto-approve and tag the quote post
                {:ok, _updated} <-
                  accept_quote_request(request, quote_post, quoted_post,
                    incoming: false,
                    request_activity: quote_request_activity
                  )
-                 |> flood("Auto-accepted quote request and updated quote post") do
+                 |> debug("Auto-accepted quote request and updated quote post") do
             {:ok, request}
           else
             e ->
@@ -422,7 +585,7 @@ defmodule Bonfire.Social.Quotes do
         {:request_needed, quoted_object} ->
           with {:ok, quote_post} <-
                  Bonfire.Federate.ActivityPub.AdapterUtils.return_pointable(data["instrument"])
-                 |> flood("prepared quote post") do
+                 |> debug("prepared quote post") do
             # Save request in our system for manual approval
             debug("WIP: send notification of request to user")
 
@@ -466,18 +629,18 @@ defmodule Bonfire.Social.Quotes do
           }
         } = request_activity
       ) do
-    flood(accept_activity, "Received Accept for QuoteRequest")
-    flood(request_activity, "QuoteRequest object being accepted")
+    debug(accept_activity, "Received Accept for QuoteRequest")
+    debug(request_activity, "QuoteRequest object being accepted")
 
     with {:ok, local_quote_post} <-
            ActivityPub.Object.get_cached(ap_id: quote_post)
            |> repo().maybe_preload(pointer: [:created])
-           |> flood("Found local quote post"),
+           |> debug("Found local quote post"),
          {:ok, quoted_object} <-
            ActivityPub.Object.get_cached(ap_id: quoted_object_id)
            |> repo().maybe_preload([:pointer])
            #  |> repo().maybe_preload(pointer: [:created])
-           |> flood("loaded quoted object"),
+           |> debug("loaded quoted object"),
          # quoted_creator = e(quoted_object, :pointer, :created, :creator, nil) || e(quoted_object, :pointer, :created, :creator_id, nil),
          #  quote_post_creator =
          #    e(local_quote_post, :pointer, :created, :creator, nil) ||
@@ -486,7 +649,7 @@ defmodule Bonfire.Social.Quotes do
            accept_quote(local_quote_post.pointer, quoted_object.pointer,
              request_activity: request_activity
            )
-           |> flood("Updated local quote post with authorization") do
+           |> debug("Updated local quote post with authorization") do
       {:ok, local_quote_post}
     else
       {:error, :not_found} ->
@@ -509,24 +672,24 @@ defmodule Bonfire.Social.Quotes do
           }
         } = quote_request_object
       ) do
-    flood(quote_request_object, "Received Reject for QuoteRequest")
+    debug(quote_request_object, "Received Reject for QuoteRequest")
 
     with {:ok, local_quote_post} <-
            ActivityPub.Object.get_cached(ap_id: quote_post)
            |> repo().maybe_preload(pointer: [:created])
-           |> flood("Found local quote post"),
+           |> debug("Found local quote post"),
          {:ok, quoted_object} <-
            ActivityPub.Object.get_cached(ap_id: quoted_object_id)
            |> repo().maybe_preload([:pointer])
            #  |> repo().maybe_preload(pointer: [:created])
-           |> flood("loaded quoted object"),
+           |> debug("loaded quoted object"),
          # quoted_creator = e(quoted_object, :pointer, :created, :creator, nil) || e(quoted_object, :pointer, :created, :creator_id, nil),
          #  quote_post_creator =
          #    e(local_quote_post, :pointer, :created, :creator, nil) ||
          #      e(local_quote_post, :pointer, :created, :creator_id, nil),
          {:ok, updated_quote_post} <-
            reject_quote(local_quote_post.pointer, quoted_object.pointer)
-           |> flood("Updated local quote post with rejection") do
+           |> debug("Updated local quote post with rejection") do
       {:ok, updated_quote_post}
     else
       {:error, :not_found} ->
@@ -543,7 +706,7 @@ defmodule Bonfire.Social.Quotes do
         %{data: %{"type" => "Delete"}} = _activity,
         %{data: %{"type" => "QuoteRequest"}} = object
       ) do
-    flood(object, "Received Delete for QuoteRequest")
+    debug(object, "Received Delete for QuoteRequest")
 
     ap_receive_activity(
       _subject,

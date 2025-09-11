@@ -237,8 +237,6 @@ defmodule Bonfire.Social.PostContents do
   defp prepare_remote_content(attrs, creator, opts) do
     # debug(creator)
 
-    # opts = Keyword.put(opts, :custom_emoji, true)
-
     mentions = e(attrs, :mentions, %{})
     hashtags = e(attrs, :hashtags, %{})
 
@@ -654,6 +652,31 @@ defmodule Bonfire.Social.PostContents do
       Bonfire.Files.split_media_by_type(e(post, :media, nil))
       |> debug("media_splits")
 
+    # Look up QuoteAuthorization for any quoted objects
+    {primary_quote, quote_authorization} =
+      case quoted_objects do
+        [first_quote | _] ->
+          quoted_object_ap_id = Bonfire.Common.URIs.canonical_url(first_quote)
+          quote_post_ap_id = Bonfire.Common.URIs.canonical_url(post)
+
+          # Try to find existing QuoteAuthorization
+          {
+            quoted_object_ap_id,
+            case ActivityPub.quote_authorization(actor, quoted_object_ap_id, quote_post_ap_id) do
+              {:ok, %{data: %{"type" => "QuoteAuthorization", "id" => id}}} ->
+                id
+
+              e ->
+                err(e, "error looking up or creating QuoteAuthorization")
+                nil
+            end
+          }
+
+        [] ->
+          {nil, nil}
+      end
+      |> debug("quote_and_QuoteAuthorization")
+
     %{
       "type" => "Note",
       #  "actor" => actor.ap_id,
@@ -683,21 +706,17 @@ defmodule Bonfire.Social.PostContents do
       "inReplyTo" => reply_to,
       "context" => context,
       # Add Mastodon-style quote field for compatibility
-      "quote" =>
-        case quoted_objects do
-          [first_quote | _] -> Bonfire.Common.URIs.canonical_url(first_quote)
-          [] -> nil
-        end,
-      # Add quote objects as Link tags with proper rel value
-      # # TODO: https://github.com/bonfire-networks/bonfire-app/issues/1541
-      # Enum.map(links, fn link ->
-      #   %{
-      #     "href" => e(link, :path, nil),
-      #     "name" => Bonfire.Files.Media.media_label(link),
-      #     "mediaType" => e(link, :metadata, "content_type", nil) || e(link, :media_type, nil),
-      #     "type" => "Link"
-      #   }
-      # end) ++
+      "quote" => primary_quote,
+      "quoteAuthorization" => quote_authorization,
+      # # Add quote objects as Link tags with proper rel value
+      #     Enum.map(links, fn link ->
+      #       %{
+      #         "href" => e(link, :path, nil),
+      #         "name" => Bonfire.Files.Media.media_label(link),
+      #         "mediaType" => e(link, :metadata, "content_type", nil) || e(link, :media_type, nil),
+      #         "type" => "Link"
+      #       }
+      #     end) ++
       "tag" =>
         Enum.map(mentions, fn actor ->
           %{
@@ -860,7 +879,7 @@ defmodule Bonfire.Social.PostContents do
           parse_remote_links: regular_links == []
         ]
       },
-      "incoming remote post attrs"
+      "remote post attrs"
     )
   end
 

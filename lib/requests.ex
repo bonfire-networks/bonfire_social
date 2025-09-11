@@ -466,11 +466,11 @@ defmodule Bonfire.Social.Requests do
              object: object,
              local: true
            })
-           |> flood("accept_done") do
+           |> debug("accept_done") do
       :ok
     else
       true ->
-        flood("accept_to is local, so we don't need to federate the accept")
+        debug("accept_to is local, so we don't need to federate the accept")
         :ok
 
       e ->
@@ -479,11 +479,11 @@ defmodule Bonfire.Social.Requests do
   end
 
   def ap_publish_activity(subject, {:accept_to, accept_to}, request) do
-    flood(request, "accept_to with request")
+    debug(request, "accept_to with request")
     request_id = uid(request)
 
     with {:ok, ap_object} <-
-           ActivityPub.Object.get_cached(pointer: request_id) |> flood("ap_object") do
+           ActivityPub.Object.get_cached(pointer: request_id) |> debug("ap_object to accept") do
       ap_publish_activity(subject, {:accept_to, accept_to}, ap_object)
     else
       e ->
