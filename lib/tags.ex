@@ -197,10 +197,9 @@ defmodule Bonfire.Social.Tags do
     post
     |> e(:tags, [])
     |> debug("all tags")
-    |> Enum.reject(fn tag ->
-      # Reject hashtags and character mentions
-      not is_nil(e(tag, :character, nil))
-      # TODO: by type instead? also exclude hashtags
+    |> Enum.filter(fn tag ->
+      # Reject hashtags and characters (@ mentions)
+      Types.object_type(tag) != Bonfire.Tag.Hashtag and is_nil(e(tag, :character, nil))
     end)
   end
 
@@ -208,8 +207,9 @@ defmodule Bonfire.Social.Tags do
     post
     |> repo().maybe_preload(tags: [:character])
     |> e(:tags, [])
-    |> Enum.reject(fn tag ->
-      not is_nil(e(tag, :character, nil))
+    |> Enum.filter(fn tag ->
+      Types.object_type(tag) == Bonfire.Tag.Hashtag
+      # is_nil(e(tag, :character, nil))
     end)
   end
 
