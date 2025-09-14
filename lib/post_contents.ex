@@ -173,6 +173,9 @@ defmodule Bonfire.Social.PostContents do
   # post from local user
   def maybe_prepare_contents(attrs, creator, _boundary, opts) do
     if module_enabled?(Bonfire.Social.Tags, creator) do
+      # set input format to eg. markdown for parsing
+      opts = Keyword.put_new(opts, :output_format, editor_output_content_type(creator))
+
       parse_and_prepare_contents(attrs, creator, opts)
     else
       only_prepare_content(attrs, creator, opts)
@@ -240,65 +243,76 @@ defmodule Bonfire.Social.PostContents do
     mentions = e(attrs, :mentions, %{})
     hashtags = e(attrs, :hashtags, %{})
 
-    # If link processing is enabled, use the same implementation as local posts
-    if opts[:parse_remote_links] && module_enabled?(Bonfire.Social.Tags, creator) do
-      debug("process remote post contents for links (but not mentions/hashtags)")
+    # If link processing is enabled, extract existing URLs from HTML using LazyHTML
+    urls =
+      if opts[:parse_remote_links] do
+        debug("extract existing links from remote post HTML content")
 
-      # Extract mention/hashtag URLs to filter them out from link processing
-      mention_urls = Map.keys(mentions) |> Enums.filter_empty([])
-      hashtag_urls = Map.keys(hashtags) |> Enums.filter_empty([])
+        # Extract mention/hashtag URLs to filter them out from link processing
+        mention_urls = Map.keys(mentions) |> Enums.filter_empty([])
+        hashtag_urls = Map.keys(hashtags) |> Enums.filter_empty([])
+        exclude_urls = mention_urls ++ hashtag_urls
 
-      # Use same processing as local posts but disable mentions/hashtags
-
-      attrs =
-        attrs
-        |> Map.put(:mentions, Map.values(mentions) || [])
-        |> Map.put(:hashtags, Map.values(hashtags) || [])
-        |> parse_and_prepare_contents(
-          creator,
-          opts ++ [mentions: false, hashtags: false, custom_emoji: false]
-        )
-        |> Map.update(:urls, [], fn links ->
-          Enum.reject(links, fn url ->
-            url in mention_urls or url in hashtag_urls
-          end)
-          |> debug("filtered urls")
+        # Extract URLs from all HTML content fields
+        (extract_urls_from_html(get_attr(attrs, :name)) ++
+           extract_urls_from_html(get_attr(attrs, :summary)) ++
+           extract_urls_from_html(get_attr(attrs, :html_body)))
+        |> debug("extracted urls")
+        |> Enum.reject(fn url ->
+          url in exclude_urls
         end)
+        |> Enum.uniq()
+        |> debug("filtered urls")
+      end
 
-      merge_with_body_or_nil(attrs, %{
-        html_body:
-          get_attr(attrs, :html_body)
-          |> rewrite_remote_links(mentions, hashtags, mention_urls, hashtag_urls),
-        name:
-          get_attr(attrs, :name)
-          |> rewrite_remote_links(mentions, hashtags, mention_urls, hashtag_urls),
-        summary:
-          get_attr(attrs, :summary)
-          |> rewrite_remote_links(mentions, hashtags, mention_urls, hashtag_urls)
-        # mentions: Map.values(mentions) || [],
-        # hashtags: Map.values(hashtags) || []
-      })
-    else
-      # Fallback to simple processing without link detection (existing behavior)
-      merge_with_body_or_nil(attrs, %{
-        html_body:
-          get_attr(attrs, :html_body)
-          |> rewrite_remote_links(mentions, hashtags)
-          |> prepare_text(creator, opts),
-        name:
-          get_attr(attrs, :name)
-          |> rewrite_remote_links(mentions, hashtags)
-          |> prepare_text(creator, opts),
-        summary:
-          get_attr(attrs, :summary)
-          |> rewrite_remote_links(mentions, hashtags)
-          |> prepare_text(creator, opts),
-        languages: maybe_detect_languages(attrs),
-        mentions: Map.values(mentions) || [],
-        hashtags: Map.values(hashtags) || []
-      })
+    merge_with_body_or_nil(attrs, %{
+      html_body:
+        get_attr(attrs, :html_body)
+        |> rewrite_remote_links(mentions, hashtags)
+        |> prepare_text(creator, opts),
+      name:
+        get_attr(attrs, :name)
+        |> rewrite_remote_links(mentions, hashtags)
+        |> prepare_text(creator, opts),
+      summary:
+        get_attr(attrs, :summary)
+        |> rewrite_remote_links(mentions, hashtags)
+        |> prepare_text(creator, opts),
+      languages: maybe_detect_languages(attrs),
+      mentions: Map.values(mentions) || [],
+      hashtags: Map.values(hashtags) || [],
+      urls: urls || []
+    })
+    |> debug("prepared remote content")
+  end
+
+  @doc """
+  Extract URLs from HTML content using LazyHTML, filtering out mention and hashtag URLs.
+  """
+  defp extract_urls_from_html(html_content)
+  defp extract_urls_from_html(nil), do: []
+  defp extract_urls_from_html(""), do: []
+
+  defp extract_urls_from_html(html_content) when is_binary(html_content) do
+    try do
+      html_content
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("a[href]")
+      |> LazyHTML.attribute("href")
+      |> Enum.filter(fn url ->
+        # Basic URL validation - ensure it's a proper URL
+        String.starts_with?(url, ["http://", "https://", "ftp://", "mailto:"]) or
+          String.contains?(url, "://")
+      end)
+    rescue
+      error ->
+        error(
+          error,
+          "Failed to parse HTML content for URL extraction, falling back to empty list"
+        )
+
+        []
     end
-    |> debug()
   end
 
   @doc "Given post content attributes, prepares it for processing by just cleaning up the text and detecting languages."
