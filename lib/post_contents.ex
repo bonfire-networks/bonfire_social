@@ -186,6 +186,9 @@ defmodule Bonfire.Social.PostContents do
   def parse_and_prepare_contents(attrs, creator, opts) do
     debug("process post contents for tags/mentions")
 
+    do_not_strip_html? = e(opts, :do_not_strip_html, nil)
+    output_format = opts[:output_format]
+
     # TODO: refactor this?
     with {:ok,
           %{
@@ -194,18 +197,16 @@ defmodule Bonfire.Social.PostContents do
             hashtags: hashtags1,
             urls: urls1
           }} <-
-           Bonfire.Social.Tags.maybe_process(
+           process_local_input(
+             :html_body,
              creator,
-             get_attr(attrs, :html_body)
-             |> maybe_sane_html(e(opts, :do_not_strip_html, nil), true),
+             attrs,
+             do_not_strip_html?,
+             output_format,
              opts
            ),
          {:ok, %{text: name, mentions: mentions2, hashtags: hashtags2, urls: urls2}} <-
-           Bonfire.Social.Tags.maybe_process(
-             creator,
-             get_attr(attrs, :name) |> maybe_sane_html(e(opts, :do_not_strip_html, nil), true),
-             opts
-           ),
+           process_local_input(:name, creator, attrs, do_not_strip_html?, output_format, opts),
          {:ok,
           %{
             text: summary,
@@ -213,18 +214,22 @@ defmodule Bonfire.Social.PostContents do
             hashtags: hashtags3,
             urls: urls3
           }} <-
-           Bonfire.Social.Tags.maybe_process(
-             creator,
-             get_attr(attrs, :summary)
-             |> maybe_sane_html(e(opts, :do_not_strip_html, nil), true),
-             opts
-           ) do
+           process_local_input(:summary, creator, attrs, do_not_strip_html?, output_format, opts) do
+      # # little easter egg to test error handling
+      # if String.contains?(html_body, "/crash!"), do: raise("User-triggered crash")
+
       merge_with_body_or_nil(
         attrs,
         %{
-          name: prepare_text(name, creator, opts ++ [do_not_strip_html: true]),
-          summary: prepare_text(summary, creator, opts ++ [do_not_strip_html: true]),
-          html_body: prepare_text(html_body, creator, opts ++ [do_not_strip_html: true]),
+          name:
+            normalise_input(name, do_not_strip_html?, output_format)
+            |> prepare_text(creator, opts ++ [do_not_strip_html: true]),
+          summary:
+            normalise_input(summary, do_not_strip_html?, output_format)
+            |> prepare_text(creator, opts ++ [do_not_strip_html: true]),
+          html_body:
+            normalise_input(html_body, do_not_strip_html?, output_format)
+            |> prepare_text(creator, opts ++ [do_not_strip_html: true]),
           mentions: e(attrs, :mentions, []) ++ mentions1 ++ mentions2 ++ mentions3,
           hashtags: e(attrs, :hashtags, []) ++ hashtags1 ++ hashtags2 ++ hashtags3,
           urls: urls1 ++ urls2 ++ urls3,
@@ -236,83 +241,91 @@ defmodule Bonfire.Social.PostContents do
     end
   end
 
+  defp process_local_input(field, creator, attrs, do_not_strip_html?, output_format, opts) do
+    Bonfire.Social.Tags.maybe_process(
+      creator,
+      get_attr(attrs, field),
+      #  |> normalise_input(do_not_strip_html?, output_format),
+      opts
+    )
+    |> debug("processed local input")
+  end
+
   @doc "Given attributes of a remote post, prepares it for processing by detecting languages, and rewriting mentions, hashtags, and urls"
   defp prepare_remote_content(attrs, creator, opts) do
     # debug(creator)
 
+    parse_remote_links? = opts[:parse_remote_links]
+
     mentions = e(attrs, :mentions, %{})
     hashtags = e(attrs, :hashtags, %{})
 
-    # If link processing is enabled, extract existing URLs from HTML using LazyHTML
-    urls =
-      if opts[:parse_remote_links] do
-        debug("extract existing links from remote post HTML content")
+    mentions_and_hashtags = Map.merge(mentions, hashtags)
+    exclude_urls = Map.keys(mentions_and_hashtags)
 
-        # Extract mention/hashtag URLs to filter them out from link processing
-        mention_urls = Map.keys(mentions) |> Enums.filter_empty([])
-        hashtag_urls = Map.keys(hashtags) |> Enums.filter_empty([])
-        exclude_urls = mention_urls ++ hashtag_urls
-
-        # Extract URLs from all HTML content fields
-        (extract_urls_from_html(get_attr(attrs, :name)) ++
-           extract_urls_from_html(get_attr(attrs, :summary)) ++
-           extract_urls_from_html(get_attr(attrs, :html_body)))
+    with {:ok,
+          %{
+            html: html_body,
+            urls: urls1
+          }} <-
+           get_attr(attrs, :html_body)
+           |> process_remote_input(parse_remote_links?, mentions_and_hashtags),
+         {:ok, %{html: name, urls: urls2}} <-
+           get_attr(attrs, :name)
+           |> process_remote_input(parse_remote_links?, mentions_and_hashtags),
+         {:ok,
+          %{
+            html: summary,
+            urls: urls3
+          }} <-
+           get_attr(attrs, :summary)
+           |> process_remote_input(parse_remote_links?, mentions_and_hashtags) do
+      urls =
+        (urls1 ++ urls2 ++ urls3)
         |> debug("extracted urls")
         |> Enum.reject(fn url ->
           url in exclude_urls
         end)
         |> Enum.uniq()
         |> debug("filtered urls")
-      end
 
-    merge_with_body_or_nil(attrs, %{
-      html_body:
-        get_attr(attrs, :html_body)
-        |> rewrite_remote_links(mentions, hashtags)
-        |> prepare_text(creator, opts),
-      name:
-        get_attr(attrs, :name)
-        |> rewrite_remote_links(mentions, hashtags)
-        |> prepare_text(creator, opts),
-      summary:
-        get_attr(attrs, :summary)
-        |> rewrite_remote_links(mentions, hashtags)
-        |> prepare_text(creator, opts),
-      languages: maybe_detect_languages(attrs),
-      mentions: Map.values(mentions) || [],
-      hashtags: Map.values(hashtags) || [],
-      urls: urls || []
-    })
-    |> debug("prepared remote content")
+      merge_with_body_or_nil(attrs, %{
+        html_body: prepare_text(html_body, creator, opts),
+        name: prepare_text(name, creator, opts),
+        summary: prepare_text(summary, creator, opts),
+        languages: maybe_detect_languages(attrs),
+        mentions: Map.values(mentions) || [],
+        hashtags: Map.values(hashtags) || [],
+        urls: urls || []
+      })
+      |> debug("prepared remote content")
+    end
   end
 
-  @doc """
-  Extract URLs from HTML content using LazyHTML, filtering out mention and hashtag URLs.
-  """
-  defp extract_urls_from_html(html_content)
-  defp extract_urls_from_html(nil), do: []
-  defp extract_urls_from_html(""), do: []
+  defp process_remote_input(input, true = _parse_remote_links?, mentions_and_hashtags) do
+    input
+    # first do all the other parsing
+    |> do_process_remote_input(nil)
+    # then when enabled, extract URLs
+    |> Text.extract_urls_from_html() || {:ok, %{html: nil, urls: []}}
+  end
 
-  defp extract_urls_from_html(html_content) when is_binary(html_content) do
-    try do
-      html_content
-      |> LazyHTML.from_fragment()
-      |> LazyHTML.query("a[href]")
-      |> LazyHTML.attribute("href")
-      |> Enum.filter(fn url ->
-        # Basic URL validation - ensure it's a proper URL
-        String.starts_with?(url, ["http://", "https://", "ftp://", "mailto:"]) or
-          String.contains?(url, "://")
-      end)
-    rescue
-      error ->
-        error(
-          error,
-          "Failed to parse HTML content for URL extraction, falling back to empty list"
-        )
+  defp process_remote_input(input, _false, mentions_and_hashtags) do
+    {:ok,
+     %{
+       html:
+         input
+         |> do_process_remote_input(mentions_and_hashtags),
+       urls: []
+     }}
+  end
 
-        []
-    end
+  defp do_process_remote_input(input, mentions_and_hashtags) do
+    input
+    |> normalise_input(false, :html)
+    |> Text.replace_links(mentions_and_hashtags)
+
+    # |> normalise_ap_links(:html)
   end
 
   @doc "Given post content attributes, prepares it for processing by just cleaning up the text and detecting languages."
@@ -325,34 +338,6 @@ defmodule Bonfire.Social.PostContents do
       mentions: e(attrs, :mentions, [])
     })
   end
-
-  defp rewrite_remote_links(text, mentions, hashtags, mention_urls \\ nil, hashtag_urls \\ nil)
-       when is_binary(text) and (mentions != %{} or hashtags != %{}) do
-    # WIP: find mentions with `[...] mention` class, and hashtags with `class=\"[...] hashtag\" rel=\"tag\"` and rewrite the URLs to point to local instance OR use the `tags` AS field to know what hashtag/user URLs are likely to be found in the body and just find and replace those?"
-
-    mention_urls =
-      mention_urls ||
-        mentions
-        # |> debug()
-        |> Map.keys()
-        |> Enums.filter_empty([])
-
-    hashtag_urls =
-      hashtag_urls ||
-        hashtags
-        # |> debug()
-        |> Map.keys()
-        |> Enums.filter_empty([])
-
-    text
-    |> String.replace(
-      mention_urls,
-      &path(e(mentions, &1, nil) || ActivityPub.Actor.format_username(&1) || &1)
-    )
-    |> String.replace(hashtag_urls, &(path(e(hashtags, &1, nil)) || &1))
-  end
-
-  defp rewrite_remote_links(text, _, _, _, _), do: text
 
   def all_text_content(attrs) do
     "#{get_attr(attrs, :name)}\n#{get_attr(attrs, :summary)}\n#{get_attr(attrs, :html_body)}\n#{get_attr(attrs, :note)}"
@@ -395,53 +380,135 @@ defmodule Bonfire.Social.PostContents do
       e(attrs, :post_content, key, nil) || e(attrs, :post, key, nil)
   end
 
-  def prepare_text(text, creator, opts) when is_binary(text) and text != "" do
-    # little easter egg to test error handling
-    if String.contains?(text, "/crash!"), do: raise("User-triggered crash")
+  defp normalise_input(text, do_not_strip_html? \\ false, fix_wysiwyg_input \\ false)
+  defp normalise_input(nil, _, _), do: nil
 
+  defp normalise_input(text, do_not_strip_html?, :markdown) when is_binary(text) do
     text
-    # if not using an HTML-based WYSIWYG editor, we store the raw markdown
-    # |> maybe_process_markdown(creator)
-    # transform emoticons to emojis
-    # |> debug()
-    # |> debug()
-    # |> Text.normalise_links(:markdown)
+    # special for MD links coming from milkdown
+    |> Regex.replace(~r/<(http[^>]+)>/U, ..., " \\1 ")
+    |> Regex.replace(~r/@<([^>]+)>/U, ..., " @\\1 ")
+    # for @user@domain.tld
+    |> String.replace("\\@", "@")
+    |> normalise_input(do_not_strip_html?, nil)
+  end
+
+  defp normalise_input(text, true, format) do
+    text
+  end
+
+  defp normalise_input(text, _, format) do
+    text
     # maybe remove potentially dangerous or dirty markup
-    |> maybe_sane_html(e(opts, :do_not_strip_html, nil))
-    |> Text.maybe_emote(creator, opts)
-    # make sure we end up with valid HTML
-    |> Text.maybe_normalize_html()
-    |> debug()
-  end
-
-  def prepare_text("", _, _opts), do: nil
-  def prepare_text(other, _, _opts), do: other
-
-  defp maybe_sane_html(text, do_not_strip_html \\ false, fix_wysiwyg_input \\ false)
-  defp maybe_sane_html(nil, _, _), do: nil
-
-  defp maybe_sane_html(text, do_not_strip_html, true) when is_binary(text),
-    do:
-      text
-      # special for MD links coming from milkdown
-      |> Regex.replace(~r/<(http[^>]+)>/U, ..., " \\1 ")
-      |> Regex.replace(~r/@<([^>]+)>/U, ..., " @\\1 ")
-      # for @user@domain.tld
-      |> String.replace("\\@", "@")
-      |> maybe_sane_html(do_not_strip_html, nil)
-
-  defp maybe_sane_html(text, true, _),
-    do:
-      text
-      |> Text.normalise_links(:markdown)
-
-  defp maybe_sane_html(text, _, _) do
-    text
-    #  open remote links in new tab (need to do this before maybe_sane_html)
-    # TODO: set format based on current editor
     |> Text.maybe_sane_html()
-    |> Text.normalise_links(:markdown)
   end
+
+  def prepare_text(nil, _, _opts), do: nil
+  def prepare_text("", _, _opts), do: nil
+  # def prepare_text(text, creator, opts) when is_binary(text) do
+  #   text
+  #   # if not using an HTML-based WYSIWYG editor, we store the raw markdown
+  #   # |> maybe_process_markdown(creator)
+  #   # |> Text.normalise_ap_links(:markdown)
+  #   # |> normalise_input(e(opts, :do_not_strip_html, nil))
+  #   # transform emoticons to emojis
+  #   |> Text.maybe_emote(creator, opts)
+  #   # make sure we end up with valid HTML
+  #   |> debug("prepared html")
+  # end
+  def prepare_text(other, creator, opts) do
+    case other
+         # |> debug("pre-normalise_ap_links")
+         |> normalise_ap_links(opts[:output_format] || :markdown)
+         # |> debug("post normalise_ap_links")
+         |> Text.as_html() do
+      html when is_binary(html) ->
+        html
+        |> Text.maybe_emote(creator, opts)
+
+      nil ->
+        nil
+    end
+    |> debug("prepared html")
+  end
+
+  @doc """
+  Normalizes AP links in the content based on format.
+
+  ## Examples
+
+      > normalise_ap_links("<a href=\"/pub/actors/foo\">Actor</a>", :markdown)
+      "<a href=\"/character/foo\">Actor</a>"
+  """
+  def normalise_ap_links(input, format)
+
+  def normalise_ap_links(input, :html) do
+    local_instance = Bonfire.Common.URIs.base_url()
+
+    input
+    |> Text.as_html_tree()
+    |> LazyHTML.Tree.postwalk(fn
+      {"a", attrs, children} = node ->
+        case List.keyfind(attrs, "href", 0) do
+          {"href", href} ->
+            new_href =
+              href
+              |> String.replace_leading(local_instance, "")
+
+            new_href =
+              new_href
+              |> String.replace_leading("/pub/actors/", "/character/")
+              |> String.replace_leading("/pub/objects/", "/discussion/")
+
+            if new_href != href do
+              new_attrs = List.keyreplace(attrs, "href", 0, {"href", new_href})
+              {"a", new_attrs, children}
+            else
+              node
+            end
+
+          nil ->
+            node
+        end
+
+      node ->
+        node
+    end)
+  end
+
+  def normalise_ap_links(content, :markdown)
+      when is_binary(content) and byte_size(content) > 20 do
+    local_instance = Bonfire.Common.URIs.base_url()
+
+    content
+    # handle AP actors
+    |> Regex.replace(
+      md_ap_actors_regex(local_instance),
+      ...,
+      "\\1/character/\\2"
+    )
+    # handle AP objects
+    |> Regex.replace(
+      md_ap_objects_regex(local_instance),
+      ...,
+      "\\1/discussion/\\2"
+    )
+    # handle local links
+    |> Regex.replace(
+      md_local_links_regex(local_instance),
+      ...,
+      "\\1\\2"
+    )
+
+    # |> debug(content)
+  end
+
+  def normalise_ap_links(content, _format), do: content
+
+  # Regex patterns for normalizing links
+  defp md_ap_actors_regex(local_instance), do: ~r/(\()#{local_instance}\/pub\/actors\/(.+\))/U
+  defp md_ap_objects_regex(local_instance), do: ~r/(\()#{local_instance}\/pub\/objects\/(.+\))/U
+  defp md_local_links_regex(local_instance), do: ~r/(\]\()#{local_instance}(.+\))/U
 
   def editor_output_content_type(user) do
     if Bonfire.Common.Settings.get(
