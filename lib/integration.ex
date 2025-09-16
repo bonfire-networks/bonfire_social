@@ -66,7 +66,8 @@ defmodule Bonfire.Social do
         subject,
         object,
         opts \\ []
-      ) do
+      )
+      when is_map(object) do
     with {:ok, ap_activity} <-
            maybe_federate_activity(subject, object, opts[:verb], opts[:object], opts)
            |> debug("result of maybe_federate_activity") do
@@ -196,7 +197,12 @@ defmodule Bonfire.Social do
     maybe_federate(subject || edge_subject, verb, object_override || parent_object, nil, opts)
   end
 
-  defp maybe_federate_activity(_subject, activity, _verb, _object, _opts) do
+  defp maybe_federate_activity(_subject, activity, _verb, object, _opts) do
+    debug(
+      object,
+      "Cannot federate: got no activity for object"
+    )
+
     err(
       activity,
       "Cannot federate: Expected an Activity, or an object containing one"

@@ -13,7 +13,7 @@ defmodule Bonfire.Social.Import do
   # alias Bonfire.Me.Characters
   use Bonfire.Common.E
   use Bonfire.Common.Localise
-  alias Bonfire.Common.Settings
+  use Bonfire.Common.Settings
   alias Bonfire.Common.Utils
   alias Bonfire.Common.Enums
   alias Bonfire.Me.Users

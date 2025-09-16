@@ -51,6 +51,10 @@ defmodule Bonfire.Social.Acts.Federate do
         maybe_debug(epic, act, on, "ActivityPub: Skipping due to `on` option")
         nil
 
+      is_nil(object) ->
+        warn(current_user, "ActivityPub: Skipping due to missing object")
+        nil
+
       # not is_binary(current_user_id) ->
       #   warn(current_user, "ActivityPub: Skipping due to missing current_user")
       #   nil

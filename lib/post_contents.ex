@@ -261,7 +261,14 @@ defmodule Bonfire.Social.PostContents do
     hashtags = e(attrs, :hashtags, %{})
 
     mentions_and_hashtags = Map.merge(mentions, hashtags)
+
     exclude_urls = Map.keys(mentions_and_hashtags)
+
+    replacement_urls =
+      mentions_and_hashtags
+      |> Enum.map(fn {url, object} ->
+        {url, path(object) || path(ActivityPub.Actor.format_username(object))}
+      end)
 
     with {:ok,
           %{
@@ -269,17 +276,17 @@ defmodule Bonfire.Social.PostContents do
             urls: urls1
           }} <-
            get_attr(attrs, :html_body)
-           |> process_remote_input(parse_remote_links?, mentions_and_hashtags),
+           |> process_remote_input(parse_remote_links?, replacement_urls),
          {:ok, %{html: name, urls: urls2}} <-
            get_attr(attrs, :name)
-           |> process_remote_input(parse_remote_links?, mentions_and_hashtags),
+           |> process_remote_input(parse_remote_links?, replacement_urls),
          {:ok,
           %{
             html: summary,
             urls: urls3
           }} <-
            get_attr(attrs, :summary)
-           |> process_remote_input(parse_remote_links?, mentions_and_hashtags) do
+           |> process_remote_input(parse_remote_links?, replacement_urls) do
       urls =
         (urls1 ++ urls2 ++ urls3)
         |> debug("extracted urls")
@@ -302,30 +309,30 @@ defmodule Bonfire.Social.PostContents do
     end
   end
 
-  defp process_remote_input(input, true = _parse_remote_links?, mentions_and_hashtags) do
+  defp process_remote_input(input, true = _parse_remote_links?, replacement_urls) do
     input
     # first do all the other parsing
-    |> do_process_remote_input(nil)
+    |> do_process_remote_input(replacement_urls)
     # then when enabled, extract URLs
     |> Text.extract_urls_from_html() || {:ok, %{html: nil, urls: []}}
   end
 
-  defp process_remote_input(input, _false, mentions_and_hashtags) do
+  defp process_remote_input(input, _false, replacement_urls) do
     {:ok,
      %{
        html:
          input
-         |> do_process_remote_input(mentions_and_hashtags),
+         |> do_process_remote_input(replacement_urls),
        urls: []
      }}
   end
 
-  defp do_process_remote_input(input, mentions_and_hashtags) do
+  defp do_process_remote_input(input, replacement_urls) do
     input
     |> normalise_input(false, :html)
-    |> Text.replace_links(mentions_and_hashtags)
+    |> Text.replace_links(replacement_urls)
 
-    # |> normalise_ap_links(:html)
+    # |> nomalise_local_links(:html)
   end
 
   @doc "Given post content attributes, prepares it for processing by just cleaning up the text and detecting languages."
@@ -409,7 +416,7 @@ defmodule Bonfire.Social.PostContents do
   #   text
   #   # if not using an HTML-based WYSIWYG editor, we store the raw markdown
   #   # |> maybe_process_markdown(creator)
-  #   # |> Text.normalise_ap_links(:markdown)
+  #   # |> Text.nomalise_local_links(:markdown)
   #   # |> normalise_input(e(opts, :do_not_strip_html, nil))
   #   # transform emoticons to emojis
   #   |> Text.maybe_emote(creator, opts)
@@ -418,9 +425,9 @@ defmodule Bonfire.Social.PostContents do
   # end
   def prepare_text(other, creator, opts) do
     case other
-         # |> debug("pre-normalise_ap_links")
-         |> normalise_ap_links(opts[:output_format] || :markdown)
-         # |> debug("post normalise_ap_links")
+         # |> debug("pre-nomalise_local_links")
+         |> nomalise_local_links(opts[:output_format] || :markdown)
+         # |> debug("post nomalise_local_links")
          |> Text.as_html() do
       html when is_binary(html) ->
         html
@@ -437,12 +444,12 @@ defmodule Bonfire.Social.PostContents do
 
   ## Examples
 
-      > normalise_ap_links("<a href=\"/pub/actors/foo\">Actor</a>", :markdown)
+      > nomalise_local_links("<a href=\"/pub/actors/foo\">Actor</a>", :markdown)
       "<a href=\"/character/foo\">Actor</a>"
   """
-  def normalise_ap_links(input, format)
+  def nomalise_local_links(input, format)
 
-  def normalise_ap_links(input, :html) do
+  def nomalise_local_links(input, :html) do
     local_instance = Bonfire.Common.URIs.base_url()
 
     input
@@ -476,7 +483,7 @@ defmodule Bonfire.Social.PostContents do
     end)
   end
 
-  def normalise_ap_links(content, :markdown)
+  def nomalise_local_links(content, :markdown)
       when is_binary(content) and byte_size(content) > 20 do
     local_instance = Bonfire.Common.URIs.base_url()
 
@@ -503,7 +510,7 @@ defmodule Bonfire.Social.PostContents do
     # |> debug(content)
   end
 
-  def normalise_ap_links(content, _format), do: content
+  def nomalise_local_links(content, _format), do: content
 
   # Regex patterns for normalizing links
   defp md_ap_actors_regex(local_instance), do: ~r/(\()#{local_instance}\/pub\/actors\/(.+\))/U
@@ -716,7 +723,9 @@ defmodule Bonfire.Social.PostContents do
 
   @doc "Prepare an outgoing ActivityPub Note object for publishing."
   def ap_prepare_object_note(subject, verb, post, actor, mentions, context, reply_to) do
-    html_body = e(post, :post_content, :html_body, nil)
+    html_body =
+      e(post, :post_content, :html_body, nil)
+      |> Text.make_links_absolute(:markdown)
 
     hashtags =
       Bonfire.Social.Tags.list_tags_hashtags(post)
@@ -769,11 +778,16 @@ defmodule Bonfire.Social.PostContents do
       # TODO: put somewhere reusable by other types:
       "sensitive" => e(post, :sensitive, :is_sensitive, false),
       "name" => e(post, :post_content, :name, nil),
-      "summary" => e(post, :post_content, :summary, nil),
+      "summary" =>
+        Text.maybe_markdown_to_html(
+          e(post, :post_content, :summary, nil)
+          |> Text.make_links_absolute(:markdown),
+          sanitize: true
+        ),
       "content" =>
         Text.maybe_markdown_to_html(
           html_body,
-          # we don't want to escape HTML in local content
+          # we don't want to escape HTML in local content:
           sanitize: true
         ),
       "source" => %{

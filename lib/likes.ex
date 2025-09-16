@@ -503,10 +503,13 @@ defmodule Bonfire.Social.Likes do
         %{data: %{"type" => "Like"}} = _activity,
         object
       ) do
+    debug(object, "Like object")
+
     Bonfire.Federate.ActivityPub.AdapterUtils.return_pointable(object,
       current_user: liker,
       verbs: [:like]
     )
+    |> debug("returned pointable")
     ~> like(liker, ..., local: false)
   end
 
