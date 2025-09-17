@@ -468,6 +468,16 @@ defmodule Bonfire.Social.Quotes do
       {:error, other} ->
         err(other, "Unexpected error fetching quote authorization")
     end
+    |> case do
+      {:not_authorized, reason} ->
+        info(reason, "Quote authorization invalid or revoked, removing quote tag if present")
+        reject_quote(quote_post, quoted_object)
+
+        {:not_authorized, reason}
+
+      other ->
+        other
+    end
   end
 
   defp get_first_quoted_object(quote_post) do
