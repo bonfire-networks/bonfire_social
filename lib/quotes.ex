@@ -178,7 +178,7 @@ defmodule Bonfire.Social.Quotes do
     # debug(opts, "opts")
 
     with {:ok, %{edge: %{object: quoted_object, subject: quote_post}} = request} <-
-           Requests.accept(request, opts) |> debug("accepted_quote"),
+           Requests.accept(request, opts) |> debug("accepted_quote on #{repo()}"),
          quoted_creator =
            (quoted_creator ||
               e(request, :edge, :object, :created, :creator, nil) ||
@@ -218,9 +218,6 @@ defmodule Bonfire.Social.Quotes do
            )
            |> debug("published_update_for_quote_post") do
       {:ok, quote_post}
-    else
-      e ->
-        error(e, l("An error occurred while accepting the quote request"))
     end
   end
 
@@ -251,10 +248,13 @@ defmodule Bonfire.Social.Quotes do
       {:ok, ignored_request}
   """
   def reject(request, opts) do
-    reject(request, e(request, :edge, :subject, nil), e(request, :edge, :object, nil), opts)
+    Requests.requested(request)
+    |> flood("request to reject")
+    ~> reject(..., e(..., :edge, :subject, nil), e(..., :edge, :object, nil), opts)
   end
 
-  def reject(request, quote_object, quoted_object, opts) do
+  def reject(request, quote_object, quoted_object, opts)
+      when is_struct(quote_object) and is_struct(quoted_object) do
     quote_object =
       quote_object
       |> repo().maybe_preload(created: [creator: [:character]])
@@ -263,13 +263,28 @@ defmodule Bonfire.Social.Quotes do
       quoted_object
       |> repo().maybe_preload(created: [creator: [:character]])
 
+    quoted_creator =
+      (e(request, :edge, :object, :created, :creator, nil) ||
+         e(quoted_object, :created, :creator, nil) ||
+         e(request, :edge, :object, :created, :creator_id, nil) ||
+         e(quoted_object, :created, :creator_id, nil))
+      |> debug("determined_quoted_creator")
+
     with {:ok, request} <- Requests.ignore(request, opts) |> debug("ignored_quote_request"),
-         {:ok, _} <-
+         {:ok, quote_object} <-
            update_quote_remove(quote_object, quoted_object) |> debug("removed_quote_tag"),
          {:ok, _} <-
            federate_reject(opts[:verb], request, quote_object, quoted_object)
-           |> debug("ap_rejected_quote_request") do
-      {:ok, request}
+           |> debug("ap_rejected_quote_request"),
+         # Then send Update for the now-unauthorized quote post (only if this is a local quote_post)
+         {:ok, quote_post} <-
+           Social.maybe_federate_and_gift_wrap_activity(
+             quoted_creator,
+             quote_object,
+             opts ++ [verb: :update]
+           )
+           |> debug("published_update_for_quote_post") do
+      {:ok, quote_post}
     end
   end
 
@@ -279,9 +294,19 @@ defmodule Bonfire.Social.Quotes do
            |> debug("ap_quote_object"),
          {:ok, quote_auth} <-
            ActivityPub.Object.get_cached(ap_id: ap_quote_object.data["quoteAuthorization"])
-           |> debug("ap_quote_object"),
-         {:ok, result} <- ActivityPub.delete(quote_auth) do
+           |> debug("ap_quoteAuthorization"),
+         {:ok, result} <-
+           ActivityPub.delete(quote_auth,
+             bcc: e(ap_quote_object, :data, "to", []) ++ e(ap_quote_object, :data, "cc", [])
+           ) do
       {:ok, result}
+    else
+      {:error, :not_found} ->
+        debug("No quoteAuthorization found, nothing to delete")
+        {:ok, :ignore}
+
+      e ->
+        error(e, "Error while attempting to federate the rejection")
     end
   end
 
@@ -318,6 +343,13 @@ defmodule Bonfire.Social.Quotes do
              local: true
            }) do
       {:ok, result}
+    else
+      {:error, :not_found} ->
+        warn("No AP object found for the quote post, quoted post, or actor, so skip federation")
+        {:ok, :ignore}
+
+      e ->
+        error(e, "Error while attempting to federate the rejection")
     end
   end
 
@@ -339,6 +371,10 @@ defmodule Bonfire.Social.Quotes do
     debug(quoted_object, "tags to remove from thing")
 
     Bonfire.Tag.Tagged.thing_tags_remove(quote_post, quoted_object)
+
+    {:ok,
+     quote_post
+     |> repo().maybe_preload([:tags], force: true)}
   end
 
   @doc """
@@ -364,7 +400,8 @@ defmodule Bonfire.Social.Quotes do
   def fetch_fresh_quote_authorization(quote_post, quoted_object \\ nil) do
     quoted_object = quoted_object || get_first_quoted_object(quote_post)
 
-    with {:ok, %{data: ap_json}} <- ActivityPub.Object.get_cached(pointer: quote_post),
+    with {:ok, %{data: ap_json}} <-
+           ActivityPub.Object.get_cached(pointer: quote_post) |> debug("quote_ap_json"),
          quote_auth_url when is_binary(quote_auth_url) <- ap_json["quoteAuthorization"],
          {:ok, authorization} <-
            ActivityPub.Federator.Fetcher.fetch_fresh_object_from_id(quote_auth_url,
@@ -405,11 +442,13 @@ defmodule Bonfire.Social.Quotes do
       {:error, :invalid}
   """
   def verify_quote_authorization(quote_post, quoted_object \\ nil, authorization \\ nil) do
-    quoted_object = quoted_object || get_first_quoted_object(quote_post)
+    quoted_object =
+      (quoted_object || get_first_quoted_object(quote_post))
+      |> flood("quoted_object for verification")
 
     case authorization || fetch_fresh_quote_authorization(quote_post, quoted_object) do
       {:ok, authorization} ->
-        case ActivityPub.Object.deleted?(authorization) do
+        case ActivityPub.Object.is_deleted?(authorization) do
           true ->
             {:not_authorized, "Quote authorization was revoked"}
 
@@ -455,18 +494,31 @@ defmodule Bonfire.Social.Quotes do
          {:ok, quoted_actor} <- ActivityPub.Actor.get_cached(pointer: quoted_creator_id) do
       cond do
         # Check that authorization references correct objects
-        auth_data["object"] != quote_ap_object.data["id"] ->
+        auth_data["interactingObject"] != quote_ap_object.data["id"] ->
+          error(
+            auth_data["interactingObject"],
+            "authorization object does not match quote post ID"
+          )
+
           error(quote_ap_object.data["id"], "Quote post ID does not match authorization object")
 
-        auth_data["context"] != quoted_ap_object.data["id"] ->
+        auth_data["interactionTarget"] != quoted_ap_object.data["id"] ->
+          error(
+            auth_data["interactionTarget"],
+            "authorization target does not match quote post ID"
+          )
+
           error(
             quoted_ap_object.data["id"],
-            "Quoted object ID does not match authorization context"
+            "Quoted object ID does not match authorization target"
           )
 
         # Check that authorization is signed by quoted object's creator
-        auth_data["actor"] != quoted_actor.ap_id ->
-          error(auth_data["actor"], "Authorization actor does not match quoted object's creator")
+        auth_data["attributedTo"] != quoted_actor.ap_id ->
+          error(
+            auth_data["attributedTo"],
+            "Authorization actor does not match quoted object's creator"
+          )
 
         true ->
           {:ok, :valid}

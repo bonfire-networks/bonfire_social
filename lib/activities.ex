@@ -703,7 +703,7 @@ defmodule Bonfire.Social.Activities do
           [tags: [:character, profile: :icon]]
 
         :quote_tags ->
-          # Quote posts
+          # Quote posts - TODO: only preload actual posts? excluding hashtags and mentions etc
           [tags: [:character, :post_content, created: [creator: [:profile, :character]]]]
 
         :with_subject ->

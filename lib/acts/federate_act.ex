@@ -90,13 +90,13 @@ defmodule Bonfire.Social.Acts.Federate do
       not Social.is_local?(current_user) or not Social.is_local?(object) ->
         warn(current_user, "ActivityPub: Skip pushing remote object")
 
-        # do this anyway because we might need to create pending quote requests for local objects
-        maybe_create_pending_quote_requests(
-          current_user,
-          epic.assigns[:request_quotes],
-          object,
-          options
-        )
+        # should we do this here?
+        # maybe_create_pending_quote_requests(
+        #   current_user,
+        #   epic.assigns[:request_quotes],
+        #   object,
+        #   options
+        # )
 
         nil
 

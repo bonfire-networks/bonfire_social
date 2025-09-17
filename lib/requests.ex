@@ -160,10 +160,10 @@ defmodule Bonfire.Social.Requests do
       iex> requested(request, current_user: me)
       {:ok, request}
   """
-  defp requested(request, opts \\ [])
-  defp requested(%Request{id: _} = request, _opts), do: {:ok, request}
+  def requested(request, opts \\ [])
+  def requested(%Request{id: _} = request, _opts), do: {:ok, request}
 
-  defp requested(request, opts),
+  def requested(request, opts),
     do:
       get(
         [
@@ -487,7 +487,12 @@ defmodule Bonfire.Social.Requests do
       ap_publish_activity(subject, {:accept_to, accept_to}, ap_object)
     else
       e ->
-        err(e, "Could not find the request to accept #{request_id}")
+        warn(
+          request,
+          "Could not find AP object for this request to accept, assuming it's local-only"
+        )
+
+        :ok
     end
   end
 
