@@ -29,7 +29,8 @@ defmodule Bonfire.Social.Quotes do
       {"Delete", "QuoteAuthorization"}
     ]
 
-  def quote_verb_id, do: Bonfire.Boundaries.Verbs.get_id(:annotate)
+  def quote_verb, do: :quote
+  def quote_verb_id, do: Bonfire.Boundaries.Verbs.get_id(quote_verb())
 
   @doc """
   Checks if a quote request has been made.
@@ -46,11 +47,11 @@ defmodule Bonfire.Social.Quotes do
 
   ## Examples
 
-      iex> Bonfire.Social.Quotes.requested?(user, quote_post, quoted_object)
+      iex> Bonfire.Social.Quotes.requested?(quote_post, quoted_object)
       true
   """
-  def requested?(subject, quote_post, quoted_object),
-    do: Requests.requested?(quote_post, :annotate, quoted_object)
+  def requested?(quote_post, quoted_object),
+    do: Requests.requested?(quote_post, quote_verb(), quoted_object)
 
   @doc """
   Requests permission to quote a post, checking boundaries and creating requests as needed.
@@ -85,7 +86,7 @@ defmodule Bonfire.Social.Quotes do
         {:auto_approve, quoted_object}
 
       # Check if user can annotate the post (auto-approve)
-      Bonfire.Boundaries.can?(user, :annotate, quoted_object) ->
+      Bonfire.Boundaries.can?(user, quote_verb(), quoted_object) ->
         debug(user_id, "User has permission to annotate")
         {:auto_approve, quoted_object}
 
@@ -124,7 +125,7 @@ defmodule Bonfire.Social.Quotes do
 
     # Store as a Request in our database and federate as QuoteRequest
     # subject: quote_post (can lookup creator from here)
-    # table_id: :annotate (annotation verb) 
+    # table_id: :quote verb
     # object: quoted_object (the post being quoted)
     Requests.request(
       quote_post,
@@ -249,7 +250,7 @@ defmodule Bonfire.Social.Quotes do
   """
   def reject(request, opts) do
     Requests.requested(request)
-    |> flood("request to reject")
+    |> debug("request to reject")
     ~> reject(..., e(..., :edge, :subject, nil), e(..., :edge, :object, nil), opts)
   end
 
@@ -444,7 +445,7 @@ defmodule Bonfire.Social.Quotes do
   def verify_quote_authorization(quote_post, quoted_object \\ nil, authorization \\ nil) do
     quoted_object =
       (quoted_object || get_first_quoted_object(quote_post))
-      |> flood("quoted_object for verification")
+      |> debug("quoted_object for verification")
 
     case authorization || fetch_fresh_quote_authorization(quote_post, quoted_object) do
       {:ok, authorization} ->
