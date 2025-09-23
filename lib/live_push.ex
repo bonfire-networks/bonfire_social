@@ -289,7 +289,7 @@ defmodule Bonfire.Social.LivePush do
         url = URIs.based_url(preview_assigns[:url])
 
         assigns =
-          Bonfire.UI.Social.ActivityLive.prepare(%{
+          Bonfire.UI.Social.ActivityLive.prepare_assigns(%{
             activity: activity,
             object: object,
             permalink: url
