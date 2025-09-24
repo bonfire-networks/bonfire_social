@@ -39,7 +39,7 @@ defmodule Bonfire.Social.Quotes do
 
   - `subject`: The subject (requester)
   - `quote_post`: The quote post (instrument)
-  - `quoted_object`: The quoted object 
+  - `quoted_object`: The quoted object
 
   ## Returns
 
@@ -57,7 +57,7 @@ defmodule Bonfire.Social.Quotes do
   Requests permission to quote a post, checking boundaries and creating requests as needed.
 
   Returns a tuple with {approved_quotes, pending_quotes} where:
-  - approved_quotes can be tagged immediately  
+  - approved_quotes can be tagged immediately
   - pending_quotes need quote requests after post creation
   """
   def process_quotes(user, quoted_objects, opts \\ [])
@@ -90,7 +90,7 @@ defmodule Bonfire.Social.Quotes do
         debug(user_id, "User has permission to annotate")
         {:auto_approve, quoted_object}
 
-      # Check if user can make a request about the post (manual approval)  
+      # Check if user can make a request about the post (manual approval)
       Bonfire.Boundaries.can?(user, :request, quoted_object) ->
         debug(user_id, "User needs to request")
         {:request_needed, quoted_object}
@@ -254,14 +254,15 @@ defmodule Bonfire.Social.Quotes do
     ~> reject(..., e(..., :edge, :subject, nil), e(..., :edge, :object, nil), opts)
   end
 
-  def reject(request, quote_object, quoted_object, opts)
-      when is_struct(quote_object) and is_struct(quoted_object) do
+  def reject(request, quote_object, quoted_object, opts) do
     quote_object =
-      quote_object
+      (e(request, :edge, :subject, nil) ||
+         quote_object)
       |> repo().maybe_preload(created: [creator: [:character]])
 
     quoted_object =
-      quoted_object
+      (e(request, :edge, :object, nil) ||
+         quoted_object)
       |> repo().maybe_preload(created: [creator: [:character]])
 
     quoted_creator =
@@ -431,7 +432,7 @@ defmodule Bonfire.Social.Quotes do
   ## Returns
 
   - `{:ok, :valid}` if authorization exists and is valid
-  - `{:error, :invalid}` if authorization exists but is invalid (wrong signatures, etc)  
+  - `{:error, :invalid}` if authorization exists but is invalid (wrong signatures, etc)
   - `{:error, :revoked}` if authorization was deleted/revoked or network errors
 
   ## Examples
@@ -551,7 +552,7 @@ defmodule Bonfire.Social.Quotes do
 
     request =
       repo().maybe_preload(request,
-        # :pointer, 
+        # :pointer,
         edge: [:object, subject: [created: [:creator]]]
       )
 
@@ -661,7 +662,7 @@ defmodule Bonfire.Social.Quotes do
           end
 
         {:not_permitted, _quoted_object} ->
-          # Send Reject 
+          # Send Reject
           ActivityPub.reject(%{
             actor: quoted_actor,
             to: [data["actor"]],
