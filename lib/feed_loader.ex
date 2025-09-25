@@ -85,7 +85,10 @@ defmodule Bonfire.Social.FeedLoader do
         prepare_feed_preset_and_filters(nil, custom_filters |> Map.put(:feed_name, nil), opts)
 
       {:error, e} ->
-        error(e)
+        {:error, e}
+
+      e ->
+        error(e, "Could not find a preset feed")
     end
   end
 

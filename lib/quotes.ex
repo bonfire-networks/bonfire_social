@@ -336,7 +336,7 @@ defmodule Bonfire.Social.Quotes do
            ),
          %ActivityPub.Object{} = quote_request_activity <-
            ActivityPub.Object.fetch_latest_activity(quote_actor, ap_quoted_object, "QuoteRequest")
-           |> debug("latest"),
+           |> debug("latest") || {:error, :not_found},
          {:ok, result} <-
            ActivityPub.reject(%{
              actor: quoted_actor,

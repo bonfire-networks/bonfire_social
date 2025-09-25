@@ -27,7 +27,7 @@ defmodule Bonfire.Social.Activities do
   # alias Bonfire.Data.Social.Flag
   # alias Bonfire.Data.Social.Replied
   alias Bonfire.Data.Social.Seen
-
+  alias Bonfire.Data.Edges.Request
   alias Bonfire.Data.Edges.Edge
   alias Bonfire.Data.AccessControl.Verb
   alias Bonfire.Data.Identity.User
@@ -649,12 +649,12 @@ defmodule Bonfire.Social.Activities do
           query
           |> proload(activity: [object: [:extra_info]])
 
-        # :with_quote_post_requested ->
-        #       quote_table_id = Bonfire.Social.Quotes.quote_verb_id()
+        :with_quote_post_requested ->
+          # NOTE: better only as postload
+          #   quote_table_id = Bonfire.Social.Quotes.quote_verb_id()
+          #   posts_query = from e in Edge, where: e.table_id == ^quote_table_id
+          query
 
-        #   posts_query = from e in Edge, where: e.table_id == ^quote_table_id
-
-        #   query
         #   |> proload(activity: [edge: ^{posts_query, [subject: [:profile, :character]]}])
 
         nil ->
@@ -782,7 +782,7 @@ defmodule Bonfire.Social.Activities do
 
           quote_edge_query = from e in Edge, where: e.table_id == ^quote_table_id
 
-          [edge: {quote_edge_query, [subject: [:post_content]]}]
+          [edge: {quote_edge_query, [:request, subject: [:post_content]]}]
 
         nil ->
           []
