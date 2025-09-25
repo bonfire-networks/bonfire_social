@@ -269,6 +269,7 @@ defmodule Bonfire.Social.PostContents do
       |> Enum.map(fn {url, object} ->
         {url, path(object) || path(ActivityPub.Actor.format_username(object))}
       end)
+      |> Map.new()
 
     with {:ok,
           %{
@@ -331,6 +332,7 @@ defmodule Bonfire.Social.PostContents do
     input
     |> normalise_input(false, :html)
     |> Text.replace_links(replacement_urls)
+    |> flood("replaced links #{inspect(replacement_urls)}")
 
     # |> nomalise_local_links(:html)
   end
