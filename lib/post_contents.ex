@@ -332,7 +332,7 @@ defmodule Bonfire.Social.PostContents do
     input
     |> normalise_input(false, :html)
     |> Text.replace_links(replacement_urls)
-    |> flood("replaced links #{inspect(replacement_urls)}")
+    |> debug("replaced links #{inspect(replacement_urls)}")
 
     # |> nomalise_local_links(:html)
   end
