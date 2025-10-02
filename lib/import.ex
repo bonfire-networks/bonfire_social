@@ -588,7 +588,8 @@ defmodule Bonfire.Social.Import do
       # TODO: clean/document these?
       mode: :async,
       fetch_collection: :async,
-      fetch_collection_entries: :async
+      fetch_collection_entries: :async,
+      triggered_by: "import:fetch_thread_async"
     )
     |> debug("called fetch_thread_async")
   end
@@ -616,7 +617,8 @@ defmodule Bonfire.Social.Import do
         # Insert the embedded object directly (without re-fetching)
         with {:ok, inserted_object} <-
                ActivityPub.Federator.Fetcher.cached_or_handle_incoming(activity,
-                 already_fetched: true
+                 already_fetched: true,
+                 triggered_by: "import:embedded_object"
                ) do
           maybe_fetch_thread_async(inserted_object, user)
           |> debug("Successfully inserted embedded object + scheduled thread fetching")
