@@ -262,14 +262,14 @@ defmodule Bonfire.Social.PostContents do
 
     mentions_and_hashtags = Map.merge(mentions, hashtags)
 
-    exclude_urls = Map.keys(mentions_and_hashtags)
-
     replacement_urls =
       mentions_and_hashtags
       |> Enum.map(fn {url, object} ->
-        {url, path(object) || path(ActivityPub.Actor.format_username(object))}
+        {String.downcase(url), path(object) || path(ActivityPub.Actor.format_username(object))}
       end)
       |> Map.new()
+
+    exclude_urls = Map.keys(mentions_and_hashtags)
 
     with {:ok,
           %{
@@ -292,7 +292,7 @@ defmodule Bonfire.Social.PostContents do
         (urls1 ++ urls2 ++ urls3)
         |> debug("extracted urls")
         |> Enum.reject(fn url ->
-          url in exclude_urls
+          String.downcase(url) in exclude_urls
         end)
         |> Enum.uniq()
         |> debug("filtered urls")

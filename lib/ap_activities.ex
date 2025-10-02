@@ -312,7 +312,11 @@ defmodule Bonfire.Social.APActivities do
 
   defp fetch_and_normalize_nested_object(id, embedded_object, options) do
     # Try to fetch and create the object
-    case ActivityPub.Federator.Fetcher.fetch_object_from_id(id) do
+    case ActivityPub.Federator.Fetcher.fetch_object_from_id(
+           id,
+           options
+           |> Keyword.put_new(:triggered_by, "APActivities.fetch_and_normalize_nested_object")
+         ) do
       {:ok, %ActivityPub.Object{} = fetched_object} ->
         # debug(fetched_object, "Fetched Object from ActivityPub")
         {:ok, build_pointer_map(id, fetched_object, embedded_object["type"])}
