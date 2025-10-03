@@ -20,6 +20,17 @@ defmodule Bonfire.Social.APActivities do
   use Bonfire.Common.Repo
   import Bonfire.Common.Config, only: [repo: 0]
 
+  @behaviour Bonfire.Common.QueryModule
+  @behaviour Bonfire.Common.ContextModule
+  def schema_module, do: APActivity
+  def query_module, do: __MODULE__
+
+  @behaviour Bonfire.Federate.ActivityPub.FederationModules
+  def federation_module,
+    do: [
+      # fallback for any unhandled activity types
+    ]
+
   @doc """
   Receives and processes an ActivityPub activity.
 
@@ -49,6 +60,26 @@ defmodule Bonfire.Social.APActivities do
       e(object, :data, nil) || object,
       is_public?
     )
+  end
+
+  def ap_publish_activity(subject, _, %{json: data} = ap_activity) do
+    flood(ap_activity, "AP - publishing APActivity")
+
+    with {:ok, subject_actor} <-
+           ActivityPub.Actor.get_cached(
+             pointer:
+               subject || e(ap_activity, :created, :creator, nil) ||
+                 e(ap_activity, :created, :creator_id, nil)
+           ) do
+      # TODO: special handling if ap_activity is already a Create Activity
+      ActivityPub.create(%{to: data["to"], actor: subject_actor, object: data})
+    else
+      {:error, :not_found} ->
+        :ignore
+
+      e ->
+        error(e)
+    end
   end
 
   @doc """
