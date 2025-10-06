@@ -125,6 +125,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           description: l("Things I've liked"),
           filters: %FeedFilters{activity_types: [:like]},
           parameterized: %{subjects: [:me]},
+          current_user_required: true,
           # exclude_from_nav: false,
           icon: "ph:fire-duotone",
           assigns: [
@@ -188,6 +189,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           description: l("Activities I've shared"),
           filters: %FeedFilters{activity_types: [:boost]},
           parameterized: %{subjects: [:me]},
+          current_user_required: true,
           # exclude_from_nav: false,
           icon: "ph:rocket-launch-duotone",
           assigns: [
