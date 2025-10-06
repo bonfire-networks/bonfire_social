@@ -136,12 +136,15 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         end)
       end
 
-      field(:direct_replies, list_of(:replied)) do
-        arg(:paginate, :paginate)
+      field :replied, :replied,
+        description: "Information about the thread, and replies to this activity (if any)"
 
-        # , args: %{my: :followed})
-        resolve(Absinthe.Resolution.Helpers.dataloader(Needle.Pointer))
-      end
+      # field(:direct_replies, list_of(:replied)) do
+      #   arg(:paginate, :paginate)
+
+      #   # , args: %{my: :followed})
+      #   resolve(Absinthe.Resolution.Helpers.dataloader(Needle.Pointer))
+      # end
     end
 
     connection(node_type: :activity)
@@ -168,12 +171,18 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       # field(:reply_to, :activity)
 
-      field(:direct_replies, list_of(:replied)) do
-        arg(:paginate, :paginate)
+      field(:direct_replies_count, :integer)
+      field(:nested_replies_count, :integer)
 
-        # , args: %{my: :followed})
-        resolve(Absinthe.Resolution.Helpers.dataloader(Needle.Pointer))
-      end
+      field(:total_replies_count, :integer)
+
+      # FIXME
+      # field(:direct_replies, list_of(:replied)) do
+      #   arg(:paginate, :paginate)
+
+      #   # , args: %{my: :followed})
+      #   resolve(Absinthe.Resolution.Helpers.dataloader(Needle.Pointer))
+      # end
     end
 
     # TODO move to bonfire_files
