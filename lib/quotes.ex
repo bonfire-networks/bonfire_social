@@ -101,6 +101,45 @@ defmodule Bonfire.Social.Quotes do
   end
 
   @doc """
+  Batch version of check_quote_permission for multiple objects.
+  Returns a map of object_id => permission_tuple.
+  """
+  def check_quote_permissions_many(_user, []), do: %{}
+
+  def check_quote_permissions_many(user, quoted_objects) when is_list(quoted_objects) do
+    user_id = id(user)
+
+    # Preload associations with follow_pointers to handle Needle.Pointer objects
+    quoted_objects =
+      repo().maybe_preload(quoted_objects, [:created, controlled: :acl], follow_pointers: true)
+
+    # Map each object to its permission status
+    Map.new(quoted_objects, fn obj ->
+      obj_id = id(obj)
+
+      permission =
+        cond do
+          # User's own content
+          e(obj, :created, :creator_id, nil) == user_id || obj_id == user_id ->
+            {:auto_approve, obj}
+
+          # Can quote directly
+          Bonfire.Boundaries.can?(user, quote_verb(), obj) ->
+            {:auto_approve, obj}
+
+          # Can request to quote
+          Bonfire.Boundaries.can?(user, :request, obj) ->
+            {:request_needed, obj}
+
+          true ->
+            {:not_permitted, obj}
+        end
+
+      {obj_id, permission}
+    end)
+  end
+
+  @doc """
   Creates quote requests for pending quotes after the post has been created.
   """
   def create_quote_requests(user, pending_quotes, quote_post, opts \\ []) do
