@@ -221,7 +221,7 @@ defmodule Bonfire.Social.APActivities do
          current_user
        ) do
     # because Peertube doesn't give us details to play/embed the video in the AS JSON
-    Bonfire.Files.Acts.URLPreviews.maybe_fetch_and_save(current_user, url)
+    Bonfire.Files.Media.maybe_fetch_and_save(current_user, url)
     |> Bonfire.Files.Acts.AttachMedia.cast(changeset, ... || [])
 
     # TODO clean up: we shouldn't be reaching into the Acts outside of Epics

@@ -111,7 +111,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         resolve(&the_activity_object/3)
       end
 
-      field :media, :media, description: "Media attached to this activity (TODO)"
+      # TODO
+      # field :media, :media, description: "Media attached to this activity"
 
       field(:object_post_content, :post_content) do
         resolve(fn
@@ -185,34 +186,35 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       # end
     end
 
-    # TODO move to bonfire_files
-    object :media do
-      field :id, non_null(:id)
+    # NOTE: :media object and connection moved to Bonfire.Files.API.GraphQL
 
-      field :path, :string
+    # object :media do
+    #   field :id, non_null(:id)
 
-      field :size, :integer
+    #   field :path, :string
 
-      field :media_type, :string
+    #   field :size, :integer
 
-      field :metadata, :json
+    #   field :media_type, :string
 
-      field :creator, :any_character do
-        resolve(Absinthe.Resolution.Helpers.dataloader(Needle.Pointer))
-      end
+    #   field :metadata, :json
 
-      field(:activity, :activity, description: "An activity associated with this media")
+    #   field :creator, :any_character do
+    #     resolve(Absinthe.Resolution.Helpers.dataloader(Needle.Pointer))
+    #   end
 
-      field(:activities, list_of(:activity),
-        description: "All activities associated with this media (TODO)"
-      )
+    #   field(:activity, :activity, description: "An activity associated with this media")
 
-      field(:objects, list_of(:any_context),
-        description: "All objects associated with this media (TODO)"
-      )
-    end
+    #   field(:activities, list_of(:activity),
+    #     description: "All activities associated with this media (TODO)"
+    #   )
 
-    connection(node_type: :media)
+    #   field(:objects, list_of(:any_context),
+    #     description: "All objects associated with this media (TODO)"
+    #   )
+    # end
+
+    # connection(node_type: :media)
 
     # object :posts_page do
     #   field(:page_info, non_null(:page_info))
