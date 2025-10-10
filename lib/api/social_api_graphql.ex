@@ -346,11 +346,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         resolve(&feed_objects/2)
       end
 
-      @desc "Get media in a feed (TODO)"
-      connection field :feed_media, node_type: :media do
-        arg(:filter, :feed_filters)
-        resolve(&feed_media/2)
-      end
+      # @desc "Get media in a feed (TODO)"
+      # connection field :feed_media, node_type: :media do
+      #   arg(:filter, :feed_filters)
+      #   resolve(&feed_media/2)
+      # end
     end
 
     object :social_mutations do
