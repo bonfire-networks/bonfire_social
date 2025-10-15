@@ -1333,7 +1333,7 @@ defmodule Bonfire.Social.Activities do
       opts
     )
     # Handle APActivity pointer preloading if needed
-    |> maybe_preload_ap_activity_pointers(opts)
+    |> maybe_preload_ap_activity_nested_objects(opts)
     |> debug("attempted_reply_to_nested")
   end
 
@@ -1353,13 +1353,13 @@ defmodule Bonfire.Social.Activities do
       opts
     )
     # Handle APActivity pointer preloading if needed
-    |> maybe_preload_ap_activity_pointers(opts)
+    |> maybe_preload_ap_activity_nested_objects(opts)
   end
 
-  defp maybe_preload_ap_activity_pointers(objects, opts) do
+  defp maybe_preload_ap_activity_nested_objects(objects, opts) do
     if Keyword.get(opts, :preload_ap_activity_embedded, true) do
       # debug("we need to preload AP activity pointers")
-      Bonfire.Social.APActivities.preload_ap_activity_pointers(objects, opts)
+      Bonfire.Social.APActivities.preload_nested_objects(objects, opts)
     else
       # debug("no need to preload AP activity pointers")
       objects
