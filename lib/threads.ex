@@ -67,6 +67,7 @@ defmodule Bonfire.Social.Threads do
     do: cast_replied(changeset, attrs, user)
 
   defp cast_replied(changeset, attrs, user) do
+    debug(attrs, "cast_replied attrs and user")
     # TODO: dedup with function in Threaded act
     custom_thread = find_thread(attrs, user)
 
@@ -123,6 +124,7 @@ defmodule Bonfire.Social.Threads do
           start_new_thread(changeset)
         end
     end
+    |> debug("changeset with replied")
   end
 
   @doc """
@@ -149,6 +151,7 @@ defmodule Bonfire.Social.Threads do
     |> find_reply_id()
     |> debug("reply_id")
     |> maybe_replyable(user)
+    |> debug("maybe_replyable")
   end
 
   @doc """

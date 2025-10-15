@@ -28,6 +28,8 @@ defmodule Bonfire.Social.Acts.Threaded do
     changeset = epic.assigns[on]
     current_user = Bonfire.Common.Utils.current_user(epic.assigns[:options])
 
+    debug(changeset && changeset.action, "Threaded Act running on #{on} with changeset action")
+
     cond do
       epic.errors != [] ->
         maybe_debug(
@@ -44,11 +46,11 @@ defmodule Bonfire.Social.Acts.Threaded do
         epic
 
       not (is_struct(current_user) or is_binary(current_user)) ->
-        warn(current_user, "Skipping due to missing current_user")
+        debug(current_user, "Skipping due to missing current_user")
         epic
 
       not is_struct(changeset) || changeset.__struct__ != Changeset ->
-        warn(changeset, "Skipping :#{on} due to missing changeset")
+        debug(changeset, "Skipping :#{on} due to missing changeset")
         epic
 
       changeset.action not in [:insert, :delete] ->
@@ -131,9 +133,10 @@ defmodule Bonfire.Social.Acts.Threaded do
         |> Epic.assign(:verb, verb)
 
       _ ->
-        maybe_debug(
-          epic,
-          act,
+        debug(
+          # epic,
+          # act,
+          attrs,
           "does not reply to anything or not permitted to reply to, so starting new thread (or using custom if specified)"
         )
 

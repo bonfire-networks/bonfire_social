@@ -112,7 +112,7 @@ defmodule Bonfire.Social.Migrations do
       add(:item_type, :string, null: false)
       add(:item_id, :uuid)
       add(:item_changes, :map, null: false)
-      add(:originator_id, weak_pointer())
+      add_pointer(:originator_id, :weak)
       add(:origin, :string, size: 50)
       add(:meta, :map)
 

@@ -63,7 +63,7 @@ defmodule Bonfire.Social.APActivities do
   end
 
   def ap_publish_activity(subject, _, %{json: data} = ap_activity) do
-    flood(ap_activity, "AP - publishing APActivity")
+    debug(ap_activity, "AP - publishing APActivity")
 
     with {:ok, subject_actor} <-
            ActivityPub.Actor.get_cached(
