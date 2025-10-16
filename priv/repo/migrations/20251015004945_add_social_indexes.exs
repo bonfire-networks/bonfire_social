@@ -1,6 +1,7 @@
 defmodule Bonfire.Social.Repo.Migrations.AddSocialIndexes do
   @moduledoc false
-  use Ecto.Migration
+use Ecto.Migration 
+  use Needle.Migration.Indexable
   use Needle.Migration.Indexable
 
   def up do
