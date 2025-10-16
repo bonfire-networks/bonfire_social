@@ -1347,6 +1347,7 @@ defmodule Bonfire.Social.Activities do
          opts
        ) do
     objects
+    # FIXME: this is causing n+1 queries for ap_activity when loading a feed with unknown-type remote posts
     |> Bonfire.Common.Repo.Preload.maybe_preloads_per_nested_schema(
       object_nested_under || activity_nested_under ++ [:object],
       preload_nested,
