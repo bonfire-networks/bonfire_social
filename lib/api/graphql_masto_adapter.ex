@@ -117,21 +117,23 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
           end)
           |> Map.new()
         )
+        |> Enums.stringify_keys()
       )
-      |> debug()
+      |> debug("prepared activity for API")
     end
 
-    defp prepare_post(user) do
-      # TODO: implement these fields
+    defp prepare_post(post) do
+      # TODO: add required fields
       %{
         # "locked"=> false,
       }
       |> Map.merge(
-        user
+        post
         |> Enums.maybe_flatten()
+        |> Enums.stringify_keys()
         # |> Enums.map_put_default(:note, "") # because some clients don't accept nil
       )
-      |> debug()
+      |> debug("prepared post for API")
     end
   end
 end
