@@ -1211,22 +1211,15 @@ defmodule Bonfire.Social.Objects do
     {:ok, pointer |> Map.put(:sensitive, nil)}
   end
 
-  def ap_receive_activity(creator, _activity, %{pointer: %{id: _} = pointer} = _object) do
-    ap_maybe_delete(creator, pointer)
-  end
+  def ap_receive_activity(creator, _activity, object) do
+    # TODO: double check for Delete activity type?
+    case pointer_id_from_ap_object(object) do
+      pointer_id when is_binary(pointer_id) ->
+        ap_maybe_delete(creator, pointer_id)
 
-  def ap_receive_activity(creator, _activity, %{pointer_id: pointer} = _object)
-      when is_binary(pointer) do
-    ap_maybe_delete(creator, pointer)
-  end
-
-  def ap_receive_activity(creator, _activity, %struct{id: id} = object)
-      when struct not in [ActivityPub.Actor, ActivityPub.Object] do
-    ap_maybe_delete(creator, object)
-  end
-
-  def ap_receive_activity(_creator, _activity, object) do
-    error(object, "Could not find the object to delete")
+      _e ->
+        error(object, "Could not find the object to delete")
+    end
   end
 
   def ap_maybe_delete(_creator, nil) do
@@ -1278,6 +1271,59 @@ defmodule Bonfire.Social.Objects do
 
   def permalink(other) do
     debug(other, "seems to be a local object")
+    nil
+  end
+
+  @doc """
+  Finds a Bonfire object by its ActivityPub URI or object struct, even if the AP object has been pruned from cache.
+
+  Tries multiple patterns to extract pointer_id:
+  - From pointer field
+  - From pointer_id field  
+  - From struct id (for non-AP structs)
+  - From data["id"] via Peered lookup
+
+  Returns the pointer_id if found, allowing the adapter to process activities for pruned objects.
+
+  ## Examples
+
+      iex> pointer_id_from_ap_object("https://remote.example/objects/123")
+      "01FXYZ123ABC"
+      
+      iex> pointer_id_from_ap_object(%{pointer_id: "01FXYZ123ABC"})
+      "01FXYZ123ABC"
+      
+      iex> pointer_id_from_ap_object(%{data: %{"id" => "https://remote.example/objects/123"}})
+      "01FXYZ123ABC"
+
+      iex> pointer_id_from_ap_object(%{})
+      nil
+  """
+  def pointer_id_from_ap_object(%{pointer: %{id: pointer_id}}) when is_binary(pointer_id) do
+    pointer_id
+  end
+
+  def pointer_id_from_ap_object(%{pointer_id: pointer_id}) when is_binary(pointer_id) do
+    pointer_id
+  end
+
+  def pointer_id_from_ap_object(%struct{id: id})
+      when struct not in [ActivityPub.Actor, ActivityPub.Object] do
+    id
+  end
+
+  def pointer_id_from_ap_object(%{data: %{"id" => uri}}) when is_binary(uri) do
+    Bonfire.Federate.ActivityPub.Peered.get_by_uri(uri)
+    ~> id()
+  end
+
+  def pointer_id_from_ap_object(uri) when is_binary(uri) do
+    Bonfire.Federate.ActivityPub.Peered.get(uri)
+    ~> id()
+  end
+
+  def pointer_id_from_ap_object(o) do
+    error(o, "Unrecognized AP object format for extracting pointer_id")
     nil
   end
 end
