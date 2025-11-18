@@ -176,16 +176,36 @@ defmodule Bonfire.Social.Threads do
   defp maybe_replyable(id, user) do
     if is_binary(id) and id != "" do
       case load_replyable(user, id) do
+        %{replied: %{thread_id: thread_id}} = reply
+        when is_binary(thread_id) and thread_id != id ->
+          # Also check if user can reply to the thread root
+          if Bonfire.Boundaries.can?(user, :reply, thread_id) do
+            {:ok, reply}
+          else
+            debug(thread_id, "reply not permitted on thread")
+
+            reply_not_permitted!()
+          end
+
         %{} = reply ->
           {:ok, reply}
 
         _ ->
-          error(id, "not permitted to reply to")
-          nil
+          debug(id, "reply not permitted on reply_to")
+
+          reply_not_permitted!()
       end
     else
       nil
     end
+  end
+
+  defp reply_not_permitted! do
+    if !Config.get([__MODULE__, :start_new_thread_if_reply_not_allowed], false) do
+      raise Bonfire.Fail, :not_permitted
+    end
+
+    nil
   end
 
   @doc """

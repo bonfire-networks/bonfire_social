@@ -339,13 +339,13 @@ defmodule Bonfire.Social.LivePush do
         results when is_list(results) ->
           successful = Enum.count(results, fn {status, _, _} -> status == :ok end)
           failed = Enum.count(results, fn {status, _, _} -> status == :error end)
-          flood("Web push sent: #{successful} successful, #{failed} failed")
+          debug("Web push sent: #{successful} successful, #{failed} failed")
 
         other ->
           warn(other, "Unexpected result from notify")
       end
     else
-      flood("Bonfire.Notify not enabled, skipping push notifications")
+      debug("Bonfire.Notify not enabled, skipping push notifications")
     end
   end
 
