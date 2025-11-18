@@ -309,10 +309,43 @@ defmodule Bonfire.Social.LivePush do
         Enum.map(notify_emails, &(Bonfire.Mailer.send_now(email, &1) |> debug()))
       end
 
+      # Send in-app flash notifications to online users
       maybe_apply(Bonfire.UI.Common.Notifications, :notify_broadcast, [
         notify_feed_ids,
         preview_assigns
       ])
+
+      # Send web push notifications
+      send_push_notifications(notify_feed_ids, preview_assigns)
+    end
+  end
+
+  defp send_push_notifications([], _preview_assigns), do: :ok
+
+  defp send_push_notifications(user_ids, preview_assigns) do
+    debug(preview_assigns, "📤 send_push_notifications called with preview_assigns")
+    debug(user_ids, "📤 Sending to user_ids")
+
+    if module_enabled?(Bonfire.Notify) do
+      results = Bonfire.Notify.notify(preview_assigns, user_ids)
+
+      debug(results, "📤 Push notification results")
+
+      # Log results for debugging
+      case results do
+        {:error, reason} ->
+          warn(reason, "Push notification error")
+
+        results when is_list(results) ->
+          successful = Enum.count(results, fn {status, _, _} -> status == :ok end)
+          failed = Enum.count(results, fn {status, _, _} -> status == :error end)
+          flood("Web push sent: #{successful} successful, #{failed} failed")
+
+        other ->
+          warn(other, "Unexpected result from notify")
+      end
+    else
+      flood("Bonfire.Notify not enabled, skipping push notifications")
     end
   end
 
