@@ -124,31 +124,40 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       case feed_response do
         %{data: %{feed_activities: %{edges: edges, page_info: page_info}}} when is_list(edges) ->
           # Single-pass processing: accumulate items while tracking first/last IDs
-          {items_reversed, first_id, last_id} = edges
-          |> Enum.reduce({[], nil, nil}, fn edge, {acc_items, first_id, last_id} ->
-            # Get current edge's ID for pagination tracking
-            edge_id = get_in(edge, [:node, :id])
-            # Set first_id only once (from first edge)
-            new_first_id = first_id || edge_id
+          {items_reversed, first_id, last_id} =
+            edges
+            |> Enum.reduce({[], nil, nil}, fn edge, {acc_items, first_id, last_id} ->
+              # Get current edge's ID for pagination tracking
+              edge_id = get_in(edge, [:node, :id])
+              # Set first_id only once (from first edge)
+              new_first_id = first_id || edge_id
 
-            # Process the edge item
-            new_acc_items = try do
-              item = prepare_fn.(edge)
-              # Validate that item has required fields
-              if Map.get(item, "account") && Map.get(item, "id") do
-                [item | acc_items]  # Prepend valid item
-              else
-                warn(item, "#{String.capitalize(feed_type)} item missing required fields (account or id)")
-                acc_items  # Keep accumulator unchanged
-              end
-            rescue
-              e ->
-                error(e, "Failed to prepare #{feed_type} item from edge: #{inspect(edge)}")
-                acc_items  # Keep accumulator unchanged
-            end
+              # Process the edge item
+              new_acc_items =
+                try do
+                  item = prepare_fn.(edge)
+                  # Validate that item has required fields
+                  if Map.get(item, "account") && Map.get(item, "id") do
+                    # Prepend valid item
+                    [item | acc_items]
+                  else
+                    warn(
+                      item,
+                      "#{String.capitalize(feed_type)} item missing required fields (account or id)"
+                    )
 
-            {new_acc_items, new_first_id, edge_id}
-          end)
+                    # Keep accumulator unchanged
+                    acc_items
+                  end
+                rescue
+                  e ->
+                    error(e, "Failed to prepare #{feed_type} item from edge: #{inspect(edge)}")
+                    # Keep accumulator unchanged
+                    acc_items
+                end
+
+              {new_acc_items, new_first_id, edge_id}
+            end)
 
           # Reverse to maintain original order
           items = Enum.reverse(items_reversed)
@@ -177,22 +186,24 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       links = []
 
       # Add "next" link for pagination (older posts)
-      links = if last_id do
-        query_params = base_params |> Map.put("max_id", last_id) |> URI.encode_query()
-        next_link = "<#{base_url}?#{query_params}>; rel=\"next\""
-        links ++ [next_link]
-      else
-        links
-      end
+      links =
+        if last_id do
+          query_params = base_params |> Map.put("max_id", last_id) |> URI.encode_query()
+          next_link = "<#{base_url}?#{query_params}>; rel=\"next\""
+          links ++ [next_link]
+        else
+          links
+        end
 
       # Add "prev" link for pagination (newer posts)
-      links = if first_id do
-        query_params = base_params |> Map.put("min_id", first_id) |> URI.encode_query()
-        prev_link = "<#{base_url}?#{query_params}>; rel=\"prev\""
-        links ++ [prev_link]
-      else
-        links
-      end
+      links =
+        if first_id do
+          query_params = base_params |> Map.put("min_id", first_id) |> URI.encode_query()
+          prev_link = "<#{base_url}?#{query_params}>; rel=\"prev\""
+          links ++ [prev_link]
+        else
+          links
+        end
 
       if links != [] do
         conn
@@ -207,6 +218,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     defp get_field(map, key) when is_atom(key) and is_map(map) do
       Map.get(map, key) || Map.get(map, Atom.to_string(key))
     end
+
     defp get_field(_, _), do: nil
 
     # Transform Bonfire media to Mastodon media_attachments format
@@ -257,8 +269,12 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       # Get account data (prefer :account, fallback to :subject)
       account_data =
         case get_field(nested, :account) || get_field(nested, :subject) do
-          nil -> nil
-          %{} = acc when map_size(acc) == 0 -> nil
+          nil ->
+            nil
+
+          %{} = acc when map_size(acc) == 0 ->
+            nil
+
           acc ->
             prepared = Utils.maybe_apply(MeAdapter, :prepare_user, acc, fallback_return: acc)
             # Ensure prepared account has an ID
@@ -270,58 +286,60 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         end
 
       # Process reblog/boost if this is an Announce activity
-      reblog_data = if is_boost do
-        prepare_reblog(get_field(nested, :object))
-      else
-        nil
-      end
+      reblog_data =
+        if is_boost do
+          prepare_reblog(get_field(nested, :object))
+        else
+          nil
+        end
 
       object = get_field(nested, :object)
 
       media_raw =
         get_field(object, :media) ||
-        get_field(get_field(object, :activity), :media) ||
-        get_field(activity, :media) ||
-        []
+          get_field(get_field(object, :activity), :media) ||
+          get_field(activity, :media) ||
+          []
 
       # media_attachments = prepare_media_attachments(media_raw)
 
-      result = Map.merge(
-        %{
-          "visibility" => "private",
-          "sensitive" => false,
-          "spoiler_text" => "",
-          "application" => nil,
-          "bookmarked" => false,
-          "card" => nil,
-          "emojis" => [],
-          "favourited" => false,
-          "favourites_count" => 0,
-          "in_reply_to_account_id" => nil,
-          "in_reply_to_id" => nil,
-          "language" => nil,
-          "mentions" => [],
-          "tags" => [],
-          "muted" => false,
-          "pinned" => false,
-          "poll" => nil,
-          "reblog" => nil,
-          "reblogged" => false,
-          "reblogs_count" => 0,
-          "replies_count" => 0
-        },
-        flattened
-        |> Map.merge(
-          %{}
-          |> then(fn map ->
-            if account_data, do: Map.put(map, :account, account_data), else: map
-          end)
-          |> then(fn map ->
-            if reblog_data, do: Map.put(map, :reblog, reblog_data), else: map
-          end)
+      result =
+        Map.merge(
+          %{
+            "visibility" => "private",
+            "sensitive" => false,
+            "spoiler_text" => "",
+            "application" => nil,
+            "bookmarked" => false,
+            "card" => nil,
+            "emojis" => [],
+            "favourited" => false,
+            "favourites_count" => 0,
+            "in_reply_to_account_id" => nil,
+            "in_reply_to_id" => nil,
+            "language" => nil,
+            "mentions" => [],
+            "tags" => [],
+            "muted" => false,
+            "pinned" => false,
+            "poll" => nil,
+            "reblog" => nil,
+            "reblogged" => false,
+            "reblogs_count" => 0,
+            "replies_count" => 0
+          },
+          flattened
+          |> Map.merge(
+            %{}
+            |> then(fn map ->
+              if account_data, do: Map.put(map, :account, account_data), else: map
+            end)
+            |> then(fn map ->
+              if reblog_data, do: Map.put(map, :reblog, reblog_data), else: map
+            end)
+          )
+          |> Enums.stringify_keys()
         )
-        |> Enums.stringify_keys()
-      )
     end
 
     # Prepare the original status for a boost/reblog
@@ -346,16 +364,18 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
       # Get creator (prefer :creator, fallback to :subject)
       creator = get_field(activity, :creator) || get_field(activity, :subject)
-      account = if creator do
-        Utils.maybe_apply(MeAdapter, :prepare_user, creator, fallback_return: creator)
-      else
-        nil
-      end
+
+      account =
+        if creator do
+          Utils.maybe_apply(MeAdapter, :prepare_user, creator, fallback_return: creator)
+        else
+          nil
+        end
 
       media_raw =
         get_field(post, :media) ||
-        get_field(activity, :media) ||
-        []
+          get_field(activity, :media) ||
+          []
 
       # media_attachments = prepare_media_attachments(media_raw)
 
@@ -366,7 +386,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         "uri" => get_field(activity, :uri) || get_field(post, :canonical_uri),
         "url" => get_field(activity, :uri) || get_field(post, :canonical_uri),
         "account" => account,
-        "content" => get_field(post_content, :content) || get_field(post_content, :html_body) || "",
+        "content" =>
+          get_field(post_content, :content) || get_field(post_content, :html_body) || "",
         "visibility" => "public",
         "sensitive" => false,
         "spoiler_text" => get_field(post_content, :summary) || "",
@@ -377,7 +398,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         "reblogs_count" => 0,
         "favourites_count" => 0,
         "replies_count" => 0,
-        "reblog" => nil,  # Nested reblogs not supported
+        # Nested reblogs not supported
+        "reblog" => nil,
         "application" => nil,
         "language" => nil,
         "muted" => false,
@@ -392,6 +414,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       }
       |> Enums.stringify_keys()
     end
+
     defp prepare_reblog(_), do: nil
 
     # Status interaction mutations
