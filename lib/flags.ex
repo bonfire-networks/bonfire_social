@@ -157,6 +157,8 @@ defmodule Bonfire.Social.Flags do
       opts
       |> Keyword.put_new(:current_user, flagger)
       |> Keyword.put_new_lazy(:to_feeds, fn -> flag_feeds(id(object), object_type(object)) end)
+      # Default to NOT forwarding for safety
+      |> Keyword.put_new(:forward, false)
       |> debug("opts")
 
     case check_flag(flagger, object, opts)
@@ -524,7 +526,7 @@ defmodule Bonfire.Social.Flags do
       iex> Bonfire.Social.Flags.ap_publish_activity(subject, :flag, flag)
       {:ok, %ActivityPub.Object{}}
   """
-  def ap_publish_activity(subject, _verb, %Flag{} = flag) do
+  def ap_publish_activity(subject, _verb, %Flag{} = flag, opts \\ []) do
     flagger = subject || e(flag, :edge, :subject, nil) || e(flag, :activity, :subject, nil)
     flagged = e(flag, :edge, :object, nil) || e(flag, :activity, :object, nil)
 
@@ -566,10 +568,8 @@ defmodule Bonfire.Social.Flags do
           # actor: flagger, # exclude actor so we send an anonymised flag instead (using a service actor)
           statuses: params.statuses,
           account: params.account,
-          # TODO: ask the user if they want to forward the flag?
-          forward: true,
-          # content: flag.message, # TODO: add a comment
-          forward: true,
+          content: e(flag, :named, :name, nil),
+          forward: opts[:forward] || false,
           pointer: flag
         }
         |> debug("tooo_flag")
@@ -647,13 +647,16 @@ defmodule Bonfire.Social.Flags do
 
   def ap_receive_activity(
         creator,
-        %{data: %{"type" => "Flag"}} = _activity,
+        %{data: %{"type" => "Flag"}} = activity,
         %{pointer_id: pointer_id}
       )
       when is_binary(pointer_id) do
     with {:ok, object} <-
            Bonfire.Common.Needles.get(pointer_id, skip_boundary_check: true) do
-      flag(creator, object)
+      # Extract the comment from the ActivityPub flag activity
+      comment = e(activity, :data, "content", nil)
+
+      flag(creator, object, comment: comment)
     end
   end
 
