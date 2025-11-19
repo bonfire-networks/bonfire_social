@@ -444,8 +444,12 @@ defmodule Bonfire.Social.Threads do
       |> debug("activity_or_object to find participants for")
 
     thread_or_object_id =
-      thread_or_object_id || e(activity_or_object, :replied, :thread_id, nil) ||
-        e(activity_or_object, :replied, :thread_id, nil)
+      if thread_or_object_id == :skip do
+        nil
+      else
+        thread_or_object_id || e(activity_or_object, :replied, :thread_id, nil) ||
+          e(activity_or_object, :replied, :thread_id, nil)
+      end
 
     # add author of root message
     # add author of the message it was replying to
