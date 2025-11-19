@@ -219,9 +219,14 @@ defmodule Bonfire.Social.FeedLoader do
 
   def feed({feed_name, feed_id_or_ids}, opts)
       when is_atom(feed_name) and not is_nil(feed_name) and is_list(opts) do
-    warn(feed_id_or_ids, "should we do something with feed_id_or_ids?")
+    # Merge all filters (including id_before, id_after, etc.) with feed_name
+    filters = if is_map(feed_id_or_ids) do
+      Map.put(feed_id_or_ids, :feed_name, feed_name)
+    else
+      %{feed_name: feed_name}
+    end
 
-    feed(%{feed_name: feed_name}, opts)
+    feed(filters, opts)
   end
 
   def feed(feed_name, opts)
