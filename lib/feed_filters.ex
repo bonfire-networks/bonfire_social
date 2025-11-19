@@ -62,6 +62,10 @@ defmodule Bonfire.Social.FeedFilters do
     # Ecto.Enum, values: [nil, false, true, :mod, :admins]
 
     field :show_objects_only_once, :boolean, default: true
+
+    # Pagination fields for Mastodon API compatibility
+    field :id_before, :string
+    field :id_after, :string
   end
 
   # TODO: how can we generate this from the list above to make sure they stay in sync?
@@ -94,7 +98,10 @@ defmodule Bonfire.Social.FeedFilters do
       :sort_order,
       #  FIXME should only be set in config
       # :include_flags,
-      :show_objects_only_once
+      :show_objects_only_once,
+      # Pagination fields for Mastodon API compatibility
+      :id_before,
+      :id_after
     ]
 
   @doc """

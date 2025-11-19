@@ -699,7 +699,7 @@ defmodule Bonfire.Social.Activities do
           ]
 
         :tags ->
-          # Tags/mentions 
+          # Tags/mentions
           [tags: [:character, profile: :icon]]
 
         :quote_tags ->
@@ -846,7 +846,7 @@ defmodule Bonfire.Social.Activities do
       on: activity.object_id == object.id
     )
 
-    # ^ adds a join to show ONLY APActivity objects in activities 
+    # ^ adds a join to show ONLY APActivity objects in activities
   end
 
   defp query_preload_seen(q, opts) do
@@ -1087,7 +1087,7 @@ defmodule Bonfire.Social.Activities do
         [activity: activity, object_created: object_created],
         creator in assoc(object_created, :creator),
         as: :object_creator,
-        # only includes the created with creator_id if different than the subject 
+        # only includes the created with creator_id if different than the subject
         on: object_created.creator_id != activity.subject_id
       )
     else
@@ -1221,7 +1221,7 @@ defmodule Bonfire.Social.Activities do
 
     {nested_under, preload_nested} = opts[:preload_nested] || {nil, []}
 
-    # TODO: put in config 
+    # TODO: put in config
     preload_nested =
       [if(:per_media not in preloads, do: Bonfire.Files.Media), Bonfire.Data.Social.APActivity] ++
         preload_nested
@@ -1573,7 +1573,7 @@ defmodule Bonfire.Social.Activities do
 
     #   #
     #   other ->
-    # TODO: support custom APActivity types 
+    # TODO: support custom APActivity types
     # debug(other, "other exclude_table_ids")
     query
     # end
@@ -1680,6 +1680,20 @@ defmodule Bonfire.Social.Activities do
         where(query, [activity: activity], activity.subject_id not in ^ids)
     end
   end
+
+  def maybe_filter(query, {:id_before, id}, _opts) when is_binary(id) and id != "" do
+    # Filter for Mastodon max_id compatibility - get activities with ID less than this
+    where(query, [activity: activity], activity.id < ^id)
+  end
+
+  def maybe_filter(query, {:id_before, _}, _opts), do: query
+
+  def maybe_filter(query, {:id_after, id}, _opts) when is_binary(id) and id != "" do
+    # Filter for Mastodon since_id/min_id compatibility - get activities with ID greater than this
+    where(query, [activity: activity], activity.id > ^id)
+  end
+
+  def maybe_filter(query, {:id_after, _}, _opts), do: query
 
   def maybe_filter(query, {:subject_types, types}, _opts) do
     case Bonfire.Common.Types.table_types(types) do
@@ -1913,7 +1927,7 @@ defmodule Bonfire.Social.Activities do
       > query(filters)
 
       iex> query([my: :feed], [current_user: nil])
-      ** (Bonfire.Fail.Auth) You need to log in first. 
+      ** (Bonfire.Fail.Auth) You need to log in first.
   """
   def query(filters \\ [], opts_or_current_user \\ [])
 
@@ -2670,6 +2684,15 @@ defmodule Bonfire.Social.Activities do
   def fetch_cursor_value_fun(%{activity: %{replied: %{id: _} = replied}}, :num_replies) do
     debug(:num_replies)
     e(replied, :nested_replies_count, 0) + e(replied, :direct_replies_count, 0)
+  end
+
+  def fetch_cursor_value_fun(d, {:activity, :id}) do
+    case d do
+      %{activity: %{id: id}} -> id
+      %{activity_id: id} -> id
+      %{id: id} -> id
+      _ -> nil
+    end
   end
 
   def fetch_cursor_value_fun(d, list) when is_tuple(list) do

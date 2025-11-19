@@ -25,9 +25,18 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       field(:id, :id)
       field(:post_content, :post_content)
 
-      field(:activity, :activity,
-        description: "An activity associated with this post (usually the post creation)"
-      )
+      # Use Dataloader to batch load activity association (prevents N+1)
+      field :activity, :activity do
+        description("An activity associated with this post (usually the post creation)")
+        resolve(Helpers.dataloader(Needle.Pointer, :activity))
+      end
+
+      # Use Dataloader to batch-load media attachments (prevents N+1 queries)
+      # Skip boundary checks for internal API calls (REST layer already authenticated)
+      field :media, list_of(:media) do
+        description("Media attached to this post")
+        resolve(Helpers.dataloader(Needle.Pointer, :media))
+      end
 
       field(:activities, list_of(:activity),
         description: "All activities associated with this post (TODO)"
@@ -45,7 +54,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
           %{verb: verb}, _, _ ->
             {:ok,
              verb
-             |> debug()
              |> Activities.verb_maybe_modify()
              |> Activities.verb_display()}
         end)
@@ -71,8 +79,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       field(:canonical_uri, :string) do
         resolve(fn activity, _, _ ->
-          # IO.inspect(activity)
-          {:ok, Bonfire.Common.URIs.canonical_url(activity)}
+          # Use preload_if_needed: false to rely on Dataloader batching
+          # instead of lazy loading peered/created associations
+          {:ok, Bonfire.Common.URIs.canonical_url(activity, preload_if_needed: false)}
         end)
       end
 
@@ -107,34 +116,50 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       end
 
       # field(:object_id, :string)
+      # Use Dataloader to batch-load object pointers, then follow them to get actual objects
       field :object, :any_context do
-        resolve(&the_activity_object/3)
+        resolve(fn activity, _args, %{context: %{loader: loader}} ->
+          loader
+          |> Dataloader.load(Needle.Pointer, :object, activity)
+          |> Helpers.on_load(fn loader ->
+            case Dataloader.get(loader, Needle.Pointer, :object, activity) do
+              %Needle.Pointer{} = pointer ->
+                # Follow the pointer to get the actual object (Boost, Like, Post, etc.)
+                case Bonfire.Common.Needles.follow!(pointer, skip_boundary_check: true) do
+                  %{__struct__: _} = object -> {:ok, object}
+                  _ -> {:ok, nil}
+                end
+
+              object when is_struct(object) ->
+                {:ok, object}
+
+              _ ->
+                {:ok, nil}
+            end
+          end)
+        end)
       end
 
-      # TODO
-      # field :media, :media, description: "Media attached to this activity"
+      # Use Dataloader to batch-load media attachments (prevents N+1 queries)
+      # Skip boundary checks for internal API calls (REST layer already authenticated)
+      field :media, list_of(:media) do
+        description("Media attached to this activity")
+        resolve(Helpers.dataloader(Needle.Pointer, :media))
+      end
 
+      # Use Dataloader for association loading to prevent N+1 queries
+      # Dataloader batches all post_content loads across activities in a single query
       field(:object_post_content, :post_content) do
-        resolve(fn
-          %{object: %{post_content: %{id: _} = post_content}}, _, _ ->
-            {:ok, post_content |> debug("post_content detected")}
+        resolve(Helpers.dataloader(Needle.Pointer, :object_post_content))
+      end
 
-          %{object: %{post_content: _} = object}, _, _ ->
-            {:ok,
-             object
-             |> repo().maybe_preload(:post_content)
-             |> e(:post_content, nil)
-             |> debug("post_content detected")}
+      # Dataloader fields for peered and created associations (prevents N+1 queries)
+      field :peered, :peered do
+        resolve(Helpers.dataloader(Needle.Pointer, :peered))
+      end
 
-          activity, _, _ ->
-            {:ok,
-             activity
-             |> repo().maybe_preload(:object_post_content)
-             |> e(:object_post_content, nil)
-             |> debug(
-               "no object with post_content detected, tried preloading :object_post_content"
-             )}
-        end)
+      field :created, :created do
+        resolve(Helpers.dataloader(Needle.Pointer, :created))
       end
 
       field :replied, :replied,
@@ -160,6 +185,64 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       field(:name, :string)
       field(:summary, :string)
       field(:html_body, :string)
+    end
+
+    object :boost do
+      field(:id, :id)
+
+      field :edge, :edge do
+        resolve(Helpers.dataloader(Needle.Pointer, :edge))
+      end
+    end
+
+    object :like do
+      field(:id, :id)
+
+      field :edge, :edge do
+        resolve(Helpers.dataloader(Needle.Pointer, :edge))
+      end
+    end
+
+    object :follow do
+      field(:id, :id)
+
+      field :edge, :edge do
+        resolve(Helpers.dataloader(Needle.Pointer, :edge))
+      end
+    end
+
+    object :edge do
+      field(:id, :id)
+      field(:subject_id, :id)
+      field(:object_id, :id)
+      field(:table_id, :id)
+
+      field :subject, :any_character do
+        resolve(Helpers.dataloader(Needle.Pointer, :subject))
+      end
+
+      field :object, :any_context do
+        resolve(fn edge, _args, %{context: %{loader: loader}} ->
+          loader
+          |> Dataloader.load(Needle.Pointer, :object, edge)
+          |> Helpers.on_load(fn loader ->
+            case Dataloader.get(loader, Needle.Pointer, :object, edge) do
+              %Needle.Pointer{} = pointer ->
+                # Follow the pointer to get the actual object
+                case Bonfire.Common.Needles.follow!(pointer, skip_boundary_check: true) do
+                  %{__struct__: _} = object -> {:ok, object}
+                  _ -> {:ok, nil}
+                end
+
+              object when is_struct(object) ->
+                {:ok, object}
+
+              _ ->
+                {:ok, nil}
+            end
+          end)
+        end)
+      end
     end
 
     object :replied do
@@ -295,6 +378,21 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         default_value: :desc,
         description: "Sort in ascending or descending order"
       )
+
+      field(:id_before, :string,
+        description:
+          "Filter activities with ID less than this (for Mastodon max_id pagination compatibility)"
+      )
+
+      field(:id_after, :string,
+        description:
+          "Filter activities with ID greater than this (for Mastodon since_id/min_id pagination compatibility)"
+      )
+
+      field(:preload, list_of(:string),
+        description:
+          "Preload options to avoid N+1 queries (eg. with_subject, with_creator, with_media)"
+      )
     end
 
     input_object :post_filters do
@@ -392,7 +490,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     def list_posts(_parent, args, info) do
       {pagination_args, filters} =
         Pagination.pagination_args_filter(args)
-        |> debug()
 
       Bonfire.Posts.list_paginated(filters,
         current_user: GraphQL.current_user(info),
@@ -411,18 +508,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
     def get_activity(_parent, %{filter: %{object_id: id}} = _args, info) do
       Bonfire.Social.Activities.read(id, GraphQL.current_user(info))
-    end
-
-    def the_activity_object(%{activity: %{object: _object} = activity}, _, _) do
-      do_the_activity_object(activity)
-    end
-
-    def the_activity_object(%{object: _object} = activity, _, _) do
-      do_the_activity_object(activity)
-    end
-
-    defp do_the_activity_object(%{} = activity) do
-      {:ok, Activities.object_from_activity(activity)}
     end
 
     # defp feed(args, info) do
@@ -445,24 +530,35 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       {pagination_args, filters} =
         Pagination.pagination_args_filter(args)
-        |> debug()
 
       filters = e(filters, :filter, [])
 
+      feed_name_resolved =
+        feed_name ||
+          Types.maybe_to_atom(
+            e(filters, :feed_name, nil) ||
+              Bonfire.Social.FeedLoader.feed_name_or_default(:default, current_user)
+          )
+
       Bonfire.Social.FeedActivities.feed(
-        {feed_name ||
-           Types.maybe_to_atom(
-             e(filters, :feed_name, nil) ||
-               Bonfire.Social.FeedLoader.feed_name_or_default(:default, current_user)
-           ), filters},
+        feed_name_resolved,
+        filters,
         current_user: current_user,
         pagination: pagination_args,
         # we don't want to preload anything unnecessarily (relying instead on preloads in sub-field definitions)
         preload:
-          case feed_type do
-            :objects -> :per_object
-            :media -> :per_media
-            _activities -> false
+          case e(filters, :preload, nil) || e(filters, "preload", nil) do
+            preload_list when is_list(preload_list) and preload_list != [] ->
+              # Convert string preload options to atoms (for Mastodon API N+1 optimization)
+              Enum.map(preload_list, &Types.maybe_to_atom/1)
+
+            _ ->
+              # Fall back to existing logic based on feed_type
+              case feed_type do
+                :objects -> :per_object
+                :media -> :per_media
+                _activities -> false
+              end
           end
       )
       |> Pagination.connection_paginate(pagination_args,
@@ -473,7 +569,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
             _activities -> fn fp -> e(fp, :activity, nil) || fp end
           end
       )
-      |> debug("paginated_feed")
     end
 
     def feed_objects(feed_name \\ nil, args, info) do
