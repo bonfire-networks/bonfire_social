@@ -842,8 +842,8 @@ defmodule Bonfire.Social.FeedLoader do
         description: l("Default feed to display when visiting the feed page.")
       )
     else
-      # fallback to showing instance feed
-      :local
+      # fallback to showing default or local instance feed
+      Config.get([Bonfire.UI.Social.FeedLive, :default_feed]) || :local
     end
 
     # |> debug("default feed to load:")
