@@ -99,19 +99,23 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     #   RestAdapter.return(:post, post, conn, &prepare_post/1)
     # end
 
-    @graphql "query ($filter: FeedFilters, $first: Int) {
-      feed_activities(filter: $filter, first: $first) {
+    @graphql "query ($filter: FeedFilters, $first: Int, $last: Int, $after: String, $before: String) {
+      feed_activities(filter: $filter, first: $first, last: $last, after: $after, before: $before) {
       edges { node {
               #{@activity}
       }}
       page_info: pageInfo {
         has_next_page: hasNextPage
         has_previous_page: hasPreviousPage
+        start_cursor: startCursor
+        end_cursor: endCursor
       }
     }}"
     def feed(params, conn) do
       # N+1 queries are prevented by Dataloader in GraphQL field resolvers
       # (see social_api_graphql.ex for peered/created Dataloader fields)
+      # Pagination params are already translated by the controller
+
       graphql(conn, :feed, params)
       |> process_feed_response(conn, params, &prepare_activity/1, "feed")
     end
@@ -119,42 +123,37 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     # Shared helper to process feed responses from GraphQL
     # Handles edges processing, pagination, and error responses
     defp process_feed_response(feed_response, conn, params, prepare_fn, feed_type) do
-      debug(feed_response, "GraphQL #{feed_type} response")
-
       case feed_response do
         %{data: %{feed_activities: %{edges: edges, page_info: page_info}}} when is_list(edges) ->
-          # Single-pass processing: accumulate items while tracking first/last IDs
-          {items_reversed, first_id, last_id} = edges
-          |> Enum.reduce({[], nil, nil}, fn edge, {acc_items, first_id, last_id} ->
-            # Get current edge's ID for pagination tracking
-            edge_id = get_in(edge, [:node, :id])
-            # Set first_id only once (from first edge)
-            new_first_id = first_id || edge_id
+          # Process edges into items, filtering out invalid ones
+          items =
+            edges
+            |> Enum.flat_map(fn edge ->
+              try do
+                item = prepare_fn.(edge)
+                # Validate that item has required fields
+                if Map.get(item, "account") && Map.get(item, "id") do
+                  # Keep valid item
+                  [item]
+                else
+                  warn(
+                    item,
+                    "#{String.capitalize(feed_type)} item missing required fields (account or id)"
+                  )
 
-            # Process the edge item
-            new_acc_items = try do
-              item = prepare_fn.(edge)
-              # Validate that item has required fields
-              if Map.get(item, "account") && Map.get(item, "id") do
-                [item | acc_items]  # Prepend valid item
-              else
-                warn(item, "#{String.capitalize(feed_type)} item missing required fields (account or id)")
-                acc_items  # Keep accumulator unchanged
+                  # Skip invalid item
+                  []
+                end
+              rescue
+                e ->
+                  error(e, "Failed to prepare #{feed_type} item from edge: #{inspect(edge)}")
+                  # Skip failed item
+                  []
               end
-            rescue
-              e ->
-                error(e, "Failed to prepare #{feed_type} item from edge: #{inspect(edge)}")
-                acc_items  # Keep accumulator unchanged
-            end
-
-            {new_acc_items, new_first_id, edge_id}
-          end)
-
-          # Reverse to maintain original order
-          items = Enum.reverse(items_reversed)
+            end)
 
           conn
-          |> add_link_headers(params, first_id, last_id, page_info)
+          |> add_link_headers(params, page_info, items)
           |> Phoenix.Controller.json(items)
 
         %{errors: errors} ->
@@ -166,33 +165,46 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       end
     end
 
-    # Add Mastodon-compatible Link headers for pagination
-    # Skip headers only if we got 0 results
-    defp add_link_headers(conn, _params, nil, nil, _page_info), do: conn
-
-    defp add_link_headers(conn, params, first_id, last_id, page_info) do
+    # Add Mastodon-compatible Link headers for pagination using Paginator cursors
+    defp add_link_headers(conn, _params, page_info, items) do
       base_url = "#{conn.scheme}://#{conn.host}:#{conn.port}#{conn.request_path}"
       base_params = Map.take(conn.params, ["limit"])
 
+      # Get cursors from page_info, with fallback to extracting from items
+      # (Paginator may set start_cursor to nil on first page)
+      cursor_for_record_fun = get_field(page_info, :cursor_for_record_fun) || (&Enums.id/1)
+
+      start_cursor =
+        (get_field(page_info, :start_cursor) ||
+           items |> List.first() |> then(&if &1, do: cursor_for_record_fun.(&1)))
+        |> encode_cursor_for_link_header()
+
+      end_cursor =
+        (get_field(page_info, :end_cursor) ||
+           items |> List.last() |> then(&if &1, do: cursor_for_record_fun.(&1)))
+        |> encode_cursor_for_link_header()
+
       links = []
 
-      # Add "next" link for pagination (older posts)
-      links = if last_id do
-        query_params = base_params |> Map.put("max_id", last_id) |> URI.encode_query()
-        next_link = "<#{base_url}?#{query_params}>; rel=\"next\""
-        links ++ [next_link]
-      else
-        links
-      end
+      # Add "next" link for pagination (older posts) using end_cursor
+      links =
+        if end_cursor do
+          query_params = base_params |> Map.put("max_id", end_cursor) |> URI.encode_query()
+          next_link = "<#{base_url}?#{query_params}>; rel=\"next\""
+          links ++ [next_link]
+        else
+          links
+        end
 
-      # Add "prev" link for pagination (newer posts)
-      links = if first_id do
-        query_params = base_params |> Map.put("min_id", first_id) |> URI.encode_query()
-        prev_link = "<#{base_url}?#{query_params}>; rel=\"prev\""
-        links ++ [prev_link]
-      else
-        links
-      end
+      # Add "prev" link for pagination (newer posts) using start_cursor
+      links =
+        if start_cursor do
+          query_params = base_params |> Map.put("min_id", start_cursor) |> URI.encode_query()
+          prev_link = "<#{base_url}?#{query_params}>; rel=\"prev\""
+          links ++ [prev_link]
+        else
+          links
+        end
 
       if links != [] do
         conn
@@ -207,6 +219,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     defp get_field(map, key) when is_atom(key) and is_map(map) do
       Map.get(map, key) || Map.get(map, Atom.to_string(key))
     end
+
     defp get_field(_, _), do: nil
 
     # Transform Bonfire media to Mastodon media_attachments format
@@ -257,8 +270,12 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       # Get account data (prefer :account, fallback to :subject)
       account_data =
         case get_field(nested, :account) || get_field(nested, :subject) do
-          nil -> nil
-          %{} = acc when map_size(acc) == 0 -> nil
+          nil ->
+            nil
+
+          %{} = acc when map_size(acc) == 0 ->
+            nil
+
           acc ->
             prepared = Utils.maybe_apply(MeAdapter, :prepare_user, acc, fallback_return: acc)
             # Ensure prepared account has an ID
@@ -270,58 +287,60 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         end
 
       # Process reblog/boost if this is an Announce activity
-      reblog_data = if is_boost do
-        prepare_reblog(get_field(nested, :object))
-      else
-        nil
-      end
+      reblog_data =
+        if is_boost do
+          prepare_reblog(get_field(nested, :object))
+        else
+          nil
+        end
 
       object = get_field(nested, :object)
 
       media_raw =
         get_field(object, :media) ||
-        get_field(get_field(object, :activity), :media) ||
-        get_field(activity, :media) ||
-        []
+          get_field(get_field(object, :activity), :media) ||
+          get_field(activity, :media) ||
+          []
 
       # media_attachments = prepare_media_attachments(media_raw)
 
-      result = Map.merge(
-        %{
-          "visibility" => "private",
-          "sensitive" => false,
-          "spoiler_text" => "",
-          "application" => nil,
-          "bookmarked" => false,
-          "card" => nil,
-          "emojis" => [],
-          "favourited" => false,
-          "favourites_count" => 0,
-          "in_reply_to_account_id" => nil,
-          "in_reply_to_id" => nil,
-          "language" => nil,
-          "mentions" => [],
-          "tags" => [],
-          "muted" => false,
-          "pinned" => false,
-          "poll" => nil,
-          "reblog" => nil,
-          "reblogged" => false,
-          "reblogs_count" => 0,
-          "replies_count" => 0
-        },
-        flattened
-        |> Map.merge(
-          %{}
-          |> then(fn map ->
-            if account_data, do: Map.put(map, :account, account_data), else: map
-          end)
-          |> then(fn map ->
-            if reblog_data, do: Map.put(map, :reblog, reblog_data), else: map
-          end)
+      result =
+        Map.merge(
+          %{
+            "visibility" => "private",
+            "sensitive" => false,
+            "spoiler_text" => "",
+            "application" => nil,
+            "bookmarked" => false,
+            "card" => nil,
+            "emojis" => [],
+            "favourited" => false,
+            "favourites_count" => 0,
+            "in_reply_to_account_id" => nil,
+            "in_reply_to_id" => nil,
+            "language" => nil,
+            "mentions" => [],
+            "tags" => [],
+            "muted" => false,
+            "pinned" => false,
+            "poll" => nil,
+            "reblog" => nil,
+            "reblogged" => false,
+            "reblogs_count" => 0,
+            "replies_count" => 0
+          },
+          flattened
+          |> Map.merge(
+            %{}
+            |> then(fn map ->
+              if account_data, do: Map.put(map, :account, account_data), else: map
+            end)
+            |> then(fn map ->
+              if reblog_data, do: Map.put(map, :reblog, reblog_data), else: map
+            end)
+          )
+          |> Enums.stringify_keys()
         )
-        |> Enums.stringify_keys()
-      )
     end
 
     # Prepare the original status for a boost/reblog
@@ -346,16 +365,18 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
       # Get creator (prefer :creator, fallback to :subject)
       creator = get_field(activity, :creator) || get_field(activity, :subject)
-      account = if creator do
-        Utils.maybe_apply(MeAdapter, :prepare_user, creator, fallback_return: creator)
-      else
-        nil
-      end
+
+      account =
+        if creator do
+          Utils.maybe_apply(MeAdapter, :prepare_user, creator, fallback_return: creator)
+        else
+          nil
+        end
 
       media_raw =
         get_field(post, :media) ||
-        get_field(activity, :media) ||
-        []
+          get_field(activity, :media) ||
+          []
 
       # media_attachments = prepare_media_attachments(media_raw)
 
@@ -366,7 +387,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         "uri" => get_field(activity, :uri) || get_field(post, :canonical_uri),
         "url" => get_field(activity, :uri) || get_field(post, :canonical_uri),
         "account" => account,
-        "content" => get_field(post_content, :content) || get_field(post_content, :html_body) || "",
+        "content" =>
+          get_field(post_content, :content) || get_field(post_content, :html_body) || "",
         "visibility" => "public",
         "sensitive" => false,
         "spoiler_text" => get_field(post_content, :summary) || "",
@@ -377,7 +399,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         "reblogs_count" => 0,
         "favourites_count" => 0,
         "replies_count" => 0,
-        "reblog" => nil,  # Nested reblogs not supported
+        # Nested reblogs not supported
+        "reblog" => nil,
         "application" => nil,
         "language" => nil,
         "muted" => false,
@@ -392,6 +415,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       }
       |> Enums.stringify_keys()
     end
+
     defp prepare_reblog(_), do: nil
 
     # Status interaction mutations
@@ -588,6 +612,31 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         |> Enums.stringify_keys()
         # |> Enums.map_put_default(:note, "") # because some clients don't accept nil
       )
+    end
+
+    # Encode cursor for use in Link headers
+    # All cursors must be consistently encoded to base64
+    # Must use url_encode64 to match Paginator's url_decode64!
+    defp encode_cursor_for_link_header(nil), do: nil
+
+    defp encode_cursor_for_link_header(cursor) when is_map(cursor) do
+      cursor
+      |> :erlang.term_to_binary()
+      |> Base.url_encode64()
+    end
+
+    defp encode_cursor_for_link_header(cursor) when is_binary(cursor) do
+      # Check if already base64 encoded (from Paginator)
+      if String.match?(cursor, ~r/^g3[A-Za-z0-9_-]+=*$/) do
+        # Already encoded, pass through unchanged
+        cursor
+      else
+        # Plain ID from cursor_for_record_fun - convert to cursor map and encode
+        # Matches Bonfire's cursor_fields format: {{:activity, :id}, :desc}
+        %{{:activity, :id} => cursor}
+        |> :erlang.term_to_binary()
+        |> Base.url_encode64()
+      end
     end
   end
 end

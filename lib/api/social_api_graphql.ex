@@ -533,23 +533,25 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       filters = e(filters, :filter, [])
 
-      feed_name_resolved = feed_name ||
-           Types.maybe_to_atom(
-             e(filters, :feed_name, nil) ||
-               Bonfire.Social.FeedLoader.feed_name_or_default(:default, current_user)
-           )
+      feed_name_resolved =
+        feed_name ||
+          Types.maybe_to_atom(
+            e(filters, :feed_name, nil) ||
+              Bonfire.Social.FeedLoader.feed_name_or_default(:default, current_user)
+          )
 
       Bonfire.Social.FeedActivities.feed(
         feed_name_resolved,
         filters,
         current_user: current_user,
-        pagination: pagination_args,
+        paginate: pagination_args,
         # we don't want to preload anything unnecessarily (relying instead on preloads in sub-field definitions)
         preload:
           case e(filters, :preload, nil) || e(filters, "preload", nil) do
             preload_list when is_list(preload_list) and preload_list != [] ->
               # Convert string preload options to atoms (for Mastodon API N+1 optimization)
               Enum.map(preload_list, &Types.maybe_to_atom/1)
+
             _ ->
               # Fall back to existing logic based on feed_type
               case feed_type do
