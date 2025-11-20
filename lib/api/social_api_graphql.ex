@@ -544,7 +544,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         feed_name_resolved,
         filters,
         current_user: current_user,
-        pagination: pagination_args,
+        paginate: pagination_args,
         # we don't want to preload anything unnecessarily (relying instead on preloads in sub-field definitions)
         preload:
           case e(filters, :preload, nil) || e(filters, "preload", nil) do

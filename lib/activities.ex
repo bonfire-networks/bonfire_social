@@ -1681,20 +1681,6 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
-  def maybe_filter(query, {:id_before, id}, _opts) when is_binary(id) and id != "" do
-    # Filter for Mastodon max_id compatibility - get activities with ID less than this
-    where(query, [activity: activity], activity.id < ^id)
-  end
-
-  def maybe_filter(query, {:id_before, _}, _opts), do: query
-
-  def maybe_filter(query, {:id_after, id}, _opts) when is_binary(id) and id != "" do
-    # Filter for Mastodon since_id/min_id compatibility - get activities with ID greater than this
-    where(query, [activity: activity], activity.id > ^id)
-  end
-
-  def maybe_filter(query, {:id_after, _}, _opts), do: query
-
   def maybe_filter(query, {:subject_types, types}, _opts) do
     case Bonfire.Common.Types.table_types(types) do
       table_ids when is_list(table_ids) and table_ids != [] ->

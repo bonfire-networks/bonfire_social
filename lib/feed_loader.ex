@@ -473,10 +473,7 @@ defmodule Bonfire.Social.FeedLoader do
     else
       opts
     end
-    |> Keyword.merge(
-      Activities.order_pagination_opts(filters[:sort_by], filters[:sort_order])
-      |> debug("pagination opts")
-    )
+    |> Keyword.merge(Activities.order_pagination_opts(filters[:sort_by], filters[:sort_order]))
   end
 
   defp do_feed_many_paginated(query, filters, opts) do
@@ -490,8 +487,6 @@ defmodule Bonfire.Social.FeedLoader do
 
   @decorate time()
   defp paginate_and_boundarise_feed(query, filters, opts) do
-    debug("Starting paginate_and_boundarise_feed")
-
     opts =
       prepare_opts_for_pagination(query, filters, opts)
       |> Keyword.put_new_lazy(:query_with_deferred_join, fn ->
@@ -587,8 +582,8 @@ defmodule Bonfire.Social.FeedLoader do
         |> do_feed_many_paginated(
           filters,
           opts
+          |> Keyword.put_new(:paginate, true)
           |> Keyword.merge(
-            paginate: true,
             return: :query,
             multiply_limit: opts[:deferred_join_multiply_limit] || 2
           )
