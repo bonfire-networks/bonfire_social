@@ -23,7 +23,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
     object :post do
       field(:id, :id)
-      field(:post_content, :post_content)
+
+      # Use Dataloader to batch-load post content (prevents N+1 queries)
+      field :post_content, :post_content do
+        resolve(Helpers.dataloader(Needle.Pointer, :post_content))
+      end
 
       # Use Dataloader to batch load activity association (prevents N+1)
       field :activity, :activity do
@@ -31,12 +35,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         resolve(Helpers.dataloader(Needle.Pointer, :activity))
       end
 
-      # Use Dataloader to batch-load media attachments (prevents N+1 queries)
-      # Skip boundary checks for internal API calls (REST layer already authenticated)
-      field :media, list_of(:media) do
-        description("Media attached to this post")
-        resolve(Helpers.dataloader(Needle.Pointer, :media))
-      end
+      # Media is postloaded via Activities.activity_preloads in feed query
+      # No custom resolver needed - just return the postloaded :media field
+      field(:media, list_of(:media), description: "Media attached to this post")
 
       field(:activities, list_of(:activity),
         description: "All activities associated with this post (TODO)"
@@ -72,7 +73,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       field(:subject_id, :string)
 
       field(:subject, :any_character) do
-        resolve(Absinthe.Resolution.Helpers.dataloader(Needle.Pointer))
+        resolve(Helpers.dataloader(Needle.Pointer))
       end
 
       field(:object_id, :string)
@@ -142,10 +143,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       # Use Dataloader to batch-load media attachments (prevents N+1 queries)
       # Skip boundary checks for internal API calls (REST layer already authenticated)
-      field :media, list_of(:media) do
-        description("Media attached to this activity")
-        resolve(Helpers.dataloader(Needle.Pointer, :media))
-      end
+      # Media is postloaded via Activities.activity_preloads in feed query
+      # No custom resolver needed - just return the postloaded :media field
+      field(:media, list_of(:media), description: "Media attached to this activity")
 
       # Use Dataloader for association loading to prevent N+1 queries
       # Dataloader batches all post_content loads across activities in a single query
@@ -393,6 +393,12 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         description:
           "Preload options to avoid N+1 queries (eg. with_subject, with_creator, with_media)"
       )
+
+      field(:skip_current_user_preload, :boolean,
+        default_value: nil,
+        description:
+          "Set to false to load current user's subject data in feeds (needed for notifications)"
+      )
     end
 
     input_object :post_filters do
@@ -540,27 +546,54 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
               Bonfire.Social.FeedLoader.feed_name_or_default(:default, current_user)
           )
 
-      Bonfire.Social.FeedActivities.feed(
-        feed_name_resolved,
-        filters,
-        current_user: current_user,
-        paginate: pagination_args,
-        # we don't want to preload anything unnecessarily (relying instead on preloads in sub-field definitions)
-        preload:
-          case e(filters, :preload, nil) || e(filters, "preload", nil) do
-            preload_list when is_list(preload_list) and preload_list != [] ->
-              # Convert string preload options to atoms (for Mastodon API N+1 optimization)
-              Enum.map(preload_list, &Types.maybe_to_atom/1)
+      feed_result =
+        Bonfire.Social.FeedActivities.feed(
+          feed_name_resolved,
+          filters,
+          [
+            current_user: current_user,
+            paginate: pagination_args,
+            # we don't want to preload anything unnecessarily (relying instead on preloads in sub-field definitions)
+            preload:
+              case e(filters, :preload, nil) || e(filters, "preload", nil) do
+                preload_list when is_list(preload_list) and preload_list != [] ->
+                  # Convert string preload options to atoms (for Mastodon API N+1 optimization)
+                  Enum.map(preload_list, &Types.maybe_to_atom/1)
 
-            _ ->
-              # Fall back to existing logic based on feed_type
-              case feed_type do
-                :objects -> :per_object
-                :media -> :per_media
-                _activities -> false
+                _ ->
+                  # Fall back to existing logic based on feed_type
+                  case feed_type do
+                    :objects -> :per_object
+                    :media -> :per_media
+                    _activities -> false
+                  end
               end
-          end
-      )
+          ]
+        )
+
+      # Apply postloads (same pattern as LiveHandler.do_preload_extras)
+      # Media requires postloading because it uses complex join logic
+      postloads = [:with_media]
+
+      # Apply postloads to raw feed items before pagination
+      feed_with_media =
+        if feed_result.edges && length(feed_result.edges) > 0 do
+          # Apply postloads to the raw feed items
+          # Use preload_nested to tell activity_preloads about the structure
+          loaded_items =
+            feed_result.edges
+            |> Activities.activity_preloads(postloads,
+              current_user: current_user,
+              skip_boundary_check: true,
+              preload_nested: {[:activity], []}
+            )
+
+          %{feed_result | edges: loaded_items}
+        else
+          feed_result
+        end
+
+      feed_with_media
       |> Pagination.connection_paginate(pagination_args,
         item_prepare_fun:
           case feed_type do

@@ -10,6 +10,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       action: [mode: :internal]
 
     alias Bonfire.API.GraphQL.RestAdapter
+    alias Bonfire.API.MastoCompat.{Schemas, Mappers, InteractionHandler}
     alias Bonfire.Common.Utils
     alias Bonfire.Common.Enums
     alias Bonfire.Me.API.GraphQLMasto.Adapter, as: MeAdapter
@@ -18,6 +19,16 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     name
     summary
     content: html_body
+    "
+
+    @media "
+    id
+    url
+    path
+    media_type
+    label
+    description
+    size
     "
 
     @user Utils.maybe_apply(MeAdapter, :user_profile_query, [], fallback_return: "id")
@@ -41,6 +52,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         id
         post_content {
           #{@post_content}
+        }
+        media {
+          #{@media}
         }
         activity {
           id
@@ -68,6 +82,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
               id
               post_content {
                 #{@post_content}
+              }
+              media {
+                #{@media}
               }
               activity {
                 id
@@ -116,13 +133,107 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       # (see social_api_graphql.ex for peered/created Dataloader fields)
       # Pagination params are already translated by the controller
 
+      current_user = conn.assigns[:current_user]
+      prepare_fn = &Mappers.Status.from_activity(&1, current_user: current_user)
+
       graphql(conn, :feed, params)
-      |> process_feed_response(conn, params, &prepare_activity/1, "feed")
+      |> process_feed_edges(prepare_fn, "feed")
+      |> then(&respond_with_feed(conn, params, &1))
+    end
+
+    @graphql "query ($filter: FeedFilters, $first: Int, $last: Int, $after: String, $before: String) {
+      feed_activities(filter: $filter, first: $first, last: $last, after: $after, before: $before) {
+      edges { node {
+              #{@activity}
+      }}
+      page_info: pageInfo {
+        has_next_page: hasNextPage
+        has_previous_page: hasPreviousPage
+        start_cursor: startCursor
+        end_cursor: endCursor
+      }
+    }}"
+    def notifications(params, conn) do
+      # N+1 queries are prevented by Dataloader in GraphQL field resolvers
+      # Pagination params are already translated by the controller
+      # Filter is already set to notifications feed by controller
+
+      current_user = conn.assigns[:current_user]
+      notification_filters = extract_notification_filters(conn.params)
+      prepare_fn = &Mappers.Notification.from_activity(&1, current_user: current_user)
+
+      graphql(conn, :notifications, params)
+      |> process_feed_edges(prepare_fn, "notification")
+      |> apply_notification_filters(notification_filters)
+      |> then(&respond_with_feed(conn, params, &1))
+    end
+
+    # Apply Mastodon-specific notification filtering to result tuple
+    defp apply_notification_filters({:ok, items, page_info}, filters) do
+      filtered_items = filter_notifications(items, filters)
+      {:ok, filtered_items, page_info}
+    end
+
+    defp apply_notification_filters({:error, _} = error, _filters), do: error
+
+    # Extract notification filtering parameters from request
+    defp extract_notification_filters(params) do
+      %{
+        types: extract_types_filter(params["types"]),
+        exclude_types: extract_types_filter(params["exclude_types"]),
+        account_id: params["account_id"]
+      }
+    end
+
+    # Parse types/exclude_types arrays from params
+    # Mastodon sends these as arrays in query params like: ?exclude_types[]=follow&exclude_types[]=mention
+    defp extract_types_filter(nil), do: nil
+    defp extract_types_filter(types) when is_list(types), do: types
+    defp extract_types_filter(types) when is_binary(types), do: [types]
+    defp extract_types_filter(_), do: nil
+
+    # Filter notifications based on Mastodon filtering params
+    defp filter_notifications(notifications, %{types: nil, exclude_types: nil, account_id: nil}) do
+      # No filters, return all
+      notifications
+    end
+
+    defp filter_notifications(notifications, filters) do
+      notifications
+      |> Enum.filter(fn notification ->
+        type = Map.get(notification, "type")
+        account = Map.get(notification, "account")
+        account_id = if account, do: Map.get(account, "id"), else: nil
+
+        # Apply type filtering (types and exclude_types are mutually exclusive)
+        type_match =
+          cond do
+            filters.types != nil ->
+              type in filters.types
+
+            filters.exclude_types != nil ->
+              type not in filters.exclude_types
+
+            true ->
+              true
+          end
+
+        # Apply account_id filtering
+        account_match =
+          if filters.account_id do
+            account_id == filters.account_id
+          else
+            true
+          end
+
+        type_match && account_match
+      end)
     end
 
     # Shared helper to process feed responses from GraphQL
-    # Handles edges processing, pagination, and error responses
-    defp process_feed_response(feed_response, conn, params, prepare_fn, feed_type) do
+    # Pure function that returns {:ok, items, page_info} or {:error, reason}
+    # Separates data processing from HTTP concerns for better composability
+    defp process_feed_edges(feed_response, prepare_fn, feed_type) do
       case feed_response do
         %{data: %{feed_activities: %{edges: edges, page_info: page_info}}} when is_list(edges) ->
           # Process edges into items, filtering out invalid ones
@@ -152,22 +263,39 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
               end
             end)
 
-          conn
-          |> add_link_headers(params, page_info, items)
-          |> Phoenix.Controller.json(items)
+          {:ok, items, page_info}
 
         %{errors: errors} ->
-          RestAdapter.error_fn(errors, conn)
+          {:error, errors}
 
         other ->
           error(other, "unexpected_#{feed_type}_response")
-          RestAdapter.error_fn(other, conn)
+          {:error, other}
       end
+    end
+
+    # HTTP response helper - converts result tuple to JSON response
+    defp respond_with_feed(conn, params, {:ok, items, page_info}) do
+      conn
+      |> add_link_headers(params, page_info, items)
+      |> Phoenix.Controller.json(items)
+    end
+
+    defp respond_with_feed(conn, _params, {:error, errors}) do
+      RestAdapter.error_fn(errors, conn)
     end
 
     # Add Mastodon-compatible Link headers for pagination using Paginator cursors
     defp add_link_headers(conn, _params, page_info, items) do
-      base_url = "#{conn.scheme}://#{conn.host}:#{conn.port}#{conn.request_path}"
+      # Build base URL, omitting standard ports (80 for HTTP, 443 for HTTPS)
+      port_part =
+        case {conn.scheme, conn.port} do
+          {"https", 443} -> ""
+          {"http", 80} -> ""
+          {_, port} -> ":#{port}"
+        end
+
+      base_url = "#{conn.scheme}://#{conn.host}#{port_part}#{conn.request_path}"
       base_params = Map.take(conn.params, ["limit"])
 
       # Get cursors from page_info, with fallback to extracting from items
@@ -222,395 +350,50 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
     defp get_field(_, _), do: nil
 
-    # Transform Bonfire media to Mastodon media_attachments format
-    # defp prepare_media_attachments(nil), do: []
-    # defp prepare_media_attachments([]), do: []
-
-    # defp prepare_media_attachments(media) when is_list(media) do
-    #   Enum.map(media, &prepare_media_attachment/1)
-    # end
-
-    # defp prepare_media_attachments(_other), do: []
-
-    # defp prepare_media_attachment(media) do
-    #   media_type = get_field(media, :media_type) || "unknown"
-
-    #   # Determine Mastodon media type from MIME type
-    #   type = cond do
-    #     String.starts_with?(media_type, "image/") -> "image"
-    #     String.starts_with?(media_type, "video/") -> "video"
-    #     String.starts_with?(media_type, "audio/") -> "audio"
-    #     true -> "unknown"
-    #   end
-
-    #   %{
-    #     "id" => get_field(media, :id),
-    #     "type" => type,
-    #     "url" => get_field(media, :url),
-    #     "preview_url" => get_field(media, :url),  # Use same URL for preview
-    #     "remote_url" => nil,
-    #     "meta" => get_field(media, :metadata) || %{},
-    #     "description" => get_field(media, :description) || get_field(media, :label) || "",
-    #     "blurhash" => nil
-    #   }
-    # end
-
-    defp prepare_activity(%{node: activity}), do: prepare_activity(activity)
-
-    defp prepare_activity(activity) do
-      # Check if this is a boost/reblog by comparing verb ID
-      verb_id = get_field(activity, :verb) |> get_field(:verb)
-      boost_verb_id = Bonfire.Boundaries.Verbs.get_id!(:boost)
-      is_boost = verb_id == boost_verb_id
-
-      # Split nested associations from flat fields
-      {nested, flat} = Map.split(activity, [:account, :object, :subject])
-      flattened = Enums.maybe_flatten(flat)
-
-      # Get account data (prefer :account, fallback to :subject)
-      account_data =
-        case get_field(nested, :account) || get_field(nested, :subject) do
-          nil ->
-            nil
-
-          %{} = acc when map_size(acc) == 0 ->
-            nil
-
-          acc ->
-            prepared = Utils.maybe_apply(MeAdapter, :prepare_user, acc, fallback_return: acc)
-            # Ensure prepared account has an ID
-            if is_map(prepared) && (Map.has_key?(prepared, :id) || Map.has_key?(prepared, "id")) do
-              prepared
-            else
-              nil
-            end
-        end
-
-      # Process reblog/boost if this is an Announce activity
-      reblog_data =
-        if is_boost do
-          prepare_reblog(get_field(nested, :object))
-        else
-          nil
-        end
-
-      object = get_field(nested, :object)
-
-      media_raw =
-        get_field(object, :media) ||
-          get_field(get_field(object, :activity), :media) ||
-          get_field(activity, :media) ||
-          []
-
-      # media_attachments = prepare_media_attachments(media_raw)
-
-      result =
-        Map.merge(
-          %{
-            "visibility" => "private",
-            "sensitive" => false,
-            "spoiler_text" => "",
-            "application" => nil,
-            "bookmarked" => false,
-            "card" => nil,
-            "emojis" => [],
-            "favourited" => false,
-            "favourites_count" => 0,
-            "in_reply_to_account_id" => nil,
-            "in_reply_to_id" => nil,
-            "language" => nil,
-            "mentions" => [],
-            "tags" => [],
-            "muted" => false,
-            "pinned" => false,
-            "poll" => nil,
-            "reblog" => nil,
-            "reblogged" => false,
-            "reblogs_count" => 0,
-            "replies_count" => 0
-          },
-          flattened
-          |> Map.merge(
-            %{}
-            |> then(fn map ->
-              if account_data, do: Map.put(map, :account, account_data), else: map
-            end)
-            |> then(fn map ->
-              if reblog_data, do: Map.put(map, :reblog, reblog_data), else: map
-            end)
-          )
-          |> Enums.stringify_keys()
-        )
-    end
-
-    # Prepare the original status for a boost/reblog
-    defp prepare_reblog(nil), do: nil
-
-    # Handle Boost objects - unwrap to get the original post
-    defp prepare_reblog(%{__typename: "Boost"} = boost) do
-      edge = get_field(boost, :edge)
-      original_post = get_field(edge, :object)
-
-      if original_post && get_field(original_post, :__typename) == "Post" do
-        prepare_reblog(original_post)
-      else
-        nil
-      end
-    end
-
-    defp prepare_reblog(%{__typename: "Post"} = post) do
-      # Extract post content and activity
-      post_content = get_field(post, :post_content) || %{}
-      activity = get_field(post, :activity) || %{}
-
-      # Get creator (prefer :creator, fallback to :subject)
-      creator = get_field(activity, :creator) || get_field(activity, :subject)
-
-      account =
-        if creator do
-          Utils.maybe_apply(MeAdapter, :prepare_user, creator, fallback_return: creator)
-        else
-          nil
-        end
-
-      media_raw =
-        get_field(post, :media) ||
-          get_field(activity, :media) ||
-          []
-
-      # media_attachments = prepare_media_attachments(media_raw)
-
-      # Build a status object for the original post
-      %{
-        "id" => get_field(post, :id),
-        "created_at" => get_field(activity, :created_at) || get_field(post, :created_at),
-        "uri" => get_field(activity, :uri) || get_field(post, :canonical_uri),
-        "url" => get_field(activity, :uri) || get_field(post, :canonical_uri),
-        "account" => account,
-        "content" =>
-          get_field(post_content, :content) || get_field(post_content, :html_body) || "",
-        "visibility" => "public",
-        "sensitive" => false,
-        "spoiler_text" => get_field(post_content, :summary) || "",
-        # "media_attachments" => media_attachments,
-        "mentions" => [],
-        "tags" => [],
-        "emojis" => [],
-        "reblogs_count" => 0,
-        "favourites_count" => 0,
-        "replies_count" => 0,
-        # Nested reblogs not supported
-        "reblog" => nil,
-        "application" => nil,
-        "language" => nil,
-        "muted" => false,
-        "bookmarked" => false,
-        "pinned" => false,
-        "favourited" => false,
-        "reblogged" => false,
-        "card" => nil,
-        "poll" => nil,
-        "in_reply_to_id" => nil,
-        "in_reply_to_account_id" => nil
-      }
-      |> Enums.stringify_keys()
-    end
-
-    defp prepare_reblog(_), do: nil
-
     # Status interaction mutations
     # Call Bonfire context functions directly with proper preloads
 
     def like_status(%{"id" => id} = params, conn) do
       debug(params, "like_status called with params")
 
-      current_user = conn.assigns[:current_user]
-
-      if current_user do
-        case Bonfire.Social.Likes.like(current_user, id) do
-          {:ok, like_activity} ->
-            debug(like_activity, "like created successfully")
-
-            # Get the activity with proper preloads to avoid GraphQL type resolution errors
-            opts = [
-              preload: [
-                :with_subject,
-                :with_creator,
-                :with_media,
-                :with_object_more,
-                :with_object_peered,
-                :with_reply_to
-              ]
-            ]
-
-            case Bonfire.Social.Activities.get(id, current_user, opts) do
-              {:ok, activity} ->
-                prepared =
-                  activity
-                  |> prepare_activity()
-                  |> Map.put("favourited", true)
-
-                Phoenix.Controller.json(conn, prepared)
-
-              {:error, reason} ->
-                error(reason, "Failed to fetch activity after like")
-                RestAdapter.error_fn({:error, reason}, conn)
-            end
-
-          {:error, reason} ->
-            error(reason, "like_status error")
-            RestAdapter.error_fn({:error, reason}, conn)
-        end
-      else
-        RestAdapter.error_fn({:error, :unauthorized}, conn)
-      end
+      InteractionHandler.handle_interaction(conn, id,
+        interaction_type: :like,
+        context_fn: &Bonfire.Social.Likes.like/2,
+        flag: "favourited",
+        flag_value: true
+      )
     end
 
     def unlike_status(%{"id" => id} = params, conn) do
       debug(params, "unlike_status called with params")
 
-      current_user = conn.assigns[:current_user]
-
-      if current_user do
-        case Bonfire.Social.Likes.unlike(current_user, id) do
-          {:ok, _} ->
-            debug(id, "unlike completed successfully")
-
-            # Get the activity with proper preloads
-            opts = [
-              preload: [
-                :with_subject,
-                :with_creator,
-                :with_media,
-                :with_object_more,
-                :with_object_peered,
-                :with_reply_to
-              ]
-            ]
-
-            case Bonfire.Social.Activities.get(id, current_user, opts) do
-              {:ok, activity} ->
-                prepared =
-                  activity
-                  |> prepare_activity()
-                  |> Map.put("favourited", false)
-
-                Phoenix.Controller.json(conn, prepared)
-
-              {:error, reason} ->
-                error(reason, "Failed to fetch activity after unlike")
-                RestAdapter.error_fn({:error, reason}, conn)
-            end
-
-          {:error, reason} ->
-            error(reason, "unlike_status error")
-            RestAdapter.error_fn({:error, reason}, conn)
-        end
-      else
-        RestAdapter.error_fn({:error, :unauthorized}, conn)
-      end
+      InteractionHandler.handle_interaction(conn, id,
+        interaction_type: :unlike,
+        context_fn: &Bonfire.Social.Likes.unlike/2,
+        flag: "favourited",
+        flag_value: false
+      )
     end
 
     def boost_status(%{"id" => id} = params, conn) do
       debug(params, "boost_status called with params")
 
-      current_user = conn.assigns[:current_user]
-
-      if current_user do
-        case Bonfire.Social.Boosts.boost(current_user, id) do
-          {:ok, boost_activity} ->
-            debug(boost_activity, "boost created successfully")
-
-            # Get the activity with proper preloads
-            opts = [
-              preload: [
-                :with_subject,
-                :with_creator,
-                :with_media,
-                :with_object_more,
-                :with_object_peered,
-                :with_reply_to
-              ]
-            ]
-
-            case Bonfire.Social.Activities.get(id, current_user, opts) do
-              {:ok, activity} ->
-                prepared =
-                  activity
-                  |> prepare_activity()
-                  |> Map.put("reblogged", true)
-
-                Phoenix.Controller.json(conn, prepared)
-
-              {:error, reason} ->
-                error(reason, "Failed to fetch activity after boost")
-                RestAdapter.error_fn({:error, reason}, conn)
-            end
-
-          {:error, reason} ->
-            error(reason, "boost_status error")
-            RestAdapter.error_fn({:error, reason}, conn)
-        end
-      else
-        RestAdapter.error_fn({:error, :unauthorized}, conn)
-      end
+      InteractionHandler.handle_interaction(conn, id,
+        interaction_type: :boost,
+        context_fn: &Bonfire.Social.Boosts.boost/2,
+        flag: "reblogged",
+        flag_value: true
+      )
     end
 
     def unboost_status(%{"id" => id} = params, conn) do
       debug(params, "unboost_status called with params")
 
-      current_user = conn.assigns[:current_user]
-
-      if current_user do
-        case Bonfire.Social.Boosts.unboost(current_user, id) do
-          {:ok, _} ->
-            debug(id, "unboost completed successfully")
-
-            # Get the activity with proper preloads
-            opts = [
-              preload: [
-                :with_subject,
-                :with_creator,
-                :with_media,
-                :with_object_more,
-                :with_object_peered,
-                :with_reply_to
-              ]
-            ]
-
-            case Bonfire.Social.Activities.get(id, current_user, opts) do
-              {:ok, activity} ->
-                prepared =
-                  activity
-                  |> prepare_activity()
-                  |> Map.put("reblogged", false)
-
-                Phoenix.Controller.json(conn, prepared)
-
-              {:error, reason} ->
-                error(reason, "Failed to fetch activity after unboost")
-                RestAdapter.error_fn({:error, reason}, conn)
-            end
-
-          {:error, reason} ->
-            error(reason, "unboost_status error")
-            RestAdapter.error_fn({:error, reason}, conn)
-        end
-      else
-        RestAdapter.error_fn({:error, :unauthorized}, conn)
-      end
-    end
-
-    defp prepare_post(post) do
-      # TODO: add required fields
-      %{
-        # "locked"=> false,
-      }
-      |> Map.merge(
-        post
-        |> Enums.maybe_flatten()
-        |> Enums.stringify_keys()
-        # |> Enums.map_put_default(:note, "") # because some clients don't accept nil
+      InteractionHandler.handle_interaction(conn, id,
+        interaction_type: :unboost,
+        context_fn: &Bonfire.Social.Boosts.unboost/2,
+        flag: "reblogged",
+        flag_value: false
       )
     end
 
