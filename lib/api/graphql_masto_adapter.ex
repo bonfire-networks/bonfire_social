@@ -4,6 +4,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
     use Arrows
     import Untangle
+    use Bonfire.Common.Repo
 
     use AbsintheClient,
       schema: Bonfire.API.GraphQL.Schema,
@@ -104,6 +105,22 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     object_post_content {
       #{@post_content}
     }
+    replied {
+      reply_to_id: replyToId
+      reply_to: replyTo {
+        id
+        subject_id: subjectId
+      }
+    }
+    liked_by_me: likedByMe
+    boosted_by_me: boostedByMe
+    bookmarked_by_me: bookmarkedByMe
+    like_count: likeCount
+    boost_count: boostCount
+    replies_count: repliesCount
+    media {
+      #{@media}
+    }
     "
 
     # @graphql "query ($filter: PostFilters) {
@@ -134,10 +151,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       # Pagination params are already translated by the controller
 
       current_user = conn.assigns[:current_user]
-      prepare_fn = &Mappers.Status.from_activity(&1, current_user: current_user)
 
       graphql(conn, :feed, params)
-      |> process_feed_edges(prepare_fn, "feed")
+      |> process_feed_edges_with_batch_loading(current_user, "feed")
       |> then(&respond_with_feed(conn, params, &1))
     end
 
@@ -160,10 +176,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
       current_user = conn.assigns[:current_user]
       notification_filters = extract_notification_filters(conn.params)
-      prepare_fn = &Mappers.Notification.from_activity(&1, current_user: current_user)
 
       graphql(conn, :notifications, params)
-      |> process_feed_edges(prepare_fn, "notification")
+      |> process_feed_edges_with_batch_loading(current_user, "notification")
       |> apply_notification_filters(notification_filters)
       |> then(&respond_with_feed(conn, params, &1))
     end
@@ -228,6 +243,338 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
         type_match && account_match
       end)
+    end
+
+    # GraphQL query for fetching a single activity by ID
+    # Must be immediately before show_status function for AbsintheClient
+    @graphql "query ($filter: ActivityFilter) {
+      activity(filter: $filter) {
+        #{@activity}
+      }
+    }"
+    # Get single status by ID
+    # Uses GraphQL query defined above to leverage Dataloader and avoid N+1 queries
+    # Returns map data (not Ecto structs) to prevent Jason.Encoder errors
+    def show_status(%{"id" => id}, conn) do
+      current_user = conn.assigns[:current_user]
+
+      # Call GraphQL with proper query name (matches function name)
+      # The @activity fragment ensures complete selection set → returns maps not structs
+      # Use object_id (not activity_id) - status ID is the post/object ID in Mastodon API
+      case graphql(conn, :show_status, %{"filter" => %{"object_id" => id}}) do
+        # CRITICAL: Use atom keys (:data, :activity), not string keys
+        %{data: %{activity: activity}} when not is_nil(activity) ->
+          # activity is now a MAP (from GraphQL), not an Ecto struct
+          # Batch load interaction states for this single activity
+          object_ids = [get_activity_id(activity)] |> Enum.reject(&is_nil/1)
+          interaction_states = batch_load_interaction_states(current_user, object_ids)
+
+          status =
+            Mappers.Status.from_activity(activity,
+              current_user: current_user,
+              interaction_states: interaction_states
+            )
+
+          if Map.get(status, "id") do
+            Phoenix.Controller.json(conn, status)
+          else
+            RestAdapter.error_fn({:error, :not_found}, conn)
+          end
+
+        %{data: %{activity: nil}} ->
+          RestAdapter.error_fn({:error, :not_found}, conn)
+
+        %{errors: errors} ->
+          # Log errors for debugging
+          error(errors, "GraphQL query failed in show_status")
+          RestAdapter.error_fn({:error, errors}, conn)
+
+        other ->
+          error(other, "Unexpected GraphQL response in show_status")
+          RestAdapter.error_fn({:error, :unexpected_response}, conn)
+      end
+    end
+
+    # GraphQL query for fetching thread context (ancestors and descendants)
+    # Must be immediately before status_context function for AbsintheClient
+    @graphql "query ($id: ID!) {
+      thread_context(id: $id) {
+        ancestors {
+          #{@activity}
+        }
+        descendants {
+          #{@activity}
+        }
+      }
+    }"
+    # Get thread context (ancestors and descendants)
+    # Uses GraphQL query defined above to leverage Dataloader and avoid N+1 queries
+    # Returns map data (not Ecto structs) to prevent Jason.Encoder errors
+    def status_context(%{"id" => id}, conn) do
+      current_user = conn.assigns[:current_user]
+
+      # Call GraphQL with proper query name (matches function name)
+      # The @activity fragment ensures complete selection set → returns maps not structs
+      case graphql(conn, :status_context, %{"id" => id}) do
+        %{data: %{thread_context: %{ancestors: ancestors, descendants: descendants}}} ->
+          # Collect all activity IDs for batch loading interaction states
+          all_activities = (ancestors || []) ++ (descendants || [])
+          object_ids = all_activities |> Enum.map(&get_activity_id/1) |> Enum.reject(&is_nil/1)
+          interaction_states = batch_load_interaction_states(current_user, object_ids)
+
+          # Transform maps to Mastodon format with interaction states
+          map_opts = [current_user: current_user, interaction_states: interaction_states]
+
+          context = %{
+            "ancestors" => Enum.map(ancestors || [], &Mappers.Status.from_activity(&1, map_opts)),
+            "descendants" =>
+              Enum.map(descendants || [], &Mappers.Status.from_activity(&1, map_opts))
+          }
+
+          Phoenix.Controller.json(conn, context)
+
+        %{data: %{thread_context: nil}} ->
+          # Empty context if thread not found
+          Phoenix.Controller.json(conn, %{"ancestors" => [], "descendants" => []})
+
+        %{errors: errors} ->
+          error(errors, "GraphQL query failed in status_context")
+          RestAdapter.error_fn({:error, errors}, conn)
+
+        other ->
+          error(other, "Unexpected GraphQL response in status_context")
+          # Return empty context on unexpected response
+          Phoenix.Controller.json(conn, %{"ancestors" => [], "descendants" => []})
+      end
+    end
+
+    # Get accounts who favourited/liked a status
+    def status_favourited_by(%{"id" => id} = params, conn) do
+      current_user = conn.assigns[:current_user]
+      opts = build_list_pagination_opts(params, current_user)
+
+      case Bonfire.Social.Likes.list_of(id, opts) do
+        %{edges: edges, page_info: page_info} ->
+          accounts =
+            edges
+            |> Enum.map(& &1.subject)
+            |> Enum.map(&Mappers.Account.from_user(&1, current_user: current_user))
+            |> Enum.reject(&is_nil/1)
+
+          conn
+          |> add_link_headers(params, page_info, accounts)
+          |> Phoenix.Controller.json(accounts)
+
+        {:error, reason} ->
+          RestAdapter.error_fn({:error, reason}, conn)
+
+        _other ->
+          # If list_of returns unexpected format, return empty list
+          Phoenix.Controller.json(conn, [])
+      end
+    end
+
+    # Get accounts who reblogged/boosted a status
+    def status_reblogged_by(%{"id" => id} = params, conn) do
+      current_user = conn.assigns[:current_user]
+      opts = build_list_pagination_opts(params, current_user)
+
+      case Bonfire.Social.Boosts.list_of(id, opts) do
+        %{edges: edges, page_info: page_info} ->
+          accounts =
+            edges
+            |> Enum.map(& &1.subject)
+            |> Enum.map(&Mappers.Account.from_user(&1, current_user: current_user))
+            |> Enum.reject(&is_nil/1)
+
+          conn
+          |> add_link_headers(params, page_info, accounts)
+          |> Phoenix.Controller.json(accounts)
+
+        {:error, reason} ->
+          RestAdapter.error_fn({:error, reason}, conn)
+
+        _other ->
+          # If list_of returns unexpected format, return empty list
+          Phoenix.Controller.json(conn, [])
+      end
+    end
+
+    # Helper to extract activity/object ID for batch loading
+    # Check object_id first - for Mastodon API, status ID is the object/post ID
+    defp get_activity_id(%{object_id: id}), do: id
+    defp get_activity_id(%{id: id}), do: id
+    defp get_activity_id(_), do: nil
+
+    # Batch load interaction states for multiple objects to avoid N+1 queries
+    # Returns a map with %{object_id => %{favourited: bool, reblogged: bool, bookmarked: bool}}
+    defp batch_load_interaction_states(nil, _object_ids), do: %{}
+    defp batch_load_interaction_states(_user, []), do: %{}
+
+    defp batch_load_interaction_states(current_user, object_ids) do
+      # Query all likes, boosts, and bookmarks for this user in 3 queries total
+      liked_ids = batch_load_liked(current_user, object_ids)
+      boosted_ids = batch_load_boosted(current_user, object_ids)
+      bookmarked_ids = batch_load_bookmarked(current_user, object_ids)
+
+      # Build a map of object_id => interaction states
+      object_ids
+      |> Enum.map(fn object_id ->
+        {object_id,
+         %{
+           favourited: MapSet.member?(liked_ids, object_id),
+           reblogged: MapSet.member?(boosted_ids, object_id),
+           bookmarked: MapSet.member?(bookmarked_ids, object_id)
+         }}
+      end)
+      |> Map.new()
+    end
+
+    # Batch load all object IDs liked by user (filtered to specific object_ids)
+    defp batch_load_liked(current_user, object_ids) do
+      try do
+        # Query edges table directly for better performance
+        import Ecto.Query
+        alias Bonfire.Data.Edges.Edge
+        like_table_id = Bonfire.Data.Social.Like.__pointers__(:table_id)
+
+        from(e in Edge,
+          where: e.subject_id == ^current_user.id,
+          where: e.object_id in ^object_ids,
+          where: e.table_id == ^like_table_id,
+          select: e.object_id
+        )
+        |> repo().all()
+        |> MapSet.new()
+      rescue
+        _ -> MapSet.new()
+      end
+    end
+
+    # Batch load all object IDs boosted by user (filtered to specific object_ids)
+    defp batch_load_boosted(current_user, object_ids) do
+      try do
+        import Ecto.Query
+        alias Bonfire.Data.Edges.Edge
+        boost_table_id = Bonfire.Data.Social.Boost.__pointers__(:table_id)
+
+        from(e in Edge,
+          where: e.subject_id == ^current_user.id,
+          where: e.object_id in ^object_ids,
+          where: e.table_id == ^boost_table_id,
+          select: e.object_id
+        )
+        |> repo().all()
+        |> MapSet.new()
+      rescue
+        _ -> MapSet.new()
+      end
+    end
+
+    # Batch load all object IDs bookmarked by user (filtered to specific object_ids)
+    defp batch_load_bookmarked(current_user, object_ids) do
+      try do
+        import Ecto.Query
+        alias Bonfire.Data.Edges.Edge
+        bookmark_table_id = Bonfire.Data.Social.Bookmark.__pointers__(:table_id)
+
+        from(e in Edge,
+          where: e.subject_id == ^current_user.id,
+          where: e.object_id in ^object_ids,
+          where: e.table_id == ^bookmark_table_id,
+          select: e.object_id
+        )
+        |> repo().all()
+        |> MapSet.new()
+      rescue
+        _ -> MapSet.new()
+      end
+    end
+
+    # Build pagination opts for list queries (favourited_by, reblogged_by)
+    # These don't use the feed cursor format, just simple pagination
+    defp build_list_pagination_opts(params, current_user) do
+      limit = validate_limit(params["limit"])
+
+      base_opts = [
+        current_user: current_user,
+        limit: limit
+      ]
+
+      # Add pagination cursors if present
+      base_opts
+      |> maybe_add_cursor(params, "max_id", :after)
+      |> maybe_add_cursor(params, "since_id", :before)
+      |> maybe_add_cursor(params, "min_id", :before)
+    end
+
+    defp maybe_add_cursor(opts, params, param_name, cursor_key) do
+      if cursor = params[param_name] do
+        Keyword.put(opts, cursor_key, cursor)
+      else
+        opts
+      end
+    end
+
+    defp validate_limit(nil), do: 40
+
+    defp validate_limit(limit) when is_binary(limit),
+      do: String.to_integer(limit) |> validate_limit()
+
+    defp validate_limit(limit) when is_integer(limit) and limit > 0 and limit <= 80, do: limit
+    defp validate_limit(limit) when is_integer(limit) and limit > 80, do: 80
+    defp validate_limit(_), do: 40
+
+    # Process feed edges with batch loading of interaction states to avoid N+1 queries
+    # This extracts object IDs, batch loads interaction states, then delegates to process_feed_edges
+    defp process_feed_edges_with_batch_loading(feed_response, current_user, feed_type) do
+      case feed_response do
+        %{data: %{feed_activities: %{edges: edges}}} when is_list(edges) ->
+          # Extract object IDs from all activities for batch loading
+          object_ids =
+            edges
+            |> Enum.map(fn edge ->
+              activity = Map.get(edge, :node) || edge
+              get_activity_id(activity)
+            end)
+            |> Enum.reject(&is_nil/1)
+
+          # Batch load interaction states in 3 queries total (not N×3)
+          interaction_states = batch_load_interaction_states(current_user, object_ids)
+
+          # Build prepare function with preloaded interaction states
+          prepare_fn =
+            case feed_type do
+              "notification" ->
+                &Mappers.Notification.from_activity(&1,
+                  current_user: current_user,
+                  interaction_states: interaction_states
+                )
+
+              _ ->
+                &Mappers.Status.from_activity(&1,
+                  current_user: current_user,
+                  interaction_states: interaction_states
+                )
+            end
+
+          # Delegate to existing process_feed_edges with prepared function
+          process_feed_edges(feed_response, prepare_fn, feed_type)
+
+        # Pass through errors and other responses
+        other ->
+          # For errors, use a simple prepare function without interaction states
+          prepare_fn =
+            case feed_type do
+              "notification" ->
+                &Mappers.Notification.from_activity(&1, current_user: current_user)
+
+              _ ->
+                &Mappers.Status.from_activity(&1, current_user: current_user)
+            end
+
+          process_feed_edges(other, prepare_fn, feed_type)
+      end
     end
 
     # Shared helper to process feed responses from GraphQL

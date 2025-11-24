@@ -162,8 +162,10 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         resolve(Helpers.dataloader(Needle.Pointer, :created))
       end
 
-      field :replied, :replied,
-        description: "Information about the thread, and replies to this activity (if any)"
+      field :replied, :replied do
+        description("Information about the thread, and replies to this activity (if any)")
+        resolve(Helpers.dataloader(Needle.Pointer, :replied))
+      end
 
       # field(:direct_replies, list_of(:replied)) do
       #   arg(:paginate, :paginate)
@@ -171,6 +173,117 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       #   # , args: %{my: :followed})
       #   resolve(Absinthe.Resolution.Helpers.dataloader(Needle.Pointer))
       # end
+
+      # User interaction flags (batch-loaded via Dataloader.KV to prevent N+1 queries)
+      field :liked_by_me, :boolean do
+        resolve(fn activity, _args, %{context: %{loader: loader, current_user: user}} = _info ->
+          if user && user.id do
+            loader
+            |> Dataloader.load(:user_interactions, :liked, %{
+              user_id: user.id,
+              activity_id: activity.id
+            })
+            |> Helpers.on_load(fn loader ->
+              result =
+                Dataloader.get(loader, :user_interactions, :liked, %{
+                  user_id: user.id,
+                  activity_id: activity.id
+                })
+
+              {:ok, result || false}
+            end)
+          else
+            {:ok, false}
+          end
+        end)
+      end
+
+      field :boosted_by_me, :boolean do
+        resolve(fn activity, _args, %{context: %{loader: loader, current_user: user}} = _info ->
+          if user && user.id do
+            loader
+            |> Dataloader.load(:user_interactions, :boosted, %{
+              user_id: user.id,
+              activity_id: activity.id
+            })
+            |> Helpers.on_load(fn loader ->
+              result =
+                Dataloader.get(loader, :user_interactions, :boosted, %{
+                  user_id: user.id,
+                  activity_id: activity.id
+                })
+
+              {:ok, result || false}
+            end)
+          else
+            {:ok, false}
+          end
+        end)
+      end
+
+      field :bookmarked_by_me, :boolean do
+        resolve(fn activity, _args, %{context: %{loader: loader, current_user: user}} = _info ->
+          if user && user.id do
+            loader
+            |> Dataloader.load(:user_interactions, :bookmarked, %{
+              user_id: user.id,
+              activity_id: activity.id
+            })
+            |> Helpers.on_load(fn loader ->
+              result =
+                Dataloader.get(loader, :user_interactions, :bookmarked, %{
+                  user_id: user.id,
+                  activity_id: activity.id
+                })
+
+              {:ok, result || false}
+            end)
+          else
+            {:ok, false}
+          end
+        end)
+      end
+
+      # Engagement counts (from EdgeTotal system)
+      # Use Dataloader to batch-load count associations, then extract the count value
+      field :like_count, :integer do
+        resolve(fn activity, _args, %{context: %{loader: loader}} = _info ->
+          loader
+          |> Dataloader.load(Needle.Pointer, :like_count, activity)
+          |> Helpers.on_load(fn loader ->
+            case Dataloader.get(loader, Needle.Pointer, :like_count, activity) do
+              %{object_count: count} when is_integer(count) -> {:ok, count}
+              _ -> {:ok, 0}
+            end
+          end)
+        end)
+      end
+
+      field :boost_count, :integer do
+        resolve(fn activity, _args, %{context: %{loader: loader}} = _info ->
+          loader
+          |> Dataloader.load(Needle.Pointer, :boost_count, activity)
+          |> Helpers.on_load(fn loader ->
+            case Dataloader.get(loader, Needle.Pointer, :boost_count, activity) do
+              %{object_count: count} when is_integer(count) -> {:ok, count}
+              _ -> {:ok, 0}
+            end
+          end)
+        end)
+      end
+
+      field :replies_count, :integer do
+        resolve(fn activity, _args, %{context: %{loader: loader}} = _info ->
+          loader
+          |> Dataloader.load(Needle.Pointer, :replied, activity)
+          |> Helpers.on_load(fn loader ->
+            case Dataloader.get(loader, Needle.Pointer, :replied, activity) do
+              %{direct_replies_count: count} when is_integer(count) -> {:ok, count}
+              _ -> {:ok, 0}
+            end
+          end)
+        end)
+      end
     end
 
     connection(node_type: :activity)
@@ -253,7 +366,10 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       field(:thread_id, :id)
       field(:reply_to_id, :id)
 
-      # field(:reply_to, :activity)
+      field :reply_to, :activity do
+        description("The activity being replied to")
+        resolve(Helpers.dataloader(Needle.Pointer, :reply_to))
+      end
 
       field(:direct_replies_count, :integer)
       field(:nested_replies_count, :integer)
@@ -267,6 +383,14 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       #   # , args: %{my: :followed})
       #   resolve(Absinthe.Resolution.Helpers.dataloader(Needle.Pointer))
       # end
+    end
+
+    object :thread_context do
+      @desc "Activities that are ancestors of the specified activity (from newest to oldest, towards the root)"
+      field(:ancestors, list_of(:activity))
+
+      @desc "Activities that are descendants/replies to the specified activity"
+      field(:descendants, list_of(:activity))
     end
 
     # NOTE: :media object and connection moved to Bonfire.Files.API.GraphQL
@@ -433,6 +557,12 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         resolve(&get_activity/3)
       end
 
+      @desc "Get thread context (ancestors and descendants) for an activity"
+      field :thread_context, :thread_context do
+        arg(:id, non_null(:id))
+        resolve(&get_thread_context/3)
+      end
+
       @desc "Get activities in a feed"
       # field :feed, list_of(:activity) do
       #   arg(:filter, :feed_filters)
@@ -516,6 +646,60 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       Bonfire.Social.Activities.read(id, GraphQL.current_user(info))
     end
 
+    def get_thread_context(_parent, %{id: id} = _args, info) do
+      current_user = GraphQL.current_user(info)
+
+      # Get ancestors (walking up the reply chain to root)
+      ancestor_activities =
+        case Bonfire.Social.Threads.thread_ancestors_path(id, current_user: current_user) do
+          path when is_list(path) and length(path) > 0 ->
+            # Fetch each ancestor activity with preloads for N+1 prevention
+            path
+            |> Enum.map(fn ancestor_id ->
+              case Bonfire.Social.Activities.read(ancestor_id,
+                     current_user: current_user,
+                     preload: [:with_subject, :with_media, :with_reply_to]
+                   ) do
+                {:ok, ancestor_activity} -> ancestor_activity
+                _ -> nil
+              end
+            end)
+            |> Enum.reject(&is_nil/1)
+
+          _ ->
+            []
+        end
+
+      # Get descendants (replies to this activity)
+      # Include with_reply_to preload for threading information
+      descendant_activities =
+        case Bonfire.Social.Threads.list_replies(id,
+               current_user: current_user,
+               preload: [:with_reply_to]
+             ) do
+          %{edges: edges} when is_list(edges) ->
+            edges
+            |> Enum.map(fn edge ->
+              # Extract activity from edge
+              case edge do
+                %{activity: activity} when not is_nil(activity) -> activity
+                %{node: %{activity: activity}} when not is_nil(activity) -> activity
+                _ -> nil
+              end
+            end)
+            |> Enum.reject(&is_nil/1)
+
+          _ ->
+            []
+        end
+
+      {:ok,
+       %{
+         ancestors: ancestor_activities,
+         descendants: descendant_activities
+       }}
+    end
+
     # defp feed(args, info) do
     #   user = GraphQL.current_user(info)
     #   debug(args)
@@ -550,25 +734,23 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         Bonfire.Social.FeedActivities.feed(
           feed_name_resolved,
           filters,
-          [
-            current_user: current_user,
-            paginate: pagination_args,
-            # we don't want to preload anything unnecessarily (relying instead on preloads in sub-field definitions)
-            preload:
-              case e(filters, :preload, nil) || e(filters, "preload", nil) do
-                preload_list when is_list(preload_list) and preload_list != [] ->
-                  # Convert string preload options to atoms (for Mastodon API N+1 optimization)
-                  Enum.map(preload_list, &Types.maybe_to_atom/1)
+          current_user: current_user,
+          paginate: pagination_args,
+          # we don't want to preload anything unnecessarily (relying instead on preloads in sub-field definitions)
+          preload:
+            case e(filters, :preload, nil) || e(filters, "preload", nil) do
+              preload_list when is_list(preload_list) and preload_list != [] ->
+                # Convert string preload options to atoms (for Mastodon API N+1 optimization)
+                Enum.map(preload_list, &Types.maybe_to_atom/1)
 
-                _ ->
-                  # Fall back to existing logic based on feed_type
-                  case feed_type do
-                    :objects -> :per_object
-                    :media -> :per_media
-                    _activities -> false
-                  end
-              end
-          ]
+              _ ->
+                # Fall back to existing logic based on feed_type
+                case feed_type do
+                  :objects -> :per_object
+                  :media -> :per_media
+                  _activities -> false
+                end
+            end
         )
 
       # Apply postloads (same pattern as LiveHandler.do_preload_extras)
