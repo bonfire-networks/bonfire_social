@@ -744,6 +744,28 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       )
     end
 
+    def bookmark_status(%{"id" => id} = params, conn) do
+      debug(params, "bookmark_status called with params")
+
+      InteractionHandler.handle_interaction(conn, id,
+        interaction_type: :bookmark,
+        context_fn: &Bonfire.Social.Bookmarks.bookmark/2,
+        flag: "bookmarked",
+        flag_value: true
+      )
+    end
+
+    def unbookmark_status(%{"id" => id} = params, conn) do
+      debug(params, "unbookmark_status called with params")
+
+      InteractionHandler.handle_interaction(conn, id,
+        interaction_type: :unbookmark,
+        context_fn: &Bonfire.Social.Bookmarks.unbookmark/2,
+        flag: "bookmarked",
+        flag_value: false
+      )
+    end
+
     # Encode cursor for use in Link headers
     # All cursors must be consistently encoded to base64
     # Must use url_encode64 to match Paginator's url_decode64!
