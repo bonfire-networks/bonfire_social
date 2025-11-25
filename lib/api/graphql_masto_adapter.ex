@@ -245,6 +245,122 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       end)
     end
 
+    # Favourites timeline - posts liked by current user
+    # Uses Bonfire.Social.Likes.list_my instead of GraphQL since there's no likes feed query
+    @doc "Get posts favourited/liked by the current user"
+    def favourites(params, conn) do
+      current_user = conn.assigns[:current_user]
+
+      if is_nil(current_user) do
+        RestAdapter.error_fn({:error, :unauthorized}, conn)
+      else
+        # Extract pagination options from params
+        pagination_opts = extract_favourites_pagination_opts(params)
+
+        # Get liked posts using Likes module with proper preloads
+        result =
+          Bonfire.Social.Likes.list_my(
+            Keyword.merge(pagination_opts,
+              current_user: current_user,
+              preload: :object_with_creator
+            )
+          )
+
+        result
+        |> process_likes_result(current_user)
+        |> then(&respond_with_feed(conn, params, &1))
+      end
+    end
+
+    # Extract pagination options for favourites query
+    defp extract_favourites_pagination_opts(params) do
+      limit = validate_limit(params[:first] || params[:last] || 20)
+
+      opts = [limit: limit]
+      opts = if params[:after], do: Keyword.put(opts, :after, params[:after]), else: opts
+      opts = if params[:before], do: Keyword.put(opts, :before, params[:before]), else: opts
+      opts
+    end
+
+    # Process Like edges into Status objects
+    defp process_likes_result(%{edges: edges, page_info: page_info}, current_user) do
+      # First, extract all objects and their IDs
+      objects_with_ids =
+        edges
+        |> Enum.flat_map(fn like_edge ->
+          object =
+            case like_edge do
+              %{edge: %{object: obj}} when not is_nil(obj) -> obj
+              %{object: obj} when not is_nil(obj) -> obj
+              _ -> nil
+            end
+
+          object_id = object && (Map.get(object, :id) || Map.get(object, "id"))
+          if object && object_id, do: [{object, object_id}], else: []
+        end)
+
+      object_ids = Enum.map(objects_with_ids, fn {_, id} -> id end)
+
+      # Batch load boost and bookmark states (likes are known: user favourited these)
+      # This avoids N+1 queries in add_interaction_states
+      boosted_ids =
+        if current_user && length(object_ids) > 0 do
+          batch_load_boosted(object_ids, current_user)
+        else
+          MapSet.new()
+        end
+
+      bookmarked_ids =
+        if current_user && length(object_ids) > 0 do
+          batch_load_bookmarked(object_ids, current_user)
+        else
+          MapSet.new()
+        end
+
+      # Build interaction states map
+      interaction_states =
+        Enum.reduce(object_ids, %{}, fn id, acc ->
+          Map.put(acc, id, %{
+            # User favourited these (that's why they're in the list)
+            favourited: true,
+            reblogged: MapSet.member?(boosted_ids, id),
+            bookmarked: MapSet.member?(bookmarked_ids, id)
+          })
+        end)
+
+      # Transform objects to statuses with pre-loaded interaction states
+      statuses =
+        objects_with_ids
+        |> Enum.flat_map(fn {object, _object_id} ->
+          try do
+            status =
+              Mappers.Status.from_post(object,
+                current_user: current_user,
+                interaction_states: interaction_states
+              )
+
+            if status, do: [status], else: []
+          rescue
+            e ->
+              error(e, "Failed to transform liked post to status")
+              []
+          end
+        end)
+
+      # Add cursor_fields to page_info so Link headers use correct cursor format
+      # Likes uses [id: :desc] (not {:activity, :id})
+      page_info_with_cursor = Map.put(page_info, :cursor_fields, id: :desc)
+
+      {:ok, statuses, page_info_with_cursor}
+    end
+
+    defp process_likes_result({:error, _} = error, _current_user), do: error
+
+    defp process_likes_result(other, _current_user) do
+      error(other, "Unexpected result from Likes.list_my")
+      {:error, :unexpected_response}
+    end
+
     # GraphQL query for fetching a single activity by ID
     # Must be immediately before show_status function for AbsintheClient
     @graphql "query ($filter: ActivityFilter) {
@@ -584,28 +700,37 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       case feed_response do
         %{data: %{feed_activities: %{edges: edges, page_info: page_info}}} when is_list(edges) ->
           # Process edges into items, filtering out invalid ones
+          # Note: Mappers now return nil for invalid items after schema validation
           items =
             edges
             |> Enum.flat_map(fn edge ->
               try do
-                item = prepare_fn.(edge)
-                # Validate that item has required fields
-                if Map.get(item, "account") && Map.get(item, "id") do
-                  # Keep valid item
-                  [item]
-                else
-                  warn(
-                    item,
-                    "#{String.capitalize(feed_type)} item missing required fields (account or id)"
-                  )
+                case prepare_fn.(edge) do
+                  nil ->
+                    # Mapper returned nil (failed validation) - skip silently
+                    # Validation warnings are logged by the mapper itself
+                    []
 
-                  # Skip invalid item
-                  []
+                  item when is_map(item) ->
+                    # Double-check required fields (defensive)
+                    if Map.get(item, "account") && Map.get(item, "id") do
+                      [item]
+                    else
+                      warn(
+                        item,
+                        "#{String.capitalize(feed_type)} item missing required fields (account or id)"
+                      )
+
+                      []
+                    end
+
+                  other ->
+                    warn(other, "#{String.capitalize(feed_type)} mapper returned unexpected type")
+                    []
                 end
               rescue
                 e ->
                   error(e, "Failed to prepare #{feed_type} item from edge: #{inspect(edge)}")
-                  # Skip failed item
                   []
               end
             end)
@@ -649,21 +774,29 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       # (Paginator may set start_cursor to nil on first page)
       cursor_for_record_fun = get_field(page_info, :cursor_for_record_fun) || (&Enums.id/1)
 
+      # Extract cursor field format from page_info for proper encoding
+      # Defaults to {:activity, :id} for timeline compatibility
+      cursor_field = extract_cursor_field(page_info)
+
       start_cursor =
         (get_field(page_info, :start_cursor) ||
            items |> List.first() |> then(&if &1, do: cursor_for_record_fun.(&1)))
-        |> encode_cursor_for_link_header()
+        |> encode_cursor_for_link_header(cursor_field)
 
       end_cursor =
         (get_field(page_info, :end_cursor) ||
            items |> List.last() |> then(&if &1, do: cursor_for_record_fun.(&1)))
-        |> encode_cursor_for_link_header()
+        |> encode_cursor_for_link_header(cursor_field)
 
       links = []
 
+      # Check if we're on the last page (Paginator sets final_cursor instead of end_cursor on last page)
+      is_last_page = get_field(page_info, :final_cursor) != nil
+
       # Add "next" link for pagination (older posts) using end_cursor
+      # Don't add if we're on the last page (no more results)
       links =
-        if end_cursor do
+        if end_cursor && !is_last_page do
           query_params = base_params |> Map.put("max_id", end_cursor) |> URI.encode_query()
           next_link = "<#{base_url}?#{query_params}>; rel=\"next\""
           links ++ [next_link]
@@ -696,6 +829,22 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     end
 
     defp get_field(_, _), do: nil
+
+    # Extract cursor field format from page_info
+    # Returns the field name (e.g., :id or {:activity, :id}) for cursor encoding
+    # Defaults to {:activity, :id} for timeline compatibility
+    defp extract_cursor_field(page_info) when is_map(page_info) do
+      case get_field(page_info, :cursor_fields) do
+        # Format: [id: :desc] or [{:activity, :id}: :desc]
+        [{field, _direction} | _] -> field
+        # Format: [:id] or [{:activity, :id}]
+        [field | _] when is_atom(field) or is_tuple(field) -> field
+        # Default to timeline format
+        _ -> {:activity, :id}
+      end
+    end
+
+    defp extract_cursor_field(_), do: {:activity, :id}
 
     # Status interaction mutations
     # Call Bonfire context functions directly with proper preloads
@@ -769,23 +918,27 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     # Encode cursor for use in Link headers
     # All cursors must be consistently encoded to base64
     # Must use url_encode64 to match Paginator's url_decode64!
-    defp encode_cursor_for_link_header(nil), do: nil
 
-    defp encode_cursor_for_link_header(cursor) when is_map(cursor) do
+    # Handle nil cursor
+    defp encode_cursor_for_link_header(nil, _cursor_field), do: nil
+
+    # Handle map cursor (already in cursor format)
+    defp encode_cursor_for_link_header(cursor, _cursor_field) when is_map(cursor) do
       cursor
       |> :erlang.term_to_binary()
       |> Base.url_encode64()
     end
 
-    defp encode_cursor_for_link_header(cursor) when is_binary(cursor) do
+    # Handle binary cursor with explicit cursor field format
+    defp encode_cursor_for_link_header(cursor, cursor_field) when is_binary(cursor) do
       # Check if already base64 encoded (from Paginator)
       if String.match?(cursor, ~r/^g3[A-Za-z0-9_-]+=*$/) do
         # Already encoded, pass through unchanged
         cursor
       else
         # Plain ID from cursor_for_record_fun - convert to cursor map and encode
-        # Matches Bonfire's cursor_fields format: {{:activity, :id}, :desc}
-        %{{:activity, :id} => cursor}
+        # Use the specified cursor_field format to match query's cursor_fields
+        %{cursor_field => cursor}
         |> :erlang.term_to_binary()
         |> Base.url_encode64()
       end
