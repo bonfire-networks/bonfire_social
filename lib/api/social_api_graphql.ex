@@ -444,11 +444,12 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     end
 
     enum :sort_by do
-      value(:date, description: "Sort by date")
+      value(:date_created, description: "Sort by date created")
       value(:num_likes, description: "Sort by number of likes")
       value(:num_boosts, description: "Sort by number of boosts")
       value(:num_replies, description: "Sort by number of replies")
       value(:num_flags, description: "Sort by flags (for moderators) (TODO)")
+      value(:latest_reply, description: "Sort by latest reply")
 
       value(:num_activities,
         description:
@@ -465,11 +466,13 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         description: "Optionally specify feed IDs (overrides feedName) (TODO)"
       )
 
-      field :subjects, list_of(:string),
-        description: "Optionally filter by activity subject (TODO)"
+      field :subjects, list_of(:string), description: "Optionally filter by activity subject IDs"
 
-      field :creators, list_of(:string),
-        description: "Optionally filter by object creators (TODO)"
+      field :subject_circles, list_of(:id),
+        description:
+          "Optionally filter by circle IDs (show posts from users in the specified circles)"
+
+      field :creators, list_of(:string), description: "Optionally filter by object creator IDs"
 
       field :objects, list_of(:string),
         description: "Optionally filter by the username of the object (TODO)"
@@ -494,7 +497,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       )
 
       field(:sort_by, :sort_by,
-        default_value: :date,
+        default_value: :date_created,
         description: "Sort by date, likes, boosts, replies, etc..."
       )
 
@@ -585,6 +588,23 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       #   arg(:filter, :feed_filters)
       #   resolve(&feed_media/2)
       # end
+
+      @desc "List posts liked by the current user (favourites)"
+      connection field :my_likes, node_type: :post do
+        resolve(&my_likes/2)
+      end
+
+      @desc "List users who liked a specific post/activity"
+      field :likers_of, list_of(:user) do
+        arg(:id, non_null(:id))
+        resolve(&likers_of/3)
+      end
+
+      @desc "List users who boosted a specific post/activity"
+      field :boosters_of, list_of(:user) do
+        arg(:id, non_null(:id))
+        resolve(&boosters_of/3)
+      end
     end
 
     object :social_mutations do
@@ -614,6 +634,12 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         arg(:id, non_null(:string))
 
         resolve(&like/2)
+      end
+
+      field :unlike, :boolean do
+        arg(:id, non_null(:string))
+
+        resolve(&unlike/2)
       end
 
       field :flag, :activity do
@@ -723,12 +749,22 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       filters = e(filters, :filter, [])
 
+      # Check if feed_name was explicitly provided (even if nil) vs not provided at all
+      # This allows callers to explicitly disable feed_name filtering by passing nil
+      feed_name_explicitly_set? = is_map(filters) and Map.has_key?(filters, :feed_name)
+      feed_name_from_filter = e(filters, :feed_name, nil)
+
       feed_name_resolved =
         feed_name ||
-          Types.maybe_to_atom(
-            e(filters, :feed_name, nil) ||
+          if feed_name_explicitly_set? do
+            # feed_name was explicitly provided (could be nil to disable filtering)
+            Types.maybe_to_atom(feed_name_from_filter)
+          else
+            # feed_name not provided, use default
+            Types.maybe_to_atom(
               Bonfire.Social.FeedLoader.feed_name_or_default(:default, current_user)
-          )
+            )
+          end
 
       feed_result =
         Bonfire.Social.FeedActivities.feed(
@@ -857,6 +893,54 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
              do: {:ok, e(f, :activity, nil)}
       else
         {:error, "Not authenticated"}
+      end
+    end
+
+    defp unlike(%{id: id}, info) do
+      with {:ok, user} <- GraphQL.current_user_or_not_logged_in(info),
+           {:ok, _} <- Bonfire.Social.Likes.unlike(user, id) do
+        {:ok, true}
+      end
+    end
+
+    def my_likes(args, info) do
+      with {:ok, user} <- GraphQL.current_user_or_not_logged_in(info) do
+        {pagination_args, _filters} = Pagination.pagination_args_filter(args)
+
+        Bonfire.Social.Likes.list_my(
+          current_user: user,
+          paginate: pagination_args
+        )
+        |> Pagination.connection_paginate(pagination_args,
+          item_prepare_fun: fn like ->
+            # Return the liked post directly (node_type is now :post)
+            e(like, :edge, :object, nil) || e(like, :object, nil)
+          end
+        )
+      end
+    end
+
+    defp likers_of(_parent, %{id: id}, info) do
+      list_interaction_subjects(Bonfire.Social.Likes, id, info)
+    end
+
+    defp boosters_of(_parent, %{id: id}, info) do
+      list_interaction_subjects(Bonfire.Social.Boosts, id, info)
+    end
+
+    # Shared helper for listing users who performed an interaction (like/boost) on an object
+    defp list_interaction_subjects(module, id, info) do
+      case module.list_of(id, current_user: GraphQL.current_user(info), preload: :subject) do
+        %{edges: edges} ->
+          users =
+            edges
+            |> Enum.map(fn edge -> e(edge, :edge, :subject, nil) || e(edge, :subject, nil) end)
+            |> Enum.reject(&is_nil/1)
+
+          {:ok, users}
+
+        _ ->
+          {:ok, []}
       end
     end
 
