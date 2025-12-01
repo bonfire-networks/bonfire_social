@@ -11,29 +11,16 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       action: [mode: :internal]
 
     alias Bonfire.API.GraphQL.RestAdapter
-    alias Bonfire.API.MastoCompat.{Schemas, Mappers, InteractionHandler, Helpers}
+    alias Bonfire.API.MastoCompat.{Schemas, Mappers, InteractionHandler, Helpers, PaginationHelpers, Fragments}
     import Helpers, only: [get_field: 2]
     alias Bonfire.Common.Utils
-    alias Bonfire.Common.Enums
-    alias Bonfire.Me.API.GraphQLMasto.Adapter, as: MeAdapter
 
-    @post_content "
-    name
-    summary
-    content: html_body
-    "
+    # Use centralized fragments from Bonfire.API.MastoCompat.Fragments
+    @post_content Fragments.post_content()
 
-    @media "
-    id
-    url
-    path
-    media_type
-    label
-    description
-    size
-    "
+    @media Fragments.media()
 
-    @user Utils.maybe_apply(MeAdapter, :user_profile_query, [], fallback_return: "id")
+    @user Fragments.user_profile()
 
     @activity "
     id
@@ -124,31 +111,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     }
     "
 
-    @circle "
-    id
-    name
-    summary
-    "
-
-    @circle_member "
-    id
-    subject_id: subjectId
-    subject {
-      ... on User {
-        #{@user}
-      }
-    }
-    "
-
-    # @graphql "query ($filter: PostFilters) {
-    #   post(filter: $filter) {
-    #     #{@post_content}
-    # }}"
-    # def post(params, conn) do
-    #   post = graphql(conn, :post, debug(params))
-
-    #   RestAdapter.return(:post, post, conn, &prepare_post/1)
-    # end
+    # NOTE: @circle and @circle_member fragments moved to Bonfire.Boundaries.API.GraphQLMasto.Adapter
 
     @graphql "query ($filter: FeedFilters, $first: Int, $last: Int, $after: String, $before: String) {
       feed_activities(filter: $filter, first: $first, last: $last, after: $after, before: $before) {
@@ -198,6 +161,89 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       |> process_feed_edges_with_batch_loading(current_user, "notification")
       |> apply_notification_filters(notification_filters)
       |> then(&respond_with_feed(conn, params, &1))
+    end
+
+    @doc "Get a single notification by ID"
+    def notification(id, conn) do
+      current_user = conn.assigns[:current_user]
+
+      if is_nil(current_user) do
+        RestAdapter.error_fn({:error, :unauthorized}, conn)
+      else
+        # Fetch the activity by ID
+        case Bonfire.Social.FeedActivities.get(id, current_user: current_user) do
+          {:ok, activity} ->
+            # Transform to notification format
+            notification =
+              Mappers.Notification.from_activity(
+                activity,
+                current_user: current_user
+              )
+
+            if notification do
+              Phoenix.Controller.json(conn, notification)
+            else
+              RestAdapter.error_fn({:error, :not_found}, conn)
+            end
+
+          {:error, _} ->
+            RestAdapter.error_fn({:error, :not_found}, conn)
+
+          nil ->
+            RestAdapter.error_fn({:error, :not_found}, conn)
+        end
+      end
+    end
+
+    @doc "Clear all notifications for the current user"
+    def clear_notifications(conn) do
+      current_user = conn.assigns[:current_user]
+
+      if is_nil(current_user) do
+        RestAdapter.error_fn({:error, :unauthorized}, conn)
+      else
+        # Mark all notifications as seen
+        # Using the :notifications feed which is the user's notification inbox
+        case Bonfire.Social.FeedActivities.mark_all_seen(:notifications,
+               current_user: current_user
+             ) do
+          {:ok, _count} ->
+            # Mastodon API returns empty object on success
+            Phoenix.Controller.json(conn, %{})
+
+          {:error, reason} ->
+            error(reason, "Failed to clear notifications")
+            RestAdapter.error_fn({:error, reason}, conn)
+
+          _ ->
+            # mark_all_seen may return different formats, treat as success
+            Phoenix.Controller.json(conn, %{})
+        end
+      end
+    end
+
+    @doc "Dismiss a single notification"
+    def dismiss_notification(id, conn) do
+      current_user = conn.assigns[:current_user]
+
+      if is_nil(current_user) do
+        RestAdapter.error_fn({:error, :unauthorized}, conn)
+      else
+        # Mark the specific notification/activity as seen
+        case Bonfire.Social.Seen.mark_seen(current_user, id) do
+          {:ok, _} ->
+            # Mastodon API returns empty object on success
+            Phoenix.Controller.json(conn, %{})
+
+          {:error, reason} ->
+            error(reason, "Failed to dismiss notification")
+            RestAdapter.error_fn({:error, reason}, conn)
+
+          _ ->
+            # mark_seen may return different formats, treat as success
+            Phoenix.Controller.json(conn, %{})
+        end
+      end
     end
 
     # Apply Mastodon-specific notification filtering to result tuple
@@ -360,11 +406,15 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
                 # Validate using Schema per mastodon-api skill guidelines
                 case Schemas.Status.validate(status) do
-                  {:ok, valid_status} -> [valid_status]
+                  {:ok, valid_status} ->
+                    [valid_status]
+
                   {:error, {:missing_fields, fields}} ->
                     warn(fields, "Favourites status missing required fields")
                     []
-                  {:error, _} -> []
+
+                  {:error, _} ->
+                    []
                 end
               rescue
                 e ->
@@ -434,6 +484,31 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         other ->
           error(other, "Unexpected GraphQL response in show_status")
           RestAdapter.error_fn({:error, :unexpected_response}, conn)
+      end
+    end
+
+    @doc "Delete a status"
+    def delete_status(%{"id" => id}, conn) do
+      current_user = conn.assigns[:current_user]
+
+      if is_nil(current_user) do
+        RestAdapter.error_fn({:error, :unauthorized}, conn)
+      else
+        case Bonfire.Social.Objects.delete(id, current_user: current_user) do
+          {:ok, _} ->
+            # Mastodon API returns an empty object on successful deletion
+            Phoenix.Controller.json(conn, %{})
+
+          {:error, :not_found} ->
+            RestAdapter.error_fn({:error, :not_found}, conn)
+
+          {:error, :unauthorized} ->
+            RestAdapter.error_fn({:error, :unauthorized}, conn)
+
+          {:error, reason} ->
+            error(reason, "Failed to delete status")
+            RestAdapter.error_fn({:error, reason}, conn)
+        end
       end
     end
 
@@ -520,9 +595,10 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         %{data: data} when is_map(data) ->
           users = Map.get(data, data_key, [])
 
+          # Skip expensive stats for interactor lists (N+1 query prevention)
           accounts =
             users
-            |> Enum.map(&Mappers.Account.from_user(&1, current_user: current_user))
+            |> Enum.map(&Mappers.Account.from_user(&1, current_user: current_user, skip_expensive_stats: true))
             |> Enum.reject(&is_nil/1)
 
           Phoenix.Controller.json(conn, accounts)
@@ -840,43 +916,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       |> Enum.uniq()
     end
 
-    # Build pagination opts for list queries (favourited_by, reblogged_by)
-    # These don't use the feed cursor format, just simple pagination
-    defp build_list_pagination_opts(params, current_user) do
-      limit = validate_limit(params["limit"])
+    # Delegate to shared pagination helpers
+    defp maybe_add_cursor(opts, params, param_name, cursor_key),
+      do: PaginationHelpers.maybe_add_cursor(opts, params, param_name, cursor_key)
 
-      base_opts = [
-        current_user: current_user,
-        limit: limit
-      ]
-
-      # Add pagination cursors if present
-      base_opts
-      |> maybe_add_cursor(params, "max_id", :after)
-      |> maybe_add_cursor(params, "since_id", :before)
-      |> maybe_add_cursor(params, "min_id", :before)
-    end
-
-    defp maybe_add_cursor(opts, params, param_name, cursor_key) do
-      if cursor = params[param_name] do
-        Keyword.put(opts, cursor_key, cursor)
-      else
-        opts
-      end
-    end
-
-    defp validate_limit(nil), do: 40
-
-    defp validate_limit(limit) when is_binary(limit) do
-      case Integer.parse(limit) do
-        {n, _} -> validate_limit(n)
-        :error -> 40
-      end
-    end
-
-    defp validate_limit(limit) when is_integer(limit) and limit > 0 and limit <= 80, do: limit
-    defp validate_limit(limit) when is_integer(limit) and limit > 80, do: 80
-    defp validate_limit(_), do: 40
+    defp validate_limit(limit), do: PaginationHelpers.validate_limit(limit)
 
     # Process feed edges with batch loading of interaction states and mentions to avoid N+1 queries
     # This extracts object IDs, batch loads interaction states + mentions, then delegates to process_feed_edges
@@ -1012,7 +1056,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     # HTTP response helper - converts result tuple to JSON response
     defp respond_with_feed(conn, params, {:ok, items, page_info}) do
       conn
-      |> add_link_headers(params, page_info, items)
+      |> PaginationHelpers.add_link_headers(params, page_info, items)
       |> Phoenix.Controller.json(items)
     end
 
@@ -1025,88 +1069,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       warn(other, "respond_with_feed received unexpected format, returning empty array")
       Phoenix.Controller.json(conn, [])
     end
-
-    # Add Mastodon-compatible Link headers for pagination using Paginator cursors
-    defp add_link_headers(conn, _params, page_info, items) do
-      # Build base URL, omitting standard ports (80 for HTTP, 443 for HTTPS)
-      port_part =
-        case {conn.scheme, conn.port} do
-          {"https", 443} -> ""
-          {"http", 80} -> ""
-          {_, port} -> ":#{port}"
-        end
-
-      base_url = "#{conn.scheme}://#{conn.host}#{port_part}#{conn.request_path}"
-      base_params = Map.take(conn.params, ["limit"])
-
-      # Get cursors from page_info, with fallback to extracting from items
-      # (Paginator may set start_cursor to nil on first page)
-      cursor_for_record_fun = get_field(page_info, :cursor_for_record_fun) || (&Enums.id/1)
-
-      # Extract cursor field format from page_info for proper encoding
-      # Defaults to {:activity, :id} for timeline compatibility
-      cursor_field = extract_cursor_field(page_info)
-
-      start_cursor =
-        (get_field(page_info, :start_cursor) ||
-           items |> List.first() |> then(&if &1, do: cursor_for_record_fun.(&1)))
-        |> encode_cursor_for_link_header(cursor_field)
-
-      end_cursor =
-        (get_field(page_info, :end_cursor) ||
-           items |> List.last() |> then(&if &1, do: cursor_for_record_fun.(&1)))
-        |> encode_cursor_for_link_header(cursor_field)
-
-      links = []
-
-      # Check if we're on the last page (Paginator sets final_cursor instead of end_cursor on last page)
-      is_last_page = get_field(page_info, :final_cursor) != nil
-
-      # Add "next" link for pagination (older posts) using end_cursor
-      # Don't add if we're on the last page (no more results)
-      links =
-        if end_cursor && !is_last_page do
-          query_params = base_params |> Map.put("max_id", end_cursor) |> URI.encode_query()
-          next_link = "<#{base_url}?#{query_params}>; rel=\"next\""
-          links ++ [next_link]
-        else
-          links
-        end
-
-      # Add "prev" link for pagination (newer posts) using start_cursor
-      links =
-        if start_cursor do
-          query_params = base_params |> Map.put("min_id", start_cursor) |> URI.encode_query()
-          prev_link = "<#{base_url}?#{query_params}>; rel=\"prev\""
-          links ++ [prev_link]
-        else
-          links
-        end
-
-      if links != [] do
-        conn
-        |> Plug.Conn.put_resp_header("link", Enum.join(links, ", "))
-        |> Plug.Conn.put_resp_header("access-control-expose-headers", "Link")
-      else
-        conn
-      end
-    end
-
-    # Extract cursor field format from page_info
-    # Returns the field name (e.g., :id or {:activity, :id}) for cursor encoding
-    # Defaults to {:activity, :id} for timeline compatibility
-    defp extract_cursor_field(page_info) when is_map(page_info) do
-      case get_field(page_info, :cursor_fields) do
-        # Format: [id: :desc] or [{:activity, :id}: :desc]
-        [{field, _direction} | _] -> field
-        # Format: [:id] or [{:activity, :id}]
-        [field | _] when is_atom(field) or is_tuple(field) -> field
-        # Default to timeline format
-        _ -> {:activity, :id}
-      end
-    end
-
-    defp extract_cursor_field(_), do: {:activity, :id}
 
     # Status interaction mutations
     # Call Bonfire context functions directly with proper preloads
@@ -1177,545 +1139,102 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       )
     end
 
-    # Conversations API (DM threads)
-    # Uses Bonfire.Messages to list threads with latest_in_threads option
-
-    @doc """
-    List conversations (DM threads) for the current user.
-
-    Returns a list of Mastodon-compatible Conversation objects with:
-    - id: thread ID
-    - accounts: participants
-    - unread: whether there are unseen messages
-    - last_status: the most recent message
-    """
-    def conversations(params, conn) do
-      current_user = conn.assigns[:current_user]
-
-      if is_nil(current_user) do
-        RestAdapter.error_fn({:error, :unauthorized}, conn)
-      else
-        pagination_opts = build_conversation_pagination_opts(params)
-
-        opts =
-          Keyword.merge(pagination_opts,
-            current_user: current_user,
-            latest_in_threads: true,
-            # Preloads needed for Conversation/Status mappers:
-            # - :with_object_more loads post_content and replied
-            # - :with_subject loads activity.subject (sender) for account
-            # - :with_seen for unread tracking
-            # - :tags for participants
-            preload: [:with_object_more, :with_subject, :with_seen, :tags]
-          )
-
-        case Bonfire.Messages.list(current_user, nil, opts) do
-          %{edges: edges, page_info: page_info} ->
-            conversations =
-              edges
-              |> Enum.map(&Mappers.Conversation.from_thread(&1, current_user: current_user))
-              |> Enum.reject(&is_nil/1)
-
-            conn
-            |> add_link_headers(params, page_info, conversations)
-            |> Phoenix.Controller.json(conversations)
-
-          {:error, reason} ->
-            RestAdapter.error_fn({:error, reason}, conn)
-
-          other ->
-            error(other, "Unexpected result from Messages.list")
-            Phoenix.Controller.json(conn, [])
-        end
-      end
-    end
-
-    @doc """
-    Mark a conversation as read.
-
-    Marks all messages in the thread as seen by the current user.
-    Returns the updated conversation object.
-    """
-    def mark_conversation_read(%{"id" => thread_id}, conn) do
-      current_user = conn.assigns[:current_user]
-
-      if is_nil(current_user) do
-        RestAdapter.error_fn({:error, :unauthorized}, conn)
-      else
-        # Mark the thread as seen
-        case Bonfire.Social.Seen.mark_seen(current_user, thread_id) do
-          {:ok, _} ->
-            # Return the updated conversation
-            get_single_conversation(thread_id, current_user, conn)
-
-          {:error, reason} ->
-            RestAdapter.error_fn({:error, reason}, conn)
-
-          _ ->
-            # mark_seen may return different formats, try to get conversation anyway
-            get_single_conversation(thread_id, current_user, conn)
-        end
-      end
-    end
-
-    # Get a single conversation by thread ID
-    defp get_single_conversation(thread_id, current_user, conn) do
-      # Try to load the thread's latest message
-      opts = [
-        current_user: current_user,
-        preload: [:with_object_more, :with_subject, :with_seen, :tags]
-      ]
-
-      case Bonfire.Messages.read(thread_id, opts) do
-        {:ok, message} ->
-          conversation =
-            Mappers.Conversation.from_thread(message, current_user: current_user)
-
-          if conversation do
-            Phoenix.Controller.json(conn, conversation)
-          else
-            RestAdapter.error_fn({:error, :not_found}, conn)
-          end
-
-        {:error, reason} ->
-          RestAdapter.error_fn({:error, reason}, conn)
-
-        _ ->
-          RestAdapter.error_fn({:error, :not_found}, conn)
-      end
-    end
+    # NOTE: Conversations API moved to Bonfire.Messages.API.GraphQLMasto.Adapter
+    # NOTE: Lists API moved to Bonfire.Boundaries.API.GraphQLMasto.Adapter
 
     # ==========================================
-    # Lists API (Mastodon Lists → Bonfire Circles)
+    # Search API
     # ==========================================
 
-    @doc """
-    Get all lists owned by the authenticated user.
-
-    Returns an array of Mastodon List objects. System circles (built-in and
-    stereotypes like followers/blocked) are filtered out, only user-created
-    circles are returned.
-
-    Endpoint: GET /api/v1/lists
-    """
-    @graphql "query ($filter: CircleFilters) {
-      my_circles(filter: $filter) {
-        #{@circle}
+    # GraphQL query for searching activities/statuses
+    # Returns activities with full fragment for Mastodon Status mapping
+    @graphql "query ($filter: SearchFilters!) {
+      search_activities(filter: $filter) {
+        #{@activity}
       }
     }"
-    def lists(_params, conn) do
+    def search_activities_gql(params, conn) do
+      graphql(conn, :search_activities_gql, params)
+    end
+
+    # GraphQL query for searching users/accounts
+    @graphql "query ($filter: SearchFilters!) {
+      search_users(filter: $filter) {
+        #{@user}
+      }
+    }"
+    def search_users_gql(params, conn) do
+      graphql(conn, :search_users_gql, params)
+    end
+
+    @doc """
+    Search for statuses/posts for the Mastodon API.
+
+    This is a public API for the Search adapter in bonfire_api_graphql to call,
+    as it requires access to the activity GraphQL fragment and batch loading helpers.
+
+    Returns a list of Mastodon-compatible Status objects.
+    """
+    def search_statuses_for_api(query, opts, conn) do
+      search_statuses(query, opts, conn)
+    end
+
+    # NOTE: Main search/2 orchestration moved to Bonfire.API.GraphQL.MastoCompat.SearchAdapter
+
+    # Search for statuses/posts using GraphQL
+    # Note: Unlike search_accounts, this doesn't use search_via_graphql/6 because
+    # we need to batch load interaction states (favourited/reblogged/bookmarked)
+    # for all results before mapping, which requires custom handling.
+    defp search_statuses(query, opts, conn) do
+      current_user = opts[:current_user]
+
+      case search_via_graphql_raw(conn, :search_activities_gql, :search_activities, query, opts) do
+        {:ok, activities} when is_list(activities) and activities != [] ->
+          # Batch load interaction states for all activities (like show_status does)
+          object_ids =
+            activities
+            |> Enum.map(&get_activity_id/1)
+            |> Enum.reject(&is_nil/1)
+
+          interaction_states = batch_load_interaction_states(current_user, object_ids)
+
+          activities
+          |> Enum.flat_map(fn activity ->
+            case Mappers.Status.from_activity(activity,
+                   current_user: current_user,
+                   interaction_states: interaction_states
+                 ) do
+              status when is_map(status) and map_size(status) > 0 ->
+                if Map.get(status, "id"), do: [status], else: []
+
+              _ ->
+                []
+            end
+          end)
+
+        _ ->
+          []
+      end
+    rescue
+      e ->
+        error(e, "Search statuses failed")
+        []
+    end
+
+    # Returns raw GraphQL results without mapping (used by search_statuses)
+    defp search_via_graphql_raw(conn, query_name, response_key, query, opts) do
       filter = %{
-        "exclude_stereotypes" => true,
-        "exclude_built_ins" => true
+        "query" => query,
+        "limit" => opts[:limit] || 20,
+        "offset" => opts[:offset] || 0
       }
 
-      case graphql(conn, :lists, %{"filter" => filter}) do
-        %{data: %{my_circles: circles}} when is_list(circles) ->
-          lists =
-            circles
-            |> Enum.map(&Mappers.List.from_circle/1)
-            |> Enum.reject(&is_nil/1)
-
-          Phoenix.Controller.json(conn, lists)
-
-        %{errors: errors} ->
-          RestAdapter.error_fn({:error, errors}, conn)
-
-        _ ->
-          RestAdapter.error_fn({:error, :unexpected_response}, conn)
-      end
-    end
-
-    @doc """
-    Create a new list.
-
-    Endpoint: POST /api/v1/lists
-    """
-    @graphql "mutation ($circle: CircleInput!) {
-      create_circle(circle: $circle) {
-        #{@circle}
-      }
-    }"
-    def create_list(params, conn) do
-      with_valid_title(params, conn, fn title ->
-        case graphql(conn, :create_list, %{"circle" => %{"name" => title}}) do
-          %{data: %{create_circle: circle}} when not is_nil(circle) ->
-            list = Mappers.List.from_circle(circle)
-            Phoenix.Controller.json(conn, list)
-
-          %{errors: errors} ->
-            RestAdapter.error_fn({:error, errors}, conn)
-
-          _ ->
-            RestAdapter.error_fn({:error, :unexpected_response}, conn)
-        end
-      end)
-    end
-
-    @doc """
-    Get a specific list by ID.
-
-    Endpoint: GET /api/v1/lists/:id
-    """
-    @graphql "query ($id: ID!) {
-      circle(id: $id) {
-        #{@circle}
-      }
-    }"
-    def show_list(id, _params, conn) do
-      case graphql(conn, :show_list, %{"id" => id}) do
-        %{data: %{circle: circle}} when not is_nil(circle) ->
-          list = Mappers.List.from_circle(circle)
-          Phoenix.Controller.json(conn, list)
-
-        %{data: %{circle: nil}} ->
-          RestAdapter.error_fn({:error, :not_found}, conn)
-
-        %{errors: errors} ->
-          RestAdapter.error_fn({:error, errors}, conn)
-
-        _ ->
-          RestAdapter.error_fn({:error, :not_found}, conn)
-      end
-    end
-
-    @doc """
-    Update a list (change title).
-
-    Endpoint: PUT /api/v1/lists/:id
-    """
-    @graphql "mutation ($id: ID!, $circle: CircleInput!) {
-      update_circle(id: $id, circle: $circle) {
-        #{@circle}
-      }
-    }"
-    def update_list(id, params, conn) do
-      with_valid_title(params, conn, fn title ->
-        case graphql(conn, :update_list, %{"id" => id, "circle" => %{"name" => title}}) do
-          %{data: %{update_circle: circle}} when not is_nil(circle) ->
-            list = Mappers.List.from_circle(circle)
-            Phoenix.Controller.json(conn, list)
-
-          %{errors: errors} ->
-            RestAdapter.error_fn({:error, errors}, conn)
-
-          _ ->
-            RestAdapter.error_fn({:error, :unexpected_response}, conn)
-        end
-      end)
-    end
-
-    @doc """
-    Delete a list.
-
-    Endpoint: DELETE /api/v1/lists/:id
-    """
-    @graphql "mutation ($id: ID!) {
-      delete_circle(id: $id)
-    }"
-    def delete_list(id, _params, conn) do
-      case graphql(conn, :delete_list, %{"id" => id}) do
-        %{data: %{delete_circle: true}} ->
-          Phoenix.Controller.json(conn, %{})
-
-        %{errors: errors} ->
-          RestAdapter.error_fn({:error, errors}, conn)
-
-        _ ->
-          RestAdapter.error_fn({:error, :unexpected_response}, conn)
-      end
-    end
-
-    @doc """
-    Get accounts in a list.
-
-    Returns an array of Mastodon Account objects for all members of the list.
-
-    Endpoint: GET /api/v1/lists/:id/accounts
-    """
-    @graphql "query ($circle_id: ID!, $limit: Int, $after: String, $before: String) {
-      circle_members(circle_id: $circle_id, limit: $limit, after: $after, before: $before) {
-        entries {
-          #{@circle_member}
-        }
-        page_info: pageInfo {
-          has_next_page: hasNextPage
-          has_previous_page: hasPreviousPage
-          start_cursor: startCursor
-          end_cursor: endCursor
-        }
-      }
-    }"
-    def list_accounts(id, params, conn) do
-      limit = validate_limit(params["limit"] || 40)
-
-      # Build pagination params from Mastodon params
-      pagination_params =
-        %{"circle_id" => id, "limit" => limit}
-        |> maybe_add_graphql_cursor(params, "max_id", "after")
-        |> maybe_add_graphql_cursor(params, "since_id", "before")
-        |> maybe_add_graphql_cursor(params, "min_id", "before")
-
-      case graphql(conn, :list_accounts, pagination_params) do
-        %{data: %{circle_members: %{entries: entries, page_info: page_info}}}
-        when is_list(entries) ->
-          accounts =
-            entries
-            |> Enum.map(fn member ->
-              subject = Map.get(member, :subject)
-              Mappers.Account.from_user(subject)
-            end)
-            |> Enum.reject(&is_nil/1)
-
-          # Add Link headers for pagination if we have page_info
-          conn =
-            if page_info do
-              page_info_map = %{
-                start_cursor: Map.get(page_info, :start_cursor),
-                end_cursor: Map.get(page_info, :end_cursor),
-                cursor_fields: [id: :desc]
-              }
-
-              add_link_headers(conn, params, page_info_map, entries)
-            else
-              conn
-            end
-
-          Phoenix.Controller.json(conn, accounts)
-
-        %{errors: errors} ->
-          RestAdapter.error_fn({:error, errors}, conn)
-
-        _ ->
-          RestAdapter.error_fn({:error, :not_found}, conn)
-      end
-    end
-
-    # Validate title for list create/update operations
-    defp with_valid_title(params, conn, fun) do
-      title = params["title"]
-
-      if is_nil(title) or String.trim(title) == "" do
-        RestAdapter.error_fn({:error, :unprocessable_entity}, conn)
-      else
-        fun.(title)
-      end
-    end
-
-    # Add cursor to GraphQL params (string params)
-    defp maybe_add_graphql_cursor(params, mastodon_params, mastodon_key, graphql_key) do
-      case mastodon_params[mastodon_key] do
-        id when is_binary(id) and id != "" ->
-          case encode_encircle_cursor(id) do
-            {:ok, cursor} -> Map.put(params, graphql_key, cursor)
-            _ -> params
-          end
-
-        _ ->
-          params
-      end
-    end
-
-    # Generic cursor encoding for pagination
-    defp encode_cursor(id, cursor_map) when is_binary(id) and is_map(cursor_map) do
-      if String.match?(id, ~r/^g3[A-Za-z0-9_-]+=*$/) do
-        {:ok, id}
-      else
-        try do
-          cursor =
-            cursor_map
-            |> :erlang.term_to_binary()
-            |> Base.url_encode64()
-
-          {:ok, cursor}
-        rescue
-          _ -> {:error, :encoding_failed}
-        end
-      end
-    end
-
-    defp encode_cursor(_, _), do: {:error, :invalid_id}
-
-    # Encode cursor for Encircle pagination (uses simple :id format)
-    defp encode_encircle_cursor(id) when is_binary(id),
-      do: encode_cursor(id, %{id: id})
-
-    defp encode_encircle_cursor(_), do: {:error, :invalid_id}
-
-    @doc """
-    Add accounts to a list.
-
-    Expects `account_ids` param with an array of account IDs to add.
-
-    Endpoint: POST /api/v1/lists/:id/accounts
-    """
-    @graphql "mutation ($circle_id: ID!, $subject_ids: [ID!]!) {
-      add_to_circle(circle_id: $circle_id, subject_ids: $subject_ids)
-    }"
-    def add_to_list(id, params, conn) do
-      modify_circle_members(conn, id, params, :add_to_list, :add_to_circle)
-    end
-
-    @doc """
-    Remove accounts from a list.
-
-    Expects `account_ids` param with an array of account IDs to remove.
-
-    Endpoint: DELETE /api/v1/lists/:id/accounts
-    """
-    @graphql "mutation ($circle_id: ID!, $subject_ids: [ID!]!) {
-      remove_from_circle(circle_id: $circle_id, subject_ids: $subject_ids)
-    }"
-    def remove_from_list(id, params, conn) do
-      modify_circle_members(conn, id, params, :remove_from_list, :remove_from_circle)
-    end
-
-    # Shared helper for add/remove circle members operations
-    defp modify_circle_members(conn, id, params, query_name, data_key) do
-      account_ids = params["account_ids"] || []
-
-      case graphql(conn, query_name, %{"circle_id" => id, "subject_ids" => account_ids}) do
+      case graphql(conn, query_name, %{"filter" => filter}) do
         %{data: data} when is_map(data) ->
-          if Map.get(data, data_key) == true do
-            Phoenix.Controller.json(conn, %{})
-          else
-            RestAdapter.error_fn({:error, :unexpected_response}, conn)
-          end
-
-        %{errors: errors} ->
-          RestAdapter.error_fn({:error, errors}, conn)
+          {:ok, Map.get(data, response_key, [])}
 
         _ ->
-          RestAdapter.error_fn({:error, :unexpected_response}, conn)
-      end
-    end
-
-    @doc """
-    Get the timeline for a list (posts from list members).
-
-    Returns statuses from accounts in the specified list.
-
-    Endpoint: GET /api/v1/timelines/list/:list_id
-    """
-    def list_timeline(list_id, params, conn) do
-      # Use Bonfire's native subject_circles filter which joins with Encircle table
-      # This is more efficient than fetching member IDs and filtering by subjects
-      # See: FeedLoader.feed(:custom, %{subject_circles: [circle]}, current_user: me)
-      limit = validate_limit(params["limit"] || 20)
-
-      # Extract pagination cursors from Mastodon params
-      cursors = extract_mastodon_pagination_cursors(params)
-
-      # Build limit param based on cursor direction (first for forward, last for backward)
-      limit_param =
-        cond do
-          Map.has_key?(cursors, :after) -> %{first: limit}
-          Map.has_key?(cursors, :before) -> %{last: limit}
-          true -> %{first: limit}
-        end
-
-      # Use subject_circles filter to show posts from users in this list (circle)
-      # - subject_circles joins with Encircle table to find posts by circle members
-      # - time_limit: 0 disables Bonfire's default 1-month time limit
-      # - feed_name: nil prevents defaulting to :my (home feed)
-      feed_params =
-        %{
-          "filter" => %{
-            "subject_circles" => [list_id],
-            "time_limit" => 0,
-            "feed_name" => nil
-          }
-        }
-        |> Map.merge(limit_param)
-        |> Map.merge(cursors)
-
-      feed(feed_params, conn)
-    end
-
-    # Extract entries from either paginated or unpaginated results
-    defp extract_entries(%{entries: entries}), do: entries
-    defp extract_entries(list) when is_list(list), do: list
-    defp extract_entries(_), do: []
-
-    # Extract Mastodon pagination cursors and convert to GraphQL cursor format
-    defp extract_mastodon_pagination_cursors(params) do
-      params
-      |> Map.take(["max_id", "since_id", "min_id"])
-      |> Enum.reduce(%{}, fn
-        {"max_id", id}, acc when is_binary(id) and id != "" ->
-          case encode_id_as_cursor(id) do
-            {:ok, cursor} -> Map.put(acc, :after, cursor)
-            _ -> acc
-          end
-
-        {"min_id", id}, acc when is_binary(id) and id != "" ->
-          case encode_id_as_cursor(id) do
-            {:ok, cursor} -> Map.put(acc, :before, cursor)
-            _ -> acc
-          end
-
-        {"since_id", id}, acc when is_binary(id) and id != "" ->
-          # Only use since_id if min_id not already set
-          if Map.has_key?(acc, :before) do
-            acc
-          else
-            case encode_id_as_cursor(id) do
-              {:ok, cursor} -> Map.put(acc, :before, cursor)
-              _ -> acc
-            end
-          end
-
-        _, acc ->
-          acc
-      end)
-    end
-
-    # Encode a plain ID as a GraphQL cursor
-    # Bonfire uses cursor_fields: [{{:activity, :id}, :desc}]
-    # Encode cursor for activity pagination (uses {:activity, :id} format)
-    defp encode_id_as_cursor(id) when is_binary(id),
-      do: encode_cursor(id, %{{:activity, :id} => id})
-
-    defp encode_id_as_cursor(_), do: {:error, :invalid_id}
-
-    # Build pagination opts for conversations query
-    defp build_conversation_pagination_opts(params) do
-      limit = validate_limit(params["limit"] || params[:limit])
-
-      base_opts = [limit: limit]
-
-      base_opts
-      |> maybe_add_cursor(params, "max_id", :after)
-      |> maybe_add_cursor(params, "since_id", :before)
-      |> maybe_add_cursor(params, "min_id", :before)
-    end
-
-    # Encode cursor for use in Link headers
-    # All cursors must be consistently encoded to base64
-    # Must use url_encode64 to match Paginator's url_decode64!
-
-    # Handle nil cursor
-    defp encode_cursor_for_link_header(nil, _cursor_field), do: nil
-
-    # Handle map cursor (already in cursor format)
-    defp encode_cursor_for_link_header(cursor, _cursor_field) when is_map(cursor) do
-      cursor
-      |> :erlang.term_to_binary()
-      |> Base.url_encode64()
-    end
-
-    # Handle binary cursor with explicit cursor field format
-    defp encode_cursor_for_link_header(cursor, cursor_field) when is_binary(cursor) do
-      # Check if already base64 encoded (from Paginator)
-      if String.match?(cursor, ~r/^g3[A-Za-z0-9_-]+=*$/) do
-        # Already encoded, pass through unchanged
-        cursor
-      else
-        # Plain ID from cursor_for_record_fun - convert to cursor map and encode
-        # Use the specified cursor_field format to match query's cursor_fields
-        %{cursor_field => cursor}
-        |> :erlang.term_to_binary()
-        |> Base.url_encode64()
+          {:error, :no_results}
       end
     end
   end
