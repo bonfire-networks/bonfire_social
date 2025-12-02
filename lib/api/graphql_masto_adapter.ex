@@ -11,16 +11,45 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       action: [mode: :internal]
 
     alias Bonfire.API.GraphQL.RestAdapter
-    alias Bonfire.API.MastoCompat.{Schemas, Mappers, InteractionHandler, Helpers, PaginationHelpers, Fragments}
+    alias Bonfire.API.MastoCompat.{Schemas, Mappers, InteractionHandler, Helpers, PaginationHelpers}
     import Helpers, only: [get_field: 2]
     alias Bonfire.Common.Utils
 
-    # Use centralized fragments from Bonfire.API.MastoCompat.Fragments
-    @post_content Fragments.post_content()
+    @post_content Bonfire.Social.API.MastoFragments.post_content()
 
-    @media Fragments.media()
+    # Media fragment inlined for compile-order independence
+    @media """
+      id
+      url
+      path
+      media_type
+      label
+      description
+      size
+    """
 
-    @user Fragments.user_profile()
+    # User profile fragment inlined for compile-order independence
+    @user """
+      id
+      created_at: date_created
+      profile {
+        avatar: icon
+        avatar_static: icon
+        header: image
+        header_static: image
+        display_name: name
+        note: summary
+        website
+      }
+      character {
+        username
+        acct: username
+        url: canonical_uri
+        peered {
+          canonical_uri
+        }
+      }
+    """
 
     @activity "
     id
@@ -110,8 +139,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       #{@media}
     }
     "
-
-    # NOTE: @circle and @circle_member fragments moved to Bonfire.Boundaries.API.GraphQLMasto.Adapter
 
     @graphql "query ($filter: FeedFilters, $first: Int, $last: Int, $after: String, $before: String) {
       feed_activities(filter: $filter, first: $first, last: $last, after: $after, before: $before) {
@@ -1139,13 +1166,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       )
     end
 
-    # NOTE: Conversations API moved to Bonfire.Messages.API.GraphQLMasto.Adapter
-    # NOTE: Lists API moved to Bonfire.Boundaries.API.GraphQLMasto.Adapter
-
-    # ==========================================
-    # Search API
-    # ==========================================
-
     # GraphQL query for searching activities/statuses
     # Returns activities with full fragment for Mastodon Status mapping
     @graphql "query ($filter: SearchFilters!) {
@@ -1167,19 +1187,10 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       graphql(conn, :search_users_gql, params)
     end
 
-    @doc """
-    Search for statuses/posts for the Mastodon API.
-
-    This is a public API for the Search adapter in bonfire_api_graphql to call,
-    as it requires access to the activity GraphQL fragment and batch loading helpers.
-
-    Returns a list of Mastodon-compatible Status objects.
-    """
+    @doc "Search for statuses/posts, called by the Search adapter."
     def search_statuses_for_api(query, opts, conn) do
       search_statuses(query, opts, conn)
     end
-
-    # NOTE: Main search/2 orchestration moved to Bonfire.API.GraphQL.MastoCompat.SearchAdapter
 
     # Search for statuses/posts using GraphQL
     # Note: Unlike search_accounts, this doesn't use search_via_graphql/6 because
