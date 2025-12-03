@@ -65,16 +65,17 @@ defmodule Bonfire.Social.APActivities do
   def ap_publish_activity(subject, _, %{json: data} = ap_activity) do
     debug(ap_activity, "AP - publishing APActivity")
 
+    subject =
+      subject || e(ap_activity, :created, :creator, nil) ||
+        e(ap_activity, :created, :creator_id, nil)
+
     with {:ok, subject_actor} <-
-           ActivityPub.Actor.get_cached(
-             pointer:
-               subject || e(ap_activity, :created, :creator, nil) ||
-                 e(ap_activity, :created, :creator_id, nil)
-           ) do
+           ActivityPub.Actor.get_cached(pointer: subject) do
       # TODO: special handling if ap_activity is already a Create Activity
       ActivityPub.create(%{to: data["to"], actor: subject_actor, object: data})
     else
       {:error, :not_found} ->
+        flood(subject, "Could not find actor to publish activity")
         :ignore
 
       e ->
