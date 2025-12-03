@@ -692,7 +692,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       # Get ancestors (walking up the reply chain to root)
       ancestor_activities =
-        case Bonfire.Social.Threads.thread_ancestors_path(id, current_user: current_user) do
+        case Bonfire.Social.Threads.determine_thread_path(id, current_user: current_user) do
           path when is_list(path) and length(path) > 0 ->
             # Fetch each ancestor activity with preloads for N+1 prevention
             path
