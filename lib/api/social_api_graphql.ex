@@ -291,22 +291,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     object :post_content do
       field(:name, :string)
       field(:summary, :string)
-
-      # Always returns HTML (converts markdown if needed)
-      # NOTE: Could add `cache: true` option to maybe_markdown_to_html/2 for performance if needed
-      field :html_body, :string do
-        resolve(fn post_content, _, _ ->
-          raw = Map.get(post_content, :html_body) || ""
-          {:ok, Bonfire.Common.Text.maybe_markdown_to_html(raw) || raw}
-        end)
-      end
-
-      # Returns original source content (markdown/HTML/text as stored in DB)
-      field :raw_body, :string do
-        resolve(fn post_content, _, _ ->
-          {:ok, Map.get(post_content, :html_body) || ""}
-        end)
-      end
+      field(:html_body, :string)
     end
 
     input_object :post_content_input do

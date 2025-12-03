@@ -478,114 +478,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       end
     end
 
-    @doc """
-    Create a new status (POST /api/v1/statuses).
-
-    Hooks directly into Bonfire.Posts.publish/1, bypassing GraphQL.
-
-    ## Parameters (from Mastodon API)
-    - status: Text content (required unless media_ids provided)
-    - media_ids[]: Array of media attachment IDs
-    - in_reply_to_id: ID of status being replied to
-    - sensitive: Mark as sensitive content
-    - spoiler_text: Content warning text
-    - visibility: public, unlisted, private, direct
-    """
-    def create_status(params, conn) do
-      current_user = conn.assigns[:current_user]
-
-      if is_nil(current_user) do
-        RestAdapter.error_fn({:error, :unauthorized}, conn)
-      else
-        with {:ok, post_attrs} <- build_status_post_attrs(params),
-             boundary <- visibility_to_boundary(params["visibility"]),
-             opts <- build_publish_opts(params, current_user, boundary, post_attrs),
-             {:ok, post} <- Bonfire.Posts.publish(opts) do
-          # Preload associations needed for the response
-          post =
-            post
-            |> repo().maybe_preload([
-              :post_content,
-              :media,
-              :replied,
-              activity: [:subject]
-            ])
-
-          status = Mappers.Status.from_post(post, current_user: current_user)
-
-          RestAdapter.json(conn, status)
-        else
-          {:error, reason} ->
-            error(reason, "Failed to create status")
-            RestAdapter.error_fn({:error, reason}, conn)
-        end
-      end
-    end
-
-    defp build_status_post_attrs(params) do
-      media = fetch_media_by_ids(params["media_ids"] || params["media_ids[]"] || [])
-      status_text = params["status"] || ""
-
-      # Validate: need either status text or media
-      if status_text == "" and media == [] do
-        {:error, "Validation failed: Text can't be blank"}
-      else
-        {:ok,
-         %{
-           post_content: %{
-             html_body: status_text,
-             summary: params["spoiler_text"]
-           },
-           reply_to_id: params["in_reply_to_id"],
-           uploaded_media: media
-         }}
-      end
-    end
-
-    defp build_publish_opts(params, current_user, boundary, post_attrs) do
-      [
-        current_user: current_user,
-        post_attrs: post_attrs,
-        boundary: boundary
-      ]
-      |> maybe_add_sensitive(params["sensitive"])
-    end
-
-    defp visibility_to_boundary("public"), do: "public"
-
-    defp visibility_to_boundary("unlisted") do
-      debug("unlisted visibility not yet implemented, treating as public")
-      "public"
-    end
-
-    defp visibility_to_boundary("private"), do: "followers"
-    defp visibility_to_boundary("direct"), do: "mentions"
-    defp visibility_to_boundary(_), do: "public"
-
-    defp fetch_media_by_ids(nil), do: []
-    defp fetch_media_by_ids([]), do: []
-
-    defp fetch_media_by_ids(media_ids) when is_list(media_ids) do
-      media_ids
-      |> Enum.map(fn id ->
-        case Bonfire.Files.Media.get(id) do
-          {:ok, media} -> media
-          _ -> nil
-        end
-      end)
-      |> Enum.reject(&is_nil/1)
-    end
-
-    defp fetch_media_by_ids(media_id) when is_binary(media_id) do
-      fetch_media_by_ids([media_id])
-    end
-
-    defp maybe_add_sensitive(opts, sensitive) when sensitive in [true, "true", "1"] do
-      Keyword.put(opts, :sensitive, true)
-    end
-
-    defp maybe_add_sensitive(opts, _), do: opts
-
     @graphql "query ($id: ID!) {
       thread_context(id: $id) {
         ancestors {
@@ -724,18 +616,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     end
 
     defp batch_load_interaction(current_user, object_ids, interaction_module) do
-      import Ecto.Query
-      alias Bonfire.Data.Edges.Edge
-      table_id = interaction_module.__pointers__(:table_id)
-
-      from(e in Edge,
-        where: e.subject_id == ^current_user.id,
-        where: e.object_id in ^object_ids,
-        where: e.table_id == ^table_id,
-        select: e.object_id
-      )
-      |> repo().all()
-      |> MapSet.new()
+      Bonfire.Social.Edges.batch_exists?(interaction_module, current_user, object_ids)
     end
 
     defp batch_load_liked(current_user, object_ids),

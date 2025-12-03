@@ -321,6 +321,30 @@ defmodule Bonfire.Social.Edges do
   end
 
   @doc """
+  Batch check which objects have edges from a given subject.
+  Returns a MapSet of object_ids that have the edge.
+
+  ## Examples
+
+      > batch_exists?(Like, user, ["post1", "post2", "post3"])
+      #MapSet<["post1", "post3"]>
+  """
+  def batch_exists?(_schema_or_type, _subject, []), do: MapSet.new()
+
+  def batch_exists?(schema_or_type, subject, object_ids) when is_list(object_ids) do
+    table_id = Bonfire.Common.Types.table_id(schema_or_type)
+
+    from(e in Edge,
+      where: e.subject_id == ^uid(subject),
+      where: e.object_id in ^object_ids,
+      where: e.table_id == ^table_id,
+      select: e.object_id
+    )
+    |> repo().all()
+    |> MapSet.new()
+  end
+
+  @doc """
   Counts the edges for the given type, filters or object, and options.
 
   ## Examples

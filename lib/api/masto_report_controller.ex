@@ -15,7 +15,7 @@ if Application.compile_env(:bonfire_social, :modularity) != :disabled do
     import Untangle
 
     alias Bonfire.Social.Flags
-    alias Bonfire.API.MastoCompat.Mappers
+    alias Bonfire.Social.API.MastoCompat.Mappers
     alias Bonfire.API.GraphQL.RestAdapter
 
     def create(conn, params) do
