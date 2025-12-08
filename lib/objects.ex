@@ -25,6 +25,8 @@ defmodule Bonfire.Social.Objects do
   alias Bonfire.Data.Identity.Caretaker
   alias Bonfire.Data.Identity.CareClosure
   alias Bonfire.Data.Social.Activity
+  alias Bonfire.Data.Social.PostContent
+
   alias Bonfire.Boundaries.Acls
   alias Bonfire.Boundaries.Verbs
   alias Bonfire.Social.Activities
@@ -1325,5 +1327,68 @@ defmodule Bonfire.Social.Objects do
   def pointer_id_from_ap_object(o) do
     error(o, "Unrecognized AP object format for extracting pointer_id")
     nil
+  end
+
+  @doc """
+  Translates an object's translatable fields to the target language.
+
+  If given an ID, uses `read/2` to load the object (which checks permissions).
+  Then finds the context module for the object type and calls its `translate/3` function.
+
+  ## Options
+    * `:source_lang` - Optional source language code (auto-detected if not provided)
+    * `:format` - `:text` or `:html` (default depends on field)
+    * Other options are passed through to the translation adapter
+
+  ## Examples
+
+      iex> translate("post_id_123", "es", current_user: me)
+      {:ok, %{name: "Título traducido", html_body: "<p>Contenido traducido</p>"}}
+
+      iex> translate(%Post{}, "fr", source_lang: "en")
+      {:ok, %{html_body: "Bonjour le monde"}}
+
+  """
+  def translate(object_or_id, target_lang, opts \\ [])
+
+  def translate(object_id, target_lang, opts) when is_binary(object_id) do
+    with {:ok, object} <- read(object_id, opts) do
+      translate(object, target_lang, opts)
+    end
+  end
+
+  def translate(%{post_content: %PostContent{} = object}, target_lang, opts),
+    do: translate(object, target_lang, opts)
+
+  def translate(%{__struct__: _} = object, target_lang, opts) do
+    object_type = Bonfire.Common.Types.object_type(object)
+
+    with context_module when not is_nil(context_module) <-
+           Bonfire.Common.ContextModule.maybe_context_module(object_type),
+         {:ok, _} = result <-
+           Utils.maybe_apply(
+             context_module,
+             :translate,
+             [object, target_lang, opts],
+             &translate_apply_error/2
+           ) do
+      result
+    else
+      nil ->
+        {:error, :not_translatable}
+
+      {:none, _} ->
+        {:error, :not_translatable}
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  def translate(_, _, _), do: {:error, :invalid_object}
+
+  defp translate_apply_error(error, _args) do
+    warn(error, "no translate function match")
+    {:none, error}
   end
 end

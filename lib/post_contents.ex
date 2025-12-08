@@ -1034,4 +1034,88 @@ defmodule Bonfire.Social.PostContents do
   end
 
   def indexing_object_format(_), do: nil
+
+  @doc """
+  Translates the translatable fields of a post content to the target language.
+
+  Extracts non-empty `:name`, `:summary`, and `:html_body` fields and translates them
+  using batch translation for efficiency. Uses `format: :html` for `html_body`.
+
+  ## Options
+    * `:source_lang` - Optional source language code (auto-detected if not provided)
+    * Other options are passed through to the translation adapter
+
+  ## Examples
+
+      iex> translate(%{post_content: %{name: "Hello", html_body: "<p>World</p>"}}, "es")
+      {:ok, %{name: "Hola", html_body: "<p>Mundo</p>"}}
+
+  """
+  def translate(object, target_lang, opts \\ [])
+
+  def translate(%{post_content: %PostContent{} = post_content}, target_lang, opts) do
+    translate(post_content, target_lang, opts)
+  end
+
+  def translate(%{post_content: _} = object, target_lang, opts) do
+    object
+    |> repo().maybe_preload(:post_content)
+    |> translate(target_lang, opts)
+  end
+
+  def translate(%PostContent{} = post_content, target_lang, opts) do
+    # Build list of {field_name, text, format} for non-empty fields
+    fields_to_translate =
+      [
+        {:name, e(post_content, :name, nil), :text},
+        {:summary, e(post_content, :summary, nil), :text},
+        {:html_body, e(post_content, :html_body, nil), :html}
+      ]
+      |> Enum.filter(fn {_field, text, _format} ->
+        is_binary(text) and String.trim(text) != ""
+      end)
+
+    if Enum.empty?(fields_to_translate) do
+      {:ok, %{}}
+    else
+      source_lang = opts[:source_lang]
+
+      # Group by format to batch translate with same options
+      {text_fields, html_fields} =
+        Enum.split_with(fields_to_translate, fn {_field, _text, format} -> format == :text end)
+
+      with {:ok, text_results} <-
+             translate_field_group(text_fields, source_lang, target_lang, format: :text),
+           {:ok, html_results} <-
+             translate_field_group(html_fields, source_lang, target_lang, format: :html) do
+        result =
+          Map.merge(text_results, html_results)
+          |> Enum.reject(fn {_k, v} -> is_nil(v) end)
+          |> Map.new()
+
+        {:ok, result}
+      end
+    end
+  end
+
+  def translate(_, _, _), do: {:error, :no_content}
+
+  defp translate_field_group([], _source_lang, _target_lang, _opts), do: {:ok, %{}}
+
+  defp translate_field_group(fields, source_lang, target_lang, opts) do
+    field_names = Enum.map(fields, fn {name, _text, _format} -> name end)
+    texts = Enum.map(fields, fn {_name, text, _format} -> text end)
+
+    case Bonfire.Translation.translate_batch(texts, source_lang, target_lang, opts) do
+      {:ok, translations} ->
+        result =
+          Enum.zip(field_names, translations)
+          |> Map.new()
+
+        {:ok, result}
+
+      {:error, _} = error ->
+        error
+    end
+  end
 end
