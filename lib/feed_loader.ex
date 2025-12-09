@@ -17,7 +17,6 @@ defmodule Bonfire.Social.FeedLoader do
   alias Bonfire.Common.Enums
   alias Bonfire.Common.Types
   alias Bonfire.Data.Social.Activity
-  alias Bonfire.Data.Social.FeedPublish
   alias Bonfire.Data.Social.Message
   alias Bonfire.Data.Social.Seen
   alias Bonfire.Data.Edges.Edge

@@ -75,7 +75,7 @@ defmodule Bonfire.Social.APActivities do
       ActivityPub.create(%{to: data["to"], actor: subject_actor, object: data})
     else
       {:error, :not_found} ->
-        flood(subject, "Could not find actor to publish activity")
+        debug(subject, "Could not find actor to publish activity")
         :ignore
 
       e ->

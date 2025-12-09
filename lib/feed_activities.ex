@@ -33,6 +33,11 @@ defmodule Bonfire.Social.FeedActivities do
   def schema_module, do: FeedPublish
   def query_module, do: __MODULE__
 
+  # Helper to get the FeedPublish module from config, defaulting to Bonfire.Data.Social.FeedPublish
+  def feed_activities_schema do
+    Config.get([:bonfire_social, :feed_activities_schema], Bonfire.Data.Social.FeedPublish)
+  end
+
   @doc """
   Casts the changeset to publish an activity to the given creator and feed IDs.
 
@@ -68,7 +73,9 @@ defmodule Bonfire.Social.FeedActivities do
     #   group_by: fp.id,
     #   select: %{id: fp.id, dummy: count(fp.feed_id)}
 
-    from(fp in FeedPublish,
+    fp_mod = feed_activities_schema()
+
+    from(fp in fp_mod,
       as: :main_object,
       # join: fp in subquery(feeds), on: p.id == fp.id,
       join: activity in Activity,
@@ -648,11 +655,12 @@ defmodule Bonfire.Social.FeedActivities do
         else: Bonfire.Social.Feeds.my_feed_id(feed_id, current_user)
 
     uid = uid(current_user)
+    fp_mod = feed_activities_schema()
 
     if uid && table_id && feed_id,
       do:
         {:ok,
-         from(fp in FeedPublish,
+         from(fp in fp_mod,
            left_join: seen_edge in Edge,
            on:
              fp.id == seen_edge.object_id and seen_edge.table_id == ^table_id and
@@ -681,7 +689,10 @@ defmodule Bonfire.Social.FeedActivities do
   @doc """
   Returns the total count of activities in feeds.
   """
-  def count_total(), do: repo().one(select(FeedPublish, [u], count(u.id)))
+  def count_total() do
+    fp_mod = feed_activities_schema()
+    repo().one(select(fp_mod, [u], count(u.id)))
+  end
 
   @doc """
   Marks all unseen items in a feed as seen for the current user.

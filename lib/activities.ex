@@ -21,7 +21,6 @@ defmodule Bonfire.Social.Activities do
   import Bonfire.Boundaries.Queries
   import Ecto.Query
   alias Bonfire.Data.Social.Activity
-  # alias Bonfire.Data.Social.FeedPublish
   # alias Bonfire.Data.Social.Like
   # alias Bonfire.Data.Social.Boost
   # alias Bonfire.Data.Social.Flag
