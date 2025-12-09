@@ -84,6 +84,7 @@ defmodule Bonfire.Social.FeedActivities do
       # distinct: [desc: activity.id],
       # order_by: [desc: activity.id]
     )
+    |> repo().filter_out_future_ulids()
   end
 
   def query_order(query, :num_replies = sort_by, sort_order) do

@@ -895,7 +895,10 @@ defmodule Bonfire.Social.FeedLoader do
     end
   end
 
-  defp default_query(), do: select(Needle.Pointers.query_base(), [p], p)
+  defp default_query(),
+    do:
+      select(Needle.Pointers.query_base(), [p], p)
+      |> repo().filter_out_future_ulids()
 
   defp default_or_filtered_query(filtered \\ nil, default_query, opts) do
     case filtered || e(opts, :feed_filters, nil) do
@@ -1062,6 +1065,7 @@ defmodule Bonfire.Social.FeedLoader do
 
     (query || default_or_filtered_query(filters, FeedActivities.base_query(opts), opts))
     |> proload([:activity])
+    |> repo().filter_out_future_ulids()
     |> maybe_filter(filters)
     |> query_optional_extras(filters, opts)
     |> Objects.as_permitted_for(opts)
