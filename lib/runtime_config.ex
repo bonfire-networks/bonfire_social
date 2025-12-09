@@ -607,6 +607,23 @@ defmodule Bonfire.Social.RuntimeConfig do
           include: [:with_creator, :with_post_content, :with_media, :with_object_peered],
           exclude: [:with_object, :with_object_more]
         },
+        # "Links" => %{
+        #   match: %{media_types: [:link]},
+        #   include: [
+        #     :per_media,
+        #     # :with_media,
+        #     :with_creator,
+        #     :with_post_content
+        #     # :with_object_peered (since not loading the object)
+        #   ],
+        #   exclude: [
+        #     :with_media,
+        #     # :with_subject,
+        #     :with_object,
+        #     :with_object_more,
+        #     :with_reply_to
+        #   ]
+        # },
         "Media" => %{
           match: %{media_types: "*"},
           include: [
