@@ -427,6 +427,7 @@ defmodule Bonfire.Social.Objects do
 
     locales = List.wrap(locales)
 
+    # FIXME: still shows untranslated posts
     query
     # |> proload(activity: [object: [:post_content]])
     |> select_preferred_language(locales)
@@ -1472,4 +1473,35 @@ defmodule Bonfire.Social.Objects do
     warn(error, "no translate function match")
     {:none, error}
   end
+
+  @doc """
+  Casts the object language (locale) on a changeset, with validation.
+
+  ## Examples
+
+      iex> cast_language(%Changeset{}, "en")
+      %Changeset{valid?: true}
+
+      iex> cast_language(%Changeset{}, "xx")
+      %Changeset{valid?: false}
+  """
+  def cast_language(changeset, nil), do: changeset
+
+  def cast_language(changeset, locale) when is_binary(locale) or is_atom(locale) do
+    allowed = Bonfire.Common.Localise.known_locales()
+
+    if Types.maybe_to_atom(locale) in allowed do
+      Changesets.put_assoc!(changeset, :language, %{locale: locale})
+    else
+      Ecto.Changeset.add_error(
+        changeset,
+        :locale,
+        l(
+          "Sorry, that language code is not supported, please select another or ask the instance operators or app maintainers if they can add it."
+        )
+      )
+    end
+  end
+
+  def cast_language(changeset, %{locale: locale}), do: cast_language(changeset, locale)
 end
