@@ -134,7 +134,7 @@ defmodule Bonfire.Social.PostContents do
       with: &changeset/2
       # with: (if changeset.action==:upsert, do: &changeset_update/2, else: &changeset/2)
     )
-    |> flood("casted post content")
+    |> debug("casted post content")
   end
 
   @doc """
@@ -239,7 +239,7 @@ defmodule Bonfire.Social.PostContents do
           # languages: maybe_detect_languages(attrs)
         }
       )
-      |> flood("parsed and prepared contents")
+      |> debug("parsed and prepared contents")
     end
   end
 
