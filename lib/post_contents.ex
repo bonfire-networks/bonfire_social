@@ -134,8 +134,7 @@ defmodule Bonfire.Social.PostContents do
       with: &changeset/2
       # with: (if changeset.action==:upsert, do: &changeset_update/2, else: &changeset/2)
     )
-
-    # |> debug()
+    |> flood("casted post content")
   end
 
   @doc """
@@ -234,10 +233,13 @@ defmodule Bonfire.Social.PostContents do
           hashtags: e(attrs, :hashtags, []) ++ hashtags1 ++ hashtags2 ++ hashtags3,
           urls: urls1 ++ urls2 ++ urls3,
           # TODO: show languages to user, then save the one they confirm
-          languages: maybe_detect_languages(attrs)
+          translations:
+            e(attrs, :post_content, :translations, %{})
+            |> Enums.input_to_atoms(also_discard_unknown_nested_keys: false)
+          # languages: maybe_detect_languages(attrs)
         }
       )
-      |> debug("parsed and prepared contents")
+      |> flood("parsed and prepared contents")
     end
   end
 
@@ -301,7 +303,7 @@ defmodule Bonfire.Social.PostContents do
         html_body: prepare_text(html_body, creator, opts),
         name: prepare_text(name, creator, opts),
         summary: prepare_text(summary, creator, opts),
-        languages: maybe_detect_languages(attrs),
+        # languages: maybe_detect_languages(attrs),
         mentions: Map.values(mentions) || [],
         hashtags: Map.values(hashtags) || [],
         urls: urls || []

@@ -349,6 +349,67 @@ defmodule Bonfire.Social.Objects do
     |> list_query(opts)
   end
 
+  defmacro translated_as_override(module, binding, locales) do
+    module_atom = Macro.expand(module, __CALLER__)
+
+    quote do
+      fragment(
+        "translate_field(?, ?::varchar, ?::varchar[])",
+        unquote(binding),
+        ^to_string(unquote(module_atom).__trans__(:container)),
+        ^Cldr.Trans.QueryBuilder.list_to_sql_array(unquote(locales))
+      )
+    end
+  end
+
+  def select_preferred_language(query, locales) when is_list(locales) or is_atom(locales) do
+    import Cldr.Trans.QueryBuilder
+
+    # ++ [Bonfire.Common.Localise.default_locale()] # add the default locale as a fallback?
+    locales = List.wrap(locales)
+
+    if locales == [] do
+      query
+    else
+      post_content_subquery =
+        from post_content in Bonfire.Data.Social.PostContent,
+          select: %{
+            post_content
+            | translations: nil,
+              translation:
+                translated_as_override(Bonfire.Data.Social.PostContent, post_content, locales)
+          }
+
+      query
+      |> proload(activity: [:object])
+      |> join(:left, [object: object], post_content in subquery(post_content_subquery),
+        on: post_content.id == object.id,
+        as: :post_content
+      )
+      |> proload(activity: [object: [:post_content]])
+
+      # |> select([main_object, activity: activity, object: object, post_content: post_content],
+      #   %{
+      #     main_object
+      #     | activity: %{
+      #         activity
+      #         | object: %{
+      #             object
+      #             | post_content: %{
+      #                 post_content
+      #                 | translations: nil,
+      #                   translation: selected_as(
+      #                     translated_as_override(Bonfire.Data.Social.PostContent, post_content, locales),
+      #                     :post_content_translation
+      #                   )
+      #               }
+      #           }
+      #       }
+      #   }
+      # )
+    end
+  end
+
   def maybe_filter(query, filters, opts \\ [])
 
   def maybe_filter(query, filters, opts) when is_list(filters) or is_map(filters) do
@@ -358,6 +419,26 @@ defmodule Bonfire.Social.Objects do
     Enum.reduce(filters, query, &maybe_filter(&2, &1, opts))
     # |> query_filter(Keyword.drop(filters, @skip_warn_filters))
     |> debug()
+  end
+
+  def maybe_filter(query, {:preferred_language, locales}, _opts)
+      when is_list(locales) or is_atom(locales) do
+    import Cldr.Trans.QueryBuilder
+
+    locales = List.wrap(locales)
+
+    query
+    # |> proload(activity: [object: [:post_content]])
+    |> select_preferred_language(locales)
+    |> where(
+      [post_content: post_content],
+      # or not is_nil(post_content.translation)
+      is_nil(post_content.id) or fragment("? IS NOT NULL", post_content.translation)
+      # not is_nil(selected_as(:post_content_translation))
+    )
+
+    # |> where([post_content: post_content], not is_nil(translated_as_override(PostContent, post_content, locales))) # NOTE: we could do a where clause here, but better to just check what we selected in select_preferred_language
+    # |> where([post_content: post_content], not is_nil(translated(PostContent, post_content, locales))) # NOTE: if using compile-time list of locales we could use this macro from cldr_trans
   end
 
   # doc "List objects created by a user and which are in their outbox, which are not replies"
