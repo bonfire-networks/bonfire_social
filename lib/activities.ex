@@ -1380,7 +1380,7 @@ defmodule Bonfire.Social.Activities do
 
       > get("activity_id", [])
   """
-  def get(id, opts) when is_binary(id), do: repo().single(query([id: id], opts))
+  def get(id, opts) when is_binary(id), do: repo().single(read_query([id: id], opts))
 
   @doc """
   Retrieves an activity based on a query and options.

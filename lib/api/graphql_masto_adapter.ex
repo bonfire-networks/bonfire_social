@@ -17,48 +17,19 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       Mappers,
       InteractionHandler,
       Helpers,
-      PaginationHelpers
+      PaginationHelpers,
+      Fragments
     }
 
     import Helpers, only: [get_field: 2]
     alias Bonfire.Common.Utils
 
-    @post_content Bonfire.Social.API.MastoFragments.post_content()
+    # Use centralized fragments from bonfire_api_graphql
+    @post_content Fragments.post_content()
+    @user Fragments.user_profile()
+    @media Fragments.media()
 
-    # Media fragment inlined for compile-order independence
-    @media """
-      id
-      url
-      path
-      media_type
-      label
-      description
-      size
-    """
-
-    # User profile fragment inlined for compile-order independence
-    @user """
-      id
-      created_at: date_created
-      profile {
-        avatar: icon
-        avatar_static: icon
-        header: image
-        header_static: image
-        display_name: name
-        note: summary
-        website
-      }
-      character {
-        username
-        acct: username
-        url: canonical_uri
-        peered {
-          canonical_uri
-        }
-      }
-    """
-
+    # Activity fragment for feeds - includes Boost spread for timeline items
     @activity "
     id
     created_at: date
@@ -122,6 +93,64 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
                   }
                 }
               }
+            }
+          }
+        }
+      }
+    }
+    object_post_content {
+      #{@post_content}
+    }
+    replied {
+      reply_to_id: replyToId
+      reply_to: replyTo {
+        id
+        subject_id: subjectId
+      }
+    }
+    liked_by_me: likedByMe
+    boosted_by_me: boostedByMe
+    bookmarked_by_me: bookmarkedByMe
+    like_count: likeCount
+    boost_count: boostCount
+    replies_count: repliesCount
+    media {
+      #{@media}
+    }
+    "
+
+    # Simpler activity fragment for thread context (ancestors/descendants are posts, not boosts)
+    # The any_context union doesn't include Boost type, so we can't spread on it
+    @thread_activity "
+    id
+    created_at: date
+    uri: canonical_uri
+    subject_id
+    object_id
+    verb {
+      verb
+    }
+    account: subject {
+      ... on User {
+        #{@user}
+    }}
+    object {
+      __typename
+      ... on Post {
+        id
+        post_content {
+          #{@post_content}
+        }
+        media {
+          #{@media}
+        }
+        activity {
+          id
+          created_at: date
+          uri: canonical_uri
+          creator: subject {
+            ... on User {
+              #{@user}
             }
           }
         }
@@ -481,10 +510,10 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     @graphql "query ($id: ID!) {
       thread_context(id: $id) {
         ancestors {
-          #{@activity}
+          #{@thread_activity}
         }
         descendants {
-          #{@activity}
+          #{@thread_activity}
         }
       }
     }"
@@ -775,11 +804,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       |> Enum.uniq()
     end
 
-    defp maybe_add_cursor(opts, params, param_name, cursor_key),
-      do: PaginationHelpers.maybe_add_cursor(opts, params, param_name, cursor_key)
-
-    defp validate_limit(limit), do: PaginationHelpers.validate_limit(limit)
-
     defp process_feed_edges_with_batch_loading(feed_response, current_user, feed_type) do
       case feed_response do
         %{data: %{feed_activities: %{edges: edges}}} when is_list(edges) ->
@@ -1020,6 +1044,174 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         _ ->
           {:error, :no_results}
       end
+    end
+
+    # ============================================
+    # Reports API (Mastodon-compatible)
+    # ============================================
+
+    alias Bonfire.Social.Flags
+
+    @doc """
+    Create a new report (flag).
+
+    Implements POST /api/v1/reports
+    """
+    def create_report(params, conn) do
+      current_user = conn.assigns[:current_user]
+
+      with {:ok, current_user} <- require_user(current_user),
+           {:ok, account_id} <- require_param(params, "account_id"),
+           flagged_id <- get_flagged_id(params, account_id),
+           opts <- build_flag_opts(params),
+           {:ok, flag} <- Flags.flag(current_user, flagged_id, opts) do
+        flag = preload_flag_for_api(flag)
+        report = Mappers.Report.from_flag(flag, current_user: current_user)
+
+        if report do
+          RestAdapter.json(conn, report)
+        else
+          RestAdapter.error_fn({:error, "Failed to create report"}, conn)
+        end
+      else
+        {:error, reason} -> RestAdapter.error_fn({:error, reason}, conn)
+      end
+    end
+
+    @doc """
+    List reports created by the current user.
+
+    Implements GET /api/v1/reports
+    """
+    def list_reports(params, conn) do
+      current_user = conn.assigns[:current_user]
+
+      with {:ok, current_user} <- require_user(current_user) do
+        result =
+          Flags.list_by(current_user,
+            current_user: current_user,
+            paginate?: false,
+            skip_boundary_check: true,
+            preload: :object_with_creator
+          )
+
+        flags = extract_flags(result)
+
+        reports =
+          flags
+          |> Enum.map(&preload_flag_for_api/1)
+          |> Enum.map(&Mappers.Report.from_flag(&1, current_user: current_user))
+          |> Enum.reject(&is_nil/1)
+
+        RestAdapter.json(conn, reports)
+      else
+        {:error, reason} -> RestAdapter.error_fn({:error, reason}, conn)
+      end
+    end
+
+    @doc """
+    Get a specific report by ID.
+
+    Implements GET /api/v1/reports/:id
+    """
+    def show_report(%{"id" => id}, conn) do
+      current_user = conn.assigns[:current_user]
+
+      with {:ok, current_user} <- require_user(current_user),
+           {:ok, flag} <- get_flag_by_id(id, current_user) do
+        flag = preload_flag_for_api(flag)
+        report = Mappers.Report.from_flag(flag, current_user: current_user)
+
+        if report do
+          RestAdapter.json(conn, report)
+        else
+          RestAdapter.error_fn({:error, :not_found}, conn)
+        end
+      else
+        {:error, reason} -> RestAdapter.error_fn({:error, reason}, conn)
+      end
+    end
+
+    # Report helper functions
+
+    defp require_user(nil), do: {:error, :unauthorized}
+    defp require_user(user), do: {:ok, user}
+
+    defp require_param(params, key) do
+      case params[key] do
+        nil -> {:error, "#{key} is required"}
+        "" -> {:error, "#{key} is required"}
+        value -> {:ok, value}
+      end
+    end
+
+    defp get_flagged_id(params, account_id) do
+      status_ids = params["status_ids"] || []
+      List.first(status_ids) || account_id
+    end
+
+    defp build_flag_opts(params) do
+      opts = [forward: false]
+
+      opts =
+        case params["comment"] do
+          comment when is_binary(comment) and comment != "" ->
+            Keyword.put(opts, :comment, String.slice(comment, 0, 1000))
+
+          _ ->
+            opts
+        end
+
+      if params["forward"] in [true, "true"] do
+        Keyword.put(opts, :forward, true)
+      else
+        opts
+      end
+    end
+
+    defp extract_flags(result) do
+      case result do
+        %{edges: edges} when is_list(edges) -> edges
+        flags when is_list(flags) -> flags
+        _ -> []
+      end
+    end
+
+    defp get_flag_by_id(id, current_user) do
+      if Bonfire.Common.Types.is_uid?(id) do
+        Flags.query([id: id, subjects: current_user], skip_boundary_check: true)
+        |> repo().single()
+        |> case do
+          {:ok, flag} -> {:ok, flag}
+          _ -> {:error, :not_found}
+        end
+      else
+        {:error, :not_found}
+      end
+    end
+
+    defp preload_flag_for_api(flag) do
+      repo().maybe_preload(
+        flag,
+        [:named, edge: [:object]],
+        follow_pointers: true
+      )
+      |> then(fn flag ->
+        case get_in(flag, [Access.key(:edge), Access.key(:object)]) do
+          nil ->
+            flag
+
+          object ->
+            object =
+              repo().maybe_preload(
+                object,
+                [:profile, :character, created: [creator: [:profile, :character]]],
+                follow_pointers: true
+              )
+
+            put_in(flag, [Access.key(:edge), Access.key(:object)], object)
+        end
+      end)
     end
   end
 end

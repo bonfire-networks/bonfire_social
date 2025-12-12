@@ -291,7 +291,29 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     object :post_content do
       field(:name, :string)
       field(:summary, :string)
-      field(:html_body, :string)
+
+      @desc "The raw content as stored (may be markdown or HTML depending on editor)"
+      field :raw_body, :string do
+        resolve(fn post_content, _, _ ->
+          {:ok, Map.get(post_content, :html_body)}
+        end)
+      end
+
+      @desc "The content converted to HTML (for display)"
+      field :html_body, :string do
+        resolve(fn post_content, _, _ ->
+          raw = Map.get(post_content, :html_body)
+
+          html =
+            if is_binary(raw) and raw != "" do
+              Bonfire.Common.Text.maybe_markdown_to_html(raw, sanitize: true)
+            else
+              raw
+            end
+
+          {:ok, html}
+        end)
+      end
     end
 
     input_object :post_content_input do
@@ -789,37 +811,44 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
             end
         )
 
-      # Apply postloads (same pattern as LiveHandler.do_preload_extras)
-      # Media requires postloading because it uses complex join logic
-      postloads = [:with_media]
+      # Handle error tuples from FeedActivities.feed/3 (e.g., {:error, :unauthorized})
+      case feed_result do
+        {:error, _} = error ->
+          error
 
-      # Apply postloads to raw feed items before pagination
-      feed_with_media =
-        if feed_result.edges && length(feed_result.edges) > 0 do
-          # Apply postloads to the raw feed items
-          # Use preload_nested to tell activity_preloads about the structure
-          loaded_items =
-            feed_result.edges
-            |> Activities.activity_preloads(postloads,
-              current_user: current_user,
-              skip_boundary_check: true,
-              preload_nested: {[:activity], []}
-            )
+        feed_result ->
+          # Apply postloads (same pattern as LiveHandler.do_preload_extras)
+          # Media requires postloading because it uses complex join logic
+          postloads = [:with_media]
 
-          %{feed_result | edges: loaded_items}
-        else
-          feed_result
-        end
+          # Apply postloads to raw feed items before pagination
+          feed_with_media =
+            if feed_result.edges && length(feed_result.edges) > 0 do
+              # Apply postloads to the raw feed items
+              # Use preload_nested to tell activity_preloads about the structure
+              loaded_items =
+                feed_result.edges
+                |> Activities.activity_preloads(postloads,
+                  current_user: current_user,
+                  skip_boundary_check: true,
+                  preload_nested: {[:activity], []}
+                )
 
-      feed_with_media
-      |> Pagination.connection_paginate(pagination_args,
-        item_prepare_fun:
-          case feed_type do
-            :objects -> fn fp -> Activities.activity_under_object(e(fp, :activity, nil) || fp) end
-            :media -> fn fp -> Activities.activity_under_media(e(fp, :activity, nil) || fp) end
-            _activities -> fn fp -> e(fp, :activity, nil) || fp end
-          end
-      )
+              %{feed_result | edges: loaded_items}
+            else
+              feed_result
+            end
+
+          feed_with_media
+          |> Pagination.connection_paginate(pagination_args,
+            item_prepare_fun:
+              case feed_type do
+                :objects -> fn fp -> Activities.activity_under_object(e(fp, :activity, nil) || fp) end
+                :media -> fn fp -> Activities.activity_under_media(e(fp, :activity, nil) || fp) end
+                _activities -> fn fp -> e(fp, :activity, nil) || fp end
+              end
+          )
+      end
     end
 
     def feed_objects(feed_name \\ nil, args, info) do
