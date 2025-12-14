@@ -843,9 +843,14 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
           |> Pagination.connection_paginate(pagination_args,
             item_prepare_fun:
               case feed_type do
-                :objects -> fn fp -> Activities.activity_under_object(e(fp, :activity, nil) || fp) end
-                :media -> fn fp -> Activities.activity_under_media(e(fp, :activity, nil) || fp) end
-                _activities -> fn fp -> e(fp, :activity, nil) || fp end
+                :objects ->
+                  fn fp -> Activities.activity_under_object(e(fp, :activity, nil) || fp) end
+
+                :media ->
+                  fn fp -> Activities.activity_under_media(e(fp, :activity, nil) || fp) end
+
+                _activities ->
+                  fn fp -> e(fp, :activity, nil) || fp end
               end
           )
       end
