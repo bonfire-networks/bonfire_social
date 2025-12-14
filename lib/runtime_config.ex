@@ -22,7 +22,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           },
           current_user_required: true,
           exclude_from_nav: false,
-          icon: "ph:house-duotone",
+          icon: "ph:rss-duotone",
           # New structured UI-specific settings
           assigns: [
             page: "following",
