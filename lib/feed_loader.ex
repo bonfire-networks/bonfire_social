@@ -1496,8 +1496,8 @@ defmodule Bonfire.Social.FeedLoader do
     |> Ecto.Query.exclude(:preload)
     |> Ecto.Query.exclude(:order_by)
     ~> select(count())
-    |> debug()
-    |> repo().one()
+    ~> debug()
+    ~> repo().one()
   end
 
   @doc """
@@ -1515,8 +1515,8 @@ defmodule Bonfire.Social.FeedLoader do
     |> Ecto.Query.exclude(:preload)
     |> Ecto.Query.exclude(:order_by)
     ~> select([subject: subject], count(subject.id, :distinct))
-    |> debug()
-    |> repo().one()
+    ~> debug()
+    ~> repo().one()
   end
 
   @decorate time()

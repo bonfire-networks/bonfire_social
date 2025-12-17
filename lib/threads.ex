@@ -908,7 +908,7 @@ defmodule Bonfire.Social.Threads do
   def unseen_count(filters, opts) do
     unseen_query(filters, opts)
     ~> select(count())
-    |> repo().one()
+    ~> repo().one()
   end
 
   @doc """
@@ -929,9 +929,9 @@ defmodule Bonfire.Social.Threads do
 
     unseen_query(filters, opts)
     ~> select([c], %{id: c.id})
-    |> repo().all()
-    |> debug("iddds")
-    |> Bonfire.Social.Seen.mark_seen(current_user, ...)
+    ~> repo().all()
+    ~> debug("iddds")
+    ~> Bonfire.Social.Seen.mark_seen(current_user, ...)
   end
 
   defp maybe_max_depth(query, max_depth, include_path_ids) when is_integer(max_depth) do

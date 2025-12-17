@@ -684,7 +684,7 @@ defmodule Bonfire.Social.FeedActivities do
   def unseen_count(feed_id, opts) do
     unseen_query(feed_id, opts)
     ~> select(count())
-    |> repo().one()
+    ~> repo().one()
   end
 
   @doc """
@@ -708,7 +708,7 @@ defmodule Bonfire.Social.FeedActivities do
 
     unseen_query(feed_id, opts)
     ~> select([c], %{id: c.id})
-    |> repo().all()
-    |> Bonfire.Social.Seen.mark_seen(current_user, ...)
+    ~> repo().all()
+    ~> Bonfire.Social.Seen.mark_seen(current_user, ...)
   end
 end
