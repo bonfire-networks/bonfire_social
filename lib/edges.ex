@@ -30,6 +30,7 @@ defmodule Bonfire.Social.Edges do
     :activity_types,
     :preload_type,
     :object_types,
+    :exclude_object_types,
     :subject_types,
     :current_user,
     :current_account,
@@ -436,13 +437,16 @@ defmodule Bonfire.Social.Edges do
     from(root in query_schema)
     |> reusable_join([root], edge in assoc(root, :edge), as: :edge)
     |> boundarise(edge.object_id, opts)
-    |> maybe_proload(debug(opts[:preload]), filters[:object_types])
+    |> maybe_proload(opts[:preload], filters[:object_types])
     |> filter(filters, opts)
   end
 
   defp maybe_proload(query, _preload?, object_type \\ nil)
   defp maybe_proload(query, _preload? = :skip, _object_type), do: query
   defp maybe_proload(query, _preload? = false, _object_type), do: query |> proload(:edge)
+
+  defp maybe_proload(query, preload?, [object_type]),
+    do: maybe_proload(query, preload?, object_type)
 
   defp maybe_proload(query, :subject, _object_type) do
     query
@@ -484,6 +488,7 @@ defmodule Bonfire.Social.Edges do
 
   defp maybe_proload(query, :object, object_type) do
     maybe_join_type(query, :object, object_type)
+    |> proload(edge: [:object])
   end
 
   defp maybe_proload(query, :object_with_creator, object_type) do
@@ -523,7 +528,15 @@ defmodule Bonfire.Social.Edges do
     )
   end
 
-  defp maybe_join_type(query, :object, _object_type) do
+  defp maybe_join_type(query, :object, nil) do
+    query
+    |> proload(:edge)
+    |> proload(edge: [:object])
+  end
+
+  defp maybe_join_type(query, :object, object_type) do
+    warn(object_type, "unrecognised object_type for filtering")
+
     query
     |> proload(:edge)
     |> proload(edge: [:object])
@@ -593,6 +606,16 @@ defmodule Bonfire.Social.Edges do
     case Bonfire.Common.Types.table_types(types) do
       table_ids when is_list(table_ids) and table_ids != [] ->
         where(query, [edge: edge], edge.table_id in ^table_ids)
+
+      _ ->
+        query
+    end
+  end
+
+  defp filter(query, {:exclude_object_types, types}, _opts) do
+    case Bonfire.Common.Types.table_types(types) do
+      table_ids when is_list(table_ids) and table_ids != [] ->
+        where(query, [object: object], object.table_id not in ^table_ids)
 
       _ ->
         query
