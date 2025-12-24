@@ -15,6 +15,8 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
   - POST /api/v1/statuses/:id/unreblog - Unreblog status
   - POST /api/v1/statuses/:id/bookmark - Bookmark status
   - POST /api/v1/statuses/:id/unbookmark - Unbookmark status
+  - POST /api/v1/statuses/:id/pin - Pin status to profile
+  - POST /api/v1/statuses/:id/unpin - Unpin status from profile
 
   Run with: just test extensions/bonfire_social/test/rest/masto_api/status_test.exs
   """
@@ -602,6 +604,177 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
         |> json_response(200)
 
       assert response["bookmarked"] == false
+    end
+  end
+
+  describe "POST /api/v1/statuses/:id/pin" do
+    test "pins a status", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: user,
+          post_attrs: %{post_content: %{html_body: "Pin me!"}},
+          boundary: "public"
+        )
+
+      refute Bonfire.Social.Pins.pinned?(user, post)
+
+      api_conn = masto_api_conn(conn, user: user, account: account)
+
+      response =
+        api_conn
+        |> post("/api/v1/statuses/#{post.id}/pin")
+        |> json_response(200)
+
+      assert response["id"] == post.id
+      assert response["pinned"] == true
+      assert Bonfire.Social.Pins.pinned?(user, post)
+    end
+
+    test "is idempotent - pinning twice succeeds", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: user,
+          post_attrs: %{post_content: %{html_body: "Pin me!"}},
+          boundary: "public"
+        )
+
+      api_conn = masto_api_conn(conn, user: user, account: account)
+
+      # First pin
+      api_conn |> post("/api/v1/statuses/#{post.id}/pin") |> json_response(200)
+
+      # Second pin - should still succeed
+      response =
+        api_conn
+        |> post("/api/v1/statuses/#{post.id}/pin")
+        |> json_response(200)
+
+      assert response["pinned"] == true
+    end
+
+    test "returns 401 when not authenticated", %{conn: conn} do
+      user = Fake.fake_user!()
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: user,
+          post_attrs: %{post_content: %{html_body: "Test"}},
+          boundary: "public"
+        )
+
+      response =
+        conn
+        |> put_req_header("accept", "application/json")
+        |> put_req_header("content-type", "application/json")
+        |> post("/api/v1/statuses/#{post.id}/pin")
+        |> json_response(401)
+
+      assert response["error"] == "Unauthorized"
+    end
+
+    test "can pin another user's boostable status", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+      author = Fake.fake_user!()
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: author,
+          post_attrs: %{post_content: %{html_body: "Pin someone else's post!"}},
+          boundary: "public"
+        )
+
+      api_conn = masto_api_conn(conn, user: user, account: account)
+
+      response =
+        api_conn
+        |> post("/api/v1/statuses/#{post.id}/pin")
+        |> json_response(200)
+
+      assert response["id"] == post.id
+      assert response["pinned"] == true
+      assert Bonfire.Social.Pins.pinned?(user, post)
+    end
+  end
+
+  describe "POST /api/v1/statuses/:id/unpin" do
+    test "unpins a status", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: user,
+          post_attrs: %{post_content: %{html_body: "Unpin me!"}},
+          boundary: "public"
+        )
+
+      # Pin the post first (may raise federation error but pin should still be created)
+      try do
+        Bonfire.Social.Pins.pin(user, post)
+      rescue
+        _ -> :ok
+      end
+
+      assert Bonfire.Social.Pins.pinned?(user, post)
+
+      api_conn = masto_api_conn(conn, user: user, account: account)
+
+      response =
+        api_conn
+        |> post("/api/v1/statuses/#{post.id}/unpin")
+        |> json_response(200)
+
+      assert response["id"] == post.id
+      assert response["pinned"] == false
+      refute Bonfire.Social.Pins.pinned?(user, post)
+    end
+
+    test "is idempotent - unpinning when not pinned succeeds", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: user,
+          post_attrs: %{post_content: %{html_body: "Test"}},
+          boundary: "public"
+        )
+
+      api_conn = masto_api_conn(conn, user: user, account: account)
+
+      response =
+        api_conn
+        |> post("/api/v1/statuses/#{post.id}/unpin")
+        |> json_response(200)
+
+      assert response["pinned"] == false
+    end
+
+    test "returns 401 when not authenticated", %{conn: conn} do
+      user = Fake.fake_user!()
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: user,
+          post_attrs: %{post_content: %{html_body: "Test"}},
+          boundary: "public"
+        )
+
+      response =
+        conn
+        |> put_req_header("accept", "application/json")
+        |> put_req_header("content-type", "application/json")
+        |> post("/api/v1/statuses/#{post.id}/unpin")
+        |> json_response(401)
+
+      assert response["error"] == "Unauthorized"
     end
   end
 end

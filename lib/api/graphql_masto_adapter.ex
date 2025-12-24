@@ -976,6 +976,90 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       )
     end
 
+    def pin_status(%{"id" => id} = params, conn) do
+      debug(params, "pin_status called with params")
+      current_user = conn.assigns[:current_user]
+
+      if is_nil(current_user) do
+        RestAdapter.error_fn({:error, :unauthorized}, conn)
+      else
+        # Wrap in try/rescue to handle federation errors gracefully
+        # The pin creation may succeed but federation may fail
+        result =
+          try do
+            Bonfire.Social.Pins.pin(current_user, id)
+          rescue
+            e in RuntimeError ->
+              # Check if pin was actually created despite federation error
+              if Bonfire.Social.Pins.pinned?(current_user, id) do
+                {:ok, :already_pinned}
+              else
+                {:error, e.message}
+              end
+          end
+
+        case result do
+          {:ok, _pin} ->
+            fetch_and_respond_with_pin_state(conn, current_user, id, true)
+
+          {:error, reason} ->
+            error(reason, "pin_status error")
+            RestAdapter.error_fn({:error, reason}, conn)
+        end
+      end
+    end
+
+    def unpin_status(%{"id" => id} = params, conn) do
+      debug(params, "unpin_status called with params")
+      current_user = conn.assigns[:current_user]
+
+      if is_nil(current_user) do
+        RestAdapter.error_fn({:error, :unauthorized}, conn)
+      else
+        case Bonfire.Social.Pins.unpin(current_user, id) do
+          {:ok, _} ->
+            fetch_and_respond_with_pin_state(conn, current_user, id, false)
+
+          _ ->
+            # Unpin is idempotent - still return success
+            fetch_and_respond_with_pin_state(conn, current_user, id, false)
+        end
+      end
+    end
+
+    defp fetch_and_respond_with_pin_state(conn, current_user, id, pinned_value) do
+      opts = [
+        current_user: current_user,
+        preload: [
+          :with_subject,
+          :with_creator,
+          :with_media,
+          :with_object_more,
+          :with_object_peered,
+          :with_reply_to
+        ]
+      ]
+
+      case Bonfire.Social.Objects.read(id, opts) do
+        {:ok, object} ->
+          case Mappers.Status.from_post(object, current_user: current_user) do
+            nil ->
+              RestAdapter.error_fn({:error, :not_found}, conn)
+
+            status ->
+              prepared =
+                status
+                |> Map.put("pinned", pinned_value)
+                |> Helpers.deep_struct_to_map()
+
+              Phoenix.Controller.json(conn, prepared)
+          end
+
+        {:error, reason} ->
+          RestAdapter.error_fn({:error, reason}, conn)
+      end
+    end
+
     @graphql "query ($filter: SearchFilters!) {
       search_activities(filter: $filter) {
         #{@activity}
