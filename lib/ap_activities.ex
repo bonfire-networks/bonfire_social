@@ -534,6 +534,7 @@ defmodule Bonfire.Social.APActivities do
           Bonfire.Common.Needles.list!(ids, opts)
         end
       end)
+      |> debug("loaded pointer objects")
 
     # Load AP objects
     ap_objs =
@@ -570,6 +571,7 @@ defmodule Bonfire.Social.APActivities do
     # Merge all loaded objects into a map by id
     (pointer_objs ++ ap_objs ++ ap_actor_objs)
     |> Map.new(fn obj -> {obj.id, obj} end)
+    |> debug("loaded objects")
   end
 
   # Inject loaded objects back into JSON fields
@@ -627,94 +629,90 @@ defmodule Bonfire.Social.APActivities do
     debug({json, json_fields}, "info: inject_nested_objects_into_json_map input")
 
     Enum.reduce(json_fields, json, fn path, acc_json ->
-      # Traverse to the field using the path
-      {parent, last_key} = Enum.split(path, -1)
-      parent_map = get_in(acc_json, parent)
-      field_value = parent_map && Map.get(parent_map, List.first(last_key))
+      case ed(acc_json, path, nil) do
+        %{"pointer_id" => id} = field_data when is_binary(id) ->
+          obj = Map.get(nested_objects, id)
 
-      updated =
-        case field_value do
-          %{"pointer_id" => id} = field_data when is_binary(id) ->
-            obj = Map.get(nested_objects, id)
-
-            if obj do
-              # debug({path, id, obj}, "info: injecting pointer_id - success")
-              put_in(acc_json, path, Map.put(field_data, "nested_object", obj))
-            else
-              # debug({path, id}, "info: injecting pointer_id - skipped (not found)")
-              acc_json
-            end
-
-          %{"ap_id" => id} = field_data when is_binary(id) ->
-            obj = Map.get(nested_objects, id)
-
-            if obj do
-              # debug({path, id, obj}, "info: injecting ap_id - success")
-              put_in(acc_json, path, Map.put(field_data, "nested_object", obj))
-            else
-              # debug({path, id}, "info: injecting ap_id - skipped (not found)")
-              acc_json
-            end
-
-          %{"ap_actor_id" => id} = field_data when is_binary(id) ->
-            obj = Map.get(nested_objects, id)
-
-            if obj do
-              # debug({path, id, obj}, "info: injecting ap_actor_id - success")
-              put_in(acc_json, path, Map.put(field_data, "nested_object", obj))
-            else
-              # debug({path, id}, "info: injecting ap_actor_id - skipped (not found)")
-              acc_json
-            end
-
-          list when is_list(list) ->
-            updated_list =
-              Enum.map(list, fn
-                %{"pointer_id" => id} = item when is_binary(id) ->
-                  obj = Map.get(nested_objects, id)
-
-                  if obj do
-                    # debug({path, id, obj}, "info: injecting pointer_id in list - success")
-                    Map.put(item, "nested_object", obj)
-                  else
-                    # debug({path, id}, "info: injecting pointer_id in list - skipped (not found)")
-                    item
-                  end
-
-                %{"ap_id" => id} = item when is_binary(id) ->
-                  obj = Map.get(nested_objects, id)
-
-                  if obj do
-                    # debug({path, id, obj}, "info: injecting ap_id in list - success")
-                    Map.put(item, "nested_object", obj)
-                  else
-                    # debug({path, id}, "info: injecting ap_id in list - skipped (not found)")
-                    item
-                  end
-
-                %{"ap_actor_id" => id} = item when is_binary(id) ->
-                  obj = Map.get(nested_objects, id)
-
-                  if obj do
-                    # debug({path, id, obj}, "info: injecting ap_actor_id in list - success")
-                    Map.put(item, "nested_object", obj)
-                  else
-                    # debug({path, id}, "info: injecting ap_actor_id in list - skipped (not found)")
-                    item
-                  end
-
-                item ->
-                  item
-              end)
-
-            put_in(acc_json, path, updated_list)
-
-          other ->
-            # debug({path, other}, "info: inject_nested_objects_into_json_map - unmatched case")
+          if obj do
+            # debug({path, id, obj}, "info: injecting pointer_id - success")
+            put_in(acc_json, path, Map.put(field_data, "nested_object", obj))
+          else
+            # debug({path, id}, "info: injecting pointer_id - skipped (not found)")
             acc_json
-        end
+          end
 
-      updated
+        %{"ap_id" => id} = field_data when is_binary(id) ->
+          obj = Map.get(nested_objects, id)
+
+          if obj do
+            # debug({path, id, obj}, "info: injecting ap_id - success")
+            put_in(acc_json, path, Map.put(field_data, "nested_object", obj))
+          else
+            # debug({path, id}, "info: injecting ap_id - skipped (not found)")
+            acc_json
+          end
+
+        %{"ap_actor_id" => id} = field_data when is_binary(id) ->
+          obj = Map.get(nested_objects, id)
+
+          if obj do
+            # debug({path, id, obj}, "info: injecting ap_actor_id - success")
+            put_in(acc_json, path, Map.put(field_data, "nested_object", obj))
+          else
+            # debug({path, id}, "info: injecting ap_actor_id - skipped (not found)")
+            acc_json
+          end
+
+        list when is_list(list) ->
+          updated_list =
+            Enum.map(list, fn
+              %{"pointer_id" => id} = item when is_binary(id) ->
+                obj = Map.get(nested_objects, id)
+
+                if obj do
+                  # debug({path, id, obj}, "info: injecting pointer_id in list - success")
+                  Map.put(item, "nested_object", obj)
+                else
+                  # debug({path, id}, "info: injecting pointer_id in list - skipped (not found)")
+                  item
+                end
+
+              %{"ap_id" => id} = item when is_binary(id) ->
+                obj = Map.get(nested_objects, id)
+
+                if obj do
+                  # debug({path, id, obj}, "info: injecting ap_id in list - success")
+                  Map.put(item, "nested_object", obj)
+                else
+                  # debug({path, id}, "info: injecting ap_id in list - skipped (not found)")
+                  item
+                end
+
+              %{"ap_actor_id" => id} = item when is_binary(id) ->
+                obj = Map.get(nested_objects, id)
+
+                if obj do
+                  # debug({path, id, obj}, "info: injecting ap_actor_id in list - success")
+                  Map.put(item, "nested_object", obj)
+                else
+                  # debug({path, id}, "info: injecting ap_actor_id in list - skipped (not found)")
+                  item
+                end
+
+              item ->
+                item
+            end)
+
+          put_in(acc_json, path, updated_list)
+
+        nil ->
+          # debug({path}, "info: injecting - skipped (nil field)")
+          acc_json
+
+        other ->
+          debug({path, other}, "inject_nested_objects_into_json_map - unmatched case")
+          acc_json
+      end
     end)
   end
 end
