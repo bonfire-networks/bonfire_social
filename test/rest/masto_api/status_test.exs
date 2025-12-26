@@ -61,6 +61,7 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
 
       api_conn = masto_api_conn(conn, user: user, account: account)
 
+      # FIXME
       response =
         api_conn
         |> get("/api/v1/statuses/01HZNONEXISTENT00000000000")
@@ -69,6 +70,7 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
       assert response["error"]
     end
 
+    # FIXME
     test "works without authentication for public posts", %{conn: conn} do
       user = Fake.fake_user!()
 
@@ -108,6 +110,7 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
         |> delete("/api/v1/statuses/#{post.id}")
         |> json_response(200)
 
+      # FIXME
       assert response["id"] == post.id
 
       # Verify it's deleted

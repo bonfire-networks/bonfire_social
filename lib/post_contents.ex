@@ -733,11 +733,11 @@ defmodule Bonfire.Social.PostContents do
 
     hashtags =
       Bonfire.Social.Tags.list_tags_hashtags(post)
-      |> flood("tags")
+      |> debug("tags")
       # TODO: check why we're doing this?
       |> Bonfire.Common.Needles.list!(skip_boundary_check: true)
       |> repo().maybe_preload(:named)
-      |> flood("include_as_hashtags")
+      |> debug("include_as_hashtags")
 
     quoted_objects =
       Bonfire.Social.Tags.list_tags_quote(post)
@@ -847,7 +847,7 @@ defmodule Bonfire.Social.PostContents do
     }
     |> Enum.filter(fn {_, v} -> not is_nil(v) end)
     |> Enum.into(%{})
-    |> flood("prepared outgoing AP Note object")
+    |> debug("prepared outgoing AP Note object")
   end
 
   # edit an existing post
@@ -878,7 +878,7 @@ defmodule Bonfire.Social.PostContents do
       end
       |> filter_empty([])
       |> Map.new()
-      |> flood("incoming hashtags")
+      |> debug("incoming hashtags")
 
     #  TODO: put somewhere reusable by other types
     mentions =

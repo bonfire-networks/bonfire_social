@@ -150,7 +150,7 @@ defmodule Bonfire.Social.Threads do
     |> debug("attrs")
     |> find_reply_id()
     |> debug("reply_id")
-    |> maybe_replyable(user)
+    |> maybe_replyable(user, attrs)
     |> debug("maybe_replyable")
   end
 
@@ -170,10 +170,10 @@ defmodule Bonfire.Social.Threads do
   # old; not sure this is what forks will look like when we implement thread forking
   def find_thread(attrs, user) do
     find_thread_id(attrs)
-    |> maybe_replyable(user)
+    |> maybe_replyable(user, attrs)
   end
 
-  defp maybe_replyable(id, user) do
+  defp maybe_replyable(id, user, attrs \\ nil) do
     if is_binary(id) and id != "" do
       case load_replyable(user, id) do
         %{replied: %{thread_id: thread_id}} = reply
@@ -182,7 +182,7 @@ defmodule Bonfire.Social.Threads do
           if Bonfire.Boundaries.can?(user, :reply, thread_id) do
             {:ok, reply}
           else
-            flood(thread_id, "reply not permitted on thread")
+            flood(attrs || thread_id, "reply not permitted on thread")
 
             reply_not_permitted!()
           end
@@ -191,7 +191,7 @@ defmodule Bonfire.Social.Threads do
           {:ok, reply}
 
         _ ->
-          flood(id, "reply not permitted on reply_to")
+          flood(attrs || id, "reply not permitted on reply_to")
 
           reply_not_permitted!()
       end
@@ -317,11 +317,12 @@ defmodule Bonfire.Social.Threads do
   end
 
   defp find_reply_id(%{reply_to_id: id}), do: Enums.id(id)
-  defp find_reply_id(%{reply_to: attrs_or_object}), do: find_reply_id(attrs_or_object)
+  defp find_reply_id(%{reply_to: attrs_or_object}), do: Enums.id(attrs_or_object)
   # defp find_reply_id(%{thread_id: id}) when is_binary(id) and id != "", do: id
-  defp find_reply_id(attrs_or_object), do: Enums.id(attrs_or_object)
+  # defp find_reply_id(attrs_or_object), do: Enums.id(attrs_or_object)
+  defp find_reply_id(_), do: nil
 
-  defp find_thread_id(%{thread_id: id}) when is_binary(id) and id != "", do: id
+  defp find_thread_id(%{thread_id: id}), do: Enums.id(id)
   defp find_thread_id(%{reply_to: attrs}), do: find_thread_id(attrs)
   defp find_thread_id(_), do: nil
 

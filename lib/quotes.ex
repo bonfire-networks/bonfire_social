@@ -209,16 +209,18 @@ defmodule Bonfire.Social.Quotes do
                )
                |> info("published_accept"),
              else: :ok
-           ),
-         # Then send Update for the now-authorized quote post (only if this is a local quote_post)
-         {:ok, quote_post} <-
-           Social.maybe_federate_and_gift_wrap_activity(
-             quoted_creator,
-             quote_post,
-             opts ++ [verb: :update]
-           )
-           |> info("published_update_for_quote_post") do
-      {:ok, quote_post}
+           ) do
+      # Then send Update for the now-authorized quote post (only if this is a local quote_post)
+      if Bonfire.Social.is_local?(quote_post) do
+        Social.maybe_federate_and_gift_wrap_activity(
+          quoted_creator,
+          quote_post,
+          opts ++ [verb: :update]
+        )
+        |> info("published_update_for_quote_post after acceptance")
+      else
+        {:ok, quote_post}
+      end
     end
   end
 
@@ -277,16 +279,18 @@ defmodule Bonfire.Social.Quotes do
            update_quote_remove(quote_object, quoted_object) |> info("removed_quote_tag"),
          {:ok, _} <-
            federate_reject(opts[:verb], request, quote_object, quoted_object)
-           |> info("ap_rejected_quote_request"),
-         # Then send Update for the now-unauthorized quote post (only if this is a local quote_post)
-         {:ok, quote_post} <-
-           Social.maybe_federate_and_gift_wrap_activity(
-             quoted_creator,
-             quote_object,
-             opts ++ [verb: :update]
-           )
-           |> info("published_update_for_quote_post") do
-      {:ok, quote_post}
+           |> info("ap_rejected_quote_request") do
+      # Then send Update for the now-unauthorized quote post (only if this is a local quote_post) 
+      if Bonfire.Social.is_local?(quote_object) do
+        Social.maybe_federate_and_gift_wrap_activity(
+          quoted_creator,
+          quote_object,
+          opts ++ [verb: :update]
+        )
+        |> info("published_update_for_quote_post after rejection")
+      else
+        {:ok, quote_object}
+      end
     end
   end
 
@@ -412,12 +416,12 @@ defmodule Bonfire.Social.Quotes do
         #        ActivityPub.Federator.Fetcher.fetch_fresh_object_from_id(URIS.canonical_url(quote_post),
         #          return_tombstones: true
         #        )
-        #        |> flood("fetched fresh object"),
+        #        |> debug("fetched fresh object"),
         #        {:ok, authorization} <- do_fetch_fresh_quote_authorization(quote_post, quoted_object) do
         #         {:ok, authorization}
         #        end
         # else
-        flood("No quoteAuthorization field in quote post")
+        debug("No quoteAuthorization field in quote post")
         {:error, :not_found}
 
       # end
@@ -428,13 +432,13 @@ defmodule Bonfire.Social.Quotes do
 
   defp do_fetch_fresh_quote_authorization(quote_post, _quoted_object) do
     with {:ok, %{data: ap_json}} <-
-           ActivityPub.Object.get_cached(pointer: quote_post) |> flood("quote_ap_json"),
+           ActivityPub.Object.get_cached(pointer: quote_post) |> debug("quote_ap_json"),
          quote_auth_url when is_binary(quote_auth_url) <- ap_json["quoteAuthorization"],
          {:ok, authorization} <-
            ActivityPub.Federator.Fetcher.fetch_fresh_object_from_id(quote_auth_url,
              return_tombstones: true
            )
-           |> flood("fetched fresh authorization") do
+           |> debug("fetched fresh authorization") do
       {:ok, authorization}
     end
   end
@@ -729,6 +733,7 @@ defmodule Bonfire.Social.Quotes do
          #      e(local_quote_post, :pointer, :created, :creator_id, nil),
          {:ok, local_quote_post} <-
            accept_quote(local_quote_post.pointer, quoted_object.pointer,
+             incoming: true,
              request_activity: request_activity
            )
            |> info("Updated local quote post with authorization") do

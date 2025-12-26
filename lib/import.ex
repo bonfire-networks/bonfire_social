@@ -573,7 +573,7 @@ defmodule Bonfire.Social.Import do
 
   # Helper to optionally fetch thread based on user setting
   defp maybe_fetch_thread_async(object, user) do
-    flood(user, "user settings check for fetch_thread_on_import")
+    debug(user, "user settings check for fetch_thread_on_import")
 
     if Settings.get(
          [Bonfire.Social.Import, :fetch_threads_on_import],
@@ -582,7 +582,7 @@ defmodule Bonfire.Social.Import do
          name: l("Fetch thread replies on import"),
          description: l("Automatically fetch replies when importing posts.")
        ) do
-      flood("scheduling fetch_thread_async for imported object")
+      debug("scheduling fetch_thread_async for imported object")
       fetch_thread_async(object, user)
     end
   end
