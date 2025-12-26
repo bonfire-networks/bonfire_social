@@ -211,6 +211,16 @@ defmodule Bonfire.Social.Pins do
             {:error, e}
         end
     end
+  rescue
+    e in Ecto.ConstraintError ->
+      case get(pinner, pinned) do
+        {:ok, pin} ->
+          debug(pin, "the user already pinned this object")
+          {:ok, pin}
+
+        _ ->
+          error(e)
+      end
   end
 
   @doc """

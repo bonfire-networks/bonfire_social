@@ -400,24 +400,42 @@ defmodule Bonfire.Social.Quotes do
       {:ok, %ActivityPub.Object{}}
   """
   def fetch_fresh_quote_authorization(quote_post, quoted_object \\ nil) do
-    quoted_object = quoted_object || get_first_quoted_object(quote_post)
+    # quoted_object = quoted_object || get_first_quoted_object(quote_post)
+    # FIXME? do we need to do anything with quoted_object here?
 
+    with {:ok, authorization} <- do_fetch_fresh_quote_authorization(quote_post, quoted_object) do
+      {:ok, authorization}
+    else
+      nil ->
+        # TODO? do we need something like this?
+        #     with {:ok, fresh_object} <-
+        #        ActivityPub.Federator.Fetcher.fetch_fresh_object_from_id(URIS.canonical_url(quote_post),
+        #          return_tombstones: true
+        #        )
+        #        |> flood("fetched fresh object"),
+        #        {:ok, authorization} <- do_fetch_fresh_quote_authorization(quote_post, quoted_object) do
+        #         {:ok, authorization}
+        #        end
+        # else
+        flood("No quoteAuthorization field in quote post")
+        {:error, :not_found}
+
+      # end
+      other ->
+        other
+    end
+  end
+
+  defp do_fetch_fresh_quote_authorization(quote_post, _quoted_object) do
     with {:ok, %{data: ap_json}} <-
-           ActivityPub.Object.get_cached(pointer: quote_post) |> info("quote_ap_json"),
+           ActivityPub.Object.get_cached(pointer: quote_post) |> flood("quote_ap_json"),
          quote_auth_url when is_binary(quote_auth_url) <- ap_json["quoteAuthorization"],
          {:ok, authorization} <-
            ActivityPub.Federator.Fetcher.fetch_fresh_object_from_id(quote_auth_url,
              return_tombstones: true
            )
-           |> info("fetched_fresh") do
+           |> flood("fetched fresh authorization") do
       {:ok, authorization}
-    else
-      nil ->
-        info("No quoteAuthorization field in quote post")
-        {:error, :not_found}
-
-      other ->
-        other
     end
   end
 

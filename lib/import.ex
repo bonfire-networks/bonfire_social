@@ -14,6 +14,7 @@ defmodule Bonfire.Social.Import do
   use Bonfire.Common.E
   use Bonfire.Common.Localise
   use Bonfire.Common.Settings
+  use Bonfire.Common.Repo
   alias Bonfire.Common.Utils
   alias Bonfire.Common.Enums
   alias Bonfire.Me.Users
@@ -53,10 +54,10 @@ defmodule Bonfire.Social.Import do
       %{imported: 5, boosted: 3, errors: 1}
 
   """
-  def import_from_json_file(type, user_id, path, opts \\ []) do
+  def import_from_json_file(type, user, path, opts \\ []) do
     with {:ok, json_content} <- File.read(path),
          {:ok, outbox_data} <- Jason.decode(json_content) do
-      import_from_json(type, user_id, outbox_data, opts)
+      import_from_json(type, user, outbox_data, opts)
     else
       error ->
         error(error, "Failed to read or parse JSON file")
@@ -66,19 +67,15 @@ defmodule Bonfire.Social.Import do
   @doc """
   Import user's outbox from parsed JSON data.
   """
-  def import_from_json(:outbox = _type, user_id, outbox_data, opts \\ []) do
+  def import_from_json(type, user_id, outbox_data, opts \\ [])
+
+  def import_from_json(:outbox = _type, user, outbox_data, opts) do
     activities = Map.get(outbox_data, "orderedItems", [])
 
     op = if(opts[:include_boosts], do: "outbox_import", else: "outbox_creations_import")
 
-    with {:ok, user} <- Users.by_username(user_id) do
-      activities
-      # TODO: should we only save the type and object id in the queue metadata?
-      |> enqueue_many(op, user_id, ...)
-    else
-      error ->
-        error(error, "Failed to find user for outbox import")
-    end
+    # TODO: should we only save the type and object id in the queue metadata?
+    enqueue_many(op, Enums.id(user), activities)
   end
 
   defp follows_from_csv_file(scope, path) do
@@ -453,6 +450,13 @@ defmodule Bonfire.Social.Import do
 
   def perform(_, _, _), do: :ok
 
+  #  with {:ok, user} <- Users.by_username(user_id) do
+  #     import_from_json(type, user_id, outbox_data, opts)
+  #   else
+  #     error ->
+  #       error(error, "Failed to find user for outbox import")
+  #   end
+
   defp process_json_activity(
          %{"type" => "Create", "object" => %{"id" => object_id} = object} = activity,
          user,
@@ -480,7 +484,7 @@ defmodule Bonfire.Social.Import do
     # For other Create activities where we don't have the full object, fetch the object before boosting
     with {:ok, boost} <- import_object_action(:boost, object, activity, user) do
       if object = e(boost, :edge, :object, nil) || e(boost, :edge, :object_id, nil),
-        do: maybe_fetch_thread_async(object, user)
+        do: maybe_fetch_thread_async(object, user |> repo().maybe_preload(:settings))
 
       {:ok, boost}
     end
@@ -569,6 +573,8 @@ defmodule Bonfire.Social.Import do
 
   # Helper to optionally fetch thread based on user setting
   defp maybe_fetch_thread_async(object, user) do
+    flood(user, "user settings check for fetch_thread_on_import")
+
     if Settings.get(
          [Bonfire.Social.Import, :fetch_threads_on_import],
          false,
@@ -576,6 +582,7 @@ defmodule Bonfire.Social.Import do
          name: l("Fetch thread replies on import"),
          description: l("Automatically fetch replies when importing posts.")
        ) do
+      flood("scheduling fetch_thread_async for imported object")
       fetch_thread_async(object, user)
     end
   end

@@ -733,10 +733,11 @@ defmodule Bonfire.Social.PostContents do
 
     hashtags =
       Bonfire.Social.Tags.list_tags_hashtags(post)
+      |> flood("tags")
       # TODO: check why we're doing this?
       |> Bonfire.Common.Needles.list!(skip_boundary_check: true)
-      #  |> repo().maybe_preload(:named)
-      |> debug("include_as_hashtags")
+      |> repo().maybe_preload(:named)
+      |> flood("include_as_hashtags")
 
     quoted_objects =
       Bonfire.Social.Tags.list_tags_quote(post)
@@ -817,32 +818,36 @@ defmodule Bonfire.Social.PostContents do
       #       }
       #     end) ++
       "tag" =>
-        Enum.map(mentions, fn actor ->
-          %{
-            "href" => actor.ap_id,
-            "name" => actor.username,
-            "type" => "Mention"
-          }
-        end) ++
-          Enum.map(hashtags, fn tag ->
-            %{
-              "href" => URIs.canonical_url(tag),
-              "name" => "##{e(tag, :name, nil) || e(tag, :named, :name, nil)}",
-              "type" => "Hashtag"
-            }
-          end) ++
-          Enum.map(quoted_objects, fn quoted_object ->
-            %{
-              "href" => Bonfire.Common.URIs.canonical_url(quoted_object),
-              "type" => "Link",
-              "rel" => "https://misskey-hub.net/ns#_misskey_quote",
-              "mediaType" =>
-                "application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\""
-            }
-          end)
+        (Enum.map(mentions, fn actor ->
+           %{
+             "href" => actor.ap_id,
+             "name" => actor.username,
+             "type" => "Mention"
+           }
+         end) ++
+           Enum.map(hashtags, fn tag ->
+             if tag = e(tag, :named, :name, nil) || e(tag, :name, nil) do
+               %{
+                 "href" => "/hashtag/#{tag}" |> URIs.based_url(),
+                 "name" => "##{tag}",
+                 "type" => "Hashtag"
+               }
+             end
+           end) ++
+           Enum.map(quoted_objects, fn quoted_object ->
+             %{
+               "href" => Bonfire.Common.URIs.canonical_url(quoted_object),
+               "type" => "Link",
+               "rel" => "https://misskey-hub.net/ns#_misskey_quote",
+               "mediaType" =>
+                 "application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\""
+             }
+           end))
+        |> Enum.reject(&is_nil/1)
     }
     |> Enum.filter(fn {_, v} -> not is_nil(v) end)
     |> Enum.into(%{})
+    |> flood("prepared outgoing AP Note object")
   end
 
   # edit an existing post
@@ -873,8 +878,7 @@ defmodule Bonfire.Social.PostContents do
       end
       |> filter_empty([])
       |> Map.new()
-
-    # |> debug("incoming hashtags")
+      |> flood("incoming hashtags")
 
     #  TODO: put somewhere reusable by other types
     mentions =

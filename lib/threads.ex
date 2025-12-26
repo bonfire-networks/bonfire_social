@@ -182,7 +182,7 @@ defmodule Bonfire.Social.Threads do
           if Bonfire.Boundaries.can?(user, :reply, thread_id) do
             {:ok, reply}
           else
-            debug(thread_id, "reply not permitted on thread")
+            flood(thread_id, "reply not permitted on thread")
 
             reply_not_permitted!()
           end
@@ -191,7 +191,7 @@ defmodule Bonfire.Social.Threads do
           {:ok, reply}
 
         _ ->
-          debug(id, "reply not permitted on reply_to")
+          flood(id, "reply not permitted on reply_to")
 
           reply_not_permitted!()
       end

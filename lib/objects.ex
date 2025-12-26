@@ -353,10 +353,16 @@ defmodule Bonfire.Social.Objects do
     module_atom = Macro.expand(module, __CALLER__)
 
     quote do
+      # NOTE: uses postgres function 
+      # `translate_field(record record, container varchar, field varchar, default_locale varchar, locales varchar[])` 
+      # or 
+      # `translate_field(record record, container varchar, default_locale varchar, locales varchar[])`
+
       fragment(
-        "translate_field(?, ?::varchar, ?::varchar[])",
+        "translate_field(?, ?::varchar, ?::varchar, ?::varchar[])",
         unquote(binding),
         ^to_string(unquote(module_atom).__trans__(:container)),
+        ^"en",
         ^Cldr.Trans.QueryBuilder.list_to_sql_array(unquote(locales))
       )
     end

@@ -240,9 +240,18 @@ defmodule Bonfire.Social.Likes do
 
           _ ->
             error(e)
-            {:error, e}
         end
     end
+  rescue
+    e in Ecto.ConstraintError ->
+      case get(liker, liked) do
+        {:ok, like} ->
+          debug(like, "the user already likes this object")
+          {:ok, like}
+
+        _ ->
+          error(e)
+      end
   end
 
   @doc """
