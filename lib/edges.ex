@@ -369,6 +369,7 @@ defmodule Bonfire.Social.Edges do
     |> Ecto.Query.exclude(:preload)
     |> Ecto.Query.exclude(:order_by)
     |> select([type, edge], count(edge))
+    # |> flood("Edge count query")
     |> repo().one()
   end
 
