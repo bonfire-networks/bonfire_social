@@ -219,11 +219,17 @@ defmodule Bonfire.Social.Likes do
           for fp <- e(like, :feed_publishes, []),
               do: e(fp, :feed_id, nil)
 
+        # Only notify the post creator (not the liker themselves)
+        creator_notify_feeds =
+          if id(liker) != id(object_creator),
+            do: [Feeds.feed_id(:notifications, object_creator)],
+            else: []
+
         maybe_apply(Bonfire.Social.LivePush, :push_activity_object, [
           feed_ids,
           like,
           Objects.preload_creator(liked, force: true),
-          [push_to_thread: false, notify: true]
+          [push_to_thread: false, notify: creator_notify_feeds]
         ])
 
         if !opts[:skip_federation],

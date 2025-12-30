@@ -219,11 +219,17 @@ defmodule Bonfire.Social.Boosts do
 
       # |> debug("published feed_ids")
 
+      # Only notify the post creator (not the booster themselves)
+      creator_notify_feeds =
+        if e(opts, :notify_creator, true) and id(booster) != id(object_creator),
+          do: [Feeds.feed_id(:notifications, object_creator)],
+          else: []
+
       maybe_apply(Bonfire.Social.LivePush, :push_activity_object, [
         feed_ids,
         boost,
         Objects.preload_creator(boosted, force: true),
-        [push_to_thread: false, notify: true]
+        [push_to_thread: false, notify: creator_notify_feeds]
       ])
 
       if !opts[:skip_federation],
