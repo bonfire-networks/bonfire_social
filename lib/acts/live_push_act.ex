@@ -44,9 +44,9 @@ defmodule Bonfire.Social.Acts.LivePush do
           Bonfire.Social.LivePush.push_activity(
             feeds,
             activity,
-            notify: Map.get(epic.assigns, notify_feeds_key, [])
+            notify: Map.get(epic.assigns, notify_feeds_key)
           )
-          |> debug("pushed")
+          # |> debug("pushed")
           |> Epic.assign(epic, on, ...)
       end
     else

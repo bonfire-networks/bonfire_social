@@ -176,13 +176,15 @@ defmodule Bonfire.Social.LivePush do
         true -> Config.get([:ui, :theme, :instance_icon], "/images/bonfire-icon.png")
       end
 
-    opt_notify = e(opts, :notify, nil)
+    opt_notify =
+      e(opts, :notify, nil)
+      |> debug("notify opt")
 
     notify_feed_ids =
       cond do
-
         opt_notify == true ->
-          e(opts, :feed_ids, []) # used for Follows
+          # used for Follows
+          e(opts, :feed_ids, [])
 
         notify_feeds = e(opt_notify, :notify_feeds, nil) || e(opts, :notify_feeds, nil) ->
           notify_feeds
@@ -193,7 +195,7 @@ defmodule Bonfire.Social.LivePush do
         true ->
           []
       end
-      # |> debug("send_notify_feed_ids")
+      |> debug("send_notify_feed_ids")
       |> uids()
 
     notify_emails =
