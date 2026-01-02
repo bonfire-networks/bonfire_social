@@ -121,20 +121,21 @@ defmodule Bonfire.Social.TrendingLinks do
       end)
       |> Enum.sum()
 
-    unique_sharers =
+    # Collect unique sharers with their data (for avatars)
+    sharers =
       items
       |> Enum.map(fn {_media, activity, _edge} ->
-        e(activity, :subject_id, nil)
+        e(activity, :subject, nil)
       end)
       |> Enum.reject(&is_nil/1)
-      |> Enum.uniq()
-      |> length()
+      |> Enum.uniq_by(&id/1)
 
     %{
       media: first_media,
       path: url,
       total_boosts: total_boosts,
-      unique_sharers: unique_sharers,
+      sharers: sharers,
+      unique_sharers: length(sharers),
       share_count: length(items)
     }
   end
