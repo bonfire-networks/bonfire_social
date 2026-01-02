@@ -12,9 +12,11 @@ defmodule Bonfire.Social.TrendingLinks do
   alias Bonfire.Common.Cache
   alias Bonfire.Social.FeedLoader
 
-  # Cache for 1 hour (matching Tags pattern)
+  # Cache for 1 hour 
   @default_cache_ttl 1_000 * 60 * 60
   @default_limit 5
+  # days
+  @default_time_limit 7
 
   @doc """
   Returns trending links grouped by URL with aggregated boost counts.
@@ -28,43 +30,50 @@ defmodule Bonfire.Social.TrendingLinks do
   - `unique_sharers` - Count of unique users who shared this link
 
   ## Options
+  - `:time_limit` - Time window in days to consider activities (default: 7)
   - `:limit` - Maximum number of links to return (default: 5)
+  - `:unique_sharers_weight` - Weight multiplier for unique sharers in sorting (default: 0.25)
+  - `:cache_ttl` - Cache expiration time (default: 1 hour)
   - Any other options passed to FeedLoader.feed/2
 
   ## Examples
 
-      TrendingLinks.list_trending(limit: 10)
+      list_trending(limit: 10)
       #=> [%{media: %Bonfire.Files.Media{}, path: "https://...", total_boosts: 42, unique_sharers: 5}]
   """
   def list_trending(opts \\ []) do
-    limit = Keyword.get(opts, :limit, @default_limit)
-
     Cache.maybe_apply_cached(
       &list_trending_without_cache/1,
-      [limit],
-      expire: @default_cache_ttl
+      [opts],
+      expire: Keyword.get(opts, :cache_ms, @default_cache_ttl)
     )
   end
 
   @doc """
   Resets the trending links cache for a given limit.
   """
-  def list_trending_reset(limit \\ @default_limit) do
-    Cache.reset(&list_trending_without_cache/1, [limit])
+  def list_trending_reset(opts \\ []) do
+    Cache.reset(&list_trending_without_cache/1, [opts])
   end
 
-  defp list_trending_without_cache(limit) do
-    # Fetch more than we need to account for grouping (same URL shared by multiple posts)
-    feed_opts = [
-      limit: limit * 5,
-      skip_boundary_check: true
-    ]
+  defp list_trending_without_cache(opts) do
+    limit = Keyword.get(opts, :limit, @default_limit)
 
-    case FeedLoader.feed(:trending_links, feed_opts) do
+    opts =
+      Keyword.merge(opts,
+        # how many days
+        time_limit: Keyword.get(opts, :time_limit, @default_time_limit),
+        # Fetch more than we need to account for grouping (same URL shared by multiple posts), FIXME: do in DB?
+        limit: 500,
+        skip_boundary_check: true
+      )
+
+    case FeedLoader.feed(:trending_links, opts) do
       %{edges: edges} when is_list(edges) and edges != [] ->
         edges
+        # TODO: this grouping could be done in the DB for better performance, or in FeedLoader so it also applies to the :trending_links preset feed
         |> extract_and_group_by_url()
-        |> sort_by_boosts()
+        |> sort_trending(Keyword.get(opts, :unique_sharers_weight, 0.25))
         |> Enum.take(limit)
 
       _ ->
@@ -82,19 +91,22 @@ defmodule Bonfire.Social.TrendingLinks do
 
   defp extract_link_media_with_activity(edge) do
     # Get media from edge.activity.media (preloaded by :with_media)
+    activity = e(edge, :activity, nil)
+
     media_list =
-      e(edge, :activity, :media, [])
+      e(activity, :media, [])
       |> List.wrap()
       |> Enum.filter(&is_link_media?/1)
 
     Enum.map(media_list, fn media ->
-      {media, e(edge, :activity, nil), edge}
+      {media, activity, edge}
     end)
   end
 
-  defp is_link_media?(%{media_type: media_type, path: path}) when is_binary(path) do
-    String.starts_with?(path, "http") and
-      media_type in ["link", "article", "profile", "website", "research"]
+  defp is_link_media?(%{media_type: media_type, path: "http" <> _path})
+       when media_type in ["link", "article", "profile", "website", "research"] do
+    # NOTE: the feed preset already filters by: ["link", "article", "profile", "website"] but this ensures we exclude non-link attachments to a post with a link
+    true
   end
 
   defp is_link_media?(_), do: false
@@ -105,7 +117,7 @@ defmodule Bonfire.Social.TrendingLinks do
     total_boosts =
       items
       |> Enum.map(fn {_media, _activity, edge} ->
-        e(edge, :activity, :boost_count, :object_count, 0) || 0
+        e(edge, :activity, :boost_count, :object_count, 0)
       end)
       |> Enum.sum()
 
@@ -114,7 +126,7 @@ defmodule Bonfire.Social.TrendingLinks do
       |> Enum.map(fn {_media, activity, _edge} ->
         e(activity, :subject_id, nil)
       end)
-      |> Enum.filter(& &1)
+      |> Enum.reject(&is_nil/1)
       |> Enum.uniq()
       |> length()
 
@@ -129,7 +141,8 @@ defmodule Bonfire.Social.TrendingLinks do
 
   defp aggregate_group(_), do: nil
 
-  defp sort_by_boosts(links) do
-    Enum.sort_by(links, & &1.total_boosts, :desc)
+  defp sort_trending(links, unique_sharers_weight) do
+    # multiplier gives more weight to diversity of sharers
+    Enum.sort_by(links, &(&1.total_boosts + &1.unique_sharers * unique_sharers_weight), :desc)
   end
 end

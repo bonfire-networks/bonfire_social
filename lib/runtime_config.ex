@@ -463,7 +463,8 @@ defmodule Bonfire.Social.RuntimeConfig do
             exclude_activity_types: [:reply],
             media_types: [:link],
             sort_by: :num_boosts,
-            sort_order: :desc
+            sort_order: :desc,
+            time_limit: 7
           },
           exclude_from_nav: false,
           icon: "ph:newspaper-duotone",
