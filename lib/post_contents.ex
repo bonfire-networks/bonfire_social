@@ -992,10 +992,18 @@ defmodule Bonfire.Social.PostContents do
         post_data,
         pointer_id
       ) do
-    attrs = ap_receive_attrs_prepare(creator, activity_data, post_data)
+    debug(activity_data, "ap_receive_update activity_data")
+    debug(post_data, "ap_receive_update post_data")
 
-    with {:ok, edited} <- edit(creator, pointer_id, attrs) do
+    attrs =
+      ap_receive_attrs_prepare(creator, activity_data, post_data)
+      |> debug("attrs from ap_receive_attrs_prepare")
+
+    with {:ok, edited} <-
+           edit(creator, pointer_id, attrs)
+           |> debug("result from edit") do
       {:ok, attrs, edited}
+      |> debug("final result from ap_receive_update")
     end
   end
 
