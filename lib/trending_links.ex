@@ -13,7 +13,7 @@ defmodule Bonfire.Social.TrendingLinks do
   alias Bonfire.Social.FeedLoader
 
   # Cache for 1 hour 
-  @default_cache_ttl 1_000 * 60 * 60
+  @default_cache_ttl to_timeout(hour: 1)
   @default_limit 5
   # days
   @default_time_limit 7
@@ -45,7 +45,7 @@ defmodule Bonfire.Social.TrendingLinks do
     Cache.maybe_apply_cached(
       &list_trending_without_cache/1,
       [opts],
-      expire: Keyword.get(opts, :cache_ms, @default_cache_ttl)
+      expire: Keyword.get(opts, :cache_ms) || Config.get([Bonfire.Social.TrendingLinks, :default_cache_ttl]) || @default_cache_ttl
     )
   end
 
@@ -62,9 +62,9 @@ defmodule Bonfire.Social.TrendingLinks do
     opts =
       Keyword.merge(opts,
         # how many days
-        time_limit: Keyword.get(opts, :time_limit, @default_time_limit),
+        time_limit: Keyword.get(opts, :time_limit) || Config.get([Bonfire.Social.TrendingLinks, :default_time_limit]) || @default_time_limit,
         # Fetch more than we need to account for grouping (same URL shared by multiple posts), FIXME: do in DB?
-        limit: 500,
+        limit: System.get_env("TRENDING_LINKS_FETCH_LIMIT", "200") |> String.to_integer(),
         skip_boundary_check: true
       )
 
