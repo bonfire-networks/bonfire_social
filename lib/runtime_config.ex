@@ -723,8 +723,12 @@ defmodule Bonfire.Social.RuntimeConfig do
         ]
       ]
 
-      config :bonfire_social, Bonfire.Social.TrendingLinks,
-        default_time_limit: System.get_env("TRENDING_LINKS_TIME_LIMIT_DAYS", "7") |> String.to_integer(),
-        default_cache_ttl: to_timeout(hour: System.get_env("TRENDING_LINKS_CACHE_TTL_HOURS", "1") |> String.to_integer())
+    config :bonfire_social, Bonfire.Social.TrendingLinks,
+      default_time_limit:
+        System.get_env("TRENDING_LINKS_TIME_LIMIT_DAYS", "7") |> String.to_integer(),
+      default_cache_ttl:
+        to_timeout(
+          hour: System.get_env("TRENDING_LINKS_CACHE_TTL_HOURS", "1") |> String.to_integer()
+        )
   end
 end
