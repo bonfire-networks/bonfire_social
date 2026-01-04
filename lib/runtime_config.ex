@@ -494,6 +494,7 @@ defmodule Bonfire.Social.RuntimeConfig do
       :with_media,
       :with_replied,
       :with_reply_to,
+      :with_thread_post,
       :with_object_peered,
       #  TODO: only if quote posts are enabled?
       :quote_tags

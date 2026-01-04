@@ -511,6 +511,21 @@ defmodule Bonfire.Social.Activities do
         :with_thread_name ->
           proload(query, activity: [replied: [thread: [:named]]])
 
+        :with_thread_post ->
+          # Preload the thread's full post content for showing thread start in feeds
+          debug("thread post should be preloaded with custom query so boundaries can be applied")
+
+          query
+          |> proload(activity: [:replied])
+          |> preload(
+            activity: [
+              replied: [
+                thread: ^maybe_preload_thread_post(skip_loading_user_ids, opts)
+              ]
+            ]
+          )
+          |> debug("with thread_post")
+
         :with_parent ->
           # TODO: make proload check if the schema module of an assoc is enabled to avoid having to add conditionals like this?
           if Extend.module_enabled?(Bonfire.Classify.Tree, opts),
@@ -740,6 +755,13 @@ defmodule Bonfire.Social.Activities do
         :with_thread_name ->
           [replied: [thread: [:named]]]
 
+        :with_thread_post ->
+          [
+            replied: [
+              thread: maybe_preload_thread_post(skip_loading_user_ids, opts)
+            ]
+          ]
+
         :with_parent ->
           debug("with_parent!")
 
@@ -952,6 +974,53 @@ defmodule Bonfire.Social.Activities do
       # }]
     )
     |> debug("query to attempt loading reply_to")
+  end
+
+  defp maybe_preload_thread_post([], opts) do
+    # Preload the thread's full post content for showing thread start in feeds
+    Common.Needles.pointer_query(
+      [],
+      Enums.merge_uniq(opts,
+        skip_boundary_check: false
+      )
+    )
+    |> preload([
+      :post_content,
+      :media,
+      :sensitive,
+      created: [
+        creator: [character: [:peered], profile: :icon]
+      ]
+    ])
+    |> debug("query to attempt loading thread_post")
+  end
+
+  defp maybe_preload_thread_post(skip_loading_user_ids, opts) do
+    # Preload the thread's full post content for showing thread start in feeds
+    Common.Needles.pointer_query(
+      [],
+      Enums.merge_uniq(opts,
+        skip_boundary_check: false
+      )
+    )
+    |> preload([
+      :post_content,
+      :media,
+      :sensitive
+    ])
+    |> reusable_join(
+      :left,
+      [thread],
+      created in assoc(thread, :created),
+      as: :created,
+      on: created.creator_id not in ^skip_loading_user_ids
+    )
+    |> preload(
+      created: [
+        creator: [character: [:peered], profile: :icon]
+      ]
+    )
+    |> debug("query to attempt loading thread_post")
   end
 
   @doc """
