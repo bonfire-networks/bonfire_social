@@ -351,7 +351,7 @@ defmodule Bonfire.Social.APActivities do
     case ActivityPub.Federator.Fetcher.fetch_object_from_id(
            id,
            options
-           |> Keyword.put_new(:triggered_by, "APActivities.fetch_and_normalize_nested_object")
+           |> Keyword.put(:triggered_by, "APActivities.fetch_and_normalize_nested_object")
          ) do
       {:ok, %ActivityPub.Object{} = fetched_object} ->
         debug(fetched_object, "Fetched Object from ActivityPub")
@@ -380,7 +380,7 @@ defmodule Bonfire.Social.APActivities do
          |> debug("WIP: call incoming adapter on this?")
          |> ActivityPub.Federator.Fetcher.cached_or_handle_incoming(
            options
-           |> Keyword.put_new(:triggered_by, "APActivities.create_object_from_embedded_data")
+           |> Keyword.put(:triggered_by, "APActivities.create_object_from_embedded_data")
          )
          |> debug("Handled incoming for created embedded object") do
       {:ok, %{} = created_object} ->

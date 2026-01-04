@@ -164,7 +164,7 @@ defmodule Bonfire.Social.FeedLoader do
               end),
          # NOTE: we're not calling prepare_feed_filters/3 here because they must have already been prepared/validated since we're getting a FeedFilters struct
          {filters, opts} <-
-           prepare_filters_and_opts(filters, Keyword.merge(opts, preset[:opts] || [])) do
+           prepare_filters_and_opts(filters, preset[:opts] || [], opts) do
       case preset[:base_query_fun] || opts[:base_query_fun] do
         fun when is_function(fun, 0) ->
           fun.()
@@ -373,6 +373,7 @@ defmodule Bonfire.Social.FeedLoader do
     custom_query
     |> proload([:activity])
     |> query_extras(filters, opts)
+    |> debug("feed query before pagination/boundaries")
     |> paginate_and_boundarise_feed(filters, opts)
     |> prepare_feed(filters, opts)
   end
@@ -411,6 +412,7 @@ defmodule Bonfire.Social.FeedLoader do
       :custom ->
         # For custom feeds, directly use the filters without looking up presets
         query_extras(filters, opts)
+        |> debug("feed query before pagination/boundaries")
         |> paginate_and_boundarise_feed(filters, opts)
         |> prepare_feed(filters, opts)
 
@@ -419,6 +421,7 @@ defmodule Bonfire.Social.FeedLoader do
         debug(filters, "with any provided filters")
         # raise e
         query_extras(filters, opts)
+        |> debug("feed query before pagination/boundaries")
         |> paginate_and_boundarise_feed(filters, opts)
         |> prepare_feed(filters, opts)
     end
@@ -442,7 +445,7 @@ defmodule Bonfire.Social.FeedLoader do
     filters = Map.new(filters)
 
     do_query(filters, opts, opts[:base_query] || default_query())
-    # |> debug("feed query")
+    |> debug("feed query before pagination/boundaries")
     |> paginate_and_boundarise_feed(filters, opts)
 
     # |> prepare_feed(filters, opts)
@@ -477,8 +480,8 @@ defmodule Bonfire.Social.FeedLoader do
 
   defp do_feed_many_paginated(query, filters, opts) do
     Social.many(
-      query,
-      # |> debug("feed query"),
+      query
+      |> debug("actual feed query"),
       opts[:paginate] || opts,
       opts
     )
@@ -488,14 +491,22 @@ defmodule Bonfire.Social.FeedLoader do
   defp paginate_and_boundarise_feed(query, filters, opts) do
     opts =
       prepare_opts_for_pagination(query, filters, opts)
-      |> Keyword.put_new_lazy(:query_with_deferred_join, fn ->
-        Config.get([Bonfire.Social.Feeds, :query_with_deferred_join], true,
-          name: l("Use Deferred Joins"),
-          description: l("Technical setting for query performance optimization.")
-        )
-      end)
+      |> Keyword.put(
+        :query_with_deferred_join,
+        # Disable deferred join when using :per_media preload as it needs to filter in the main query
+        if :per_media in opts[:preload] do
+          false
+        else
+          opts[:query_with_deferred_join] ||
+            Config.get([Bonfire.Social.Feeds, :query_with_deferred_join], true,
+              name: l("Use Deferred Joins"),
+              description: l("Technical setting for query performance optimization.")
+            )
+        end
+      )
+      |> debug("pagination opts")
 
-    #   time_limit = e(debug(filters), :time_limit, nil)
+    #   time_limit = e((filters), :time_limit, nil)
 
     # opts =
     #   opts
@@ -673,7 +684,7 @@ defmodule Bonfire.Social.FeedLoader do
     )
     |> Activities.as_permitted_for(opts)
     |> FeedActivities.query_order(filters[:sort_by], filters[:sort_order])
-    |> info("non_deferred query")
+    |> debug("non_deferred query")
 
     # |> debug()
   end
@@ -1102,8 +1113,9 @@ defmodule Bonfire.Social.FeedLoader do
       > to_feed_options(filters, assigns)
       [exclude_activity_types: [:flag, :boost, :follow]]
   """
-  def prepare_filters_and_opts(filters, opts) do
-    opts = to_options(opts)
+  def prepare_filters_and_opts(filters, preset_opts, caller_opts) do
+    opts = Keyword.merge(caller_opts, preset_opts)
+
     current_user = current_user(opts)
     current_user_id = Enums.id(current_user)
 
@@ -1127,13 +1139,25 @@ defmodule Bonfire.Social.FeedLoader do
       |> debug("include_flags?")
 
     skip_boundary_check =
-      case include_flags do
-        :admins -> maybe_apply(Bonfire.Me.Accounts, :is_admin?, [opts], fallback_return: nil)
-        nil -> false
-        false -> false
-        verb when is_atom(verb) or is_list(verb) -> Bonfire.Boundaries.can?(opts, verb, :instance)
-        _ -> false
-      end
+      (case include_flags do
+         :admins ->
+           maybe_apply(Bonfire.Me.Accounts, :is_admin?, [opts], fallback_return: nil)
+
+         nil ->
+           nil
+
+         false ->
+           nil
+
+         true ->
+           Bonfire.Boundaries.can?(opts, :mediate, :instance)
+
+         verb when is_atom(verb) or is_list(verb) ->
+           Bonfire.Boundaries.can?(opts, verb, :instance)
+
+         _ ->
+           nil
+       end || caller_opts[:skip_boundary_check] || false)
       |> debug("skip_boundary_check?")
 
     {exclude_table_ids, exclude_other_object_types, _show_articles?} =
@@ -1315,8 +1339,10 @@ defmodule Bonfire.Social.FeedLoader do
     #   opts |> Keyword.put(:replied_preload_fun, &FeedActivities.maybe_preload_replied/1)
     # )
     |> Objects.query_maybe_time_limit(
-      info(e(filters, :time_limit, nil) || opts[:time_limit], "apply_time_limit")
+      (e(filters, :time_limit, nil) || opts[:time_limit])
+      |> debug("apply_time_limit")
     )
+    |> debug("query_optional_extras result")
   end
 
   def feed_contains?(feed_name, object, opts \\ [])
@@ -1531,6 +1557,7 @@ defmodule Bonfire.Social.FeedLoader do
 
     edges =
       edges
+      |> debug("feed resulst before preparing")
       |> Enum.with_index()
       |> Enum.group_by(fn {item, _idx} ->
         case e(item, :activity, :verb_id, nil) do

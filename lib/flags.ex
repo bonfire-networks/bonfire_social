@@ -311,15 +311,18 @@ defmodule Bonfire.Social.Flags do
 
   A paginated list of flags.
 
+  NOTE: this function doesn't seem to be used?
+
   ## Examples
 
-      iex> Bonfire.Social.Flags.list(scope: :instance)
+      iex> Bonfire.Social.Flags.list(scope: :instance, current_user: an_admin_user)
       %{page_info: %{}, edges: [%Bonfire.Data.Social.Flag{}, ...]}
   """
   def list(opts) do
     opts = opts ++ [preload: :object_with_creator]
     opts = to_options(opts)
     scope = opts[:scope]
+    scope_type = opts[:scope_type] || :tree_parent
     can_mediate_instance? = Bonfire.Boundaries.can?(opts, :mediate, :instance)
 
     opts =
@@ -331,30 +334,33 @@ defmodule Bonfire.Social.Flags do
 
     if scope == :instance and
          can_mediate_instance? do
+      debug("Listing all flags for instance moderators")
       list_paginated([], opts)
     else
+      debug(scope, "Listing flags for scope")
+
       case id(scope) do
         id when is_binary(id) ->
-          if Bonfire.Boundaries.can?(opts, :mediate, scope) do
-            list_paginated([tree_parent: id], opts)
+          if can_mediate_instance? || Bonfire.Boundaries.can?(opts, :mediate, scope) do
+            list_paginated([{scope_type, id}], opts)
           else
             error(:not_permitted)
           end
 
         _ ->
-          feed = list_paginated([], opts)
-
-          edges =
-            for %{edge: %{} = edge} <- e(feed, :edges, []),
-                do: edge |> Map.put(:verb, %{verb: "Flag"})
-
-          %{page_info: e(feed, :page_info, []), edges: edges}
+          if can_mediate_instance? do
+            list_paginated([], opts)
+          else
+            error(:not_permitted)
+          end
       end
     end
   end
 
   @doc """
   Lists flags with preloaded associations.
+
+  NOTE: this function doesn't seem to be used?
 
   ## Parameters
 
@@ -378,15 +384,14 @@ defmodule Bonfire.Social.Flags do
     )
   end
 
-  def list_paginated(filters, opts) do
-    # mediators and admins should see all flagged objects
+  defp list_paginated(filters, opts) do
+    # mediators and admins should see all flagged objects (WARNING: this function does not apply boundary checks!)
 
     filters
     |> query(opts)
     |> proload([:named])
+    |> debug("flags query")
     |> Social.many(opts[:paginate?], opts)
-
-    # TODO: activity preloads?
   end
 
   @doc """
@@ -434,6 +439,8 @@ defmodule Bonfire.Social.Flags do
 
   @doc """
   Lists flags for a specific object.
+
+  WARNING: this should only be used by moderators/admins as it bypasses boundary checks!
 
   ## Parameters
 
