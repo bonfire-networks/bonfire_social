@@ -460,7 +460,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           description: l("Most boosted posts with links"),
           filters: %FeedFilters{
             feed_name: :trending_links,
-            exclude_activity_types: [:reply],
+            exclude_activity_types: [:reply, :boost],
             media_types: [:link],
             sort_by: :num_boosts,
             sort_order: :desc,
@@ -653,6 +653,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           # we join in first query to filter out deleted objects and/or filter by type
           :with_object,
           :with_replied,
+          :per_media,
           :per_media
           # :with_object_peered
         ]

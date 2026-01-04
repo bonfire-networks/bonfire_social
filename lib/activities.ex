@@ -595,14 +595,16 @@ defmodule Bonfire.Social.Activities do
           query
           |> proload(activity: [:sensitive])
           |> join_per_media(:left)
-          # use preload instead of proload because there can be many media
+          # use preload (postload) instead of proload (join) because there can be many media
           |> preload(activity: [:media])
 
         :per_media ->
           query
           |> proload(activity: [:sensitive])
-          |> join_per_media(:left)
+          |> join_per_media(:inner)
+          # use proload (join) instead of preload include the media in the query itself
           |> proload(activity: [:media])
+          |> debug("per_media preload applied")
 
         :sensitivity ->
           query
@@ -814,7 +816,7 @@ defmodule Bonfire.Social.Activities do
       [activity: activity, files: files],
       media in Bonfire.Files.Media,
       as: :media,
-      on: files.media_id == media.id or activity.object_id == media.id
+      on: files.media_id == media.id or activity.id == media.id
     )
   end
 
@@ -831,7 +833,7 @@ defmodule Bonfire.Social.Activities do
       [activity: activity, files: files],
       media in Bonfire.Files.Media,
       as: :media,
-      on: files.media_id == media.id or activity.object_id == media.id
+      on: files.media_id == media.id or activity.id == media.id
     )
   end
 

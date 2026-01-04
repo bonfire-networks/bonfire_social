@@ -44,9 +44,9 @@ defmodule Bonfire.Social.TrendingLinks do
   def list_trending(opts \\ []) do
     Cache.maybe_apply_cached(
       &list_trending_without_cache/1,
-      [opts],
+      [Keyword.drop(opts, [:cache_ttl])],
       expire:
-        Keyword.get(opts, :cache_ms) ||
+        Keyword.get(opts, :cache_ttl) ||
           Config.get([Bonfire.Social.TrendingLinks, :default_cache_ttl]) || @default_cache_ttl
     )
   end
@@ -69,6 +69,7 @@ defmodule Bonfire.Social.TrendingLinks do
             Config.get([Bonfire.Social.TrendingLinks, :default_time_limit]) || @default_time_limit,
         # Fetch more than we need to account for grouping (same URL shared by multiple posts), FIXME: do in DB?
         limit: System.get_env("TRENDING_LINKS_FETCH_LIMIT", "200") |> String.to_integer(),
+        show_objects_only_once: false,
         skip_boundary_check: true
       )
 
@@ -115,9 +116,8 @@ defmodule Bonfire.Social.TrendingLinks do
 
   defp is_link_media?(_), do: false
 
-  defp aggregate_group({url, items}) when is_binary(url) and items != [] do
-    {first_media, _first_activity, _first_edge} = List.first(items)
-
+  defp aggregate_group({url, [{first_media, _first_activity, _first_edge} | _] = items})
+       when is_binary(url) and items != [] do
     total_boosts =
       items
       |> Enum.map(fn {_media, _activity, edge} ->
@@ -139,6 +139,11 @@ defmodule Bonfire.Social.TrendingLinks do
       path: url,
       total_boosts: total_boosts,
       sharers: sharers,
+      share_activity_ids:
+        Enum.map(items, fn {_media, %{id: id} = activity, _edge} ->
+          debug(activity, "Activity for trending link")
+          id
+        end),
       unique_sharers: length(sharers),
       share_count: length(items)
     }
