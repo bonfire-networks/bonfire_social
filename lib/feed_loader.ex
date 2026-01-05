@@ -138,6 +138,19 @@ defmodule Bonfire.Social.FeedLoader do
     # |> debug()
   end
 
+  def feed(:trending_links, opts) do
+    # Use media-first query that groups by URL and aggregates metrics
+    Bonfire.Social.TrendingLinks.list_trending_paginated(opts)
+  end
+
+  # Handle trending_links when called via feed/3 which converts to map
+  def feed(%{feed_name: :trending_links} = filters, opts) when is_list(opts) do
+    # Merge filters (especially time_limit) into opts
+    Bonfire.Social.TrendingLinks.list_trending_paginated(
+      Keyword.merge(opts, Map.to_list(Map.drop(filters, [:feed_name])))
+    )
+  end
+
   # def feed(:likes, opts) do
   #   # TODO: refactor to use `feed_filtered` like any others rather than delegating to the context
   #   Bonfire.Social.Likes.list_my(opts)
@@ -494,7 +507,7 @@ defmodule Bonfire.Social.FeedLoader do
       |> Keyword.put(
         :query_with_deferred_join,
         # Disable deferred join when using :per_media preload as it needs to filter in the main query
-        if :per_media in opts[:preload] do
+        if :per_media in List.wrap(opts[:preload]) do
           false
         else
           opts[:query_with_deferred_join] ||

@@ -472,7 +472,8 @@ defmodule Bonfire.Social.RuntimeConfig do
             page: "trending_links",
             page_title: l("Trending links"),
             feedback_title: l("No trending links yet"),
-            feedback_message: l("Share interesting links to see them here")
+            feedback_message: l("Share interesting links to see them here"),
+            hide_filters: true
           ]
         },
         local_media: %{

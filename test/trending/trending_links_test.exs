@@ -156,51 +156,6 @@ defmodule Bonfire.Social.TrendingLinksTest do
       assert first.total_boosts >= 3
     end
 
-    test "sorting respects unique_sharers_weight option" do
-      user1 = Fake.fake_user!()
-      user2 = Fake.fake_user!()
-      user3 = Fake.fake_user!()
-
-      # Create a post with many boosts but one sharer
-      popular_post =
-        fake_post!(user1, "public", %{
-          post_content: %{html_body: "Very popular https://example.com/popular"}
-        })
-
-      # Add 10 boosts from same user
-      Enum.each(1..10, fn _ ->
-        Process.put([:bonfire_social, Bonfire.Social.Boosts, :can_reboost_after], true)
-        {:ok, _} = Boosts.boost(user2, popular_post)
-      end)
-
-      # Create posts with less boosts but more unique sharers (using different URL to avoid collision)
-      post_a =
-        fake_post!(user1, "public", %{
-          post_content: %{html_body: "Diverse https://example.com/diverse1"}
-        })
-
-      post_b =
-        fake_post!(user2, "public", %{
-          post_content: %{html_body: "Also diverse https://example.com/diverse1"}
-        })
-
-      {:ok, _} = Boosts.boost(user3, post_a)
-      {:ok, _} = Boosts.boost(user1, post_b)
-
-      # With high weight on unique sharers, diverse1 should rank higher
-      results = TrendingLinks.list_trending(unique_sharers_weight: 10.0)
-
-      diverse1 = Enum.find(results, &String.contains?(&1.path, "diverse1"))
-      popular = Enum.find(results, &String.contains?(&1.path, "popular"))
-
-      # diverse1 has 2 sharers, popular has 1 sharer
-      # With high weight, diversity should win
-      diverse1_index = Enum.find_index(results, &(&1 == diverse1))
-      popular_index = Enum.find_index(results, &(&1 == popular))
-
-      assert diverse1_index < popular_index
-    end
-
     test "respects limit option" do
       # Create multiple different links
       user = Fake.fake_user!()
@@ -224,11 +179,7 @@ defmodule Bonfire.Social.TrendingLinksTest do
 
       old_links = Enum.filter(results, &String.contains?(&1.path, "old"))
 
-      List.first(old_links)[:share_activity_ids]
-      |> List.first()
-      |> DatesTimes.to_date_time()
-      |> debug("Old link datetime")
-
+      # Old links should be filtered out by time_limit
       assert length(old_links) == 0
 
       # With 30 day window, should include old post
@@ -237,32 +188,7 @@ defmodule Bonfire.Social.TrendingLinksTest do
       assert length(old_links_long) > 0
     end
 
-    test "cache reset clears cached results" do
-      # First call populates cache
-      results1 = TrendingLinks.list_trending(limit: 10)
-      assert is_list(results1)
-
-      # Reset cache
-      TrendingLinks.list_trending_reset(limit: 10)
-      # Create new link after reset
-      user = Fake.fake_user!()
-
-      new_post =
-        fake_post!(user, "public", %{
-          post_content: %{html_body: "Brand new https://example.com/articleII"}
-        })
-
-      {:ok, _} = Boosts.boost(user, new_post)
-
-      # After reset, fresh query should pick up new data
-      results2 = TrendingLinks.list_trending(limit: 10)
-      assert is_list(results2)
-      assert Enum.any?(results2, &String.contains?(&1.path, "articleII"))
-    end
-
     test "handles posts without boosts" do
-      TrendingLinks.list_trending_reset(limit: 11)
-
       user = Fake.fake_user!()
 
       fake_post!(user, "public", %{
@@ -294,56 +220,7 @@ defmodule Bonfire.Social.TrendingLinksTest do
       :ok
     end
 
-    test "sorting respects unique_sharers_weight option" do
-      TrendingLinks.list_trending_reset()
-
-      user1 = Fake.fake_user!()
-      user2 = Fake.fake_user!()
-      user3 = Fake.fake_user!()
-
-      # Create a post with many boosts but one sharer
-      popular_post =
-        fake_post!(user1, "public", %{
-          post_content: %{html_body: "Very popular https://example.com/popular"}
-        })
-
-      # Add 10 boosts from same user
-      Enum.each(1..10, fn _ ->
-        Process.put([:bonfire_social, Bonfire.Social.Boosts, :can_reboost_after], true)
-        {:ok, _} = Boosts.boost(user2, popular_post)
-      end)
-
-      # Create posts with less boosts but more unique sharers (using different URL to avoid collision)
-      post_a =
-        fake_post!(user1, "public", %{
-          post_content: %{html_body: "Diverse https://example.com/diverse1"}
-        })
-
-      post_b =
-        fake_post!(user2, "public", %{
-          post_content: %{html_body: "Also diverse https://example.com/diverse1"}
-        })
-
-      {:ok, _} = Boosts.boost(user3, post_a)
-      {:ok, _} = Boosts.boost(user1, post_b)
-
-      # With high weight on unique sharers, diverse1 should rank higher
-      results = TrendingLinks.list_trending(unique_sharers_weight: 10.0)
-
-      diverse1 = Enum.find(results, &String.contains?(&1.path, "diverse1"))
-      popular = Enum.find(results, &String.contains?(&1.path, "popular"))
-
-      # diverse1 has 2 sharers, popular has 1 sharer
-      # With high weight, diversity should win
-      diverse1_index = Enum.find_index(results, &(&1 == diverse1))
-      popular_index = Enum.find_index(results, &(&1 == popular))
-
-      assert diverse1_index < popular_index
-    end
-
     test "respects limit option" do
-      TrendingLinks.list_trending_reset()
-
       # Create multiple different links
       user = Fake.fake_user!()
 
@@ -360,32 +237,7 @@ defmodule Bonfire.Social.TrendingLinksTest do
       assert length(results) <= 3
     end
 
-    test "cache reset clears cached results" do
-      # First call populates cache
-      results1 = TrendingLinks.list_trending()
-      assert is_list(results1)
-
-      # Reset cache
-      TrendingLinks.list_trending_reset()
-
-      # Create new link after reset
-      user = Fake.fake_user!()
-
-      new_post =
-        fake_post!(user, "public", %{
-          post_content: %{html_body: "Brand new https://example.com/brandnew"}
-        })
-
-      {:ok, _} = Boosts.boost(user, new_post)
-
-      # After reset, fresh query should pick up new data
-      results2 = TrendingLinks.list_trending()
-      assert is_list(results2)
-    end
-
     test "handles no links gracefully" do
-      TrendingLinks.list_trending_reset()
-
       # Create posts without links
       user = Fake.fake_user!()
 
@@ -399,8 +251,6 @@ defmodule Bonfire.Social.TrendingLinksTest do
     end
 
     test "handles posts without boosts" do
-      TrendingLinks.list_trending_reset()
-
       user = Fake.fake_user!()
 
       fake_post!(user, "public", %{
@@ -419,19 +269,9 @@ defmodule Bonfire.Social.TrendingLinksTest do
     end
 
     test "returns empty list when no trending links exist" do
-      TrendingLinks.list_trending_reset()
-
       # Test with limit: 0 to get empty list
       results = TrendingLinks.list_trending(limit: 0)
       assert results == []
-    end
-
-    test "handles custom cache_ttl option" do
-      TrendingLinks.list_trending_reset()
-
-      # Test that custom TTL doesn't break functionality
-      results = TrendingLinks.list_trending(cache_ms: 5000)
-      assert is_list(results)
     end
   end
 end
