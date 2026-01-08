@@ -208,7 +208,7 @@ defmodule Bonfire.Social.Likes do
       |> Keyword.merge(
         # TODO: make configurable
         boundary: "mentions",
-        to_circles: [id(object_creator)],
+        # to_circles: [id(object_creator)], # NOTE: commented out to avoid creating per-object ACLs - preset is sufficient
         to_feeds: Feeds.maybe_creator_notification(liker, object_creator, opts)
       )
 

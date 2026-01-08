@@ -201,7 +201,7 @@ defmodule Bonfire.Social.Boosts do
       |> Keyword.merge(
         # TODO: get the preset for boosting from config and/or user's settings
         boundary: boundary,
-        to_circles: [id(object_creator)],
+        # to_circles: [id(object_creator)], # NOTE: commented out to avoid creating per-object ACLs - preset is sufficient
         to_feeds:
           [outbox: booster] ++
             if(e(opts, :notify_creator, true),
