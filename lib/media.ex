@@ -42,20 +42,20 @@ defmodule Bonfire.Social.Media do
       #=> [%{media: %Bonfire.Files.Media{}, path: "https://...", boost_count: 42, unique_sharers: 5}]
   """
   def trending_links(opts \\ []) do
-    # Cache.maybe_apply_cached(
-    #   &list_trending_paginated/1,
-    #   [Keyword.drop(opts, [:cache_ttl])],
-    #   expire:
-    #     Keyword.get(opts, :cache_ttl) ||
-    #       Config.get([Bonfire.Social.Media, :default_cache_ttl]) || @default_cache_ttl
-    # ) 
-    list_trending_paginated(opts)
+    Cache.maybe_apply_cached(
+      &list_trending_paginated/1,
+      [Keyword.drop(opts, [:cache_ttl])],
+      expire:
+        Keyword.get(opts, :cache_ttl) ||
+          Config.get([Bonfire.Social.Media, :default_cache_ttl]) || @default_cache_ttl
+    ) 
+    # list_trending_paginated(opts)
     |> e(:edges, [])
 
-    # rescue
-    #   e ->
-    #     err(e, "Error fetching trending links")
-    #     []
+    rescue
+      e ->
+        err(e, "Error fetching trending links")
+        []
   end
 
   def trending_links_reset(opts \\ []) do
