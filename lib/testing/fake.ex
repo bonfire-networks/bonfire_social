@@ -1,7 +1,7 @@
 defmodule Bonfire.Social.Fake do
   # import Bonfire.Files.Simulation
   import Untangle
-  # alias Bonfire.Common.Utils
+  use Bonfire.Common.E
   # alias Bonfire.Posts
   # alias Bonfire.Social.Graph.Follows
   alias Bonfire.Common
@@ -193,6 +193,20 @@ defmodule Bonfire.Social.Fake do
 
         {post, nil}
 
+      :trending_links ->
+        post =
+          Bonfire.Posts.Fake.fake_post!(user, "public", %{
+            post_content: %{
+              name: "link post #{i}",
+              html_body: "post with link https://doi.org/10.1080/1047840X.2012.720832 #{i}"
+            }
+          })
+          |> flood("created post with link")
+
+        media = e(post, :media, nil) || e(post, :activity, :media, nil) || []
+
+        {List.first(media), post}
+
       :my_flags ->
         post =
           Bonfire.Posts.Fake.fake_post!(other_user, "public", %{
@@ -217,58 +231,66 @@ defmodule Bonfire.Social.Fake do
         {:ok, flag} = Bonfire.Social.Flags.flag(other_user, post)
         {post, flag}
 
-      :images ->
-        {:ok, media} =
-          Bonfire.Files.upload(
-            Bonfire.Files.ImageUploader,
-            user,
-            Bonfire.Files.Simulation.icon_file(),
-            %{
-              metadata: %{label: "Standalone Media"}
-            }
-          )
-
-        {:ok, activity} =
-          Bonfire.Files.Media.publish(
-            user,
-            media,
-            boundary: "public"
-          )
+      :image_standalone ->
+        media = upload_media(:images, user, "Image Media #{i}")
+        activity = publish_media(user, media)
 
         {media, activity}
 
-      :research ->
-        #    {:ok, media} = Bonfire.OpenScience.APIs.fetch_and_publish_work(user, "https://doi.org/10.1080/1047840X.2012.720832")
-        #   {media, nil} 
-
-        #  FIXME: feed ends up empty
-        {nil, nil}
-
       :image_post ->
-        {:ok, media} =
-          Bonfire.Files.upload(
-            Bonfire.Files.ImageUploader,
-            user,
-            Bonfire.Files.Simulation.icon_file(),
-            %{
-              metadata: %{label: "Post Media"}
-            }
-          )
-
-        post =
-          Bonfire.Posts.Fake.fake_post!(user, "public", %{
-            post_content: %{name: "Image post #{i}", html_body: "media content post #{i}"},
-            uploaded_media: [media]
-          })
+        media = upload_media(:images, user, "Post Media #{i}")
+        post = post_with_media(user, media, "Post with image #{i}")
 
         {media, post}
 
-      :local_media ->
-        # first create a Media as object
-        create_test_content(:images, user, other_user, i)
+      :images ->
+        create_media_content(user, other_user, i, :image_standalone, :image_post)
 
-        # also create a media to attach to a post
-        create_test_content(:image_post, user, other_user, i)
+      :video_standalone ->
+        media = upload_media(:videos, user, "Video Media #{i}")
+        activity = publish_media(user, media)
+
+        {media, activity}
+
+      :video_post ->
+        media = upload_media(:videos, user, "Video Media #{i}")
+        post = post_with_media(user, media, "Post with video #{i}")
+
+        {media, post}
+
+      :videos ->
+        create_media_content(user, other_user, i, :video_standalone, :video_post)
+
+      :audio_standalone ->
+        media = upload_media(:audio, user, "Audio Media #{i}")
+        activity = publish_media(user, media)
+
+        {media, activity}
+
+      :audio_post ->
+        media = upload_media(:audio, user, "Audio Media #{i}")
+        post = post_with_media(user, media, "Post with audio #{i}")
+
+        {media, post}
+
+      :audio ->
+        create_media_content(user, other_user, i, :audio_standalone, :audio_post)
+
+      :research ->
+        {:ok, media} =
+          Bonfire.OpenScience.APIs.fetch_and_publish_work(
+            user,
+            "https://doi.org/10.1080/1047840X.2012.720832"
+          )
+
+        {media, nil}
+
+      #  FIXME? feed ends up empty
+      # {nil, nil}
+
+      :local_media ->
+        # create_media_content(user, other_user, i, :audio_standalone, :audio_post) # TODO: more content?
+        create_media_content(user, other_user, i, :image_standalone, :image_post)
 
       :trending_discussions ->
         # TODO
@@ -342,5 +364,89 @@ defmodule Bonfire.Social.Fake do
       other ->
         raise "Missing create_test_content case for #{inspect(other)}"
     end
+  end
+
+  defp create_media_content(
+         user,
+         other_user,
+         i,
+         standalone_type \\ :image_standalone,
+         post_type \\ :image_post
+       ) do
+    # first create a Media as object
+    {media_standalone, activity} = create_test_content(standalone_type, user, other_user, i)
+
+    # also create a media to attach to a post
+    {media_attachment, post} = create_test_content(post_type, user, other_user, i)
+
+    # {media_standalone, post} # FIXME: standalone media should also appear in feed
+  end
+
+  def post_with_media(user, media_or_type \\ :images, label) do
+    media =
+      case media_or_type do
+        %{} -> media_or_type
+        type -> upload_media(media_or_type, user, "Post Media #{label}")
+      end
+
+    Bonfire.Posts.Fake.fake_post!(user, "public", %{
+      post_content: %{name: "Post with Media #{label}", html_body: "media content post"},
+      uploaded_media: [media]
+    })
+  end
+
+  def publish_media(user, media) do
+    {:ok, activity} =
+      Bonfire.Files.Media.publish(
+        user,
+        media,
+        boundary: "public"
+      )
+
+    activity
+  end
+
+  def upload_media(type, user, label \\ nil)
+
+  def upload_media(:images, user, label) do
+    {:ok, media} =
+      Bonfire.Files.upload(
+        Bonfire.Files.ImageUploader,
+        user,
+        Bonfire.Files.Simulation.icon_file(),
+        %{
+          metadata: %{label: label || "Image Media"}
+        }
+      )
+
+    media
+  end
+
+  def upload_media(:videos, user, label) do
+    {:ok, media} =
+      Bonfire.Files.upload(
+        Bonfire.Files.VideoUploader,
+        user,
+        Bonfire.Files.Simulation.video_file(),
+        %{
+          metadata: %{label: label || "Video Media"}
+        }
+      )
+
+    media
+  end
+
+  def upload_media(:audio, user, label) do
+    {:ok, media} =
+      Bonfire.Files.upload(
+        Bonfire.Files.DocumentUploader,
+        user,
+        Bonfire.Files.Simulation.audio_file(),
+        %{
+          metadata: %{label: label || "Audio Media"}
+        }
+      )
+
+    media
   end
 end

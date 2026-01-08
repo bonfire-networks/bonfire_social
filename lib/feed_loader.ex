@@ -1463,12 +1463,12 @@ defmodule Bonfire.Social.FeedLoader do
   end
 
   def feed_contains?(%{edges: []}, object, opts) do
-    debug("empty feed")
+    warner("empty feed")
     false
   end
 
   def feed_contains?([], object, opts) do
-    debug("empty list")
+    warner("empty list")
     false
   end
 
@@ -1521,17 +1521,18 @@ defmodule Bonfire.Social.FeedLoader do
 
     feed
     |> Enum.find_value(fn fi ->
-      a_body =
-        e(fi.activity, :object, :post_content, :html_body, nil)
-        |> debug("body in feed")
-
       if q_id do
-        if fi.activity.object_id == q_id, do: fi.activity
+        if fi.activity.object_id == q_id or fi.id == q_id,
+          do: return_feed_contains_match(fi, opts[:return_match_fun])
       else
+        a_body =
+          e(fi.activity, :object, :post_content, :html_body, nil)
+          |> debug("body in feed")
+
         if(
           a_body && q_body &&
             a_body =~ q_body,
-          do: fi.activity
+          do: return_feed_contains_match(fi, opts[:return_match_fun])
         )
       end
     end) ||
@@ -1550,6 +1551,15 @@ defmodule Bonfire.Social.FeedLoader do
 
         false
       )
+  end
+
+  def return_feed_contains_match(fi, fun) when is_function(fun, 1) do
+    fun.(fi)
+    |> flood("returning match using custom function")
+  end
+
+  def return_feed_contains_match(fi, _) do
+    fi.activity
   end
 
   def feed_contains?(feed, object, opts) when is_map(object) or is_binary(object) do

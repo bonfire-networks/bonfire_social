@@ -397,4 +397,15 @@ defmodule Bonfire.Social.Media do
         types
     end
   end
+
+  def preload_newest_activity(%{edges: edges} = result) do
+    %{result | edges: preload_newest_activity(edges)}
+  end
+
+  def preload_newest_activity(edges) when is_list(edges) do
+    repo().maybe_preload(edges, [:newest_activity])
+    |> Enum.map(fn %{newest_activity: newest_activity} = edge ->
+      %{edge | activity: newest_activity, newest_activity: nil}
+    end)
+  end
 end

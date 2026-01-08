@@ -45,8 +45,11 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
       when preset not in [
              :user_followers,
              :user_following,
+             :images,
+             :local_media,
              :audio,
              :videos,
+             :research,
              :mentions,
              :curated,
              :events,
