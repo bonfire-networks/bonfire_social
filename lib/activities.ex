@@ -451,7 +451,7 @@ defmodule Bonfire.Social.Activities do
           # * In the case of like of a post, creator of the post
           # in feeds, we join the creator with a where clause to skip it when creator==subject
           query
-          |> proload(
+          |> proload(:inner,
             activity: [
               :object
               # object: {"object_", [:created]}
@@ -480,7 +480,7 @@ defmodule Bonfire.Social.Activities do
           proload(query, activity: [:verb])
 
         :with_object ->
-          proload(query, activity: [:object])
+          proload(query, :inner, activity: [:object])
 
         :with_post_content ->
           proload(query,
@@ -609,16 +609,19 @@ defmodule Bonfire.Social.Activities do
         :with_media ->
           query
           |> proload(activity: [:sensitive])
-          |> join_per_media(:left)
+          |> join_media(:left)
           # use preload (postload) instead of proload (join) because there can be many media
           |> preload(activity: [:media])
 
         :per_media ->
           query
           |> proload(activity: [:sensitive])
-          |> join_per_media(:inner)
-          # use proload (join) instead of preload include the media in the query itself
-          |> proload(activity: [:media])
+          # Note: FeedLoader queries the Media at top level for :per_media feeds, so we don't re-join or preload it
+
+          # |> join_media(:inner)
+          # # use proload (join) instead of preload include the media in the query itself
+          # |> proload(activity: [:media])
+
           |> debug("per_media preload applied")
 
         :sensitivity ->
@@ -817,9 +820,7 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
-  @doc "join media"
-
-  def join_per_media(query, :inner) do
+  def join_media(query, :inner) do
     query
     # |> reusable_join(:inner, [activity: activity], media in Bonfire.Files.Media,
     #     as: :media,
@@ -842,7 +843,7 @@ defmodule Bonfire.Social.Activities do
     )
   end
 
-  def join_per_media(query, _) do
+  def join_media(query, _) do
     query
     |> reusable_join(
       :left,
@@ -1597,7 +1598,7 @@ defmodule Bonfire.Social.Activities do
       {table_ids, [], false} when is_list(table_ids) and table_ids != [] ->
         query
         |> maybe_join_filter_activity(exclude_table_ids)
-        |> proload(:left, activity: [:object])
+        |> proload(:inner, activity: [:object])
         |> where(
           [object: object],
           object.table_id in ^table_ids and
@@ -1608,7 +1609,7 @@ defmodule Bonfire.Social.Activities do
         query
         |> maybe_join_filter_activity(exclude_table_ids)
         |> join_per_ap_activity(:inner)
-        |> proload(:left, activity: [:object])
+        |> proload(:inner, activity: [:object])
         |> where(
           [object: object],
           fragment("(?)->'object'->>'type' = ANY(?)", object.json, ^other_types) or
@@ -1852,7 +1853,7 @@ defmodule Bonfire.Social.Activities do
 
         query
         # WIP: optimise by avoiding subject and object :peered preloads (only need to join them)
-        |> proload(activity: [:object])
+        |> proload(:inner, activity: [:object])
         |> reusable_join(
           :left,
           [activity: activity],
@@ -2576,100 +2577,80 @@ defmodule Bonfire.Social.Activities do
 
   ## Examples
 
-      > query_order(query, :num_replies, :asc)
+      > query_order(query, :reply_count, :asc)
       # returns the query ordered by number of replies in ascending order
   """
-  def query_order(query, sort_by, sort_order, with_pins? \\ false)
+  def query_order(query, sort_by, sort_order, fallback_sort_field \\ :id, with_pins? \\ false)
 
-  def query_order(query, :num_replies, sort_order, _no_pins) do
-    if sort_order == :asc do
-      query
-      |> proload(:activity)
-      |> order_by(
-        [activity: activity, replied: replied],
-        asc_nulls_first: replied.total_replies_count,
-        asc: activity.id
-      )
-    else
-      query
-      |> proload(:activity)
-      |> order_by(
-        [activity: activity, replied: replied],
-        # [desc_nulls_last: replied.nested_replies_count, desc: replied.id]
-        desc_nulls_last: replied.total_replies_count,
-        desc: activity.id
-      )
-    end
+  def query_order(query, :reply_count, sort_order, fallback_sort_field, _with_pins?) do
+    query_order_with_metric(
+      query,
+      :reply_count,
+      sort_order,
+      fallback_sort_field,
+      # Media aggregation field
+      :reply_count,
+      # Activity preload & binding
+      :replied,
+      # Field to sort by in activity query
+      :total_replies_count
+    )
   end
 
-  # def query_order(query, :num_replies, sort_order) do
-  #   if sort_order == :asc do
-  #     query
-  #     |> proload(:activity)
-  #     |> order_by(
-  #       [activity: activity, replied: replied],
-  #       asc_nulls_first:
-  #         fragment(
-  #           "?+?",
-  #           replied.nested_replies_count,
-  #           replied.direct_replies_count
-  #         ),
-  #       asc: activity.id
-  #     )
-  #   else
-  #     query
-  #     |> proload(:activity)
-  #     |> order_by(
-  #       [activity: activity, replied: replied],
-  #       # [desc_nulls_last: replied.nested_replies_count, desc: replied.id]
-  #       desc_nulls_last:
-  #         fragment(
-  #           "?+?",
-  #           replied.nested_replies_count,
-  #           replied.direct_replies_count
-  #         ),
-  #       desc: activity.id
-  #     )
-  #   end
-  # end
-
-  def query_order(query, :num_boosts, sort_order, _no_pins) do
-    if sort_order == :asc do
-      query
-      |> proload(activity: [:boost_count])
-      |> order_by([activity: activity, boost_count: boost_count],
-        asc_nulls_first: boost_count.object_count,
-        asc: activity.id
-      )
-    else
-      query
-      |> proload(activity: [:boost_count])
-      |> order_by([activity: activity, boost_count: boost_count],
-        desc_nulls_last: boost_count.object_count,
-        desc: activity.id
-      )
-    end
+  def query_order(query, :boost_count, sort_order, fallback_sort_field, _with_pins?) do
+    query_order_with_metric(
+      query,
+      :boost_count,
+      sort_order,
+      fallback_sort_field,
+      # Media aggregation field
+      :boost_count,
+      # Activity preload & binding
+      :boost_count,
+      # Field to sort by in activity query
+      :object_count
+    )
   end
 
-  def query_order(query, :num_likes, sort_order, _no_pins) do
-    if sort_order == :asc do
-      query
-      |> proload(activity: [:like_count])
-      |> order_by([activity: activity, like_count: like_count],
-        asc_nulls_first: like_count.object_count,
-        asc: activity.id
-      )
-    else
-      query
-      |> proload(activity: [:like_count])
-      |> order_by([activity: activity, like_count: like_count],
-        desc_nulls_last: like_count.object_count,
-        desc: activity.id
-      )
-    end
+  def query_order(query, :like_count, sort_order, fallback_sort_field, _with_pins?) do
+    query_order_with_metric(
+      query,
+      :like_count,
+      sort_order,
+      fallback_sort_field,
+      # Media aggregation field
+      :like_count,
+      # Activity preload & binding
+      :like_count,
+      # Field to sort by in activity query
+      :object_count
+    )
   end
 
-  def query_order(query, _, sort_order, true = _with_pins) do
+  def query_order(query, :object_count, :asc, :newest_activity_id, _with_pins?) do
+    # For media-aggregated queries (trending links) - always uses newest_activity_id
+    order_by(query, [], asc: selected_as(:object_count), asc: selected_as(:newest_activity_id))
+  end
+
+  def query_order(query, :object_count, _sort_order, :newest_activity_id, _with_pins?) do
+    # For media-aggregated queries (trending links) - always uses newest_activity_id  
+    order_by(query, [], desc: selected_as(:object_count), desc: selected_as(:newest_activity_id))
+  end
+
+  def query_order(query, :trending_score, :asc, :newest_activity_id, _with_pins?) do
+    # For media-aggregated queries (trending links) - always uses newest_activity_id
+    order_by(query, [], asc: selected_as(:trending_score), asc: selected_as(:newest_activity_id))
+  end
+
+  def query_order(query, :trending_score, _sort_order, :newest_activity_id, _with_pins?) do
+    # For media-aggregated queries (trending links) - always uses newest_activity_id
+    order_by(query, [],
+      desc: selected_as(:trending_score),
+      desc: selected_as(:newest_activity_id)
+    )
+  end
+
+  def query_order(query, _, sort_order, _fallback_sort_field, true = _with_pins) do
     if sort_order == :asc do
       query
       |> proload(:activity)
@@ -2687,7 +2668,23 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
-  def query_order(query, _, sort_order, _no_pins) do
+  def query_order(query, _, sort_order, :newest_activity_id, _with_pins?) do
+    if sort_order == :asc do
+      query
+      |> proload(:activity)
+      |> order_by([],
+        asc: selected_as(:newest_activity_id)
+      )
+    else
+      query
+      |> proload(:activity)
+      |> order_by([],
+        desc: selected_as(:newest_activity_id)
+      )
+    end
+  end
+
+  def query_order(query, _, sort_order, _fallback_sort_field, _with_pins?) do
     if sort_order == :asc do
       query
       |> proload(:activity)
@@ -2700,6 +2697,153 @@ defmodule Bonfire.Social.Activities do
       |> order_by([activity: activity],
         desc: activity.id
       )
+    end
+  end
+
+  # Unified helper for sorting by metrics that works for both media aggregation and activity queries
+  defp query_order_with_metric(
+         query,
+         metric_name,
+         sort_order,
+         fallback_sort_field,
+         media_field,
+         activity_assoc,
+         activity_field
+       ) do
+    # Media aggregation queries use :newest_activity_id as fallback (instead of activity.id)
+    if fallback_sort_field == :newest_activity_id do
+      # Media aggregation: sort by aliased virtual fields using selected_as
+      if sort_order == :asc do
+        order_by(query, [], asc: selected_as(^media_field), asc: selected_as(:newest_activity_id))
+      else
+        order_by(query, [],
+          desc: selected_as(^media_field),
+          desc: selected_as(:newest_activity_id)
+        )
+      end
+    else
+      # Regular activity query: sort by association field - need explicit cases for proload macro
+      query_order_activity_metric(
+        query,
+        metric_name,
+        activity_assoc,
+        activity_field,
+        sort_order,
+        fallback_sort_field
+      )
+    end
+    |> flood("query_order_with_metric")
+  end
+
+  # Handle each metric explicitly since proload needs compile-time atoms
+  defp query_order_activity_metric(
+         query,
+         :reply_count,
+         _activity_assoc,
+         activity_field,
+         sort_order,
+         fallback_sort_field
+       ) do
+    query = proload(query, activity: [:replied])
+
+    if sort_order == :asc do
+      if fallback_sort_field == :newest_activity_id do
+        order_by(query, [activity: activity, replied: replied, main: main],
+          asc_nulls_first: field(replied, ^activity_field),
+          asc: main.newest_activity_id
+        )
+      else
+        order_by(query, [activity: activity, replied: replied],
+          asc_nulls_first: field(replied, ^activity_field),
+          asc: activity.id
+        )
+      end
+    else
+      if fallback_sort_field == :newest_activity_id do
+        order_by(query, [activity: activity, replied: replied, main: main],
+          desc_nulls_last: field(replied, ^activity_field),
+          desc: main.newest_activity_id
+        )
+      else
+        order_by(query, [activity: activity, replied: replied],
+          desc_nulls_last: field(replied, ^activity_field),
+          desc: activity.id
+        )
+      end
+    end
+  end
+
+  defp query_order_activity_metric(
+         query,
+         :boost_count,
+         _activity_assoc,
+         activity_field,
+         sort_order,
+         fallback_sort_field
+       ) do
+    query = proload(query, activity: [:boost_count])
+
+    if sort_order == :asc do
+      if fallback_sort_field == :newest_activity_id do
+        order_by(query, [activity: activity, boost_count: boost_count, main: main],
+          asc_nulls_first: field(boost_count, ^activity_field),
+          asc: main.newest_activity_id
+        )
+      else
+        order_by(query, [activity: activity, boost_count: boost_count],
+          asc_nulls_first: field(boost_count, ^activity_field),
+          asc: activity.id
+        )
+      end
+    else
+      if fallback_sort_field == :newest_activity_id do
+        order_by(query, [activity: activity, boost_count: boost_count, main: main],
+          desc_nulls_last: field(boost_count, ^activity_field),
+          desc: main.newest_activity_id
+        )
+      else
+        order_by(query, [activity: activity, boost_count: boost_count],
+          desc_nulls_last: field(boost_count, ^activity_field),
+          desc: activity.id
+        )
+      end
+    end
+  end
+
+  defp query_order_activity_metric(
+         query,
+         :like_count,
+         _activity_assoc,
+         activity_field,
+         sort_order,
+         fallback_sort_field
+       ) do
+    query = proload(query, activity: [:like_count])
+
+    if sort_order == :asc do
+      if fallback_sort_field == :newest_activity_id do
+        order_by(query, [activity: activity, like_count: like_count, main: main],
+          asc_nulls_first: field(like_count, ^activity_field),
+          asc: main.newest_activity_id
+        )
+      else
+        order_by(query, [activity: activity, like_count: like_count],
+          asc_nulls_first: field(like_count, ^activity_field),
+          asc: activity.id
+        )
+      end
+    else
+      if fallback_sort_field == :newest_activity_id do
+        order_by(query, [activity: activity, like_count: like_count, main: main],
+          desc_nulls_last: field(like_count, ^activity_field),
+          desc: main.newest_activity_id
+        )
+      else
+        order_by(query, [activity: activity, like_count: like_count],
+          desc_nulls_last: field(like_count, ^activity_field),
+          desc: activity.id
+        )
+      end
     end
   end
 
@@ -2708,15 +2852,21 @@ defmodule Bonfire.Social.Activities do
 
   ## Examples
 
-      > order_pagination_opts(:num_likes, :desc)
+      > order_pagination_opts(:like_count, :desc)
       # returns pagination options for ordering by number of likes in descending order
   """
-  def order_pagination_opts(sort_by, sort_order) do
+  def order_pagination_opts(sort_by, sort_order, opts \\ []) do
     # [cursor_fields: [{{:activity, :id}, sort_order}]]
     [
-      cursor_fields: order_cursor_fields(sort_by, sort_order || :desc),
+      cursor_fields:
+        order_cursor_fields(
+          sort_by,
+          sort_order || :desc,
+          if(:per_media in List.wrap(opts[:preload]), do: :newest_activity_id, else: :id)
+        ),
       fetch_cursor_value_fun: &fetch_cursor_value_fun/2
     ]
+    |> flood("order_pagination_opts")
   end
 
   @doc """
@@ -2724,22 +2874,37 @@ defmodule Bonfire.Social.Activities do
 
   ## Examples
 
-      > fetch_cursor_value_fun(%{nested_replies_count: 5}, :num_replies)
+      > fetch_cursor_value_fun(%{nested_replies_count: 5}, :reply_count)
       # returns the cursor value based on the number of replies
   """
-  def fetch_cursor_value_fun(%{nested_replies_count: _} = replied, :num_replies) do
-    debug(:num_replies)
+  def fetch_cursor_value_fun(%{nested_replies_count: _} = replied, :reply_count) do
+    debug(:reply_count)
     e(replied, :nested_replies_count, 0) + e(replied, :direct_replies_count, 0)
   end
 
-  def fetch_cursor_value_fun(%{replied: %{id: _} = replied}, :num_replies) do
-    debug(:num_replies)
+  def fetch_cursor_value_fun(%{replied: %{id: _} = replied}, :reply_count) do
+    debug(:reply_count)
     e(replied, :nested_replies_count, 0) + e(replied, :direct_replies_count, 0)
   end
 
-  def fetch_cursor_value_fun(%{activity: %{replied: %{id: _} = replied}}, :num_replies) do
-    debug(:num_replies)
+  def fetch_cursor_value_fun(%{activity: %{replied: %{id: _} = replied}}, :reply_count) do
+    debug(:reply_count)
     e(replied, :nested_replies_count, 0) + e(replied, :direct_replies_count, 0)
+  end
+
+  def fetch_cursor_value_fun(%{object_count: object_count}, :object_count) do
+    debug(:object_count)
+    object_count
+  end
+
+  def fetch_cursor_value_fun(%{id: id}, :trending_score) do
+    # debug(:trending_score)
+    id
+  end
+
+  def fetch_cursor_value_fun(%{newest_activity_id: id}, :newest_activity_id) do
+    debug(:newest_activity_id)
+    id
   end
 
   def fetch_cursor_value_fun(d, {:activity, :id}) do
@@ -2767,23 +2932,55 @@ defmodule Bonfire.Social.Activities do
 
   ## Examples
 
-      > order_cursor_fields(:num_likes, :asc)
+      > order_cursor_fields(:like_count, :asc)
       # returns cursor fields for ordering by number of likes in ascending order
   """
-  def order_cursor_fields(:num_likes, sort_order),
-    do: [{{:activity, :like_count, :object_count}, sort_order}, {{:activity, :id}, sort_order}]
+  def order_cursor_fields(sort_by, sort_order, fallback_sort_field \\ :id)
 
-  def order_cursor_fields(:num_boosts, sort_order),
-    do: [{{:activity, :boost_count, :object_count}, sort_order}, {{:activity, :id}, sort_order}]
+  def order_cursor_fields(:like_count, sort_order, fallback_sort_field) do
+    [
+      {{:activity, :like_count, :object_count}, sort_order},
+      {cursor_fallback_field(fallback_sort_field), sort_order}
+    ]
+  end
 
-  def order_cursor_fields(:num_replies, sort_order),
-    do: [
+  def order_cursor_fields(:boost_count, sort_order, fallback_sort_field) do
+    [
+      {{:activity, :boost_count, :object_count}, sort_order},
+      {cursor_fallback_field(fallback_sort_field), sort_order}
+    ]
+  end
+
+  def order_cursor_fields(:reply_count, sort_order, fallback_sort_field) do
+    [
       {{:activity, :replied, :total_replies_count}, sort_order},
-      {{:activity, :id}, sort_order}
+      {cursor_fallback_field(fallback_sort_field), sort_order}
+    ]
+  end
+
+  def order_cursor_fields(:object_count, sort_order, fallback_sort_field),
+    do: [
+      {:object_count, sort_order},
+      {cursor_fallback_field(fallback_sort_field), sort_order}
     ]
 
-  # {:num_replies, sort_order},
-  # def order_cursor_fields(:num_replies, sort_order), do: [{{:activity, :id}, sort_order}]
+  def order_cursor_fields(:trending_score, sort_order, fallback_sort_field),
+    do: [
+      # {:trending_score, sort_order},
+      # paginated by main ID instead of computer score
+      {:id, sort_order},
+      {cursor_fallback_field(fallback_sort_field), sort_order}
+    ]
 
-  def order_cursor_fields(_, sort_order), do: [{{:activity, :id}, sort_order}]
+  def order_cursor_fields(fallback_sort_field, sort_order, fallback_sort_field),
+    do: [{cursor_fallback_field(fallback_sort_field), sort_order}]
+
+  def order_cursor_fields(sort_field, sort_order, fallback_sort_field) do
+    err(sort_field, "unhandled sort field in order_cursor_fields/3")
+    [{cursor_fallback_field(fallback_sort_field), sort_order}]
+  end
+
+  defp cursor_fallback_field(:newest_activity_id), do: :newest_activity_id
+  defp cursor_fallback_field(:id), do: :id
+  defp cursor_fallback_field(_), do: :id
 end

@@ -285,11 +285,7 @@ defmodule Bonfire.Social.Objects do
 
   def query_maybe_time_limit(query, x_days) when is_integer(x_days) do
     # we add 12h of leeway 
-    with limit_pointer when is_binary(limit_pointer) <-
-           DatesTimes.past(x_days * 24 + 12, :hour)
-           # |> info("from date")
-           |> DatesTimes.generate_ulid()
-           |> debug("date-based UID") do
+    with limit_pointer when is_binary(limit_pointer) <- ulid_for_x_days_ago(x_days) do
       where(query, [activity: activity], activity.id > ^limit_pointer)
     else
       e ->
@@ -303,6 +299,13 @@ defmodule Bonfire.Social.Objects do
   end
 
   def query_maybe_time_limit(query, _), do: query
+
+  def ulid_for_x_days_ago(x_days) do
+    DatesTimes.past(x_days * 24 + 12, :hour)
+    # |> info("from date")
+    |> DatesTimes.generate_ulid()
+    |> flood("date-based UID")
+  end
 
   @doc """
   Lists objects in a paginated manner.
@@ -515,60 +518,6 @@ defmodule Bonfire.Social.Objects do
   #   # )
   # end
 
-  def maybe_filter(query, {:media_types, types}, _opts) when is_list(types) and types != [] do
-    case prepare_media_type(types) do
-      :all ->
-        query
-        |> Activities.join_per_media(:inner)
-        |> proload(:left, activity: [:media])
-        |> where([media: media], not is_nil(media.media_type))
-
-      [first | rest] ->
-        rest
-        |> Enum.reduce(
-          query
-          |> Activities.join_per_media(:inner)
-          |> proload(:left, activity: [:media])
-          |> where([media: media], ilike(media.media_type, ^"#{first}%")),
-          fn type, query ->
-            or_where(query, [media: media], ilike(media.media_type, ^"#{type}%"))
-          end
-        )
-
-      other ->
-        warn(other, "Unrecognised media type")
-        query
-    end
-  end
-
-  def maybe_filter(query, {:exclude_media_types, types}, opts)
-      when is_list(types) and types != [] do
-    case prepare_media_type(types) do
-      :all ->
-        query
-        # TODO: only join
-        |> proload(activity: [:media])
-        |> where([media: media], is_nil(media.media_type))
-
-      [first | rest] ->
-        # NOTE: when excluding media types do we want to show only media or any object types (in both cases excluding media of specified types)? for now going with the second option
-        rest
-        |> Enum.reduce(
-          query
-          |> Activities.join_per_media(:left)
-          |> proload(activity: [:media])
-          |> where([media: media], is_nil(media.id) or not ilike(media.media_type, ^"#{first}%")),
-          fn type, query ->
-            where(query, [media: media], not ilike(media.media_type, ^"#{type}%"))
-          end
-        )
-
-      other ->
-        warn(other, "Unrecognised media type")
-        query
-    end
-  end
-
   def maybe_filter(query, {:tags, tags}, _opts)
       when is_binary(tags) or (is_list(tags) and tags != []) do
     case tags
@@ -611,19 +560,6 @@ defmodule Bonfire.Social.Objects do
   def maybe_filter(query, filters, _opts) do
     warn(filters, "no supported object-related filters defined")
     query
-  end
-
-  defp prepare_media_type(types) do
-    cond do
-      "*" in types or :* in types ->
-        :all
-
-      :link in types or "link" in types ->
-        ["link", "article", "profile", "website"] ++ types
-
-      true ->
-        types
-    end
   end
 
   def prepare_object_types(types) do

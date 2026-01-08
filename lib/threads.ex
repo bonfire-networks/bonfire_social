@@ -843,17 +843,17 @@ defmodule Bonfire.Social.Threads do
   #   end
 
   defp query_order(%{aliases: %{replied: _}} = query, sort_by, sort_order, with_pins?) do
-    Activities.query_order(query, sort_by, sort_order, with_pins?)
+    Activities.query_order(query, sort_by, sort_order, :id, with_pins?)
   end
 
-  defp query_order(query, :num_replies = sort_by, sort_order, with_pins?) do
+  defp query_order(query, :reply_count = sort_by, sort_order, with_pins?) do
     # debug(query.aliases)
     from(query, as: :replied)
-    |> Activities.query_order(sort_by, sort_order, with_pins?)
+    |> Activities.query_order(sort_by, sort_order, :id, with_pins?)
   end
 
   defp query_order(query, sort_by, sort_order, with_pins?) do
-    Activities.query_order(query, sort_by, sort_order, with_pins?)
+    Activities.query_order(query, sort_by, sort_order, :id, with_pins?)
   end
 
   @doc """

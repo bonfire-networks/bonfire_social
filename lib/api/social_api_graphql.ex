@@ -467,9 +467,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
     enum :sort_by do
       value(:date_created, description: "Sort by date created")
-      value(:num_likes, description: "Sort by number of likes")
-      value(:num_boosts, description: "Sort by number of boosts")
-      value(:num_replies, description: "Sort by number of replies")
+      value(:like_count, description: "Sort by number of likes")
+      value(:boost_count, description: "Sort by number of boosts")
+      value(:reply_count, description: "Sort by number of replies")
       value(:num_flags, description: "Sort by flags (for moderators) (TODO)")
       value(:latest_reply, description: "Sort by latest reply")
 

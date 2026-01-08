@@ -14,6 +14,7 @@ defmodule Bonfire.Social.FeedLoader do
   use Bonfire.Common.Config
   use Bonfire.Common.Settings
   alias Bonfire.Common.Cache
+  alias Bonfire.Common.DatesTimes
   alias Bonfire.Common.Enums
   alias Bonfire.Common.Types
   alias Bonfire.Data.Social.Activity
@@ -138,19 +139,6 @@ defmodule Bonfire.Social.FeedLoader do
     # |> debug()
   end
 
-  def feed(:trending_links, opts) do
-    # Use media-first query that groups by URL and aggregates metrics
-    Bonfire.Social.TrendingLinks.list_trending_paginated(opts)
-  end
-
-  # Handle trending_links when called via feed/3 which converts to map
-  def feed(%{feed_name: :trending_links} = filters, opts) when is_list(opts) do
-    # Merge filters (especially time_limit) into opts
-    Bonfire.Social.TrendingLinks.list_trending_paginated(
-      Keyword.merge(opts, Map.to_list(Map.drop(filters, [:feed_name])))
-    )
-  end
-
   # def feed(:likes, opts) do
   #   # TODO: refactor to use `feed_filtered` like any others rather than delegating to the context
   #   Bonfire.Social.Likes.list_my(opts)
@@ -174,16 +162,20 @@ defmodule Bonfire.Social.FeedLoader do
              (case Bonfire.Social.Feeds.feed_preset_if_permitted(filters, opts) do
                 {:ok, preset} -> preset
                 _ -> %{}
-              end),
+              end)
+             |> flood("using preset from opts or looked up from filters"),
          # NOTE: we're not calling prepare_feed_filters/3 here because they must have already been prepared/validated since we're getting a FeedFilters struct
          {filters, opts} <-
-           prepare_filters_and_opts(filters, preset[:opts] || [], opts) do
+           prepare_filters_and_opts(filters, preset[:opts] || [], opts)
+           |> flood("prepared filters and opts") do
       case preset[:base_query_fun] || opts[:base_query_fun] do
         fun when is_function(fun, 0) ->
           fun.()
+          |> repo().filter_out_future_ulids()
 
         fun when is_function(fun, 1) ->
           fun.(opts)
+          |> repo().filter_out_future_ulids()
 
         _ ->
           filters[:feed_name] || preset[:filters][:feed_name]
@@ -420,24 +412,22 @@ defmodule Bonfire.Social.FeedLoader do
     feed_filtered(feed_name, filters, opts)
   end
 
-  def feed_filtered(other, filters, opts) do
-    case other do
-      :custom ->
-        # For custom feeds, directly use the filters without looking up presets
-        query_extras(filters, opts)
-        |> debug("feed query before pagination/boundaries")
-        |> paginate_and_boundarise_feed(filters, opts)
-        |> prepare_feed(filters, opts)
+  def feed_filtered(:custom, filters, opts) do
+    # For custom feeds, directly use the filters without looking up presets
+    query_extras(filters, opts)
+    |> debug("feed query before pagination/boundaries")
+    |> paginate_and_boundarise_feed(filters, opts)
+    |> prepare_feed(filters, opts)
+  end
 
-      _ ->
-        warn(other, "Not a recognised feed to query, defaulting to explore?")
-        debug(filters, "with any provided filters")
-        # raise e
-        query_extras(filters, opts)
-        |> debug("feed query before pagination/boundaries")
-        |> paginate_and_boundarise_feed(filters, opts)
-        |> prepare_feed(filters, opts)
-    end
+  def feed_filtered(other, filters, opts) do
+    flood(other, "Not a DB-based feed to query, defaulting to explore? with any provided filters")
+    flood(filters, "provided filters")
+    # raise e
+    query_extras(filters, opts)
+    |> debug("feed query before pagination/boundaries")
+    |> paginate_and_boundarise_feed(filters, opts)
+    |> prepare_feed(filters, opts)
   end
 
   @doc """
@@ -488,13 +478,15 @@ defmodule Bonfire.Social.FeedLoader do
     else
       opts
     end
-    |> Keyword.merge(Activities.order_pagination_opts(filters[:sort_by], filters[:sort_order]))
+    |> Keyword.merge(
+      Activities.order_pagination_opts(filters[:sort_by], filters[:sort_order], opts)
+    )
+    |> flood("prepared opts for pagination")
   end
 
   defp do_feed_many_paginated(query, filters, opts) do
     Social.many(
-      query
-      |> debug("actual feed query"),
+      query,
       opts[:paginate] || opts,
       opts
     )
@@ -502,20 +494,22 @@ defmodule Bonfire.Social.FeedLoader do
 
   @decorate time()
   defp paginate_and_boundarise_feed(query, filters, opts) do
+    per_media? = :per_media in List.wrap(opts[:preload])
+
     opts =
       prepare_opts_for_pagination(query, filters, opts)
       |> Keyword.put(
         :query_with_deferred_join,
         # Disable deferred join when using :per_media preload as it needs to filter in the main query
-        if :per_media in List.wrap(opts[:preload]) do
-          false
-        else
-          opts[:query_with_deferred_join] ||
-            Config.get([Bonfire.Social.Feeds, :query_with_deferred_join], true,
-              name: l("Use Deferred Joins"),
-              description: l("Technical setting for query performance optimization.")
-            )
-        end
+        # if per_media? do
+        #   false
+        # else
+        opts[:query_with_deferred_join] ||
+          Config.get([Bonfire.Social.Feeds, :query_with_deferred_join], true,
+            name: l("Use Deferred Joins"),
+            description: l("Technical setting for query performance optimization.")
+          )
+        # end
       )
       |> debug("pagination opts")
 
@@ -532,7 +526,8 @@ defmodule Bonfire.Social.FeedLoader do
 
     case opts[:return] do
       :explain ->
-        (maybe_paginate_and_boundarise_feed_deferred_query(query, filters, opts) ||
+        (maybe_prepare_per_media_query(query, filters, opts) ||
+           maybe_prepare_and_boundarise_feed_deferred_query(query, filters, opts) ||
            paginate_and_boundarise_feed_non_deferred_query(query, filters, opts))
         |> Ecto.Adapters.SQL.explain(repo(), :all, ...,
           analyze: true,
@@ -561,18 +556,20 @@ defmodule Bonfire.Social.FeedLoader do
         # NOTE: `infinite_pages = true` tells Paginator to always give us an `after` cursor, needed with deferred join since there may be more activities available than those that the join window is allowing Paginator to see
 
         with %Ecto.Query{} = deferred_query <-
-               maybe_paginate_and_boundarise_feed_deferred_query(query, filters, opts),
-             %{edges: []} <-
+               maybe_prepare_per_media_query(query, filters, opts) ||
+                 maybe_prepare_and_boundarise_feed_deferred_query(query, filters, opts),
+             %{edges: []} when per_media? != true <-
                do_feed_many_paginated(
                  deferred_query,
                  filters,
                  opts
                ) do
+          flood("empty results in deferred join, trying pagination to next window")
           # WIP: Try paginating to the next window of results if the initial one is empty
           paginate_and_boundarise_feed_deferred_fallback(query, filters, opts)
         else
           nil ->
-            debug("deferred join is not enabled")
+            flood("deferred join is not enabled")
 
             paginate_and_boundarise_feed_non_deferred_query(query, filters, opts)
             |> do_feed_many_paginated(filters, opts)
@@ -588,27 +585,32 @@ defmodule Bonfire.Social.FeedLoader do
     end
   end
 
-  defp maybe_paginate_and_boundarise_feed_deferred_query(initial_query, filters, opts) do
+  defp maybe_prepare_and_boundarise_feed_deferred_query(query, filters, opts) do
     # tries to speed up queries by applying filters (incl. pagination) in a deferred join before boundarising and extra joins/preloads
 
     if Keyword.get(opts, :query_with_deferred_join) do
-      if Enum.any?(initial_query.joins, &(&1.as == :deferred_join_subquery)),
+      if Enum.any?(query.joins, &(&1.as == :deferred_join_subquery)),
         do: throw("Feed query already deferred")
 
       initial_query =
-        initial_query
+        query
         # |> debug()
         |> Ecto.Query.exclude(:select)
         |> select([:id])
-        |> make_distinct(filters[:sort_by], filters[:sort_order], opts)
-        |> FeedActivities.query_order(filters[:sort_by], filters[:sort_order])
+        |> make_distinct_by_activity_id(filters[:sort_by], filters[:sort_order], opts)
+        |> FeedActivities.query_order(
+          filters[:sort_by],
+          filters[:sort_order],
+          :id,
+          opts[:with_pins?]
+        )
         |> do_feed_many_paginated(
           filters,
           opts
           |> Keyword.put_new(:paginate, true)
           |> Keyword.merge(
             return: :query,
-            multiply_limit: opts[:deferred_join_multiply_limit] || 2
+            multiply_limit: max(opts[:deferred_join_multiply_limit] || 2, 6)
           )
         )
         |> offset(^(opts[:deferred_join_offset] || 0))
@@ -618,19 +620,87 @@ defmodule Bonfire.Social.FeedLoader do
 
       default_or_filtered_query(FeedActivities.base_query(opts), opts)
       |> join(:inner, [fp], ^initial_query, on: [id: fp.id], as: :deferred_join_subquery)
-      # NOTE make_distinct needs to come before preloads as it may create a subquery
-      |> make_distinct(filters[:sort_by], filters[:sort_order], opts)
+      # NOTE make_distinct_by_activity_id needs to come before preloads as it may create a subquery
+      |> make_distinct_by_activity_id(filters[:sort_by], filters[:sort_order], opts)
       |> Activities.activity_preloads(
         opts[:preload],
         opts
       )
-      |> FeedActivities.query_order(filters[:sort_by], filters[:sort_order])
+      |> FeedActivities.query_order(
+        filters[:sort_by],
+        filters[:sort_order],
+        :id,
+        opts[:with_pins?]
+      )
       |> Activities.as_permitted_for(opts)
-
-      # |> IO.inspect(label: "feed query")
-      # |> debug("query with deferred join")
+      |> flood("query with deferred join")
     end
   end
+
+  defp maybe_prepare_per_media_query(initial_query, filters, opts) do
+    # tries to speed up queries by applying filters (incl. pagination) in a deferred join before boundarising and extra joins/preloads
+    if :per_media in List.wrap(opts[:preload]) do
+      if Enum.any?(initial_query.joins, &(&1.as == :per_media_qualifying_fa)),
+        do: throw("Feed query already deferred")
+
+      sort_by = filters[:sort_by] || opts[:sort_by]
+      sort_order = filters[:sort_order] || opts[:sort_order]
+
+      subquery_sort_by =
+        if sort_by == :trending_score do
+          :boost_count
+        else
+          sort_by
+        end
+
+      qualifying_activities_query =
+        initial_query
+        # TODO: needed for per_media?
+        |> make_distinct_by_activity_id(subquery_sort_by, sort_order, opts)
+        |> FeedActivities.query_order(subquery_sort_by, sort_order, :id, opts[:with_pins?])
+        # |> do_feed_many_paginated(
+        #   filters,
+        #   subquery_opts
+        #   |> Keyword.put_new(:paginate, true)
+        #   |> Keyword.merge(
+        #     return: :query,
+        #     multiply_limit: opts[:per_media_multiply_limit] || 50
+        #   )
+        # )
+        |> offset(^(opts[:deferred_join_offset] || 0))
+        # |> raise_debug_query()
+        |> Ecto.Query.exclude(:select)
+        |> select([:id])
+        |> Bonfire.Social.Activities.as_permitted_for(opts)
+        |> flood("media boundarised query")
+        |> repo().make_subquery()
+        |> flood("initial subquery")
+
+      # Check if we need media aggregation (for trending links feed)
+      Bonfire.Social.Media.build_media_aggregated_query(
+        qualifying_activities_query,
+        filters,
+        opts
+      )
+    end
+  end
+
+  #   defp raise_debug_query(query) do
+  #     query
+  #     |> flood("query for debug")
+  #     |> repo().print_sql()
+  #     |> proload([activity: [:media, object: [:post_content]]])
+  #     |> repo().all()
+  #     |> flood("fetched data for debug")
+  #     |> Enum.each(fn %{activity: activity} ->
+  #   ts = DatesTimes.to_date_time(activity.id)
+  #   flood("Activity ID: #{activity.id} | Timestamp: #{ts}")
+  # end)
+
+  #     raise "Debugging query ^"
+
+  #     query
+  # end
 
   defp paginate_and_boundarise_feed_deferred_multiplied_opts(
          previous_deferred_join_multiply_limit \\ nil,
@@ -663,25 +733,37 @@ defmodule Bonfire.Social.FeedLoader do
   defp paginate_and_boundarise_feed_deferred_fallback(query, filters, opts) do
     # WIP: Try paginating to the next window of results if the initial one is empty
 
-    previous_deferred_join_multiply_limit = opts[:deferred_join_multiply_limit] || 2
-
     next_page_opts =
-      paginate_and_boundarise_feed_deferred_multiplied_opts(
-        previous_deferred_join_multiply_limit,
-        previous_deferred_join_multiply_limit * 2,
+      if :per_media in List.wrap(opts[:preload]) do
+        # For media aggregation when none where found:
+        # We need to get ALL qualifying activities first, then aggregate by media
+        previous_limit = opts[:per_media_multiply_limit] || 5
+
         opts
-      )
+        |> Keyword.put(:per_media_multiply_limit, 1000)
+        |> Keyword.put(:deferred_join_offset, previous_limit)
+        |> debug("unlimited opts for per_media non-deferred query")
+      else
+        previous_deferred_join_multiply_limit = opts[:deferred_join_multiply_limit] || 2
+
+        paginate_and_boundarise_feed_deferred_multiplied_opts(
+          previous_deferred_join_multiply_limit,
+          previous_deferred_join_multiply_limit * 2,
+          opts
+        )
+      end
 
     # Try the query again with the new cursor
     with %Ecto.Query{} = deferred_query <-
-           maybe_paginate_and_boundarise_feed_deferred_query(query, filters, next_page_opts),
+           maybe_prepare_per_media_query(query, filters, next_page_opts) ||
+             maybe_prepare_and_boundarise_feed_deferred_query(query, filters, next_page_opts),
          %{edges: []} <-
            do_feed_many_paginated(
              deferred_query,
              filters,
              next_page_opts
            ) do
-      info("No results in next window either, falling back to non-deferred query")
+      flood("No results in next window either, falling back to non-deferred query")
 
       paginate_and_boundarise_feed_non_deferred_query(query, filters, opts)
       |> do_feed_many_paginated(filters, opts)
@@ -689,15 +771,21 @@ defmodule Bonfire.Social.FeedLoader do
   end
 
   defp paginate_and_boundarise_feed_non_deferred_query(query, filters, opts) do
-    query
-    |> make_distinct(filters[:sort_by], filters[:sort_order], opts)
-    |> Activities.activity_preloads(
-      opts[:preload],
-      opts
-    )
-    |> Activities.as_permitted_for(opts)
-    |> FeedActivities.query_order(filters[:sort_by], filters[:sort_order])
-    |> debug("non_deferred query")
+    maybe_prepare_per_media_query(query, filters, opts) ||
+      query
+      |> make_distinct_by_activity_id(filters[:sort_by], filters[:sort_order], opts)
+      |> Activities.activity_preloads(
+        opts[:preload],
+        opts
+      )
+      |> Activities.as_permitted_for(opts)
+      |> FeedActivities.query_order(
+        filters[:sort_by],
+        filters[:sort_order],
+        :id,
+        opts[:with_pins?]
+      )
+      |> debug("non_deferred query")
 
     # |> debug()
   end
@@ -920,6 +1008,7 @@ defmodule Bonfire.Social.FeedLoader do
   end
 
   defp default_query(),
+    # FIXME: when/why is this used in some places instead of FeedActivities.base_query() ??
     do:
       select(Needle.Pointers.query_base(), [p], p)
       |> repo().filter_out_future_ulids()
@@ -928,6 +1017,7 @@ defmodule Bonfire.Social.FeedLoader do
     case filtered || e(opts, :feed_filters, nil) do
       %Ecto.Query{} = query ->
         query
+        |> repo().filter_out_future_ulids()
 
       _ ->
         default_query
@@ -935,48 +1025,55 @@ defmodule Bonfire.Social.FeedLoader do
     end
   end
 
-  # defp make_distinct(query, _) do
+  # defp make_distinct_by_activity_id(query, _) do
   # query
   # |> group_by([fp], fp.id)
   # |> select([fp], max(fp.feed_id))
   # end
 
-  defp make_distinct(%Ecto.Query{distinct: distinct} = query, _, _, _opts)
+  defp make_distinct_by_activity_id(%Ecto.Query{distinct: distinct} = query, _, _, _opts)
        when not is_nil(distinct) do
     debug("skip because we already have a distinct clause")
     query
   end
 
-  defp make_distinct(query, id, :asc, _opts) when is_nil(id) or id == false or id == :id do
+  defp make_distinct_by_activity_id(query, id, :asc, _opts)
+       when is_nil(id) or id == false or id == :id do
     distinct(query, [activity: activity], asc: activity.id)
   end
 
-  defp make_distinct(query, id, _desc, _opts) when is_nil(id) or id == false or id == :id do
+  defp make_distinct_by_activity_id(query, id, _desc, _opts)
+       when is_nil(id) or id == false or id == :id do
     distinct(query, [activity: activity], desc: activity.id)
   end
 
-  defp make_distinct(query, other, :asc, opts) do
-    debug(other, "making a subquery to show distinct activities with field other than :id")
+  defp make_distinct_by_activity_id(query, other, :asc, opts) do
+    flood(
+      other,
+      "making a subquery to show distinct activities with field other than :id, sorted by"
+    )
 
     distinct(query, [activity: activity], asc: activity.id)
-    |> make_distinct_subquery(opts)
+    |> make_distinct_by_activity_id_subquery(opts)
   end
 
-  defp make_distinct(query, other, _desc, opts) do
-    debug(other, "making a subquery to show distinct activities with field other than :id")
+  defp make_distinct_by_activity_id(query, other, _desc, opts) do
+    flood(
+      other,
+      "making a subquery to show distinct activities with field other than :id, sorted by"
+    )
 
     distinct(query, [activity: activity], desc: activity.id)
-    |> make_distinct_subquery(opts)
+    |> make_distinct_by_activity_id_subquery(opts)
   end
 
-  defp make_distinct_subquery(query, opts) do
+  defp make_distinct_by_activity_id_subquery(query, opts) do
     # FIXME: if `query` already has some preloads those should be applied at the top level
-    subquery =
-      query
-      |> repo().make_subquery()
+    subquery = repo().make_subquery(query)
 
+    # TODO: why default_query instead of FeedActivities.base_query? what's the difference?
     default_or_filtered_query(default_query(), opts)
-    |> join(:inner, [fp], ^subquery, on: [id: fp.id])
+    |> join(:inner, [fp], ^subquery, on: [id: fp.id], as: :distinct_activity_id_subquery)
   end
 
   # @decorate time()
@@ -1334,11 +1431,11 @@ defmodule Bonfire.Social.FeedLoader do
       query
       # |> maybe_filter(filter, opts)
       |> Activities.maybe_filter(filter, opts)
-      |> debug("Activities filter #{inspect(filter_key)} applied")
+      # |> debug("Activities filter #{inspect(filter_key)} applied")
       #  TODO: can we avoid loading the object if not needed by a filter?
       # |> proload(activity: [:object])
       |> Objects.maybe_filter(filter, opts)
-      |> debug("Objects filter #{inspect(filter_key)} applied")
+      |> Bonfire.Social.Media.maybe_filter(filter, opts)
     end)
   end
 

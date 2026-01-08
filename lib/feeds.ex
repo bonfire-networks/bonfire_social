@@ -611,7 +611,7 @@ defmodule Bonfire.Social.Feeds do
   def my_feed_id(type, other) do
     case current_user(other) do
       nil ->
-        error("no user found in #{inspect(other)}")
+        debug(other, "no user found")
         nil
 
       current_user ->

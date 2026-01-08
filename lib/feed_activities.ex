@@ -87,14 +87,17 @@ defmodule Bonfire.Social.FeedActivities do
     |> repo().filter_out_future_ulids()
   end
 
-  def query_order(query, :num_replies = sort_by, sort_order) do
+  def query_order(query, sort_by, sort_order, fallback_sort_field \\ :id, with_pins? \\ false)
+
+  def query_order(query, :reply_count = sort_by, sort_order, fallback_sort_field, with_pins?) do
     query
+    # preload replied (NOTE: Threads calls Activities.query_order to skip this because it already has that data)
     |> maybe_preload_replied()
-    |> Activities.query_order(sort_by, sort_order)
+    |> Activities.query_order(sort_by, sort_order, fallback_sort_field, with_pins?)
   end
 
-  def query_order(query, sort_by, sort_order) do
-    Activities.query_order(query, sort_by, sort_order)
+  def query_order(query, sort_by, sort_order, fallback_sort_field, with_pins?) do
+    Activities.query_order(query, sort_by, sort_order, fallback_sort_field, with_pins?)
   end
 
   def query_maybe_exclude_mine(query, me) do

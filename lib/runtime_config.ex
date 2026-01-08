@@ -428,7 +428,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           description: "Popular discussions from the last 7 days",
           filters: %FeedFilters{
             time_limit: 7,
-            sort_by: :num_replies,
+            sort_by: :reply_count,
             sort_order: :desc,
             exclude_activity_types: [:boost, :like, :follow]
           },
@@ -441,7 +441,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %FeedFilters{
             feed_name: :trending,
             exclude_activity_types: [:reply],
-            sort_by: :num_boosts,
+            sort_by: :trending_score,
             sort_order: :desc,
             time_limit: 7
           },
@@ -462,9 +462,10 @@ defmodule Bonfire.Social.RuntimeConfig do
             feed_name: :trending_links,
             exclude_activity_types: [:reply, :boost],
             media_types: [:link],
-            sort_by: :num_boosts,
+            sort_by: :trending_score,
             sort_order: :desc,
-            time_limit: 7
+            time_limit: 7,
+            show_objects_only_once: false
           },
           exclude_from_nav: false,
           icon: "ph:newspaper-duotone",
@@ -472,8 +473,8 @@ defmodule Bonfire.Social.RuntimeConfig do
             page: "trending_links",
             page_title: l("Trending links"),
             feedback_title: l("No trending links yet"),
-            feedback_message: l("Share interesting links to see them here"),
-            hide_filters: true
+            feedback_message: l("Share interesting links to see them here")
+            # hide_filters: true
           ]
         },
         local_media: %{
@@ -655,7 +656,6 @@ defmodule Bonfire.Social.RuntimeConfig do
           # we join in first query to filter out deleted objects and/or filter by type
           :with_object,
           :with_replied,
-          :per_media,
           :per_media
           # :with_object_peered
         ]
@@ -726,7 +726,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         ]
       ]
 
-    config :bonfire_social, Bonfire.Social.TrendingLinks,
+    config :bonfire_social, Bonfire.Social.Media,
       default_time_limit:
         System.get_env("TRENDING_LINKS_TIME_LIMIT_DAYS", "7") |> String.to_integer(),
       default_cache_ttl:
