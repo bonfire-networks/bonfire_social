@@ -2653,14 +2653,14 @@ defmodule Bonfire.Social.Activities do
   def query_order(query, _, sort_order, _fallback_sort_field, true = _with_pins) do
     if sort_order == :asc do
       query
-      |> proload(:activity)
+      |> projoin(:activity)
       |> order_by([activity: activity, pinned: pinned],
         desc_nulls_last: pinned.id,
         asc: activity.id
       )
     else
       query
-      |> proload(:activity)
+      |> projoin(:activity)
       |> order_by([activity: activity, pinned: pinned],
         desc_nulls_last: pinned.id,
         desc: activity.id
@@ -2671,13 +2671,13 @@ defmodule Bonfire.Social.Activities do
   def query_order(query, _, sort_order, :newest_activity_id, _with_pins?) do
     if sort_order == :asc do
       query
-      |> proload(:activity)
+      |> projoin(:activity)
       |> order_by([],
         asc: selected_as(:newest_activity_id)
       )
     else
       query
-      |> proload(:activity)
+      |> projoin(:activity)
       |> order_by([],
         desc: selected_as(:newest_activity_id)
       )
@@ -2687,13 +2687,13 @@ defmodule Bonfire.Social.Activities do
   def query_order(query, _, sort_order, _fallback_sort_field, _with_pins?) do
     if sort_order == :asc do
       query
-      |> proload(:activity)
+      |> projoin(:activity)
       |> order_by([activity: activity],
         asc: activity.id
       )
     else
       query
-      |> proload(:activity)
+      |> projoin(:activity)
       |> order_by([activity: activity],
         desc: activity.id
       )

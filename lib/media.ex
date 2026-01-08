@@ -116,15 +116,18 @@ defmodule Bonfire.Social.Media do
 
     qualifying_activities_query =
       qualifying_activities_query
+      |> repo().make_subquery()
+      |> flood("initial subquery")
       |> projoin(:activity)
-      |> group_by([activity: activity], activity.object_id)
-      |> select_merge([activity: activity], %{
+      |> select([activity: activity], %{
         id: max(activity.id),
         object_id: activity.object_id
       })
+      |> group_by([activity: activity], activity.object_id)
       |> maybe_preload_and_select_boosts_metric(sort_by in [:boost_count, :trending_score])
       |> maybe_preload_and_select_likes_metric(sort_by in [:like_count, :trending_score])
       |> maybe_preload_and_select_replies_metric(sort_by in [:reply_count, :trending_score])
+      |> flood("qualifying_activities_query")
 
     # Start from Media table and join the qualifying activities
     from(media in Bonfire.Files.Media,

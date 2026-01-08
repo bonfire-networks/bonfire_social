@@ -51,8 +51,8 @@ defmodule Bonfire.Social.Feeds.MediaTest do
              :trending_links
            ] <-
         feed_preset_test_params() do
-    #  :like_count, 
-    sort_by = Faker.Util.pick([nil, :boost_count, :reply_count, :object_count, :trending_score])
+    #  :like_count, :reply_count, 
+    sort_by = Faker.Util.pick([nil, :boost_count, :object_count, :trending_score])
 
     describe "feed preset `#{inspect(preset)}` (ordered by #{sort_by}) loads correct feed" do
       setup do

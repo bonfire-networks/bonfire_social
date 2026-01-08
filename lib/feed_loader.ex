@@ -673,8 +673,6 @@ defmodule Bonfire.Social.FeedLoader do
         |> select([:id])
         |> Bonfire.Social.Activities.as_permitted_for(opts)
         |> flood("media boundarised query")
-        |> repo().make_subquery()
-        |> flood("initial subquery")
 
       # Check if we need media aggregation (for trending links feed)
       Bonfire.Social.Media.build_media_aggregated_query(
