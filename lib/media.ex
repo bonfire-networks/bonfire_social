@@ -48,14 +48,13 @@ defmodule Bonfire.Social.Media do
       expire:
         Keyword.get(opts, :cache_ttl) ||
           Config.get([Bonfire.Social.Media, :default_cache_ttl]) || @default_cache_ttl
-    ) 
+    )
     # list_trending_paginated(opts)
     |> e(:edges, [])
-
-    rescue
-      e ->
-        err(e, "Error fetching trending links")
-        []
+  rescue
+    e ->
+      err(e, "Error fetching trending links")
+      []
   end
 
   def trending_links_reset(opts \\ []) do
@@ -95,6 +94,10 @@ defmodule Bonfire.Social.Media do
       opts
     )
     |> flood("queried trending links")
+  rescue
+    e ->
+      err(e, "Error fetching trending links")
+      %{edges: [], page_info: %{}}
   end
 
   @doc """
