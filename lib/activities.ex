@@ -483,20 +483,41 @@ defmodule Bonfire.Social.Activities do
           proload(query, :inner, activity: [:object])
 
         :with_post_content ->
-          proload(query,
-            activity: [
-              :sensitive,
-              object: {"object_", [:post_content]}
-            ]
-          )
+          # Skip adding post_content if already joined (e.g., by article filter)
+          # to avoid "binding at position X and Y" error from duplicate preloads
+          query_struct = Ecto.Queryable.to_query(query)
+
+          if Enum.any?(query_struct.joins, &(&1.as == :post_content)) do
+            # post_content already joined, just add :sensitive
+            proload(query, activity: [:sensitive])
+          else
+            proload(query,
+              activity: [
+                :sensitive,
+                object: {"object_", [:post_content]}
+              ]
+            )
+          end
 
         :with_object_more ->
-          proload(query,
-            activity: [
-              :sensitive,
-              object: {"object_", [:post_content, :character, profile: :icon]}
-            ]
-          )
+          # Skip adding post_content if already joined (e.g., by article filter)
+          query_struct = Ecto.Queryable.to_query(query)
+
+          if Enum.any?(query_struct.joins, &(&1.as == :post_content)) do
+            proload(query,
+              activity: [
+                :sensitive,
+                object: {"object_", [:character, profile: :icon]}
+              ]
+            )
+          else
+            proload(query,
+              activity: [
+                :sensitive,
+                object: {"object_", [:post_content, :character, profile: :icon]}
+              ]
+            )
+          end
 
         :with_object_peered ->
           proload(query,
