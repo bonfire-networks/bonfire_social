@@ -464,7 +464,7 @@ defmodule Bonfire.Social.RuntimeConfig do
             media_types: [:link],
             sort_by: :trending_score,
             sort_order: :desc,
-            time_limit: 7,
+            time_limit: 2,
             show_objects_only_once: false
           },
           exclude_from_nav: false,

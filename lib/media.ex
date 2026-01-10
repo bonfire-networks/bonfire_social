@@ -16,8 +16,10 @@ defmodule Bonfire.Social.Media do
   alias Bonfire.Files.Media
 
   @default_limit 5
-  # days
-  @default_time_limit 7
+  # days - reduced from 7 to 2 for better query performance
+  @default_time_limit 2
+  # 1 hour cache TTL in milliseconds (Cachex uses ms)
+  @default_cache_ttl :timer.hours(1)
 
   @doc """
   Returns trending links grouped by URL with aggregated metrics.
@@ -32,7 +34,7 @@ defmodule Bonfire.Social.Media do
   # - `unique_sharers` - Count of unique users who shared this link
 
   ## Options
-  - `:time_limit` - Time window in days to consider activities (default: 7)
+  - `:time_limit` - Time window in days to consider activities (default: 2)
   - `:limit` - Maximum number of links to return (default: 5)
   - `:exclude_activity_types` - Activity types to exclude (default: [:reply, :boost])
 
@@ -59,6 +61,34 @@ defmodule Bonfire.Social.Media do
 
   def trending_links_reset(opts \\ []) do
     Cache.reset(&list_trending_paginated/1, [opts])
+  end
+
+  @doc """
+  Warms the trending links cache by pre-computing results.
+
+  Call this from an Oban cron job to ensure fresh cached data is available.
+  Returns {:ok, count} with number of links cached, or {:error, reason}.
+  """
+  def warm_cache(opts \\ []) do
+    # Reset any stale cache first
+    trending_links_reset(opts)
+
+    # Now fetch and cache fresh data
+    links = trending_links(opts)
+    {:ok, length(links)}
+  rescue
+    e ->
+      err(e, "Error warming trending links cache")
+      {:error, e}
+  end
+
+  @doc """
+  Checks if trending links data is available in cache.
+  Returns the cached data if available, nil otherwise.
+  """
+  def cached_trending_links(opts \\ []) do
+    Cache.get(&list_trending_paginated/1, [Keyword.drop(opts, [:cache_ttl])])
+    |> e(:edges, nil)
   end
 
   @doc """
