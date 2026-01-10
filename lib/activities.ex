@@ -2958,6 +2958,9 @@ defmodule Bonfire.Social.Activities do
   """
   def order_cursor_fields(sort_by, sort_order, fallback_sort_field \\ :id)
 
+  def order_cursor_fields(nil, sort_order, fallback_sort_field),
+    do: [{cursor_fallback_field(fallback_sort_field), sort_order}]
+
   def order_cursor_fields(:like_count, sort_order, fallback_sort_field) do
     [
       {{:activity, :like_count, :object_count}, sort_order},
