@@ -2083,7 +2083,7 @@ defmodule Bonfire.Social.FeedLoader do
       iex> matches_filter?(%{types: :post}, %{types: "post"})
       true
   """
-  def matches_filter?(rule_match_criteria, feed_filters) do
+  def matches_filter?(rule_match_criteria, feed_filters) when is_map(feed_filters) do
     Enum.all?(rule_match_criteria, fn {key, rule_value} ->
       with filter_value <- ed(feed_filters, key, nil) do
         cond do
@@ -2124,6 +2124,8 @@ defmodule Bonfire.Social.FeedLoader do
       end
     end)
   end
+
+  def matches_filter?(_, _), do: false
 
   # Helper to normalize values to strings for comparison
   defp normalize_value(value) when is_binary(value), do: value
