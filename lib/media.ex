@@ -87,7 +87,14 @@ defmodule Bonfire.Social.Media do
   Returns the cached data if available, nil otherwise.
   """
   def cached_trending_links(opts \\ []) do
-    Cache.get(&list_trending_paginated/1, [Keyword.drop(opts, [:cache_ttl])])
+    # Use key_for_call to generate the same key format that maybe_apply_cached uses
+    key =
+      Cache.key_for_call(
+        {Bonfire.Social.Media, :list_trending_paginated},
+        [Keyword.drop(opts, [:cache_ttl])]
+      )
+
+    Cache.get!(key)
     |> e(:edges, nil)
   end
 
