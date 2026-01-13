@@ -687,7 +687,7 @@ defmodule Bonfire.Social.FeedLoader do
   #     query
   #     |> flood("query for debug")
   #     |> repo().print_sql()
-  #     |> proload([activity: [:media, object: [:post_content]]])
+  #     |> proload([activity: [:media, object: {"object_", [:post_content]}]])
   #     |> repo().all()
   #     |> flood("fetched data for debug")
   #     |> Enum.each(fn %{activity: activity} ->

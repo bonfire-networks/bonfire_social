@@ -632,7 +632,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         # Other media feeds (images, videos, audio) use standard activity format
         "Media" => %{
           match: %{media_types: "*"},
-        # "Trending Links" => %{
+          # "Trending Links" => %{
           # match: %{feed_name: :trending_links},
           include: [
             :per_media,

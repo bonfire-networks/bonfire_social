@@ -1588,11 +1588,11 @@ defmodule Bonfire.Social.Activities do
       {[], [_], true} ->
         query
         |> maybe_join_filter_activity(exclude_table_ids)
-        |> proload(:inner, activity: [object: [:post_content]])
+        |> proload(:inner, activity: [object: {"object_", [:post_content]}])
         |> where(
-          [post_content: post_content],
-          fragment("LENGTH(?)", post_content.name) > 2 and
-            fragment("CHAR_LENGTH(?)", post_content.html_body) > ^article_char_threshold()
+          [object_post_content: object_post_content],
+          fragment("LENGTH(?)", object_post_content.name) > 2 and
+            fragment("CHAR_LENGTH(?)", object_post_content.html_body) > ^article_char_threshold()
         )
 
       {table_ids, [], false} when is_list(table_ids) and table_ids != [] ->

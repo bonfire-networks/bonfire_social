@@ -396,7 +396,7 @@ defmodule Bonfire.Social.Objects do
         on: post_content.id == object.id,
         as: :post_content
       )
-      |> proload(activity: [object: [:post_content]])
+      |> proload(activity: [object: {"object_", [:post_content]}])
 
       # |> select([main_object, activity: activity, object: object, post_content: post_content],
       #   %{
@@ -439,7 +439,7 @@ defmodule Bonfire.Social.Objects do
 
     # FIXME: still shows untranslated posts
     query
-    # |> proload(activity: [object: [:post_content]])
+    # |> proload(activity: [object: {"object_", [:post_content]}:post_content])
     |> select_preferred_language(locales)
     |> where(
       [post_content: post_content],
