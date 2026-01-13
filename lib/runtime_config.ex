@@ -630,8 +630,10 @@ defmodule Bonfire.Social.RuntimeConfig do
         # },
         # Only trending_links uses per_media aggregation (returns Media structs)
         # Other media feeds (images, videos, audio) use standard activity format
-        "Trending Links" => %{
-          match: %{feed_name: :trending_links},
+        "Media" => %{
+          match: %{media_types: "*"},
+        # "Trending Links" => %{
+          # match: %{feed_name: :trending_links},
           include: [
             :per_media,
             :with_creator,
