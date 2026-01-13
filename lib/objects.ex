@@ -154,6 +154,7 @@ defmodule Bonfire.Social.Objects do
 
     with {:ok, object} <-
            query
+           |> repo().maybe_filter_out_future_ulids(opts)
            |> Activities.read_query(opts)
            |> as_permitted_for(opts)
            #  |> debug("q")
@@ -641,7 +642,7 @@ defmodule Bonfire.Social.Objects do
   Returns a basic query over undeleted pointable objects in the system,
   optionally limited to one or more types.
   """
-  def query_base(type \\ nil), do: Needle.Pointers.query_base(type)
+  def query_base(type \\ nil), do: Bonfire.Common.Needles.query_base(type)
 
   @doc """
   Sets the name/title of an object.

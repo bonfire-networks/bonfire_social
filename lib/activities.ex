@@ -3000,7 +3000,7 @@ defmodule Bonfire.Social.Activities do
     do: [{cursor_fallback_field(fallback_sort_field), sort_order}]
 
   def order_cursor_fields(sort_field, sort_order, fallback_sort_field) do
-    err(sort_field, "unhandled sort field in order_cursor_fields/3")
+    debug(sort_field, "unhandled sort field in order_cursor_fields, defaulting to id")
     [{cursor_fallback_field(fallback_sort_field), sort_order}]
   end
 

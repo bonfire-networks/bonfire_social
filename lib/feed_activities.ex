@@ -67,7 +67,7 @@ defmodule Bonfire.Social.FeedActivities do
   defdelegate feed(name \\ nil, opts \\ []), to: FeedLoader
   defdelegate feed(name, filters, opts), to: FeedLoader
 
-  def base_query(_opts \\ []) do
+  def base_query(opts \\ []) do
     # feeds = from fp in FeedPublish, # why the subquery?..
     #   where: fp.feed_id in ^feed_ids,
     #   group_by: fp.id,
@@ -84,7 +84,7 @@ defmodule Bonfire.Social.FeedActivities do
       # distinct: [desc: activity.id],
       # order_by: [desc: activity.id]
     )
-    |> repo().filter_out_future_ulids()
+    |> repo().maybe_filter_out_future_ulids(opts)
   end
 
   def query_order(query, sort_by, sort_order, fallback_sort_field \\ :id, with_pins? \\ false)

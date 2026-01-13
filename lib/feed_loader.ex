@@ -171,11 +171,11 @@ defmodule Bonfire.Social.FeedLoader do
       case preset[:base_query_fun] || opts[:base_query_fun] do
         fun when is_function(fun, 0) ->
           fun.()
-          |> repo().filter_out_future_ulids()
+          |> repo().maybe_filter_out_future_ulids(opts)
 
         fun when is_function(fun, 1) ->
           fun.(opts)
-          |> repo().filter_out_future_ulids()
+          |> repo().maybe_filter_out_future_ulids(opts)
 
         _ ->
           filters[:feed_name] || preset[:filters][:feed_name]
@@ -447,7 +447,7 @@ defmodule Bonfire.Social.FeedLoader do
     opts = to_options(opts)
     filters = Map.new(filters)
 
-    do_query(filters, opts, opts[:base_query] || default_query())
+    do_query(filters, opts, opts[:base_query] || default_query(opts))
     |> debug("feed query before pagination/boundaries")
     |> paginate_and_boundarise_feed(filters, opts)
 
@@ -1005,17 +1005,15 @@ defmodule Bonfire.Social.FeedLoader do
     end
   end
 
-  defp default_query(),
+  defp default_query(opts),
     # FIXME: when/why is this used in some places instead of FeedActivities.base_query() ??
-    do:
-      select(Needle.Pointers.query_base(), [p], p)
-      |> repo().filter_out_future_ulids()
+    do: select(Bonfire.Common.Needles.query_base(opts), [p], p)
 
   defp default_or_filtered_query(filtered \\ nil, default_query, opts) do
     case filtered || e(opts, :feed_filters, nil) do
       %Ecto.Query{} = query ->
         query
-        |> repo().filter_out_future_ulids()
+        |> repo().maybe_filter_out_future_ulids(opts)
 
       _ ->
         default_query
@@ -1070,7 +1068,7 @@ defmodule Bonfire.Social.FeedLoader do
     subquery = repo().make_subquery(query)
 
     # TODO: why default_query instead of FeedActivities.base_query? what's the difference?
-    default_or_filtered_query(default_query(), opts)
+    default_or_filtered_query(default_query(opts), opts)
     |> join(:inner, [fp], ^subquery, on: [id: fp.id], as: :distinct_activity_id_subquery)
   end
 
@@ -1143,16 +1141,16 @@ defmodule Bonfire.Social.FeedLoader do
   end
 
   @doc "Return a boundarised query for a feed"
-  def query(filters \\ [], opts \\ [], query \\ default_query()) do
-    do_query(filters, opts, query)
+  def query(filters \\ [], opts \\ [], query \\ nil) do
+    do_query(filters, opts, query || default_query(opts))
     |> Activities.as_permitted_for(opts)
   end
 
   # NOT boundarised!
-  defp do_query(filters \\ [], opts \\ [], query \\ default_query())
+  defp do_query(filters \\ [], opts \\ [], query \\ nil)
 
   defp do_query(filters, opts, query) when is_list(filters) or is_map(filters) do
-    query
+    (query || default_query(opts))
     |> query_extras(filters, opts)
     |> query_filter(filters, nil, nil)
 
@@ -1184,7 +1182,7 @@ defmodule Bonfire.Social.FeedLoader do
 
     (query || default_or_filtered_query(filters, FeedActivities.base_query(opts), opts))
     |> proload([:activity])
-    |> repo().filter_out_future_ulids()
+    |> repo().maybe_filter_out_future_ulids(opts)
     |> maybe_filter(filters)
     |> query_optional_extras(filters, opts)
     |> Objects.as_permitted_for(opts)
@@ -1556,8 +1554,23 @@ defmodule Bonfire.Social.FeedLoader do
     |> flood("returning match using custom function")
   end
 
+  def return_feed_contains_match(
+        %{activity: %{object: %{post_content: %{id: _} = post_content}}},
+        _
+      ) do
+    post_content
+  end
+
+  def return_feed_contains_match(%{activity: %{object: %{id: _} = object}}, _) do
+    object
+  end
+
+  def return_feed_contains_match(%{activity: %{id: _} = activity}, _) do
+    activity
+  end
+
   def return_feed_contains_match(fi, _) do
-    fi.activity
+    fi
   end
 
   def feed_contains?(feed, object, opts) when is_map(object) or is_binary(object) do
@@ -1634,7 +1647,7 @@ defmodule Bonfire.Social.FeedLoader do
       10
   """
   def count(filters \\ [], opts \\ []) do
-    query(filters, opts, opts[:query] || default_query())
+    query(filters, opts, opts[:query] || default_query(opts))
     |> Ecto.Query.exclude(:select)
     # |> Ecto.Query.exclude(:distinct)
     |> Ecto.Query.exclude(:preload)
@@ -1653,7 +1666,7 @@ defmodule Bonfire.Social.FeedLoader do
       3
   """
   def count_subjects(filters \\ [], opts \\ []) do
-    query(filters, opts, opts[:query] || default_query())
+    query(filters, opts, opts[:query] || default_query(opts))
     |> Ecto.Query.exclude(:select)
     |> Ecto.Query.exclude(:distinct)
     |> Ecto.Query.exclude(:preload)

@@ -201,7 +201,7 @@ defmodule Bonfire.Social.Fake do
               html_body: "post with link https://doi.org/10.1080/1047840X.2012.720832 #{i}"
             }
           })
-          |> flood("created post with link")
+          |> debug("created post with link")
 
         media = e(post, :media, nil) || e(post, :activity, :media, nil) || []
 

@@ -70,7 +70,7 @@ defmodule Bonfire.Social.PostContents do
       #Ecto.Query<from p0 in Bonfire.Data.Social.PostContent>
   """
   def base_query do
-    Needle.Pointers.query_base()
+    Bonfire.Common.Needles.query_base()
   end
 
   @doc """

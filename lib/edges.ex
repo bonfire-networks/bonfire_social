@@ -448,10 +448,33 @@ defmodule Bonfire.Social.Edges do
   defp maybe_proload(query, preload?, [object_type]),
     do: maybe_proload(query, preload?, object_type)
 
-  defp maybe_proload(query, :subject, _object_type) do
+  defp maybe_proload(query, :subject_character, _object_type) do
     query
-    |> proload(:edge)
+    # |> proload(:edge)
+    |> proload(edge: [subject: {"subject_", [:character]}])
+  end
+
+  defp maybe_proload(query, :subject_profile, _object_type) do
+    query
+    # |> proload(:edge)
     |> proload(edge: [subject: {"subject_", [:profile, :character]}])
+  end
+
+  defp maybe_proload(query, :subject, object_type) do
+    maybe_proload(query, :subject_profile, object_type)
+  end
+
+  defp maybe_proload(query, :subject_id_only, _object_type) do
+    query
+    |> projoin(:edge)
+    |> select([edge: edge], [edge.subject_id])
+  end
+
+  defp maybe_proload(query, :object_id_only, _object_type) do
+    # TODO: support filtering by object type here?
+    query
+    |> projoin(:edge)
+    |> select([edge: edge], [edge.object_id])
   end
 
   defp maybe_proload(query, :object, object_type)
@@ -521,7 +544,7 @@ defmodule Bonfire.Social.Edges do
   defp maybe_join_type(query, :object, object_type)
        when is_atom(object_type) and not is_nil(object_type) do
     query
-    |> proload(:edge)
+    |> projoin(:edge)
     |> reusable_join(:left, [edge: edge], object in ^object_type,
       as: :object,
       on: edge.object_id == object.id
@@ -530,16 +553,14 @@ defmodule Bonfire.Social.Edges do
 
   defp maybe_join_type(query, :object, nil) do
     query
-    |> proload(:edge)
-    |> proload(edge: [:object])
+    |> projoin(edge: [:object])
   end
 
   defp maybe_join_type(query, :object, object_type) do
     warn(object_type, "unrecognised object_type for filtering")
 
     query
-    |> proload(:edge)
-    |> proload(edge: [:object])
+    |> projoin(edge: [:object])
   end
 
   @doc "TODOC"
