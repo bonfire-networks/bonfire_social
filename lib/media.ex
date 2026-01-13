@@ -447,8 +447,13 @@ defmodule Bonfire.Social.Media do
 
   def preload_newest_activity(edges) when is_list(edges) do
     repo().maybe_preload(edges, [:newest_activity])
-    |> Enum.map(fn %{newest_activity: newest_activity} = edge ->
-      %{edge | activity: newest_activity, newest_activity: nil}
-    end)
+    |> Enum.map(fn 
+      %{newest_activity: newest_activity} = edge ->
+        %{edge | activity: newest_activity, newest_activity: nil}
+      edge ->
+        warn("No :newest_activity assoc to preload")
+        edge
+      end
+    )
   end
 end
