@@ -3004,7 +3004,8 @@ defmodule Bonfire.Social.Activities do
     [{cursor_fallback_field(fallback_sort_field), sort_order}]
   end
 
-  defp cursor_fallback_field(:newest_activity_id), do: :newest_activity_id
+  # use :id for pagination since newest_activity_id is a computed alias that can't be used in WHERE clauses
+  defp cursor_fallback_field(:newest_activity_id), do: :id
   defp cursor_fallback_field(:id), do: :id
   defp cursor_fallback_field(_), do: :id
 end

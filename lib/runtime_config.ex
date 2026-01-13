@@ -628,18 +628,17 @@ defmodule Bonfire.Social.RuntimeConfig do
         #     :with_reply_to
         #   ]
         # },
-        "Media" => %{
-          match: %{media_types: "*"},
+        # Only trending_links uses per_media aggregation (returns Media structs)
+        # Other media feeds (images, videos, audio) use standard activity format
+        "Trending Links" => %{
+          match: %{feed_name: :trending_links},
           include: [
             :per_media,
-            # :with_media,
             :with_creator,
             :with_post_content
-            # :with_object_peered (since not loading the object)
           ],
           exclude: [
             :with_media,
-            # :with_subject,
             :with_object,
             :with_object_more,
             :with_reply_to
