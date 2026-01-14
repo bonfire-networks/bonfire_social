@@ -225,18 +225,18 @@ defmodule Bonfire.Social.Feeds do
       ) do
     users =
       filter_reply_and_or_mentions(me, reply_to_creator, mentions)
-      |> debug("filtered")
+      |> flood("filtered")
       |> users_to_notify(
         boundary,
         to_circles
       )
-      |> debug("users to notify")
+      |> flood("users to notify")
 
     %{
       notify_feeds: notify_feeds(users),
       notify_emails: notify_emails(users)
     }
-    |> debug("to notify")
+    |> flood("to notify")
   end
 
   defp filter_reply_and_or_mentions(me, reply_to_creator, mentions) do
@@ -250,9 +250,15 @@ defmodule Bonfire.Social.Feeds do
   defp users_to_notify(users, boundary, to_circles \\ []) do
     # debug(epic, act, users, "users going in")
     cond do
-      boundary in ["public", "public_remote", "mentions"] ->
+      boundary in ["public", "mentions"] ->
         users
         |> filter_empty([])
+        |> repo().maybe_preload([:character, :settings])
+
+      boundary in ["public_remote"] ->
+        # filter out non-federating users (where we just have a username rather than a struct)
+        users
+        |> Enum.reject(&(is_nil(&1) || is_binary(&1)))
         |> repo().maybe_preload([:character, :settings])
 
       boundary == "local" ->

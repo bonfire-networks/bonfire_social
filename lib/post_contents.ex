@@ -901,7 +901,7 @@ defmodule Bonfire.Social.PostContents do
              #          Bonfire.Federate.ActivityPub.AdapterUtils.get_or_fetch_character_by_ap_id(
              #            mention["href"] || mention["name"]
              #          ),
-             true <- Bonfire.Social.federating?(character) do
+             true <- Bonfire.Social.federating?(character) |> flood("federating? check") do
           {
             url,
             character
@@ -910,7 +910,7 @@ defmodule Bonfire.Social.PostContents do
           false ->
             warner(
               mention["name"],
-              "mentioned character has federation disabled, so skip them"
+              "mentioned character has federation disabled, so we include them by name but don't link their character"
             )
 
             {
@@ -932,7 +932,7 @@ defmodule Bonfire.Social.PostContents do
       end
       |> filter_empty([])
       |> Map.new()
-      |> debug("incoming mentions")
+      |> flood("incoming mentions")
 
     # Handle quote posts and regular links separately
     {quote_tags, regular_links} =
