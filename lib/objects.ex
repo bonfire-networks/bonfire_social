@@ -305,7 +305,7 @@ defmodule Bonfire.Social.Objects do
     DatesTimes.past(x_days * 24 + 12, :hour)
     # |> info("from date")
     |> DatesTimes.generate_ulid()
-    |> flood("date-based UID")
+    |> debug("date-based UID")
   end
 
   @doc """

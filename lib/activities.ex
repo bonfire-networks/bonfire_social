@@ -2732,7 +2732,7 @@ defmodule Bonfire.Social.Activities do
         fallback_sort_field
       )
     end
-    |> flood("query_order_with_metric")
+    |> debug("query_order_with_metric")
   end
 
   # Handle each metric explicitly since proload needs compile-time atoms
@@ -2866,7 +2866,7 @@ defmodule Bonfire.Social.Activities do
         ),
       fetch_cursor_value_fun: &fetch_cursor_value_fun/2
     ]
-    |> flood("order_pagination_opts")
+    |> debug("order_pagination_opts")
   end
 
   @doc """

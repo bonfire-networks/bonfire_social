@@ -80,8 +80,6 @@ defmodule Bonfire.Social.Acts.Activity do
             e(attrs, :to_circles, [])
           )
 
-        # |> IO.inspect(label: "notify feeds")
-
         # CLEANUP: duplicate implementation of `Feeds.target_feeds`
         feed_ids =
           Feeds.feed_ids_to_publish(

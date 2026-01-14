@@ -1454,7 +1454,7 @@ defmodule Bonfire.Social.FeedLoader do
   def feed_contains?(feed_name, object, opts \\ [])
 
   def feed_contains?({:error, e}, object, opts) do
-    error(e, "Feed returned an error")
+    err(e, "Feed returned an error")
     false
   end
 
@@ -1479,8 +1479,13 @@ defmodule Bonfire.Social.FeedLoader do
 
     if Keyword.keyword?(objects_or_filters) and is_atom(feed) do
       case feed_contains_many(feed, objects_or_filters, opts) do
-        [] -> false
-        items -> items
+        [] ->
+          warner("feed did not contain any matching object")
+          false
+
+        items ->
+          items
+          |> flood("feed contained matching objects")
       end
     else
       Enum.all?(objects_or_filters, &feed_contains?(feed, &1, opts))
@@ -1489,13 +1494,13 @@ defmodule Bonfire.Social.FeedLoader do
 
   def feed_contains?(feed, id_or_html_body, opts)
       when is_list(feed) and (is_binary(id_or_html_body) or is_struct(id_or_html_body)) do
-    debug(id_or_html_body, "id_or_html_body")
+    flood(id_or_html_body, "id_or_html_body")
 
     q_id =
       (e(id_or_html_body, :object_id, nil) || Enums.id(e(id_or_html_body, :object, nil)) ||
          e(id_or_html_body, :activity, :object_id, nil) ||
          Enums.id(e(id_or_html_body, :activity, :object, nil)) || Types.uid(id_or_html_body))
-      |> debug("id to look for in feed")
+      |> flood("id to look for in feed")
 
     q_body =
       if is_map(id_or_html_body) do
@@ -1505,7 +1510,7 @@ defmodule Bonfire.Social.FeedLoader do
       else
         if !q_id, do: id_or_html_body
       end
-      |> debug("body to look for in feed")
+      |> flood("body to look for in feed")
 
     feed =
       if opts[:postload] != false do
@@ -1519,16 +1524,16 @@ defmodule Bonfire.Social.FeedLoader do
     |> Enum.find_value(fn fi ->
       if q_id do
         if fi.activity.object_id == q_id or fi.id == q_id,
-          do: return_feed_contains_match(fi, opts[:return_match_fun])
+          do: return_feed_contains_match(fi, opts[:return_match_fun] || opts[:return])
       else
         a_body =
           e(fi.activity, :object, :post_content, :html_body, nil)
-          |> debug("body in feed")
+          |> flood("body in feed")
 
         if(
           a_body && q_body &&
             a_body =~ q_body,
-          do: return_feed_contains_match(fi, opts[:return_match_fun])
+          do: return_feed_contains_match(fi, opts[:return_match_fun] || opts[:return])
         )
       end
     end) ||
@@ -1549,37 +1554,13 @@ defmodule Bonfire.Social.FeedLoader do
       )
   end
 
-  def return_feed_contains_match(fi, fun) when is_function(fun, 1) do
-    fun.(fi)
-    |> flood("returning match using custom function")
-  end
-
-  def return_feed_contains_match(
-        %{activity: %{object: %{post_content: %{id: _} = post_content}}},
-        _
-      ) do
-    post_content
-  end
-
-  def return_feed_contains_match(%{activity: %{object: %{id: _} = object}}, _) do
-    object
-  end
-
-  def return_feed_contains_match(%{activity: %{id: _} = activity}, _) do
-    activity
-  end
-
-  def return_feed_contains_match(fi, _) do
-    fi
-  end
-
   def feed_contains?(feed, object, opts) when is_map(object) or is_binary(object) do
     # debug(object, "object")
     opts = to_options(opts)
 
     case Types.uid(object) do
       nil ->
-        debug(
+        flood(
           object,
           "assume we want to look up a string in the object fields, so query the feed first"
         )
@@ -1588,13 +1569,14 @@ defmodule Bonfire.Social.FeedLoader do
         |> feed_contains?(object, opts)
 
       id ->
-        debug(id, "lookup by ID")
+        flood(id, "lookup by ID")
 
         case feed_contains?(feed, [objects: id], opts) do
           result when is_list(result) ->
             feed_contains?(result, object, opts)
 
           other ->
+            io_inspect(other, "expected a list of results from feed_contains?")
             other
         end
     end
@@ -1608,15 +1590,39 @@ defmodule Bonfire.Social.FeedLoader do
 
       # |> id()
       e ->
-        err(e)
+        err(e, "expected a Query")
     end
+  end
+
+  def return_feed_contains_match(fi, fun) when is_function(fun, 1) do
+    fun.(fi)
+    # |> flood("returning match using custom function")
+  end
+
+  def return_feed_contains_match(
+        %{activity: %{object: %{post_content: %{id: _} = post_content}}},
+        :post_content
+      ) do
+    post_content
+  end
+
+  def return_feed_contains_match(%{activity: %{object: %{id: _} = object}}, :object) do
+    object
+  end
+
+  def return_feed_contains_match(%{activity: %{id: _} = activity}, _) do
+    activity
+  end
+
+  def return_feed_contains_match(fi, _) do
+    fi
   end
 
   defp feed_contains_many(feed_name, filters, opts) do
     case feed_contains_query(feed_name, filters, opts) do
       %Ecto.Query{} = query ->
         query
-        |> debug("feed_contains_query")
+        |> io_inspect("feed_contains_query")
         |> repo().many()
 
       e ->

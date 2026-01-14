@@ -225,17 +225,18 @@ defmodule Bonfire.Social.Feeds do
       ) do
     users =
       filter_reply_and_or_mentions(me, reply_to_creator, mentions)
-      |> debug()
+      |> debug("filtered")
       |> users_to_notify(
         boundary,
         to_circles
       )
+      |> debug("users to notify")
 
     %{
       notify_feeds: notify_feeds(users),
       notify_emails: notify_emails(users)
     }
-    |> debug()
+    |> debug("to notify")
   end
 
   defp filter_reply_and_or_mentions(me, reply_to_creator, mentions) do
@@ -249,7 +250,7 @@ defmodule Bonfire.Social.Feeds do
   defp users_to_notify(users, boundary, to_circles \\ []) do
     # debug(epic, act, users, "users going in")
     cond do
-      boundary in ["public", "mentions"] ->
+      boundary in ["public", "public_remote", "mentions"] ->
         users
         |> filter_empty([])
         |> repo().maybe_preload([:character, :settings])
@@ -262,7 +263,7 @@ defmodule Bonfire.Social.Feeds do
         |> Enum.filter(&is_local?/1)
 
       true ->
-        # we should only notify mentions & reply_to_creator IF they are included in the object's boundaries
+        # for custom boundaries we should only notify mentions & reply_to_creator IF they are included in the object's boundaries
         # TODO: check also if they can read the object otherwise (for example, by being member of an included circle)
 
         to_circles_ids = Enums.ids(to_circles)
@@ -272,7 +273,8 @@ defmodule Bonfire.Social.Feeds do
         |> Enum.filter(&(id(&1) in to_circles_ids))
         |> repo().maybe_preload([:character, :settings])
     end
-    |> debug()
+
+    # |> debug()
   end
 
   defp notify_feeds(users) do

@@ -864,6 +864,7 @@ defmodule Bonfire.Social.PostContents do
       (List.wrap(activity_data["tag"]) ++
          List.wrap(post_data["tag"]))
       |> Enum.uniq()
+      |> debug("all incoming tags")
 
     #  TODO: put somewhere reusable by other types
     hashtags =
@@ -907,7 +908,7 @@ defmodule Bonfire.Social.PostContents do
           }
         else
           false ->
-            info(
+            warner(
               mention["name"],
               "mentioned character has federation disabled, so skip them"
             )
@@ -918,7 +919,7 @@ defmodule Bonfire.Social.PostContents do
             }
 
           e ->
-            info(
+            warner(
               e,
               "could not find known character for incoming mention"
             )
