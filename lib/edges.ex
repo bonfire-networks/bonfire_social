@@ -320,6 +320,16 @@ defmodule Bonfire.Social.Edges do
     |> repo().exists?()
   end
 
+  def exists_for_subject?(schema_or_context, subject, opts) do
+    edge_query(schema_or_context, [subjects: subject], Keyword.put(opts, :preload, false))
+    |> repo().exists?()
+  end
+
+  def exists_for_object?(schema_or_context, object, opts) do
+    edge_query(schema_or_context, [objects: object], Keyword.put(opts, :preload, false))
+    |> repo().exists?()
+  end
+
   @doc """
   Batch check which objects have edges from a given subject.
   Returns a MapSet of object_ids that have the edge.

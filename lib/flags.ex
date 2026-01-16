@@ -61,6 +61,12 @@ defmodule Bonfire.Social.Flags do
   def flagged?(%{} = user, object),
     do: Edges.exists?(__MODULE__, user, object, skip_boundary_check: true)
 
+  def flagged_object?(object),
+    do: Edges.exists_for_object?(__MODULE__, object, skip_boundary_check: true)
+
+  def subject_flagged_any?(user),
+    do: Edges.exists_for_subject?(__MODULE__, user, skip_boundary_check: true)
+
   @doc """
   Retrieves a flag by subject and object.
 
@@ -159,19 +165,21 @@ defmodule Bonfire.Social.Flags do
       |> Keyword.put_new_lazy(:to_feeds, fn -> flag_feeds(id(object), object_type(object)) end)
       # Default to NOT forwarding for safety
       |> Keyword.put_new(:forward, false)
-      |> debug("opts")
+      |> debug("flag opts")
 
     case check_flag(flagger, object, opts)
          ~> create(flagger, ..., opts) do
       {:ok, flag} ->
-        if opts[:skip_federation] != true and
+        if opts[:forward] == true and opts[:skip_federation] != true and
              id(flagger) not in maybe_apply(
                Bonfire.Federate.ActivityPub,
                :do_not_federate_user_ids,
                [],
                fallback_return: []
-             ) do
+             )
+             |> debug("do_not_federate_user_ids") do
           Social.maybe_federate_and_gift_wrap_activity(flagger, flag)
+          |> debug("federated flag activity")
         else
           {:ok, flag}
         end
@@ -576,13 +584,15 @@ defmodule Bonfire.Social.Flags do
           statuses: params.statuses,
           account: params.account,
           content: e(flag, :named, :name, nil),
-          forward: opts[:forward] || false,
+          # assume true here because we are skipping federation in flag/3
+          forward: opts[:forward] != false,
           pointer: flag
         }
-        |> debug("tooo_flag")
+        |> debug("publish flag params")
       )
+      |> debug("published_flag")
     else
-      e -> {:error, e}
+      e -> err(e, "Could not federate flag activity")
     end
   end
 
@@ -640,14 +650,14 @@ defmodule Bonfire.Social.Flags do
            end
          ) do
       %{ok: flags, error: errors} ->
-        warn(errors, "Could not flag all the objects, but continuing with the ones that worked")
+        error(errors, "Could not flag all the objects, but continuing with the ones that worked")
         {:ok, flags}
 
       %{ok: flags} ->
         {:ok, flags}
 
       %{error: errors} ->
-        error(errors, "Could not flag any objects")
+        err(errors, "Could not flag any objects")
         # {_flags, errors} -> error(errors, "Could not flag all the objects")
     end
   end
@@ -664,6 +674,7 @@ defmodule Bonfire.Social.Flags do
       comment = e(activity, :data, "content", nil)
 
       flag(creator, object, comment: comment)
+      |> debug("incoming federated flag created")
     end
   end
 

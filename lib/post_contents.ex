@@ -901,7 +901,7 @@ defmodule Bonfire.Social.PostContents do
              #          Bonfire.Federate.ActivityPub.AdapterUtils.get_or_fetch_character_by_ap_id(
              #            mention["href"] || mention["name"]
              #          ),
-             true <- Bonfire.Social.federating?(character) |> flood("federating? check") do
+             true <- Bonfire.Social.federating?(character) |> debug("federating? check") do
           {
             url,
             character
@@ -932,7 +932,7 @@ defmodule Bonfire.Social.PostContents do
       end
       |> filter_empty([])
       |> Map.new()
-      |> flood("incoming mentions")
+      |> debug("incoming mentions")
 
     # Handle quote posts and regular links separately
     {quote_tags, regular_links} =
