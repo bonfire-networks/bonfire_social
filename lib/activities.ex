@@ -2968,12 +2968,14 @@ defmodule Bonfire.Social.Activities do
     ]
 
   def order_cursor_fields(:trending_score, sort_order, fallback_sort_field),
-    do: [
-      # {:trending_score, sort_order},
-      # paginated by main ID instead of computer score
-      {:id, sort_order},
-      {cursor_fallback_field(fallback_sort_field), sort_order}
-    ]
+    do:
+      [
+        # {:trending_score, sort_order},
+        # paginated by main ID instead of computer score
+        {:id, sort_order},
+        {cursor_fallback_field(fallback_sort_field), sort_order}
+      ]
+      |> Enum.uniq()
 
   def order_cursor_fields(fallback_sort_field, sort_order, fallback_sort_field),
     do: [{cursor_fallback_field(fallback_sort_field), sort_order}]
