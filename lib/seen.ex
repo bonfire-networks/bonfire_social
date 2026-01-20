@@ -117,7 +117,7 @@ defmodule Bonfire.Social.Seen do
             {:ok, seen}
 
           _ ->
-            error(e)
+            error(e, "Could not mark object as seen")
             {:error, e}
         end
     end
@@ -206,8 +206,13 @@ defmodule Bonfire.Social.Seen do
 
   defp create(subject, seen, opts \\ []) do
     if opts[:upsert] do
+      # Since ULID is used as the ID (encoding timestamp), and unique constraint prevents multiple seen edges per subject/object/table,
+      # we must delete the previous seen edge before inserting a new one.
+      # Possible refactor: use a separate timestamp field for last seen, or remove the unique index if we want to track seen history (eg for active user stats), but would also have to avoid recording multiple seen records when not needed.
+      Edges.delete_by_both(subject, Seen, seen)
+
       Edges.changeset_base(Seen, subject, seen, opts)
-      |> repo().upsert()
+      |> repo().insert()
     else
       Edges.changeset_base(Seen, subject, seen, opts)
       |> repo().insert()
