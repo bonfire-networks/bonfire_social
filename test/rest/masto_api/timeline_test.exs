@@ -333,14 +333,16 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
       end
     end
 
-    # FIXME
     test "returns error for non-existent notification", %{conn: conn} do
       account = Fake.fake_account!()
       user = Fake.fake_user!(account)
 
       api_conn = masto_api_conn(conn, user: user, account: account)
 
-      http_conn = get(api_conn, "/api/v1/notifications/01HZNONEXISTENT00000000000")
+      # Use a valid ULID format that doesn't exist
+      nonexistent_id = Needle.ULID.generate()
+
+      http_conn = get(api_conn, "/api/v1/notifications/#{nonexistent_id}")
       # Should return 404 (may be JSON or HTML depending on error handler)
       assert http_conn.status == 404
     end

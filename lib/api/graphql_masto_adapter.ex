@@ -10,6 +10,20 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       schema: Bonfire.API.GraphQL.Schema,
       action: [mode: :internal]
 
+    # Custom pipeline to ensure context has dataloader for both authenticated and unauthenticated requests
+    def absinthe_pipeline(schema, opts) do
+      context = Keyword.get(opts, :context, %{})
+
+      context_with_loader =
+        if Map.has_key?(context, :loader) do
+          context
+        else
+          schema.context(context)
+        end
+
+      AbsintheClient.default_pipeline(schema, Keyword.put(opts, :context, context_with_loader))
+    end
+
     alias Bonfire.API.GraphQL.RestAdapter
 
     alias Bonfire.API.MastoCompat.{
@@ -482,6 +496,65 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       end
     end
 
+    @doc "Get the source (raw text) of a status for editing"
+    def status_source(%{"id" => id}, conn) do
+      current_user = conn.assigns[:current_user]
+
+      # Use direct database query - simpler and doesn't require user for public posts
+      case Bonfire.Posts.read(id, current_user: current_user, preload: [:post_content]) do
+        {:ok, post} ->
+          post_content = Map.get(post, :post_content) || %{}
+
+          source = %{
+            "id" => id,
+            "text" => Map.get(post_content, :html_body) || "",
+            "spoiler_text" => Map.get(post_content, :summary) || ""
+          }
+
+          Phoenix.Controller.json(conn, source)
+
+        {:error, :not_found} ->
+          RestAdapter.error_fn({:error, :not_found}, conn)
+
+        {:error, _reason} ->
+          RestAdapter.error_fn({:error, :not_found}, conn)
+      end
+    end
+
+    @doc "Edit a status"
+    def update_status(%{"id" => id} = params, conn) do
+      current_user = conn.assigns[:current_user]
+
+      if is_nil(current_user) do
+        RestAdapter.error_fn({:error, :unauthorized}, conn)
+      else
+        attrs = %{
+          html_body: params["status"],
+          summary: params["spoiler_text"]
+        }
+
+        case Bonfire.Social.PostContents.edit(current_user, id, attrs) do
+          {:ok, post} ->
+            # Reload with associations for mapping
+            case Bonfire.Posts.read(post.id, current_user: current_user, preload: [:post_content, :activity]) do
+              {:ok, post} ->
+                status = Mappers.Status.from_post(post, current_user: current_user)
+                Phoenix.Controller.json(conn, status)
+
+              _ ->
+                # Fallback - return minimal status
+                Phoenix.Controller.json(conn, %{"id" => id})
+            end
+
+          {:error, :not_found} ->
+            RestAdapter.error_fn({:error, :not_found}, conn)
+
+          {:error, _reason} ->
+            RestAdapter.error_fn({:error, :forbidden}, conn)
+        end
+      end
+    end
+
     @doc "Delete a status"
     def delete_status(%{"id" => id}, conn) do
       current_user = conn.assigns[:current_user]
@@ -491,8 +564,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       else
         case Bonfire.Social.Objects.delete(id, current_user: current_user) do
           {:ok, _} ->
-            # Mastodon API returns an empty object on successful deletion
-            Phoenix.Controller.json(conn, %{})
+            # Mastodon API returns the deleted status for delete-and-redraft functionality
+            Phoenix.Controller.json(conn, %{"id" => id})
 
           {:error, :not_found} ->
             RestAdapter.error_fn({:error, :not_found}, conn)

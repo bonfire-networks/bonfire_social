@@ -36,6 +36,7 @@ defmodule Bonfire.Social.MastoApi.ReportTest do
       assert response["target_account"]["id"] == target.id
     end
 
+    @tag :live_federation
     test "creates a report with forward flag", %{conn: conn} do
       account = Fake.fake_account!()
       user = Fake.fake_user!(account)
