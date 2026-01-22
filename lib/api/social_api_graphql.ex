@@ -44,6 +44,10 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       )
     end
 
+    object :other do
+      field(:json, :json)
+    end
+
     # for pagination 
     connection(node_type: :post)
 
@@ -118,7 +122,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       # field(:object_id, :string)
       # Use Dataloader to batch-load object pointers, then follow them to get actual objects
-      field :object, :any_context do
+      field :object, :any_object do
         resolve(fn activity, _args, %{context: %{loader: loader}} ->
           loader
           |> Dataloader.load(Needle.Pointer, :object, activity)
@@ -176,112 +180,136 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       # User interaction flags (batch-loaded via Dataloader.KV to prevent N+1 queries)
       field :liked_by_me, :boolean do
-        resolve(fn activity, _args, %{context: %{loader: loader, current_user: user}} = _info ->
-          if user && user.id do
-            loader
-            |> Dataloader.load(:user_interactions, :liked, %{
-              user_id: user.id,
-              activity_id: activity.id
-            })
-            |> Helpers.on_load(fn loader ->
-              result =
-                Dataloader.get(loader, :user_interactions, :liked, %{
-                  user_id: user.id,
-                  activity_id: activity.id
-                })
+        resolve(fn
+          activity, _args, %{context: %{loader: loader, current_user: user}} = _info ->
+            if user && user.id do
+              loader
+              |> Dataloader.load(:user_interactions, :liked, %{
+                user_id: user.id,
+                activity_id: activity.id
+              })
+              |> Helpers.on_load(fn loader ->
+                result =
+                  Dataloader.get(loader, :user_interactions, :liked, %{
+                    user_id: user.id,
+                    activity_id: activity.id
+                  })
 
-              {:ok, result || false}
-            end)
-          else
+                {:ok, result || false}
+              end)
+            else
+              {:ok, false}
+            end
+
+          _activity, _args, _info ->
             {:ok, false}
-          end
         end)
       end
 
       field :boosted_by_me, :boolean do
-        resolve(fn activity, _args, %{context: %{loader: loader, current_user: user}} = _info ->
-          if user && user.id do
-            loader
-            |> Dataloader.load(:user_interactions, :boosted, %{
-              user_id: user.id,
-              activity_id: activity.id
-            })
-            |> Helpers.on_load(fn loader ->
-              result =
-                Dataloader.get(loader, :user_interactions, :boosted, %{
-                  user_id: user.id,
-                  activity_id: activity.id
-                })
+        resolve(fn
+          activity, _args, %{context: %{loader: loader, current_user: user}} = _info ->
+            if user && user.id do
+              loader
+              |> Dataloader.load(:user_interactions, :boosted, %{
+                user_id: user.id,
+                activity_id: activity.id
+              })
+              |> Helpers.on_load(fn loader ->
+                result =
+                  Dataloader.get(loader, :user_interactions, :boosted, %{
+                    user_id: user.id,
+                    activity_id: activity.id
+                  })
 
-              {:ok, result || false}
-            end)
-          else
+                {:ok, result || false}
+              end)
+            else
+              {:ok, false}
+            end
+
+          _activity, _args, _info ->
             {:ok, false}
-          end
         end)
       end
 
       field :bookmarked_by_me, :boolean do
-        resolve(fn activity, _args, %{context: %{loader: loader, current_user: user}} = _info ->
-          if user && user.id do
-            loader
-            |> Dataloader.load(:user_interactions, :bookmarked, %{
-              user_id: user.id,
-              activity_id: activity.id
-            })
-            |> Helpers.on_load(fn loader ->
-              result =
-                Dataloader.get(loader, :user_interactions, :bookmarked, %{
-                  user_id: user.id,
-                  activity_id: activity.id
-                })
+        resolve(fn
+          activity, _args, %{context: %{loader: loader, current_user: user}} = _info ->
+            if user && user.id do
+              loader
+              |> Dataloader.load(:user_interactions, :bookmarked, %{
+                user_id: user.id,
+                activity_id: activity.id
+              })
+              |> Helpers.on_load(fn loader ->
+                result =
+                  Dataloader.get(loader, :user_interactions, :bookmarked, %{
+                    user_id: user.id,
+                    activity_id: activity.id
+                  })
 
-              {:ok, result || false}
-            end)
-          else
+                {:ok, result || false}
+              end)
+            else
+              {:ok, false}
+            end
+
+          _activity, _args, _info ->
             {:ok, false}
-          end
         end)
       end
 
       # Engagement counts (from EdgeTotal system)
       # Use Dataloader to batch-load count associations, then extract the count value
       field :like_count, :integer do
-        resolve(fn activity, _args, %{context: %{loader: loader}} = _info ->
-          loader
-          |> Dataloader.load(Needle.Pointer, :like_count, activity)
-          |> Helpers.on_load(fn loader ->
-            case Dataloader.get(loader, Needle.Pointer, :like_count, activity) do
-              %{object_count: count} when is_integer(count) -> {:ok, count}
-              _ -> {:ok, 0}
-            end
-          end)
+        resolve(fn
+          activity, _args, %{context: %{loader: loader}} = _info ->
+            loader
+            |> Dataloader.load(Needle.Pointer, :like_count, activity)
+            |> Helpers.on_load(fn loader ->
+              case Dataloader.get(loader, Needle.Pointer, :like_count, activity) do
+                %{object_count: count} when is_integer(count) -> {:ok, count}
+                _ -> {:ok, 0}
+              end
+            end)
+
+          _activity, _args, _info ->
+            {:ok, 0}
         end)
       end
 
       field :boost_count, :integer do
-        resolve(fn activity, _args, %{context: %{loader: loader}} = _info ->
-          loader
-          |> Dataloader.load(Needle.Pointer, :boost_count, activity)
-          |> Helpers.on_load(fn loader ->
-            case Dataloader.get(loader, Needle.Pointer, :boost_count, activity) do
-              %{object_count: count} when is_integer(count) -> {:ok, count}
-              _ -> {:ok, 0}
-            end
-          end)
+        resolve(fn
+          activity, _args, %{context: %{loader: loader}} = _info ->
+            loader
+            |> Dataloader.load(Needle.Pointer, :boost_count, activity)
+            |> Helpers.on_load(fn loader ->
+              case Dataloader.get(loader, Needle.Pointer, :boost_count, activity) do
+                %{object_count: count} when is_integer(count) -> {:ok, count}
+                _ -> {:ok, 0}
+              end
+            end)
+
+          _activity, _args, _info ->
+            {:ok, 0}
         end)
       end
 
       field :replies_count, :integer do
-        resolve(fn activity, _args, %{context: %{loader: loader}} = _info ->
-          loader
-          |> Dataloader.load(Needle.Pointer, :replied, activity)
-          |> Helpers.on_load(fn loader ->
-            case Dataloader.get(loader, Needle.Pointer, :replied, activity) do
-              %{direct_replies_count: count} when is_integer(count) -> {:ok, count}
-              _ -> {:ok, 0}
-            end
-          end)
+        resolve(fn
+          activity, _args, %{context: %{loader: loader}} = _info ->
+            loader
+            |> Dataloader.load(Needle.Pointer, :replied, activity)
+            |> Helpers.on_load(fn loader ->
+              case Dataloader.get(loader, Needle.Pointer, :replied, activity) do
+                %{direct_replies_count: count} when is_integer(count) -> {:ok, count}
+                _ -> {:ok, 0}
+              end
+            end)
+
+          _activity, _args, _info ->
+            {:ok, 0}
         end)
       end
     end
@@ -577,7 +605,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       end
 
       @desc "Get an object"
-      field :object, :any_context do
+      field :object, :any_object do
         arg(:filter, :object_filter)
         resolve(&get_activity/3)
       end

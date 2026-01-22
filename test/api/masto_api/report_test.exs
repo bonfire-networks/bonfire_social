@@ -247,7 +247,7 @@ defmodule Bonfire.Social.MastoApi.ReportTest do
 
       response =
         api_conn
-        |> get("/api/v1/reports/01HZNONEXISTENT00000000000")
+        |> get("/api/v1/reports/01KFKNQ2NV1673CZGRRHAAMDR5")
         |> json_response(404)
 
       assert response["error"]

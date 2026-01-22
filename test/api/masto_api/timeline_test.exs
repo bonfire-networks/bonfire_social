@@ -576,7 +576,7 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
 
       response =
         api_conn
-        |> get("/api/v1/accounts/01HZNONEXISTENT00000000000/statuses")
+        |> get("/api/v1/accounts/01KFKNQ2NV1673CZGRRHAAMDR5/statuses")
         |> json_response(200)
 
       assert response == []

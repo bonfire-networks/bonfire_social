@@ -43,6 +43,40 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     @user Fragments.user_profile()
     @media Fragments.media()
 
+    @activity_in_object "
+    activity {
+      id
+      created_at: date
+      uri: canonical_uri
+      creator: subject {
+        ... on User {
+          #{@user}
+        }
+      }
+    }
+    "
+
+    # NOTE: not needed since we load object_post_content and media on activity
+    # @on_post "
+    # ... on Post {
+    #     id
+    #     post_content {
+    #       #{@post_content}
+    #     }
+    #     media {
+    #       #{@media}
+    #     }
+    #     @activity_in_object
+    #   }
+    # "
+
+    # TODO: add support for Polls and other object types here
+    @on_object_types "
+    ... on Other {
+      json
+    }
+    "
+
     # Activity fragment for feeds - includes Boost spread for timeline items
     @activity "
     id
@@ -59,58 +93,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     }}
     object {
       __typename
-      ... on Post {
-        id
-        post_content {
-          #{@post_content}
-        }
-        media {
-          #{@media}
-        }
-        activity {
-          id
-          created_at: date
-          uri: canonical_uri
-          creator: subject {
-            ... on User {
-              #{@user}
-            }
-          }
-        }
-      }
-      ... on Boost {
-        id
-        edge {
-          id
-          subject {
-            ... on User {
-              #{@user}
-            }
-          }
-          object {
-            __typename
-            ... on Post {
-              id
-              post_content {
-                #{@post_content}
-              }
-              media {
-                #{@media}
-              }
-              activity {
-                id
-                created_at: date
-                uri: canonical_uri
-                creator: subject {
-                  ... on User {
-                    #{@user}
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
+      #{@on_object_types}
     }
     object_post_content {
       #{@post_content}
@@ -150,25 +133,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     }}
     object {
       __typename
-      ... on Post {
-        id
-        post_content {
-          #{@post_content}
-        }
-        media {
-          #{@media}
-        }
-        activity {
-          id
-          created_at: date
-          uri: canonical_uri
-          creator: subject {
-            ... on User {
-              #{@user}
-            }
-          }
-        }
-      }
+      #{@on_object_types}
     }
     object_post_content {
       #{@post_content}
@@ -892,20 +857,20 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
           interaction_states = batch_load_interaction_states(current_user, object_ids)
           mentions_by_object = batch_load_mentions(object_ids)
 
-          {subjects_by_id, post_content_by_id} =
-            if feed_type == "notification" do
-              subject_ids = extract_subject_ids_for_batch_load(edges)
-              subjects = batch_load_subjects(subject_ids)
-              content_ids = extract_object_ids_for_content_batch_load(edges)
-              post_content = batch_load_post_content(content_ids)
-              {subjects, post_content}
-            else
-              {%{}, %{}}
-            end
-
           prepare_fn =
             case feed_type do
               "notification" ->
+                {subjects_by_id, post_content_by_id} =
+                  if feed_type == "notification" do
+                    subject_ids = extract_subject_ids_for_batch_load(edges)
+                    subjects = batch_load_subjects(subject_ids)
+                    content_ids = extract_object_ids_for_content_batch_load(edges)
+                    post_content = batch_load_post_content(content_ids)
+                    {subjects, post_content}
+                  else
+                    {%{}, %{}}
+                  end
+
                 &Mappers.Notification.from_activity(&1,
                   current_user: current_user,
                   interaction_states: interaction_states,
