@@ -156,7 +156,7 @@ defmodule Bonfire.Social.Pins do
   end
 
   def pin(pinner, %{} = object, scope, opts) do
-    if Bonfire.Boundaries.can?(pinner, @boundary_verb, object) do
+    if opts[:skip_boundary_check] || Bonfire.Boundaries.can?(pinner, @boundary_verb, object) do
       do_pin(scope || pinner, object, opts)
     else
       error(l("Sorry, you cannot pin this"))
