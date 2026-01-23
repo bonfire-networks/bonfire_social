@@ -225,18 +225,18 @@ defmodule Bonfire.Social.Feeds do
       ) do
     users =
       filter_reply_and_or_mentions(me, reply_to_creator, mentions)
-      |> flood("filtered")
+      |> debug("filtered")
       |> users_to_notify(
         boundary,
         to_circles
       )
-      |> flood("users to notify")
+      |> debug("users to notify")
 
     %{
       notify_feeds: notify_feeds(users),
       notify_emails: notify_emails(users)
     }
-    |> flood("to notify")
+    |> debug("to notify")
   end
 
   defp filter_reply_and_or_mentions(me, reply_to_creator, mentions) do

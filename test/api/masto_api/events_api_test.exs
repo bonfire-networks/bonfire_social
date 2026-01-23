@@ -97,7 +97,7 @@ defmodule Bonfire.Social.EventsApiTest do
         conn
         |> get("/api/bonfire-v1/events/#{event.id}")
         |> json_response(200)
-        |> flood("Event format test response")
+        |> debug("Event format test response")
 
       # Mastodon Status fields
       assert is_binary(response["id"])
@@ -139,7 +139,7 @@ defmodule Bonfire.Social.EventsApiTest do
         |> get("/api/bonfire-v1/timelines/events")
         |> json_response(200)
 
-      flood(response, "Events timeline response")
+      debug(response, "Events timeline response")
 
       assert is_list(response)
       assert length(response) >= 2
@@ -192,7 +192,7 @@ defmodule Bonfire.Social.EventsApiTest do
         |> get("/api/bonfire-v1/accounts/#{user.id}/events")
         |> json_response(200)
 
-      flood(response, "User events response")
+      debug(response, "User events response")
 
       assert is_list(response)
 
@@ -235,7 +235,7 @@ defmodule Bonfire.Social.EventsApiTest do
         |> get("/api/bonfire-v1/events/#{event.id}")
         |> json_response(200)
 
-      flood(response, "Event details response")
+      debug(response, "Event details response")
 
       assert_status_with_event_fields(response)
       assert response["id"] == event.id

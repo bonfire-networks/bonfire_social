@@ -861,7 +861,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
                 end
             end
         )
-        |> flood("feed_result")
+        |> debug("feed_result")
 
       # Handle error tuples from FeedActivities.feed/3 (e.g., {:error, :unauthorized})
       case feed_result do
