@@ -77,7 +77,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         end)
       end
 
-      field :canonical_uri, :string do
+      field :canonical_url, :string do
         resolve(fn ap_activity, _, _ ->
           {:ok, Bonfire.Common.URIs.canonical_url(e(ap_activity, :object, nil) || ap_activity)}
         end)
@@ -98,11 +98,26 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         end)
       end
 
-      # field :inserted_at, :string do
-      #   resolve(fn ap_activity, _, _ ->
-      #     {:ok, ap_activity.inserted_at}
-      #   end)
-      # end
+      field :location, :spatial_thing do
+        resolve(fn ap_activity, _, _ ->
+          # Location is stored in json.object.location with nested_object after preload_nested_objects
+          location =
+            get_in(get_event_object(ap_activity) |> flood("json_find_location"), ["location"])
+
+          case location do
+            # preload_nested_objects injects the loaded struct under "nested_object"
+            %{"nested_object" => %{__struct__: _} = geo} ->
+              {:ok, geo}
+
+            %{__struct__: _} = geo ->
+              # Already a loaded struct (shouldn't happen but handle it)
+              {:ok, geo}
+
+            _ ->
+              {:ok, nil}
+          end
+        end)
+      end
     end
 
     # Queries
@@ -123,7 +138,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
            true <- is_event_activity?(ap_activity) do
         {:ok,
          ap_activity
-         |> repo().maybe_preload([:activity])}
+         |> repo().maybe_preload([:activity])
+         |> Bonfire.Social.APActivities.preload_nested_objects(current_user: current_user)}
       else
         _ -> {:error, "Event not found"}
       end
