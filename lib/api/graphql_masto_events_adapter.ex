@@ -28,6 +28,8 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
     Fragments
   }
 
+  @user_profile Fragments.user_profile()
+
   @event_fields "
   id
   name
@@ -41,6 +43,11 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
   json
   canonicalUri
   creator_id
+  creator {
+    ... on User {
+          #{@user_profile}
+        }
+  }
   "
 
   @doc """
@@ -54,7 +61,7 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
     Bonfire.Social.Web.MastoTimelineController.feed_by_name(
       conn,
       "events",
-      params |> Map.put("creator_id", user_id)
+      params |> Map.put("creators", [user_id])
     )
   end
 

@@ -507,6 +507,29 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       )
     end
 
+    @doc "List of valid filter keys that can be passed to feed queries"
+    def feed_filter_keys do
+      [
+        :feed_name,
+        :feed_ids,
+        :subjects,
+        :subject_circles,
+        :creators,
+        :objects,
+        :tags,
+        :activity_types,
+        :object_types,
+        :media_types,
+        :time_limit,
+        :sort_by,
+        :sort_order,
+        :id_before,
+        :id_after,
+        :preload,
+        :skip_current_user_preload
+      ]
+    end
+
     input_object :feed_filters do
       field(:feed_name, :string,
         description: "Specify which feed to query. For example: explore, my, local, remote"

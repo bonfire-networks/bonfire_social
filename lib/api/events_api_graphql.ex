@@ -6,6 +6,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
     use Absinthe.Schema.Notation
     use Bonfire.Common.Utils
+    use Bonfire.Common.Repo
     import Untangle
 
     alias Bonfire.API.GraphQL
@@ -120,7 +121,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       with {:ok, ap_activity} <- Objects.read(id, current_user: current_user),
            true <- is_event_activity?(ap_activity) do
-        {:ok, ap_activity}
+        {:ok,
+         ap_activity
+         |> repo().maybe_preload([:activity])}
       else
         _ -> {:error, "Event not found"}
       end
