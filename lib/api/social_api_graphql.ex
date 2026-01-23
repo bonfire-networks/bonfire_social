@@ -821,7 +821,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
           feed_name_resolved,
           filters,
           current_user: current_user,
-          paginate: pagination_args,
+          paginate: pagination_args || true,
           # we don't want to preload anything unnecessarily (relying instead on preloads in sub-field definitions)
           preload:
             case e(filters, :preload, nil) || e(filters, "preload", nil) do
@@ -838,50 +838,49 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
                 end
             end
         )
+        |> flood("feed_result")
 
       # Handle error tuples from FeedActivities.feed/3 (e.g., {:error, :unauthorized})
       case feed_result do
         {:error, _} = error ->
           error
 
-        feed_result ->
+        %{edges: edges} when is_list(edges) and length(edges) > 0 ->
           # Apply postloads (same pattern as LiveHandler.do_preload_extras)
           # Media requires postloading because it uses complex join logic
           postloads = [:with_media]
 
           # Apply postloads to raw feed items before pagination
-          feed_with_media =
-            if feed_result.edges && length(feed_result.edges) > 0 do
-              # Apply postloads to the raw feed items
-              # Use preload_nested to tell activity_preloads about the structure
-              loaded_items =
-                feed_result.edges
-                |> Activities.activity_preloads(postloads,
-                  current_user: current_user,
-                  skip_boundary_check: true,
-                  preload_nested: {[:activity], []}
-                )
+          # Use preload_nested to tell activity_preloads about the structure
+          edges =
+            edges
+            |> Activities.activity_preloads(postloads,
+              current_user: current_user,
+              skip_boundary_check: true,
+              preload_nested: {[:activity], []}
+            )
 
-              %{feed_result | edges: loaded_items}
-            else
-              feed_result
-            end
+          feed_paginate(feed_type, %{feed_result | edges: edges}, pagination_args)
 
-          feed_with_media
-          |> Pagination.connection_paginate(pagination_args,
-            item_prepare_fun:
-              case feed_type do
-                :objects ->
-                  fn fp -> Activities.activity_under_object(e(fp, :activity, nil) || fp) end
-
-                :media ->
-                  fn fp -> Activities.activity_under_media(e(fp, :activity, nil) || fp) end
-
-                _activities ->
-                  fn fp -> e(fp, :activity, nil) || fp end
-              end
-          )
+        _ ->
+          feed_paginate(feed_type, feed_result, pagination_args)
       end
+    end
+
+    defp feed_paginate(feed_type \\ nil, feed, pagination_args) do
+      Pagination.connection_paginate(feed, pagination_args,
+        item_prepare_fun:
+          case feed_type do
+            :objects ->
+              fn fp -> Activities.activity_under_object(e(fp, :activity, nil) || fp) end
+
+            :media ->
+              fn fp -> Activities.activity_under_media(e(fp, :activity, nil) || fp) end
+
+            _activities ->
+              fn fp -> e(fp, :activity, nil) || fp end
+          end
+      )
     end
 
     def feed_objects(feed_name \\ nil, args, info) do

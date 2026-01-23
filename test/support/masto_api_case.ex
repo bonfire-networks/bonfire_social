@@ -32,7 +32,7 @@ defmodule Bonfire.Social.MastoApiCase do
 
     @endpoint Application.compile_env!(:bonfire, :endpoint_module)
 
-    def masto_api_conn(conn, opts \\ []) do
+    def masto_api_conn(conn \\ build_conn(), opts) do
       conn
       |> put_req_header("accept", "application/json")
       |> put_req_header("content-type", "application/json")

@@ -501,7 +501,10 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         case Bonfire.Social.PostContents.edit(current_user, id, attrs) do
           {:ok, post} ->
             # Reload with associations for mapping
-            case Bonfire.Posts.read(post.id, current_user: current_user, preload: [:post_content, :activity]) do
+            case Bonfire.Posts.read(post.id,
+                   current_user: current_user,
+                   preload: [:post_content, :activity]
+                 ) do
               {:ok, post} ->
                 status = Mappers.Status.from_post(post, current_user: current_user)
                 Phoenix.Controller.json(conn, status)
