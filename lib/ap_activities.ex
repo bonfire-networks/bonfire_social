@@ -161,7 +161,7 @@ defmodule Bonfire.Social.APActivities do
       else
         fetch_and_create_nested_ap_objects(activity) || %{}
       end
-      |> debug("json to store")
+      |> flood("json to store")
 
     # TODO: reuse logic from Posts for targeting the audience
     opts =
@@ -354,11 +354,11 @@ defmodule Bonfire.Social.APActivities do
            |> Keyword.put(:triggered_by, "APActivities.fetch_and_normalize_nested_object")
          ) do
       {:ok, %ActivityPub.Object{} = fetched_object} ->
-        debug(fetched_object, "Fetched Object from ActivityPub")
+        flood(fetched_object, "Fetched Object from ActivityPub")
         {:ok, build_pointer_map(id, fetched_object, embedded_object["type"])}
 
       {:ok, %ActivityPub.Actor{} = fetched_object} ->
-        debug(fetched_object, "Fetched Actor from ActivityPub")
+        flood(fetched_object, "Fetched Actor from ActivityPub")
         {:ok, build_pointer_map(id, fetched_object, embedded_object["type"], "ap_actor_id")}
 
       e ->
@@ -382,12 +382,12 @@ defmodule Bonfire.Social.APActivities do
            options
            |> Keyword.put(:triggered_by, "APActivities.create_object_from_embedded_data")
          )
-         |> debug("Handled incoming for created embedded object") do
+         |> flood("Handled incoming for created embedded object") do
       {:ok, %{} = created_object} ->
         {:ok, build_pointer_map(id, created_object, embedded_object["type"])}
 
       e ->
-        error(e, "Could not insert embedded data as Object, falling back to using as-is")
+        err(e, "Could not insert embedded data as Object, falling back to using as-is")
         :skip
     end
   end

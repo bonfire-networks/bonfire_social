@@ -35,52 +35,53 @@ defmodule Bonfire.Social.EventsApiTest do
     defaults = %{
       name: "Test Event",
       content: "An awesome test event",
-      summary: "",
+      # summary: "",
       start_time: DateTime.add(DateTime.utc_now(), 30, :day),
       end_time: DateTime.add(DateTime.utc_now(), 31, :day),
-      display_end_time: true
+      display_end_time: true,
+      location: nil
     }
 
     event_attrs = Map.merge(defaults, attrs)
 
-    event_object = %{
-      "type" => "Event",
-      "name" => event_attrs.name,
-      "content" => event_attrs.content,
-      "summary" => event_attrs.summary,
-      "startTime" => DateTime.to_iso8601(event_attrs.start_time),
-      "endTime" => DateTime.to_iso8601(event_attrs.end_time),
-      "displayEndTime" => to_string(event_attrs.display_end_time)
-    }
+    event_object =
+      %{
+        "type" => "Event",
+        "name" => event_attrs.name,
+        "content" => event_attrs.content,
+        # "summary" => event_attrs.summary,
+        "startTime" => DateTime.to_iso8601(event_attrs.start_time),
+        "endTime" => DateTime.to_iso8601(event_attrs.end_time),
+        "displayEndTime" => to_string(event_attrs.display_end_time)
+      }
+      |> maybe_add_location(event_attrs.location)
 
     # Create activity with event object
     activity_json = %{
       "type" => "Create",
       "actor" => Bonfire.Common.URIs.canonical_url(user),
-      "object" => event_object,
       "published" => DateTime.to_iso8601(DateTime.utc_now()),
       "to" => ["https://www.w3.org/ns/activitystreams#Public"]
     }
 
-    # Create the APActivity record
+    # Use ap_receive to properly process JSON (including geolocation, etc.)
     {:ok, activity} =
-      Bonfire.Data.Social.APActivity.changeset(%Bonfire.Data.Social.APActivity{}, %{
-        local: true,
-        canonical_uri:
-          "https://#{Bonfire.Common.URIs.base_domain()}/pub/objects/#{Needle.UID.generate()}",
-        json: activity_json
-      })
-      |> Bonfire.Common.Repo.insert()
-
-    Bonfire.Social.Objects.publish(
-      user,
-      :create,
-      activity,
-      [boundary: "local"],
-      __MODULE__
-    )
+      Bonfire.Social.APActivities.ap_receive(user, activity_json, event_object, true)
 
     activity
+  end
+
+  defp maybe_add_location(event_object, nil), do: event_object
+
+  defp maybe_add_location(event_object, geolocation) do
+    Map.put(event_object, "location", %{
+      "type" => "Place",
+      "id" => Bonfire.Common.URIs.canonical_url(geolocation),
+      "name" => geolocation.name,
+      "address" => Map.get(geolocation, :mappable_address, nil),
+      "latitude" => geolocation.lat,
+      "longitude" => geolocation.long
+    })
   end
 
   describe "Event response format" do
@@ -258,8 +259,11 @@ defmodule Bonfire.Social.EventsApiTest do
     # end
 
     test "includes location when event has location_id", %{user: user} do
-      # Create event with location (will implement after location linking works)
-      event = fake_event!(user, %{name: "Event with Location"})
+      # Create a geolocation first
+      location = Bonfire.Geolocate.Simulate.fake_geolocation!(user)
+
+      # Create event with that location
+      event = fake_event!(user, %{name: "Event with Location", location: location})
 
       conn = masto_api_conn(user: user)
 
@@ -268,10 +272,20 @@ defmodule Bonfire.Social.EventsApiTest do
         |> get("/api/bonfire-v1/events/#{event.id}")
         |> json_response(200)
 
-      # Location should be included when available
-      if response["event"]["location_id"] do
-        assert is_map(response["event"]["location"])
-      end
+      # Location should be included
+      # assert is_binary(response["event"]["location_id"])
+      assert is_map(response["event"]["location"])
+      assert response["event"]["location"]["name"] == location.name
+
+      response =
+        conn
+        |> get("/api/bonfire-v1/timelines/events")
+        |> json_response(200)
+
+      result = List.first(response)
+
+      assert is_map(result["event"]["location"])
+      assert result["event"]["location"]["name"] == location.name
     end
   end
 

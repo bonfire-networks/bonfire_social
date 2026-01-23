@@ -41,12 +41,22 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
   timezone
   joinMode
   json
-  canonicalUri
+  uri: canonicalUrl
   creator_id
   creator {
     ... on User {
           #{@user_profile}
         }
+  }
+  location {
+    id
+    uri: canonicalUrl
+    name
+    note
+    address: mappableAddress
+    lat
+    long
+    geom
   }
   "
 
@@ -108,7 +118,8 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
          display_end_time,
          timezone,
          join_mode,
-         json
+         json,
+         graphql_location
        ) do
     event_obj = get_event_object_from_json(json)
 
@@ -120,8 +131,8 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
       "timezone" => timezone,
 
       # Location (if available)
-      "location_id" => extract_location_id(event_obj),
-      "location" => build_location(event_obj),
+      # "location_id" => location_id,
+      "location" => graphql_location,
 
       # Virtual locations
       "virtual_locations" => event_obj["virtualLocations"] || [],
@@ -133,6 +144,7 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
       "status" => determine_event_status(start_time, end_time),
       "join_mode" => join_mode || "free"
     }
+    |> flood("Built event attachment")
   end
 
   defp get_event_object_from_json(%{"object" => %{"type" => "Event"} = event}), do: event
@@ -142,17 +154,6 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
   defp extract_location_id(event_obj) do
     event_obj["location"]["id"] || event_obj["location_id"] || event_obj["location"]
   end
-
-  defp build_location(%{"location" => location}) when is_map(location) do
-    %{
-      "id" => location["id"],
-      "name" => location["name"],
-      "address" => location["address"] || location["mappableAddress"],
-      "uri" => location["url"] || location["uri"]
-    }
-  end
-
-  defp build_location(_), do: nil
 
   defp build_organizers(%{"organizer" => organizer}) when is_list(organizer) do
     Enum.map(organizer, &format_organizer/1)
@@ -220,36 +221,18 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
 
     event_obj = get_event_object_from_json(json)
 
-    # Build minimal event data map with just event-specific fields
-    event_data = %{
-      "id" => id,
-      "name" => get_in(event_obj, ["name"]),
-      "content" => get_in(event_obj, ["content"]),
-      "summary" => get_in(event_obj, ["summary"]),
-      "startTime" => get_in(event_obj, ["startTime"]),
-      "endTime" => get_in(event_obj, ["endTime"]),
-      "displayEndTime" => parse_boolean(get_in(event_obj, ["displayEndTime"])),
-      "timezone" => get_in(event_obj, ["timezone"]),
-      "joinMode" => get_in(event_obj, ["joinMode"]) || "free",
-      "json" => json,
-      "canonicalUri" => get_field(activity, :uri),
-      "creator" => get_fields(activity, [:account, :subject])
-    }
-
-    # Build context by merging event-specific data with activity metadata
-    # The activity already has all the metadata we need
+    # Build context directly from event_obj and activity
     context = %{
       id: id,
       object_id: id,
       created_at: get_field(activity, :created_at),
       uri: get_field(activity, :uri),
       object_post_content: %{
-        html_body: get_field(event_data, "content") || "",
-        name: get_field(event_data, "name"),
-        summary: get_field(event_data, "summary")
+        html_body: event_obj["content"] || "",
+        name: event_obj["name"],
+        summary: event_obj["summary"]
       },
       subject: get_fields(activity, [:account, :subject]),
-      # Reuse existing activity fields instead of re-extracting
       media: get_field(activity, :media) || [],
       tags: get_field(activity, :tags) || [],
       like_count: get_field(activity, :like_count) || 0,
@@ -263,16 +246,17 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
     # Build base status
     base_status = Bonfire.API.MastoCompat.Mappers.Status.build_regular_status(context, opts)
 
-    # Build and attach event data
+    # Build and attach event data directly from event_obj
     event_attachment =
       build_event_attachment(
         id,
-        get_field(event_data, "startTime"),
-        get_field(event_data, "endTime"),
-        get_field(event_data, "displayEndTime"),
-        get_field(event_data, "timezone"),
-        get_field(event_data, "joinMode"),
-        json
+        event_obj["startTime"],
+        event_obj["endTime"],
+        parse_boolean(event_obj["displayEndTime"]),
+        event_obj["timezone"],
+        event_obj["joinMode"] || "free",
+        json,
+        get_field(object, :location)
       )
 
     base_status
@@ -309,7 +293,7 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
       id: id,
       object_id: id,
       created_at: created_at,
-      uri: get_field(event, "canonicalUri"),
+      uri: get_field(event, "uri"),
       object_post_content: %{
         html_body: get_field(event, "content") || "",
         name: get_field(event, "name"),
@@ -338,7 +322,8 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
         get_field(event, "displayEndTime"),
         get_field(event, "timezone"),
         get_field(event, "joinMode"),
-        json
+        json,
+        get_field(event, :location)
       )
 
     base_status
