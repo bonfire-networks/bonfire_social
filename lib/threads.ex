@@ -675,6 +675,7 @@ defmodule Bonfire.Social.Threads do
       [activity: Activities.maybe_with_labelled()],
       opts |> Keyword.put_new(:follow_pointers, false)
     )
+    |> Bonfire.Social.after_many(opts)
 
     # |> repo().many # without pagination
     # |> debug("thread")

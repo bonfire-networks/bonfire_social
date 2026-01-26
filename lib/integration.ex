@@ -376,6 +376,7 @@ defmodule Bonfire.Social do
         else
           repo().many_paginated(query, opts)
         end
+        |> after_many(opts)
     end
   end
 
@@ -422,5 +423,119 @@ defmodule Bonfire.Social do
          e(object, :creator_id, nil)) or
       (Bonfire.Boundaries.can?(context, verb, object_boundary) ||
          Bonfire.Boundaries.can?(context, verb, :instance))
+  end
+
+  @doc """
+  Post-processes results from `many/3`, applying filters like keyword filtering.
+
+  ## Parameters
+
+    - results: The results from a query (paginated map with :edges, or a list)
+    - opts: Options including current_user for loading user-specific settings
+
+  ## Examples
+
+      iex> results = %{edges: [%{activity: %{object_post_content: %{name: "hello"}}}]}
+      iex> Bonfire.Social.after_many(results, true, [])
+      %{edges: [%{activity: %{object_post_content: %{name: "hello"}}}]}
+
+  """
+  def after_many(results, opts \\ [])
+
+  def after_many(%{edges: edges} = results, opts) when is_list(edges) and results != [] do
+    %{results | edges: filter_by_keywords(edges, opts)}
+  end
+
+  def after_many(results, opts) when is_list(results) and results != [] do
+    filter_by_keywords(results, opts)
+  end
+
+  def after_many(results, _opts), do: results
+
+  defp filter_by_keywords(edges, opts) do
+    case Bonfire.Boundaries.BlockKeywords.block_keywords_settings(opts) do
+      nil ->
+        edges
+
+      [] ->
+        edges
+
+      patterns ->
+        Enum.reject(edges, &matches_keyword_filter?(&1, patterns))
+
+        # _ ->
+        #   edges
+    end
+  end
+
+  defp matches_keyword_filter?(
+         %{activity: %{object_post_content: %{html_body: _} = content}},
+         patterns
+       ) do
+    Bonfire.Boundaries.BlockKeywords.text_fields_match?(
+      content,
+      [:html_body, :summary, :name],
+      patterns
+    )
+  end
+
+  defp matches_keyword_filter?(
+         %{activity: %{object: %{post_content: %{html_body: _} = content}}},
+         patterns
+       ) do
+    Bonfire.Boundaries.BlockKeywords.text_fields_match?(
+      content,
+      [:html_body, :summary, :name],
+      patterns
+    )
+  end
+
+  defp matches_keyword_filter?(%{post_content: %{html_body: _} = content}, patterns) do
+    Bonfire.Boundaries.BlockKeywords.text_fields_match?(
+      content,
+      [:html_body, :summary, :name],
+      patterns
+    )
+  end
+
+  defp matches_keyword_filter?(%{object_post_content: %{html_body: _} = content}, patterns) do
+    Bonfire.Boundaries.BlockKeywords.text_fields_match?(
+      content,
+      [:html_body, :summary, :name],
+      patterns
+    )
+  end
+
+  defp matches_keyword_filter?(%{object: %{post_content: %{html_body: _} = content}}, patterns) do
+    Bonfire.Boundaries.BlockKeywords.text_fields_match?(
+      content,
+      [:html_body, :summary, :name],
+      patterns
+    )
+  end
+
+  defp matches_keyword_filter?(_, _patterns), do: false
+
+  @doc """
+  Checks if an activity should be shown to the current user based on keyword filters.
+  Used by LiveView handlers to filter PubSub activities before displaying.
+
+  ## Parameters
+
+    - activity: The activity to check
+    - opts: Options including current_user for loading user-specific settings
+
+  ## Examples
+
+      iex> should_show_activity?(%{object_post_content: %{html_body: "spam"}}, current_user: user)
+      false
+
+  """
+  def show_activity?(activity, opts) do
+    case Bonfire.Boundaries.BlockKeywords.block_keywords_settings(opts) do
+      nil -> true
+      [] -> true
+      patterns -> not matches_keyword_filter?(activity, patterns)
+    end
   end
 end
