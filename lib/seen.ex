@@ -2,7 +2,13 @@ defmodule Bonfire.Social.Seen do
   @moduledoc """
   Track seen/unseen status of things (usually `Activities`).
 
-  This module implements functionality to manage the seen/unseen status of objects (similar to read/unread status in other apps, but only indicates that it was displayed in a feed or other listing for the user, not that they actually read it). 
+  This module implements functionality to manage the seen/unseen status of objects (similar to read/unread status in other apps, but only indicates that it was displayed in a feed or other listing, not that they actually read it).
+
+  **Account-Based Tracking**: Seen status is tracked per Account, not per User. This means:
+  - When you mark something as seen with one profile, it will show as seen across all profiles under the same account
+  - For shared profiles (multiple accounts accessing the same user), each account maintains separate seen status
+
+  All functions accept either a User or Account struct as the subject. If a User is provided, it will be automatically normalized to their Account internally.
 
   Seen is implemented on top of the `Bonfire.Data.Edges.Edge` schema (see `Bonfire.Social.Edges` for shared functions).
   """
@@ -34,11 +40,14 @@ defmodule Bonfire.Social.Seen do
   def query_module, do: __MODULE__
 
   @doc """
-  Checks if a user has seen an object.
+  Checks if a user or account has seen an object.
+
+  Accepts either a User or Account struct. Tracking is account-based, so if a User is passed,
+  it will be normalized to their Account internally.
 
   ## Parameters
 
-    - user: The user to check.
+    - user_or_account: The user or account to check.
     - object: The object to check if seen.
 
   ## Examples
@@ -49,19 +58,25 @@ defmodule Bonfire.Social.Seen do
       true
 
   """
-  def seen?(%{} = user, object),
-    do: Edges.exists?(__MODULE__, user, object, skip_boundary_check: true)
+  def seen?(%{} = user_or_account, object) do
+    subject = normalize_subject(user_or_account)
+    Edges.exists?(__MODULE__, subject, object, skip_boundary_check: true)
+  end
 
   def last_date(subject, object) do
+    subject = normalize_subject(subject)
     Edges.last_date(__MODULE__, subject, object, skip_boundary_check: true)
   end
 
   @doc """
   Retrieves a Seen edge between a subject and an object.
 
+  Accepts either a User or Account struct. Tracking is account-based, so if a User is passed,
+  it will be normalized to their Account internally.
+
   ## Parameters
 
-    - subject: The subject (usually a user) of the Seen edge.
+    - subject: The subject (user or account) of the Seen edge.
     - object: The object that was seen.
     - opts: Additional options for the query (optional).
 
@@ -73,23 +88,30 @@ defmodule Bonfire.Social.Seen do
       {:ok, %Seen{}}
 
   """
-  def get(subject, object, opts \\ []),
-    do: Edges.get(__MODULE__, subject, object, opts ++ [skip_boundary_check: true])
+  def get(subject, object, opts \\ []) do
+    subject = normalize_subject(subject)
+    Edges.get(__MODULE__, subject, object, opts ++ [skip_boundary_check: true])
+  end
 
   @doc """
     Similar to `get/3`, but raises an error if the Seen edge is not found.
   """
-  def get!(subject, object, opts \\ []),
-    do: Edges.get!(__MODULE__, subject, object, opts ++ [skip_boundary_check: true])
+  def get!(subject, object, opts \\ []) do
+    subject = normalize_subject(subject)
+    Edges.get!(__MODULE__, subject, object, opts ++ [skip_boundary_check: true])
+  end
 
   # def by_subject(%{}=subject), do: [subjects: subject] |> query(current_user: subject) |> repo().many()
 
   @doc """
-  Marks an object as seen by a user.
+  Marks an object as seen by a user or account.
+
+  Accepts either a User or Account struct. Tracking is account-based, so if a User is passed,
+  it will be normalized to their Account internally.
 
   ## Parameters
 
-    - subject: The user marking the object as seen.
+    - subject: The user or account marking the object as seen.
     - object: The object(s) or ID(s) being marked as seen.
 
   ## Examples
@@ -106,14 +128,16 @@ defmodule Bonfire.Social.Seen do
   def mark_seen(subject, object, opts \\ [])
 
   def mark_seen(%{} = subject, %{id: _} = object, opts) do
-    case create(subject, object, opts) do
+    normalized_subject = normalize_subject(subject)
+
+    case create(normalized_subject, object, opts) do
       {:ok, seen} ->
         {:ok, seen}
 
       {:error, e} ->
-        case get(subject, object) do
+        case get(normalized_subject, object) do
           {:ok, seen} ->
-            debug(seen, "the user has already seen this object")
+            debug(seen, "the account has already seen this object")
             {:ok, seen}
 
           _ ->
@@ -123,30 +147,36 @@ defmodule Bonfire.Social.Seen do
     end
   rescue
     e in Ecto.ConstraintError ->
-      debug(e, "the user has already seen this object")
+      debug(e, "the account has already seen this object")
       {:ok, nil}
   end
 
   def mark_seen(%{} = subject, object, opts) when is_binary(object) do
+    normalized_subject = normalize_subject(subject)
+
     with {:ok, seen} <-
            Bonfire.Common.Needles.get(object, current_user: subject, verb: :see) do
       # debug(seen)
-      mark_seen(subject, seen, opts)
+      mark_seen(normalized_subject, seen, opts)
     end
   end
 
-  # TODO: bulk with insert_all 
+  # TODO: bulk with insert_all
   def mark_seen(%{} = subject, objects, opts) when is_list(objects) do
-    Enum.each(objects, &mark_seen(subject, &1, opts))
+    normalized_subject = normalize_subject(subject)
+    Enum.each(objects, &mark_seen(normalized_subject, &1, opts))
     Enum.count(objects)
   end
 
   @doc """
-  Marks an object as unseen by a user.
+  Marks an object as unseen by a user or account.
+
+  Accepts either a User or Account struct. Tracking is account-based, so if a User is passed,
+  it will be normalized to their Account internally.
 
   ## Parameters
 
-  - subject: The user marking the object as unseen.
+  - subject: The user or account marking the object as unseen.
   - object: The object or ID being marked as unseen.
 
   ## Examples
@@ -159,17 +189,20 @@ defmodule Bonfire.Social.Seen do
   iex> Bonfire.Social.Seen.mark_unseen(user, "456")
 
   """
-  def mark_unseen(%User{} = subject, %{} = object) do
+  def mark_unseen(%{} = subject, %{} = object) do
+    normalized_subject = normalize_subject(subject)
     # delete the Seen
-    Edges.delete_by_both(subject, Seen, object)
+    Edges.delete_by_both(normalized_subject, Seen, object)
 
     # Note: the seen count is automatically decremented by DB triggers
   end
 
-  def mark_unseen(%User{} = subject, object) when is_binary(object) do
+  def mark_unseen(%{} = subject, object) when is_binary(object) do
+    normalized_subject = normalize_subject(subject)
+
     with {:ok, seen} <-
            Bonfire.Common.Needles.get(object, current_user: subject) do
-      mark_unseen(subject, seen)
+      mark_unseen(normalized_subject, seen)
     end
   end
 
@@ -219,5 +252,12 @@ defmodule Bonfire.Social.Seen do
     end
 
     # |> repo().maybe_preload(edge: [:object])
+  end
+
+  @doc false
+  defp normalize_subject(subject) do
+    # Use existing current_account helper to infer account from user
+    # Falls back to subject itself if no account found (for direct account input)
+    current_account(subject) || subject
   end
 end
