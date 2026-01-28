@@ -658,17 +658,17 @@ defmodule Bonfire.Social.FeedActivities do
         do: feed_id,
         else: Bonfire.Social.Feeds.my_feed_id(feed_id, current_user)
 
-    uid = uid(current_user)
+    subject_id = Enums.id(current_account(current_user) || current_account(opts) || current_user)
     fp_mod = feed_activities_schema()
 
-    if uid && table_id && feed_id,
+    if subject_id && table_id && feed_id,
       do:
         {:ok,
          from(fp in fp_mod,
            left_join: seen_edge in Edge,
            on:
              fp.id == seen_edge.object_id and seen_edge.table_id == ^table_id and
-               seen_edge.subject_id == ^uid,
+               seen_edge.subject_id == ^subject_id,
            where: fp.feed_id == ^feed_id,
            where: is_nil(seen_edge.id)
          )}

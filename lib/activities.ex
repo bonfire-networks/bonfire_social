@@ -351,9 +351,8 @@ defmodule Bonfire.Social.Activities do
   end
 
   # def preload_seen(object, opts) do # TODO
-  #   user = current_user(opts)
-  #   if user do
-  #     preload_query = from seen in Seen, as: :activity_seen, where: activity.id == seen.object_id and seen.subject_id == ^user
+  #  if subject_id = Enums.id(current_account(current_user) || current_user) do
+  #     preload_query = from seen in Seen, as: :activity_seen, where: activity.id == seen.object_id and seen.subject_id == ^subject_id
   #     repo().preload(object, [activity: [seen: preload_query]])
   #   else
   #     q
@@ -874,9 +873,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   defp query_preload_seen(q, opts) do
-    user_id = uid(current_user(opts))
-
-    if user_id do
+    if subject_id = Enums.id(current_account(opts) || current_user(opts)) do
       table_id = Bonfire.Common.Types.table_id(Seen)
 
       q
@@ -884,7 +881,7 @@ defmodule Bonfire.Social.Activities do
         as: :seen,
         on:
           activity.id == seen_edge.object_id and seen_edge.table_id == ^table_id and
-            seen_edge.subject_id == ^user_id
+            seen_edge.subject_id == ^subject_id
       )
       |> preload([activity: activity, seen: seen],
         activity: {activity, seen: seen}
@@ -895,13 +892,11 @@ defmodule Bonfire.Social.Activities do
   end
 
   defp subquery_preload_seen(opts) do
-    user_id = uid(current_user(opts))
-
-    if user_id do
+    if subject_id = Enums.id(current_account(opts) || current_user(opts)) do
       table_id = Bonfire.Common.Types.table_id(Seen)
 
       from(seen_edge in Edge,
-        where: seen_edge.table_id == ^table_id and seen_edge.subject_id == ^user_id
+        where: seen_edge.table_id == ^table_id and seen_edge.subject_id == ^subject_id
       )
     end
   end
