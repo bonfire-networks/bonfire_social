@@ -494,27 +494,31 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
           summary: params["spoiler_text"]
         }
 
-        case Bonfire.Social.PostContents.edit(current_user, id, attrs) do
-          {:ok, post} ->
-            # Reload with associations for mapping
-            case Bonfire.Posts.read(post.id,
-                   current_user: current_user,
-                   preload: [:post_content, :activity]
-                 ) do
-              {:ok, post} ->
-                status = Mappers.Status.from_post(post, current_user: current_user)
-                Phoenix.Controller.json(conn, status)
+        try do
+          case Bonfire.Social.PostContents.edit(current_user, id, attrs) do
+            {:ok, post} ->
+              # Reload with associations for mapping
+              case Bonfire.Posts.read(post.id,
+                     current_user: current_user,
+                     preload: [:post_content, :activity]
+                   ) do
+                {:ok, post} ->
+                  status = Mappers.Status.from_post(post, current_user: current_user)
+                  Phoenix.Controller.json(conn, status)
 
-              _ ->
-                # Fallback - return minimal status
-                Phoenix.Controller.json(conn, %{"id" => id})
-            end
+                _ ->
+                  # Fallback - return minimal status
+                  Phoenix.Controller.json(conn, %{"id" => id})
+              end
 
-          {:error, :not_found} ->
-            RestAdapter.error_fn({:error, :not_found}, conn)
+            {:error, :not_found} ->
+              RestAdapter.error_fn({:error, :not_found}, conn)
 
-          {:error, _reason} ->
-            RestAdapter.error_fn({:error, :forbidden}, conn)
+            {:error, _reason} ->
+              RestAdapter.error_fn({:error, :forbidden}, conn)
+          end
+        rescue
+          _ -> RestAdapter.error_fn({:error, :not_found}, conn)
         end
       end
     end
