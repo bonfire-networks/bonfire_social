@@ -23,11 +23,84 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
 
   use Bonfire.Social.MastoApiCase, async: true
 
+  import Bonfire.Files.Simulation
+
   alias Bonfire.Me.Fake
   alias Bonfire.Posts
+  alias Bonfire.Files
+  alias Bonfire.Files.ImageUploader
   alias Bonfire.Social.{Likes, Boosts, Bookmarks}
 
   @moduletag :masto_api
+
+  describe "POST /api/v1/statuses" do
+    test "creates a status with text", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+
+      api_conn = masto_api_conn(conn, user: user, account: account)
+
+      response =
+        api_conn
+        |> post("/api/v1/statuses", %{"status" => "Hello from the API!"})
+        |> json_response(200)
+
+      assert is_binary(response["id"])
+      assert response["content"] =~ "Hello from the API!"
+    end
+
+    test "creates a status with media_ids as a list", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+
+      {:ok, media} = Files.upload(ImageUploader, user, image_file(), %{})
+
+      api_conn = masto_api_conn(conn, user: user, account: account)
+
+      response =
+        api_conn
+        |> post("/api/v1/statuses", %{
+          "status" => "Post with media",
+          "media_ids" => [media.id]
+        })
+        |> json_response(200)
+
+      assert is_binary(response["id"])
+      assert is_list(response["media_attachments"])
+    end
+
+    test "creates a status with media_ids as indexed map params", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+
+      {:ok, media} = Files.upload(ImageUploader, user, image_file(), %{})
+
+      api_conn = masto_api_conn(conn, user: user, account: account)
+
+      # Simulate indexed array params (media_ids[0]=id) which Phoenix parses as a map
+      response =
+        api_conn
+        |> post("/api/v1/statuses", %{
+          "status" => "Post with indexed media",
+          "media_ids" => %{"0" => media.id}
+        })
+        |> json_response(200)
+
+      assert is_binary(response["id"])
+      assert is_list(response["media_attachments"])
+    end
+
+    test "returns 401 when not authenticated", %{conn: conn} do
+      response =
+        conn
+        |> put_req_header("accept", "application/json")
+        |> put_req_header("content-type", "application/json")
+        |> post("/api/v1/statuses", Jason.encode!(%{"status" => "Unauthorized"}))
+        |> json_response(401)
+
+      assert response["error"] == "Unauthorized"
+    end
+  end
 
   describe "GET /api/v1/statuses/:id" do
     test "returns a status by ID", %{conn: conn} do

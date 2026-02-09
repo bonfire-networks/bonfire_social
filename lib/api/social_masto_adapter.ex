@@ -56,28 +56,24 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     }
     "
 
-    # NOTE: not needed since we load object_post_content and media on activity
-    # @on_post "
-    # ... on Post {
-    #     id
-    #     post_content {
-    #       #{@post_content}
-    #     }
-    #     media {
-    #       #{@media}
-    #     }
-    #     @activity_in_object
-    #   }
-    # "
-
-    # TODO: add support for Polls and other object types here
+    # Post spread loads fields needed by extract_reblog/from_post for boost activities
     @on_object_types "
     ... on Other {
       json
     }
+    ... on Post {
+      id
+      post_content {
+        #{@post_content}
+      }
+      #{@activity_in_object}
+      media {
+        #{@media}
+      }
+    }
     "
 
-    # Activity fragment for feeds - includes Boost spread for timeline items
+    # Activity fragment for feeds
     @activity "
     id
     created_at: date
@@ -951,9 +947,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       Phoenix.Controller.json(conn, [])
     end
 
-    def like_status(%{"id" => id} = params, conn) do
-      debug(params, "like_status called with params")
-
+    def like_status(%{"id" => id}, conn) do
       InteractionHandler.handle_interaction(conn, id,
         interaction_type: :like,
         context_fn: &Bonfire.Social.Likes.like/2,
@@ -962,9 +956,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       )
     end
 
-    def unlike_status(%{"id" => id} = params, conn) do
-      debug(params, "unlike_status called with params")
-
+    def unlike_status(%{"id" => id}, conn) do
       InteractionHandler.handle_interaction(conn, id,
         interaction_type: :unlike,
         context_fn: &Bonfire.Social.Likes.unlike/2,
@@ -973,9 +965,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       )
     end
 
-    def boost_status(%{"id" => id} = params, conn) do
-      debug(params, "boost_status called with params")
-
+    def boost_status(%{"id" => id}, conn) do
       InteractionHandler.handle_interaction(conn, id,
         interaction_type: :boost,
         context_fn: &Bonfire.Social.Boosts.boost/2,
@@ -984,9 +974,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       )
     end
 
-    def unboost_status(%{"id" => id} = params, conn) do
-      debug(params, "unboost_status called with params")
-
+    def unboost_status(%{"id" => id}, conn) do
       InteractionHandler.handle_interaction(conn, id,
         interaction_type: :unboost,
         context_fn: &Bonfire.Social.Boosts.unboost/2,
@@ -995,9 +983,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       )
     end
 
-    def bookmark_status(%{"id" => id} = params, conn) do
-      debug(params, "bookmark_status called with params")
-
+    def bookmark_status(%{"id" => id}, conn) do
       InteractionHandler.handle_interaction(conn, id,
         interaction_type: :bookmark,
         context_fn: &Bonfire.Social.Bookmarks.bookmark/2,
@@ -1006,9 +992,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       )
     end
 
-    def unbookmark_status(%{"id" => id} = params, conn) do
-      debug(params, "unbookmark_status called with params")
-
+    def unbookmark_status(%{"id" => id}, conn) do
       InteractionHandler.handle_interaction(conn, id,
         interaction_type: :unbookmark,
         context_fn: &Bonfire.Social.Bookmarks.unbookmark/2,
@@ -1017,8 +1001,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       )
     end
 
-    def pin_status(%{"id" => id} = params, conn) do
-      debug(params, "pin_status called with params")
+    def pin_status(%{"id" => id}, conn) do
       current_user = conn.assigns[:current_user]
 
       if is_nil(current_user) do
@@ -1050,8 +1033,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       end
     end
 
-    def unpin_status(%{"id" => id} = params, conn) do
-      debug(params, "unpin_status called with params")
+    def unpin_status(%{"id" => id}, conn) do
       current_user = conn.assigns[:current_user]
 
       if is_nil(current_user) do
@@ -1337,6 +1319,34 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
             put_in(flag, [Access.key(:edge), Access.key(:object)], object)
         end
       end)
+    end
+
+    @doc "Get pinned statuses for a user"
+    def pinned_statuses(user_id, params, conn) do
+      current_user = conn.assigns[:current_user]
+      limit = PaginationHelpers.validate_limit(params["limit"] || 20)
+
+      case Bonfire.Social.Pins.list_by(user_id, limit: limit, preload: :object_with_creator) do
+        %{edges: edges} when is_list(edges) ->
+          statuses =
+            Enum.flat_map(edges, fn edge ->
+              post = get_field(edge, :edge) |> get_field(:object)
+
+              if post do
+                case Mappers.Status.from_post(post, current_user: current_user) do
+                  nil -> []
+                  status -> [Map.put(status, "pinned", true)]
+                end
+              else
+                []
+              end
+            end)
+
+          Phoenix.Controller.json(conn, statuses)
+
+        _ ->
+          Phoenix.Controller.json(conn, [])
+      end
     end
   end
 end

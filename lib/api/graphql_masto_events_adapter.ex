@@ -75,6 +75,13 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
     )
   end
 
+  def show_event(id, conn) do
+    case get_event(id, conn) do
+      nil -> Bonfire.API.GraphQL.RestAdapter.error_fn({:error, :not_found}, conn)
+      status -> Phoenix.Controller.json(conn, status)
+    end
+  end
+
   @doc """
   Get a single event by ID.
   """
@@ -203,16 +210,6 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
   defp parse_boolean("true"), do: true
   defp parse_boolean(true), do: true
   defp parse_boolean(_), do: false
-
-  defp format_datetime(nil), do: nil
-
-  defp format_datetime(%DateTime{} = dt) do
-    DateTime.to_iso8601(dt)
-  end
-
-  defp format_datetime(string) when is_binary(string), do: string
-
-  defp format_datetime(_), do: nil
 
   def build_event_status(activity, opts) do
     object = get_field(activity, :object)
