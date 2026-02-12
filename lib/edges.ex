@@ -355,6 +355,27 @@ defmodule Bonfire.Social.Edges do
   end
 
   @doc """
+  Batch check which subjects have edges to a given object.
+  Returns a MapSet of subject_ids that have the edge.
+
+  This is the reverse of `batch_exists?/3` — checks subjects instead of objects.
+  """
+  def batch_subjects_exist?(_schema_or_type, _object, []), do: MapSet.new()
+
+  def batch_subjects_exist?(schema_or_type, object, subject_ids) when is_list(subject_ids) do
+    table_id = Bonfire.Common.Types.table_id(schema_or_type)
+
+    from(e in Edge,
+      where: e.subject_id in ^Enum.map(subject_ids, &uid(&1)),
+      where: e.object_id == ^uid(object),
+      where: e.table_id == ^table_id,
+      select: e.subject_id
+    )
+    |> repo().all()
+    |> MapSet.new()
+  end
+
+  @doc """
   Counts the edges for the given type, filters or object, and options.
 
   ## Examples

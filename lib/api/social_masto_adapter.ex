@@ -373,6 +373,12 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
           mentions_by_object = batch_load_mentions(object_ids)
 
+          visibility_by_object =
+            Bonfire.Boundaries.Controlleds.list_preset_acl_ids_on_objects(object_ids)
+
+          followers_grant_objects =
+            batch_load_followers_grants(object_ids, visibility_by_object)
+
           statuses =
             edges
             |> Enum.flat_map(fn edge ->
@@ -390,7 +396,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
                 Mappers.Status.from_activity(%{node: activity_data},
                   current_user: current_user,
                   interaction_states: interaction_states,
-                  mentions_by_object: mentions_by_object
+                  mentions_by_object: mentions_by_object,
+                  visibility_by_object: visibility_by_object,
+                  followers_grant_objects: followers_grant_objects
                 )
 
               case Schemas.Status.validate(status) do
@@ -567,7 +575,19 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
           all_activities = (ancestors || []) ++ (descendants || [])
           object_ids = all_activities |> Enum.map(&get_activity_id/1) |> Enum.reject(&is_nil/1)
           interaction_states = batch_load_interaction_states(current_user, object_ids)
-          map_opts = [current_user: current_user, interaction_states: interaction_states]
+
+          visibility_by_object =
+            Bonfire.Boundaries.Controlleds.list_preset_acl_ids_on_objects(object_ids)
+
+          followers_grant_objects =
+            batch_load_followers_grants(object_ids, visibility_by_object)
+
+          map_opts = [
+            current_user: current_user,
+            interaction_states: interaction_states,
+            visibility_by_object: visibility_by_object,
+            followers_grant_objects: followers_grant_objects
+          ]
 
           context = %{
             "ancestors" => Enum.map(ancestors || [], &Mappers.Status.from_activity(&1, map_opts)),
@@ -697,6 +717,18 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
     defp batch_load_bookmarked(current_user, object_ids),
       do: batch_load_interaction(current_user, object_ids, Bonfire.Data.Social.Bookmark)
+
+    defp batch_load_followers_grants(object_ids, visibility_by_object) do
+      no_preset_ids =
+        Enum.filter(object_ids, fn id ->
+          case Map.get(visibility_by_object, id) do
+            %MapSet{} = s -> MapSet.size(s) == 0
+            nil -> true
+          end
+        end)
+
+      Bonfire.Boundaries.Controlleds.list_objects_with_followers_grants(no_preset_ids)
+    end
 
     defp batch_load_mentions([]), do: %{}
 
@@ -860,6 +892,12 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
           interaction_states = batch_load_interaction_states(current_user, object_ids)
           mentions_by_object = batch_load_mentions(object_ids)
 
+          visibility_by_object =
+            Bonfire.Boundaries.Controlleds.list_preset_acl_ids_on_objects(object_ids)
+
+          followers_grant_objects =
+            batch_load_followers_grants(object_ids, visibility_by_object)
+
           prepare_fn =
             case feed_type do
               "notification" ->
@@ -878,6 +916,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
                   current_user: current_user,
                   interaction_states: interaction_states,
                   mentions_by_object: mentions_by_object,
+                  visibility_by_object: visibility_by_object,
+                  followers_grant_objects: followers_grant_objects,
                   subjects_by_id: subjects_by_id,
                   post_content_by_id: post_content_by_id
                 )
@@ -886,7 +926,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
                 &Mappers.Status.from_activity(&1,
                   current_user: current_user,
                   interaction_states: interaction_states,
-                  mentions_by_object: mentions_by_object
+                  mentions_by_object: mentions_by_object,
+                  visibility_by_object: visibility_by_object,
+                  followers_grant_objects: followers_grant_objects
                 )
             end
 
@@ -1122,11 +1164,19 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
           interaction_states = batch_load_interaction_states(current_user, object_ids)
 
+          visibility_by_object =
+            Bonfire.Boundaries.Controlleds.list_preset_acl_ids_on_objects(object_ids)
+
+          followers_grant_objects =
+            batch_load_followers_grants(object_ids, visibility_by_object)
+
           activities
           |> Enum.flat_map(fn activity ->
             case Mappers.Status.from_activity(activity,
                    current_user: current_user,
-                   interaction_states: interaction_states
+                   interaction_states: interaction_states,
+                   visibility_by_object: visibility_by_object,
+                   followers_grant_objects: followers_grant_objects
                  ) do
               status when is_map(status) and map_size(status) > 0 ->
                 if Map.get(status, "id"), do: [status], else: []
