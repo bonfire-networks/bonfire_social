@@ -130,25 +130,22 @@ defmodule Bonfire.Social.Seen do
   def mark_seen(%{} = subject, %{id: _} = object, opts) do
     normalized_subject = normalize_subject(subject)
 
-    case create(normalized_subject, object, opts) do
+    # Check existence first to avoid costly constraint error + rollback on duplicates
+    case get(normalized_subject, object) do
       {:ok, seen} ->
+        debug(seen, "the account has already seen this object")
         {:ok, seen}
 
-      {:error, e} ->
-        case get(normalized_subject, object) do
+      _ ->
+        case create(normalized_subject, object, opts) do
           {:ok, seen} ->
-            debug(seen, "the account has already seen this object")
             {:ok, seen}
 
-          _ ->
+          {:error, e} ->
             error(e, "Could not mark object as seen")
             {:error, e}
         end
     end
-  rescue
-    e in Ecto.ConstraintError ->
-      debug(e, "the account has already seen this object")
-      {:ok, nil}
   end
 
   def mark_seen(%{} = subject, object, opts) when is_binary(object) do

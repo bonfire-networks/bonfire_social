@@ -19,7 +19,10 @@ if Application.compile_env(:bonfire_social, :modularity) != :disabled do
 
     def feed_by_name(conn, feed_name, params) do
       params
-      |> PaginationHelpers.build_feed_params(%{"feed_name" => feed_name})
+      |> PaginationHelpers.build_feed_params(%{
+        "feed_name" => feed_name,
+        "preload" => ["with_subject"]
+      })
       |> then(&Adapter.feed(&1, conn))
     end
 
@@ -30,7 +33,8 @@ if Application.compile_env(:bonfire_social, :modularity) != :disabled do
       params
       |> PaginationHelpers.build_feed_params(%{
         "feed_name" => feed_name,
-        "tags" => [normalized_tag]
+        "tags" => [normalized_tag],
+        "preload" => ["with_subject"]
       })
       |> then(&Adapter.feed(&1, conn))
     end
@@ -60,13 +64,16 @@ if Application.compile_env(:bonfire_social, :modularity) != :disabled do
 
     def bookmarks(conn, params) do
       params
-      |> PaginationHelpers.build_feed_params(%{"feed_name" => "bookmarks"})
+      |> PaginationHelpers.build_feed_params(%{
+        "feed_name" => "bookmarks",
+        "preload" => ["with_subject"]
+      })
       |> then(&Adapter.feed(&1, conn))
     end
 
     def favourites(conn, params) do
       params
-      |> PaginationHelpers.build_feed_params(%{})
+      |> PaginationHelpers.build_feed_params(%{"preload" => ["with_subject"]})
       |> then(&Adapter.favourites(&1, conn))
     end
 
@@ -78,6 +85,7 @@ if Application.compile_env(:bonfire_social, :modularity) != :disabled do
           params
           |> Map.take(["feed_name", "feed_ids", "creators", "objects", "tags"])
           |> Map.put("subjects", [user_id])
+          |> Map.put("preload", ["with_subject"])
 
         params
         |> PaginationHelpers.build_feed_params(filter)

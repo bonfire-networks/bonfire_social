@@ -45,20 +45,13 @@ defmodule Bonfire.Social.Markers do
     end
   end
 
-  defp resolve_activity_id(user, timeline, post_id) do
-    feed_ids = feed_ids_for_timeline(user, timeline)
-    fp_mod = FeedActivities.feed_activities_schema()
-
-    if feed_ids != [] do
-      from(fp in fp_mod,
-        inner_join: act in Activity,
-        on: fp.id == act.id,
-        where: fp.feed_id in ^feed_ids and act.object_id == ^post_id,
-        select: fp.id,
-        limit: 1
-      )
-      |> repo().one()
-    end
+  defp resolve_activity_id(_user, _timeline, post_id) do
+    from(act in Activity,
+      where: act.object_id == ^post_id,
+      select: act.id,
+      limit: 1
+    )
+    |> repo().one()
   end
 
   defp last_seen_in_feed(user, account_id, timeline) do

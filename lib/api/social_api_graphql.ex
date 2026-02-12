@@ -77,7 +77,18 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       field(:subject_id, :string)
 
       field(:subject, :any_character) do
-        resolve(Helpers.dataloader(Needle.Pointer))
+        resolve(fn
+          %{subject: subject}, _args, _info
+          when not is_nil(subject) and not is_struct(subject, Ecto.Association.NotLoaded) ->
+            {:ok, subject}
+
+          parent, _args, %{context: %{loader: loader}} ->
+            loader
+            |> Dataloader.load(Needle.Pointer, :subject, parent)
+            |> Helpers.on_load(fn loader ->
+              {:ok, Dataloader.get(loader, Needle.Pointer, :subject, parent)}
+            end)
+        end)
       end
 
       field(:object_id, :string)
