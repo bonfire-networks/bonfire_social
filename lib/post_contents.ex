@@ -783,12 +783,7 @@ defmodule Bonfire.Social.PostContents do
       # TODO: put somewhere reusable by other types:
       "sensitive" => e(post, :sensitive, :is_sensitive, false),
       "name" => e(post, :post_content, :name, nil),
-      "summary" =>
-        Text.maybe_markdown_to_html(
-          e(post, :post_content, :summary, nil)
-          |> Text.make_links_absolute(:markdown),
-          sanitize: true
-        ),
+      "summary" => Text.text_only(e(post, :post_content, :summary, nil)),
       "content" =>
         Text.maybe_markdown_to_html(
           html_body,
