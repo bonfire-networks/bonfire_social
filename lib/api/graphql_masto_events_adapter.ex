@@ -6,9 +6,9 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
   into Mastodon Status format with Event attachments.
 
   Implements:
-  - GET /api/bonfire-v1/timelines/events
-  - GET /api/bonfire-v1/accounts/:id/events
-  - GET /api/bonfire-v1/events/:id
+  - GET /api/v1-bonfire/timelines/events
+  - GET /api/v1-bonfire/accounts/:id/events
+  - GET /api/v1-bonfire/events/:id
   """
 
   use AbsintheClient,

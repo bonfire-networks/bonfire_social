@@ -7,9 +7,9 @@ defmodule Bonfire.Social.EventsApiTest do
   Tests for Mastodon-compatible Events API endpoints.
 
   Covers:
-  - GET /api/bonfire-v1/timelines/events - Event feed with optional filters
-  - GET /api/bonfire-v1/accounts/:id/events - List a user's events
-  - GET /api/bonfire-v1/events/:id - Get event details
+  - GET /api/v1-bonfire/timelines/events - Event feed with optional filters
+  - GET /api/v1-bonfire/accounts/:id/events - List a user's events
+  - GET /api/v1-bonfire/events/:id - Get event details
 
   All endpoints return Mastodon Status objects with Event attachments.
   """
@@ -96,7 +96,7 @@ defmodule Bonfire.Social.EventsApiTest do
 
       response =
         conn
-        |> get("/api/bonfire-v1/events/#{event.id}")
+        |> get("/api/v1-bonfire/events/#{event.id}")
         |> json_response(200)
         |> debug("Event format test response")
 
@@ -137,7 +137,7 @@ defmodule Bonfire.Social.EventsApiTest do
 
       response =
         conn
-        |> get("/api/bonfire-v1/timelines/events")
+        |> get("/api/v1-bonfire/timelines/events")
         |> json_response(200)
 
       debug(response, "Events timeline response")
@@ -160,7 +160,7 @@ defmodule Bonfire.Social.EventsApiTest do
 
       response =
         conn
-        |> get("/api/bonfire-v1/timelines/events?limit=3")
+        |> get("/api/v1-bonfire/timelines/events?limit=3")
         |> json_response(200)
 
       assert length(response) <= 3
@@ -173,7 +173,7 @@ defmodule Bonfire.Social.EventsApiTest do
 
       response =
         conn
-        |> get("/api/bonfire-v1/timelines/events?location_id=test_location_id")
+        |> get("/api/v1-bonfire/timelines/events?location_id=test_location_id")
         |> json_response(200)
 
       assert is_list(response)
@@ -190,7 +190,7 @@ defmodule Bonfire.Social.EventsApiTest do
 
       response =
         conn
-        |> get("/api/bonfire-v1/accounts/#{user.id}/events")
+        |> get("/api/v1-bonfire/accounts/#{user.id}/events")
         |> json_response(200)
 
       debug(response, "User events response")
@@ -210,7 +210,7 @@ defmodule Bonfire.Social.EventsApiTest do
 
       response =
         conn
-        |> get("/api/bonfire-v1/accounts/#{new_user.id}/events")
+        |> get("/api/v1-bonfire/accounts/#{new_user.id}/events")
         |> json_response(200)
 
       assert response == []
@@ -233,7 +233,7 @@ defmodule Bonfire.Social.EventsApiTest do
 
       response =
         conn
-        |> get("/api/bonfire-v1/events/#{event.id}")
+        |> get("/api/v1-bonfire/events/#{event.id}")
         |> json_response(200)
 
       debug(response, "Event details response")
@@ -254,7 +254,7 @@ defmodule Bonfire.Social.EventsApiTest do
     #   conn = masto_api_conn(user: user)
 
     #   conn
-    #   |> get("/api/bonfire-v1/events/#{Needle.UID.generate()}")
+    #   |> get("/api/v1-bonfire/events/#{Needle.UID.generate()}")
     #   |> json_response(404)
     # end
 
@@ -269,7 +269,7 @@ defmodule Bonfire.Social.EventsApiTest do
 
       response =
         conn
-        |> get("/api/bonfire-v1/events/#{event.id}")
+        |> get("/api/v1-bonfire/events/#{event.id}")
         |> json_response(200)
 
       # Location should be included
@@ -279,7 +279,7 @@ defmodule Bonfire.Social.EventsApiTest do
 
       response =
         conn
-        |> get("/api/bonfire-v1/timelines/events")
+        |> get("/api/v1-bonfire/timelines/events")
         |> json_response(200)
 
       result = List.first(response)
