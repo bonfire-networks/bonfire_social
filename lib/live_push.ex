@@ -180,11 +180,12 @@ defmodule Bonfire.Social.LivePush do
       e(opts, :notify, nil)
       |> debug("notify opt")
 
+    all_feed_ids = e(opts, :feed_ids, [])
+
     notify_feed_ids =
       cond do
         opt_notify == true ->
-          # used for Follows
-          e(opts, :feed_ids, [])
+          all_feed_ids
 
         notify_feeds = e(opt_notify, :notify_feeds, nil) || e(opts, :notify_feeds, nil) ->
           notify_feeds
