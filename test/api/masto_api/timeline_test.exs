@@ -372,7 +372,7 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
         |> post("/api/v1/notifications/clear")
         |> json_response(401)
 
-      assert response["error"] == "Unauthorized"
+      assert response["error"] == "You need to login first."
     end
   end
 
