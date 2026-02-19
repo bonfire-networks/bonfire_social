@@ -118,7 +118,7 @@ defmodule Bonfire.Social.MastoApi.ReportTest do
         |> post("/api/v1/reports", Jason.encode!(%{"account_id" => target.id}))
         |> json_response(401)
 
-      assert response["error"] == "Unauthorized"
+      assert response["error"] == "You need to login first."
     end
 
     test "allows reporting the same account again (idempotent)", %{conn: conn} do
@@ -215,7 +215,7 @@ defmodule Bonfire.Social.MastoApi.ReportTest do
         |> get("/api/v1/reports")
         |> json_response(401)
 
-      assert response["error"] == "Unauthorized"
+      assert response["error"] == "You need to login first."
     end
   end
 
@@ -285,7 +285,7 @@ defmodule Bonfire.Social.MastoApi.ReportTest do
         |> get("/api/v1/reports/#{flag.id}")
         |> json_response(401)
 
-      assert response["error"] == "Unauthorized"
+      assert response["error"] == "You need to login first."
     end
   end
 end

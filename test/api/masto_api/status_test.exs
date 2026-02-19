@@ -95,10 +95,10 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
         conn
         |> put_req_header("accept", "application/json")
         |> put_req_header("content-type", "application/json")
-        |> post("/api/v1/statuses", Jason.encode!(%{"status" => "Unauthorized"}))
+        |> post("/api/v1/statuses", Jason.encode!(%{"status" => "Just testing"}))
         |> json_response(401)
 
-      assert response["error"] == "Unauthorized"
+      assert response["error"] == "You need to login first."
     end
   end
 
@@ -334,7 +334,7 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
         |> put("/api/v1/statuses/#{post.id}", Jason.encode!(%{"status" => "Edited"}))
         |> json_response(401)
 
-      assert response["error"] == "Unauthorized"
+      assert response["error"] == "You need to login first."
     end
   end
 
@@ -404,7 +404,7 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
         |> delete("/api/v1/statuses/#{post.id}")
         |> json_response(401)
 
-      assert response["error"] == "Unauthorized"
+      assert response["error"] == "You need to login first."
     end
   end
 
@@ -628,7 +628,7 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
         |> post("/api/v1/statuses/#{post.id}/favourite")
         |> json_response(401)
 
-      assert response["error"] == "Unauthorized"
+      assert response["error"] == "You need to login first."
     end
   end
 
@@ -727,7 +727,7 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
         |> post("/api/v1/statuses/#{post.id}/reblog")
         |> json_response(401)
 
-      assert response["error"] == "Unauthorized"
+      assert response["error"] == "You need to login first."
     end
   end
 
@@ -804,7 +804,7 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
         |> post("/api/v1/statuses/#{post.id}/bookmark")
         |> json_response(401)
 
-      assert response["error"] == "Unauthorized"
+      assert response["error"] == "You need to login first."
     end
   end
 
@@ -927,7 +927,7 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
         |> post("/api/v1/statuses/#{post.id}/pin")
         |> json_response(401)
 
-      assert response["error"] == "Unauthorized"
+      assert response["error"] == "You need to login first."
     end
 
     test "can pin another user's boostable status", %{conn: conn} do
@@ -1026,7 +1026,7 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
         |> post("/api/v1/statuses/#{post.id}/unpin")
         |> json_response(401)
 
-      assert response["error"] == "Unauthorized"
+      assert response["error"] == "You need to login first."
     end
   end
 end
