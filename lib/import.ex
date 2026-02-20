@@ -280,7 +280,8 @@ defmodule Bonfire.Social.Import do
     do:
       job_enqueue([queue: :import], %{"op" => op, "user_id" => scope, "identifier" => identifier})
 
-  defp job_enqueue(spec, worker_args \\ []), do: job(spec, worker_args) |> Oban.insert()
+  defp job_enqueue(spec, worker_args \\ []),
+    do: job(spec, worker_args) |> Bonfire.Common.TestInstanceRepo.oban_insert()
 
   defp job(spec, worker_args \\ []), do: new(worker_args, spec)
 
