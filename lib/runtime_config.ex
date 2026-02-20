@@ -280,33 +280,34 @@ defmodule Bonfire.Social.RuntimeConfig do
           },
           icon: "ph:microscope-duotone"
         },
-        images: %{
-          name: l("Images"),
-          built_in: true,
-          description: l("All known images"),
-          filters: %FeedFilters{
-            media_types: ["image"]
-          },
-          icon: "ph:image-duotone"
-        },
-        videos: %{
-          name: l("Videos"),
-          built_in: true,
-          description: l("All known videos"),
-          filters: %FeedFilters{
-            media_types: ["video"]
-          },
-          icon: "ph:video-duotone"
-        },
-        audio: %{
-          name: l("Audio"),
-          built_in: true,
-          description: l("All known audio"),
-          filters: %FeedFilters{
-            media_types: ["audio"]
-          },
-          icon: "ph:waveform-duotone"
-        },
+        # TEMPORARILY DISABLED:
+        # images: %{
+        #   name: l("Images"),
+        #   built_in: true,
+        #   description: l("All known images"),
+        #   filters: %FeedFilters{
+        #     media_types: ["image"]
+        #   },
+        #   icon: "ph:image-duotone"
+        # },
+        # videos: %{
+        #   name: l("Videos"),
+        #   built_in: true,
+        #   description: l("All known videos"),
+        #   filters: %FeedFilters{
+        #     media_types: ["video"]
+        #   },
+        #   icon: "ph:video-duotone"
+        # },
+        # audio: %{
+        #   name: l("Audio"),
+        #   built_in: true,
+        #   description: l("All known audio"),
+        #   filters: %FeedFilters{
+        #     media_types: ["audio"]
+        #   },
+        #   icon: "ph:waveform-duotone"
+        # },
 
         # Hashtag feeds
         hashtag: %{
@@ -434,49 +435,50 @@ defmodule Bonfire.Social.RuntimeConfig do
           },
           icon: "ph:chats-circle-duotone"
         },
-        trending: %{
-          name: l("Trending"),
-          built_in: true,
-          description: l("Most boosted activities from the last week"),
-          filters: %FeedFilters{
-            feed_name: :trending,
-            exclude_activity_types: [:reply],
-            sort_by: :trending_score,
-            sort_order: :desc,
-            time_limit: 7
-          },
-          exclude_from_nav: false,
-          icon: "ph:trend-up-duotone",
-          assigns: [
-            page: "trending",
-            page_title: l("Trending"),
-            feedback_title: l("No trending posts yet"),
-            feedback_message: l("Posts need to be boosted to appear in trending")
-          ]
-        },
-        trending_links: %{
-          name: l("Trending links"),
-          built_in: true,
-          description: l("Most boosted posts with links"),
-          filters: %FeedFilters{
-            feed_name: :trending_links,
-            exclude_activity_types: [:reply, :boost],
-            media_types: [:link],
-            sort_by: :trending_score,
-            sort_order: :desc,
-            time_limit: 2,
-            show_objects_only_once: false
-          },
-          exclude_from_nav: false,
-          icon: "ph:newspaper-duotone",
-          assigns: [
-            page: "trending_links",
-            page_title: l("Trending links"),
-            feedback_title: l("No trending links yet"),
-            feedback_message: l("Share interesting links to see them here")
-            # hide_filters: true
-          ]
-        },
+        # TEMPORARILY DISABLED:
+        # trending: %{
+        #   name: l("Trending"),
+        #   built_in: true,
+        #   description: l("Most boosted activities from the last week"),
+        #   filters: %FeedFilters{
+        #     feed_name: :trending,
+        #     exclude_activity_types: [:reply],
+        #     sort_by: :trending_score,
+        #     sort_order: :desc,
+        #     time_limit: 7
+        #   },
+        #   exclude_from_nav: false,
+        #   icon: "ph:trend-up-duotone",
+        #   assigns: [
+        #     page: "trending",
+        #     page_title: l("Trending"),
+        #     feedback_title: l("No trending posts yet"),
+        #     feedback_message: l("Posts need to be boosted to appear in trending")
+        #   ]
+        # },
+        # trending_links: %{
+        #   name: l("Trending links"),
+        #   built_in: true,
+        #   description: l("Most boosted posts with links"),
+        #   filters: %FeedFilters{
+        #     feed_name: :trending_links,
+        #     exclude_activity_types: [:reply, :boost],
+        #     media_types: [:link],
+        #     sort_by: :trending_score,
+        #     sort_order: :desc,
+        #     time_limit: 2,
+        #     show_objects_only_once: false
+        #   },
+        #   exclude_from_nav: false,
+        #   icon: "ph:newspaper-duotone",
+        #   assigns: [
+        #     page: "trending_links",
+        #     page_title: l("Trending links"),
+        #     feedback_title: l("No trending links yet"),
+        #     feedback_message: l("Share interesting links to see them here")
+        #     # hide_filters: true
+        #   ]
+        # },
         local_media: %{
           name: l("Local Media"),
           built_in: true,
