@@ -504,11 +504,15 @@ defmodule Bonfire.Social.FeedLoader do
         # if per_media? do
         #   false
         # else
-        opts[:query_with_deferred_join] ||
-          Config.get([Bonfire.Social.Feeds, :query_with_deferred_join], true,
-            name: l("Use Deferred Joins"),
-            description: l("Technical setting for query performance optimization.")
-          )
+        # Respect explicit `false` (unlike `||` which treats false as falsy)
+        if(Keyword.has_key?(opts, :query_with_deferred_join),
+          do: opts[:query_with_deferred_join],
+          else:
+            Config.get([Bonfire.Social.Feeds, :query_with_deferred_join], true,
+              name: l("Use Deferred Joins"),
+              description: l("Technical setting for query performance optimization.")
+            )
+        )
         # end
       )
       |> debug("pagination opts")

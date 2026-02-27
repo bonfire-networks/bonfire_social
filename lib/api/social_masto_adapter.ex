@@ -71,6 +71,24 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         #{@media}
       }
     }
+    ... on Boost {
+      id
+      edge {
+        object {
+          __typename
+          ... on Post {
+            id
+            post_content {
+              #{@post_content}
+            }
+            #{@activity_in_object}
+            media {
+              #{@media}
+            }
+          }
+        }
+      }
+    }
     "
 
     # Activity fragment for feeds
