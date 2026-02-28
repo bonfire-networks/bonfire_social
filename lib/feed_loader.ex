@@ -2053,15 +2053,15 @@ defmodule Bonfire.Social.FeedLoader do
 
       iex> filters = %{feed_name: "remote"}
       iex> preloads_from_filters(filters) |> Enum.sort()
-      [:quote_tags, :with_creator, :with_media, :with_object_more, :with_object_peered, :with_replied, :with_reply_to, :with_subject]
+      [:quote_tags, :with_creator, :with_media, :with_object_more, :with_object_peered, :with_replied, :with_reply_to, :with_subject, :with_thread_post]
 
       iex> filters = %{subjects: ["alice"]}
       iex> preloads_from_filters(filters) |> Enum.sort()
-      [:quote_tags, :with_creator, :with_media, :with_object_more, :with_object_peered, :with_replied, :with_reply_to]
+      [:quote_tags, :with_creator, :with_media, :with_object_more, :with_object_peered, :with_replied, :with_reply_to, :with_thread_post]
 
       iex> filters = %{feed_name: "unknown"}
       iex> preloads_from_filters(filters) |> Enum.sort()
-      [:quote_tags, :with_creator, :with_media, :with_object_more, :with_object_peered, :with_replied, :with_reply_to, :with_subject]
+      [:quote_tags, :with_creator, :with_media, :with_object_more, :with_object_peered, :with_replied, :with_reply_to, :with_subject, :with_thread_post]
 
   """
   def preloads_from_filters(feed_filters, filter_rules \\ preloads_from_filters_rules()) do

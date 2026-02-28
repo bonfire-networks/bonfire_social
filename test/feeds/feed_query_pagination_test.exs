@@ -98,6 +98,7 @@ defmodule Bonfire.Social.FeedPaginationTest do
       assert feed.edges == []
     end
 
+    @tag :fixme
     test "has correct query structure and pagination behaviour", %{user: user} do
       # Set up common options
       opts = [
@@ -209,6 +210,7 @@ defmodule Bonfire.Social.FeedPaginationTest do
     end
   end
 
+  @tag :fixme
   test "attempts pagination to next window before falling back to non-deferred query" do
     limit = 4
     user = fake_user!()

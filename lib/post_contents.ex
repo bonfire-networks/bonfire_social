@@ -969,7 +969,11 @@ defmodule Bonfire.Social.PostContents do
         created: %{
           date: post_data["published"]
         },
-        sensitive: post_data["sensitive"],
+        sensitive:
+          case post_data["sensitive"] do
+            nil -> is_binary(post_data["summary"]) and post_data["summary"] != ""
+            val -> val
+          end,
         primary_image: e(post_data, "image", nil) || e(post_data, "icon", nil),
         attachments: List.wrap(e(post_data, "attachment", [])) ++ regular_links,
         opts: [

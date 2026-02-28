@@ -201,6 +201,7 @@ defmodule Bonfire.Social.Tags do
       # Reject hashtags and characters (@ mentions)
       Types.object_type(tag) != Bonfire.Tag.Hashtag and is_nil(e(tag, :character, nil))
     end)
+    |> repo().maybe_preload(:sensitive)
   end
 
   def list_tags_hashtags(post) do
