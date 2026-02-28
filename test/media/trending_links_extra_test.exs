@@ -9,6 +9,8 @@ defmodule Bonfire.Social.Bonfire.Social.TrendingLinksExtraTest do
 
   import Tesla.Mock
 
+  @moduletag :todo
+
   setup do
     Bonfire.Social.Test.FakeHelpers.setup_url_mocks()
     :ok

@@ -396,7 +396,10 @@ defmodule Bonfire.Social.Objects do
         on: post_content.id == object.id,
         as: :post_content
       )
-      |> proload(activity: [object: {"object_", [:post_content]}])
+      |> preload(
+        [activity: activity, object: object, post_content: post_content],
+        activity: {activity, object: {object, post_content: post_content}}
+      )
 
       # |> select([main_object, activity: activity, object: object, post_content: post_content],
       #   %{
@@ -437,15 +440,17 @@ defmodule Bonfire.Social.Objects do
 
     locales = List.wrap(locales)
 
-    # FIXME: still shows untranslated posts
     query
     # |> proload(activity: [object: {"object_", [:post_content]}:post_content])
     |> select_preferred_language(locales)
     |> where(
       [post_content: post_content],
-      # or not is_nil(post_content.translation)
-      is_nil(post_content.id) or fragment("? IS NOT NULL", post_content.translation)
-      # not is_nil(selected_as(:post_content_translation))
+      # Cast the translation jsonb value to text and uses NULLIF to convert the string 'null' (which is what 'null'::jsonb casts to as text) into SQL NULL. So that:
+      # - A post with a real translation → NULLIF('{"summary":"Hola mundo",...}', 'null') → non-null → IS NOT NULL → TRUE → included
+      # - A post without translation → NULLIF('null', 'null') → NULL → IS NOT NULL → FALSE → excluded
+      # - A post with no post_content at all → is_nil(post_content.id) → TRUE → included (no filtering needed)
+      is_nil(post_content.id) or
+        fragment("NULLIF(?::text, 'null') IS NOT NULL", post_content.translation)
     )
 
     # |> where([post_content: post_content], not is_nil(translated_as_override(PostContent, post_content, locales))) # NOTE: we could do a where clause here, but better to just check what we selected in select_preferred_language

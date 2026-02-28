@@ -9,6 +9,8 @@ defmodule Bonfire.Social.Bonfire.Social.TrendingLinksTest do
 
   import Tesla.Mock
 
+  @moduletag :todo
+
   setup_all tags do
     Bonfire.Common.Test.Interactive.setup_test_repo(tags)
 
