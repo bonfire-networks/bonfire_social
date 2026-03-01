@@ -77,6 +77,8 @@ defmodule Bonfire.Social.EventsApiTest do
     Map.put(event_object, "location", %{
       "type" => "Place",
       "id" => Bonfire.Common.URIs.canonical_url(geolocation),
+      "pointer_id" => geolocation.id,
+      "pointer_type" => "Bonfire.Geolocate.Geolocation",
       "name" => geolocation.name,
       "address" => Map.get(geolocation, :mappable_address, nil),
       "latitude" => geolocation.lat,

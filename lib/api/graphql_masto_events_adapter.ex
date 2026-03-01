@@ -118,38 +118,22 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
 
   def event_to_masto_status(_), do: nil
 
-  defp build_event_attachment(
-         id,
-         start_time,
-         end_time,
-         display_end_time,
-         timezone,
-         join_mode,
-         json,
-         graphql_location
-       ) do
-    event_obj = get_event_object_from_json(json)
+  defp build_event_attachment(event_obj, event_data) do
+    start_time = event_data["start_time"]
+    end_time = event_data["end_time"]
 
     %{
-      "id" => id,
+      "id" => event_data["id"],
+      "name" => event_obj["name"],
       "start_time" => start_time,
       "end_time" => end_time,
-      "display_end_time" => display_end_time,
-      "timezone" => timezone,
-
-      # Location (if available)
-      # "location_id" => location_id,
-      "location" => graphql_location,
-
-      # Virtual locations
+      "display_end_time" => event_data["display_end_time"],
+      "timezone" => event_data["timezone"],
+      "location" => event_data["location"],
       "virtual_locations" => event_obj["virtualLocations"] || [],
-
-      # Organizers (if available)
       "organizers" => build_organizers(event_obj),
-
-      # Status and join mode
       "status" => determine_event_status(start_time, end_time),
-      "join_mode" => join_mode || "free"
+      "join_mode" => event_data["join_mode"] || "free"
     }
     |> flood("Built event attachment")
   end
@@ -158,9 +142,40 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
   defp get_event_object_from_json(%{"type" => "Event"} = event), do: event
   defp get_event_object_from_json(_), do: %{}
 
-  defp extract_location_id(event_obj) do
-    event_obj["location"]["id"] || event_obj["location_id"] || event_obj["location"]
+  # Extract location from the nested_object injected by preload_nested_objects
+  defp extract_preloaded_location(%{"location" => %{"nested_object" => %{} = geo}}) do
+    # Virtual fields lat/long may not be populated from DB load; extract from geom
+    {lat, long} =
+      case geo do
+        %{geom: %Geo.Point{coordinates: {lat, long}}} -> {lat, long}
+        %{lat: lat, long: long} when not is_nil(lat) -> {lat, long}
+        _ -> {nil, nil}
+      end
+
+    %{
+      "id" => Map.get(geo, :id),
+      "name" => Map.get(geo, :name),
+      "address" => Map.get(geo, :mappable_address),
+      "lat" => lat,
+      "long" => long,
+      "note" => Map.get(geo, :note)
+    }
   end
+
+  # Fallback: extract location from raw JSON (when pointer wasn't resolved)
+  defp extract_preloaded_location(%{"location" => %{"name" => name} = loc})
+       when is_binary(name) do
+    %{
+      "id" => loc["pointer_id"] || loc["id"],
+      "name" => name,
+      "address" => loc["address"] || loc["mappableAddress"],
+      "lat" => loc["latitude"] || loc["lat"],
+      "long" => loc["longitude"] || loc["long"] || loc["lng"],
+      "note" => loc["note"]
+    }
+  end
+
+  defp extract_preloaded_location(_), do: nil
 
   defp build_organizers(%{"organizer" => organizer}) when is_list(organizer) do
     Enum.map(organizer, &format_organizer/1)
@@ -213,6 +228,10 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
 
   def build_event_status(activity, opts) do
     object = get_field(activity, :object)
+
+    # Preload nested objects (resolves pointer_id references like location)
+    object = Bonfire.Social.APActivities.preload_nested_objects(object, opts)
+
     json = get_field(object, :json)
     id = get_field(activity, :object_id) || get_field(activity, :id)
 
@@ -240,28 +259,27 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
       bookmarked_by_me: get_field(activity, :bookmarked_by_me) || false
     }
 
-    # Build base status
     base_status = Bonfire.API.MastoCompat.Mappers.Status.build_regular_status(context, opts)
 
-    # Build and attach event data directly from event_obj
+    location = extract_preloaded_location(event_obj)
+
     event_attachment =
-      build_event_attachment(
-        id,
-        event_obj["startTime"],
-        event_obj["endTime"],
-        parse_boolean(event_obj["displayEndTime"]),
-        event_obj["timezone"],
-        event_obj["joinMode"] || "free",
-        json,
-        get_field(object, :location)
-      )
+      build_event_attachment(event_obj, %{
+        "id" => id,
+        "start_time" => event_obj["startTime"],
+        "end_time" => event_obj["endTime"],
+        "display_end_time" => parse_boolean(event_obj["displayEndTime"]),
+        "timezone" => event_obj["timezone"],
+        "join_mode" => event_obj["joinMode"] || "free",
+        "location" => location
+      })
 
     base_status
+    |> Map.put("name", event_obj["name"])
     |> Map.put("event", event_attachment)
     |> then(&Helpers.validate_and_return(&1, Schemas.Status))
   end
 
-  # Single source of truth for building status from event data
   defp build_status_from_event_data(event, activity_meta, opts) do
     id = get_field(event, "id")
     json = get_field(event, "json")
@@ -285,7 +303,6 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
           _ -> nil
         end
 
-    # Build context map for status mapper
     context = %{
       id: id,
       object_id: id,
@@ -307,23 +324,24 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
       bookmarked_by_me: activity_meta["bookmarked_by_me"] || false
     }
 
-    # Build base status using existing status mapper
     base_status = Bonfire.API.MastoCompat.Mappers.Status.build_regular_status(context, opts)
 
-    # Build and attach event data
+    event_obj = get_event_object_from_json(json)
+
     event_attachment =
-      build_event_attachment(
-        id,
-        get_field(event, "startTime"),
-        get_field(event, "endTime"),
-        get_field(event, "displayEndTime"),
-        get_field(event, "timezone"),
-        get_field(event, "joinMode"),
-        json,
-        get_field(event, :location)
-      )
+      build_event_attachment(event_obj, %{
+        "id" => id,
+        "start_time" => get_field(event, "startTime"),
+        "end_time" => get_field(event, "endTime"),
+        "display_end_time" => get_field(event, "displayEndTime"),
+        "timezone" => get_field(event, "timezone"),
+        "join_mode" => get_field(event, "joinMode"),
+        "location" => get_field(event, :location)
+      })
 
     base_status
+    |> Map.put("name", get_field(event, "name"))
     |> Map.put("event", event_attachment)
+    |> then(&Helpers.validate_and_return(&1, Schemas.Status))
   end
 end
