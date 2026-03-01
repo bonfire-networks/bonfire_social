@@ -130,7 +130,7 @@ defmodule Bonfire.Social.Media do
       },
       opts
     )
-    |> flood("queried trending links")
+    |> debug("queried trending links")
   rescue
     e ->
       err(e, "Error fetching trending links")
@@ -157,7 +157,7 @@ defmodule Bonfire.Social.Media do
     qualifying_activities_query =
       qualifying_activities_query
       |> repo().make_subquery()
-      |> flood("initial subquery")
+      |> debug("initial subquery")
       |> projoin(:activity)
       |> select([activity: activity], %{
         id: max(activity.id),
@@ -167,7 +167,7 @@ defmodule Bonfire.Social.Media do
       |> maybe_preload_and_select_boosts_metric(sort_by in [:boost_count, :trending_score])
       |> maybe_preload_and_select_likes_metric(sort_by in [:like_count, :trending_score])
       |> maybe_preload_and_select_replies_metric(sort_by in [:reply_count, :trending_score])
-      |> flood("qualifying_activities_query")
+      |> debug("qualifying_activities_query")
 
     # Start from Media table and join the qualifying activities
     from(media in Bonfire.Files.Media,
@@ -199,7 +199,7 @@ defmodule Bonfire.Social.Media do
     #     opts[:preload],
     #     opts
     #   )
-    |> flood("media query before calculating metrics")
+    |> debug("media query before calculating metrics")
     # Conditionally add expensive metrics
     # |> reusable_join(
     #       :left,
@@ -215,15 +215,15 @@ defmodule Bonfire.Social.Media do
     |> Bonfire.Social.Activities.query_order(sort_by, sort_order, :newest_activity_id)
     # |> apply_media_filters(filters, opts)
     # boundarise
-    |> flood("media aggregated query")
+    |> debug("media aggregated query")
     |> repo().print_sql("media aggregated query SQL")
   end
 
   #   defp raise_debug_query(query) do
   #     query
-  #     |> flood("query for debug")
+  #     |> debug("query for debug")
   #     |> repo().all()
-  #     |> flood("fetched data for debug")
+  #     |> debug("fetched data for debug")
 
   #     raise "Debugging query ^"
   # end

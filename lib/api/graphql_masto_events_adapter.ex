@@ -135,7 +135,7 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
       "status" => determine_event_status(start_time, end_time),
       "join_mode" => event_data["join_mode"] || "free"
     }
-    |> flood("Built event attachment")
+    |> debug("Built event attachment")
   end
 
   defp get_event_object_from_json(%{"object" => %{"type" => "Event"} = event}), do: event

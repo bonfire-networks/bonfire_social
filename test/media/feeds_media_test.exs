@@ -69,7 +69,7 @@ defmodule Bonfire.Social.Feeds.MediaTest do
         # Check media type before proceeding
         if object do
           assert %Bonfire.Files.Media{media_type: media_type} = object
-          flood(media_type, "media type for preset #{preset}")
+          debug(media_type, "media type for preset #{preset}")
         end
 
         Map.merge(params, %{
@@ -150,7 +150,7 @@ defmodule Bonfire.Social.Feeds.MediaTest do
             filters =
               FeedLoader.parameterize_filters(filters, parameterized || %{}, opts)
               |> Map.put(:sort_by, sort_by)
-              |> flood("parameterized_filters for #{preset}")
+              |> debug("parameterized_filters for #{preset}")
 
             feed =
               FeedLoader.feed(:custom, filters, opts)

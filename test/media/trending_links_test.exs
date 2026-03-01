@@ -82,7 +82,7 @@ defmodule Bonfire.Social.Bonfire.Social.TrendingLinksTest do
 
     Bonfire.Social.Objects.ulid_for_x_days_ago(7)
     |> DatesTimes.to_date_time()
-    |> flood("Time limit datetime")
+    |> debug("Time limit datetime")
 
     %{
       users: [user1, user2, user3],
@@ -94,13 +94,13 @@ defmodule Bonfire.Social.Bonfire.Social.TrendingLinksTest do
       },
       results:
         Bonfire.Social.Media.trending_links()
-        |> flood("shared fixture trending links results"),
+        |> debug("shared fixture trending links results"),
       results_30days:
         Bonfire.Social.Media.trending_links(time_limit: 30)
-        |> flood("Results with 30-day time limit"),
+        |> debug("Results with 30-day time limit"),
       results_by_trending_score:
         Bonfire.Social.Media.trending_links(sort_by: :trending_score)
-        |> flood("Results sorted by trending_score")
+        |> debug("Results sorted by trending_score")
     }
   end
 
@@ -219,21 +219,21 @@ defmodule Bonfire.Social.Bonfire.Social.TrendingLinksTest do
     # Default is 7 days, old_post is 10 days old - should be filtered out
     # results =
     # Bonfire.Social.Media.trending_links(time_limit: 7)
-    # |> flood("Results with 7-day time limit")
+    # |> debug("Results with 7-day time limit")
 
     old_links = Enum.filter(results, &String.contains?(&1.path, "old"))
 
     # Debug: print ULIDs and their decoded timestamps
-    # flood("\nULID debug for old post and trending results:")
+    # debug("\nULID debug for old post and trending results:")
     # old_post = posts.old_post
     # old_ulid = old_post.id
     # old_link = old_links
-    # |> flood("Old links found")
+    # |> debug("Old links found")
     # |> List.first()
 
     # old_link.newest_activity_id
     # |> DatesTimes.to_date_time()
-    # |> flood("Old link datetime")
+    # |> debug("Old link datetime")
 
     assert length(old_links) == 0
 

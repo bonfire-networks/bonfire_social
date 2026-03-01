@@ -102,7 +102,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         resolve(fn ap_activity, _, _ ->
           # Location is stored in json.object.location with nested_object after preload_nested_objects
           location =
-            get_in(get_event_object(ap_activity) |> flood("json_find_location"), ["location"])
+            get_in(get_event_object(ap_activity) |> debug("json_find_location"), ["location"])
 
           case location do
             # preload_nested_objects injects the loaded struct under "nested_object"

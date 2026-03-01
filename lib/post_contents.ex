@@ -337,7 +337,7 @@ defmodule Bonfire.Social.PostContents do
       # workaround for Pixelfed appending ?src=hash to hashtag URLs in content
       Map.get(map, String.replace(href, "?src=hash", ""))
     end)
-    |> Text.strip_trailing_element("p", fn
+    |> Text.mark_trailing_element("p", "invisible", fn
       {"a", attrs, _} ->
         case List.keyfind(attrs, "href", 0) do
           {"href", "/hashtag/" <> _} -> true
