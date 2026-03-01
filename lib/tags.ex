@@ -201,6 +201,29 @@ defmodule Bonfire.Social.Tags do
       # Reject hashtags and characters (@ mentions)
       Types.object_type(tag) != Bonfire.Tag.Hashtag and is_nil(e(tag, :character, nil))
     end)
+    |> repo().maybe_preload(:sensitive)
+  end
+
+  @doc "Partitions tags into `{quotes, hashtags}` in a single pass."
+  def tags_quotes_and_hashtags(post) do
+    post
+    # |> repo().maybe_preload(tags: [:character])
+    |> e(:tags, [])
+    |> Enum.reduce({[], []}, fn tag, {quotes, hashtags} ->
+      cond do
+        Types.object_type(tag) == Bonfire.Tag.Hashtag ->
+          {quotes, [tag | hashtags]}
+
+        is_nil(e(tag, :character, nil)) ->
+          {[tag | quotes], hashtags}
+
+        true ->
+          {quotes, hashtags}
+      end
+    end)
+    |> then(fn {quotes, hashtags} ->
+      {repo().maybe_preload(quotes, :sensitive), repo().maybe_preload(hashtags, :named)}
+    end)
   end
 
   def list_tags_hashtags(post) do

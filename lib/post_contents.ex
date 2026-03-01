@@ -333,7 +333,20 @@ defmodule Bonfire.Social.PostContents do
   defp do_process_remote_input(input, replacement_urls) do
     input
     |> normalise_input(false, :html)
-    |> Text.replace_links(replacement_urls)
+    |> Text.replace_links(replacement_urls, fn map, href ->
+      # workaround for Pixelfed appending ?src=hash to hashtag URLs in content
+      Map.get(map, String.replace(href, "?src=hash", ""))
+    end)
+    |> Text.strip_trailing_element("p", fn
+      {"a", attrs, _} ->
+        case List.keyfind(attrs, "href", 0) do
+          {"href", "/hashtag/" <> _} -> true
+          _ -> false
+        end
+
+      _ ->
+        false
+    end)
     |> debug("replaced links #{inspect(replacement_urls)}")
 
     # |> nomalise_local_links(:html)
@@ -865,7 +878,7 @@ defmodule Bonfire.Social.PostContents do
     hashtags =
       for %{"type" => "Hashtag", "name" => name} = tag <- tags do
         with {:ok, hashtag} <- Bonfire.Tag.get_or_create_hashtag(name) do
-          {tag["href"] || name, hashtag}
+          {String.downcase(tag["href"] || name), hashtag}
         else
           none ->
             warn(none, "could not create Hashtag for #{tag["name"]}")
@@ -969,7 +982,11 @@ defmodule Bonfire.Social.PostContents do
         created: %{
           date: post_data["published"]
         },
-        sensitive: post_data["sensitive"],
+        sensitive:
+          case post_data["sensitive"] do
+            nil -> is_binary(post_data["summary"]) and post_data["summary"] != ""
+            val -> val
+          end,
         primary_image: e(post_data, "image", nil) || e(post_data, "icon", nil),
         attachments: List.wrap(e(post_data, "attachment", [])) ++ regular_links,
         opts: [
