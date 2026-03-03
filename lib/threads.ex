@@ -5,7 +5,7 @@ defmodule Bonfire.Social.Threads do
   Provides functionality for managing threaded discussions, including creating replies, querying threads, and handling participants.
 
   It is the context module for `Bonfire.Data.Social.Replied` which contains these fields:
-  - id: object 
+  - id: object
   - reply_to: what object or activity are we replying to
   - thread: what discussion thread we're in, if any (usually same as the ID of the original object that started the thread)
   - direct_replies_count: number of direct replies to this object (automatically counted and updated)
@@ -376,7 +376,7 @@ defmodule Bonfire.Social.Threads do
     end
   end
 
-  # Try to find the thread_id for a comment 
+  # Try to find the thread_id for a comment
   def fetch_thread_id(comment_id, _opts \\ []) do
     base_query()
     |> query_filter(id: comment_id)
@@ -427,15 +427,74 @@ defmodule Bonfire.Social.Threads do
       iex> list_participants(activity, "thread_123", limit: 10)
       [%{id: "user1", ...}, %{id: "user2", ...}]
   """
+
+  @doc """
+  Batch-loads participants for multiple threads in a single query,
+  returning a map of `%{thread_id => [participant_subjects]}`.
+  """
+  def list_participants_for_threads(edges, opts \\ []) do
+    opts = to_options(opts)
+    limit_per_thread = opts[:limit] || 5
+
+    all_thread_ids =
+      Enum.flat_map(edges, fn %{activity: activity} ->
+        thread_id = e(activity, :replied, :thread_id, nil)
+
+        if thread_id do
+          [
+            thread_id,
+            id(e(activity, :object_id, nil) || e(activity, :object, nil)),
+            id(activity)
+          ]
+          |> Enum.reject(&is_nil/1)
+        else
+          []
+        end
+      end)
+      |> Enum.uniq()
+
+    # Build a map of thread_id => [activity subjects from edges]
+    edge_subjects_by_thread =
+      Enum.group_by(
+        edges,
+        &e(&1, :activity, :replied, :thread_id, nil),
+        &e(&1, :activity, :subject, nil)
+      )
+
+    fetched_by_thread =
+      if all_thread_ids != [] do
+        fetch_participants(all_thread_ids,
+          current_user: current_user(opts),
+          limit: limit_per_thread * length(edges),
+          exclude_table_ids: default_exclude_table_ids(),
+          skip_boundary_check: opts[:skip_boundary_check]
+        )
+        |> e(:edges, [])
+        |> Enum.group_by(
+          &e(&1, :thread_id, nil),
+          &e(&1, :activity, :subject, nil)
+        )
+      else
+        %{}
+      end
+
+    # Merge fetched participants + edge subjects, dedup, take limit
+    Map.new(Enum.uniq(Map.keys(fetched_by_thread) ++ Map.keys(edge_subjects_by_thread)), fn thread_id ->
+      {thread_id,
+       (Map.get(fetched_by_thread, thread_id, []) ++
+          Map.get(edge_subjects_by_thread, thread_id, []))
+       |> filter_empty([])
+       |> Enum.uniq_by(&(e(&1, :character, :id, nil) || id(&1)))
+       |> Enum.take(limit_per_thread)}
+    end)
+  end
+
   def list_participants(activity_or_object, thread_or_object_id \\ nil, opts \\ []) do
     opts = to_options(opts)
     current_user = current_user(opts)
     limit = opts[:limit] || 500
 
-    # no groups or hashtags
-    exclude_table_ids =
-      [Bonfire.Tag.Hashtag, Bonfire.Classify.Category]
-      |> Bonfire.Common.Types.table_types()
+    exclude_table_ids = default_exclude_table_ids()
 
     activity_or_object =
       Activities.activity_preloads(
@@ -491,6 +550,11 @@ defmodule Bonfire.Social.Threads do
     # |> debug("participants")
   end
 
+  defp default_exclude_table_ids do
+    [Bonfire.Tag.Hashtag, Bonfire.Classify.Category]
+    |> Bonfire.Common.Types.table_types()
+  end
+
   @doc "List participants in a thread (depending on user's boundaries)"
   defp fetch_participants(thread_id, opts \\ [])
 
@@ -540,7 +604,7 @@ defmodule Bonfire.Social.Threads do
 
   #   type_context.count(
   #     [in_thread: {thread_id, &filter/3}],
-  #     opts 
+  #     opts
   #   )
   # end
   # def count_edges(_, _, _), do: []
@@ -666,7 +730,7 @@ defmodule Bonfire.Social.Threads do
     )
     # preloaded after so we can get more than 1
     # |> repo().maybe_preload(
-    #   # :pinned, 
+    #   # :pinned,
     #   # FIXME: this should happen via `Activities.activity_preloads`
     #   activity: [:media]
     # )
@@ -791,7 +855,7 @@ defmodule Bonfire.Social.Threads do
          Extend.module_enabled?(Bonfire.Social.Answers) do
       pin_table_id = Bonfire.Common.Types.table_id(Pin)
       # pinned_query = from p in Edge, where: p.subject_id == ^thread_id
-      # and p.table_id == ^pin_table_id 
+      # and p.table_id == ^pin_table_id
 
       query
       |> join(:left, [replied], pinned in Edge,
@@ -812,7 +876,7 @@ defmodule Bonfire.Social.Threads do
   #   defp query_order(query, :latest_reply, sort_order, _with_pins?) do
   #     #  query = query
   #     #   |> select([replied], %{
-  #     #  replied | path_depth: fragment("array_upper(?, 1) as path_depth", replied.path) 
+  #     #  replied | path_depth: fragment("array_upper(?, 1) as path_depth", replied.path)
   #     #})
   #     if sort_order == :asc do
   #       order_by(
@@ -975,7 +1039,7 @@ defmodule Bonfire.Social.Threads do
   end
 
   @doc """
-  Arranges replies. 
+  Arranges replies.
 
   TODOC: how is it different than `arrange_replies_tree/2`?
 
