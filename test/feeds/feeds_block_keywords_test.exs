@@ -1,5 +1,5 @@
 defmodule Bonfire.Social.FeedsBlockKeywordsTest do
-  use Bonfire.Social.DataCase, async: true
+  use Bonfire.Social.DataCase, async: false
   use Bonfire.Common.Utils
 
   alias Bonfire.Social.FeedLoader

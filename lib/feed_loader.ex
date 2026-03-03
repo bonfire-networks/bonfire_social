@@ -1532,7 +1532,7 @@ defmodule Bonfire.Social.FeedLoader do
       else
         a_body =
           e(fi.activity, :object, :post_content, :html_body, nil)
-          |> debug("body in feed")
+          |> debug("checking body in feed")
 
         if(
           a_body && q_body &&
@@ -1542,17 +1542,15 @@ defmodule Bonfire.Social.FeedLoader do
       end
     end) ||
       (
-        io_inspect(
-          feed
-          |> Enum.map(fn fi ->
-            # e(fi, :activity, :object, nil) ||
-            e(fi, :activity, :object, :post_content, :html_body, nil) ||
-              e(fi, :activity, :object, :post_content, :name, nil) ||
-              e(fi, :activity, :object, nil) ||
-              e(fi, :activity, nil) || fi
-          end),
-          "object `#{q_body}` with ID `#{q_id}` not found in feed containing"
-        )
+        feed
+        |> Enum.map(fn fi ->
+          # e(fi, :activity, :object, nil) ||
+          e(fi, :activity, :object, :post_content, :html_body, nil) ||
+            e(fi, :activity, :object, :post_content, :name, nil) ||
+            e(fi, :activity, :object, nil) ||
+            e(fi, :activity, nil) || fi
+        end)
+        |> debug("object `#{q_body}` with ID `#{q_id}` not found in feed containing")
 
         false
       )
@@ -1580,8 +1578,8 @@ defmodule Bonfire.Social.FeedLoader do
             feed_contains?(result, object, opts)
 
           other ->
-            io_inspect(other, "expected a list of results from feed_contains?")
             other
+            #  |> io_inspect("expected a list of results from feed_contains?")
         end
     end
   end
@@ -1626,7 +1624,7 @@ defmodule Bonfire.Social.FeedLoader do
     case feed_contains_query(feed_name, filters, opts) do
       %Ecto.Query{} = query ->
         query
-        |> io_inspect("feed_contains_query")
+        # |> io_inspect("feed_contains_query")
         |> repo().many()
 
       e ->

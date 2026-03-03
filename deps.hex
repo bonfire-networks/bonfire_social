@@ -1,7 +1,6 @@
 # paper_trail = "~> 1.1.2"
 nimble_csv = "~> 1.2"
 faker = "~> 0.14" # fake data generation
-= "~> 0.3"
 jason = "~> 1.0"
 
 uniq = "~> 0.6"
