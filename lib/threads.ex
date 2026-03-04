@@ -479,14 +479,17 @@ defmodule Bonfire.Social.Threads do
       end
 
     # Merge fetched participants + edge subjects, dedup, take limit
-    Map.new(Enum.uniq(Map.keys(fetched_by_thread) ++ Map.keys(edge_subjects_by_thread)), fn thread_id ->
-      {thread_id,
-       (Map.get(fetched_by_thread, thread_id, []) ++
-          Map.get(edge_subjects_by_thread, thread_id, []))
-       |> filter_empty([])
-       |> Enum.uniq_by(&(e(&1, :character, :id, nil) || id(&1)))
-       |> Enum.take(limit_per_thread)}
-    end)
+    Map.new(
+      Enum.uniq(Map.keys(fetched_by_thread) ++ Map.keys(edge_subjects_by_thread)),
+      fn thread_id ->
+        {thread_id,
+         (Map.get(fetched_by_thread, thread_id, []) ++
+            Map.get(edge_subjects_by_thread, thread_id, []))
+         |> filter_empty([])
+         |> Enum.uniq_by(&(e(&1, :character, :id, nil) || id(&1)))
+         |> Enum.take(limit_per_thread)}
+      end
+    )
   end
 
   def list_participants(activity_or_object, thread_or_object_id \\ nil, opts \\ []) do
