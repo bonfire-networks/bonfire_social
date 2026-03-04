@@ -459,7 +459,7 @@ defmodule Bonfire.Social.Requests do
            ActivityPub.Actor.get_cached(pointer: subject),
          {:ok, accept_to_actor} <-
            ActivityPub.Actor.get_cached(pointer: accept_to),
-         {:ok, _} <-
+         {:ok, accept_activity} <-
            ActivityPub.accept(%{
              actor: subject_actor,
              to: [accept_to_actor.data],
@@ -467,7 +467,11 @@ defmodule Bonfire.Social.Requests do
              local: true
            })
            |> debug("accept_done") do
-      :ok
+      # FEP-044f: return QuoteAuthorization URL from Accept's result if present
+      case accept_activity do
+        %{data: %{"result" => result}} when is_binary(result) -> {:ok, result}
+        _ -> :ok
+      end
     else
       true ->
         debug("accept_to is local, so we don't need to federate the accept")

@@ -752,38 +752,12 @@ defmodule Bonfire.Social.PostContents do
       |> repo().maybe_preload(:named)
       |> debug("include_as_hashtags")
 
-    quoted_objects =
-      Bonfire.Social.Tags.list_tags_quote(post)
-      |> debug("include_as_quotes")
-
     %{primary_image: primary_image, images: images, links: _links} =
       Bonfire.Files.split_media_by_type(e(post, :media, nil))
       |> debug("media_splits")
 
-    # Look up QuoteAuthorization for any quoted objects
-    {primary_quote, quote_authorization} =
-      case quoted_objects do
-        [first_quote | _] ->
-          quoted_object_ap_id = Bonfire.Common.URIs.canonical_url(first_quote)
-          quote_post_ap_id = Bonfire.Common.URIs.canonical_url(post)
-
-          # Try to find existing QuoteAuthorization
-          {
-            quoted_object_ap_id,
-            case ActivityPub.quote_authorization(actor, quoted_object_ap_id, quote_post_ap_id) do
-              {:ok, %{data: %{"type" => "QuoteAuthorization", "id" => id}}} ->
-                id
-
-              e ->
-                err(e, "error looking up or creating QuoteAuthorization")
-                nil
-            end
-          }
-
-        [] ->
-          {nil, nil}
-      end
-      |> debug("quote_and_QuoteAuthorization")
+    # Quote-related fields (quote, quoteAuthorization, and Link tags)
+    {quote_fields, quote_tags} = Bonfire.Social.Quotes.ap_quote_fields(actor, post)
 
     %{
       "type" => "Note",
@@ -813,18 +787,6 @@ defmodule Bonfire.Social.PostContents do
         maybe_apply(Bonfire.Files, :ap_publish_activity, [images], fallback_return: nil),
       "inReplyTo" => reply_to,
       "context" => context,
-      # Add Mastodon-style quote field for compatibility
-      "quote" => primary_quote,
-      "quoteAuthorization" => quote_authorization,
-      # # Add quote objects as Link tags with proper rel value
-      #     Enum.map(links, fn link ->
-      #       %{
-      #         "href" => e(link, :path, nil),
-      #         "name" => Bonfire.Files.Media.media_label(link),
-      #         "mediaType" => e(link, :metadata, "content_type", nil) || e(link, :media_type, nil),
-      #         "type" => "Link"
-      #       }
-      #     end) ++
       "tag" =>
         (Enum.map(mentions, fn actor ->
            %{
@@ -842,17 +804,10 @@ defmodule Bonfire.Social.PostContents do
                }
              end
            end) ++
-           Enum.map(quoted_objects, fn quoted_object ->
-             %{
-               "href" => Bonfire.Common.URIs.canonical_url(quoted_object),
-               "type" => "Link",
-               "rel" => "https://misskey-hub.net/ns#_misskey_quote",
-               "mediaType" =>
-                 "application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\""
-             }
-           end))
+           quote_tags)
         |> Enum.reject(&is_nil/1)
     }
+    |> Map.merge(quote_fields)
     |> Enum.filter(fn {_, v} -> not is_nil(v) end)
     |> Enum.into(%{})
     |> debug("prepared outgoing AP Note object")
@@ -943,60 +898,37 @@ defmodule Bonfire.Social.PostContents do
       |> debug("incoming mentions")
 
     # Handle quote posts and regular links separately
-    {quote_tags, regular_links} =
-      for %{"type" => "Link", "href" => url} = tag <- tags, reduce: {[], []} do
-        {quotes, links} ->
-          case tag["rel"] do
-            # All quote formats are now standardized as Link tags with quote-related rel values
-            "https://misskey-hub.net/ns#_misskey_quote" ->
-              case Bonfire.Federate.ActivityPub.AdapterUtils.get_or_fetch_and_create_by_uri(url) do
-                {:ok, quoted_object} ->
-                  debug(quoted_object, "fetched quoted object for link tag")
-                  {[quoted_object | quotes], links}
+    {quote_tags, regular_links} = Bonfire.Social.Quotes.ap_extract_quote_tags(tags)
 
-                e ->
-                  error(e, "could not fetch quoted object from #{url}")
-                  {quotes, links}
-              end
-
-            # Regular link
-            _ ->
-              {quotes, [tag | links]}
-          end
-      end
-      |> debug("separated quote tags and regular links")
-
-    debug(
-      %{
-        local: false,
-        canonical_url: nil,
-        mentions: mentions,
-        hashtags: hashtags,
-        # Add quote tags here
-        tags: quote_tags,
-        post_content: %{
-          name: post_data["name"],
-          summary: post_data["summary"],
-          html_body: post_data["content"]
-        },
-        created: %{
-          date: post_data["published"]
-        },
-        sensitive:
-          case post_data["sensitive"] do
-            nil -> is_binary(post_data["summary"]) and post_data["summary"] != ""
-            val -> val
-          end,
-        primary_image: e(post_data, "image", nil) || e(post_data, "icon", nil),
-        attachments: List.wrap(e(post_data, "attachment", [])) ++ regular_links,
-        opts: [
-          emoji: e(post_data, "emoji", nil),
-          do_not_strip_html: e(post_data, "source", "mediaType", nil) == "text/x.misskeymarkdown",
-          parse_remote_links: regular_links == []
-        ]
+    %{
+      local: false,
+      canonical_url: nil,
+      mentions: mentions,
+      hashtags: hashtags,
+      # Add quote tags here
+      tags: quote_tags,
+      post_content: %{
+        name: post_data["name"],
+        summary: post_data["summary"],
+        html_body: post_data["content"]
       },
-      "remote post attrs"
-    )
+      created: %{
+        date: post_data["published"]
+      },
+      sensitive:
+        case post_data["sensitive"] do
+          nil -> is_binary(post_data["summary"]) and post_data["summary"] != ""
+          val -> val
+        end,
+      primary_image: e(post_data, "image", nil) || e(post_data, "icon", nil),
+      attachments: List.wrap(e(post_data, "attachment", [])) ++ regular_links,
+      opts: [
+        emoji: e(post_data, "emoji", nil),
+        do_not_strip_html: e(post_data, "source", "mediaType", nil) == "text/x.misskeymarkdown",
+        parse_remote_links: regular_links == []
+      ]
+    }
+    |> debug("remote post attrs")
   end
 
   def ap_receive_update(

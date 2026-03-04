@@ -119,7 +119,7 @@ defmodule Bonfire.Social.Quotes do
       |> repo().maybe_preload(created: [creator: [:character]])
 
     # Get the creator of the quoted object for notifications
-    quoted_creator =
+    quoted_object_creator =
       e(quoted_object, :created, :creator, nil) ||
         e(quoted_object, :created, :creator_id, nil)
 
@@ -134,8 +134,8 @@ defmodule Bonfire.Social.Quotes do
       opts
       |> Keyword.put(:current_user, user)
       |> Keyword.put(:federation_module, __MODULE__)
-      |> Keyword.put(:to_circles, [id(quoted_creator)])
-      |> Keyword.put(:to_feeds, notifications: quoted_creator)
+      |> Keyword.put(:to_circles, [id(quoted_object_creator)])
+      |> Keyword.put(:to_feeds, notifications: quoted_object_creator)
     )
     |> info("Created quote request on #{repo()}")
   end
@@ -164,65 +164,273 @@ defmodule Bonfire.Social.Quotes do
       quoted_object
       |> repo().maybe_preload(created: [creator: [:character]])
 
-    quote_creator =
+    quote_post_author =
       e(quote_object, :created, :creator, nil) ||
         e(quote_object, :created, :creator_id, nil)
 
-    quoted_creator =
+    quoted_object_creator =
       e(quoted_object, :created, :creator, nil) ||
         e(quoted_object, :created, :creator_id, nil)
 
-    accept(request, quote_creator, quoted_creator, opts)
+    accept(request, quote_post_author, quoted_object_creator, opts)
   end
 
-  def accept(request, quote_creator \\ nil, quoted_creator \\ nil, opts) do
+  def accept(request, quote_post_author \\ nil, quoted_object_creator \\ nil, opts) do
     # info(opts, "opts")
 
     with {:ok, %{edge: %{object: quoted_object, subject: quote_post}} = request} <-
            Requests.accept(request, opts) |> info("accepted_quote on #{repo()}"),
-         quoted_creator =
-           (quoted_creator ||
+         quoted_object_creator =
+           (quoted_object_creator ||
               e(request, :edge, :object, :created, :creator, nil) ||
               e(quoted_object, :created, :creator, nil) ||
               e(request, :edge, :object, :created, :creator_id, nil) ||
               e(quoted_object, :created, :creator_id, nil))
-           |> info("determined_quoted_creator"),
-         quote_creator =
-           (quote_creator ||
+           |> info("determined_quoted_object_creator"),
+         quote_post_author =
+           (quote_post_author ||
               e(request, :edge, :subject, :created, :creator, nil) ||
               e(quote_post, :created, :creator, nil) ||
               e(request, :edge, :subject, :created, :creator_id, nil) ||
               e(quote_post, :created, :creator_id, nil))
-           |> info("determined_quote_creator"),
+           |> info("determined_quote_post_author"),
          {:ok, quote_post} <-
-           update_quote_add(quote_creator, quote_post, quoted_object, opts)
+           update_quote_add(quote_post_author, quote_post, quoted_object, opts)
            |> repo().maybe_preload([:post_content, :activity])
            |> info("updated_quote"),
-         :ok <-
+         accept_result <-
            if(opts[:incoming] != true,
-             #  TODO: the Accept activity should include "result": "https://example.com/users/alice/stamps/1" with a QuoteAuthorization
              do:
                Requests.ap_publish_activity(
-                 quoted_creator,
-                 {:accept_to, quote_creator},
+                 quoted_object_creator,
+                 {:accept_to, quote_post_author},
                  opts[:request_activity] || request
                )
                |> info("published_accept"),
              else: :ok
            ) do
-      # Then send Update for the now-authorized quote post (only if this is a local quote_post)
-      if Bonfire.Social.is_local?(quote_post) do
-        Social.maybe_federate_and_gift_wrap_activity(
-          quoted_creator,
+      # FEP-044f: determine the QuoteAuthorization URL
+      quoted_object_ap_id =
+        opts[:quoted_object_ap_id] ||
+          Bonfire.Common.URIs.canonical_url(quoted_object)
+
+      quote_authorization_url =
+        case accept_result do
+          # From local Accept publish (we're the quoted author)
+          {:ok, url} when is_binary(url) ->
+            url
+
+          # From incoming Accept's result (we're the quote author)
+          _ ->
+            # For local-to-local: create QuoteAuthorization on-demand
+            opts[:quote_authorization] ||
+              create_quote_authorization(quoted_object_creator, quote_post, quoted_object_ap_id)
+        end
+
+      # Always store quoteAuthorization on local AP object when we have one
+      if is_binary(quote_authorization_url) do
+        store_quote_authorization_on_ap_object(
           quote_post,
-          opts ++ [verb: :update]
+          quote_authorization_url,
+          quoted_object_ap_id
+        )
+      end
+
+      if opts[:incoming] == true do
+        # We're the quote post author receiving an Accept — send Update per FEP-044f
+        # Include the quoted author in cc so their server receives the Update
+        quoted_author_ap_id =
+          case ActivityPub.Actor.get_cached(pointer: quoted_object_creator) do
+            {:ok, actor} -> actor.ap_id
+            _ -> nil
+          end
+
+        Social.maybe_federate_and_gift_wrap_activity(
+          quote_post_author,
+          quote_post,
+          opts ++ [verb: :update, cc: List.wrap(quoted_author_ap_id)]
         )
         |> info("published_update_for_quote_post after acceptance")
       else
+        # We're the quoted author — the quote author's server handles the Update
         {:ok, quote_post}
       end
     end
   end
+
+  defp create_quote_authorization(quoted_object_creator, quote_post, quoted_object_ap_id) do
+    quote_post_ap_id = Bonfire.Common.URIs.canonical_url(quote_post)
+
+    with {:ok, actor} <- ActivityPub.Actor.get_cached(pointer: quoted_object_creator),
+         {:ok, %{data: %{"id" => id}}} <-
+           ActivityPub.quote_authorization(actor, quoted_object_ap_id, quote_post_ap_id) do
+      id
+    else
+      _ -> nil
+    end
+  end
+
+  defp quote_link_tag(quoted_object_ap_id) do
+    %{
+      "href" => quoted_object_ap_id,
+      "type" => "Link",
+      "rel" => "https://misskey-hub.net/ns#_misskey_quote",
+      "mediaType" => "application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\""
+    }
+  end
+
+  defp store_quote_authorization_on_ap_object(quote_post, auth_url, quoted_object_ap_id)
+       when is_binary(auth_url) do
+    with {:ok, %{data: data} = ap_object} <-
+           ActivityPub.Object.get_cached(pointer: quote_post) do
+      existing_tags = data["tag"] || []
+
+      has_quote_link? =
+        Enum.any?(existing_tags, fn tag ->
+          is_map(tag) and tag["rel"] == "https://misskey-hub.net/ns#_misskey_quote"
+        end)
+
+      updated_data =
+        data
+        |> Map.put("quoteAuthorization", auth_url)
+        |> then(fn d ->
+          if is_binary(quoted_object_ap_id),
+            do: Map.put(d, "quote", quoted_object_ap_id),
+            else: d
+        end)
+        |> then(fn d ->
+          if is_binary(quoted_object_ap_id) and not has_quote_link?,
+            do: Map.put(d, "tag", existing_tags ++ [quote_link_tag(quoted_object_ap_id)]),
+            else: d
+        end)
+
+      ActivityPub.Object.do_update_existing(ap_object, %{data: updated_data})
+      |> info("Stored quoteAuthorization, quote URL, and Link tag on AP object")
+    else
+      e -> warn(e, "Could not store quoteAuthorization on AP object")
+    end
+  end
+
+  defp store_quote_authorization_on_ap_object(_, _, _), do: nil
+
+  defp remove_quote_authorization_from_ap_object(quote_post) do
+    with {:ok, %{data: data} = ap_object} <-
+           ActivityPub.Object.get_cached(pointer: quote_post) do
+      existing_tags = data["tag"] || []
+
+      updated_data =
+        data
+        |> Map.delete("quoteAuthorization")
+        |> Map.delete("quote")
+        |> Map.put(
+          "tag",
+          Enum.reject(existing_tags, fn tag ->
+            is_map(tag) and tag["rel"] == "https://misskey-hub.net/ns#_misskey_quote"
+          end)
+        )
+
+      ActivityPub.Object.do_update_existing(ap_object, %{data: updated_data})
+      |> info("Removed quoteAuthorization, quote, and Link tag from AP object after rejection")
+    else
+      e -> warn(e, "Could not remove quoteAuthorization from AP object")
+    end
+  end
+
+  @doc """
+  Returns quote-related AP fields (`quote`, `quoteAuthorization`, and Link tags) for an outgoing Note.
+  Per FEP-044f, only the quoted author's server creates the QuoteAuthorization;
+  the quote author's server uses the URL received from the Accept's `result`.
+  """
+  def ap_quote_fields(actor, post) do
+    quoted_objects =
+      Bonfire.Social.Tags.list_tags_quote(post)
+      |> debug("include_as_quotes")
+
+    # Check if we have stored quote fields on the AP object (from Accept's result or previous federation)
+    stored =
+      case ActivityPub.Object.get_cached(pointer: post) do
+        {:ok, %{data: %{"quote" => quote_url} = data}} when is_binary(quote_url) ->
+          {quote_url, data["quoteAuthorization"]}
+
+        _ ->
+          nil
+      end
+
+    case quoted_objects do
+      [first_quote | _] ->
+        quoted_object_ap_id = Bonfire.Common.URIs.canonical_url(first_quote)
+
+        auth =
+          case stored do
+            {_, url} when is_binary(url) ->
+              # Use stored quoteAuthorization (from Accept's result)
+              url
+
+            _ ->
+              # Fall back to creating/finding QuoteAuthorization locally
+              # only when we're the quoted author's server
+              if Bonfire.Social.is_local?(first_quote) do
+                quote_post_ap_id = Bonfire.Common.URIs.canonical_url(post)
+
+                case ActivityPub.quote_authorization(
+                       actor,
+                       quoted_object_ap_id,
+                       quote_post_ap_id
+                     ) do
+                  {:ok, %{data: %{"type" => "QuoteAuthorization", "id" => id}}} -> id
+                  _ -> nil
+                end
+              end
+          end
+
+        quote_tags =
+          Enum.map(quoted_objects, fn quoted_object ->
+            quote_link_tag(Bonfire.Common.URIs.canonical_url(quoted_object))
+          end)
+
+        {%{"quote" => quoted_object_ap_id, "quoteAuthorization" => auth}, quote_tags}
+
+      _ ->
+        # No quote tags found locally — check stored AP object data
+        # (handles cross-instance scenarios where tags aren't in the local repo)
+        case stored do
+          {quote_url, auth_url} ->
+            {%{"quote" => quote_url, "quoteAuthorization" => auth_url}, []}
+
+          _ ->
+            {%{}, []}
+        end
+    end
+    |> debug("ap_quote_fields")
+  end
+
+  @doc """
+  Separates quote Link tags from regular links in incoming AP tags.
+  Fetches the quoted objects and returns them alongside remaining non-quote links.
+  """
+  def ap_extract_quote_tags(tags) when is_list(tags) do
+    for %{"type" => "Link", "href" => url} = tag <- tags, reduce: {[], []} do
+      {quotes, links} ->
+        case tag["rel"] do
+          "https://misskey-hub.net/ns#_misskey_quote" ->
+            case Bonfire.Federate.ActivityPub.AdapterUtils.get_or_fetch_and_create_by_uri(url) do
+              {:ok, quoted_object} ->
+                debug(quoted_object, "fetched quoted object for link tag")
+                {[quoted_object | quotes], links}
+
+              e ->
+                error(e, "could not fetch quoted object from #{url}")
+                {quotes, links}
+            end
+
+          _ ->
+            {quotes, [tag | links]}
+        end
+    end
+    |> debug("separated quote tags and regular links")
+  end
+
+  def ap_extract_quote_tags(_), do: {[], []}
 
   def reject_quote(quote_object, quoted_object, opts \\ []) do
     with {:ok, request} <-
@@ -267,23 +475,24 @@ defmodule Bonfire.Social.Quotes do
          quoted_object)
       |> repo().maybe_preload(created: [creator: [:character]])
 
-    quoted_creator =
+    quoted_object_creator =
       (e(request, :edge, :object, :created, :creator, nil) ||
          e(quoted_object, :created, :creator, nil) ||
          e(request, :edge, :object, :created, :creator_id, nil) ||
          e(quoted_object, :created, :creator_id, nil))
-      |> info("determined_quoted_creator")
+      |> info("determined_quoted_object_creator")
 
     with {:ok, request} <- Requests.ignore(request, opts) |> info("ignored_quote_request"),
          {:ok, quote_object} <-
            update_quote_remove(quote_object, quoted_object) |> info("removed_quote_tag"),
          {:ok, _} <-
            federate_reject(opts[:verb], request, quote_object, quoted_object)
-           |> info("ap_rejected_quote_request") do
+           |> info("ap_rejected_quote_request"),
+         _ <- remove_quote_authorization_from_ap_object(quote_object) do
       # Then send Update for the now-unauthorized quote post (only if this is a local quote_post) 
       if Bonfire.Social.is_local?(quote_object) do
         Social.maybe_federate_and_gift_wrap_activity(
-          quoted_creator,
+          quoted_object_creator,
           quote_object,
           opts ++ [verb: :update]
         )
@@ -317,11 +526,11 @@ defmodule Bonfire.Social.Quotes do
   end
 
   defp federate_reject(_reject, request, quote_object, quoted_object) do
-    quoted_creator =
+    quoted_object_creator =
       e(quoted_object, :created, :creator, nil) ||
         e(quoted_object, :created, :creator_id, nil)
 
-    quote_creator =
+    quote_post_author =
       e(quote_object, :created, :creator, nil) ||
         e(quote_object, :created, :creator_id, nil)
 
@@ -329,14 +538,18 @@ defmodule Bonfire.Social.Quotes do
            ActivityPub.Object.get_cached(pointer: quoted_object)
            |> info("ap_quoted_object"),
          {:ok, quoted_actor} <-
-           if(quoted_creator,
-             do: ActivityPub.Actor.get_cached(pointer: quoted_creator) |> info("quoted_creator"),
-             else: err(quoted_object, "quoted_creator not found")
+           if(quoted_object_creator,
+             do:
+               ActivityPub.Actor.get_cached(pointer: quoted_object_creator)
+               |> info("quoted_object_creator"),
+             else: err(quoted_object, "quoted_object_creator not found")
            ),
          {:ok, quote_actor} <-
-           if(quote_creator,
-             do: ActivityPub.Actor.get_cached(pointer: quote_creator) |> info("quote_creator"),
-             else: err(quote_object, "quote_creator not found")
+           if(quote_post_author,
+             do:
+               ActivityPub.Actor.get_cached(pointer: quote_post_author)
+               |> info("quote_post_author"),
+             else: err(quote_object, "quote_post_author not found")
            ),
          %ActivityPub.Object{} = quote_request_activity <-
            ActivityPub.Object.fetch_latest_activity(quote_actor, ap_quoted_object, "QuoteRequest")
@@ -517,15 +730,15 @@ defmodule Bonfire.Social.Quotes do
     quote_post = repo().maybe_preload(quote_post, [:created])
     quoted_object = repo().maybe_preload(quoted_object, [:created])
 
-    quote_creator_id =
+    quote_post_author_id =
       e(quote_post, :created, :creator_id, nil) || id(quote_post)
 
-    quoted_creator_id =
+    quoted_object_creator_id =
       e(quoted_object, :created, :creator_id, nil) || id(quoted_object)
 
     with {:ok, quote_ap_object} <- ActivityPub.Object.get_cached(pointer: quote_post),
          {:ok, quoted_ap_object} <- ActivityPub.Object.get_cached(pointer: quoted_object),
-         {:ok, quoted_actor} <- ActivityPub.Actor.get_cached(pointer: quoted_creator_id) do
+         {:ok, quoted_actor} <- ActivityPub.Actor.get_cached(pointer: quoted_object_creator_id) do
       cond do
         # Check that authorization references correct objects
         auth_data["interactingObject"] != quote_ap_object.data["id"] ->
@@ -637,13 +850,15 @@ defmodule Bonfire.Social.Quotes do
            quoted_object
            |> repo().maybe_preload(pointer: [:created])
            |> info("loaded quoted object"),
-         quoted_creator =
+         quoted_object_creator =
            e(quoted_object, :pointer, :created, :creator, nil) ||
              e(quoted_object, :pointer, :created, :creator_id, nil),
          {:ok, quoted_actor} <-
-           if(quoted_creator,
-             do: ActivityPub.Actor.get_cached(pointer: quoted_creator) |> info("quoted_creator"),
-             else: err(quoted_object, "quoted_creator not found")
+           if(quoted_object_creator,
+             do:
+               ActivityPub.Actor.get_cached(pointer: quoted_object_creator)
+               |> info("quoted_object_creator"),
+             else: err(quoted_object, "quoted_object_creator not found")
            ) do
       case check_quote_permission(requester, quoted_object)
            |> info("checked_quote_permission") do
@@ -718,6 +933,11 @@ defmodule Bonfire.Social.Quotes do
     info(accept_activity, "Received Accept for QuoteRequest")
     info(request_activity, "QuoteRequest object being accepted")
 
+    # FEP-044f: extract QuoteAuthorization URL from Accept's result
+    quote_authorization =
+      accept_activity.data["result"]
+      |> info("Extracted quoteAuthorization URL from Accept result")
+
     with {:ok, local_quote_post} <-
            ActivityPub.Object.get_cached(ap_id: quote_post)
            |> repo().maybe_preload(pointer: [:created])
@@ -725,16 +945,13 @@ defmodule Bonfire.Social.Quotes do
          {:ok, quoted_object} <-
            ActivityPub.Object.get_cached(ap_id: quoted_object_id)
            |> repo().maybe_preload([:pointer])
-           #  |> repo().maybe_preload(pointer: [:created])
            |> info("loaded quoted object"),
-         # quoted_creator = e(quoted_object, :pointer, :created, :creator, nil) || e(quoted_object, :pointer, :created, :creator_id, nil),
-         #  quote_post_creator =
-         #    e(local_quote_post, :pointer, :created, :creator, nil) ||
-         #      e(local_quote_post, :pointer, :created, :creator_id, nil),
          {:ok, local_quote_post} <-
            accept_quote(local_quote_post.pointer, quoted_object.pointer,
              incoming: true,
-             request_activity: request_activity
+             request_activity: request_activity,
+             quote_authorization: quote_authorization,
+             quoted_object_ap_id: quoted_object_id
            )
            |> info("Updated local quote post with authorization") do
       {:ok, local_quote_post}
@@ -770,7 +987,7 @@ defmodule Bonfire.Social.Quotes do
            |> repo().maybe_preload([:pointer])
            #  |> repo().maybe_preload(pointer: [:created])
            |> info("loaded quoted object"),
-         # quoted_creator = e(quoted_object, :pointer, :created, :creator, nil) || e(quoted_object, :pointer, :created, :creator_id, nil),
+         # quoted_object_creator = e(quoted_object, :pointer, :created, :creator, nil) || e(quoted_object, :pointer, :created, :creator_id, nil),
          #  quote_post_creator =
          #    e(local_quote_post, :pointer, :created, :creator, nil) ||
          #      e(local_quote_post, :pointer, :created, :creator_id, nil),

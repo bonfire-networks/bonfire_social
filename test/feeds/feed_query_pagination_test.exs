@@ -98,7 +98,6 @@ defmodule Bonfire.Social.FeedPaginationTest do
       assert feed.edges == []
     end
 
-    @tag :fixme
     test "has correct query structure and pagination behaviour", %{user: user} do
       # Set up common options
       opts = [
@@ -125,7 +124,7 @@ defmodule Bonfire.Social.FeedPaginationTest do
 
       # First page should have a limit but not cursor-based filtering
       assert query_string =~ "limit: ^6"
-      refute query_string =~ "where: (a1.id < ^"
+      refute query_string =~ "where: (f0.id < ^"
 
       # PART 2: Execute the first page query and get pagination info
       # -----------------------------------------------------
@@ -159,7 +158,7 @@ defmodule Bonfire.Social.FeedPaginationTest do
       assert query_string =~ "order_by: [desc: a1.id]"
       # Second page should have cursor-based filtering
       assert query2_string =~ "limit: ^6"
-      assert query2_string =~ "where: (a1.id < ^\""
+      assert query2_string =~ "where: (f0.id < ^\""
       # TODO: The ID corresponding to the cursor value should be in the query
       # assert query2_string =~ after_cursor
 
@@ -210,7 +209,8 @@ defmodule Bonfire.Social.FeedPaginationTest do
     end
   end
 
-  @tag :fixme
+  #  NOTE: not sure if behaviour broken or test out of date?
+  @tag :todo
   test "attempts pagination to next window before falling back to non-deferred query" do
     limit = 4
     user = fake_user!()
