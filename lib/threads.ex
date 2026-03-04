@@ -495,7 +495,6 @@ defmodule Bonfire.Social.Threads do
         %{}
       end
 
-
     # Merge fetched participants + edge subjects, dedup, take limit
     Map.new(
       Enum.uniq(Map.keys(fetched_by_thread) ++ Map.keys(edge_subjects_by_thread)),
