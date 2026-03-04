@@ -435,6 +435,7 @@ defmodule Bonfire.Social.Threads do
   def list_participants_for_threads(edges, opts \\ []) do
     opts = to_options(opts)
     limit_per_thread = opts[:limit] || 5
+    exclude_table_ids = default_exclude_table_ids()
 
     all_thread_ids =
       Enum.flat_map(edges, fn %{activity: activity} ->
@@ -461,12 +462,28 @@ defmodule Bonfire.Social.Threads do
         &e(&1, :activity, :subject, nil)
       )
 
+    # Build a map of thread_id => [tagged users from edges] (DM recipients)
+    edge_tags_by_thread =
+      edges
+      |> Enum.flat_map(fn %{activity: activity} ->
+        thread_id = e(activity, :replied, :thread_id, nil)
+
+        if thread_id do
+          e(activity, :object, :tags, [])
+          |> Enum.reject(&(e(&1, :table_id, nil) in exclude_table_ids))
+          |> Enum.map(&{thread_id, &1})
+        else
+          []
+        end
+      end)
+      |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+
     fetched_by_thread =
       if all_thread_ids != [] do
         fetch_participants(all_thread_ids,
           current_user: current_user(opts),
           limit: limit_per_thread * length(edges),
-          exclude_table_ids: default_exclude_table_ids(),
+          exclude_table_ids: exclude_table_ids,
           skip_boundary_check: opts[:skip_boundary_check]
         )
         |> e(:edges, [])
@@ -478,11 +495,19 @@ defmodule Bonfire.Social.Threads do
         %{}
       end
 
-    # Merge fetched participants + edge subjects, dedup, take limit
-    Map.new(Enum.uniq(Map.keys(fetched_by_thread) ++ Map.keys(edge_subjects_by_thread)), fn thread_id ->
+    # Merge fetched participants + edge subjects + edge tags, dedup, take limit
+    all_keys =
+      Enum.uniq(
+        Map.keys(fetched_by_thread) ++
+          Map.keys(edge_subjects_by_thread) ++
+          Map.keys(edge_tags_by_thread)
+      )
+
+    Map.new(all_keys, fn thread_id ->
       {thread_id,
        (Map.get(fetched_by_thread, thread_id, []) ++
-          Map.get(edge_subjects_by_thread, thread_id, []))
+          Map.get(edge_subjects_by_thread, thread_id, []) ++
+          Map.get(edge_tags_by_thread, thread_id, []))
        |> filter_empty([])
        |> Enum.uniq_by(&(e(&1, :character, :id, nil) || id(&1)))
        |> Enum.take(limit_per_thread)}
