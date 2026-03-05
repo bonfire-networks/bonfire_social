@@ -98,7 +98,7 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
         event_to_masto_status(event)
 
       other ->
-        err(other, "Unexpected response from event")
+        error(other, "Unexpected response from event")
         nil
     end
   end

@@ -522,19 +522,15 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
         try do
           case Bonfire.Social.PostContents.edit(current_user, id, attrs) do
-            {:ok, post} ->
-              # Reload with associations for mapping
-              case Bonfire.Posts.read(post.id,
-                     current_user: current_user,
-                     preload: [:post_content, :activity]
-                   ) do
-                {:ok, post} ->
-                  status = Mappers.Status.from_post(post, current_user: current_user)
-                  Phoenix.Controller.json(conn, status)
-
-                _ ->
-                  # Fallback - return minimal status
-                  Phoenix.Controller.json(conn, %{"id" => id})
+            {:ok, _} ->
+              # Reload via GraphQL to get all associations needed by the mapper
+              with %{data: %{activity: activity}} when not is_nil(activity) <-
+                     graphql(conn, :show_status, %{"filter" => %{"object_id" => id}}),
+                   status when not is_nil(status) <-
+                     Mappers.Status.from_activity(activity, current_user: current_user) do
+                Phoenix.Controller.json(conn, status)
+              else
+                _ -> RestAdapter.error_fn({:error, :not_found}, conn)
               end
 
             {:error, :not_found} ->

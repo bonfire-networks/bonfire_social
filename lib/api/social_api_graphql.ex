@@ -133,7 +133,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       # field(:object_id, :string)
       # Use Dataloader to batch-load object pointers, then follow them to get actual objects
-      field :object, :any_object do
+      field :object, :any_context do
         resolve(fn activity, _args, %{context: %{loader: loader}} ->
           loader
           |> Dataloader.load(Needle.Pointer, :object, activity)
