@@ -134,9 +134,7 @@ defmodule Bonfire.Social.FeedLoader do
   def feed(name_or_filters \\ nil, opts \\ [])
 
   def feed(:curated, opts) do
-    # TODO: refactor to use `feed_filtered` like any others rather than delegating to the context
-    Bonfire.Social.Pins.list_instance_pins(opts)
-    # |> debug()
+    Bonfire.Social.Pins.list_instance_pins_activities(opts)
   end
 
   # def feed(:likes, opts) do

@@ -23,7 +23,7 @@ defmodule Bonfire.Social.Pins do
   alias Bonfire.Social.Objects
   alias Bonfire.Social.Feeds
 
-  # import Ecto.Query
+  import Ecto.Query
   alias Bonfire.Social
   use Bonfire.Common.Utils
   use Bonfire.Common.Repo
@@ -148,8 +148,8 @@ defmodule Bonfire.Social.Pins do
   def pin(pinner, object, scope \\ nil, opts \\ [])
 
   def pin(pinner, object, :instance, opts) do
-    if Bonfire.Boundaries.can?(pinner, :pin, :instance) do
-      pin(instance_scope(), object, pinner, opts ++ [skip_boundary_check: true])
+    if Bonfire.Boundaries.can?(pinner, :mediate, :instance) do
+      pin(instance_scope(), object, nil, opts ++ [skip_boundary_check: true, to_feeds: []])
     else
       error(l("Sorry, you cannot pin to the instance"))
     end
@@ -193,7 +193,7 @@ defmodule Bonfire.Social.Pins do
       # TODO: make configurable
       boundary: "mentions",
       to_circles: [uid(object_creator)],
-      to_feeds: Feeds.maybe_creator_notification(pinner, object_creator, opts)
+      to_feeds: opts[:to_feeds] || Feeds.maybe_creator_notification(pinner, object_creator, opts)
     ]
 
     case create(pinner, pinned, opts) do
@@ -244,8 +244,8 @@ defmodule Bonfire.Social.Pins do
   def unpin(user, object, scope \\ nil)
 
   def unpin(user, object, :instance) do
-    if Bonfire.Boundaries.can?(user, :pin, :instance) do
-      unpin(instance_scope(), object, user)
+    if Bonfire.Boundaries.can?(user, :mediate, :instance) do
+      unpin(instance_scope(), object, nil)
     else
       error(l("Sorry, you cannot pin to the instance"))
     end
@@ -379,7 +379,59 @@ defmodule Bonfire.Social.Pins do
   """
   def list_instance_pins(opts) when is_list(opts) do
     opts = to_options(opts)
-    list_by(instance_scope(), Keyword.put(opts, :preload, :object_with_creator))
+    list_by(instance_scope(), Keyword.put(opts, :preload, [:object_with_creator, :object_post_content]))
+  end
+
+  @doc """
+  Lists the original activities for instance-pinned objects.
+
+  Returns full activity structs (with preloaded subject, object, etc.) suitable
+  for rendering with `ActivityLive`, rather than pin edge structs.
+
+  ## Examples
+
+      iex> Bonfire.Social.Pins.list_instance_pins_activities(current_user: %User{})
+      %{edges: [%Activity{}, ...], page_info: %{}}
+
+  """
+  def list_instance_pins_activities(opts) when is_list(opts) do
+    opts = to_options(opts)
+
+    object_ids =
+      from(p in Pin,
+        join: e in Bonfire.Data.Edges.Edge,
+        on: e.id == p.id,
+        where: e.subject_id in ^List.wrap(instance_scope()),
+        select: e.object_id
+      )
+      |> repo().many()
+
+    case object_ids do
+      [] ->
+        %{edges: [], page_info: %{}}
+
+      ids ->
+        create_verb_id = Activities.verb_id(:create)
+
+        # Plain query on Activity, then postload associations on the results
+        # (read_query is designed for object-base queries, not Activity-base)
+        limit = opts[:limit] || 5
+
+        from(a in Bonfire.Data.Social.Activity,
+          where: a.object_id in ^ids,
+          where: a.verb_id == ^create_verb_id,
+          order_by: [desc: a.id],
+          limit: ^limit
+        )
+        |> repo().many()
+        |> Activities.activity_preloads(
+          [:default, :with_object_more, :with_subject, :with_media],
+          opts ++ [skip_boundary_check: true]
+        )
+        |> List.wrap()
+        |> Enum.map(&%{activity: &1})
+        |> then(&%{edges: &1, page_info: %{}})
+    end
   end
 
   @doc """
