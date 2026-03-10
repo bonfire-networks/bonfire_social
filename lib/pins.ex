@@ -379,7 +379,11 @@ defmodule Bonfire.Social.Pins do
   """
   def list_instance_pins(opts) when is_list(opts) do
     opts = to_options(opts)
-    list_by(instance_scope(), Keyword.put(opts, :preload, [:object_with_creator, :object_post_content]))
+
+    list_by(
+      instance_scope(),
+      Keyword.put(opts, :preload, [:object_with_creator, :object_post_content])
+    )
   end
 
   @doc """
