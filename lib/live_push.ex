@@ -354,9 +354,12 @@ defmodule Bonfire.Social.LivePush do
   end
 
   defp increment_counters(feed_ids, box) do
-    feed_ids
-    |> Enum.map(&"unseen_count:#{box}:#{&1}")
-    |> PubSub.broadcast({{Bonfire.Social.Feeds, :count_increment}, box})
+    Enum.each(feed_ids, fn feed_id ->
+      PubSub.broadcast(
+        "unseen_count:#{feed_id}",
+        {{Bonfire.Social.Feeds, :count_increment}, %{box: box, feed_id: feed_id}}
+      )
+    end)
   end
 
   defp activity_from_object(%{id: _, activity: _activity} = object) do
