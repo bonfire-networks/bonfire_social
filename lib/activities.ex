@@ -1579,15 +1579,18 @@ defmodule Bonfire.Social.Activities do
     exclude_table_ids = e(opts, :filters, :exclude_table_ids, [])
 
     case Objects.partition_table_types(types) |> debug("object_type_tables") do
-      #  articles
       {[], [_], true} ->
+        # articles (excluding replies)
         query
         |> maybe_join_filter_activity(exclude_table_ids)
         |> proload(:inner, activity: [object: {"object_", [:post_content]}])
+        |> projoin(activity: [:replied])
         |> where(
-          [object_post_content: object_post_content],
+          [object_post_content: object_post_content, replied: replied],
           fragment("LENGTH(?)", object_post_content.name) > 2 and
-            fragment("CHAR_LENGTH(?)", object_post_content.html_body) > ^article_char_threshold()
+            fragment("CHAR_LENGTH(?)", object_post_content.html_body) >
+              ^Bonfire.Social.article_char_threshold() and
+            is_nil(replied.reply_to_id)
         )
 
       {table_ids, [], false} when is_list(table_ids) and table_ids != [] ->
@@ -1969,7 +1972,34 @@ defmodule Bonfire.Social.Activities do
     )
   end
 
-  def article_char_threshold, do: Config.get([:bonfire_posts, :article_char_threshold], 888)
+  # min_body_bytes gets compiled in, but you can make the character threshold bigger at runtime, as it uses a conservative multiplier: ASCII is 1 byte per char, so this should ensure we don't filter out posts that might reach the character threshold
+  @min_body_bytes div(Bonfire.Social.article_char_threshold() * 2, 3)
+
+  def is_article?(object_type, object, replied \\ nil)
+  def is_article?(_object_type, _object, true), do: false
+
+  def is_article?(_object_type, _object, %{reply_to_id: reply_to_id}) when is_binary(reply_to_id),
+    do: false
+
+  def is_article?(_object_type, _object, %{replied: %{reply_to_id: reply_to_id}})
+      when is_binary(reply_to_id), do: false
+
+  def is_article?(Bonfire.Data.Social.Post, %{name: name, html_body: html_body}, _false)
+      when is_binary(name) and is_binary(html_body) and
+             byte_size(name) > 2 and byte_size(html_body) > @min_body_bytes do
+    String.length(html_body) > Bonfire.Social.article_char_threshold()
+  end
+
+  def is_article?(
+        Bonfire.Data.Social.Post,
+        %{
+          post_content: %{name: name, html_body: html_body}
+        },
+        _false
+      ),
+      do: is_article?(Bonfire.Data.Social.Post, %{name: name, html_body: html_body})
+
+  def is_article?(_, _, _), do: false
 
   @doc """
   Constructs a query based on filters and optional user context.

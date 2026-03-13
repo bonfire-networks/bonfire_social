@@ -917,8 +917,19 @@ defmodule Bonfire.Social.PostContents do
       },
       sensitive:
         case post_data["sensitive"] do
-          nil -> is_binary(post_data["summary"]) and post_data["summary"] != ""
-          val -> val
+          val when is_boolean(val) ->
+            val
+
+          "true" ->
+            true
+
+          "false" ->
+            false
+
+          _ ->
+            # if remote Note does't have a sensitive field but has a summary, assume in needs a CW (doesn't apply to Article)
+            post_data["type"] != "Article" and is_binary(post_data["summary"]) and
+              post_data["summary"] != ""
         end,
       primary_image: e(post_data, "image", nil) || e(post_data, "icon", nil),
       attachments: List.wrap(e(post_data, "attachment", [])) ++ regular_links,

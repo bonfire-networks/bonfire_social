@@ -557,6 +557,46 @@ defmodule Bonfire.Social.FeedsFiltersTest do
     end
   end
 
+  describe "article filter excludes replies" do
+    setup do
+      user = fake_user!("main user")
+      other_user = fake_user!("replier")
+
+      # Create an article (long post with a title)
+      article =
+        fake_post!(user, "public", %{
+          post_content: %{
+            name: "An article title",
+            html_body: String.duplicate("long article content ", 100)
+          }
+        })
+
+      # Create a reply to the article that also looks like an article
+      reply_article =
+        fake_post!(other_user, "public", %{
+          post_content: %{
+            name: "A reply that looks like an article",
+            html_body: String.duplicate("long reply content ", 100)
+          },
+          reply_to_id: article.id
+        })
+
+      %{user: user, article: article, reply_article: reply_article}
+    end
+
+    test "article filter includes articles but excludes replies", %{
+      user: user,
+      article: article,
+      reply_article: reply_article
+    } do
+      feed =
+        FeedLoader.feed(:custom, %{object_types: ["article"]}, current_user: user)
+
+      assert FeedLoader.feed_contains?(feed, article, current_user: user)
+      refute FeedLoader.feed_contains?(feed, reply_article, current_user: user)
+    end
+  end
+
   describe "time_limit filter" do
     setup do
       user = fake_user!("main user")

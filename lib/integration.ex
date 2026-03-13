@@ -17,6 +17,8 @@ defmodule Bonfire.Social do
   @automod_id "1FR1END1YAVT0M0DERAT0RB0TS"
   def automod_id, do: @automod_id
 
+  def article_char_threshold, do: Config.get([:bonfire_posts, :article_char_threshold], 888)
+
   def get_or_create_automod,
     do:
       maybe_apply(Bonfire.Me.Users, :get_or_create_service_character, [
