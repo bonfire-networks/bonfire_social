@@ -26,7 +26,8 @@ defmodule Bonfire.Social.RuntimeConfig do
           # New structured UI-specific settings
           assigns: [
             page: "following",
-            feed_title: l("Following")
+            feed_title: l("Following"),
+            enable_marker: true
           ]
         },
         explore: %{
@@ -46,7 +47,8 @@ defmodule Bonfire.Social.RuntimeConfig do
             feedback_message:
               l(
                 "It seems like the paint is still fresh and there are no activities to explore..."
-              )
+              ),
+            enable_marker: true
           ]
         },
         local: %{
@@ -64,7 +66,8 @@ defmodule Bonfire.Social.RuntimeConfig do
             page: "local",
             page_title: l("Explore local activities"),
             feedback_title: l("Your local feed is empty"),
-            feedback_message: l("It seems like the paint is still fresh on this instance...")
+            feedback_message: l("It seems like the paint is still fresh on this instance..."),
+            enable_marker: true
           ]
         },
         remote: %{
@@ -84,7 +87,8 @@ defmodule Bonfire.Social.RuntimeConfig do
             feedback_message:
               l(
                 "It seems you and other local users do not follow anyone on a different federated instance"
-              )
+              ),
+            enable_marker: true
           ]
         },
         notifications: %{
@@ -241,7 +245,10 @@ defmodule Bonfire.Social.RuntimeConfig do
           description: l("Posts (not including replies)"),
           #  TODO: exclude articles?
           filters: %FeedFilters{object_types: [:post], exclude_activity_types: [:reply]},
-          icon: "ph:note-duotone"
+          icon: "ph:note-duotone",
+          assigns: [
+            enable_marker: true
+          ]
         },
         articles: %{
           name: l("Articles"),
@@ -260,7 +267,8 @@ defmodule Bonfire.Social.RuntimeConfig do
             feedback_message:
               l(
                 "There are no known articles to show. Articles from other federated platforms like WriteFreely or Ghost will appear here."
-              )
+              ),
+            enable_marker: true
           ]
         },
         # TODO?
@@ -278,7 +286,10 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %FeedFilters{
             media_types: [:research]
           },
-          icon: "ph:microscope-duotone"
+          icon: "ph:microscope-duotone",
+          assigns: [
+            enable_marker: true
+          ]
         },
         # TEMPORARILY DISABLED:
         # images: %{
@@ -353,7 +364,8 @@ defmodule Bonfire.Social.RuntimeConfig do
             feedback_message:
               l(
                 "There are no known books to show. Books from other federated platforms like BookWyrm will appear here."
-              )
+              ),
+            enable_marker: true
           ]
         },
         events: %{
@@ -374,7 +386,8 @@ defmodule Bonfire.Social.RuntimeConfig do
               l(
                 "There are no upcoming events to show. Events from other federated platforms like Mobilizon will appear here."
               )
-          ]
+          ],
+          enable_marker: true
         },
         my_flags: %{
           name: l("Flagged"),
