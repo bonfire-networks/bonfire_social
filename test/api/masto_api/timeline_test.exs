@@ -96,7 +96,6 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
 
       {:ok, _} = Follows.follow(user, followed)
 
-      # Create multiple posts
       for i <- 1..5 do
         {:ok, _} =
           Posts.publish(
@@ -114,6 +113,139 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
         |> json_response(200)
 
       assert length(response) <= 2
+    end
+
+    test "max_id cursor returns older posts", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+      followed = Fake.fake_user!()
+
+      {:ok, _} = Follows.follow(user, followed)
+
+      posts =
+        for i <- 1..6 do
+          {:ok, post} =
+            Posts.publish(
+              current_user: followed,
+              post_attrs: %{post_content: %{html_body: "Pagination post #{i}"}},
+              boundary: "public"
+            )
+
+          post
+        end
+
+      api_conn = masto_api_conn(conn, user: user, account: account)
+
+      # Fetch first page
+      page1_conn = get(api_conn, "/api/v1/timelines/home?limit=3")
+      page1 = json_response(page1_conn, 200)
+      assert length(page1) > 0, "First page should have items"
+
+      # Use the last item's ID as max_id to fetch the next page
+      last_id = List.last(page1)["id"]
+
+      page2 = api_conn |> get("/api/v1/timelines/home?limit=3&max_id=#{last_id}") |> json_response(200)
+
+      # Page 2 should have different items than page 1
+      page1_ids = MapSet.new(Enum.map(page1, & &1["id"]))
+      page2_ids = MapSet.new(Enum.map(page2, & &1["id"]))
+      assert MapSet.disjoint?(page1_ids, page2_ids), "Pages should not overlap"
+
+      # Page 2 items should be older (lower IDs in descending sort)
+      if page2 != [] do
+        assert Enum.all?(page2, fn item -> item["id"] < last_id end),
+               "All page 2 items should have IDs less than max_id"
+      end
+    end
+
+    test "min_id cursor returns newer posts", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+      followed = Fake.fake_user!()
+
+      {:ok, _} = Follows.follow(user, followed)
+
+      for i <- 1..4 do
+        {:ok, _} =
+          Posts.publish(
+            current_user: followed,
+            post_attrs: %{post_content: %{html_body: "Old post #{i}"}},
+            boundary: "public"
+          )
+      end
+
+      api_conn = masto_api_conn(conn, user: user, account: account)
+
+      # Fetch initial page to get a cursor
+      page1 = api_conn |> get("/api/v1/timelines/home?limit=2") |> json_response(200)
+      assert length(page1) > 0
+
+      first_id = List.first(page1)["id"]
+
+      # Create newer posts
+      for i <- 1..2 do
+        {:ok, _} =
+          Posts.publish(
+            current_user: followed,
+            post_attrs: %{post_content: %{html_body: "New post #{i}"}},
+            boundary: "public"
+          )
+      end
+
+      # Fetch posts newer than first_id
+      newer = api_conn |> get("/api/v1/timelines/home?min_id=#{first_id}") |> json_response(200)
+
+      if newer != [] do
+        assert Enum.all?(newer, fn item -> item["id"] > first_id end),
+               "All items should have IDs greater than min_id"
+      end
+    end
+
+    test "returns Link headers for pagination", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+      followed = Fake.fake_user!()
+
+      {:ok, _} = Follows.follow(user, followed)
+
+      for i <- 1..5 do
+        {:ok, _} =
+          Posts.publish(
+            current_user: followed,
+            post_attrs: %{post_content: %{html_body: "Link header post #{i}"}},
+            boundary: "public"
+          )
+      end
+
+      api_conn = masto_api_conn(conn, user: user, account: account)
+      result_conn = get(api_conn, "/api/v1/timelines/home?limit=3")
+      response = json_response(result_conn, 200)
+      assert length(response) > 0
+
+      link_header = Plug.Conn.get_resp_header(result_conn, "link")
+      assert link_header != [], "Link header should be present"
+
+      link_value = List.first(link_header)
+      # Mastodon Link header format: <url?max_id=X>; rel="next", <url?min_id=Y>; rel="prev"
+      assert link_value =~ "rel=\"next\"", "Should have next link"
+      assert link_value =~ "rel=\"prev\"", "Should have prev link"
+      assert link_value =~ "max_id=", "Next link should use max_id cursor"
+      assert link_value =~ "min_id=", "Prev link should use min_id cursor"
+    end
+
+    test "max_id past end returns empty list", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+
+      api_conn = masto_api_conn(conn, user: user, account: account)
+
+      # Use a very old ID that won't match anything
+      response =
+        api_conn
+        |> get("/api/v1/timelines/home?max_id=00000000000000000000000000")
+        |> json_response(200)
+
+      assert response == []
     end
   end
 

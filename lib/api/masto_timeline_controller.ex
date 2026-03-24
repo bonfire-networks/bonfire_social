@@ -17,11 +17,13 @@ if Application.compile_env(:bonfire_social, :modularity) != :disabled do
 
     def local(conn, params), do: feed_by_name(conn, "local", params)
 
+    @masto_feed_preloads ["with_subject", "with_object_more", "with_post_content", "with_replied"]
+
     def feed_by_name(conn, feed_name, params) do
       params
       |> PaginationHelpers.build_feed_params(%{
         "feed_name" => feed_name,
-        "preload" => ["with_subject"]
+        "preload" => @masto_feed_preloads
       })
       |> then(&Adapter.feed(&1, conn))
     end
@@ -34,7 +36,7 @@ if Application.compile_env(:bonfire_social, :modularity) != :disabled do
       |> PaginationHelpers.build_feed_params(%{
         "feed_name" => feed_name,
         "tags" => [normalized_tag],
-        "preload" => ["with_subject"]
+        "preload" => @masto_feed_preloads
       })
       |> then(&Adapter.feed(&1, conn))
     end
@@ -52,7 +54,7 @@ if Application.compile_env(:bonfire_social, :modularity) != :disabled do
       params
       |> PaginationHelpers.build_feed_params(%{
         "feed_name" => "notifications",
-        "preload" => ["with_subject"]
+        "preload" => @masto_feed_preloads
       })
       |> then(&Adapter.notifications(&1, conn))
     end
@@ -66,14 +68,14 @@ if Application.compile_env(:bonfire_social, :modularity) != :disabled do
       params
       |> PaginationHelpers.build_feed_params(%{
         "feed_name" => "bookmarks",
-        "preload" => ["with_subject"]
+        "preload" => @masto_feed_preloads
       })
       |> then(&Adapter.feed(&1, conn))
     end
 
     def favourites(conn, params) do
       params
-      |> PaginationHelpers.build_feed_params(%{"preload" => ["with_subject"]})
+      |> PaginationHelpers.build_feed_params(%{"preload" => @masto_feed_preloads})
       |> then(&Adapter.favourites(&1, conn))
     end
 

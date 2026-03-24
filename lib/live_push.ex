@@ -272,13 +272,16 @@ defmodule Bonfire.Social.LivePush do
           ) || e(object, :profile, :name, nil) ||
           e(object, :character, :username, nil)
 
+      notify_category = verb_to_notify_category(verb)
+
       preview_assigns = %{
         title:
           (e(subject, :profile, :name, nil) || e(subject, :character, :username, "")) <>
             " #{verb_display}",
         message: Text.text_only(content || ""),
         url: path(object),
-        icon: icon || Config.get([:ui, :theme, :instance_icon], nil)
+        icon: icon || Config.get([:ui, :theme, :instance_icon], nil),
+        notify_category: notify_category
       }
 
       # WIP: send email notif?
@@ -319,7 +322,7 @@ defmodule Bonfire.Social.LivePush do
         preview_assigns
       ])
 
-      # Send web push notifications
+      # Send web push notifications (filtering by user preferences happens in Bonfire.Notify)
       send_push_notifications(notify_feed_ids, preview_assigns)
     end
   end
@@ -350,6 +353,16 @@ defmodule Bonfire.Social.LivePush do
       end
     else
       debug("Bonfire.Notify not enabled, skipping push notifications")
+    end
+  end
+
+  defp verb_to_notify_category(verb) do
+    case Bonfire.Social.Activities.verb_name(verb) do
+      "Like" -> :likes
+      "Boost" -> :boosts
+      "Follow" -> :follows
+      "Message" -> :messages
+      _ -> :replies_and_mentions
     end
   end
 

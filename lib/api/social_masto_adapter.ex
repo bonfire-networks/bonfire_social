@@ -38,6 +38,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     import Helpers, only: [get_field: 2]
     alias Bonfire.Common.Utils
 
+    @masto_preloads [:with_subject, :with_object_more, :with_post_content, :with_replied]
+
     # Use centralized fragments from bonfire_api_graphql
     @post_content Fragments.post_content()
     @user Fragments.user_profile()
@@ -170,44 +172,18 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     }
     "
 
-    @graphql "query ($filter: FeedFilters, $first: Int, $last: Int, $after: String, $before: String) {
-      feed_activities(filter: $filter, first: $first, last: $last, after: $after, before: $before) {
-      edges { node {
-              #{@activity}
-      }}
-      page_info: pageInfo {
-        has_next_page: hasNextPage
-        has_previous_page: hasPreviousPage
-        start_cursor: startCursor
-        end_cursor: endCursor
-      }
-    }}"
     def feed(params, conn) do
       current_user = conn.assigns[:current_user]
 
-      graphql(conn, :feed, params)
-      |> process_feed_edges_with_batch_loading(current_user, "feed")
+      feed_direct(params, current_user, :feed)
       |> then(&respond_with_feed(conn, params, &1))
     end
 
-    @graphql "query ($filter: FeedFilters, $first: Int, $last: Int, $after: String, $before: String) {
-      feed_activities(filter: $filter, first: $first, last: $last, after: $after, before: $before) {
-      edges { node {
-              #{@activity}
-      }}
-      page_info: pageInfo {
-        has_next_page: hasNextPage
-        has_previous_page: hasPreviousPage
-        start_cursor: startCursor
-        end_cursor: endCursor
-      }
-    }}"
     def notifications(params, conn) do
       current_user = conn.assigns[:current_user]
       notification_filters = extract_notification_filters(conn.params)
 
-      graphql(conn, :notifications, params)
-      |> process_feed_edges_with_batch_loading(current_user, "notification")
+      feed_direct(params, current_user, :notification)
       |> apply_notification_filters(notification_filters)
       |> then(&respond_with_feed(conn, params, &1))
     end
@@ -456,30 +432,18 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       case graphql(conn, :show_status, %{"filter" => %{"object_id" => id}}) do
         %{data: %{activity: activity}} when not is_nil(activity) ->
           object_ids = [get_activity_id(activity)] |> Enum.reject(&is_nil/1)
-          interaction_states = batch_load_interaction_states(current_user, object_ids)
+          batch_opts = batch_load_supplementary(current_user, object_ids)
 
-          status =
-            Mappers.Status.from_activity(activity,
-              current_user: current_user,
-              interaction_states: interaction_states
-            )
+          status = Mappers.Status.from_activity(activity, batch_opts)
 
-          if Map.get(status, "id") do
+          if is_map(status) and Map.get(status, "id") do
             Phoenix.Controller.json(conn, status)
           else
             RestAdapter.error_fn({:error, :not_found}, conn)
           end
 
-        %{data: %{activity: nil}} ->
+        _ ->
           RestAdapter.error_fn({:error, :not_found}, conn)
-
-        %{errors: errors} ->
-          error(errors, "GraphQL query failed in show_status")
-          RestAdapter.error_fn({:error, errors}, conn)
-
-        other ->
-          error(other, "Unexpected GraphQL response in show_status")
-          RestAdapter.error_fn({:error, :unexpected_response}, conn)
       end
     end
 
@@ -588,20 +552,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         %{data: %{thread_context: %{ancestors: ancestors, descendants: descendants}}} ->
           all_activities = (ancestors || []) ++ (descendants || [])
           object_ids = all_activities |> Enum.map(&get_activity_id/1) |> Enum.reject(&is_nil/1)
-          interaction_states = batch_load_interaction_states(current_user, object_ids)
-
-          visibility_by_object =
-            Bonfire.Boundaries.Controlleds.list_preset_acl_ids_on_objects(object_ids)
-
-          followers_grant_objects =
-            batch_load_followers_grants(object_ids, visibility_by_object)
-
-          map_opts = [
-            current_user: current_user,
-            interaction_states: interaction_states,
-            visibility_by_object: visibility_by_object,
-            followers_grant_objects: followers_grant_objects
-          ]
+          map_opts = batch_load_supplementary(current_user, object_ids)
 
           context = %{
             "ancestors" => Enum.map(ancestors || [], &Mappers.Status.from_activity(&1, map_opts)),
@@ -614,59 +565,45 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         %{data: %{thread_context: nil}} ->
           Phoenix.Controller.json(conn, %{"ancestors" => [], "descendants" => []})
 
-        %{errors: errors} ->
-          error(errors, "GraphQL query failed in status_context")
-          RestAdapter.error_fn({:error, errors}, conn)
-
-        other ->
-          error(other, "Unexpected GraphQL response in status_context")
+        _ ->
           Phoenix.Controller.json(conn, %{"ancestors" => [], "descendants" => []})
       end
     end
 
-    @graphql "query ($id: ID!) {
-      likers_of(id: $id) {
-        #{@user}
-      }
-    }"
     def status_favourited_by(%{"id" => id}, conn) do
-      list_status_interactors(conn, :status_favourited_by, :likers_of, id)
+      list_status_interactors(conn, :like, id)
     end
 
-    @graphql "query ($id: ID!) {
-      boosters_of(id: $id) {
-        #{@user}
-      }
-    }"
     def status_reblogged_by(%{"id" => id}, conn) do
-      list_status_interactors(conn, :status_reblogged_by, :boosters_of, id)
+      list_status_interactors(conn, :boost, id)
     end
 
-    defp list_status_interactors(conn, query_name, data_key, id) do
+    defp list_status_interactors(conn, interaction_type, id) do
       current_user = conn.assigns[:current_user]
 
-      case graphql(conn, query_name, %{"id" => id}) do
-        %{data: data} when is_map(data) ->
-          users = Map.get(data, data_key, [])
+      result =
+        case interaction_type do
+          :like -> Bonfire.Social.Likes.by_liked(id, current_user: current_user, preload: :subject)
+          :boost -> Bonfire.Social.Boosts.list_of(id, current_user: current_user)
+        end
 
-          accounts =
-            users
-            |> Enum.map(
-              &Mappers.Account.from_user(&1,
-                current_user: current_user,
-                skip_expensive_stats: true
-              )
-            )
-            |> Enum.reject(&is_nil/1)
+      edges =
+        case result do
+          list when is_list(list) -> list
+          %{edges: list} when is_list(list) -> list
+          _ -> []
+        end
 
-          Phoenix.Controller.json(conn, accounts)
+      accounts =
+        edges
+        |> Enum.flat_map(fn edge ->
+          subject = Map.get(edge, :edge, edge) |> Map.get(:subject, nil)
+          if subject, do: [subject], else: []
+        end)
+        |> Enum.map(&Mappers.Account.from_user(&1, current_user: current_user, skip_expensive_stats: true))
+        |> Enum.reject(&is_nil/1)
 
-        %{errors: errors} ->
-          RestAdapter.error_fn({:error, errors}, conn)
-
-        _other ->
-          Phoenix.Controller.json(conn, [])
-      end
+      Phoenix.Controller.json(conn, accounts)
     end
 
     defp get_activity_id(%{object_id: id}), do: id
@@ -891,105 +828,105 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       |> Enum.uniq()
     end
 
-    defp process_feed_edges_with_batch_loading(feed_response, current_user, feed_type) do
-      case feed_response do
-        %{data: %{feed_activities: %{edges: edges}}} when is_list(edges) ->
-          object_ids =
-            edges
-            |> Enum.flat_map(fn edge ->
-              activity = Map.get(edge, :node) || edge
-              get_all_object_ids(activity)
-            end)
-            |> Enum.reject(&is_nil/1)
-            |> Enum.uniq()
+    defp feed_direct(params, current_user, feed_type) do
+      filters = Map.get(params, :filter) || Map.get(params, "filter", %{})
 
-          interaction_states = batch_load_interaction_states(current_user, object_ids)
-          mentions_by_object = batch_load_mentions(object_ids)
+      feed_name =
+        Bonfire.Common.Types.maybe_to_atom(
+          Map.get(filters, :feed_name) || Map.get(filters, "feed_name") ||
+            Bonfire.Social.FeedLoader.feed_name_or_default(:default, current_user)
+        )
 
-          visibility_by_object =
-            Bonfire.Boundaries.Controlleds.list_preset_acl_ids_on_objects(object_ids)
+      pagination_args = Map.take(params, [:first, :last, :after, :before])
+      pagination_args = if map_size(pagination_args) == 0, do: %{first: 20}, else: pagination_args
 
-          followers_grant_objects =
-            batch_load_followers_grants(object_ids, visibility_by_object)
+      feed_result =
+        Bonfire.Social.FeedActivities.feed(
+          feed_name,
+          filters,
+          current_user: current_user,
+          paginate: pagination_args,
+          preload: @masto_preloads
+        )
 
-          prepare_fn =
-            case feed_type do
-              "notification" ->
-                {subjects_by_id, post_content_by_id} =
-                  if feed_type == "notification" do
-                    subject_ids = extract_subject_ids_for_batch_load(edges)
-                    subjects = batch_load_subjects(subject_ids)
-                    content_ids = extract_object_ids_for_content_batch_load(edges)
-                    post_content = batch_load_post_content(content_ids)
-                    {subjects, post_content}
-                  else
-                    {%{}, %{}}
-                  end
+      case feed_result do
+        {:error, _} = error ->
+          error
 
-                &Mappers.Notification.from_activity(&1,
-                  current_user: current_user,
-                  interaction_states: interaction_states,
-                  mentions_by_object: mentions_by_object,
-                  visibility_by_object: visibility_by_object,
-                  followers_grant_objects: followers_grant_objects,
-                  subjects_by_id: subjects_by_id,
-                  post_content_by_id: post_content_by_id
-                )
+        %{edges: edges, page_info: page_info} when is_list(edges) ->
+          edges =
+            Bonfire.Social.Activities.activity_preloads(edges, [:with_media],
+              current_user: current_user,
+              skip_boundary_check: true,
+              preload_nested: {[:activity], []}
+            )
 
-              _ ->
-                &Mappers.Status.from_activity(&1,
-                  current_user: current_user,
-                  interaction_states: interaction_states,
-                  mentions_by_object: mentions_by_object,
-                  visibility_by_object: visibility_by_object,
-                  followers_grant_objects: followers_grant_objects
-                )
-            end
+          activities =
+            Enum.map(edges, fn edge -> Map.get(edge, :activity, edge) end)
 
-          process_feed_edges(feed_response, prepare_fn, feed_type)
+          object_ids = extract_object_ids(activities)
+          batch_opts = batch_load_supplementary(current_user, object_ids, activities, feed_type)
 
-        other ->
-          prepare_fn =
-            case feed_type do
-              "notification" ->
-                &Mappers.Notification.from_activity(&1, current_user: current_user)
+          mapper_fn =
+            if feed_type == :notification,
+              do: &Mappers.Notification.from_activity(&1, batch_opts),
+              else: &Mappers.Status.from_activity(&1, batch_opts)
 
-              _ ->
-                &Mappers.Status.from_activity(&1, current_user: current_user)
-            end
-
-          process_feed_edges(other, prepare_fn, feed_type)
-      end
-    end
-
-    defp process_feed_edges(feed_response, prepare_fn, feed_type) do
-      case feed_response do
-        %{data: %{feed_activities: %{edges: edges, page_info: page_info}}} when is_list(edges) ->
           items =
-            edges
-            |> Enum.flat_map(fn edge ->
-              case prepare_fn.(edge) do
-                nil ->
-                  []
-
-                item when is_map(item) ->
-                  [item]
-
-                other ->
-                  warn(other, "#{String.capitalize(feed_type)} mapper returned unexpected type")
-                  []
+            Enum.flat_map(activities, fn activity ->
+              case mapper_fn.(activity) do
+                item when is_map(item) -> [item]
+                _ -> []
               end
             end)
 
           {:ok, items, page_info}
 
-        %{errors: errors} ->
-          {:error, errors}
-
-        other ->
-          warn(other, "unexpected_#{feed_type}_response, returning empty list")
+        _ ->
           {:ok, [], %{}}
       end
+    end
+
+    defp extract_object_ids(activities) when is_list(activities) do
+      activities
+      |> Enum.map(&Map.get(&1, :object_id))
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+    end
+
+    defp batch_load_supplementary(current_user, object_ids, activities, :notification) do
+      batch_load_supplementary(current_user, object_ids) ++
+        [
+          subjects_by_id:
+            activities
+            |> Enum.map(&Map.get(&1, :subject_id))
+            |> Enum.reject(&is_nil/1)
+            |> Enum.uniq()
+            |> batch_load_subjects(),
+          post_content_by_id:
+            activities
+            |> Enum.map(&Map.get(&1, :object_id))
+            |> Enum.reject(&is_nil/1)
+            |> Enum.uniq()
+            |> batch_load_post_content()
+        ]
+    end
+
+    defp batch_load_supplementary(current_user, object_ids, _activities, _feed_type) do
+      batch_load_supplementary(current_user, object_ids)
+    end
+
+    defp batch_load_supplementary(current_user, object_ids) do
+      visibility_by_object =
+        Bonfire.Boundaries.Controlleds.list_preset_acl_ids_on_objects(object_ids)
+
+      [
+        current_user: current_user,
+        interaction_states: batch_load_interaction_states(current_user, object_ids),
+        mentions_by_object: batch_load_mentions(object_ids),
+        visibility_by_object: visibility_by_object,
+        followers_grant_objects: batch_load_followers_grants(object_ids, visibility_by_object)
+      ]
     end
 
     defp respond_with_feed(conn, params, {:ok, items, page_info}) do
