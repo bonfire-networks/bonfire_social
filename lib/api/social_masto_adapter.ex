@@ -583,8 +583,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
       result =
         case interaction_type do
-          :like -> Bonfire.Social.Likes.by_liked(id, current_user: current_user, preload: :subject)
-          :boost -> Bonfire.Social.Boosts.list_of(id, current_user: current_user)
+          :like ->
+            Bonfire.Social.Likes.by_liked(id, current_user: current_user, preload: :subject)
+
+          :boost ->
+            Bonfire.Social.Boosts.list_of(id, current_user: current_user)
         end
 
       edges =
@@ -600,7 +603,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
           subject = Map.get(edge, :edge, edge) |> Map.get(:subject, nil)
           if subject, do: [subject], else: []
         end)
-        |> Enum.map(&Mappers.Account.from_user(&1, current_user: current_user, skip_expensive_stats: true))
+        |> Enum.map(
+          &Mappers.Account.from_user(&1, current_user: current_user, skip_expensive_stats: true)
+        )
         |> Enum.reject(&is_nil/1)
 
       Phoenix.Controller.json(conn, accounts)

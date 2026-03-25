@@ -144,7 +144,8 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
       # Use the last item's ID as max_id to fetch the next page
       last_id = List.last(page1)["id"]
 
-      page2 = api_conn |> get("/api/v1/timelines/home?limit=3&max_id=#{last_id}") |> json_response(200)
+      page2 =
+        api_conn |> get("/api/v1/timelines/home?limit=3&max_id=#{last_id}") |> json_response(200)
 
       # Page 2 should have different items than page 1
       page1_ids = MapSet.new(Enum.map(page1, & &1["id"]))
