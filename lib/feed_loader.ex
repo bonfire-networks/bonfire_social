@@ -277,7 +277,7 @@ defmodule Bonfire.Social.FeedLoader do
     filters
     |> Map.put(
       :sort_by,
-      filters[:sort_by] || opts[:sort_by] ||
+      e(filters, :sort_by, nil) || e(filters, "sort_by", nil) || opts[:sort_by] ||
         Settings.get([Bonfire.UI.Social.FeedLive, :sort_by], nil,
           current_user: current_user,
           name: l("Default Sort Order"),
@@ -286,7 +286,7 @@ defmodule Bonfire.Social.FeedLoader do
     )
     |> Map.put(
       :time_limit,
-      filters[:time_limit] || opts[:time_limit] ||
+      e(filters, :time_limit, nil) || e(filters, "time_limit", nil) || opts[:time_limit] ||
         Settings.get([Bonfire.UI.Social.FeedLive, :time_limit], 7,
           current_user: current_user,
           name: l("Default Time Limit"),
