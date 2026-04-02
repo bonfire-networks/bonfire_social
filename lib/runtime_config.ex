@@ -571,7 +571,8 @@ defmodule Bonfire.Social.RuntimeConfig do
         # Custom Feeds
         "A Specific User's Activities" => %{
           match: %{subjects: "*"},
-          include: [:with_creator],
+          # NOTE: include parent to show "published in" for posts in group
+          include: [:with_creator, :with_parent],
           exclude: [:with_subject]
         },
         "Requests for Me" => %{
@@ -603,6 +604,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         },
         "Created by a Specific User" => %{
           match: %{creators: "*"},
+          include: [:with_parent],
           exclude: [:with_creator, :with_subject]
         },
         "Flags" => %{
