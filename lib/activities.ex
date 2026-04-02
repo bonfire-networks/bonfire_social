@@ -527,7 +527,7 @@ defmodule Bonfire.Social.Activities do
 
         :with_parent ->
           # TODO: make proload check if the schema module of an assoc is enabled to avoid having to add conditionals like this?
-          flood(
+          debug(
             Extend.module_enabled?(Bonfire.Classify.Tree, opts),
             "with_parent proload: Classify.Tree enabled?"
           )
@@ -535,7 +535,7 @@ defmodule Bonfire.Social.Activities do
           if Extend.module_enabled?(Bonfire.Classify.Tree, opts),
             do:
               proload(query, activity: [tree: [parent: [:profile, :character]]])
-              |> flood("with_parent proload: query with proload"),
+              |> debug("with_parent proload: query with proload"),
             else: query
 
         :with_reply_to ->
@@ -774,14 +774,14 @@ defmodule Bonfire.Social.Activities do
           ]
 
         :with_parent ->
-          flood(
+          debug(
             Extend.module_enabled?(Bonfire.Classify.Tree, opts),
             "with_parent preload: Classify.Tree enabled?"
           )
 
           if Extend.module_enabled?(Bonfire.Classify.Tree, opts),
-            do: [tree: [parent: [:profile, :character]]] |> flood("with_parent: preload list"),
-            else: [] |> flood("with_parent: Tree not enabled, skipping")
+            do: [tree: [parent: [:profile, :character]]] |> debug("with_parent: preload list"),
+            else: [] |> debug("with_parent: Tree not enabled, skipping")
 
         :with_reply_to ->
           [
