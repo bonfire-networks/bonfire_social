@@ -1181,7 +1181,7 @@ defmodule Bonfire.Social.Objects do
       %Changeset{}
 
   """
-  def cast_sensitivity(changeset, skip) when skip in [nil, false] do
+  def cast_sensitivity(changeset, skip) when skip in [nil, false, "false"] do
     changeset
   end
 
