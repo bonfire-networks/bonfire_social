@@ -1051,7 +1051,7 @@ defmodule Bonfire.Social.Objects do
   # used in Classify, Geolocate, etc
   def publish(creator, verb, thing, opts_or_attrs \\ nil, for_module \\ __MODULE__)
 
-  def publish(creator, verb, %{id: _} = thing, opts_or_attrs, for_module) do
+  def publish(creator, verb, thing, opts_or_attrs, for_module) do
     creator =
       creator || e(thing, :creator, nil) || e(thing, :created, :creator, nil) ||
         e(thing, :created, :creator_id, nil) || e(thing, :provider, nil)
