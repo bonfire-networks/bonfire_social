@@ -399,30 +399,35 @@ defmodule Bonfire.Social.Activities do
   def activity_preloads(query_or_object_or_objects, preloads, opts) when is_list(preloads) do
     # debug(query, "query or data")
     # debug(preloads, "preloads inputted")
-    opts =
-      to_options(opts)
-      |> Keyword.put(:preload, preloads)
-      |> debug("opts with preloads inputted")
+    :telemetry.span([:bonfire, :activities, :preloads], %{preloads: preloads}, fn ->
+      opts =
+        to_options(opts)
+        |> Keyword.put(:preload, preloads)
+        |> debug("opts with preloads inputted")
 
-    if not is_nil(query_or_object_or_objects) and
-         Ecto.Queryable.impl_for(query_or_object_or_objects) do
-      preloads
-      |> Bonfire.Social.FeedLoader.map_activity_preloads()
-      |> debug("accumulated preloads to proload")
-      |> Enum.reduce(query_or_object_or_objects, &prepare_activity_preloads(&2, &1, opts))
-      |> debug("query with accumulated proloads")
-    else
-      already_preloaded = already_preloaded_from_opts(opts)
+      result =
+        if not is_nil(query_or_object_or_objects) and
+             Ecto.Queryable.impl_for(query_or_object_or_objects) do
+          preloads
+          |> Bonfire.Social.FeedLoader.map_activity_preloads()
+          |> debug("accumulated preloads to proload")
+          |> Enum.reduce(query_or_object_or_objects, &prepare_activity_preloads(&2, &1, opts))
+          |> debug("query with accumulated proloads")
+        else
+          already_preloaded = already_preloaded_from_opts(opts)
 
-      preloads
-      |> Bonfire.Social.FeedLoader.map_activity_preloads(already_preloaded)
-      |> Enum.flat_map(&prepare_activity_preloads(nil, &1, opts))
-      |> Enum.uniq()
-      |> debug("accumulated postloads to try")
-      |> maybe_repo_preload_activity(query_or_object_or_objects, ..., opts)
+          preloads
+          |> Bonfire.Social.FeedLoader.map_activity_preloads(already_preloaded)
+          |> Enum.flat_map(&prepare_activity_preloads(nil, &1, opts))
+          |> Enum.uniq()
+          |> debug("accumulated postloads to try")
+          |> maybe_repo_preload_activity(query_or_object_or_objects, ..., opts)
 
-      # |> debug()
-    end
+          # |> debug()
+        end
+
+      {result, %{}}
+    end)
   end
 
   def activity_preloads(query, false, _opts) do

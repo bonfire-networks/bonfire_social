@@ -1687,6 +1687,12 @@ defmodule Bonfire.Social.FeedLoader do
 
   defp prepare_feed(%{edges: edges, page_info: page_info}, filters, opts)
        when is_list(edges) and edges != [] do
+    :telemetry.span([:bonfire, :feed, :prepare], %{count: length(edges)}, fn ->
+      {do_prepare_feed(edges, page_info, filters, opts), %{}}
+    end)
+  end
+
+  defp do_prepare_feed(edges, page_info, filters, opts) do
     # debug(length(edges), "Starting prepare_feed with N edges")
 
     show_objects_only_once? =

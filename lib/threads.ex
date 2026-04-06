@@ -433,6 +433,14 @@ defmodule Bonfire.Social.Threads do
   returning a map of `%{thread_id => [participant_subjects]}`.
   """
   def list_participants_for_threads(edges, opts \\ []) do
+    :telemetry.span(
+      [:bonfire, :threads, :list_participants_for_threads],
+      %{edge_count: length(edges)},
+      fn -> {do_list_participants_for_threads(edges, opts), %{}} end
+    )
+  end
+
+  defp do_list_participants_for_threads(edges, opts) do
     opts = to_options(opts)
     limit_per_thread = opts[:limit] || 5
     exclude_table_ids = default_exclude_table_ids()
@@ -454,6 +462,8 @@ defmodule Bonfire.Social.Threads do
       end)
       |> Enum.uniq()
 
+    exclude_subject_ids = opts[:exclude_subject_ids] || []
+
     # Build a map of thread_id => [activity subjects from edges]
     edge_subjects_by_thread =
       Enum.group_by(
@@ -461,6 +471,9 @@ defmodule Bonfire.Social.Threads do
         &e(&1, :activity, :replied, :thread_id, nil),
         &e(&1, :activity, :subject, nil)
       )
+      |> Map.new(fn {k, subjects} ->
+        {k, Enum.reject(subjects, &(id(&1) in exclude_subject_ids))}
+      end)
 
     # Build a map of thread_id => [tagged users from edges] (DM recipients)
     edge_tags_by_thread =
@@ -470,7 +483,9 @@ defmodule Bonfire.Social.Threads do
 
         if thread_id do
           e(activity, :object, :tags, [])
-          |> Enum.reject(&(e(&1, :table_id, nil) in exclude_table_ids))
+          |> Enum.reject(
+            &(e(&1, :table_id, nil) in exclude_table_ids or id(&1) in exclude_subject_ids)
+          )
           |> Enum.map(&{thread_id, &1})
         else
           []
@@ -478,35 +493,48 @@ defmodule Bonfire.Social.Threads do
       end)
       |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
 
+    # Flat lookup map of already-loaded subject structs — used to fill nil subjects after skipped JOIN
+    known_subjects_by_id =
+      (Enum.flat_map(edge_subjects_by_thread, fn {_, subjects} -> subjects end) ++
+         Enum.flat_map(edge_tags_by_thread, fn {_, tags} -> tags end))
+      |> filter_empty([])
+      |> Map.new(&{id(&1), &1})
+
+    skip_preload_for_subject_ids = Map.keys(known_subjects_by_id)
+
     fetched_by_thread =
       if all_thread_ids != [] do
         fetch_participants(all_thread_ids,
           current_user: current_user(opts),
           limit: limit_per_thread * length(edges),
           exclude_table_ids: exclude_table_ids,
+          exclude_subject_ids: opts[:exclude_subject_ids] || [],
+          skip_preload_for_subject_ids: skip_preload_for_subject_ids,
           skip_boundary_check: opts[:skip_boundary_check]
         )
         |> e(:edges, [])
+        # |> debug("fetched_by_thread")
         |> Enum.group_by(
           &e(&1, :thread_id, nil),
-          &e(&1, :activity, :subject, nil)
+          fn edge ->
+            e(edge, :activity, :subject, nil) ||
+              Map.get(known_subjects_by_id, e(edge, :activity, :subject_id, nil))
+          end
         )
       else
         %{}
       end
 
-    # Merge fetched participants + edge subjects, dedup, take limit
-    Map.new(
-      Enum.uniq(Map.keys(fetched_by_thread) ++ Map.keys(edge_subjects_by_thread)),
-      fn thread_id ->
-        {thread_id,
-         (Map.get(fetched_by_thread, thread_id, []) ++
-            Map.get(edge_subjects_by_thread, thread_id, []))
-         |> filter_empty([])
-         |> Enum.uniq_by(&(e(&1, :character, :id, nil) || id(&1)))
-         |> Enum.take(limit_per_thread)}
-      end
-    )
+    # Merge all participant sources once, then dedup and take limit per thread
+    Map.merge(fetched_by_thread, edge_subjects_by_thread, fn _, a, b -> a ++ b end)
+    |> Map.merge(edge_tags_by_thread, fn _, a, b -> a ++ b end)
+    |> Map.new(fn {thread_id, participants} ->
+      {thread_id,
+       participants
+       |> filter_empty([])
+       |> Enum.uniq_by(&(e(&1, :character, :id, nil) || id(&1)))
+       |> Enum.take(limit_per_thread)}
+    end)
   end
 
   def list_participants(activity_or_object, thread_or_object_id \\ nil, opts \\ []) do
@@ -532,6 +560,26 @@ defmodule Bonfire.Social.Threads do
           e(activity_or_object, :replied, :thread_id, nil)
       end
 
+    # Participants already known from preloaded data — exclude from DB query
+    already_known =
+      [
+        e(activity_or_object, :subject, nil),
+        e(activity_or_object, :created, :creator, nil),
+        e(activity_or_object, :object, :created, :creator, nil),
+        e(activity_or_object, :replied, :reply_to, :created, :creator, nil),
+        e(activity_or_object, :reply_to, :created, :creator, nil),
+        e(activity_or_object, :object, :replied, :reply_to, :created, :creator, nil),
+        e(activity_or_object, :object, :reply_to, :created, :creator, nil)
+      ] ++
+        e(activity_or_object, :tags, []) ++
+        e(activity_or_object, :activity, :tags, [])
+
+    known_ids =
+      already_known
+      |> Enum.map(&id/1)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+
     # add author of root message
     # add author of the message it was replying to
     # add all previously tagged people
@@ -546,21 +594,14 @@ defmodule Bonfire.Social.Threads do
            ],
            current_user: current_user,
            limit: limit,
-           exclude_table_ids: exclude_table_ids
+           exclude_table_ids: exclude_table_ids,
+           exclude_subject_ids: known_ids
          )
          |> e(:edges, [])
          |> Enum.map(&e(&1, :activity, :subject, nil)),
        else: []
      ) ++
-       [e(activity_or_object, :subject, nil)] ++
-       [e(activity_or_object, :created, :creator, nil)] ++
-       [e(activity_or_object, :object, :created, :creator, nil)] ++
-       [e(activity_or_object, :replied, :reply_to, :created, :creator, nil)] ++
-       [e(activity_or_object, :reply_to, :created, :creator, nil)] ++
-       [e(activity_or_object, :object, :replied, :reply_to, :created, :creator, nil)] ++
-       [e(activity_or_object, :object, :reply_to, :created, :creator, nil)] ++
-       e(activity_or_object, :tags, []) ++
-       e(activity_or_object, :activity, :tags, []))
+       already_known)
     # |> debug("participants grab bag")
     |> filter_empty([])
     |> Enum.reject(&(e(&1, :table_id, nil) in exclude_table_ids))
@@ -631,16 +672,29 @@ defmodule Bonfire.Social.Threads do
 
   defp q_subjects(opts \\ []) do
     exclude_table_ids = opts[:exclude_table_ids] || []
+    exclude_subject_ids = opts[:exclude_subject_ids] || []
+    skip_preload_for_subject_ids = opts[:skip_preload_for_subject_ids] || []
 
     q_by_verb(opts)
-    |> proload(activity: [:subject])
+    |> reusable_join(:left, [activity: activity], subject in Needle.Pointer,
+      as: :subject,
+      on:
+        activity.subject_id not in ^skip_preload_for_subject_ids and
+          activity.subject_id == subject.id
+    )
+    |> then(fn q ->
+      if exclude_subject_ids != [],
+        do: where(q, [activity: activity], activity.subject_id not in ^exclude_subject_ids),
+        else: q
+    end)
     |> where(
       [subject: subject],
-      subject.table_id not in ^exclude_table_ids
+      is_nil(subject.id) or subject.table_id not in ^exclude_table_ids
     )
+    |> proload(activity: [:subject])
     |> Ecto.Query.exclude(:distinct)
-    |> distinct([subject: subject],
-      desc: subject.id
+    |> distinct([activity: activity],
+      desc: activity.subject_id
     )
   end
 
