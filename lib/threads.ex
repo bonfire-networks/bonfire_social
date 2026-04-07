@@ -796,37 +796,59 @@ defmodule Bonfire.Social.Threads do
     paginate_opts =
       paginate_base ++ Activities.order_pagination_opts(opts[:sort_by], opts[:sort_order])
 
-    if opts[:thread_mode] == :flat do
-      list_flat_replies(thread_or_comment_id, paginate_opts, opts)
-    else
-      # nested mode: paginate by root replies (depth=1), then load their full subtrees
-      # use a lower limit for root replies since each may have many descendants
-      root_limit = Config.get(:thread_default_root_reply_limit, 15)
-      root_paginate_opts = Keyword.put(paginate_opts, :limit, root_limit)
+    root_limit = Config.get(:thread_default_root_reply_limit, 15)
+    hard_limit = Config.get(:thread_pagination_hard_limit, 50)
+    total_replies = opts[:total_replies_count]
+    cache_key = "thread_small:#{thread_or_comment_id}"
 
-      root_page =
-        query([thread_id: thread_or_comment_id], Keyword.put(opts, :max_depth, 1))
-        |> repo().many_paginated(root_paginate_opts)
+    cond do
+      opts[:thread_mode] == :flat ->
+        list_flat_replies(thread_or_comment_id, paginate_opts, opts)
+        |> do_list_replies_postload(opts)
 
-      root_ids =
-        root_page.edges
-        |> Enum.map(&Bonfire.Common.Needles.id_binary(&1.id))
-        |> Enum.reject(&is_nil/1)
+      (is_integer(total_replies) and total_replies <= hard_limit) or
+          Bonfire.Common.Cache.get!(cache_key) == true ->
+        # known-small — single query is safe, skip two-step overhead
+        list_nested_replies(thread_or_comment_id, opts)
 
-      if root_ids == [] do
-        root_page
-      else
-        deeper_nodes =
-          query([thread_id: thread_or_comment_id], opts)
-          |> Replied.where_root_in(root_ids)
-          # |> limit(^Config.get(:pagination_hard_max_limit, 500))
-          # |> debug("deeper_nodes_query")
-          |> repo().many()
+      true ->
+        # known-large thread: paginate by root replies (depth=1), then load their full subtrees
+        # use a lower limit for root replies since each may have many descendants
+        root_paginate_opts = Keyword.put(paginate_opts, :limit, root_limit)
 
-        %{root_page | edges: root_page.edges ++ deeper_nodes}
-      end
+        root_page =
+          query([thread_id: thread_or_comment_id], Keyword.put(opts, :max_depth, 1))
+          |> repo().many_paginated(root_paginate_opts)
+
+        root_ids =
+          root_page.edges
+          |> Enum.map(& &1.id)
+          |> Enum.reject(&is_nil/1)
+
+        debug(root_page.edges |> Enum.map(& &1.id), "root_page edge ids")
+        debug(root_ids, "root_ids (binary)")
+        debug(root_page.page_info, "root_page page_info")
+
+        result =
+          if root_ids == [] do
+            root_page
+          else
+            deeper_nodes =
+              query([thread_id: thread_or_comment_id], opts)
+              |> Replied.where_root_in(root_ids)
+              |> debug("deeper_nodes query")
+              |> repo().many()
+              |> debug("deeper_nodes results")
+
+            %{root_page | edges: root_page.edges ++ deeper_nodes}
+          end
+
+        # cache as small if this page had no next page — future visits can skip two-step
+        if is_nil(e(result, :page_info, :end_cursor, nil)),
+          do: Bonfire.Common.Cache.put(cache_key, true)
+
+        do_list_replies_postload(result, opts)
     end
-    |> do_list_replies_postload(opts)
   end
 
   defp do_list_replies_postload(result, opts) do
@@ -1163,9 +1185,11 @@ defmodule Bonfire.Social.Threads do
   """
 
   def arrange_replies_tree(replies, opts \\ []) do
+    hard_limit = Config.get(:thread_pagination_hard_limit, 50)
+
     replies
     |> debug("repppl")
-    |> Replied.arrange(arrange_opts(opts))
+    |> Replied.arrange(arrange_opts(opts) ++ [cap: hard_limit])
   end
 
   @doc """
