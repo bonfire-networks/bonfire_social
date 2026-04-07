@@ -790,33 +790,89 @@ defmodule Bonfire.Social.Threads do
 
   def list_replies(thread_or_comment_id, opts) when is_binary(thread_or_comment_id) do
     opts = to_options(opts)
+    paginate_base = opts[:paginate] || opts
+    paginate_base = if is_map(paginate_base), do: Enum.to_list(paginate_base), else: paginate_base
 
-    query(
-      # note this won't query by thread_id but rather by path
-      [thread_id: thread_or_comment_id],
-      opts
-    )
-    |> debug("quuuery")
-    # return a page of items + pagination metadata
-    |> repo().many_paginated(
-      maybe_set_high_limit(opts[:paginate] || opts, opts[:thread_mode]) ++
-        Activities.order_pagination_opts(opts[:sort_by], opts[:sort_order])
-    )
-    # preloaded after so we can get more than 1
-    # |> repo().maybe_preload(
-    #   # :pinned,
-    #   # FIXME: this should happen via `Activities.activity_preloads`
-    #   activity: [:media]
-    # )
+    paginate_opts =
+      paginate_base ++ Activities.order_pagination_opts(opts[:sort_by], opts[:sort_order])
+
+    if opts[:thread_mode] == :flat do
+      list_flat_replies(thread_or_comment_id, paginate_opts, opts)
+    else
+      # nested mode: paginate by root replies (depth=1), then load their full subtrees
+      # use a lower limit for root replies since each may have many descendants
+      root_limit = Config.get(:thread_default_root_reply_limit, 15)
+      root_paginate_opts = Keyword.put(paginate_opts, :limit, root_limit)
+
+      root_page =
+        query([thread_id: thread_or_comment_id], Keyword.put(opts, :max_depth, 1))
+        |> repo().many_paginated(root_paginate_opts)
+
+      root_ids =
+        root_page.edges
+        |> Enum.map(&Bonfire.Common.Needles.id_binary(&1.id))
+        |> Enum.reject(&is_nil/1)
+
+      if root_ids == [] do
+        root_page
+      else
+        deeper_nodes =
+          query([thread_id: thread_or_comment_id], opts)
+          |> Replied.where_root_in(root_ids)
+          # |> limit(^Config.get(:pagination_hard_max_limit, 500))
+          # |> debug("deeper_nodes_query")
+          |> repo().many()
+
+        %{root_page | edges: root_page.edges ++ deeper_nodes}
+      end
+    end
+    |> do_list_replies_postload(opts)
+  end
+
+  defp do_list_replies_postload(result, opts) do
+    result
+    # preload these after so we can get more than 1
     |> repo().maybe_preload(
       # FIXME: this should happen via `Activities.activity_preloads`
       [activity: Activities.maybe_with_labelled()],
       opts |> Keyword.put_new(:follow_pointers, false)
     )
+    # |> repo().maybe_preload(
+    #   # :pinned,
+    #   # FIXME: this should happen via `Activities.activity_preloads`
+    #   activity: [:media]
+    # )
     |> Bonfire.Social.after_many(opts)
+  end
 
-    # |> repo().many # without pagination
-    # |> debug("thread")
+  @doc """
+  Like `list_replies/2` but loads up to the pagination hard max limit in a single query.
+  Useful when you need all replies at once (e.g. for export or search indexing).
+  """
+  def list_nested_replies(thread_or_comment, opts \\ [])
+
+  def list_nested_replies(%{thread_id: thread_id}, opts),
+    do: list_nested_replies(thread_id, opts)
+
+  def list_nested_replies(%{id: thread_or_comment_id}, opts),
+    do: list_nested_replies(thread_or_comment_id, opts)
+
+  def list_nested_replies(thread_or_comment_id, opts) when is_binary(thread_or_comment_id) do
+    opts = to_options(opts)
+
+    query([thread_id: thread_or_comment_id], opts)
+    |> debug("quuuery")
+    |> repo().many_paginated(
+      maybe_set_high_limit(opts[:paginate] || opts, opts[:thread_mode]) ++
+        Activities.order_pagination_opts(opts[:sort_by], opts[:sort_order])
+    )
+    |> do_list_replies_postload(opts)
+  end
+
+  def list_flat_replies(thread_or_comment_id, paginate_opts, opts)
+      when is_binary(thread_or_comment_id) do
+    query([thread_id: thread_or_comment_id], opts)
+    |> repo().many_paginated(paginate_opts)
   end
 
   defp maybe_set_high_limit(opts, :flat), do: opts
