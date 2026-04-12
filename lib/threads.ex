@@ -584,25 +584,24 @@ defmodule Bonfire.Social.Threads do
     # add author of the message it was replying to
     # add all previously tagged people
     # add any other participants in the thread
-    (if(thread_or_object_id,
-       do:
-         fetch_participants(
-           [
-             id(e(activity_or_object, :object_id, nil) || e(activity_or_object, :object, nil)),
-             id(activity_or_object),
-             thread_or_object_id
-           ],
-           current_user: current_user,
-           limit: limit,
-           exclude_table_ids: exclude_table_ids,
-           exclude_subject_ids: known_ids
-         )
-         |> e(:edges, [])
-         |> Enum.map(&e(&1, :activity, :subject, nil)),
-       else: []
-     ) ++
-       already_known)
-    # |> debug("participants grab bag")
+    fetched =
+      if(thread_or_object_id,
+        do:
+          fetch_participants(
+            [
+              id(e(activity_or_object, :object_id, nil) || e(activity_or_object, :object, nil)),
+              id(activity_or_object),
+              thread_or_object_id
+            ],
+            limit: limit,
+            current_user: current_user,
+            exclude_table_ids: exclude_table_ids,
+            exclude_subject_ids: known_ids
+          ),
+        else: []
+      )
+
+    (fetched ++ already_known)
     |> filter_empty([])
     |> Enum.reject(&(e(&1, :table_id, nil) in exclude_table_ids))
     |> Enum.uniq_by(&(e(&1, :character, :id, nil) || id(&1)))
@@ -616,17 +615,48 @@ defmodule Bonfire.Social.Threads do
     |> Bonfire.Common.Types.table_types()
   end
 
-  @doc "List participants in a thread (depending on user's boundaries)"
+  defp thread_activities_query(thread_ids) do
+    verb_ids = Enum.map([:create, :reply], &Verbs.get_id!(&1))
+
+    base_query()
+    |> reusable_join(:inner, [root], assoc(root, :activity), as: :activity)
+    |> then(&filter(:in_thread, List.wrap(thread_ids), &1))
+    |> where([activity: activity], activity.verb_id in ^verb_ids)
+  end
+
+  @doc "List unique subjects who posted in a thread, with character and profile preloaded."
   defp fetch_participants(thread_id, opts \\ [])
 
   defp fetch_participants(thread_ids, opts)
        when is_binary(thread_ids) or
               (is_list(thread_ids) and thread_ids != []) do
-    Bonfire.Social.FeedLoader.feed_paginated(
-      [in_thread: thread_ids],
-      # [in_thread: {thread_ids, &filter/3}],
-      opts ++ [preload: :with_subject, base_query: q_subjects(opts)]
-    )
+    exclude_table_ids = opts[:exclude_table_ids] || []
+    exclude_subject_ids = opts[:exclude_subject_ids] || []
+    limit = opts[:limit] || 500
+
+    thread_activities_query(thread_ids)
+    |> then(fn q ->
+      if exclude_subject_ids != [],
+        do: where(q, [activity: activity], activity.subject_id not in ^exclude_subject_ids),
+        else: q
+    end)
+    |> Ecto.Query.exclude(:distinct)
+    |> distinct([activity: activity], desc: activity.subject_id)
+    |> proload(activity: [subject: [:character, profile: :icon]])
+    |> then(fn q ->
+      if exclude_table_ids != [],
+        do:
+          where(
+            q,
+            [subject: subject],
+            is_nil(subject.id) or subject.table_id not in ^exclude_table_ids
+          ),
+        else: q
+    end)
+    |> Activities.as_permitted_for(opts)
+    |> limit(^limit)
+    |> repo().many()
+    |> Enum.map(&e(&1, :activity, :subject, nil))
   end
 
   defp fetch_participants(_, _), do: []
@@ -656,6 +686,23 @@ defmodule Bonfire.Social.Threads do
   end
 
   def count_participants(_, _), do: []
+
+  @doc """
+  Returns a map of `%{subject_id => reply_count}` for all participants in a thread.
+  """
+  def reply_counts_per_subject(thread_id, _opts \\ [])
+
+  def reply_counts_per_subject(thread_id, _opts)
+      when is_binary(thread_id) or
+             (is_list(thread_id) and thread_id != []) do
+    thread_activities_query(thread_id)
+    |> group_by([activity: activity], activity.subject_id)
+    |> select([activity: activity], {activity.subject_id, count(activity.id)})
+    |> repo().many()
+    |> Map.new()
+  end
+
+  def reply_counts_per_subject(_, _), do: %{}
 
   # @doc "Count boosts/likes/etc of all items a thread"
   # def count_edges(thread_id, type \\ Bonfire.Social.Boosts, opts \\ [])
@@ -840,7 +887,16 @@ defmodule Bonfire.Social.Threads do
               |> repo().many()
               |> debug("deeper_nodes results")
 
-            %{root_page | edges: root_page.edges ++ deeper_nodes}
+            # Dedup by id: when `include_path_ids` is set, ancestor nodes
+            # can appear in BOTH root_page (via the `or_where id IN path_ids`
+            # bypass in `where_depth`) AND deeper_nodes (via `where_root_in`
+            # matching their depth-1 ancestor) — concatenating without
+            # deduping causes `prepare_replies_tree` to produce duplicate
+            # branches, which crashes LiveView with a duplicate component id.
+            %{
+              root_page
+              | edges: (root_page.edges ++ deeper_nodes) |> Enum.uniq_by(& &1.id)
+            }
           end
 
         # cache as small if this page had no next page — future visits can skip two-step

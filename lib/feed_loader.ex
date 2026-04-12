@@ -1698,26 +1698,42 @@ defmodule Bonfire.Social.FeedLoader do
     show_objects_only_once? =
       filters[:show_objects_only_once] != false and opts[:show_objects_only_once] != false
 
+    dedup_by_thread? = filters[:dedup_by_thread] == true
+
     edges =
       edges
       |> debug("feed resulst before preparing")
       |> Enum.with_index()
       |> Enum.group_by(fn {item, _idx} ->
-        case e(item, :activity, :verb_id, nil) do
-          "71TCREAT1NGA11NKEDRESP0NSE" = verb_id when show_objects_only_once? == true ->
-            # TODO: add a setting to define whether to group by thread_id, reply_to_id, or not
-            {verb_id,
+        if dedup_by_thread? do
+          # Group all activities by thread_id regardless of verb, so create + reply for the same thread collapse
+          {:thread,
+           e(item, :activity, :replied, :thread_id, nil) ||
              e(item, :activity, :replied, :reply_to_id, nil) ||
-               e(item, :activity, :replied, :thread_id, nil) ||
-               e(item, :activity, :object_id, nil) || e(item, :activity, :id, nil) ||
-               Enums.id(item)}
+             e(item, :activity, :object_id, nil) || e(item, :activity, :id, nil) ||
+             Enums.id(item)}
+        else
+          case e(item, :activity, :verb_id, nil) do
+            "71TCREAT1NGA11NKEDRESP0NSE" = verb_id when show_objects_only_once? == true ->
+              # TODO: add a setting to define whether to group by thread_id, reply_to_id, or not
+              {verb_id,
+               e(item, :activity, :replied, :reply_to_id, nil) ||
+                 e(item, :activity, :replied, :thread_id, nil) ||
+                 e(item, :activity, :object_id, nil) || e(item, :activity, :id, nil) ||
+                 Enums.id(item)}
 
-          verb_id ->
-            {verb_id,
-             e(item, :activity, :object_id, nil) || e(item, :activity, :id, nil) || Enums.id(item)}
+            verb_id ->
+              {verb_id,
+               e(item, :activity, :object_id, nil) || e(item, :activity, :id, nil) ||
+                 Enums.id(item)}
+          end
         end
       end)
       |> Enum.flat_map(fn
+        {{:thread, _thread_id}, [{first, idx} | _rest]} ->
+          # dedup_by_thread: keep only the most recent activity per thread
+          [{first, idx}]
+
         {{"71TCREAT1NGA11NKEDRESP0NSE", _reply_to_or_thread_id}, [{first, idx} | rest] = items}
         when rest != [] ->
           [

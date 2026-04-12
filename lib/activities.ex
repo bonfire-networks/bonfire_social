@@ -1001,6 +1001,10 @@ defmodule Bonfire.Social.Activities do
       :post_content,
       :media,
       :sensitive,
+      # Also preload the thread root's replied record (for reply counts in DiscussionPreviewLive).
+      # This adds one batched query to feeds using :with_thread_post, but avoids a more complex
+      # conditional preload in the post-processing pipeline where edges aren't Ecto-preloadable.
+      :replied,
       created: [
         creator: [character: [:peered], profile: :icon]
       ]
@@ -1019,7 +1023,8 @@ defmodule Bonfire.Social.Activities do
     |> preload([
       :post_content,
       :media,
-      :sensitive
+      :sensitive,
+      :replied
     ])
     |> reusable_join(
       :left,

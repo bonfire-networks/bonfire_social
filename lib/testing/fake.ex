@@ -333,6 +333,9 @@ defmodule Bonfire.Social.Fake do
       :local ->
         create_test_content(:discussions, user, other_user, i)
 
+      :recent_discussions ->
+        create_test_content(:discussions, user, other_user, i)
+
       :explore ->
         {local_post, _} = create_test_content(:local, user, other_user, i)
         {remote_post, _} = create_test_content(:remote, user, other_user, i)

@@ -62,6 +62,7 @@ defmodule Bonfire.Social.FeedFilters do
     # Ecto.Enum, values: [nil, false, true, :mod, :admins]
 
     field :show_objects_only_once, :boolean, default: true
+    field :dedup_by_thread, :boolean, default: false
 
     # Pagination fields for Mastodon API compatibility
     field :id_before, :string
@@ -99,6 +100,7 @@ defmodule Bonfire.Social.FeedFilters do
       #  FIXME should only be set in config
       # :include_flags,
       :show_objects_only_once,
+      :dedup_by_thread,
       # Pagination fields for Mastodon API compatibility
       :id_before,
       :id_after

@@ -347,6 +347,106 @@ defmodule Bonfire.Social.FeedPaginationTest do
     assert FeedLoader.feed_contains?(next_edges, "next_window_test")
   end
 
+  describe "reply_count sorting with exclude_activity_types: [:reply]" do
+    setup do
+      user = fake_user!("reply_sort_tester")
+      replier = fake_user!("replier")
+
+      # Create 12 root posts (more than one page of 5)
+      posts =
+        for i <- 1..12 do
+          fake_post!(user, "public", %{
+            post_content: %{
+              name: "Discussion #{i}",
+              html_body: "Content for discussion #{i}"
+            }
+          })
+        end
+
+      # Add replies to some posts so they have varying reply counts
+      # Post 12 gets 5 replies, post 11 gets 4, ..., post 8 gets 1
+      for {post, reply_count} <- Enum.zip(Enum.reverse(Enum.take(posts, -5)), 1..5) do
+        for j <- 1..reply_count do
+          fake_post!(replier, "public", %{
+            post_content: %{html_body: "Reply #{j} to #{post.id}"},
+            reply_to_id: post.id
+          })
+        end
+      end
+
+      %{user: user, posts: posts}
+    end
+
+    test "pagination has no overlap between pages", %{user: user} do
+      opts = [
+        current_user: user,
+        limit: 5,
+        show_objects_only_once: false,
+        preload: false
+      ]
+
+      filters = %{
+        sort_by: :reply_count,
+        sort_order: :desc,
+        exclude_activity_types: [:reply]
+      }
+
+      # First page
+      first_page = FeedLoader.feed(:custom, filters, opts)
+      assert length(first_page.edges) > 0
+      assert first_page.page_info.end_cursor
+
+      # Second page
+      second_page =
+        FeedLoader.feed(:custom, filters, opts ++ [after: first_page.page_info.end_cursor])
+
+      assert length(second_page.edges) > 0
+
+      # No overlap
+      first_ids = Enum.map(first_page.edges, & &1.activity.id)
+      second_ids = Enum.map(second_page.edges, & &1.activity.id)
+      overlap = MapSet.intersection(MapSet.new(first_ids), MapSet.new(second_ids))
+
+      assert MapSet.size(overlap) == 0,
+             "Pages overlap on IDs: #{inspect(MapSet.to_list(overlap))}"
+    end
+
+    test "pagination returns all items across pages", %{user: user} do
+      opts = [
+        current_user: user,
+        limit: 5,
+        show_objects_only_once: false,
+        preload: false
+      ]
+
+      filters = %{
+        sort_by: :reply_count,
+        sort_order: :desc,
+        exclude_activity_types: [:reply]
+      }
+
+      all_ids =
+        Stream.unfold(nil, fn
+          :done ->
+            nil
+
+          cursor ->
+            page_opts = if cursor, do: opts ++ [after: cursor], else: opts
+            page = FeedLoader.feed(:custom, filters, page_opts)
+
+            case page.edges do
+              [] -> nil
+              edges -> {edges, page.page_info.end_cursor || :done}
+            end
+        end)
+        |> Enum.flat_map(fn edges -> Enum.map(edges, & &1.activity.id) end)
+
+      # Should have 12 unique items (the root posts, no replies)
+      assert length(Enum.uniq(all_ids)) == 12,
+             "Expected 12 unique items across all pages, got #{length(Enum.uniq(all_ids))}"
+    end
+  end
+
   # not needed because the query already only uses necessary joins
   @tag :todo
   test "optimizes the feed query" do

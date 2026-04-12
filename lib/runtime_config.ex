@@ -444,9 +444,26 @@ defmodule Bonfire.Social.RuntimeConfig do
             time_limit: 7,
             sort_by: :reply_count,
             sort_order: :desc,
-            exclude_activity_types: [:boost, :like, :follow]
+            exclude_activity_types: [:boost, :like, :follow, :reply]
           },
-          icon: "ph:chats-circle-duotone"
+          icon: "ph:chats-circle-duotone",
+          assigns: [
+            custom_preview: Bonfire.UI.Social.Activity.DiscussionPreviewLive
+          ]
+        },
+        recent_discussions: %{
+          name: l("Recent discussions"),
+          built_in: true,
+          description: "Threads sorted by most recent activity",
+          filters: %FeedFilters{
+            sort_order: :desc,
+            exclude_activity_types: [:boost, :like, :follow],
+            dedup_by_thread: true
+          },
+          icon: "ph:chats-circle-duotone",
+          assigns: [
+            custom_preview: Bonfire.UI.Social.Activity.DiscussionPreviewLive
+          ]
         },
         # TEMPORARILY DISABLED:
         # trending: %{
