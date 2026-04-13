@@ -30,6 +30,10 @@ defmodule Bonfire.Social.FeedLoader do
   alias Bonfire.Social.Threads
   alias Needle.Pointer
 
+  @like_verb_id "11KES1ND1CATEAM11DAPPR0VA1"
+  @boost_verb_id "300ST0R0RANN0VCEANACT1V1TY"
+  @reply_verb_id "71TCREAT1NGA11NKEDRESP0NSE"
+
   # ==== START OF CODE TO REFACTOR ====
   def prepare_feed_filters(preset \\ nil, feed_name, opts) do
     with {:ok, _preset, filters} <- prepare_feed_preset_and_filters(preset, feed_name, opts) do
@@ -600,6 +604,12 @@ defmodule Bonfire.Social.FeedLoader do
         |> Ecto.Query.exclude(:select)
         |> select([:id])
         |> apply_dedup_strategy(filters, opts)
+        # # WIP: For show_objects_only_once apply dedup on the outer query; inner uses normal activity.id distinct
+        # |> then(
+        #   if filters[:show_objects_only_once] != false and not filters[:dedup_by_thread],
+        #     do: &make_distinct_by_activity_id(&1, filters[:sort_by], filters[:sort_order], opts),
+        #     else: &apply_dedup_strategy(&1, filters, opts)
+        # )
         |> FeedActivities.query_order(
           filters[:sort_by],
           filters[:sort_order],
@@ -624,7 +634,7 @@ defmodule Bonfire.Social.FeedLoader do
       |> join(:inner, [fp], ^initial_query, on: [id: fp.id], as: :deferred_join_subquery)
       # NOTE: deduping needs to come before preloads as it may create a subquery.
       |> then(
-      # For thread dedup the outer query only needs ordering (IDs are already thread roots from inner).
+        # For thread dedup the outer query only needs ordering (IDs are already thread roots from inner).
         if filters[:dedup_by_thread],
           do: &order_by_latest_thread_reply(&1),
           else: &apply_dedup_strategy(&1, filters, opts)
@@ -1080,12 +1090,29 @@ defmodule Bonfire.Social.FeedLoader do
   end
 
   defp apply_dedup_strategy(query, filters, opts) do
-    if filters[:dedup_by_thread] do
-      make_distinct_by_thread(query, opts)
-    else
-      make_distinct_by_activity_id(query, filters[:sort_by], filters[:sort_order], opts)
+    cond do
+      filters[:dedup_by_thread] ->
+        make_distinct_by_thread(query, opts)
+
+      # filters[:show_objects_only_once] != false ->
+      #   make_distinct_by_like_boost_object(query, opts)
+
+      true ->
+        make_distinct_by_activity_id(query, filters[:sort_by], filters[:sort_order], opts)
     end
   end
+
+  # # WIP: Dedup likes and boosts by (verb_id, object_id) — applied to the outer/main query.
+  # # Likes and boosts of the same object are kept separate per verb (counted independently).
+  # defp make_distinct_by_like_boost_object(query, _opts) do
+  #   query
+  #   |> distinct([activity: activity], [desc: activity.verb_id, desc: activity.object_id])
+  #   |> order_by([activity: activity],
+  #     desc: activity.verb_id,
+  #     desc: activity.object_id,
+  #     desc: activity.id
+  #   )
+  # end
 
   defp thread_order_by_latest_reply_subquery do
     alias Bonfire.Data.Social.Replied
@@ -1742,6 +1769,16 @@ defmodule Bonfire.Social.FeedLoader do
     end)
   end
 
+  defp prepare_feed(%Ecto.Query{} = query, _filters, _opts) do
+    query
+  end
+
+  defp prepare_feed(result, _filters, _opts) do
+    info(result, "seems like empty feed")
+    # debug(result, "seems like empty feed")
+    result
+  end
+
   defp do_prepare_feed(edges, page_info, filters, opts) do
     # debug(length(edges), "Starting prepare_feed with N edges")
 
@@ -1750,6 +1787,15 @@ defmodule Bonfire.Social.FeedLoader do
 
     # NOTE: skipping because query-level dedup was already applied via make_distinct_by_thread
     dedup_by_thread? = false
+
+    # NOTE: WIP like/boost dedup should be handled at query level via make_distinct_by_like_boost_object
+    #  = false
+    dedup_by_like_boost? =
+      (filters[:dedup_by_like_or_boost] != false || show_objects_only_once?)
+      |> flood("dedup_by_like_boost?")
+
+    # Reply dedup (dedup_replies_by_parent) remains in postprocessing for now
+    dedup_replies_by_parent? = filters[:dedup_replies_by_parent] == true
 
     edges =
       edges
@@ -1765,7 +1811,7 @@ defmodule Bonfire.Social.FeedLoader do
              Enums.id(item)}
         else
           case e(item, :activity, :verb_id, nil) do
-            "71TCREAT1NGA11NKEDRESP0NSE" = verb_id when show_objects_only_once? == true ->
+            @reply_verb_id = verb_id when show_objects_only_once? == true ->
               # TODO: add a setting to define whether to group by thread_id, reply_to_id, or not
               {verb_id,
                e(item, :activity, :replied, :reply_to_id, nil) ||
@@ -1785,7 +1831,7 @@ defmodule Bonfire.Social.FeedLoader do
           # dedup_by_thread: keep only the most recent activity per thread
           [{first, idx}]
 
-        {{"71TCREAT1NGA11NKEDRESP0NSE", _reply_to_or_thread_id}, [{first, idx} | rest] = items}
+        {{@reply_verb_id, _reply_to_or_thread_id}, [{first, idx} | rest] = items}
         when rest != [] ->
           [
             {Map.update(first, :activity, %{}, fn activity ->
@@ -1801,19 +1847,23 @@ defmodule Bonfire.Social.FeedLoader do
           ]
 
         {{verb_id, _object_id}, [{first, idx} | rest] = items}
-        when verb_id in ["11KES1ND1CATEAM11DAPPR0VA1", "300ST0R0RANN0VCEANACT1V1TY"] and
+        when verb_id in [@like_verb_id, @boost_verb_id] and
                rest != [] ->
-          [
-            {Map.update(first, :activity, %{}, fn activity ->
-               Map.put(
-                 activity,
-                 :subjects_more,
-                 Enum.map(rest, fn {item, _} ->
-                   e(item, :activity, :subject, nil) || e(item, :activity, :subject_id, nil)
-                 end)
-               )
-             end), idx}
-          ]
+          if dedup_by_like_boost? do
+            [
+              {Map.update(first, :activity, %{}, fn activity ->
+                 Map.put(
+                   activity,
+                   :subjects_more,
+                   Enum.map(rest, fn {item, _} ->
+                     e(item, :activity, :subject, nil) || e(item, :activity, :subject_id, nil)
+                   end)
+                 )
+               end), idx}
+            ]
+          else
+            items
+          end
 
         {{_other_verb_id, _object_id}, [first | _rest] = items} ->
           if show_objects_only_once? do
@@ -1851,18 +1901,93 @@ defmodule Bonfire.Social.FeedLoader do
     # |> Activities.activity_preloads(opts[:preload], opts |> Keyword.put_new(:follow_pointers, true))
     # |> Activities.activity_preloads(opts[:preload], opts |> Keyword.put_new(:follow_pointers, false))
 
+    # WIP
+    # edges =
+    #   if show_objects_only_once? do
+    #     postload_subjects_more(edges, filters, opts)
+    #   else
+    #     edges
+    #   end
+
     %{edges: Activities.prepare_subject_and_creator(edges, opts), page_info: page_info}
   end
 
-  defp prepare_feed(%Ecto.Query{} = query, _filters, _opts) do
-    query
-  end
+  # defp postload_subjects_more(edges, _filters, _opts) do
+  #   like_verb_id = @like_verb_id
+  #   boost_verb_id = @boost_verb_id
 
-  defp prepare_feed(result, _filters, _opts) do
-    info(result, "seems like empty feed")
-    # debug(result, "seems like empty feed")
-    result
-  end
+  #   # Collect object_ids from like/boost activities in this feed page
+  #   object_ids =
+  #     edges
+  #     |> Enum.flat_map(fn edge ->
+  #       case e(edge, :activity, :verb_id, nil) do
+  #         verb_id when verb_id in [like_verb_id, boost_verb_id] ->
+  #           [e(edge, :activity, :object_id, nil)]
+
+  #         _ ->
+  #           []
+  #       end
+  #     end)
+  #     |> Enum.reject(&is_nil/1)
+  #     |> Enum.uniq()
+
+  #   if object_ids == [] do
+  #     edges
+  #   else
+  #     # Single query: get all subject_ids grouped by (verb_id, object_id)
+  #     rows =
+  #       from(a in Activity,
+  #         where: a.verb_id in ^[like_verb_id, boost_verb_id] and a.object_id in ^object_ids,
+  #         group_by: [a.verb_id, a.object_id],
+  #         select: %{
+  #           verb_id: a.verb_id,
+  #           object_id: a.object_id,
+  #           subject_ids: fragment("array_agg(?)", a.subject_id)
+  #         }
+  #       )
+  #       |> repo().many()
+
+  #     subjects_by_verb_object =
+  #       Map.new(rows, fn %{verb_id: v, object_id: o, subject_ids: ids} -> {{v, o}, ids} end)
+
+  #     # Load all unique subject pointers in one query so we can populate :subjects_more
+  #     all_subject_ids = rows |> Enum.flat_map(& &1.subject_ids) |> Enum.uniq()
+
+  #     subjects_map =
+  #       if all_subject_ids == [] do
+  #         %{}
+  #       else
+  #         Bonfire.Common.Needles.list!(all_subject_ids) |> Map.new(&{&1.id, &1})
+  #       end
+
+  #     Enum.map(edges, fn edge ->
+  #       verb_id = e(edge, :activity, :verb_id, nil)
+  #       object_id = e(edge, :activity, :object_id, nil)
+  #       own_subject_id = e(edge, :activity, :subject_id, nil)
+
+  #       case Map.get(subjects_by_verb_object, {verb_id, object_id}) do
+  #         nil ->
+  #           edge
+
+  #         all_ids ->
+  #           other_ids = List.delete(all_ids, own_subject_id)
+
+  #           if other_ids == [] do
+  #             edge
+  #           else
+  #             other_subjects =
+  #               other_ids |> Enum.map(&Map.get(subjects_map, &1)) |> Enum.reject(&is_nil/1)
+
+  #             Map.update(edge, :activity, %{}, fn activity ->
+  #               activity
+  #               |> Map.put(:subjects_more_ids, other_ids)
+  #               |> Map.put(:subjects_more, other_subjects)
+  #             end)
+  #           end
+  #       end
+  #     end)
+  #   end
+  # end
 
   # ==== END OF CODE TO REFACTOR ====
 

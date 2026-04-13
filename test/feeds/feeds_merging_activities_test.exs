@@ -157,4 +157,131 @@ defmodule Bonfire.Social.FeedsMergingActivitiesTest do
     # assert replier1.id in reply_subject_ids
     # assert replier2.id in reply_subject_ids
   end
+
+  describe "dedup_by_thread filter" do
+    setup do
+      user = fake_user!("main user")
+      other_user = fake_user!("other_user")
+
+      thread1 =
+        fake_post!(other_user, "public", %{
+          post_content: %{name: "thread 1", html_body: "first thread root"}
+        })
+
+      thread2 =
+        fake_post!(other_user, "public", %{
+          post_content: %{name: "thread 2", html_body: "second thread root"}
+        })
+
+      # Reply to thread1 last, so thread1 should rank first (most recently active)
+      _reply =
+        fake_post!(other_user, "public", %{
+          post_content: %{html_body: "reply to thread 1"},
+          reply_to_id: thread1.id
+        })
+
+      %{user: user, other_user: other_user, thread1: thread1, thread2: thread2}
+    end
+
+    test "shows only thread roots, not replies", %{
+      user: user,
+      thread1: thread1,
+      thread2: thread2
+    } do
+      feed = FeedLoader.feed(:local, %{dedup_by_thread: true}, current_user: user)
+
+      assert FeedLoader.feed_contains?(feed, thread1, current_user: user)
+      assert FeedLoader.feed_contains?(feed, thread2, current_user: user)
+    end
+
+    test "orders threads by most recent reply", %{
+      user: user,
+      thread1: thread1,
+      thread2: thread2
+    } do
+      %{edges: edges} = FeedLoader.feed(:local, %{dedup_by_thread: true}, current_user: user)
+
+      ids = Enum.map(edges, &e(&1, :activity, :object_id, nil))
+
+      thread1_pos = Enum.find_index(ids, &(&1 == thread1.id))
+      thread2_pos = Enum.find_index(ids, &(&1 == thread2.id))
+
+      assert thread1_pos != nil, "thread1 (most recently replied) should be in the feed"
+      assert thread2_pos != nil, "thread2 should be in the feed"
+      assert thread1_pos < thread2_pos, "thread1 (latest reply) should appear before thread2"
+    end
+  end
+
+  describe "show_objects_only_once dedup for likes and boosts" do
+    setup do
+      user = fake_user!("main user")
+      liker1 = fake_user!("liker1")
+      liker2 = fake_user!("liker2")
+      booster = fake_user!("booster")
+
+      post =
+        fake_post!(user, "public", %{
+          post_content: %{name: "liked post", html_body: "content"}
+        })
+
+      {:ok, _} = Bonfire.Social.Likes.like(liker1, post)
+      {:ok, _} = Bonfire.Social.Likes.like(liker2, post)
+      {:ok, _} = Bonfire.Social.Boosts.boost(booster, post)
+
+      %{user: user, liker1: liker1, liker2: liker2, booster: booster, post: post}
+    end
+
+    test "collapses multiple likes of same post into one activity with subjects_more_ids", %{
+      user: user,
+      liker1: liker1,
+      post: post
+    } do
+      %{edges: edges} =
+        FeedLoader.feed(:local, %{show_objects_only_once: true, dedup_by_like_or_boost: true},
+          current_user: user
+        )
+
+      like_edges =
+        Enum.filter(edges, fn edge ->
+          e(edge, :activity, :verb_id, nil) == Bonfire.Boundaries.Verbs.get_id!(:like) and
+            e(edge, :activity, :object_id, nil) == post.id
+        end)
+
+      # , "should deduplicate likes to one activity per post"
+      assert length(like_edges) == 1
+
+      [like_edge] = like_edges
+      subjects_more_ids = e(like_edge, :activity, :subjects_more_ids, [])
+      # , "should have one other liker in subjects_more_ids"
+      assert length(subjects_more_ids) == 1
+    end
+
+    test "keeps likes and boosts as separate activities", %{
+      user: user,
+      post: post
+    } do
+      %{edges: edges} =
+        FeedLoader.feed(:local, %{show_objects_only_once: true, dedup_by_like_or_boost: true},
+          current_user: user
+        )
+        |> flood("feed_results")
+
+      like_edges =
+        Enum.filter(edges, fn edge ->
+          e(edge, :activity, :verb_id, nil) == Bonfire.Boundaries.Verbs.get_id!(:like) and
+            e(edge, :activity, :object_id, nil) == post.id
+        end)
+
+      boost_edges =
+        Enum.filter(edges, fn edge ->
+          e(edge, :activity, :verb_id, nil) == Bonfire.Boundaries.Verbs.get_id!(:boost) and
+            e(edge, :activity, :object_id, nil) == post.id
+        end)
+
+      # , "one like activity (deduped)"
+      assert length(like_edges) == 1
+      # , "one boost activity (kept separate from likes)"
+      assert length(boost_edges) == 1
+    end
+  end
 end

@@ -389,7 +389,7 @@ defmodule Bonfire.Social.Feeds do
 
     ([] ++
        [to_feeds_custom] ++
-       case Boundaries.preset_name(
+       case Boundaries.Presets.preset_name(
               maybe_from_opts(opts, :boundary, opts),
               true
             ) do

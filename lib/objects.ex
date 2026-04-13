@@ -1091,7 +1091,7 @@ defmodule Bonfire.Social.Objects do
         if(e(opts_or_attrs, :is_public, nil) == false or e(opts_or_attrs, :public, nil) == false,
           do: "mentions"
         ) ||
-        Bonfire.Common.Config.get_ext(for_module, :boundary_preset, "public")
+        Bonfire.Common.Config.get_ext(for_module, :default_boundary_preset, "public")
 
     to_circles =
       e(opts_or_attrs, :attrs, :to_circles, nil) || e(opts_or_attrs, :to_circles, nil) ||

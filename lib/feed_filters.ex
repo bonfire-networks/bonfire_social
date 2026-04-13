@@ -62,7 +62,9 @@ defmodule Bonfire.Social.FeedFilters do
     # Ecto.Enum, values: [nil, false, true, :mod, :admins]
 
     field :show_objects_only_once, :boolean, default: true
+    field :dedup_by_like_or_boost, :boolean, default: true
     field :dedup_by_thread, :boolean, default: false
+    field :dedup_replies_by_parent, :boolean, default: false
 
     # Pagination fields for Mastodon API compatibility
     field :id_before, :string
@@ -101,6 +103,8 @@ defmodule Bonfire.Social.FeedFilters do
       # :include_flags,
       :show_objects_only_once,
       :dedup_by_thread,
+      :dedup_replies_by_parent,
+      :dedup_by_like_or_boost,
       # Pagination fields for Mastodon API compatibility
       :id_before,
       :id_after
