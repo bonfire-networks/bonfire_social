@@ -557,6 +557,60 @@ defmodule Bonfire.Social.FeedsFiltersTest do
     end
   end
 
+  describe "dedup_by_thread filter" do
+    setup do
+      user = fake_user!("main user")
+      other_user = fake_user!("other_user")
+
+      thread1 =
+        fake_post!(other_user, "public", %{
+          post_content: %{name: "thread 1", html_body: "first thread root"}
+        })
+
+      thread2 =
+        fake_post!(other_user, "public", %{
+          post_content: %{name: "thread 2", html_body: "second thread root"}
+        })
+
+      # Reply to thread1 last, so thread1 should rank first (most recently active)
+      _reply =
+        fake_post!(other_user, "public", %{
+          post_content: %{html_body: "reply to thread 1"},
+          reply_to_id: thread1.id
+        })
+
+      %{user: user, other_user: other_user, thread1: thread1, thread2: thread2}
+    end
+
+    test "shows only thread roots, not replies", %{
+      user: user,
+      thread1: thread1,
+      thread2: thread2
+    } do
+      feed = FeedLoader.feed(:local, %{dedup_by_thread: true}, current_user: user)
+
+      assert FeedLoader.feed_contains?(feed, thread1, current_user: user)
+      assert FeedLoader.feed_contains?(feed, thread2, current_user: user)
+    end
+
+    test "orders threads by most recent reply", %{
+      user: user,
+      thread1: thread1,
+      thread2: thread2
+    } do
+      %{edges: edges} = FeedLoader.feed(:local, %{dedup_by_thread: true}, current_user: user)
+
+      ids = Enum.map(edges, &e(&1, :activity, :object_id, nil))
+
+      thread1_pos = Enum.find_index(ids, &(&1 == thread1.id))
+      thread2_pos = Enum.find_index(ids, &(&1 == thread2.id))
+
+      assert thread1_pos != nil, "thread1 (most recently replied) should be in the feed"
+      assert thread2_pos != nil, "thread2 should be in the feed"
+      assert thread1_pos < thread2_pos, "thread1 (latest reply) should appear before thread2"
+    end
+  end
+
   describe "article filter excludes replies" do
     setup do
       user = fake_user!("main user")

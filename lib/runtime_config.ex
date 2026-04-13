@@ -548,6 +548,13 @@ defmodule Bonfire.Social.RuntimeConfig do
           include: feed_default_include
         },
 
+        # Thread-deduped feeds: skip reply context joins since we show thread roots only
+        "Thread-deduped feed" => %{
+          match: %{dedup_by_thread: true},
+          include: [],
+          exclude: [:with_reply_to, :with_thread_name, :with_thread_post]
+        },
+
         # Specific Feeds
         "My Feed (Activities of people I follow)" => %{
           match: %{feed_name: :my},

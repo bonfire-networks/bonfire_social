@@ -483,8 +483,9 @@ defmodule Bonfire.Social.FeedLoader do
   end
 
   defp do_feed_many_paginated(query, filters, opts) do
-    Social.many(
-      query,
+    query
+    # |> flood("feed query")
+    |> Social.many(
       opts[:paginate] || opts,
       opts
     )
@@ -499,19 +500,18 @@ defmodule Bonfire.Social.FeedLoader do
       |> Keyword.put(
         :query_with_deferred_join,
         # Disable deferred join when using :per_media preload as it needs to filter in the main query
-        # if per_media? do
-        #   false
-        # else
+        # Disable deferred join for thread dedup: it has its own ordering via latest_reply join
         # Respect explicit `false` (unlike `||` which treats false as falsy)
-        if(Keyword.has_key?(opts, :query_with_deferred_join),
-          do: opts[:query_with_deferred_join],
-          else:
+        if filters[:dedup_by_thread] || Keyword.get(opts, :query_with_deferred_join) == false do
+          false
+        else
+          Keyword.get_lazy(opts, :query_with_deferred_join, fn ->
             Config.get([Bonfire.Social.Feeds, :query_with_deferred_join], true,
               name: l("Use Deferred Joins"),
               description: l("Technical setting for query performance optimization.")
             )
-        )
-        # end
+          end)
+        end
       )
       |> debug("pagination opts")
 
@@ -599,7 +599,7 @@ defmodule Bonfire.Social.FeedLoader do
         # |> debug()
         |> Ecto.Query.exclude(:select)
         |> select([:id])
-        |> make_distinct_by_activity_id(filters[:sort_by], filters[:sort_order], opts)
+        |> apply_dedup_strategy(filters, opts)
         |> FeedActivities.query_order(
           filters[:sort_by],
           filters[:sort_order],
@@ -622,8 +622,13 @@ defmodule Bonfire.Social.FeedLoader do
 
       default_or_filtered_query(FeedActivities.base_query(opts), opts)
       |> join(:inner, [fp], ^initial_query, on: [id: fp.id], as: :deferred_join_subquery)
-      # NOTE make_distinct_by_activity_id needs to come before preloads as it may create a subquery
-      |> make_distinct_by_activity_id(filters[:sort_by], filters[:sort_order], opts)
+      # NOTE: deduping needs to come before preloads as it may create a subquery.
+      |> then(
+      # For thread dedup the outer query only needs ordering (IDs are already thread roots from inner).
+        if filters[:dedup_by_thread],
+          do: &order_by_latest_thread_reply(&1),
+          else: &apply_dedup_strategy(&1, filters, opts)
+      )
       |> Activities.activity_preloads(
         opts[:preload],
         opts
@@ -658,7 +663,7 @@ defmodule Bonfire.Social.FeedLoader do
       qualifying_activities_query =
         initial_query
         # TODO: needed for per_media?
-        |> make_distinct_by_activity_id(subquery_sort_by, sort_order, opts)
+        |> apply_dedup_strategy(filters, opts)
         |> FeedActivities.query_order(subquery_sort_by, sort_order, :id, opts[:with_pins?])
         # |> do_feed_many_paginated(
         #   filters,
@@ -773,7 +778,7 @@ defmodule Bonfire.Social.FeedLoader do
   defp paginate_and_boundarise_feed_non_deferred_query(query, filters, opts) do
     maybe_prepare_per_media_query(query, filters, opts) ||
       query
-      |> make_distinct_by_activity_id(filters[:sort_by], filters[:sort_order], opts)
+      |> apply_dedup_strategy(filters, opts)
       |> Activities.activity_preloads(
         opts[:preload],
         opts
@@ -1072,6 +1077,51 @@ defmodule Bonfire.Social.FeedLoader do
     # TODO: why default_query instead of FeedActivities.base_query? what's the difference?
     default_or_filtered_query(default_query(opts), opts)
     |> join(:inner, [fp], ^subquery, on: [id: fp.id], as: :distinct_activity_id_subquery)
+  end
+
+  defp apply_dedup_strategy(query, filters, opts) do
+    if filters[:dedup_by_thread] do
+      make_distinct_by_thread(query, opts)
+    else
+      make_distinct_by_activity_id(query, filters[:sort_by], filters[:sort_order], opts)
+    end
+  end
+
+  defp thread_order_by_latest_reply_subquery do
+    alias Bonfire.Data.Social.Replied
+
+    from(r in Replied,
+      where: r.id != r.thread_id,
+      group_by: r.thread_id,
+      select: %{thread_id: r.thread_id, last_reply_id: max(r.id)}
+    )
+  end
+
+  # Full filter+order — used for the main (or inner deferred) query to select thread root IDs
+  defp make_distinct_by_thread(query, _opts) do
+    query
+    |> FeedActivities.maybe_preload_replied()
+    |> where(
+      [activity: activity, replied: replied],
+      # include thread roots (replied.thread_id == activity.id) and posts with no replied record (treated as roots)
+      is_nil(replied.id) or replied.thread_id == activity.id
+    )
+    |> order_by_latest_thread_reply()
+  end
+
+  # Order-only — used for the outer deferred query where IDs are already thread roots
+  defp order_by_latest_thread_reply(%{aliases: %{latest_reply: _}} = query), do: query
+
+  defp order_by_latest_thread_reply(query) do
+    query
+    |> join(:left, [activity: activity], lr in subquery(thread_order_by_latest_reply_subquery()),
+      on: lr.thread_id == activity.id,
+      as: :latest_reply
+    )
+    |> order_by(
+      [activity: activity, latest_reply: lr],
+      desc_nulls_last: fragment("COALESCE(?, ?)", lr.last_reply_id, activity.id)
+    )
   end
 
   # @decorate time()
@@ -1698,7 +1748,8 @@ defmodule Bonfire.Social.FeedLoader do
     show_objects_only_once? =
       filters[:show_objects_only_once] != false and opts[:show_objects_only_once] != false
 
-    dedup_by_thread? = filters[:dedup_by_thread] == true
+    # NOTE: skipping because query-level dedup was already applied via make_distinct_by_thread
+    dedup_by_thread? = false
 
     edges =
       edges
@@ -2075,7 +2126,7 @@ defmodule Bonfire.Social.FeedLoader do
 
       iex> filters = %{subjects: ["alice"]}
       iex> preloads_from_filters(filters) |> Enum.sort()
-      [:quote_tags, :with_creator, :with_media, :with_object_more, :with_object_peered, :with_replied, :with_reply_to, :with_thread_post]
+      [:quote_tags, :with_creator, :with_media, :with_object_more, :with_object_peered, :with_parent,:with_replied, :with_reply_to, :with_thread_post]
 
       iex> filters = %{feed_name: "unknown"}
       iex> preloads_from_filters(filters) |> Enum.sort()

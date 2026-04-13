@@ -334,7 +334,19 @@ defmodule Bonfire.Social.Fake do
         create_test_content(:discussions, user, other_user, i)
 
       :recent_discussions ->
-        create_test_content(:discussions, user, other_user, i)
+        original_post =
+          Bonfire.Posts.Fake.fake_post!(other_user, "public", %{
+            post_content: %{name: "original post #{i}", html_body: "original post content #{i}"}
+          })
+
+        _reply =
+          Bonfire.Posts.Fake.fake_post!(other_user, "public", %{
+            reply_to_id: original_post.id,
+            post_content: %{html_body: "reply to post #{i}"}
+          })
+
+        # feed shows thread roots ordered by latest reply; verify presence of the root
+        {original_post, nil}
 
       :explore ->
         {local_post, _} = create_test_content(:local, user, other_user, i)
