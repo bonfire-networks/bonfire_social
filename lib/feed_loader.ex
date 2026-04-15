@@ -343,6 +343,10 @@ defmodule Bonfire.Social.FeedLoader do
       feed_ids_and_opts(feed_name, opts)
       |> debug("feed_ids_and_opts")
 
+    # Fall back to filters.feed_ids when the named feed didn't resolve to any IDs
+    # (e.g. preset names like :recent_discussions are not registered named feeds, but a caller may still want to scope the preset to specific feed_ids — like a group's outbox)
+    feed_ids = feed_ids || e(filters, :feed_ids, nil)
+
     feed_filtered(feed_ids, filters, opts)
   end
 
