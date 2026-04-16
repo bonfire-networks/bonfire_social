@@ -448,6 +448,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           },
           icon: "ph:chats-circle-duotone",
           assigns: [
+            hide_filters: true,
             custom_preview: Bonfire.UI.Social.Activity.DiscussionPreviewLive
           ]
         },
@@ -462,6 +463,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           },
           icon: "ph:chats-circle-duotone",
           assigns: [
+            hide_filters: true,
             custom_preview: Bonfire.UI.Social.Activity.DiscussionPreviewLive
           ]
         },
