@@ -458,7 +458,8 @@ defmodule Bonfire.Social.RuntimeConfig do
           description: "Threads sorted by most recent activity",
           filters: %FeedFilters{
             sort_order: :desc,
-            exclude_activity_types: [:boost, :like, :follow],
+            # NOTE: should not include :boost to work in groups (maybe can later dynamic exlude it from the exclusions when constructing a group query)
+            exclude_activity_types: [:like, :follow],
             dedup_by_thread: true
           },
           icon: "ph:chats-circle-duotone",
