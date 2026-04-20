@@ -2073,8 +2073,8 @@ defmodule Bonfire.Social.Activities do
     activity_under_object(activity, Map.drop(top_object, [:activities]))
   end
 
-  def activity_under_object(%Activity{object: %{id: _} = activity_object} = activity) do
-    activity_under_object(activity_object, Map.drop(activity, [:object]))
+  def activity_under_object(%Activity{object: %{id: _} = object} = activity) do
+    activity_under_object(Map.drop(activity, [:object]), object)
   end
 
   def activity_under_object(%{} = object_without_activity) do
