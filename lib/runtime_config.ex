@@ -208,27 +208,35 @@ defmodule Bonfire.Social.RuntimeConfig do
 
         # User-specific feeds
         user_activities: %{
+          name: l("User activities"),
           built_in: true,
-          description: "A specific user's activities",
+          description: l("A specific user's activities"),
+          icon: "ph:user-duotone",
           # $username is replaced at runtime
           filters: %FeedFilters{exclude_activity_types: [:like, :follow]},
           parameterized: %{subjects: [:by]}
         },
         user_followers: %{
+          name: l("Followers"),
           built_in: true,
-          description: "Followers of a specific user",
+          description: l("Followers of a specific user"),
+          icon: "ph:users-duotone",
           filters: %FeedFilters{activity_types: [:follow]},
           parameterized: %{objects: [:by]}
         },
         user_following: %{
+          name: l("Following"),
           built_in: true,
-          description: "Users followed by a specific user",
+          description: l("Users followed by a specific user"),
+          icon: "ph:user-plus-duotone",
           filters: %FeedFilters{activity_types: [:follow]},
           parameterized: %{subjects: [:by]}
         },
         user_by_object_type: %{
+          name: l("User posts"),
           built_in: true,
-          description: "Posts by a specific user",
+          description: l("Posts by a specific user"),
+          icon: "ph:note-duotone",
           filters: %FeedFilters{creators: [:by], object_types: [:post]},
           parameterized: %{creators: :by}
         },
@@ -322,14 +330,18 @@ defmodule Bonfire.Social.RuntimeConfig do
 
         # Hashtag feeds
         hashtag: %{
+          name: l("Hashtag"),
           built_in: true,
           description: l("Activities with a specific hashtag"),
+          icon: "ph:hash-duotone",
           filters: %FeedFilters{},
           parameterized: %{tags: [:tags]}
         },
         mentions: %{
+          name: l("Mentions"),
           built_in: true,
-          description: "Activities with a specific @ mention",
+          description: l("Activities with a specific @ mention"),
+          icon: "ph:at-duotone",
           filters: %FeedFilters{},
           parameterized: %{tags: [:tags]}
         },
@@ -392,7 +404,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         my_flags: %{
           name: l("Flagged"),
           built_in: true,
-          description: "Content I've flagged",
+          description: l("Content I've flagged"),
           filters: %FeedFilters{
             activity_types: [:flag],
             show_objects_only_once: false
@@ -411,7 +423,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         flagged_content: %{
           name: l("Flagged (all)"),
           built_in: true,
-          description: "Content flagged by anyone (for mods only)",
+          description: l("Content flagged by anyone (for mods only)"),
           filters: %FeedFilters{
             activity_types: [:flag],
             show_objects_only_once: false
@@ -439,7 +451,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         trending_discussions: %{
           name: l("Top discussions"),
           built_in: true,
-          description: "Popular discussions from the last 7 days",
+          description: l("Popular discussions from the last 7 days"),
           filters: %FeedFilters{
             time_limit: 7,
             sort_by: :reply_count,
@@ -455,7 +467,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         recent_discussions: %{
           name: l("Recent discussions"),
           built_in: true,
-          description: "Threads sorted by most recent activity",
+          description: l("Threads sorted by most recent activity"),
           filters: %FeedFilters{
             sort_order: :desc,
             exclude_activity_types: [:boost, :like, :follow],
@@ -514,7 +526,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         local_media: %{
           name: l("Local Media"),
           built_in: true,
-          description: "All media shared on the local instance",
+          description: l("All media shared on the local instance"),
           filters: %FeedFilters{
             origin: :local,
             media_types: ["*"]
