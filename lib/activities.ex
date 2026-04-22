@@ -422,6 +422,7 @@ defmodule Bonfire.Social.Activities do
           |> Enum.uniq()
           |> debug("accumulated postloads to try")
           |> maybe_repo_preload_activity(query_or_object_or_objects, ..., opts)
+          |> Bonfire.Social.filter_by_keywords(l("[Content blocked by filters]"), opts)
 
           # |> debug()
         end

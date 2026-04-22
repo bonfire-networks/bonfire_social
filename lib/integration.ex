@@ -444,79 +444,86 @@ defmodule Bonfire.Social do
   """
   def after_many(results, opts \\ [])
 
-  def after_many(%{edges: edges} = results, opts) when is_list(edges) and results != [] do
-    %{results | edges: filter_by_keywords(edges, opts)}
+  # def after_many(%{edges: edges} = results, opts) when is_list(edges) and results != [] do
+  #   %{results | edges: filter_by_keywords(edges, opts)}
+  # end
+
+  # def after_many(results, opts) when is_list(results) and results != [] do
+  #   filter_by_keywords(results, opts)
+  # end
+
+  def after_many(results, _opts) do
+    results
   end
 
-  def after_many(results, opts) when is_list(results) and results != [] do
-    filter_by_keywords(results, opts)
-  end
-
-  def after_many(results, _opts), do: results
-
-  defp filter_by_keywords(edges, opts) do
+  def filter_by_keywords(edges_or_edge, replace_with \\ false, opts) do
     case Bonfire.Boundaries.BlockKeywords.block_keywords_settings(opts) do
       nil ->
-        edges
+        debug(opts, "no block_keywords_settings")
+        edges_or_edge
 
       [] ->
-        edges
+        debug(opts, "empty block_keywords_settings")
+        edges_or_edge
 
       patterns ->
-        Enum.reject(edges, &matches_keyword_filter?(&1, patterns))
+        if is_list(edges_or_edge) do
+          if replace_with do
+            debug(patterns, "replace with block_keywords_settings")
+            Enum.map(edges_or_edge, &(matches_keyword_filter(&1, patterns, replace_with) || &1))
+          else
+            debug(patterns, "filter with block_keywords_settings")
+            Enum.reject(edges_or_edge, &matches_keyword_filter(&1, patterns))
+          end
+        else
+          matches_keyword_filter(
+            edges_or_edge,
+            patterns,
+            replace_with || l("[Content blocked by filters]")
+          ) || edges_or_edge
+        end
 
         # _ ->
-        #   edges
+        #   edges_or_edge
     end
   end
 
-  defp matches_keyword_filter?(
-         %{activity: %{object_post_content: %{html_body: _} = content}},
-         patterns
-       ) do
-    Bonfire.Boundaries.BlockKeywords.text_fields_match?(
-      content,
-      [:html_body, :summary, :name],
-      patterns
-    )
-  end
+  defp matches_keyword_filter(edge, patterns, replace_with \\ false) do
+    {content, content_path} =
+      case edge do
+        %{activity: %{object_post_content: %{html_body: _} = c}} ->
+          {c, [:activity, :object_post_content]}
 
-  defp matches_keyword_filter?(
-         %{activity: %{object: %{post_content: %{html_body: _} = content}}},
-         patterns
-       ) do
-    Bonfire.Boundaries.BlockKeywords.text_fields_match?(
-      content,
-      [:html_body, :summary, :name],
-      patterns
-    )
-  end
+        %{activity: %{object: %{post_content: %{html_body: _} = c}}} ->
+          {c, [:activity, :object, :post_content]}
 
-  defp matches_keyword_filter?(%{post_content: %{html_body: _} = content}, patterns) do
-    Bonfire.Boundaries.BlockKeywords.text_fields_match?(
-      content,
-      [:html_body, :summary, :name],
-      patterns
-    )
-  end
+        %{object_post_content: %{html_body: _} = c} ->
+          {c, [:object_post_content]}
 
-  defp matches_keyword_filter?(%{object_post_content: %{html_body: _} = content}, patterns) do
-    Bonfire.Boundaries.BlockKeywords.text_fields_match?(
-      content,
-      [:html_body, :summary, :name],
-      patterns
-    )
-  end
+        %{post_content: %{html_body: _} = c} ->
+          {c, [:post_content]}
 
-  defp matches_keyword_filter?(%{object: %{post_content: %{html_body: _} = content}}, patterns) do
-    Bonfire.Boundaries.BlockKeywords.text_fields_match?(
-      content,
-      [:html_body, :summary, :name],
-      patterns
-    )
-  end
+        %{object: %{post_content: %{html_body: _} = c}} ->
+          {c, [:object, :post_content]}
 
-  defp matches_keyword_filter?(_, _patterns), do: false
+        _ ->
+          debug(edge, "object did not match known patterns for keyword filter")
+          {nil, nil}
+      end
+
+    if content &&
+         Bonfire.Boundaries.BlockKeywords.text_fields_match?(
+           content,
+           [:html_body, :summary, :name],
+           patterns
+         ) do
+      if replace_with != false,
+        do: put_in(edge, content_path, %Bonfire.Data.Social.PostContent{summary: replace_with}),
+        else: true
+    else
+      false
+    end
+  end
 
   @doc """
   Checks if an activity should be shown to the current user based on keyword filters.
@@ -537,7 +544,7 @@ defmodule Bonfire.Social do
     case Bonfire.Boundaries.BlockKeywords.block_keywords_settings(opts) do
       nil -> true
       [] -> true
-      patterns -> not matches_keyword_filter?(activity, patterns)
+      patterns -> !matches_keyword_filter(activity, patterns)
     end
   end
 end

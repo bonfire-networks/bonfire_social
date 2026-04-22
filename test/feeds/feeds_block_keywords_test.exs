@@ -74,7 +74,7 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
     } do
       # Set up keyword filter for user
       Process.put(
-        [:bonfire_boundaries, :filter_keywords],
+        [:activity_pub, :mrf_keyword, :reject],
         ["viagra"]
       )
 
@@ -100,7 +100,7 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
       keyword_in_name: keyword_in_name
     } do
       Process.put(
-        [:bonfire_boundaries, :filter_keywords],
+        [:activity_pub, :mrf_keyword, :reject],
         ["crypto"]
       )
 
@@ -126,7 +126,7 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
       keyword_in_summary: keyword_in_summary
     } do
       Process.put(
-        [:bonfire_boundaries, :filter_keywords],
+        [:activity_pub, :mrf_keyword, :reject],
         ["viagra"]
       )
 
@@ -153,7 +153,7 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
     } do
       # Keywords are stored lowercase, matching should be case-insensitive
       Process.put(
-        [:bonfire_boundaries, :filter_keywords],
+        [:activity_pub, :mrf_keyword, :reject],
         ["viagra"]
       )
 
@@ -180,7 +180,7 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
       keyword_in_name: keyword_in_name
     } do
       Process.put(
-        [:bonfire_boundaries, :filter_keywords],
+        [:activity_pub, :mrf_keyword, :reject],
         ["viagra", "crypto"]
       )
 
@@ -211,7 +211,7 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
       normal_post: normal_post,
       spam_post: spam_post
     } do
-      # No filter_keywords setting
+      # No reject keyword setting
       feed =
         FeedLoader.feed(:explore, limit: 10, preload: [:with_post_content], current_user: user)
 
@@ -234,7 +234,7 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
       spam_post: spam_post
     } do
       Process.put(
-        [:bonfire_boundaries, :filter_keywords],
+        [:activity_pub, :mrf_keyword, :reject],
         []
       )
 
@@ -262,7 +262,7 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
       # User has filter, other_user doesn't
       user =
         Settings.set(
-          %{bonfire_boundaries: %{filter_keywords: ["Viagra"]}},
+          %{activity_pub: %{mrf_keyword: %{reject: ["Viagra"]}}},
           current_user: user
         )
         |> current_user()
@@ -365,7 +365,7 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
       spam_reply: spam_reply,
       another_normal_reply: another_normal_reply
     } do
-      Process.put([:bonfire_boundaries, :filter_keywords], ["viagra"])
+      Process.put([:activity_pub, :mrf_keyword, :reject], ["viagra"])
 
       %{edges: replies} = Threads.list_replies(normal_thread.id, current_user: user)
 
@@ -425,7 +425,7 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
           boundary: "public"
         )
 
-      Process.put([:bonfire_boundaries, :filter_keywords], ["crypto"])
+      Process.put([:activity_pub, :mrf_keyword, :reject], ["crypto"])
 
       %{edges: replies} = Threads.list_replies(normal_thread.id, current_user: user)
 
@@ -448,7 +448,7 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
       # Set filter for one user via Settings DB
       viewer_with_filter =
         Settings.set(
-          %{bonfire_boundaries: %{filter_keywords: ["viagra"]}},
+          %{activity_pub: %{mrf_keyword: %{reject: ["viagra"]}}},
           current_user: viewer_with_filter
         )
         |> current_user()
@@ -477,7 +477,7 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
       user = fake_user!("pubsub_filter_user")
 
       # Set up keyword filter
-      Process.put([:bonfire_boundaries, :filter_keywords], ["viagra"])
+      Process.put([:activity_pub, :mrf_keyword, :reject], ["viagra"])
 
       # Create an activity with blocked content
       spam_activity = %{
@@ -495,7 +495,7 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
       user = fake_user!("pubsub_normal_user")
 
       # Set up keyword filter
-      Process.put([:bonfire_boundaries, :filter_keywords], ["viagra"])
+      Process.put([:activity_pub, :mrf_keyword, :reject], ["viagra"])
 
       # Create a normal activity
       normal_activity = %{
@@ -532,7 +532,7 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
       # Set up keyword filter for viewer
       viewer =
         Settings.set(
-          %{bonfire_boundaries: %{filter_keywords: ["viagra"]}},
+          %{activity_pub: %{mrf_keyword: %{reject: ["viagra"]}}},
           current_user: viewer
         )
         |> current_user()
@@ -566,7 +566,7 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
       # Set up keyword filter for viewer
       viewer =
         Settings.set(
-          %{bonfire_boundaries: %{filter_keywords: ["crypto"]}},
+          %{activity_pub: %{mrf_keyword: %{reject: ["crypto"]}}},
           current_user: viewer
         )
         |> current_user()
