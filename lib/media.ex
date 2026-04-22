@@ -164,9 +164,9 @@ defmodule Bonfire.Social.Media do
         object_id: activity.object_id
       })
       |> group_by([activity: activity], activity.object_id)
-      |> maybe_preload_and_select_boosts_metric(sort_by in [:boost_count, :trending_score])
-      |> maybe_preload_and_select_likes_metric(sort_by in [:like_count, :trending_score])
-      |> maybe_preload_and_select_replies_metric(sort_by in [:reply_count, :trending_score])
+      |> maybe_preload_and_select_boosts_metric(sort_by in [:boost_count, :popularity_score])
+      |> maybe_preload_and_select_likes_metric(sort_by in [:like_count, :popularity_score])
+      |> maybe_preload_and_select_replies_metric(sort_by in [:reply_count, :popularity_score])
       |> debug("qualifying_activities_query")
 
     # Start from Media table and join the qualifying activities
@@ -207,10 +207,10 @@ defmodule Bonfire.Social.Media do
     #       activity in assoc(per_media_subquery, :activity),
     #       as: :activity
     #     )
-    |> maybe_add_boosts_metric(sort_by in [:boost_count, :trending_score])
-    |> maybe_add_likes_metric(sort_by in [:like_count, :trending_score])
-    |> maybe_add_replies_metric(sort_by in [:reply_count, :trending_score])
-    |> maybe_add_trending_score(sort_by == :trending_score, opts)
+    |> maybe_add_boosts_metric(sort_by in [:boost_count, :popularity_score])
+    |> maybe_add_likes_metric(sort_by in [:like_count, :popularity_score])
+    |> maybe_add_replies_metric(sort_by in [:reply_count, :popularity_score])
+    |> maybe_add_trending_score(sort_by == :popularity_score, opts)
     # sort
     |> Bonfire.Social.Activities.query_order(sort_by, sort_order, :newest_activity_id)
     # |> apply_media_filters(filters, opts)
@@ -310,21 +310,22 @@ defmodule Bonfire.Social.Media do
   defp maybe_add_trending_score(query, true, opts) do
     # Get configurable weights for trending score
     # TODO: use Settings if we want user-configurable algorithms?
-    weight_shares = Config.get([:feeds, :trending_weight_shares], 4)
-    weight_replies = Config.get([:feeds, :trending_weight_replies], 3)
-    weight_boosts = Config.get([:feeds, :trending_weight_boosts], 2)
-    weight_likes = Config.get([:feeds, :trending_weight_likes], 1)
+    weights = Bonfire.Social.Activities.popularity_weights()
+    weight_shares = weights[:shares]
+    weight_likes = weights[:likes]
+    weight_boosts = weights[:boosts]
+    weight_replies = weights[:replies]
 
     # need yet another subquery to be able to select other calculated fields
     from(repo().make_subquery(query))
     |> select_merge([main], %{
-      trending_score:
+      popularity_score:
         selected_as(
           main.object_count * ^weight_shares +
             coalesce(main.boost_count, 0) * ^weight_boosts +
             coalesce(main.like_count, 0) * ^weight_likes +
             coalesce(main.reply_count, 0) * ^weight_replies,
-          :trending_score
+          :popularity_score
         ),
       object_count: selected_as(main.object_count, :object_count),
       newest_activity_id: selected_as(main.newest_activity_id, :newest_activity_id)

@@ -488,7 +488,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         #   filters: %FeedFilters{
         #     feed_name: :trending,
         #     exclude_activity_types: [:reply],
-        #     sort_by: :trending_score,
+        #     sort_by: :popularity_score,
         #     sort_order: :desc,
         #     time_limit: 7
         #   },
@@ -509,7 +509,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         #     feed_name: :trending_links,
         #     exclude_activity_types: [:reply, :boost],
         #     media_types: [:link],
-        #     sort_by: :trending_score,
+        #     sort_by: :popularity_score,
         #     sort_order: :desc,
         #     time_limit: 2,
         #     show_objects_only_once: false

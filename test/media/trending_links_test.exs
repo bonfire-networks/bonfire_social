@@ -99,8 +99,8 @@ defmodule Bonfire.Social.Bonfire.Social.TrendingLinksTest do
         Bonfire.Social.Media.trending_links(time_limit: 30)
         |> debug("Results with 30-day time limit"),
       results_by_trending_score:
-        Bonfire.Social.Media.trending_links(sort_by: :trending_score)
-        |> debug("Results sorted by trending_score")
+        Bonfire.Social.Media.trending_links(sort_by: :popularity_score)
+        |> debug("Results sorted by popularity_score")
     }
   end
 
@@ -293,16 +293,16 @@ defmodule Bonfire.Social.Bonfire.Social.TrendingLinksTest do
     assert article1.object_count == 2
   end
 
-  test "calculates trending_score for article1 with shared fixture data", %{
+  test "calculates popularity_score for article1 with shared fixture data", %{
     results_by_trending_score: results_by_trending_score
   } do
     # article1: shared by user1 and user2 (2 shares), boosted 3 times, 2 replies, 2 likes
     # weights: shares=4, boosts=2, likes=1, replies=3
     # object_count = 2, boost_count = 3, like_count = 2, reply_count = 2
-    # trending_score = 2*4 + 3*2 + 2*1 + 2*3 = 8 + 6 + 2 + 6 = 22
+    # popularity_score = 2*4 + 3*2 + 2*1 + 2*3 = 8 + 6 + 2 + 6 = 22
 
     assert article1 = Enum.find(results_by_trending_score, &String.contains?(&1.path, "article1"))
-    assert article1.trending_score == Decimal.new("22")
+    assert article1.popularity_score == Decimal.new("22")
   end
 
   test "sorts by engagement with default weighting", %{results: results} do

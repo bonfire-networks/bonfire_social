@@ -54,7 +54,16 @@ defmodule Bonfire.Social.FeedFilters do
     field :sort_order, Ecto.Enum, values: [:asc, :desc], default: :desc
 
     field :sort_by, Ecto.Enum,
-      values: [nil, false, :date_created, :reply_count, :boost_count, :like_count, :latest_reply],
+      values: [
+        nil,
+        false,
+        :date_created,
+        :reply_count,
+        :boost_count,
+        :like_count,
+        :latest_reply,
+        :popularity_score
+      ],
       default: nil
 
     # NOTE: the following are meant for internal use

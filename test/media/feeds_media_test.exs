@@ -52,7 +52,7 @@ defmodule Bonfire.Social.Feeds.MediaTest do
            ] <-
         feed_preset_test_params() do
     #  :like_count, :reply_count, 
-    sort_by = Faker.Util.pick([nil, :boost_count, :object_count, :trending_score])
+    sort_by = Faker.Util.pick([nil, :boost_count, :object_count, :popularity_score])
 
     describe "feed preset `#{inspect(preset)}` (ordered by #{sort_by}) loads correct feed" do
       setup do
@@ -120,7 +120,7 @@ defmodule Bonfire.Social.Feeds.MediaTest do
           :like_count,
           :reply_count,
           :object_count,
-          :trending_score
+          :popularity_score
         ])
 
       if preset not in [:flagged_content, :my_flags, :bookmarks] do

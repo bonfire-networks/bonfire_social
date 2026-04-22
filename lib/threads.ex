@@ -1267,21 +1267,51 @@ defmodule Bonfire.Social.Threads do
     do: EctoMaterializedPath.arrange_nodes(replies, :path, arrange_opts(opts))
 
   defp arrange_opts(opts) do
-    if (e(opts, :sort_by, nil) || e(opts, :feed_filters, :sort_by, nil)) == :latest_reply do
-      # sorting requires: `sort_order` (desc or asc), `struct_sort_key` (a virtual field on the struct that contains the path to store the data to sort by), and `sort_by_key` or `sort_by_key_fun`
-      Keyword.merge(opts,
-        # WIP: override to get correct behaviour in messages (which are sorted by :asc) # opts[:sort_order] || :desc,
-        sort_order: :desc,
-        struct_sort_key: :path_sorter,
-        sort_by_key_fun: &custom_nodes_sorter_latest_reply/2
-      )
-    else
-      opts
-      # |> Keyword.merge( # TODO
-      #   sort_order: opts[:sort_order] || :desc,
-      #   struct_sort_key: :path_sorter,
-      #   sort_by_key_fun: &custom_nodes_sorter_pin/2
-      # )
+    # sorting requires: `sort_order` (desc or asc), `struct_sort_key` (a virtual field on the struct that contains the path to store the data to sort by), and `sort_by_key` or `sort_by_key_fun`
+    case e(opts, :sort_by, nil) || e(opts, :feed_filters, :sort_by, nil) do
+      :latest_reply ->
+        Keyword.merge(opts,
+          # WIP: override to get correct behaviour in messages (which are sorted by :asc) # opts[:sort_order] || :desc,
+          sort_order: :desc,
+          struct_sort_key: :path_sorter,
+          sort_by_key_fun: &custom_nodes_sorter_latest_reply/2
+        )
+
+      :reply_count ->
+        Keyword.merge(opts,
+          sort_order: opts[:sort_order] || :desc,
+          sort_aggregator: :sqrt_sum,
+          sort_by_key_fun: &custom_nodes_sorter_reply_count/2
+        )
+
+      :like_count ->
+        Keyword.merge(opts,
+          sort_order: opts[:sort_order] || :desc,
+          sort_aggregator: :sqrt_sum,
+          sort_by_key_fun: &custom_nodes_sorter_like_count/2
+        )
+
+      :boost_count ->
+        Keyword.merge(opts,
+          sort_order: opts[:sort_order] || :desc,
+          sort_aggregator: :sqrt_sum,
+          sort_by_key_fun: &custom_nodes_sorter_boost_count/2
+        )
+
+      :popularity_score ->
+        Keyword.merge(opts,
+          sort_order: opts[:sort_order] || :desc,
+          sort_aggregator: :sqrt_sum,
+          sort_by_key_fun: &custom_nodes_sorter_popularity_score/2
+        )
+
+      _ ->
+        opts
+        # |> Keyword.merge( # TODO
+        #   sort_order: opts[:sort_order] || :desc,
+        #   struct_sort_key: :path_sorter,
+        #   sort_by_key_fun: &custom_nodes_sorter_pin/2
+        # )
     end
 
     # |> debug("arrange_opts")
@@ -1312,6 +1342,32 @@ defmodule Bonfire.Social.Threads do
       %{pinned: %{id: _}} -> order
       %{pinned: _} -> !order
       _ -> nil
+    end)
+  end
+
+  defp custom_nodes_sorter_reply_count(nodes, _opts) do
+    Enum.map(nodes, fn
+      %{total_replies_count: n} when is_integer(n) -> n
+      _ -> 0
+    end)
+  end
+
+  defp custom_nodes_sorter_like_count(nodes, _opts) do
+    Enum.map(nodes, fn node -> e(node, :activity, :like_count, :object_count, 0) || 0 end)
+  end
+
+  defp custom_nodes_sorter_boost_count(nodes, _opts) do
+    Enum.map(nodes, fn node -> e(node, :activity, :boost_count, :object_count, 0) || 0 end)
+  end
+
+  defp custom_nodes_sorter_popularity_score(nodes, _opts) do
+    weights = Bonfire.Social.Activities.popularity_weights()
+
+    Enum.map(nodes, fn node ->
+      likes = e(node, :activity, :like_count, :object_count, 0) || 0
+      boosts = e(node, :activity, :boost_count, :object_count, 0) || 0
+      replies = node[:total_replies_count] || 0
+      likes * weights[:likes] + boosts * weights[:boosts] + replies * weights[:replies]
     end)
   end
 

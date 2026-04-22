@@ -2627,6 +2627,48 @@ defmodule Bonfire.Social.Activities do
   """
   def query_order(query, sort_by, sort_order, fallback_sort_field \\ :id, with_pins? \\ false)
 
+  def popularity_weights do
+    Bonfire.Common.Config.get([:feeds, :popularity_weights],
+      likes: 1,
+      boosts: 2,
+      replies: 3,
+      shares: 4
+    )
+  end
+
+  def query_order(query, :popularity_score, sort_order, fallback_sort_field, _with_pins?) do
+    # preload all three signals so arrange_opts sorter can read them, then pre-sort by combined score
+    weights = popularity_weights()
+    w_likes = weights[:likes]
+    w_boosts = weights[:boosts]
+    w_replies = weights[:replies]
+
+    query =
+      if Map.has_key?(query.aliases, :replied),
+        do: query,
+        else: proload(query, activity: [:replied])
+
+    query = proload(query, activity: [:like_count, :boost_count])
+
+    if sort_order == :asc do
+      order_by(query, [activity: activity, replied: replied, like_count: lc, boost_count: bc],
+        asc_nulls_first:
+          coalesce(bc.object_count, 0) * ^w_boosts +
+            coalesce(lc.object_count, 0) * ^w_likes +
+            coalesce(replied.total_replies_count, 0) * ^w_replies,
+        asc: activity.id
+      )
+    else
+      order_by(query, [activity: activity, replied: replied, like_count: lc, boost_count: bc],
+        desc_nulls_last:
+          coalesce(bc.object_count, 0) * ^w_boosts +
+            coalesce(lc.object_count, 0) * ^w_likes +
+            coalesce(replied.total_replies_count, 0) * ^w_replies,
+        desc: activity.id
+      )
+    end
+  end
+
   def query_order(query, :reply_count, sort_order, fallback_sort_field, _with_pins?) do
     query_order_with_metric(
       query,
@@ -2682,15 +2724,18 @@ defmodule Bonfire.Social.Activities do
     order_by(query, [], desc: selected_as(:object_count), desc: selected_as(:newest_activity_id))
   end
 
-  def query_order(query, :trending_score, :asc, :newest_activity_id, _with_pins?) do
-    # For media-aggregated queries (trending links) - always uses newest_activity_id
-    order_by(query, [], asc: selected_as(:trending_score), asc: selected_as(:newest_activity_id))
-  end
-
-  def query_order(query, :trending_score, _sort_order, :newest_activity_id, _with_pins?) do
+  def query_order(query, :popularity_score, :asc, :newest_activity_id, _with_pins?) do
     # For media-aggregated queries (trending links) - always uses newest_activity_id
     order_by(query, [],
-      desc: selected_as(:trending_score),
+      asc: selected_as(:popularity_score),
+      asc: selected_as(:newest_activity_id)
+    )
+  end
+
+  def query_order(query, :popularity_score, _sort_order, :newest_activity_id, _with_pins?) do
+    # For media-aggregated queries (trending links) - always uses newest_activity_id
+    order_by(query, [],
+      desc: selected_as(:popularity_score),
       desc: selected_as(:newest_activity_id)
     )
   end
@@ -2789,7 +2834,11 @@ defmodule Bonfire.Social.Activities do
          sort_order,
          fallback_sort_field
        ) do
-    query = proload(query, activity: [:replied])
+    # skip join when :replied is already the root binding (e.g. thread queries) to avoid alias collision
+    query =
+      if Map.has_key?(query.aliases, :replied),
+        do: query,
+        else: proload(query, activity: [:replied])
 
     if sort_order == :asc do
       if fallback_sort_field == :newest_activity_id do
@@ -2942,8 +2991,8 @@ defmodule Bonfire.Social.Activities do
     object_count
   end
 
-  def fetch_cursor_value_fun(%{id: id}, :trending_score) do
-    # debug(:trending_score)
+  def fetch_cursor_value_fun(%{id: id}, :popularity_score) do
+    # debug(:popularity_score)
     id
   end
 
@@ -3012,10 +3061,10 @@ defmodule Bonfire.Social.Activities do
       {cursor_fallback_field(fallback_sort_field), sort_order}
     ]
 
-  def order_cursor_fields(:trending_score, sort_order, fallback_sort_field),
+  def order_cursor_fields(:popularity_score, sort_order, fallback_sort_field),
     do:
       [
-        # {:trending_score, sort_order},
+        # {:popularity_score, sort_order},
         # paginated by main ID instead of computer score
         {:id, sort_order},
         {cursor_fallback_field(fallback_sort_field), sort_order}

@@ -668,7 +668,7 @@ defmodule Bonfire.Social.FeedLoader do
       sort_order = filters[:sort_order] || opts[:sort_order]
 
       subquery_sort_by =
-        if sort_by == :trending_score do
+        if sort_by == :popularity_score do
           :boost_count
         else
           sort_by
