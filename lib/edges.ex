@@ -220,9 +220,7 @@ defmodule Bonfire.Social.Edges do
 
     put_edge_assoc(changeset, Bonfire.Common.Types.table_id(type_of_edge_schema), subject, object)
     |> Ecto.Changeset.unique_constraint([:subject_id, :object_id, :table_id],
-      # String.to_atom(
       name: "bonfire_data_edges_edge_#{type_of_edge_schema.__schema__(:source)}_unique_index"
-      # ) |> debug("unique constraint name")
     )
   end
 
