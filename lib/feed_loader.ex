@@ -738,7 +738,7 @@ defmodule Bonfire.Social.FeedLoader do
       repo().pagination_opts(opts),
       [
         # after: after_cursor,
-        # Increase the limit to fetch more results 
+        # Increase the limit to fetch more results
         deferred_join_multiply_limit: deferred_join_multiply_limit,
         # Change the pagination offset to match - FIXME: shouldn't this use the previous limit?
         deferred_join_offset:
@@ -1134,8 +1134,7 @@ defmodule Bonfire.Social.FeedLoader do
     |> FeedActivities.maybe_preload_replied()
     |> where(
       [activity: activity, replied: replied],
-      # include thread roots (replied.thread_id == activity.id) and posts with no replied record (treated as roots)
-      is_nil(replied.id) or replied.thread_id == activity.id
+      is_nil(replied.id) or replied.thread_id == activity.object_id
     )
     |> order_by_latest_thread_reply()
   end
@@ -1146,12 +1145,12 @@ defmodule Bonfire.Social.FeedLoader do
   defp order_by_latest_thread_reply(query) do
     query
     |> join(:left, [activity: activity], lr in subquery(thread_order_by_latest_reply_subquery()),
-      on: lr.thread_id == activity.id,
+      on: lr.thread_id == activity.object_id,
       as: :latest_reply
     )
     |> order_by(
       [activity: activity, latest_reply: lr],
-      desc_nulls_last: fragment("COALESCE(?, ?)", lr.last_reply_id, activity.id)
+      desc_nulls_last: fragment("COALESCE(?, ?)", lr.last_reply_id, activity.object_id)
     )
   end
 
@@ -1447,7 +1446,7 @@ defmodule Bonfire.Social.FeedLoader do
      #    skip_boundary_check
      #  )
      |> Map.drop([
-       # :exclude_object_types, 
+       # :exclude_object_types,
        :exclude_activity_types
      ]),
      opts
@@ -2022,7 +2021,7 @@ defmodule Bonfire.Social.FeedLoader do
       # 6: Feed with `current_user_required` and no current user
       iex> preset_feed_filters(:my_flags, [])
       {:error, :unauthorized}
-      # ** (Bonfire.Fail.Auth) You need to log in first. 
+      # ** (Bonfire.Fail.Auth) You need to log in first.
 
       # 7: Custom feed with additional parameters
       iex> {:ok, %{activity_types: [:follow], objects: ["alice"]}} = preset_feed_filters(:user_followers, [by: "alice"])
@@ -2130,7 +2129,7 @@ defmodule Bonfire.Social.FeedLoader do
 
       # Failing with `:current_user_required` parameter if we have no current user
       iex> replace_parameters(:current_user_required, %{}, current_user: nil)
-      ** (Bonfire.Fail.Auth) You need to log in first. 
+      ** (Bonfire.Fail.Auth) You need to log in first.
 
       # Handling a parameter that is in the opts
       iex> replace_parameters(:type, %{}, type: "post")
