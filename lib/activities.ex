@@ -2628,7 +2628,7 @@ defmodule Bonfire.Social.Activities do
   def query_order(query, sort_by, sort_order, fallback_sort_field \\ :id, with_pins? \\ false)
 
   def popularity_weights do
-    Bonfire.Common.Config.get([:feeds, :popularity_weights],
+    Bonfire.Common.Config.get([:bonfire_social, :popularity_weights],
       likes: 1,
       boosts: 2,
       replies: 3,
