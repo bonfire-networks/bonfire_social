@@ -2082,13 +2082,15 @@ defmodule Bonfire.Social.Activities do
     Map.put(object_without_activity, :activity, %{})
   end
 
-  def activity_under_object({:ok, %{} = object}) do
+  def activity_under_object({:ok, object}) do
     {:ok, activity_under_object(object)}
   end
 
   def activity_under_object(%Activity{} = activity, %{} = object) do
     Map.put(object, :activity, activity)
   end
+
+  def activity_under_object(nil), do: nil
 
   @doc """
   Processes and structures activity data within a media.
