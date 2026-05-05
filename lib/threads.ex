@@ -444,6 +444,7 @@ defmodule Bonfire.Social.Threads do
     opts = to_options(opts)
     limit_per_thread = opts[:limit] || 5
     exclude_table_ids = default_exclude_table_ids()
+    participant_verb_ids = participant_verb_ids()
 
     all_thread_ids =
       Enum.flat_map(edges, fn %{activity: activity} ->
@@ -464,10 +465,13 @@ defmodule Bonfire.Social.Threads do
 
     exclude_subject_ids = opts[:exclude_subject_ids] || []
 
-    # Build a map of thread_id => [activity subjects from edges]
+    # Build a map of thread_id => [activity subjects from edges].
+    # Only include subjects from create/reply activities, so that boosters,
+    # likers, etc. are not listed as thread participants.
     edge_subjects_by_thread =
-      Enum.group_by(
-        edges,
+      edges
+      |> Enum.filter(&(e(&1, :activity, :verb_id, nil) in participant_verb_ids))
+      |> Enum.group_by(
         &e(&1, :activity, :replied, :thread_id, nil),
         &e(&1, :activity, :subject, nil)
       )
@@ -475,7 +479,9 @@ defmodule Bonfire.Social.Threads do
         {k, Enum.reject(subjects, &(id(&1) in exclude_subject_ids))}
       end)
 
-    # Build a map of thread_id => [tagged users from edges] (DM recipients)
+    # Build a map of thread_id => [tagged users from edges] (DM recipients).
+    # Filter to user-like tags only (those with a `:character`), so quoted posts
+    # and similar non-user tag targets are not listed as participants.
     edge_tags_by_thread =
       edges
       |> Enum.flat_map(fn %{activity: activity} ->
@@ -483,6 +489,7 @@ defmodule Bonfire.Social.Threads do
 
         if thread_id do
           e(activity, :object, :tags, [])
+          |> Enum.filter(&user_tag?/1)
           |> Enum.reject(
             &(e(&1, :table_id, nil) in exclude_table_ids or id(&1) in exclude_subject_ids)
           )
@@ -560,7 +567,11 @@ defmodule Bonfire.Social.Threads do
           e(activity_or_object, :replied, :thread_id, nil)
       end
 
-    # Participants already known from preloaded data — exclude from DB query
+    # Participants already known from preloaded data — exclude from DB query.
+    user_tags =
+      (e(activity_or_object, :tags, []) ++ e(activity_or_object, :activity, :tags, []))
+      |> Enum.filter(&user_tag?/1)
+
     already_known =
       [
         e(activity_or_object, :subject, nil),
@@ -570,9 +581,7 @@ defmodule Bonfire.Social.Threads do
         e(activity_or_object, :reply_to, :created, :creator, nil),
         e(activity_or_object, :object, :replied, :reply_to, :created, :creator, nil),
         e(activity_or_object, :object, :reply_to, :created, :creator, nil)
-      ] ++
-        e(activity_or_object, :tags, []) ++
-        e(activity_or_object, :activity, :tags, [])
+      ] ++ user_tags
 
     known_ids =
       already_known
@@ -580,10 +589,6 @@ defmodule Bonfire.Social.Threads do
       |> Enum.reject(&is_nil/1)
       |> Enum.uniq()
 
-    # add author of root message
-    # add author of the message it was replying to
-    # add all previously tagged people
-    # add any other participants in the thread
     fetched =
       if(thread_or_object_id,
         do:
@@ -615,8 +620,15 @@ defmodule Bonfire.Social.Threads do
     |> Bonfire.Common.Types.table_types()
   end
 
+  # A tag is treated as a user (mention/recipient) when it has a `:character`
+  # association — same heuristic used by `Bonfire.Social.Tags.tags_quote/1`.
+  defp user_tag?(tag), do: not is_nil(e(tag, :character, nil))
+
+  defp participant_verb_ids,
+    do: Enum.map([:create, :reply], &Verbs.get_id!(&1))
+
   defp thread_activities_query(thread_ids) do
-    verb_ids = Enum.map([:create, :reply], &Verbs.get_id!(&1))
+    verb_ids = participant_verb_ids()
 
     base_query()
     |> reusable_join(:inner, [root], assoc(root, :activity), as: :activity)

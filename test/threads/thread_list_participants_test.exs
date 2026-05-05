@@ -4,6 +4,7 @@ defmodule Bonfire.Social.ThreadsParticipantsTest do
   alias Bonfire.Posts
   alias Bonfire.Social.Threads
   alias Bonfire.Social.FeedActivities
+  alias Bonfire.Boundaries.Verbs
   alias Bonfire.Me.Fake
 
   test "list_participants returns author of a post" do
@@ -303,5 +304,129 @@ defmodule Bonfire.Social.ThreadsParticipantsTest do
 
     assert length(participants) == 1
     assert List.first(participants).id == user.id
+  end
+
+  test "list_participants does not include quoted posts attached as tags" do
+    author = Fake.fake_user!("quoter")
+    other = Fake.fake_user!("quoted_author")
+
+    # Original post that will be quoted
+    {:ok, original} =
+      Posts.publish(
+        current_user: other,
+        post_attrs: %{post_content: %{html_body: "<p>original</p>"}},
+        boundary: "public"
+      )
+
+    # Quote post
+    {:ok, quote_post} =
+      Posts.publish(
+        current_user: author,
+        post_attrs: %{post_content: %{html_body: "<p>quoting</p>"}},
+        boundary: "public"
+      )
+
+    # Simulate the quote relationship the same way `Bonfire.Social.Quotes.update_quote_add/4` does
+    {:ok, _} = Bonfire.Tag.tag_something(author, quote_post, [original], :skip_boundary_check)
+
+    quote_post = Bonfire.Common.Repo.maybe_preload(quote_post, tags: [:character])
+
+    participants = Threads.list_participants(quote_post)
+    participant_ids = Enum.map(participants, & &1.id)
+
+    # The quote author should be a participant
+    assert author.id in participant_ids
+    # The quoted post must NOT be listed as a participant (the bug)
+    refute original.id in participant_ids
+    # And no participant entry should be missing user data
+    assert Enum.all?(participants, &(not is_nil(e(&1, :character, nil))))
+  end
+
+  test "list_participants_for_threads excludes boost-activity subjects from edges" do
+    author = Fake.fake_user!("author")
+    booster = Fake.fake_user!("booster")
+
+    {:ok, post} =
+      Posts.publish(
+        current_user: author,
+        post_attrs: %{post_content: %{html_body: "<p>boost me</p>"}},
+        boundary: "public"
+      )
+
+    thread_id = e(post, :replied, :thread_id, nil) || post.id
+    create_verb_id = Verbs.get_id!(:create)
+    boost_verb_id = Verbs.get_id!(:boost)
+
+    edges = [
+      %{
+        activity: %{
+          replied: %{thread_id: thread_id},
+          subject: author,
+          subject_id: author.id,
+          verb_id: create_verb_id,
+          object_id: post.id,
+          object: %{tags: []}
+        }
+      },
+      %{
+        activity: %{
+          replied: %{thread_id: thread_id},
+          subject: booster,
+          subject_id: booster.id,
+          verb_id: boost_verb_id,
+          object_id: post.id,
+          object: %{tags: []}
+        }
+      }
+    ]
+
+    result = Threads.list_participants_for_threads(edges, skip_boundary_check: true)
+    participant_ids = Map.get(result, thread_id, []) |> Enum.map(&id/1)
+
+    assert author.id in participant_ids
+    refute booster.id in participant_ids
+  end
+
+  test "list_participants_for_threads excludes non-user tags (e.g. quoted posts) from edges" do
+    author = Fake.fake_user!("author")
+    mentioned = Fake.fake_user!("mentioned")
+
+    {:ok, post} =
+      Posts.publish(
+        current_user: author,
+        post_attrs: %{post_content: %{html_body: "<p>hi</p>"}},
+        boundary: "public"
+      )
+
+    {:ok, quoted_post} =
+      Posts.publish(
+        current_user: author,
+        post_attrs: %{post_content: %{html_body: "<p>target</p>"}},
+        boundary: "public"
+      )
+
+    thread_id = e(post, :replied, :thread_id, nil) || post.id
+    create_verb_id = Verbs.get_id!(:create)
+
+    edges = [
+      %{
+        activity: %{
+          replied: %{thread_id: thread_id},
+          subject: author,
+          subject_id: author.id,
+          verb_id: create_verb_id,
+          object_id: post.id,
+          # Mix a real user tag (a mention) and a non-user tag (the quoted post)
+          object: %{tags: [mentioned, quoted_post]}
+        }
+      }
+    ]
+
+    result = Threads.list_participants_for_threads(edges, skip_boundary_check: true)
+    participant_ids = Map.get(result, thread_id, []) |> Enum.map(&id/1)
+
+    assert author.id in participant_ids
+    assert mentioned.id in participant_ids
+    refute quoted_post.id in participant_ids
   end
 end
