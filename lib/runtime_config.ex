@@ -104,6 +104,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           opts: [include_flags: :mediate, include_requests: true],
           icon: "ph:bell-duotone",
           assigns: [
+            hide_filters: true,
             page: "notifications",
             showing_within: :notifications,
             back: true,
