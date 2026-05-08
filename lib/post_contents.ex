@@ -214,8 +214,8 @@ defmodule Bonfire.Social.PostContents do
             urls: urls3
           }} <-
            process_local_input(:summary, creator, attrs, do_not_strip_html?, output_format, opts) do
-      # # little easter egg to test error handling
-      # if String.contains?(html_body, "/crash!"), do: raise("User-triggered crash")
+      # little easter egg to test error handling
+      if String.contains?(html_body, "/crash!"), do: raise("User-triggered crash")
 
       merge_with_body_or_nil(
         attrs,
