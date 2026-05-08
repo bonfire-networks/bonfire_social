@@ -417,6 +417,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           assigns: [
             selected_tab: :flags,
             scope: :instance,
+            hide_filters: true,
             page: "flags",
             feedback_title: l("You have not flagged any activities...")
           ]
@@ -436,6 +437,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           assigns: [
             selected_tab: "flagged_content",
             scope: :instance,
+            hide_filters: true,
             page: "flags",
             feedback_title: l("You have no flagged activities to review...")
           ]

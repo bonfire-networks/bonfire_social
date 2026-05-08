@@ -959,24 +959,7 @@ defmodule Bonfire.Social.FeedLoader do
   end
 
   def default_feed_name(opts) do
-    current_user = current_user(opts)
-
-    if not is_nil(current_user) do
-      # || current_account(socket)
-      # my feed
-      Settings.get(
-        [Bonfire.UI.Social.FeedLive, :default_feed],
-        :my,
-        current_user: current_user,
-        name: l("Default Feed"),
-        description: l("Default feed to display when visiting the feed page.")
-      )
-    else
-      # fallback to showing default or local instance feed
-      Config.get([Bonfire.UI.Social.FeedLive, :default_feed]) || :local
-    end
-
-    # |> debug("default feed to load:")
+    if not is_nil(current_user(opts)), do: :my, else: :local
   end
 
   def feed_name_or_default(name, opts) when is_nil(name) or name == :default do
