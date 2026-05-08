@@ -24,6 +24,23 @@ defmodule Bonfire.Social.InstancePinsTest do
     assert Pins.pinned?(:instance, post)
   end
 
+  test "admin can pin an object to instance by id" do
+    account = fake_account!()
+    admin = fake_admin!(account)
+
+    attrs = %{
+      post_content: %{summary: "pinnable post", html_body: "<p>pin me by id</p>"}
+    }
+
+    assert {:ok, post} =
+             Posts.publish(current_user: admin, post_attrs: attrs, boundary: "public")
+
+    # UI/LiveHandler passes the object id (binary), not the struct.
+    Pins.pin(admin, post.id, :instance)
+
+    assert Pins.pinned?(:instance, post)
+  end
+
   test "regular user cannot pin to instance" do
     user = fake_user!()
 

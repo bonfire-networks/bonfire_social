@@ -167,9 +167,9 @@ defmodule Bonfire.Social.Pins do
     with {:ok, object} <-
            Bonfire.Common.Needles.get(object,
              current_user: pinner,
-             verbs: [@boundary_verb]
+             verbs: [@boundary_verb],
+             skip_boundary_check: opts[:skip_boundary_check]
            ) do
-      # debug(object)
       do_pin(scope || pinner, object, opts)
     else
       _ ->
