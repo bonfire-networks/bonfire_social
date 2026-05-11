@@ -31,8 +31,18 @@ defmodule Bonfire.Social.FeedPaginationTest do
     assert query_string =~ "order_by: [desc: a1.id]"
   end
 
-  test "local feed origin filter also includes visible local actor activities" do
+  test "guest local feed origin filter keeps local feed membership fast path" do
     query = FeedLoader.feed(:local, return: :query, preload: false)
+
+    query_string = Inspect.Ecto.Query.to_string(query)
+
+    assert query_string =~ "feed_id == ^"
+    refute query_string =~ "subject_peered"
+    refute query_string =~ "object_peered"
+  end
+
+  test "authenticated local feed origin filter also includes visible local actor activities" do
+    query = FeedLoader.feed(:local, return: :query, preload: false, current_user: %{id: "viewer"})
 
     query_string = Inspect.Ecto.Query.to_string(query)
 
