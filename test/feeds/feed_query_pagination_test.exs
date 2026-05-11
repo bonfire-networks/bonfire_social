@@ -31,14 +31,15 @@ defmodule Bonfire.Social.FeedPaginationTest do
     assert query_string =~ "order_by: [desc: a1.id]"
   end
 
-  test "local feed origin filter uses local feed membership without peered joins" do
+  test "local feed origin filter also includes visible local actor activities" do
     query = FeedLoader.feed(:local, return: :query, preload: false)
 
     query_string = Inspect.Ecto.Query.to_string(query)
 
     assert query_string =~ "feed_id == ^"
-    refute query_string =~ "subject_peered"
-    refute query_string =~ "object_peered"
+    assert query_string =~ "subject_peered"
+    assert query_string =~ "object_peered"
+    assert query_string =~ " or "
   end
 
   describe "feed pagination with deferred join" do
