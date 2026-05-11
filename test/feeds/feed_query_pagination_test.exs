@@ -49,7 +49,10 @@ defmodule Bonfire.Social.FeedPaginationTest do
     assert query_string =~ "feed_id == ^"
     assert query_string =~ "subject_peered"
     assert query_string =~ "object_peered"
-    assert query_string =~ " or "
+    assert query_string =~ "is_nil(subject_character"
+    assert query_string =~ "is_nil(subject_peered.peer_id)"
+    assert query_string =~ "is_nil(object.id)"
+    assert query_string =~ "is_nil(object_peered.peer_id)"
   end
 
   describe "feed pagination with deferred join" do

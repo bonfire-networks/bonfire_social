@@ -1870,6 +1870,8 @@ defmodule Bonfire.Social.Activities do
         debug("local feed")
         local_feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
 
+        # Guests only need the named local feed. Authenticated viewers also need visible local-user
+        # activities from other feed rows, such as circle/custom-boundary posts.
         if current_user(opts) do
           query
           |> proload(:inner, activity: [:object])
