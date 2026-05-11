@@ -1871,44 +1871,9 @@ defmodule Bonfire.Social.Activities do
         local_feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
 
         query
-        # WIP: optimise by avoiding subject and object :peered preloads (only need to join them)
-        |> proload(:inner, activity: [:object])
-        |> reusable_join(
-          :left,
-          [activity: activity],
-          subject in assoc(activity, :subject),
-          as: :subject
-        )
-        |> reusable_join(
-          :left,
-          [subject: subject],
-          subject_character in assoc(subject, :character),
-          as: :subject_character
-        )
-        |> reusable_join(
-          :left,
-          [subject_character: subject_character],
-          subject_peered in assoc(subject_character, :peered),
-          as: :subject_peered
-        )
-        |> reusable_join(
-          :left,
-          [object: object],
-          object_peered in assoc(object, :peered),
-          as: :object_peered
-        )
         |> where(
-          [
-            fp,
-            activity: activity,
-            subject_character: subject_character,
-            subject_peered: subject_peered,
-            object: object,
-            object_peered: object_peered
-          ],
-          activity.subject_id != ^fetcher_user_id and fp.feed_id == ^local_feed_id and
-            ((is_nil(subject_character.id) or is_nil(subject_peered.peer_id)) and
-               (is_nil(object.id) or is_nil(object_peered.peer_id)))
+          [fp, activity: activity],
+          activity.subject_id != ^fetcher_user_id and fp.feed_id == ^local_feed_id
         )
 
       :remote in origin ->
