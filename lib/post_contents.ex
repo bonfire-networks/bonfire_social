@@ -221,15 +221,9 @@ defmodule Bonfire.Social.PostContents do
       merge_with_body_or_nil(
         attrs,
         %{
-          name:
-            normalise_input(name, do_not_strip_html?, output_format)
-            |> prepare_text(creator, opts ++ [do_not_strip_html: true]),
-          summary:
-            normalise_input(summary, do_not_strip_html?, output_format)
-            |> prepare_text(creator, opts ++ [do_not_strip_html: true]),
-          html_body:
-            normalise_input(html_body, do_not_strip_html?, output_format)
-            |> prepare_text(creator, opts ++ [do_not_strip_html: true]),
+          name: prepare_text(name, creator, opts ++ [do_not_strip_html: true]),
+          summary: prepare_text(summary, creator, opts ++ [do_not_strip_html: true]),
+          html_body: prepare_text(html_body, creator, opts ++ [do_not_strip_html: true]),
           mentions: e(attrs, :mentions, []) ++ mentions1 ++ mentions2 ++ mentions3,
           hashtags: e(attrs, :hashtags, []) ++ hashtags1 ++ hashtags2 ++ hashtags3,
           urls: urls1 ++ urls2 ++ urls3,
@@ -245,12 +239,9 @@ defmodule Bonfire.Social.PostContents do
   end
 
   defp process_local_input(field, creator, attrs, do_not_strip_html?, output_format, opts) do
-    Bonfire.Social.Tags.maybe_process(
-      creator,
-      get_attr(attrs, field),
-      #  |> normalise_input(do_not_strip_html?, output_format),
-      opts
-    )
+    get_attr(attrs, field)
+    |> normalise_input(do_not_strip_html?, output_format)
+    |> then(&Bonfire.Social.Tags.maybe_process(creator, &1, opts))
     |> debug("processed local input")
   end
 
@@ -741,9 +732,11 @@ defmodule Bonfire.Social.PostContents do
 
   @doc "Prepare an outgoing ActivityPub Note object for publishing."
   def ap_prepare_object_note(subject, verb, post, actor, mentions, context, reply_to) do
+    content_format = editor_output_content_type(subject)
+
     html_body =
       e(post, :post_content, :html_body, nil)
-      |> Text.make_links_absolute(:markdown)
+      |> Text.prepare_links_for_remote_render(content_format)
 
     hashtags =
       Bonfire.Social.Tags.list_tags_hashtags(post)
@@ -775,13 +768,15 @@ defmodule Bonfire.Social.PostContents do
       "content" =>
         Text.maybe_markdown_to_html(
           html_body,
-          # we don't want to escape HTML in local content:
-          sanitize: true
+          # link_rel: nil so ammonia doesn't force-override rel="tag ugc" on hashtag/mention links
+          # (Mastodon checks rel="tag" to skip link-preview generation — GH #1754)
+          sanitize: true,
+          link_rel: nil
         ),
-      "source" => %{
-        "content" => html_body,
-        "mediaType" => "text/markdown"
-      },
+      "source" =>
+        if content_format != :html do
+          %{"content" => html_body, "mediaType" => "text/#{content_format}"}
+        end,
       "image" =>
         maybe_apply(Bonfire.Files, :ap_publish_activity, [primary_image], fallback_return: nil),
       "attachment" =>
@@ -792,7 +787,7 @@ defmodule Bonfire.Social.PostContents do
         (Enum.map(mentions, fn actor ->
            %{
              "href" => actor.ap_id,
-             "name" => actor.username,
+             "name" => "@#{actor.username}",
              "type" => "Mention"
            }
          end) ++
