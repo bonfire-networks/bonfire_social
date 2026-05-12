@@ -399,7 +399,7 @@ defmodule Bonfire.Social.Flags do
     |> query(opts)
     |> proload([:named])
     |> debug("flags query")
-    |> Social.many(opts[:paginate?], opts)
+    |> repo().many_maybe_paginated(opts[:paginate?], opts)
   end
 
   @doc """

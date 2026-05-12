@@ -340,80 +340,34 @@ defmodule Bonfire.Social do
     maybe_apply(Bonfire.Federate.ActivityPub.AdapterUtils, :is_local?, [thing, opts], opts)
   end
 
-  @doc """
-  Executes a query and returns results based on the specified options.
+  def maybe_only_id(query, opts) do
+    case opts[:select_only] do
+      :id ->
+        query
+        |> Ecto.Query.exclude(:select)
+        |> Ecto.Query.select([:id])
 
-  This function can return query results in various formats, including raw query,
-  stream, or paginated results.
+      :object_id ->
+        query
+        |> Ecto.Query.exclude(:select)
+        |> Ecto.Query.select([activity: activity], activity.object_id)
 
-  ## Parameters
-
-    - query: The Ecto query to execute.
-    - paginate?: Boolean indicating whether to paginate results.
-    - opts: Additional options for query execution.
-
-  ## Examples
-
-      iex> query = from(u in User, where: u.age > 18)
-      iex> Bonfire.Social.many(query, false, return: :query)
-      #Ecto.Query<...>
-
-      iex> Bonfire.Social.many(query, true, after: "1")
-      %{entries: [%User{}, ...], page_info: %{...}}
-
-  """
-  def many(query, paginate?, opts \\ [])
-
-  def many(query, paginate?, opts) do
-    case opts[:return] do
-      # :query -> # NOTE: let repo module handle this
-      #   query
-
-      :stream ->
-        many_stream(query, opts)
+      :activity_id ->
+        query
+        |> Ecto.Query.exclude(:select)
+        |> Ecto.Query.select([activity: activity], activity.id)
 
       _ ->
-        if paginate? == false do
-          repo().many(query, opts)
-        else
-          repo().many_paginated(query, opts)
-        end
-        |> after_many(opts)
+        query
     end
   end
 
-  def many_stream(query, opts) do
-    case opts[:stream_callback] do
-      nil ->
-        stream = repo().stream(query, max_rows: opts[:max_rows] || 100)
-
-        repo().transact(fn ->
-          Enum.to_list(stream)
-        end)
-
-      callback ->
-        repo().transaction(
-          fn ->
-            callback.(
-              query
-              |> Ecto.Query.exclude(:preload)
-              |> maybe_only_id(opts)
-              |> repo().stream(max_rows: opts[:max_rows] || 100)
-            )
-          end,
-          #   1h
-          timeout: opts[:timeout] || 3_600_000
-        )
-    end
-  end
-
-  defp maybe_only_id(query, opts) do
-    if opts[:select_only_activity_id] do
-      query
-      |> Ecto.Query.exclude(:select)
-      |> Ecto.Query.select([activity: activity], activity.id)
+  @doc "If `select_only: :activity_id` (or similar) is set in opts, promotes it to a `pre_execute_fn` so the data layer handles the select rather than the caller."
+  def maybe_set_pre_execute_fn(opts) do
+    if opts[:pre_execute_fn] || !opts[:select_only] do
+      opts
     else
-      query
+      Keyword.put(opts, :pre_execute_fn, &maybe_only_id(&1, opts))
     end
   end
 

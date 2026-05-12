@@ -333,7 +333,7 @@ defmodule Bonfire.Social.Pins do
 
   defp list_paginated(filters, opts) do
     query(filters, opts)
-    |> Social.many(opts[:paginate?], opts)
+    |> repo().many_maybe_paginated(opts[:paginate?], opts)
 
     # |> Activities.query_object_preload_activity(:pin, :pinned_id, opts)
     # |> Activities.as_permitted_for(opts, [:see])

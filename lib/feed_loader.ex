@@ -469,7 +469,8 @@ defmodule Bonfire.Social.FeedLoader do
       %{edges: edges, page_info: page_info}
   """
   def feed_many_paginated(query, filters, opts) do
-    do_feed_many_paginated(query, filters, prepare_opts_for_pagination(query, filters, opts))
+    opts = prepare_opts_for_pagination(query, filters, opts)
+    query |> repo().many_maybe_paginated(opts[:paginate] || opts, opts)
   end
 
   defp prepare_opts_for_pagination(query, filters, opts) do
@@ -488,15 +489,6 @@ defmodule Bonfire.Social.FeedLoader do
       Activities.order_pagination_opts(filters[:sort_by], filters[:sort_order], opts)
     )
     |> debug("prepared opts for pagination")
-  end
-
-  defp do_feed_many_paginated(query, filters, opts) do
-    query
-    # |> flood("feed query")
-    |> Social.many(
-      opts[:paginate] || opts,
-      opts
-    )
   end
 
   @decorate time()
@@ -552,7 +544,7 @@ defmodule Bonfire.Social.FeedLoader do
         throw("Explanation printed.")
 
       :stream ->
-        Bonfire.Social.many_stream(query, opts)
+        repo().many_stream(query, Social.maybe_set_pre_execute_fn(opts))
 
       _ ->
         # deferred_opts =
@@ -569,11 +561,7 @@ defmodule Bonfire.Social.FeedLoader do
                maybe_prepare_per_media_query(query, filters, opts) ||
                  maybe_prepare_and_boundarise_feed_deferred_query(query, filters, opts),
              %{edges: []} when per_media? != true <-
-               do_feed_many_paginated(
-                 deferred_query,
-                 filters,
-                 opts
-               ) do
+               deferred_query |> repo().many_maybe_paginated(opts[:paginate] || opts, opts) do
           debug("empty results in deferred join, trying pagination to next window")
           # WIP: Try paginating to the next window of results if the initial one is empty
           paginate_and_boundarise_feed_deferred_fallback(query, filters, opts)
@@ -582,7 +570,7 @@ defmodule Bonfire.Social.FeedLoader do
             debug("deferred join is not enabled")
 
             paginate_and_boundarise_feed_non_deferred_query(query, filters, opts)
-            |> do_feed_many_paginated(filters, opts)
+            |> repo().many_maybe_paginated(opts[:paginate] || opts, opts)
 
           %Ecto.Query{} = query ->
             query
@@ -605,8 +593,6 @@ defmodule Bonfire.Social.FeedLoader do
       initial_query =
         query
         # |> debug()
-        |> Ecto.Query.exclude(:select)
-        |> select([:id])
         |> apply_dedup_strategy(filters, opts)
         # # WIP: For show_objects_only_once apply dedup on the outer query; inner uses normal activity.id distinct
         # |> then(
@@ -620,17 +606,14 @@ defmodule Bonfire.Social.FeedLoader do
           :id,
           opts[:with_pins?]
         )
-        |> do_feed_many_paginated(
+        |> repo().build_deferred_inner_subquery(
           filters,
-          opts
-          |> Keyword.put_new(:paginate, true)
-          |> Keyword.merge(
-            return: :query,
-            multiply_limit: max(opts[:deferred_join_multiply_limit] || 2, 6)
+          Keyword.put(
+            opts,
+            :deferred_join_multiply_limit,
+            max(opts[:deferred_join_multiply_limit] || 2, 6)
           )
         )
-        |> offset(^(opts[:deferred_join_offset] || 0))
-        |> repo().make_subquery()
 
       # |> debug("deferred subquery")
 
@@ -777,15 +760,15 @@ defmodule Bonfire.Social.FeedLoader do
            maybe_prepare_per_media_query(query, filters, next_page_opts) ||
              maybe_prepare_and_boundarise_feed_deferred_query(query, filters, next_page_opts),
          %{edges: []} <-
-           do_feed_many_paginated(
-             deferred_query,
-             filters,
+           deferred_query
+           |> repo().many_maybe_paginated(
+             next_page_opts[:paginate] || next_page_opts,
              next_page_opts
            ) do
       debug("No results in next window either, falling back to non-deferred query")
 
       paginate_and_boundarise_feed_non_deferred_query(query, filters, opts)
-      |> do_feed_many_paginated(filters, opts)
+      |> repo().many_maybe_paginated(opts[:paginate] || opts, opts)
     end
   end
 
@@ -1778,7 +1761,7 @@ defmodule Bonfire.Social.FeedLoader do
     #  = false
     dedup_by_like_boost? =
       (filters[:dedup_by_like_or_boost] != false || show_objects_only_once?)
-      |> flood("dedup_by_like_boost?")
+      |> debug("dedup_by_like_boost?")
 
     # Reply dedup (dedup_replies_by_parent) remains in postprocessing for now
     dedup_replies_by_parent? = filters[:dedup_replies_by_parent] == true

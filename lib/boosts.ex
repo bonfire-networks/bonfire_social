@@ -326,7 +326,7 @@ defmodule Bonfire.Social.Boosts do
     filters
     |> query(opts)
     # |> debug()
-    |> Social.many(opts[:paginate?], opts)
+    |> repo().many_maybe_paginated(opts[:paginate?], opts)
   end
 
   defp query_base(filters, opts) do

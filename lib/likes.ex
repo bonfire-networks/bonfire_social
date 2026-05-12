@@ -332,7 +332,7 @@ defmodule Bonfire.Social.Likes do
     # |> Activities.query_object_preload_activity(:like, :liked_id, opts)
     # |> Activities.as_permitted_for(opts, [:see])
     # |> debug()
-    |> Social.many(opts[:paginate?], opts)
+    |> repo().many_maybe_paginated(opts[:paginate?], opts)
 
     # |> Activities.activity_preloads(opts)
   end
