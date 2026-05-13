@@ -410,6 +410,10 @@ defmodule Bonfire.Social do
     results
   end
 
+  def filter_by_keywords(%{edges: edges} = page, replace_with, opts) when is_list(edges) do
+    Map.put(page, :edges, filter_by_keywords(edges, replace_with, opts))
+  end
+
   def filter_by_keywords(edges_or_edge, replace_with \\ false, opts) do
     case Bonfire.Boundaries.BlockKeywords.block_keywords_settings(opts) do
       nil ->
@@ -461,7 +465,7 @@ defmodule Bonfire.Social do
           {c, [:object, :post_content]}
 
         _ ->
-          debug(edge, "object did not match known patterns for keyword filter")
+          warn(edge, "object did not match known patterns for keyword filter")
           {nil, nil}
       end
 

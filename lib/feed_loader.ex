@@ -250,6 +250,32 @@ defmodule Bonfire.Social.FeedLoader do
     |> feed(opts)
   end
 
+  @doc """
+  Fetches a feed (with SQL-level preloads from the preset) and then runs postloads on the already-loaded edges via `Activities.activity_preloads/3`. This hits the object branch of `activity_preloads`, which applies `filter_by_keywords` and any other in-memory postprocessing.
+
+  Preloads and postloads default to those derived from the preset filters via `contextual_preloads_from_filters/2`. Pass `preload:` or `postload:` opts to override.
+  """
+  def feed_postloaded(feed_name, opts \\ []) do
+    with {:ok, _preset, filters} <- prepare_feed_preset_and_filters(feed_name, opts) do
+      preload = opts[:preload] || contextual_preloads_from_filters(filters, :query)
+      postload = opts[:postload] || contextual_preloads_from_filters(filters, :post)
+
+      opts_with_preload = Keyword.put(opts, :preload, preload)
+
+      case feed(feed_name, opts_with_preload) do
+        %{edges: edges} = result ->
+          Map.put(
+            result,
+            :edges,
+            Activities.activity_preloads(edges, postload, opts_with_preload)
+          )
+
+        other ->
+          other
+      end
+    end
+  end
+
   # def feed(%{id: feed_id}, opts), do: feed(feed_id, opts)
 
   # def feed(%{feed_publishes: _} = feed_for, _) do
@@ -1561,11 +1587,15 @@ defmodule Bonfire.Social.FeedLoader do
       |> debug("body to look for in feed")
 
     feed =
-      if opts[:postload] != false do
-        feed
-        |> repo().maybe_preload(activity: [object: [:post_content]])
-      else
-        feed
+      case opts[:postload] do
+        false ->
+          feed
+
+        postloads when is_list(postloads) ->
+          Activities.activity_preloads(feed, postloads, opts)
+
+        _ ->
+          feed |> repo().maybe_preload(activity: [object: [:post_content]])
       end
 
     feed
@@ -1574,13 +1604,17 @@ defmodule Bonfire.Social.FeedLoader do
         if fi.activity.object_id == q_id or fi.id == q_id,
           do: return_feed_contains_match(fi, opts[:return_match_fun] || opts[:return])
       else
-        a_body =
-          e(fi.activity, :object, :post_content, :html_body, nil)
-          |> debug("checking body in feed")
+        post_content = e(fi.activity, :object, :post_content, nil)
+
+        a_text =
+          (e(post_content, :html_body, nil) ||
+             e(post_content, :summary, nil) ||
+             e(post_content, :name, nil))
+          |> debug("checking text in feed")
 
         if(
-          a_body && q_body &&
-            a_body =~ q_body,
+          a_text && q_body &&
+            a_text =~ q_body,
           do: return_feed_contains_match(fi, opts[:return_match_fun] || opts[:return])
         )
       end

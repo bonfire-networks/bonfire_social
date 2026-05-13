@@ -927,11 +927,18 @@ defmodule Bonfire.Social.Threads do
       [activity: Activities.maybe_with_labelled()],
       opts |> Keyword.put_new(:follow_pointers, false)
     )
-    # |> repo().maybe_preload(
-    #   # :pinned,
-    #   # FIXME: this should happen via `Activities.activity_preloads`
-    #   activity: [:media]
-    # )
+    |> then(fn result ->
+      case opts[:postload] do
+        postloads when is_list(postloads) and postloads != [] ->
+          Activities.activity_preloads(result, postloads, opts)
+
+        true ->
+          Activities.activity_preloads(result, [], opts)
+
+        _ ->
+          result
+      end
+    end)
     |> Bonfire.Social.after_many(opts)
   end
 
