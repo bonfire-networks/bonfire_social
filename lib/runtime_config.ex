@@ -417,8 +417,7 @@ defmodule Bonfire.Social.RuntimeConfig do
             page: "polls",
             page_title: l("Polls"),
             feedback_title: l("No polls yet"),
-            feedback_message:
-              l("There are no polls to show. Create one to start a vote!"),
+            feedback_message: l("There are no polls to show. Create one to start a vote!"),
             enable_marker: true
           ]
         },
