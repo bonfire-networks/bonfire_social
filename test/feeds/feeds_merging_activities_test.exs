@@ -239,7 +239,9 @@ defmodule Bonfire.Social.FeedsMergingActivitiesTest do
       %{edges: edges} =
         FeedLoader.feed(
           :notifications,
-          %{show_objects_only_once: true, dedup_by_like_or_boost: true}, current_user: user)
+          %{show_objects_only_once: true, dedup_by_like_or_boost: true},
+          current_user: user
+        )
 
       like_edges =
         Enum.filter(edges, fn edge ->
@@ -263,7 +265,9 @@ defmodule Bonfire.Social.FeedsMergingActivitiesTest do
       %{edges: edges} =
         FeedLoader.feed(
           :notifications,
-          %{show_objects_only_once: true, dedup_by_like_or_boost: true}, current_user: user)
+          %{show_objects_only_once: true, dedup_by_like_or_boost: true},
+          current_user: user
+        )
         |> debug("feed_results")
 
       like_edges =
