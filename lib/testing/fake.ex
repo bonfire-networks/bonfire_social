@@ -367,6 +367,17 @@ defmodule Bonfire.Social.Fake do
 
         {post, nil}
 
+      :polls ->
+        {:ok, question} =
+          Bonfire.Poll.Fake.fake_question_with_choices(
+            %{post_content: %{name: "test poll #{i}", html_body: "vote on this poll"}},
+            nil,
+            current_user: other_user,
+            boundary: "public"
+          )
+
+        {question, nil}
+
       other
       when is_nil(other) or other in [:posts, :user_by_object_type, :user_activities] ->
         post =
