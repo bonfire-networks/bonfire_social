@@ -237,7 +237,7 @@ defmodule Bonfire.Social.FeedsMergingActivitiesTest do
       post: post
     } do
       %{edges: edges} =
-        FeedLoader.feed(:local, %{show_objects_only_once: true, dedup_by_like_or_boost: true},
+        FeedLoader.feed(:notifications, %{show_objects_only_once: true, dedup_by_like_or_boost: true},
           current_user: user
         )
 
@@ -251,9 +251,9 @@ defmodule Bonfire.Social.FeedsMergingActivitiesTest do
       assert length(like_edges) == 1
 
       [like_edge] = like_edges
-      subjects_more_ids = e(like_edge, :activity, :subjects_more_ids, [])
-      # , "should have one other liker in subjects_more_ids"
-      assert length(subjects_more_ids) == 1
+      subjects_more = e(like_edge, :activity, :subjects_more, [])
+      # , "should have one other liker in subjects_more"
+      assert length(subjects_more) == 1
     end
 
     test "keeps likes and boosts as separate activities", %{
@@ -261,7 +261,7 @@ defmodule Bonfire.Social.FeedsMergingActivitiesTest do
       post: post
     } do
       %{edges: edges} =
-        FeedLoader.feed(:local, %{show_objects_only_once: true, dedup_by_like_or_boost: true},
+        FeedLoader.feed(:notifications, %{show_objects_only_once: true, dedup_by_like_or_boost: true},
           current_user: user
         )
         |> debug("feed_results")
