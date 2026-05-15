@@ -341,6 +341,7 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
           end
 
         :with_object_more ->
+          # polls preset: Question pointer is resolved to concrete struct
           pattern_matched? =
             match?(
               %{
@@ -357,7 +358,8 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
                   }
                 },
                 activity
-              )
+              ) or
+              match?(%{object: %Bonfire.Poll.Question{}}, activity)
 
           if return_bool? do
             if expected?, do: pattern_matched?, else: !pattern_matched?
@@ -440,9 +442,11 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
           end
 
         :with_object_peered ->
+          # polls preset: Question pointer is resolved to concrete struct (peered not preloaded in non-UI path)
           pattern_matched? =
             match?(%{object: %{peered: nil}}, activity) or
-              match?(%{object: %{peered: %{id: _}}}, activity)
+              match?(%{object: %{peered: %{id: _}}}, activity) or
+              match?(%{object: %Bonfire.Poll.Question{}}, activity)
 
           if return_bool? do
             if expected?, do: pattern_matched?, else: !pattern_matched?
