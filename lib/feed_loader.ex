@@ -132,7 +132,8 @@ defmodule Bonfire.Social.FeedLoader do
   end
 
   def feed(feed_name, filters, opts) when is_list(opts) do
-    feed(filters |> Map.put(:feed_name, feed_name), opts)
+    filters = if is_map(filters), do: filters, else: Map.new(filters)
+    feed(Map.put(filters, :feed_name, feed_name), opts)
   end
 
   def feed(name_or_filters \\ nil, opts \\ [])
