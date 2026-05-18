@@ -42,7 +42,7 @@ defmodule Bonfire.Social.FeedPaginationTest do
   end
 
   test "authenticated local feed origin filter also includes visible local actor activities" do
-      user = fake_user!("viewer")
+    user = fake_user!("viewer")
     query = FeedLoader.feed(:local, return: :query, preload: false, current_user: user)
 
     query_string = Inspect.Ecto.Query.to_string(query)
@@ -51,6 +51,7 @@ defmodule Bonfire.Social.FeedPaginationTest do
     assert query_string =~ " or "
     assert query_string =~ "subject_peered"
     assert query_string =~ "object_peered"
+
     assert query_string =~ "as: :subject_character" and
              query_string =~ "as: :subject_peered" and
              query_string =~ "as: :object_peered" and
