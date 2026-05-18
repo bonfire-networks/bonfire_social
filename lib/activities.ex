@@ -1308,11 +1308,6 @@ defmodule Bonfire.Social.Activities do
 
     {nested_under, preload_nested} = opts[:preload_nested] || {nil, []}
 
-    # TODO: put in config
-    preload_nested =
-      [if(:per_media not in preloads, do: Bonfire.Files.Media), Bonfire.Data.Social.APActivity] ++
-        preload_nested
-
     {nested_under, preload_nested, :with_reply_to in preloads and !opts[:skip_follow_reply_to]}
     |> debug("preload_nested_throuple")
   end
@@ -1414,7 +1409,7 @@ defmodule Bonfire.Social.Activities do
       preloads,
       opts
     )
-    |> Bonfire.Common.Repo.Preload.maybe_preloads_per_nested_schema(
+    |> Bonfire.Common.Repo.Preload.maybe_follow_pointer_schemas(
       activity_nested_under ++ [:replied, :reply_to],
       preload_nested,
       opts
@@ -1433,9 +1428,9 @@ defmodule Bonfire.Social.Activities do
          preloads,
          opts
        ) do
-    objects
     # FIXME: this is causing n+1 queries for ap_activity when loading a feed with unknown-type remote posts
-    |> Bonfire.Common.Repo.Preload.maybe_preloads_per_nested_schema(
+    objects
+    |> Bonfire.Common.Repo.Preload.maybe_follow_pointer_schemas(
       object_nested_under || activity_nested_under ++ [:object],
       preload_nested,
       opts

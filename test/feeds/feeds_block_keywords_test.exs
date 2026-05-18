@@ -9,6 +9,18 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
   import Bonfire.Social.Fake
   import Bonfire.Posts.Fake
 
+  defp reply_body_visible?(replies, reply_id, expected_body) do
+    Enum.find_value(replies, false, fn edge ->
+      if edge.id == reply_id do
+        body =
+          e(edge, :activity, :object, :post_content, :html_body, nil) ||
+            e(edge, :activity, :object, :post_content, :summary, nil)
+
+        body && body =~ expected_body
+      end
+    end)
+  end
+
   describe "keyword-based feed filtering" do
     setup do
       user = fake_user!("keyword_filter_user")
@@ -69,141 +81,77 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
 
     test "filters posts containing blocked keywords in body", %{
       user: user,
-      normal_post: normal_post,
-      spam_post: spam_post
+      normal_post: normal_post
     } do
-      # Set up keyword filter for user
-      Process.put(
-        [:activity_pub, :mrf_keyword, :reject],
-        ["viagra"]
-      )
+      Process.put([:activity_pub, :mrf_keyword, :reject], ["viagra"])
 
-      feed =
-        FeedLoader.feed(:explore, limit: 10, preload: [:with_post_content], current_user: user)
+      feed = FeedLoader.feed_postloaded(:explore, limit: 10, current_user: user)
 
-      assert FeedLoader.feed_contains?(feed, normal_post,
-               limit: 10,
-               preload: [:with_post_content],
-               current_user: user
-             )
+      assert FeedLoader.feed_contains?(feed, normal_post, postload: false)
 
-      refute FeedLoader.feed_contains?(feed, spam_post,
-               limit: 10,
-               preload: [:with_post_content],
-               current_user: user
+      refute FeedLoader.feed_contains?(feed, "Amazing deal on viagra and other products",
+               postload: false
              )
     end
 
     test "filters posts containing blocked keywords in name", %{
       user: user,
-      normal_post: normal_post,
-      keyword_in_name: keyword_in_name
+      normal_post: normal_post
     } do
-      Process.put(
-        [:activity_pub, :mrf_keyword, :reject],
-        ["crypto"]
-      )
+      Process.put([:activity_pub, :mrf_keyword, :reject], ["crypto"])
 
-      feed =
-        FeedLoader.feed(:explore, limit: 10, preload: [:with_post_content], current_user: user)
+      feed = FeedLoader.feed_postloaded(:explore, limit: 10, current_user: user)
 
-      assert FeedLoader.feed_contains?(feed, normal_post,
-               limit: 10,
-               preload: [:with_post_content],
-               current_user: user
-             )
+      assert FeedLoader.feed_contains?(feed, normal_post, postload: false)
 
-      refute FeedLoader.feed_contains?(feed, keyword_in_name,
-               limit: 10,
-               preload: [:with_post_content],
-               current_user: user
-             )
+      refute FeedLoader.feed_contains?(feed, "Free crypto giveaway", postload: false)
     end
 
     test "filters posts containing blocked keywords in summary", %{
       user: user,
-      normal_post: normal_post,
-      keyword_in_summary: keyword_in_summary
+      normal_post: normal_post
     } do
-      Process.put(
-        [:activity_pub, :mrf_keyword, :reject],
-        ["viagra"]
-      )
+      Process.put([:activity_pub, :mrf_keyword, :reject], ["viagra"])
 
-      feed =
-        FeedLoader.feed(:explore, limit: 10, preload: [:with_post_content], current_user: user)
+      feed = FeedLoader.feed_postloaded(:explore, limit: 10, current_user: user)
 
-      assert FeedLoader.feed_contains?(feed, normal_post,
-               limit: 10,
-               preload: [:with_post_content],
-               current_user: user
-             )
+      assert FeedLoader.feed_contains?(feed, normal_post, postload: false)
 
-      refute FeedLoader.feed_contains?(feed, keyword_in_summary,
-               limit: 10,
-               preload: [:with_post_content],
-               current_user: user
+      refute FeedLoader.feed_contains?(feed, "Learn how to get free viagra today",
+               postload: false
              )
     end
 
     test "keyword matching is case-insensitive", %{
       user: user,
-      normal_post: normal_post,
-      mixed_case_post: mixed_case_post
+      normal_post: normal_post
     } do
-      # Keywords are stored lowercase, matching should be case-insensitive
-      Process.put(
-        [:activity_pub, :mrf_keyword, :reject],
-        ["viagra"]
-      )
+      Process.put([:activity_pub, :mrf_keyword, :reject], ["viagra"])
 
-      feed =
-        FeedLoader.feed(:explore, limit: 10, preload: [:with_post_content], current_user: user)
+      feed = FeedLoader.feed_postloaded(:explore, limit: 10, current_user: user)
 
-      assert FeedLoader.feed_contains?(feed, normal_post,
-               limit: 10,
-               preload: [:with_post_content],
-               current_user: user
-             )
+      assert FeedLoader.feed_contains?(feed, normal_post, postload: false)
 
-      refute FeedLoader.feed_contains?(feed, mixed_case_post,
-               limit: 10,
-               preload: [:with_post_content],
-               current_user: user
+      refute FeedLoader.feed_contains?(feed, "This post contains VIAGRA in uppercase",
+               postload: false
              )
     end
 
     test "filters with multiple keywords", %{
       user: user,
-      normal_post: normal_post,
-      spam_post: spam_post,
-      keyword_in_name: keyword_in_name
+      normal_post: normal_post
     } do
-      Process.put(
-        [:activity_pub, :mrf_keyword, :reject],
-        ["viagra", "crypto"]
-      )
+      Process.put([:activity_pub, :mrf_keyword, :reject], ["viagra", "crypto"])
 
-      feed =
-        FeedLoader.feed(:explore, limit: 10, preload: [:with_post_content], current_user: user)
+      feed = FeedLoader.feed_postloaded(:explore, limit: 10, current_user: user)
 
-      assert FeedLoader.feed_contains?(feed, normal_post,
-               limit: 10,
-               preload: [:with_post_content],
-               current_user: user
+      assert FeedLoader.feed_contains?(feed, normal_post, postload: false)
+
+      refute FeedLoader.feed_contains?(feed, "Amazing deal on viagra and other products",
+               postload: false
              )
 
-      refute FeedLoader.feed_contains?(feed, spam_post,
-               limit: 10,
-               preload: [:with_post_content],
-               current_user: user
-             )
-
-      refute FeedLoader.feed_contains?(feed, keyword_in_name,
-               limit: 10,
-               preload: [:with_post_content],
-               current_user: user
-             )
+      refute FeedLoader.feed_contains?(feed, "Free crypto giveaway", postload: false)
     end
 
     test "shows all posts when no keywords configured", %{
@@ -211,21 +159,10 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
       normal_post: normal_post,
       spam_post: spam_post
     } do
-      # No reject keyword setting
-      feed =
-        FeedLoader.feed(:explore, limit: 10, preload: [:with_post_content], current_user: user)
+      feed = FeedLoader.feed_postloaded(:explore, limit: 10, current_user: user)
 
-      assert FeedLoader.feed_contains?(feed, normal_post,
-               limit: 10,
-               preload: [:with_post_content],
-               current_user: user
-             )
-
-      assert FeedLoader.feed_contains?(feed, spam_post,
-               limit: 10,
-               preload: [:with_post_content],
-               current_user: user
-             )
+      assert FeedLoader.feed_contains?(feed, normal_post, postload: false)
+      assert FeedLoader.feed_contains?(feed, spam_post, postload: false)
     end
 
     test "shows all posts when keywords list is empty", %{
@@ -233,25 +170,12 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
       normal_post: normal_post,
       spam_post: spam_post
     } do
-      Process.put(
-        [:activity_pub, :mrf_keyword, :reject],
-        []
-      )
+      Process.put([:activity_pub, :mrf_keyword, :reject], [])
 
-      feed =
-        FeedLoader.feed(:explore, limit: 10, preload: [:with_post_content], current_user: user)
+      feed = FeedLoader.feed_postloaded(:explore, limit: 10, current_user: user)
 
-      assert FeedLoader.feed_contains?(feed, normal_post,
-               limit: 10,
-               preload: [:with_post_content],
-               current_user: user
-             )
-
-      assert FeedLoader.feed_contains?(feed, spam_post,
-               limit: 10,
-               preload: [:with_post_content],
-               current_user: user
-             )
+      assert FeedLoader.feed_contains?(feed, normal_post, postload: false)
+      assert FeedLoader.feed_contains?(feed, spam_post, postload: false)
     end
 
     test "different users have independent keyword filters (using Settings saved in DB)", %{
@@ -259,7 +183,6 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
       other_user: other_user,
       spam_post: spam_post
     } do
-      # User has filter, other_user doesn't
       user =
         Settings.set(
           %{activity_pub: %{mrf_keyword: %{reject: ["Viagra"]}}},
@@ -267,27 +190,15 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
         )
         |> current_user()
 
-      user_feed =
-        FeedLoader.feed(:explore, limit: 10, preload: [:with_post_content], current_user: user)
+      user_feed = FeedLoader.feed_postloaded(:explore, limit: 10, current_user: user)
 
-      refute FeedLoader.feed_contains?(user_feed, spam_post,
-               limit: 10,
-               preload: [:with_post_content],
-               current_user: user
+      refute FeedLoader.feed_contains?(user_feed, "Amazing deal on viagra and other products",
+               postload: false
              )
 
-      viewer_feed =
-        FeedLoader.feed(:explore,
-          limit: 10,
-          preload: [:with_post_content],
-          current_user: other_user
-        )
+      viewer_feed = FeedLoader.feed_postloaded(:explore, limit: 10, current_user: other_user)
 
-      assert FeedLoader.feed_contains?(viewer_feed, spam_post,
-               limit: 10,
-               preload: [:with_post_content],
-               current_user: other_user
-             )
+      assert FeedLoader.feed_contains?(viewer_feed, spam_post, postload: false)
     end
   end
 
@@ -358,7 +269,7 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
       }
     end
 
-    test "filters replies containing blocked keywords from thread", %{
+    test "hides content of replies containing blocked keywords from thread", %{
       user: user,
       normal_thread: normal_thread,
       normal_reply: normal_reply,
@@ -367,13 +278,18 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
     } do
       Process.put([:activity_pub, :mrf_keyword, :reject], ["viagra"])
 
-      %{edges: replies} = Threads.list_replies(normal_thread.id, current_user: user)
+      %{edges: replies} =
+        Threads.list_replies(normal_thread.id, current_user: user, postload: [:with_post_content])
 
+      # All replies are still in the list
       reply_ids = Enum.map(replies, & &1.id)
-
       assert normal_reply.id in reply_ids
+      assert spam_reply.id in reply_ids
       assert another_normal_reply.id in reply_ids
-      refute spam_reply.id in reply_ids
+
+      # But the spam reply content is replaced
+      refute reply_body_visible?(replies, spam_reply.id, "Buy cheap viagra now!")
+      assert reply_body_visible?(replies, normal_reply.id, "This is a thoughtful reply")
     end
 
     test "shows all replies when no keywords configured", %{
@@ -383,43 +299,38 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
       spam_reply: spam_reply,
       another_normal_reply: another_normal_reply
     } do
-      # No filter configured
-      %{edges: replies} = Threads.list_replies(normal_thread.id, current_user: user)
+      %{edges: replies} =
+        Threads.list_replies(normal_thread.id, current_user: user, postload: [:with_post_content])
 
       reply_ids = Enum.map(replies, & &1.id)
-
       assert normal_reply.id in reply_ids
       assert spam_reply.id in reply_ids
       assert another_normal_reply.id in reply_ids
+
+      assert reply_body_visible?(replies, spam_reply.id, "Buy cheap viagra now!")
     end
 
-    test "filters nested replies containing blocked keywords", %{
+    test "hides content of nested replies containing blocked keywords", %{
       user: user,
       poster: poster,
       normal_thread: normal_thread,
       normal_reply: normal_reply
     } do
-      # Create a nested reply with spam content
       {:ok, nested_spam} =
         Posts.publish(
           current_user: poster,
           post_attrs: %{
-            post_content: %{
-              html_body: "Get free crypto giveaway here!"
-            },
+            post_content: %{html_body: "Get free crypto giveaway here!"},
             reply_to_id: normal_reply.id
           },
           boundary: "public"
         )
 
-      # Create a normal nested reply
       {:ok, nested_normal} =
         Posts.publish(
           current_user: poster,
           post_attrs: %{
-            post_content: %{
-              html_body: "I agree with your point"
-            },
+            post_content: %{html_body: "I agree with your point"},
             reply_to_id: normal_reply.id
           },
           boundary: "public"
@@ -427,25 +338,25 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
 
       Process.put([:activity_pub, :mrf_keyword, :reject], ["crypto"])
 
-      %{edges: replies} = Threads.list_replies(normal_thread.id, current_user: user)
+      %{edges: replies} =
+        Threads.list_replies(normal_thread.id, current_user: user, postload: [:with_post_content])
 
       reply_ids = Enum.map(replies, & &1.id)
-
       assert normal_reply.id in reply_ids
       assert nested_normal.id in reply_ids
-      refute nested_spam.id in reply_ids
+      assert nested_spam.id in reply_ids
+
+      refute reply_body_visible?(replies, nested_spam.id, "Get free crypto giveaway here!")
+      assert reply_body_visible?(replies, nested_normal.id, "I agree with your point")
     end
 
-    test "different users see different filtered threads based on their settings", %{
-      poster: poster,
+    test "different users see different filtered thread content based on their settings", %{
       normal_thread: normal_thread,
       spam_reply: spam_reply
     } do
-      # Create two viewers with different filter settings
       viewer_with_filter = fake_user!("filtered_viewer")
       viewer_without_filter = fake_user!("unfiltered_viewer")
 
-      # Set filter for one user via Settings DB
       viewer_with_filter =
         Settings.set(
           %{activity_pub: %{mrf_keyword: %{reject: ["viagra"]}}},
@@ -453,19 +364,23 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
         )
         |> current_user()
 
-      # User with filter should not see spam reply
       %{edges: filtered_replies} =
-        Threads.list_replies(normal_thread.id, current_user: viewer_with_filter)
+        Threads.list_replies(normal_thread.id,
+          current_user: viewer_with_filter,
+          postload: [:with_post_content]
+        )
 
-      filtered_ids = Enum.map(filtered_replies, & &1.id)
-      refute spam_reply.id in filtered_ids
+      # Reply still present but content hidden
+      assert spam_reply.id in Enum.map(filtered_replies, & &1.id)
+      refute reply_body_visible?(filtered_replies, spam_reply.id, "Buy cheap viagra now!")
 
-      # User without filter should see all replies
       %{edges: unfiltered_replies} =
-        Threads.list_replies(normal_thread.id, current_user: viewer_without_filter)
+        Threads.list_replies(normal_thread.id,
+          current_user: viewer_without_filter,
+          postload: [:with_post_content]
+        )
 
-      unfiltered_ids = Enum.map(unfiltered_replies, & &1.id)
-      assert spam_reply.id in unfiltered_ids
+      assert reply_body_visible?(unfiltered_replies, spam_reply.id, "Buy cheap viagra now!")
     end
   end
 

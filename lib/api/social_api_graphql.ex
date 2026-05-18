@@ -831,7 +831,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       {pagination_args, filters} =
         Pagination.pagination_args_filter(args)
 
-      filters = e(filters, :filter, [])
+      filters = e(filters, :filter, %{})
+      filters = if is_map(filters), do: filters, else: Map.new(filters)
 
       # Check if feed_name was explicitly provided (even if nil) vs not provided at all
       # This allows callers to explicitly disable feed_name filtering by passing nil

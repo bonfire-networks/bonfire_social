@@ -402,6 +402,25 @@ defmodule Bonfire.Social.RuntimeConfig do
           ],
           enable_marker: true
         },
+        polls: %{
+          name: l("Polls"),
+          built_in: true,
+          description: l("Polls and group decisions"),
+          filters: %FeedFilters{
+            # Bonfire.Poll.Question pointable; federated AP `Question` objects
+            # land here too via Bonfire.Poll.Questions.federation_module/0.
+            object_types: [Bonfire.Poll.Question],
+            exclude_activity_types: [:like, :boost, :flag, :reply]
+          },
+          icon: "ph:list-checks-duotone",
+          assigns: [
+            page: "polls",
+            page_title: l("Polls"),
+            feedback_title: l("No polls yet"),
+            feedback_message: l("There are no polls to show. Create one to start a vote!"),
+            enable_marker: true
+          ]
+        },
         my_flags: %{
           name: l("Flagged"),
           built_in: true,
