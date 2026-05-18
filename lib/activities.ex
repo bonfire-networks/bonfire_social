@@ -1979,7 +1979,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   def maybe_filter(query, filters, _opts) do
-    warn(filters, "no supported activity-related filters defined")
+    debug(filters, "no supported activity-related filters defined")
     query
   end
 

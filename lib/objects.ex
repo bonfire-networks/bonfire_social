@@ -564,7 +564,7 @@ defmodule Bonfire.Social.Objects do
   end
 
   def maybe_filter(query, filters, _opts) do
-    warn(filters, "no supported object-related filters defined")
+    debug(filters, "no supported object-related filters defined")
     query
   end
 

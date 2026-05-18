@@ -402,7 +402,7 @@ defmodule Bonfire.Social.Media do
   end
 
   def maybe_filter(query, filters, _opts) do
-    warn(filters, "no supported Media-related filters defined")
+    debug(filters, "no supported Media-related filters defined")
     query
   end
 
