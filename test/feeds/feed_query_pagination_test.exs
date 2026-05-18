@@ -31,6 +31,34 @@ defmodule Bonfire.Social.FeedPaginationTest do
     assert query_string =~ "order_by: [desc: a1.id]"
   end
 
+  test "guest local feed origin filter keeps local feed membership fast path" do
+    query = FeedLoader.feed(:local, return: :query, preload: false)
+
+    query_string = Inspect.Ecto.Query.to_string(query)
+
+    assert query_string =~ "feed_id == ^"
+    refute query_string =~ "subject_peered"
+    refute query_string =~ "object_peered"
+  end
+
+  test "authenticated local feed origin filter also includes visible local actor activities" do
+    user = fake_user!("viewer")
+    query = FeedLoader.feed(:local, return: :query, preload: false, current_user: user)
+
+    query_string = Inspect.Ecto.Query.to_string(query)
+
+    assert query_string =~ "feed_id == ^"
+    assert query_string =~ " or "
+    assert query_string =~ "subject_peered"
+    assert query_string =~ "object_peered"
+
+    assert query_string =~ "as: :subject_character" and
+             query_string =~ "as: :subject_peered" and
+             query_string =~ "as: :object_peered" and
+             query_string =~ "is_nil(" and
+             query_string =~ "peer_id"
+  end
+
   describe "feed pagination with deferred join" do
     setup do
       # Create a user

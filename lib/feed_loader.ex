@@ -1490,7 +1490,7 @@ defmodule Bonfire.Social.FeedLoader do
     #     # |> maybe_filter(query, ...)
 
     #   true ->
-    warn(filters, "no supported filters defined")
+    debug(filters, "no supported filters defined")
     query
     # end
   end
