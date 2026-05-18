@@ -89,7 +89,7 @@ defmodule Bonfire.Social.Objects do
   end
 
   defp cast_activity(changeset, attrs, creator, opts) do
-    # TODO: generate 
+    # TODO: generate
     Map.put_new_lazy(attrs, :id, fn -> Needle.UID.generate(Activity) end)
     |> cast_activity(changeset, ..., creator, opts)
   end
@@ -175,8 +175,21 @@ defmodule Bonfire.Social.Objects do
       [activity: [:object]],
       opts
     )
+    |> maybe_preload_direct_creator(opts)
     |> Activities.activity_under_object()
   end
+
+  defp maybe_preload_direct_creator(%{activity: %{object: media} = activity} = pointer, opts)
+       when is_struct(media, Bonfire.Files.Media) do
+    if match?(%{creator: %{profile: %{id: _}}}, media) do
+      pointer
+    else
+      media = repo().maybe_preload(media, [creator: [profile: [:icon], character: []]], opts)
+      %{pointer | activity: %{activity | object: media}}
+    end
+  end
+
+  defp maybe_preload_direct_creator(other, _opts), do: other
 
   def maybe_preload_activity_object(pointer, opts),
     do:
@@ -225,8 +238,10 @@ defmodule Bonfire.Social.Objects do
   end
 
   def preload_creator(%{creator: _} = object, opts) do
+    # objects with a direct `belongs_to(:creator)` (e.g. `Bonfire.Files.Media`,
+    # which has no `created` mixin) still need `profile` for the name/avatar
     object
-    |> repo().maybe_preload([creator: [:character]], opts)
+    |> repo().maybe_preload([creator: [:character, profile: :icon]], opts)
   end
 
   def preload_creator(%{activity: _} = object, opts) do
@@ -285,7 +300,7 @@ defmodule Bonfire.Social.Objects do
   def query_maybe_time_limit(query, 0), do: query
 
   def query_maybe_time_limit(query, x_days) when is_integer(x_days) do
-    # we add 12h of leeway 
+    # we add 12h of leeway
     with limit_pointer when is_binary(limit_pointer) <- ulid_for_x_days_ago(x_days) do
       where(query, [activity: activity], activity.id > ^limit_pointer)
     else
@@ -357,9 +372,9 @@ defmodule Bonfire.Social.Objects do
     module_atom = Macro.expand(module, __CALLER__)
 
     quote do
-      # NOTE: uses postgres function 
-      # `translate_field(record record, container varchar, field varchar, default_locale varchar, locales varchar[])` 
-      # or 
+      # NOTE: uses postgres function
+      # `translate_field(record record, container varchar, field varchar, default_locale varchar, locales varchar[])`
+      # or
       # `translate_field(record record, container varchar, default_locale varchar, locales varchar[])`
 
       fragment(
@@ -779,7 +794,7 @@ defmodule Bonfire.Social.Objects do
     #   Bonfire.Data.Social.PostContent
     # ]
 
-    # WIP: load Activity if we don't have it, get the verb, check for a context module for the verb with `Bonfire.Common.ContextModule.context_module(verb)` and call the `delete_activity` function on that module if it exists 
+    # WIP: load Activity if we don't have it, get the verb, check for a context module for the verb with `Bonfire.Common.ContextModule.context_module(verb)` and call the `delete_activity` function on that module if it exists
     object = repo().maybe_preload(object, [:activity])
 
     if verb = e(object, :activity, :verb_id, nil) |> debug() do
@@ -1315,7 +1330,7 @@ defmodule Bonfire.Social.Objects do
 
   Tries multiple patterns to extract pointer_id:
   - From pointer field
-  - From pointer_id field  
+  - From pointer_id field
   - From struct id (for non-AP structs)
   - From data["id"] via Peered lookup
 
@@ -1325,10 +1340,10 @@ defmodule Bonfire.Social.Objects do
 
       iex> pointer_id_from_ap_object("https://remote.example/objects/123")
       "01FXYZ123ABC"
-      
+
       iex> pointer_id_from_ap_object(%{pointer_id: "01FXYZ123ABC"})
       "01FXYZ123ABC"
-      
+
       iex> pointer_id_from_ap_object(%{data: %{"id" => "https://remote.example/objects/123"}})
       "01FXYZ123ABC"
 

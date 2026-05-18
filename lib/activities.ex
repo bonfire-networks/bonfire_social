@@ -2222,11 +2222,64 @@ defmodule Bonfire.Social.Activities do
 
   # Helper to inject subject and creator data into activities
   def prepare_subject_and_creator(%{edges: edges}, opts) when is_list(edges) do
-    Enum.map(edges, &prepare_subject_and_creator(&1, opts))
+    prepare_subject_and_creator(edges, opts)
   end
 
   def prepare_subject_and_creator(edges, opts) when is_list(edges) do
-    Enum.map(edges, &prepare_subject_and_creator(&1, opts))
+    # Batch-preload the direct creators of any `Bonfire.Files.Media` objects in
+    # ONE query across the whole list, so the per-activity clause below finds
+    # them already loaded (its guard then skips, avoiding an N+1).
+    edges
+    |> batch_preload_media_creators(opts)
+    |> Enum.map(&prepare_subject_and_creator(&1, opts))
+  end
+
+  defp batch_preload_media_creators(edges, opts) do
+    medias =
+      edges
+      |> Enum.map(&media_needing_creator/1)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq_by(& &1.id)
+
+    case medias do
+      [] ->
+        edges
+
+      medias ->
+        by_id =
+          repo().maybe_preload(medias, [creator: [profile: [:icon], character: []]], opts)
+          |> Map.new(fn m -> {m.id, m} end)
+
+        Enum.map(edges, &put_preloaded_media(&1, by_id))
+    end
+  end
+
+  defp media_needing_creator(edge) do
+    media = e(edge, :activity, :object, nil) || e(edge, :object, nil)
+
+    if is_struct(media, Bonfire.Files.Media) and
+         not match?(%{creator: %{profile: %{id: _}}}, media),
+       do: media
+  end
+
+  defp put_preloaded_media(edge, by_id) do
+    media = e(edge, :activity, :object, nil) || e(edge, :object, nil)
+
+    with true <- is_struct(media, Bonfire.Files.Media),
+         %{} = loaded <- Map.get(by_id, media.id) do
+      cond do
+        match?(%{activity: %Bonfire.Data.Social.Activity{}}, edge) ->
+          %{edge | activity: %{edge.activity | object: loaded}}
+
+        match?(%Bonfire.Data.Social.Activity{}, edge) ->
+          %{edge | object: loaded}
+
+        true ->
+          edge
+      end
+    else
+      _ -> edge
+    end
   end
 
   def prepare_subject_and_creator(
@@ -2237,6 +2290,23 @@ defmodule Bonfire.Social.Activities do
   end
 
   def prepare_subject_and_creator(%Bonfire.Data.Social.Activity{object: object} = activity, opts) do
+    # `Bonfire.Files.Media` has a direct `belongs_to(:creator)` (no `created`
+    # mixin), and that creator is usually neither the viewer nor the subject
+    # (e.g. media created via `comments_embed`), so it is never resolved by
+    # `find_creator/4`. Preload it here so the author renders.
+    # NOTE: `is_struct/2` (a runtime atom) avoids a compile-time cycle between
+    # `bonfire_social` and `bonfire_files` that a `%Bonfire.Files.Media{}`
+    # literal would introduce.
+    object =
+      if is_struct(object, Bonfire.Files.Media) and
+           not match?(%{creator: %{profile: %{id: _}}}, object) do
+        repo().maybe_preload(object, [creator: [profile: [:icon], character: []]], opts)
+      else
+        object
+      end
+
+    activity = %{activity | object: object}
+
     # Find subject for this activity
     subject_id = e(activity, :subject_id, :nil!)
 
