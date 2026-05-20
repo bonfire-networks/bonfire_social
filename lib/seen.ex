@@ -158,11 +158,54 @@ defmodule Bonfire.Social.Seen do
     end
   end
 
-  # TODO: bulk with insert_all
+  def mark_seen(%{} = _subject, [], _opts), do: 0
+
   def mark_seen(%{} = subject, objects, opts) when is_list(objects) do
-    normalized_subject = normalize_subject(subject)
-    Enum.each(objects, &mark_seen(normalized_subject, &1, opts))
-    Enum.count(objects)
+    subject = normalize_subject(subject)
+
+    {bulk_objects, individual_objects} =
+      Enum.split_with(objects, fn
+        %{id: id} when is_binary(id) -> true
+        _ -> false
+      end)
+
+    Enum.each(individual_objects, &mark_seen(subject, &1, opts))
+    bulk_mark_seen(subject, bulk_objects) + length(individual_objects)
+  end
+
+  defp bulk_mark_seen(_subject, []), do: 0
+
+  defp bulk_mark_seen(subject, objects) do
+    subject_id = uid(subject)
+    table_id = Bonfire.Common.Types.table_id(Seen)
+
+    {pointer_rows, edge_rows} =
+      Enum.map(objects, fn %{id: object_id} ->
+        pointer_id = Needle.ULID.generate()
+
+        {
+          %{id: pointer_id, table_id: table_id},
+          %{
+            id: pointer_id,
+            subject_id: subject_id,
+            table_id: table_id,
+            object_id: object_id
+          }
+        }
+      end)
+      |> Enum.unzip()
+
+    case repo().transaction(fn ->
+           repo().insert_all(Needle.Pointer, pointer_rows, on_conflict: :nothing)
+
+           {count, _} =
+             repo().insert_all(Bonfire.Data.Edges.Edge, edge_rows, on_conflict: :nothing)
+
+           count
+         end) do
+      {:ok, count} -> count
+      _ -> 0
+    end
   end
 
   @doc """
