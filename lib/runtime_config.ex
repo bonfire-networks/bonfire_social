@@ -115,13 +115,13 @@ defmodule Bonfire.Social.RuntimeConfig do
               l(
                 "Did you know you can customise which activities you want to be notified for in your settings ?"
               ),
-            page_header_aside: [
-              {Bonfire.UI.Social.HeaderAsideNotificationsSeenLive,
-               [
-                 feed_id: :notifications,
-                 feed_name: "notifications"
-               ]}
-            ]
+            # page_header_aside: [
+            #   {Bonfire.UI.Social.HeaderAsideNotificationsSeenLive,
+            #    [
+            #      feed_id: :notifications,
+            #      feed_name: "notifications"
+            #    ]}
+            # ]
           ]
         },
         likes: %{
