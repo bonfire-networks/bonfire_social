@@ -11,6 +11,8 @@ defmodule Bonfire.Social.Markers do
   use Bonfire.Common.Repo
   import Ecto.Query
 
+  alias Bonfire.Common.Settings
+  alias Bonfire.Data.Identity.{Account, User}
   alias Bonfire.Data.Social.Activity
   alias Bonfire.Data.Edges.Edge
   alias Bonfire.Social.{Seen, Feeds, FeedActivities}
@@ -18,6 +20,49 @@ defmodule Bonfire.Social.Markers do
   @valid_timelines ["home", "notifications"]
 
   def valid_timelines, do: @valid_timelines
+
+  @doc """
+  Get the server-side reading position cursor for a Bonfire feed.
+  """
+  def get_reading_position(user, feed_name) when not is_nil(user) do
+    case Settings.get(reading_position_key(feed_name), nil,
+           scope: marker_scope(user),
+           preload: true
+         ) do
+      %{"last_read_id" => cursor} when is_binary(cursor) -> cursor
+      %{last_read_id: cursor} when is_binary(cursor) -> cursor
+      cursor when is_binary(cursor) -> cursor
+      _ -> nil
+    end
+  end
+
+  def get_reading_position(_user, _feed_name), do: nil
+
+  @doc "Save the server-side reading position cursor for a Bonfire feed."
+  def save_reading_position(user, feed_name, cursor)
+      when not is_nil(user) and is_binary(cursor) and cursor != "" do
+    marker = %{
+      "last_read_id" => cursor,
+      "updated_at" => DateTime.utc_now() |> DateTime.to_iso8601()
+    }
+
+    case Settings.put_raw(reading_position_key(feed_name), marker, scope: marker_scope(user)) do
+      {:ok, _} -> {:ok, marker}
+      error -> error
+    end
+  end
+
+  def save_reading_position(_user, _feed_name, _cursor), do: {:error, :invalid_marker}
+
+  @doc "Clear the server-side reading position cursor for a Bonfire feed."
+  def clear_reading_position(user, feed_name) when not is_nil(user) do
+    case Settings.put_raw(reading_position_key(feed_name), nil, scope: marker_scope(user)) do
+      {:ok, _} -> :ok
+      error -> error
+    end
+  end
+
+  def clear_reading_position(_user, _feed_name), do: :ok
 
   @doc "Get markers for the given timelines by querying last Seen item in each feed."
   def get(user, timelines \\ @valid_timelines) do
@@ -104,4 +149,24 @@ defmodule Bonfire.Social.Markers do
       "updated_at" => DateTime.utc_now() |> DateTime.to_iso8601()
     }
   end
+
+  defp reading_position_key(feed_name) do
+    [__MODULE__, :reading_positions, normalise_feed_name(feed_name)]
+  end
+
+  defp normalise_feed_name(feed_name) when is_atom(feed_name), do: Atom.to_string(feed_name)
+  defp normalise_feed_name(feed_name) when is_binary(feed_name), do: feed_name
+  defp normalise_feed_name(feed_name), do: to_string(feed_name)
+
+  defp marker_scope(user) do
+    case current_account(user) do
+      %Account{id: id} when is_binary(id) -> %Account{id: id}
+      account_id when is_binary(account_id) -> %Account{id: account_id}
+      _ -> user_scope(user)
+    end
+  end
+
+  defp user_scope(%User{id: id}) when is_binary(id), do: %User{id: id}
+  defp user_scope(%{id: id}) when is_binary(id), do: %User{id: id}
+  defp user_scope(user), do: user
 end
