@@ -1,5 +1,11 @@
 defmodule Bonfire.Social.Markers do
-  @moduledoc "Derive reading positions from Seen edges for Mastodon markers API."
+  @moduledoc """
+  Derive reading positions from Seen edges for Mastodon markers API.
+
+  Bonfire markers are last-write-wins and derived from Seen edges rather than a
+  stored marker row, so Mastodon's optimistic-concurrency `version` semantics
+  are intentionally unsupported. Marker responses expose `version: 0` as a stub.
+  """
 
   use Bonfire.Common.Utils
   use Bonfire.Common.Repo
@@ -36,6 +42,8 @@ defmodule Bonfire.Social.Markers do
         {:ok,
          %{
            "last_read_id" => last_read_id,
+           # Stub: Bonfire derives markers from Seen edges, so there is no stored
+           # marker row/lock counter to implement Mastodon's version semantics.
            "version" => 0,
            "updated_at" => DateTime.utc_now() |> DateTime.to_iso8601()
          }}
@@ -48,6 +56,7 @@ defmodule Bonfire.Social.Markers do
   defp resolve_activity_id(_user, _timeline, post_id) do
     from(act in Activity,
       where: act.object_id == ^post_id,
+      order_by: [desc: act.id],
       select: act.id,
       limit: 1
     )
@@ -70,7 +79,7 @@ defmodule Bonfire.Social.Markers do
         inner_join: act in Activity,
         on: fp.id == act.id,
         where: fp.feed_id in ^feed_ids,
-        order_by: [desc: seen.id],
+        order_by: [desc: fp.id],
         limit: 1,
         select: act.object_id
       )
@@ -90,6 +99,7 @@ defmodule Bonfire.Social.Markers do
   defp format_marker(post_id) do
     %{
       "last_read_id" => to_string(post_id),
+      # Stub: see moduledoc; optimistic-concurrency versions are unsupported.
       "version" => 0,
       "updated_at" => DateTime.utc_now() |> DateTime.to_iso8601()
     }
