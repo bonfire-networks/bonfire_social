@@ -15,14 +15,14 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
     schema: Bonfire.API.GraphQL.Schema,
     action: [mode: :internal]
 
+  import Ecto.Query, only: [from: 2]
   use Bonfire.Common.E
+  use Bonfire.Common.Repo
   import Untangle
   import Bonfire.API.MastoCompat.Helpers
 
   alias Bonfire.API.MastoCompat.{
     Schemas,
-    Mappers,
-    InteractionHandler,
     Helpers,
     PaginationHelpers,
     Fragments
@@ -64,14 +64,119 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
   List events for Mastodon API events timeline.
   """
   def list_events(params, conn) do
-    Bonfire.Social.Web.MastoTimelineController.feed_by_name(conn, "events", params)
+    list_event_statuses(params, conn)
   end
 
   def list_user_events(user_id, params, conn) do
-    Bonfire.Social.Web.MastoTimelineController.feed_by_name(
-      conn,
-      "events",
-      params |> Map.put("creators", [user_id])
+    list_event_statuses(params, conn, creators: [user_id])
+  end
+
+  defp list_event_statuses(params, conn, extra_filters \\ []) do
+    current_user = conn.assigns[:current_user]
+    limit = PaginationHelpers.validate_limit(params["limit"], default: 20, max: 80)
+
+    activities =
+      event_activities_query(extra_filters, limit, current_user)
+      |> repo().many()
+      |> Enum.map(&event_activity_from_row/1)
+
+    users_by_id =
+      activities
+      |> Enum.map(&get_field(&1, :subject_id))
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+      |> Bonfire.Me.Users.by_ids(preload: :profile)
+      |> Map.new(&{&1.id, &1})
+
+    statuses =
+      activities
+      |> Enum.map(fn activity ->
+        Map.put(activity, :subject, Map.get(users_by_id, get_field(activity, :subject_id)))
+      end)
+      |> Enum.map(&build_event_status(&1, current_user: current_user))
+      |> Enum.reject(&is_nil/1)
+
+    Phoenix.Controller.json(conn, statuses)
+  end
+
+  defp event_activity_from_row({activity, object}) do
+    Map.put(activity, :object, object)
+  end
+
+  defp event_activities_query(extra_filters, limit, current_user) do
+    current_user_id = e(current_user, :id, nil)
+
+    creator_ids =
+      extra_filters
+      |> Keyword.get(:creators, [])
+      |> Bonfire.Common.Types.uids()
+      |> List.wrap()
+      |> Enum.reject(&is_nil/1)
+
+    base_query =
+      from(
+        activity in Bonfire.Data.Social.Activity,
+        as: :main_object,
+        join: object in Bonfire.Data.Social.APActivity,
+        as: :object,
+        on: activity.id == object.id,
+        where:
+            fragment("(?)->'object'->>'type' = ?", object.json, "Event") or
+            fragment("(?)->>'type' = ?", object.json, "Event"),
+        limit: ^limit,
+        select: {activity, object}
+      )
+      |> filter_visible_event_activities(current_user_id)
+      |> order_event_activities(current_user_id)
+
+    base_query =
+      if creator_ids == [] do
+        base_query
+      else
+        from([main_object: activity] in base_query, where: activity.subject_id in ^creator_ids)
+      end
+
+    base_query
+  end
+
+  defp filter_visible_event_activities(query, nil) do
+    public_uri = "https://www.w3.org/ns/activitystreams#Public"
+
+    from(
+      [object: object] in query,
+      where:
+        fragment("jsonb_exists(?->'to', ?)", object.json, ^public_uri) or
+          fragment("jsonb_exists(?->'cc', ?)", object.json, ^public_uri) or
+          fragment("jsonb_exists(?->'object'->'to', ?)", object.json, ^public_uri) or
+          fragment("jsonb_exists(?->'object'->'cc', ?)", object.json, ^public_uri)
+    )
+  end
+
+  defp filter_visible_event_activities(query, current_user_id) do
+    public_uri = "https://www.w3.org/ns/activitystreams#Public"
+
+    from(
+      [main_object: activity, object: object] in query,
+      where:
+        activity.subject_id == ^current_user_id or
+          fragment("jsonb_exists(?->'to', ?)", object.json, ^public_uri) or
+          fragment("jsonb_exists(?->'cc', ?)", object.json, ^public_uri) or
+          fragment("jsonb_exists(?->'object'->'to', ?)", object.json, ^public_uri) or
+          fragment("jsonb_exists(?->'object'->'cc', ?)", object.json, ^public_uri)
+    )
+  end
+
+  defp order_event_activities(query, nil) do
+    from([main_object: activity] in query, order_by: [desc: activity.id])
+  end
+
+  defp order_event_activities(query, current_user_id) do
+    from(
+      [main_object: activity] in query,
+      order_by: [
+        desc: activity.subject_id == ^current_user_id,
+        desc: activity.id
+      ]
     )
   end
 
@@ -241,8 +346,8 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
     context = %{
       id: id,
       object_id: id,
-      created_at: get_field(activity, :created_at),
-      uri: get_field(activity, :uri),
+      created_at: event_created_at(activity, json, id),
+      uri: event_uri(activity, object, event_obj, id),
       object_post_content: %{
         html_body: event_obj["content"] || "",
         name: event_obj["name"],
@@ -278,6 +383,44 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
     |> Map.put("name", event_obj["name"])
     |> Map.put("event", event_attachment)
     |> then(&Helpers.validate_and_return(&1, Schemas.Status))
+  end
+
+  defp event_created_at(activity, json, id) do
+    get_field(activity, :created_at) ||
+      parse_datetime(get_in(json, ["published"])) ||
+      parse_datetime(get_in(json, ["object", "published"])) ||
+      timestamp_from_ulid(id)
+  end
+
+  defp parse_datetime(nil), do: nil
+
+  defp parse_datetime(%DateTime{} = datetime), do: datetime
+
+  defp parse_datetime(datetime) when is_binary(datetime) do
+    case DateTime.from_iso8601(datetime) do
+      {:ok, parsed, _} -> parsed
+      _ -> nil
+    end
+  end
+
+  defp parse_datetime(_), do: nil
+
+  defp timestamp_from_ulid(id) when is_binary(id) do
+    with {:ok, ts} <- Needle.ULID.timestamp(id) do
+      DateTime.from_unix!(ts, :millisecond)
+    else
+      _ -> nil
+    end
+  end
+
+  defp timestamp_from_ulid(_), do: nil
+
+  defp event_uri(activity, object, event_obj, id) do
+    get_field(activity, :uri) ||
+      get_field(object, :canonical_uri) ||
+      event_obj["id"] ||
+      Bonfire.Common.URIs.canonical_url(object, preload_if_needed: false) ||
+      "/events/#{id}"
   end
 
   defp build_status_from_event_data(event, activity_meta, opts) do

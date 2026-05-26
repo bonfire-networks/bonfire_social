@@ -90,6 +90,26 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
       assert is_list(response["media_attachments"])
     end
 
+    test "cannot attach another user's media", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+      owner = Fake.fake_user!()
+
+      {:ok, media} = Files.upload(ImageUploader, owner, image_file(), %{})
+
+      api_conn = masto_api_conn(conn, user: user, account: account)
+
+      response =
+        api_conn
+        |> post("/api/v1/statuses", %{
+          "status" => "Post with someone else's media",
+          "media_ids" => [media.id]
+        })
+        |> json_response(404)
+
+      assert response["error"]
+    end
+
     test "returns 401 when not authenticated", %{conn: conn} do
       response =
         conn
@@ -232,7 +252,7 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
       assert response["error"]
     end
 
-    test "works without authentication for public posts", %{conn: conn} do
+    test "requires authentication for public source text", %{conn: conn} do
       user = Fake.fake_user!()
 
       {:ok, post} =
@@ -246,10 +266,30 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
         conn
         |> put_req_header("accept", "application/json")
         |> get("/api/v1/statuses/#{post.id}/source")
-        |> json_response(200)
+        |> json_response(401)
 
-      assert response["id"] == post.id
-      assert is_binary(response["text"])
+      assert response["error"]
+    end
+
+    test "does not return another user's source text", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+      owner = Fake.fake_user!()
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: owner,
+          post_attrs: %{post_content: %{html_body: "Public source"}},
+          boundary: "public"
+        )
+
+      response =
+        conn
+        |> masto_api_conn(user: user, account: account)
+        |> get("/api/v1/statuses/#{post.id}/source")
+        |> json_response(404)
+
+      assert response["error"]
     end
   end
 
@@ -930,7 +970,7 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
       assert response["error"] == "You need to login first."
     end
 
-    test "can pin another user's boostable status", %{conn: conn} do
+    test "cannot pin another user's status", %{conn: conn} do
       account = Fake.fake_account!()
       user = Fake.fake_user!(account)
       author = Fake.fake_user!()
@@ -947,11 +987,10 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
       response =
         api_conn
         |> post("/api/v1/statuses/#{post.id}/pin")
-        |> json_response(200)
+        |> json_response(422)
 
-      assert response["id"] == post.id
-      assert response["pinned"] == true
-      assert Bonfire.Social.Pins.pinned?(user, post)
+      assert response["error"] == "Status is not owned by you"
+      refute Bonfire.Social.Pins.pinned?(user, post)
     end
   end
 

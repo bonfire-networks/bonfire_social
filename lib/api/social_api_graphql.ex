@@ -785,15 +785,16 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       descendant_activities =
         case Bonfire.Social.Threads.list_replies(id,
                current_user: current_user,
-               preload: [:with_reply_to]
+               preload: [:with_subject, :with_media, :with_reply_to]
              ) do
           %{edges: edges} when is_list(edges) ->
             edges
             |> Enum.map(fn edge ->
-              # Extract activity from edge
               case edge do
+                %{id: _, object_id: _} = activity -> activity
                 %{activity: activity} when not is_nil(activity) -> activity
                 %{node: %{activity: activity}} when not is_nil(activity) -> activity
+                %{node: %{id: _, object_id: _} = activity} -> activity
                 _ -> nil
               end
             end)

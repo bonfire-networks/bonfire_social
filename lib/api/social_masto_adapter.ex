@@ -3,6 +3,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     @moduledoc "Social API endpoints for Mastodon-compatible client apps, powered by the GraphQL API (see `Bonfire.Social.API.GraphQL`)"
 
     use Arrows
+    import Ecto.Query, only: [from: 2]
     import Untangle
     use Bonfire.Common.Repo
 
@@ -451,24 +452,33 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     def status_source(%{"id" => id}, conn) do
       current_user = conn.assigns[:current_user]
 
-      # Use direct database query - simpler and doesn't require user for public posts
-      case Bonfire.Posts.read(id, current_user: current_user, preload: [:post_content]) do
-        {:ok, post} ->
-          post_content = Map.get(post, :post_content) || %{}
+      if is_nil(current_user) do
+        RestAdapter.error_fn({:error, :unauthorized}, conn)
+      else
+        case load_editable_post_content(id, current_user) do
+          {:ok, post_content} ->
+            source = %{
+              "id" => id,
+              "text" => Map.get(post_content, :html_body) || "",
+              "spoiler_text" => Map.get(post_content, :summary) || ""
+            }
 
-          source = %{
-            "id" => id,
-            "text" => Map.get(post_content, :html_body) || "",
-            "spoiler_text" => Map.get(post_content, :summary) || ""
-          }
+            Phoenix.Controller.json(conn, source)
 
-          Phoenix.Controller.json(conn, source)
+          _ ->
+            RestAdapter.error_fn({:error, :not_found}, conn)
+        end
+      end
+    end
 
-        {:error, :not_found} ->
-          RestAdapter.error_fn({:error, :not_found}, conn)
-
-        {:error, _reason} ->
-          RestAdapter.error_fn({:error, :not_found}, conn)
+    defp load_editable_post_content(id, current_user) do
+      with %Bonfire.Data.Social.PostContent{} = post_content <-
+             Bonfire.Boundaries.load_pointer(id,
+               verbs: [:edit],
+               from: Bonfire.Social.PostContents.query_base(),
+               current_user: current_user
+             ) do
+        {:ok, post_content}
       end
     end
 
@@ -550,7 +560,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
       case graphql(conn, :status_context, %{"id" => id}) do
         %{data: %{thread_context: %{ancestors: ancestors, descendants: descendants}}} ->
-          all_activities = (ancestors || []) ++ (descendants || [])
+          descendants = ensure_descendants(descendants, id, current_user)
+          all_activities = (ancestors || []) ++ descendants
           object_ids = all_activities |> Enum.map(&get_activity_id/1) |> Enum.reject(&is_nil/1)
           map_opts = batch_load_supplementary(current_user, object_ids)
 
@@ -567,6 +578,58 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
         _ ->
           Phoenix.Controller.json(conn, %{"ancestors" => [], "descendants" => []})
+      end
+    end
+
+    defp ensure_descendants(descendants, _id, _current_user)
+         when is_list(descendants) and descendants != [],
+         do: descendants
+
+    defp ensure_descendants(_descendants, id, current_user) do
+      id
+      |> descendant_reply_ids()
+      |> Enum.flat_map(&load_status_activity(&1, current_user))
+    end
+
+    defp descendant_reply_ids(id) do
+      uuid = EctoMaterializedPath.UIDs.dump_one(id)
+      path_ids = if is_binary(uuid), do: [uuid], else: []
+
+      from(
+        replied in Bonfire.Data.Social.Replied,
+        where:
+          replied.id != ^id and
+            (replied.reply_to_id == ^id or replied.thread_id == ^id or
+               fragment("? @> ?", replied.path, type(^path_ids, {:array, Ecto.UUID}))),
+        order_by: [asc: replied.id],
+        limit: 80,
+        select: replied.id
+      )
+      |> repo().many()
+    end
+
+    defp load_status_activity(id, current_user) do
+      opts = [
+        current_user: current_user,
+        preload: [
+          :with_subject,
+          :with_creator,
+          :with_media,
+          :with_object_more,
+          :with_object_peered,
+          :with_reply_to
+        ]
+      ]
+
+      case Bonfire.Social.Objects.read(id, opts) do
+        {:ok, %{activity: activity} = object} when is_map(activity) ->
+          [Map.put(activity, :object, object)]
+
+        {:ok, object} ->
+          [%{id: id, object_id: id, object: object}]
+
+        _ ->
+          []
       end
     end
 
@@ -1009,20 +1072,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       if is_nil(current_user) do
         RestAdapter.error_fn({:error, :unauthorized}, conn)
       else
-        # Wrap in try/rescue to handle federation errors gracefully
-        # The pin creation may succeed but federation may fail
-        result =
-          try do
-            Bonfire.Social.Pins.pin(current_user, id)
-          rescue
-            e in RuntimeError ->
-              # Check if pin was actually created despite federation error
-              if Bonfire.Social.Pins.pinned?(current_user, id) do
-                {:ok, :already_pinned}
-              else
-                {:error, e.message}
-              end
-          end
+        result = pin_owned_status(current_user, id)
 
         case result do
           {:ok, _pin} ->
@@ -1030,8 +1080,38 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
           {:error, reason} ->
             error(reason, "pin_status error")
-            RestAdapter.error_fn({:error, reason}, conn)
+            pin_error(conn, reason)
         end
+      end
+    end
+
+    defp pin_error(conn, :not_owned) do
+      conn
+      |> Plug.Conn.put_status(422)
+      |> Phoenix.Controller.json(%{"error" => "Status is not owned by you"})
+    end
+
+    defp pin_error(conn, reason), do: RestAdapter.error_fn({:error, reason}, conn)
+
+    defp pin_owned_status(current_user, id) do
+      with {:ok, object} <- Bonfire.Social.Objects.read(id, current_user: current_user),
+           true <- Bonfire.Boundaries.can?(current_user, :edit, object) do
+        # Wrap in try/rescue to handle federation errors gracefully.
+        # The pin creation may succeed but federation may fail.
+        try do
+          Bonfire.Social.Pins.pin(current_user, object)
+        rescue
+          e in RuntimeError ->
+            if Bonfire.Social.Pins.pinned?(current_user, object) do
+              {:ok, :already_pinned}
+            else
+              {:error, e.message}
+            end
+        end
+      else
+        false -> {:error, :not_owned}
+        {:error, reason} -> {:error, reason}
+        _ -> {:error, :not_found}
       end
     end
 
@@ -1208,8 +1288,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
           Flags.list_by(current_user,
             current_user: current_user,
             paginate?: false,
-            skip_boundary_check: true,
-            preload: :object_with_creator
+            skip_boundary_check: true
           )
 
         flags = extract_flags(result)
