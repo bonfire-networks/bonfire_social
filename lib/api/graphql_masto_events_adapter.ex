@@ -121,7 +121,7 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
         as: :object,
         on: activity.id == object.id,
         where:
-            fragment("(?)->'object'->>'type' = ?", object.json, "Event") or
+          fragment("(?)->'object'->>'type' = ?", object.json, "Event") or
             fragment("(?)->>'type' = ?", object.json, "Event"),
         limit: ^limit,
         select: {activity, object}
