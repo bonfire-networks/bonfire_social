@@ -49,6 +49,20 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
       assert response["content"] =~ "Hello from the API!"
     end
 
+    test "returns 422 when status text and media are both empty", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+
+      api_conn = masto_api_conn(conn, user: user, account: account)
+
+      response =
+        api_conn
+        |> post("/api/v1/statuses", %{"status" => ""})
+        |> json_response(422)
+
+      assert response["error"] =~ "Validation failed"
+    end
+
     test "creates a status with media_ids as a list", %{conn: conn} do
       account = Fake.fake_account!()
       user = Fake.fake_user!(account)
@@ -123,6 +137,87 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
   end
 
   describe "GET /api/v1/statuses/:id" do
+    test "attributes a status to its author even when the viewer has liked it", %{conn: conn} do
+      # Regression: the old activity(object_id:) GraphQL query matched the viewer's
+      # like-activity and mis-attributed the status to the liker. The direct loader
+      # reads the post's create-activity, so the account is always the author.
+      account = Fake.fake_account!()
+      viewer = Fake.fake_user!(account)
+      author = Fake.fake_user!()
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: author,
+          post_attrs: %{post_content: %{html_body: "by the author"}},
+          boundary: "public"
+        )
+
+      {:ok, _} = Likes.like(viewer, post)
+
+      response =
+        conn
+        |> masto_api_conn(user: viewer, account: account)
+        |> get("/api/v1/statuses/#{post.id}")
+        |> json_response(200)
+
+      assert response["id"] == post.id
+      assert response["account"]["id"] == author.id
+      refute response["account"]["id"] == viewer.id
+    end
+
+    test "a poll fetched by id carries a poll object (not a plain note)", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+
+      {:ok, question} =
+        Bonfire.Poll.Fake.fake_question_with_choices(
+          %{post_content: %{html_body: "tabs or spaces?"}},
+          [%{name: "tabs"}, %{name: "spaces"}],
+          current_user: user
+        )
+
+      response =
+        conn
+        |> masto_api_conn(user: user, account: account)
+        |> get("/api/v1/statuses/#{question.id}")
+        |> json_response(200)
+
+      assert response["id"] == question.id
+      assert response["content"] =~ "tabs or spaces"
+
+      assert poll = response["poll"],
+             "a poll fetched by id should carry a poll object, not render as a note"
+
+      titles = Enum.map(poll["options"] || [], & &1["title"])
+      assert "tabs" in titles
+      assert "spaces" in titles
+    end
+
+    test "marks sensitive for a content warning and exposes hashtags in tags", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: user,
+          post_attrs: %{
+            post_content: %{html_body: "learning #elixir today", summary: "spoiler ahead"}
+          },
+          boundary: "public"
+        )
+
+      response =
+        conn
+        |> masto_api_conn(user: user, account: account)
+        |> get("/api/v1/statuses/#{post.id}")
+        |> json_response(200)
+
+      assert response["sensitive"] == true
+      assert response["spoiler_text"] == "spoiler ahead"
+      tag_names = Enum.map(response["tags"] || [], &String.downcase(&1["name"] || ""))
+      assert Enum.any?(tag_names, &(&1 =~ "elixir")), "expected the #elixir hashtag in tags"
+    end
+
     test "returns a status by ID", %{conn: conn} do
       account = Fake.fake_account!()
       user = Fake.fake_user!(account)
@@ -496,6 +591,47 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
 
       assert parent.id in ancestor_ids
       assert child.id in descendant_ids
+    end
+
+    test "does not leak a reply the viewer is not allowed to see", %{conn: conn} do
+      account = Fake.fake_account!()
+      author = Fake.fake_user!(account)
+      viewer = Fake.fake_user!()
+      outsider = Fake.fake_user!()
+
+      {:ok, root} =
+        Posts.publish(
+          current_user: author,
+          post_attrs: %{post_content: %{html_body: "public root"}},
+          boundary: "public"
+        )
+
+      # a reply only the outsider (and author) can see
+      {:ok, private_reply} =
+        Posts.publish(
+          current_user: outsider,
+          post_attrs: %{post_content: %{html_body: "secret reply"}, reply_to_id: root.id},
+          boundary: "mentions"
+        )
+
+      response =
+        conn
+        |> masto_api_conn(user: viewer)
+        |> get("/api/v1/statuses/#{root.id}/context")
+        |> json_response(200)
+
+      descendant_ids = Enum.map(response["descendants"], & &1["id"])
+      refute private_reply.id in descendant_ids
+    end
+
+    test "returns 404 for a non-existent root status", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+
+      conn
+      |> masto_api_conn(user: user, account: account)
+      |> get("/api/v1/statuses/01JABCDEF0000000000000000X/context")
+      |> json_response(404)
     end
 
     test "returns empty lists for post without context", %{conn: conn} do

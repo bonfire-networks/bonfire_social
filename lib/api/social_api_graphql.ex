@@ -26,7 +26,19 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       # Use Dataloader to batch-load post content (prevents N+1 queries)
       field :post_content, :post_content do
-        resolve(Helpers.dataloader(Needle.Pointer, :post_content))
+        resolve(fn
+          # use-parent fast path: resolve from the preloaded assoc, skip Dataloader.
+          %{post_content: pc}, _args, _info
+          when is_struct(pc) and not is_struct(pc, Ecto.Association.NotLoaded) ->
+            {:ok, pc}
+
+          post, _args, %{context: %{loader: loader}} ->
+            loader
+            |> Dataloader.load(Needle.Pointer, :post_content, post)
+            |> Helpers.on_load(fn loader ->
+              {:ok, Dataloader.get(loader, Needle.Pointer, :post_content, post)}
+            end)
+        end)
       end
 
       # Use Dataloader to batch load activity association (prevents N+1)
@@ -38,6 +50,25 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       # Media is postloaded via Activities.activity_preloads in feed query
       # No custom resolver needed - just return the postloaded :media field
       field(:media, list_of(:media), description: "Media attached to this post")
+
+      @desc "The post's author. Resolves synchronously from a `:with_creator`-preloaded `created.creator`; falls back to loading the `created` mixin."
+      field :creator, :any_character do
+        resolve(fn
+          post, _args, %{context: %{loader: loader}} ->
+            case e(post, :created, :creator, nil) || e(post, :creator, nil) do
+              creator
+              when is_struct(creator) and not is_struct(creator, Ecto.Association.NotLoaded) ->
+                {:ok, creator}
+
+              _ ->
+                loader
+                |> Dataloader.load(Needle.Pointer, :created, post)
+                |> Helpers.on_load(fn loader ->
+                  {:ok, e(Dataloader.get(loader, Needle.Pointer, :created, post), :creator, nil)}
+                end)
+            end
+        end)
+      end
 
       field(:activities, list_of(:activity),
         description: "All activities associated with this post (TODO)"
@@ -78,15 +109,22 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       field(:subject, :any_character) do
         resolve(fn
+          # boost activities carry the subject as a bare Needle.Pointer (preloaded but not
+          # followed); follow it to the concrete actor so the :any_character union resolves it.
+          # MUST come before the is_struct/0 clause (a Pointer is itself a struct). Mirrors :object.
+          %{subject: %Needle.Pointer{} = pointer}, _args, _info ->
+            follow_pointer(pointer)
+
+          # use-parent fast path: a real, already-followed actor struct.
           %{subject: subject}, _args, _info
-          when not is_nil(subject) and not is_struct(subject, Ecto.Association.NotLoaded) ->
+          when is_struct(subject) and not is_struct(subject, Ecto.Association.NotLoaded) ->
             {:ok, subject}
 
           parent, _args, %{context: %{loader: loader}} ->
             loader
             |> Dataloader.load(Needle.Pointer, :subject, parent)
             |> Helpers.on_load(fn loader ->
-              {:ok, Dataloader.get(loader, Needle.Pointer, :subject, parent)}
+              Dataloader.get(loader, Needle.Pointer, :subject, parent) |> follow_pointer()
             end)
         end)
       end
@@ -134,25 +172,21 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       # field(:object_id, :string)
       # Use Dataloader to batch-load object pointers, then follow them to get actual objects
       field :object, :any_context do
-        resolve(fn activity, _args, %{context: %{loader: loader}} ->
-          loader
-          |> Dataloader.load(Needle.Pointer, :object, activity)
-          |> Helpers.on_load(fn loader ->
-            case Dataloader.get(loader, Needle.Pointer, :object, activity) do
-              %Needle.Pointer{} = pointer ->
-                # Follow the pointer to get the actual object (Boost, Like, Post, etc.)
-                case Bonfire.Common.Needles.follow!(pointer, skip_boundary_check: true) do
-                  %{__struct__: _} = object -> {:ok, object}
-                  _ -> {:ok, nil}
-                end
+        resolve(fn
+          # use-parent fast path: resolve a feed-preloaded object synchronously (variant-D).
+          %{object: %Needle.Pointer{} = pointer}, _args, _info ->
+            follow_pointer(pointer)
 
-              object when is_struct(object) ->
-                {:ok, object}
+          %{object: object}, _args, _info
+          when is_struct(object) and not is_struct(object, Ecto.Association.NotLoaded) ->
+            {:ok, object}
 
-              _ ->
-                {:ok, nil}
-            end
-          end)
+          activity, _args, %{context: %{loader: loader}} ->
+            loader
+            |> Dataloader.load(Needle.Pointer, :object, activity)
+            |> Helpers.on_load(fn loader ->
+              Dataloader.get(loader, Needle.Pointer, :object, activity) |> follow_pointer()
+            end)
         end)
       end
 
@@ -177,9 +211,39 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         resolve(Helpers.dataloader(Needle.Pointer, :created))
       end
 
+      @desc "The edge (Like/Boost/Follow/Request) backing this activity — lets the notifications layer distinguish follow_request vs quote."
+      field :edge, :edge do
+        resolve(fn
+          %{edge: edge}, _args, _info
+          when is_struct(edge) and not is_struct(edge, Ecto.Association.NotLoaded) ->
+            {:ok, edge}
+
+          parent, _args, %{context: %{loader: loader}} ->
+            loader
+            |> Dataloader.load(Needle.Pointer, :edge, parent)
+            |> Helpers.on_load(fn loader ->
+              {:ok, Dataloader.get(loader, Needle.Pointer, :edge, parent)}
+            end)
+        end)
+      end
+
       field :replied, :replied do
         description("Information about the thread, and replies to this activity (if any)")
-        resolve(Helpers.dataloader(Needle.Pointer, :replied))
+
+        resolve(fn
+          # use-parent fast path: when the feed query preloaded `replied`
+          # (:with_replied / :with_object_more), resolve it synchronously.
+          %{replied: replied}, _args, _info
+          when is_struct(replied) and not is_struct(replied, Ecto.Association.NotLoaded) ->
+            {:ok, replied}
+
+          parent, _args, %{context: %{loader: loader}} ->
+            loader
+            |> Dataloader.load(Needle.Pointer, :replied, parent)
+            |> Helpers.on_load(fn loader ->
+              {:ok, Dataloader.get(loader, Needle.Pointer, :replied, parent)}
+            end)
+        end)
       end
 
       # field(:direct_replies, list_of(:replied)) do
@@ -309,6 +373,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       field :replies_count, :integer do
         resolve(fn
+          # use-parent fast path: :with_replied preloads the `replied` record,
+          # which carries `direct_replies_count` — no Dataloader round needed.
+          %{replied: %{direct_replies_count: count}}, _args, _info ->
+            {:ok, (is_integer(count) && count) || 0}
+
           activity, _args, %{context: %{loader: loader}} = _info ->
             loader
             |> Dataloader.load(Needle.Pointer, :replied, activity)
@@ -400,20 +469,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
           loader
           |> Dataloader.load(Needle.Pointer, :object, edge)
           |> Helpers.on_load(fn loader ->
-            case Dataloader.get(loader, Needle.Pointer, :object, edge) do
-              %Needle.Pointer{} = pointer ->
-                # Follow the pointer to get the actual object
-                case Bonfire.Common.Needles.follow!(pointer, skip_boundary_check: true) do
-                  %{__struct__: _} = object -> {:ok, object}
-                  _ -> {:ok, nil}
-                end
-
-              object when is_struct(object) ->
-                {:ok, object}
-
-              _ ->
-                {:ok, nil}
-            end
+            Dataloader.get(loader, Needle.Pointer, :object, edge) |> follow_pointer()
           end)
         end)
       end
@@ -623,6 +679,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       #   resolve(&list_posts/3)
       # end
       connection field :posts, node_type: :post do
+        complexity(&page_complexity/2)
         resolve(&list_posts/3)
       end
 
@@ -636,6 +693,12 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       field :activity, :activity do
         arg(:filter, :activity_filter)
         resolve(&get_activity/3)
+      end
+
+      @desc "Get a single status (an object's create-activity) by object id, with the activity subtree preloaded so sub-fields resolve synchronously (variant-D)"
+      field :status, :activity do
+        arg(:id, non_null(:id))
+        resolve(&get_status/3)
       end
 
       @desc "Get an object"
@@ -658,12 +721,21 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       # end
       connection field :feed_activities, node_type: :activity do
         arg(:filter, :feed_filters)
+        complexity(&page_complexity/2)
         resolve(&feed/2)
+      end
+
+      @desc "Variant-D: feed with the activity subtree preloaded so sub-fields resolve synchronously (no Needle.Pointer Dataloader rounds)"
+      connection field :feed_activities_preloaded, node_type: :activity do
+        arg(:filter, :feed_filters)
+        complexity(&page_complexity/2)
+        resolve(&feed_preloaded/2)
       end
 
       @desc "Get objects in a feed (TODO)"
       connection field :feed_objects, node_type: :any_context do
         arg(:filter, :feed_filters)
+        complexity(&page_complexity/2)
         resolve(&feed_objects/2)
       end
 
@@ -675,6 +747,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       @desc "List posts liked by the current user (favourites)"
       connection field :my_likes, node_type: :post do
+        complexity(&page_complexity/2)
         resolve(&my_likes/2)
       end
 
@@ -756,6 +829,28 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       Bonfire.Social.Activities.read(id, GraphQL.current_user(info))
     end
 
+    # Read the OBJECT's create-activity (subject = author, so liking can't mis-attribute),
+    # richly preloaded so the :activity sub-fields resolve synchronously (no Dataloader storm).
+    # Single source of truth shared with the direct read path (`read_single_status`).
+    @single_status_preloads Bonfire.API.MastoCompat.FeedPipeline.single_status_preloads()
+    def get_status(_parent, %{id: id}, info) do
+      current_user = GraphQL.current_user(info)
+
+      case Bonfire.Social.Objects.read(id,
+             current_user: current_user,
+             preload: @single_status_preloads
+           ) do
+        {:ok, %{activity: activity} = object} when is_map(activity) ->
+          {:ok, Map.put(activity, :object, object)}
+
+        {:ok, object} ->
+          {:ok, %{id: id, object_id: id, object: object}}
+
+        _ ->
+          {:error, :not_found}
+      end
+    end
+
     def get_thread_context(_parent, %{id: id} = _args, info) do
       current_user = GraphQL.current_user(info)
 
@@ -826,6 +921,18 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     #   {:ok, Enum.map(feed, &Map.get(&1, :activity))}
     # end
 
+    def feed_preloaded(args, info), do: feed(:activities_preloaded, nil, args, info)
+
+    @doc false
+    # Complexity for paginated fields (Phase 3 security): cost = page size × per-node child
+    # complexity, so abusive `first:`/`last:` or deep selections are bounded past `max_complexity`
+    # on the PUBLIC endpoint. Inert for internal `Absinthe.run` reads (no complexity analysis).
+    # Defaults to page size 20 when no pagination arg is given.
+    def page_complexity(args, child_complexity) do
+      limit = Map.get(args, :first) || Map.get(args, :last) || 20
+      max(limit, 1) * child_complexity + 1
+    end
+
     def feed(feed_type \\ :activities, feed_name \\ nil, args, info) do
       current_user = GraphQL.current_user(info)
 
@@ -857,7 +964,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
           feed_name_resolved,
           filters,
           current_user: current_user,
-          paginate: pagination_args || true,
+          paginate: feed_paginate_opts(pagination_args),
           # we don't want to preload anything unnecessarily (relying instead on preloads in sub-field definitions)
           preload:
             case e(filters, :preload, nil) || e(filters, "preload", nil) do
@@ -868,9 +975,27 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
               _ ->
                 # Fall back to existing logic based on feed_type
                 case feed_type do
-                  :objects -> :per_object
-                  :media -> :per_media
-                  _activities -> false
+                  :objects ->
+                    :per_object
+
+                  :media ->
+                    :per_media
+
+                  # variant-D: preload the activity subtree so sub-fields resolve
+                  # synchronously (no Needle.Pointer Dataloader rounds)
+                  :activities_preloaded ->
+                    # :with_verb so the verb name resolves (e.g. "Boost") for reblog detection
+                    [
+                      :with_verb,
+                      :with_subject,
+                      :with_creator,
+                      :with_object_more,
+                      :with_post_content,
+                      :with_replied
+                    ]
+
+                  _activities ->
+                    false
                 end
             end
         )
@@ -902,6 +1027,33 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
           feed_paginate(feed_type, feed_result, pagination_args)
       end
     end
+
+    # Relay args use `:first`/`:last`, but `FeedActivities.feed` (→ Paginator) reads `:limit`.
+    # Without this translation the requested page size is ignored and the feed falls back to the
+    # default (~10–20), so a client asking for 40 gets a short page and assumes the feed ended
+    # (breaks "load more" on shorter feeds).
+    defp feed_paginate_opts(pagination_args) when is_list(pagination_args) do
+      case pagination_args[:first] || pagination_args[:last] do
+        limit when is_integer(limit) -> Keyword.put_new(pagination_args, :limit, limit)
+        _ -> pagination_args
+      end
+    end
+
+    defp feed_paginate_opts(pagination_args), do: pagination_args || true
+
+    # Follow a bare Needle.Pointer to its concrete object: boost subjects and object pointers
+    # are loaded as unfollowed pointers that the :any_character/:any_context unions can't type,
+    # so dereference them; pass a real (already-loaded) struct through; nil otherwise. Shared by
+    # the :subject/:object resolvers and the :edge.object resolver.
+    defp follow_pointer(%Needle.Pointer{} = pointer) do
+      case Bonfire.Common.Needles.follow!(pointer, skip_boundary_check: true) do
+        %{__struct__: _} = object -> {:ok, object}
+        _ -> {:ok, nil}
+      end
+    end
+
+    defp follow_pointer(object) when is_struct(object), do: {:ok, object}
+    defp follow_pointer(_), do: {:ok, nil}
 
     defp feed_paginate(feed_type \\ nil, feed, pagination_args) do
       Pagination.connection_paginate(feed, pagination_args,
@@ -1004,18 +1156,34 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       with {:ok, user} <- GraphQL.current_user_or_not_logged_in(info) do
         {pagination_args, _filters} = Pagination.pagination_args_filter(args)
 
-        Bonfire.Social.Likes.list_my(
-          current_user: user,
-          paginate: pagination_args
-        )
+        result =
+          Bonfire.Social.Likes.list_my(
+            current_user: user,
+            paginate: pagination_args
+          )
+
+        # Batch-preload media on the liked posts so the `:post.media` sub-field resolves
+        # without an N+1 (mirrors the previous direct favourites path).
+        media_by_id =
+          result
+          |> e(:edges, [])
+          |> Enum.map(&liked_post/1)
+          |> Enum.reject(&is_nil/1)
+          |> Bonfire.Common.Repo.maybe_preload(:media)
+          |> Map.new(&{e(&1, :id, nil), &1})
+
+        result
         |> Pagination.connection_paginate(pagination_args,
           item_prepare_fun: fn like ->
-            # Return the liked post directly (node_type is now :post)
-            e(like, :edge, :object, nil) || e(like, :object, nil)
+            # Return the liked post directly (node_type is :post), media-preloaded.
+            post = liked_post(like)
+            Map.get(media_by_id, e(post, :id, nil), post)
           end
         )
       end
     end
+
+    defp liked_post(like), do: e(like, :edge, :object, nil) || e(like, :object, nil)
 
     defp likers_of(_parent, %{id: id}, info) do
       list_interaction_subjects(Bonfire.Social.Likes, id, info)

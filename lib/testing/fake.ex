@@ -1,6 +1,7 @@
 defmodule Bonfire.Social.Fake do
   # import Bonfire.Files.Simulation
   import Untangle
+  import Ecto.Query, only: [from: 2]
   use Bonfire.Common.E
   # alias Bonfire.Posts
   # alias Bonfire.Social.Graph.Follows
@@ -98,11 +99,11 @@ defmodule Bonfire.Social.Fake do
         instance_url = "https://#{instance_domain}"
         actor_url = "#{instance_url}/actors/other_user"
 
-        {:ok, instance} =
+        {:ok, _instance} =
           Bonfire.Federate.ActivityPub.Instances.get_or_create(instance_url)
           |> debug("instance created")
 
-        {:ok, peered} =
+        {:ok, _peered} =
           Bonfire.Federate.ActivityPub.Peered.save_canonical_uri(remote_user, actor_url)
           |> debug("user attached to instance")
 
@@ -116,10 +117,16 @@ defmodule Bonfire.Social.Fake do
 
         post_url = "#{instance_url}/post/1"
 
-        # NOTE: it should still work without this
-        # {:ok, peered} =
-        #   Bonfire.Federate.ActivityPub.Peered.save_canonical_uri(remote_post, post_url)
-        #   |> debug("post attached to instance")
+        {:ok, _peered_post} =
+          Bonfire.Federate.ActivityPub.Peered.save_canonical_uri(remote_post, post_url)
+          |> debug("post attached to instance")
+
+        # `fake_post!` publishes the post to this instance's *local* feed (public posts
+        # land there). A genuinely federated post would instead arrive in the federated
+        # feed, so repoint it there: this keeps it visible in the remote/federated feed
+        # while excluding it from local timelines (which treat every local-feed entry as
+        # local-authored — see Bonfire.Social.Activities.maybe_filter/3 `:origin`).
+        move_to_federated_feed(remote_post)
 
         {remote_post, nil}
 
@@ -390,6 +397,24 @@ defmodule Bonfire.Social.Fake do
       other ->
         raise "Missing create_test_content case for #{inspect(other)}"
     end
+  end
+
+  # Move a (locally-published) post out of the instance's local feed and into the
+  # federated feed, to simulate a post that arrived via federation rather than being
+  # authored locally.
+  defp move_to_federated_feed(post) do
+    local_feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
+    federated_feed_id = Bonfire.Social.Feeds.named_feed_id(:activity_pub)
+
+    from(fp in Bonfire.Data.Social.FeedPublish,
+      where: fp.id == ^post.id and fp.feed_id == ^local_feed_id
+    )
+    |> Common.Repo.delete_all()
+
+    Common.Repo.insert(
+      %Bonfire.Data.Social.FeedPublish{id: post.id, feed_id: federated_feed_id},
+      on_conflict: :nothing
+    )
   end
 
   defp create_media_content(

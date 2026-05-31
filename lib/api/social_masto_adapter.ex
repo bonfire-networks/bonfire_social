@@ -1,192 +1,226 @@
 if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
   defmodule Bonfire.Social.API.GraphQLMasto.Adapter do
-    @moduledoc "Social API endpoints for Mastodon-compatible client apps, powered by the GraphQL API (see `Bonfire.Social.API.GraphQL`)"
+    @moduledoc """
+    Social API endpoints for Mastodon-compatible client apps.
+
+    Feeds, favourites and single-status reads run through the GraphQL Schema via `Absinthe.run`
+    (the preloaded `feedActivitiesPreloaded`/`myLikes`/`status` resolvers) and map via
+    `Bonfire.API.MastoCompat.Mappers.*`. A few by-id/low-volume reads (thread context, pin state,
+    update) call Bonfire context functions (`Objects.read/2` etc.) directly — see
+    GRAPHQL_FIRST_MASTO_PLAN.md for why those stay direct.
+    """
 
     use Arrows
     import Ecto.Query, only: [from: 2]
     import Untangle
     use Bonfire.Common.Repo
 
-    use AbsintheClient,
-      schema: Bonfire.API.GraphQL.Schema,
-      action: [mode: :internal]
-
-    # Custom pipeline to ensure context has dataloader for both authenticated and unauthenticated requests
-    def absinthe_pipeline(schema, opts) do
-      context = Keyword.get(opts, :context, %{})
-
-      context_with_loader =
-        if Map.has_key?(context, :loader) do
-          context
-        else
-          schema.context(context)
-        end
-
-      AbsintheClient.default_pipeline(schema, Keyword.put(opts, :context, context_with_loader))
-    end
-
     alias Bonfire.API.GraphQL.RestAdapter
+    alias Bonfire.API.GraphQL.Schema
 
     alias Bonfire.API.MastoCompat.{
-      Schemas,
       Mappers,
       InteractionHandler,
       Helpers,
       PaginationHelpers,
-      Fragments
+      FeedPipeline,
+      BatchLoaders
     }
 
     import Helpers, only: [get_field: 2]
-    alias Bonfire.Common.Utils
 
-    @masto_preloads [:with_subject, :with_object_more, :with_post_content, :with_replied]
+    # Actor (subject/creator/author) fields, shared with the notifications module — covers User
+    # AND Category (groups), without which group-authored activities resolve to an untyped actor
+    # and get dropped on validation. See `Bonfire.API.MastoCompat.Fragments.actor_fields/0`.
+    @actor_fields Bonfire.API.MastoCompat.Fragments.actor_fields()
 
-    # Use centralized fragments from bonfire_api_graphql
-    @post_content Fragments.post_content()
-    @user Fragments.user_profile()
-    @media Fragments.media()
-
-    @activity_in_object "
-    activity {
-      id
-      created_at: date
-      uri: canonical_uri
-      creator: subject {
-        ... on User {
-          #{@user}
-        }
-      }
-    }
-    "
-
-    # Post spread loads fields needed by extract_reblog/from_post for boost activities
-    @on_object_types "
-    ... on Other {
-      json
-    }
-    ... on Post {
-      id
-      post_content {
-        #{@post_content}
-      }
-      #{@activity_in_object}
-      media {
-        #{@media}
-      }
-    }
-    ... on Boost {
-      id
-      edge {
-        object {
-          __typename
-          ... on Post {
-            id
-            post_content {
-              #{@post_content}
-            }
-            #{@activity_in_object}
-            media {
-              #{@media}
-            }
-          }
-        }
-      }
-    }
-    "
-
-    # Activity fragment for feeds
-    @activity "
+    # Activity-shaped selection for timelines (handles boosts → reblog). The reblog account
+    # comes from `object.creator` — the `:post.creator` field resolves synchronously from the
+    # `:with_creator`-preloaded `created.creator`, avoiding the deep `object.activity.subject`
+    # Dataloader rounds that made an earlier cut ~2× slower (now ~1.08× direct, within gate).
+    # (Defined before feed_items: module attributes must be set before the interpolating fn.)
+    @activity_node_selection """
     id
-    created_at: date
-    uri: canonical_uri
-    subject_id
-    object_id
-    verb {
-      verb
-    }
-    account: subject {
-      ... on User {
-        #{@user}
-    }}
+    object_id: objectId
+    verb { verb }
+    subject { #{@actor_fields} }
     object {
       __typename
-      #{@on_object_types}
-    }
-    object_post_content {
-      #{@post_content}
-    }
-    replied {
-      reply_to_id: replyToId
-      reply_to: replyTo {
+      ... on Post {
         id
-        subject_id: subjectId
+        post_content: postContent { name summary html_body: rawBody }
+        media { id media_type: mediaType url description metadata }
+        creator { #{@actor_fields} }
       }
+      ... on Poll { id post_content: postContent { name summary html_body: rawBody } }
     }
+    media { id media_type: mediaType url description metadata }
     liked_by_me: likedByMe
     boosted_by_me: boostedByMe
     bookmarked_by_me: bookmarkedByMe
-    like_count: likeCount
-    boost_count: boostCount
     replies_count: repliesCount
-    media {
-      #{@media}
-    }
-    "
+    """
 
-    # Simpler activity fragment for thread context (ancestors/descendants are posts, not boosts)
-    # The any_context union doesn't include Boost type, so we can't spread on it
-    @thread_activity "
-    id
-    created_at: date
-    uri: canonical_uri
-    subject_id
-    object_id
-    verb {
-      verb
-    }
-    account: subject {
-      ... on User {
-        #{@user}
-    }}
-    object {
-      __typename
-      #{@on_object_types}
-    }
-    object_post_content {
-      #{@post_content}
-    }
-    replied {
-      reply_to_id: replyToId
-      reply_to: replyTo {
-        id
-        subject_id: subjectId
+    @feed_query """
+    query Feed($first: Int, $last: Int, $after: String, $before: String, $filter: FeedFilters) {
+      feed: feedActivitiesPreloaded(first: $first, last: $last, after: $after, before: $before, filter: $filter) {
+        page_info: pageInfo {
+          end_cursor: endCursor
+          start_cursor: startCursor
+          has_next_page: hasNextPage
+          has_previous_page: hasPreviousPage
+        }
+        edges { node { #{@activity_node_selection} } }
       }
     }
-    liked_by_me: likedByMe
-    boosted_by_me: boostedByMe
-    bookmarked_by_me: bookmarkedByMe
-    like_count: likeCount
-    boost_count: boostCount
-    replies_count: repliesCount
-    media {
-      #{@media}
-    }
-    "
+    """
 
     def feed(params, conn) do
       current_user = conn.assigns[:current_user]
 
-      feed_direct(params, current_user, :feed)
+      if is_nil(current_user) and user_scoped_feed?(params) do
+        # Home and bookmarks are viewer-scoped: per Mastodon spec they require auth
+        # (401) rather than silently returning an empty public feed.
+        RestAdapter.error_fn({:error, :unauthorized}, conn)
+      else
+        params
+        |> feed_items(current_user)
+        |> then(&respond_with_feed(conn, params, &1))
+      end
+    end
+
+    @user_scoped_feeds ~w(my bookmarks)
+    defp user_scoped_feed?(params) do
+      feed_name =
+        params
+        |> Map.get(:filter, Map.get(params, "filter", %{}))
+        |> then(&(Map.get(&1, :feed_name) || Map.get(&1, "feed_name")))
+
+      to_string(feed_name) in @user_scoped_feeds
+    end
+
+    @doc "Profile timeline for a specific account (their posts + boosts/reblogs)."
+    def user_activities_feed(user_id, params, conn) do
+      current_user = conn.assigns[:current_user]
+
+      # Load the account's OUTBOX feed (posts + boosts), matching the web UI profile
+      # (feed_live.ex maps :user_activities → feed_id(:outbox, user)). The `user_activities`
+      # `subjects` preset omits the account's boosts, so we pass the outbox feed id directly.
+      params =
+        case Bonfire.Social.Feeds.feed_id(:outbox, user_id) do
+          outbox_id when is_binary(outbox_id) ->
+            filter =
+              params
+              |> Map.get(:filter, Map.get(params, "filter", %{}))
+              |> Map.put("feed_ids", [outbox_id])
+
+            params |> Map.delete(:filter) |> Map.put("filter", filter)
+
+          _ ->
+            # fallback: keep the subjects-filtered preset if the outbox id can't be resolved
+            params
+        end
+
+      params
+      |> feed_items(current_user, extra_feed_opts: [by: user_id])
       |> then(&respond_with_feed(conn, params, &1))
+    end
+
+    # REST-on-GraphQL (Phase 7): load timelines through `feedActivitiesPreloaded` and map each
+    # activity node via the GraphQL-output activity mapper.
+    defp feed_items(params, current_user, load_opts \\ []) do
+      filters = Map.get(params, :filter, Map.get(params, "filter", %{}))
+      by = get_in(load_opts, [:extra_feed_opts, :by])
+
+      gql_filter =
+        %{}
+        |> maybe_put_var("feedName", get_field(filters, :feed_name))
+        |> maybe_put_var("feedIds", get_field(filters, :feed_ids))
+        |> maybe_put_var("tags", get_field(filters, :tags))
+        |> maybe_put_var("subjects", by && List.wrap(by))
+        # Mastodon wants full id-paginated history, not the feed's default 7-day window — the
+        # masto params carry `time_limit: 0` (PaginationHelpers.build_feed_params); forward it
+        # (default to 0) so old activities/boosts aren't hidden.
+        |> maybe_put_var("timeLimit", get_field(filters, :time_limit) || 0)
+
+      pagination_args = Map.take(params, [:first, :last, :after, :before])
+      pagination = if pagination_args == %{}, do: %{first: 20}, else: pagination_args
+
+      variables =
+        %{"filter" => gql_filter}
+        |> maybe_put_var("first", Map.get(pagination, :first))
+        |> maybe_put_var("last", Map.get(pagination, :last))
+        |> maybe_put_var("after", Map.get(pagination, :after))
+        |> maybe_put_var("before", Map.get(pagination, :before))
+
+      case Absinthe.run(@feed_query, Schema,
+             variables: variables,
+             context: Schema.context(%{current_user: current_user})
+           ) do
+        {:ok, %{data: %{"feed" => %{"edges" => edges} = connection}}} when is_list(edges) ->
+          items =
+            edges
+            |> Enum.map(&get_field(&1, :node))
+            |> Enum.reject(&is_nil/1)
+            |> map_graphql_statuses(current_user, &Mappers.Status.from_graphql_activity/2)
+
+          {:ok, items, feed_page_info(items, connection)}
+
+        {:ok, %{errors: errors}} ->
+          {:error, errors}
+
+        _ ->
+          {:ok, [], %{}}
+      end
+    end
+
+    # Build the Link-header page_info from the feed's REAL Paginator cursors (carried back in the
+    # connection's pageInfo), not synthesized from object ids — so `max_id`/`min_id` round-trip
+    # correctly for every feed ordering (profile/custom sorts), not just [id: :desc] feeds.
+    # `encode_cursor_for_link_header` passes the Paginator cursor ("g3…") through unchanged.
+    defp feed_page_info(items, connection) do
+      pi = get_field(connection, :page_info) || %{}
+      end_cursor = get_field(pi, :end_cursor)
+      start_cursor = get_field(pi, :start_cursor)
+
+      %{
+        start_cursor: start_cursor,
+        end_cursor: end_cursor,
+        # fall back to item ids only if the connection didn't carry cursors
+        cursor_fields: [id: :desc],
+        # suppress the "next" link on the last page
+        final_cursor: if(get_field(pi, :has_next_page), do: nil, else: end_cursor || :last)
+      }
+      |> Map.reject(fn {_k, v} -> is_nil(v) end)
+      |> maybe_fallback_cursors(items)
+    end
+
+    # If the feed connection carried no cursors (e.g. empty page_info), fall back to item ids so
+    # add_link_headers still produces a (best-effort) Link header.
+    defp maybe_fallback_cursors(%{end_cursor: _} = page_info, _items), do: page_info
+
+    defp maybe_fallback_cursors(page_info, items) do
+      ids = items |> Enum.map(&get_field(&1, :id)) |> Enum.reject(&is_nil/1)
+
+      page_info
+      |> Map.put(:start_cursor, List.first(ids))
+      |> Map.put(:end_cursor, List.last(ids))
     end
 
     def notifications(params, conn) do
       current_user = conn.assigns[:current_user]
       notification_filters = extract_notification_filters(conn.params)
 
-      feed_direct(params, current_user, :notification)
-      |> apply_notification_filters(notification_filters)
-      |> then(&respond_with_feed(conn, params, &1))
+      if is_nil(current_user) do
+        RestAdapter.error_fn({:error, :unauthorized}, conn)
+      else
+        current_user
+        |> Bonfire.Social.API.GraphQLMasto.Notifications.list_for_user(params,
+          filters: notification_filters
+        )
+        |> notification_candidates_to_items(current_user)
+        |> then(&respond_with_feed(conn, params, &1))
+      end
     end
 
     @doc "Get a single notification by ID"
@@ -196,13 +230,13 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       if is_nil(current_user) do
         RestAdapter.error_fn({:error, :unauthorized}, conn)
       else
-        case Bonfire.Social.Activities.get(id, current_user: current_user) do
-          {:ok, activity} ->
+        case Bonfire.Social.API.GraphQLMasto.Notifications.get_for_user(current_user, id) do
+          {:ok, candidate} ->
             notification =
-              Mappers.Notification.from_activity(
-                activity,
-                current_user: current_user
-              )
+              candidate
+              |> List.wrap()
+              |> map_notification_candidates(current_user)
+              |> List.first()
 
             if notification do
               Phoenix.Controller.json(conn, notification)
@@ -267,13 +301,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       end
     end
 
-    defp apply_notification_filters({:ok, items, page_info}, filters) do
-      filtered_items = filter_notifications(items, filters)
-      {:ok, filtered_items, page_info}
-    end
-
-    defp apply_notification_filters({:error, _} = error, _filters), do: error
-
     defp extract_notification_filters(params) do
       %{
         types: extract_types_filter(params["types"]) || extract_types_filter(params["types[]"]),
@@ -289,48 +316,22 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     defp extract_types_filter(types) when is_binary(types), do: [types]
     defp extract_types_filter(_), do: nil
 
-    defp filter_notifications(notifications, %{types: nil, exclude_types: nil, account_id: nil}) do
-      notifications
+    defp notification_candidates_to_items({:ok, candidates, page_info}, current_user) do
+      {:ok, map_notification_candidates(candidates, current_user), page_info}
     end
 
-    defp filter_notifications(notifications, filters) do
-      Enum.filter(notifications, fn notification ->
-        type = Map.get(notification, "type")
-        account = Map.get(notification, "account")
-        account_id = if account, do: Map.get(account, "id"), else: nil
+    defp notification_candidates_to_items({:error, _} = error, _current_user), do: error
 
-        type_match =
-          cond do
-            filters.types != nil -> type in filters.types
-            filters.exclude_types != nil -> type not in filters.exclude_types
-            true -> true
-          end
-
-        account_match = is_nil(filters.account_id) || account_id == filters.account_id
-
-        type_match && account_match
+    defp map_notification_candidates(candidates, current_user) do
+      candidates
+      |> Enum.flat_map(fn candidate ->
+        case Mappers.Notification.from_candidate(candidate, current_user: current_user) do
+          item when is_map(item) -> [item]
+          _ -> []
+        end
       end)
     end
 
-    @graphql "query ($first: Int, $last: Int, $after: String, $before: String) {
-      my_likes(first: $first, last: $last, after: $after, before: $before) {
-        edges { node {
-          id
-          post_content {
-            #{@post_content}
-          }
-          activity {
-            #{@activity}
-          }
-        }}
-        page_info: pageInfo {
-          has_next_page: hasNextPage
-          has_previous_page: hasPreviousPage
-          start_cursor: startCursor
-          end_cursor: endCursor
-        }
-      }
-    }"
     @doc "Get posts favourited/liked by the current user"
     def favourites(params, conn) do
       current_user = conn.assigns[:current_user]
@@ -338,113 +339,167 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       if is_nil(current_user) do
         RestAdapter.error_fn({:error, :unauthorized}, conn)
       else
-        graphql(conn, :favourites, params)
-        |> process_favourites_result(current_user)
+        params
+        |> favourite_items(current_user)
         |> then(&respond_with_feed(conn, params, &1))
       end
     end
 
-    defp process_favourites_result(response, current_user) do
-      case response do
-        %{data: %{my_likes: %{edges: edges, page_info: page_info}}} when is_list(edges) ->
-          object_ids =
-            edges
-            |> Enum.flat_map(fn edge ->
-              post = Map.get(edge, :node) || edge
-              post_id = Map.get(post, :id)
-              activity_object_id = get_in(post, [:activity, :object_id])
-              [post_id, activity_object_id]
-            end)
-            |> Enum.reject(&is_nil/1)
-            |> Enum.uniq()
+    # Post-shaped node selection (favourites). Snake_case aliases so the shared Status builders
+    # read them. TODO(graphql-fix): only `... on Post` is selected — non-Post liked objects
+    # (polls/Question, media) are stripped; extend to all object types.
+    @status_node_selection """
+    id
+    post_content: postContent { name summary html_body: rawBody }
+    media { id media_type: mediaType url description metadata }
+    activity {
+      subject { #{@actor_fields} }
+      liked_by_me: likedByMe
+      boosted_by_me: boostedByMe
+      bookmarked_by_me: bookmarkedByMe
+      replies_count: repliesCount
+    }
+    """
 
-          interaction_states =
-            batch_load_interaction_states(current_user, object_ids)
-            |> then(fn states ->
-              Enum.reduce(object_ids, states, fn id, acc ->
-                Map.update(acc, id, %{favourited: true}, &Map.put(&1, :favourited, true))
-              end)
-            end)
+    @favourites_query """
+    query Favourites($first: Int, $last: Int, $after: String, $before: String) {
+      my_likes: myLikes(first: $first, last: $last, after: $after, before: $before) {
+        page_info: pageInfo { has_next_page: hasNextPage }
+        edges { node { #{@status_node_selection} } }
+      }
+    }
+    """
 
-          mentions_by_object = batch_load_mentions(object_ids)
+    # Lean activity selection for a SINGLE status (a regular post or a poll — never a reblog
+    # wrapper, so no boost `object.activity` nesting). The `... on Poll` fragment carries the
+    # __typename + content for detection; `Mappers.Status.maybe_add_poll` loads the full Question.
+    @status_activity_selection """
+    id
+    object_id: objectId
+    verb { verb }
+    subject { #{@actor_fields} }
+    object { __typename ... on Post { id post_content: postContent { name summary html_body: rawBody } } ... on Poll { id post_content: postContent { name summary html_body: rawBody } } }
+    media { id media_type: mediaType url description metadata }
+    liked_by_me: likedByMe
+    boosted_by_me: boostedByMe
+    bookmarked_by_me: bookmarkedByMe
+    replies_count: repliesCount
+    """
 
-          visibility_by_object =
-            Bonfire.Boundaries.Controlleds.list_preset_acl_ids_on_objects(object_ids)
+    @status_query """
+    query Status($id: ID!) {
+      status(id: $id) { #{@status_activity_selection} }
+    }
+    """
 
-          followers_grant_objects =
-            batch_load_followers_grants(object_ids, visibility_by_object)
+    defp favourite_items(params, current_user) do
+      pagination_args =
+        case Map.take(params, [:first, :last, :after, :before]) do
+          empty when map_size(empty) == 0 -> %{first: 20}
+          args -> args
+        end
 
+      variables =
+        %{}
+        |> maybe_put_var("first", Map.get(pagination_args, :first))
+        |> maybe_put_var("last", Map.get(pagination_args, :last))
+        |> maybe_put_var("after", Map.get(pagination_args, :after))
+        |> maybe_put_var("before", Map.get(pagination_args, :before))
+
+      case Absinthe.run(@favourites_query, Schema,
+             variables: variables,
+             context: Schema.context(%{current_user: current_user})
+           ) do
+        {:ok, %{data: %{"my_likes" => %{"edges" => edges} = connection}}} when is_list(edges) ->
           statuses =
             edges
-            |> Enum.flat_map(fn edge ->
-              post = Map.get(edge, :node) || edge
-              activity = Map.get(post, :activity)
+            |> Enum.map(&get_field(&1, :node))
+            |> Enum.reject(&is_nil/1)
+            |> map_graphql_statuses(current_user)
 
-              activity_data =
-                if activity do
-                  Map.put(activity, :object, post)
-                else
-                  %{id: Map.get(post, :id), object_id: Map.get(post, :id), object: post}
-                end
+          {:ok, statuses, favourites_page_info(statuses, connection)}
 
-              status =
-                Mappers.Status.from_activity(%{node: activity_data},
-                  current_user: current_user,
-                  interaction_states: interaction_states,
-                  mentions_by_object: mentions_by_object,
-                  visibility_by_object: visibility_by_object,
-                  followers_grant_objects: followers_grant_objects
-                )
-
-              case Schemas.Status.validate(status) do
-                {:ok, valid_status} ->
-                  [valid_status]
-
-                {:error, {:missing_fields, fields}} ->
-                  warn(fields, "Favourites status missing required fields")
-                  []
-
-                {:error, _} ->
-                  []
-              end
-            end)
-
-          page_info_with_cursor = Map.put(page_info, :cursor_fields, id: :desc)
-          {:ok, statuses, page_info_with_cursor}
-
-        %{errors: errors} ->
+        {:ok, %{errors: errors}} ->
           {:error, errors}
 
-        other ->
-          error(other, "Unexpected result from my_likes GraphQL query")
-          {:error, :unexpected_response}
+        _ ->
+          {:ok, [], %{}}
       end
     end
 
-    @graphql "query ($filter: ActivityFilter) {
-      activity(filter: $filter) {
-        #{@activity}
+    defp favourites_page_info([], _connection), do: %{}
+
+    defp favourites_page_info(statuses, connection) do
+      ids = statuses |> Enum.map(&get_field(&1, :id)) |> Enum.reject(&is_nil/1)
+      has_next_page = get_field(connection, :page_info) |> get_field(:has_next_page)
+
+      %{
+        start_cursor: List.first(ids),
+        end_cursor: List.last(ids),
+        cursor_fields: [id: :desc],
+        final_cursor: if(has_next_page, do: nil, else: List.last(ids))
       }
-    }"
+    end
+
+    defp maybe_put_var(map, _key, nil), do: map
+    defp maybe_put_var(map, key, value), do: Map.put(map, key, value)
+
+    # GraphQL `:post`/`:activity` node maps → Mastodon statuses: GraphQL provides the core node;
+    # BatchLoaders supplies hashtags/mentions/visibility (keyed by object id).
+    defp map_graphql_statuses(nodes, current_user, mapper \\ &Mappers.Status.from_graphql/2)
+         when is_list(nodes) do
+      object_ids =
+        nodes
+        |> Enum.map(&(get_field(&1, :object_id) || get_field(&1, :id)))
+        |> Enum.reject(&is_nil/1)
+
+      batch_opts = batch_load_supplementary(current_user, object_ids)
+
+      Enum.flat_map(nodes, fn node ->
+        case mapper.(node, batch_opts) do
+          status when is_map(status) -> [status]
+          _ -> []
+        end
+      end)
+    end
+
     @doc "Get single status by ID"
     def show_status(%{"id" => id}, conn) do
       current_user = conn.assigns[:current_user]
 
-      case graphql(conn, :show_status, %{"filter" => %{"object_id" => id}}) do
-        %{data: %{activity: activity}} when not is_nil(activity) ->
-          object_ids = [get_activity_id(activity)] |> Enum.reject(&is_nil/1)
-          batch_opts = batch_load_supplementary(current_user, object_ids)
+      result =
+        Absinthe.run(@status_query, Schema,
+          variables: %{"id" => id},
+          context: Schema.context(%{current_user: current_user})
+        )
 
-          status = Mappers.Status.from_activity(activity, batch_opts)
+      with {:ok, %{data: %{"status" => node}}} when is_map(node) <- result,
+           [status] <-
+             map_graphql_statuses([node], current_user, &Mappers.Status.from_graphql_activity/2),
+           true <- is_map(status) and not is_nil(Map.get(status, "id")) do
+        Phoenix.Controller.json(conn, status)
+      else
+        _ -> RestAdapter.error_fn({:error, :not_found}, conn)
+      end
+    end
 
-          if is_map(status) and Map.get(status, "id") do
-            Phoenix.Controller.json(conn, status)
-          else
-            RestAdapter.error_fn({:error, :not_found}, conn)
-          end
+    # Load a single status by id via a direct `Objects.read` (used by the by-id/interaction
+    # paths that stay direct; feeds and `show_status` go through GraphQL). Reads the OBJECT
+    # (post) and its create-activity (subject = author) — unlike the old `activity(object_id:)`
+    # query, which could match a like-activity and mis-attribute the status to the liker.
+    defp read_single_status(id, current_user) do
+      case Bonfire.Social.Objects.read(id,
+             current_user: current_user,
+             preload: FeedPipeline.single_status_preloads()
+           ) do
+        {:ok, %{activity: activity} = object} when is_map(activity) ->
+          {:ok, Map.put(activity, :object, object)}
+
+        {:ok, object} ->
+          {:ok, %{id: id, object_id: id, object: object}}
 
         _ ->
-          RestAdapter.error_fn({:error, :not_found}, conn)
+          {:error, :not_found}
       end
     end
 
@@ -494,29 +549,47 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
           summary: params["spoiler_text"]
         }
 
-        try do
-          case Bonfire.Social.PostContents.edit(current_user, id, attrs) do
-            {:ok, _} ->
-              # Reload via GraphQL to get all associations needed by the mapper
-              with %{data: %{activity: activity}} when not is_nil(activity) <-
-                     graphql(conn, :show_status, %{"filter" => %{"object_id" => id}}),
-                   status when not is_nil(status) <-
-                     Mappers.Status.from_activity(activity, current_user: current_user) do
-                Phoenix.Controller.json(conn, status)
-              else
-                _ -> RestAdapter.error_fn({:error, :not_found}, conn)
-              end
+        case edit_post_content(current_user, id, attrs) do
+          {:ok, _} ->
+            # Reload via the direct loader to get all associations the mapper needs.
+            # Kept outside the rescue: a post-commit reload/map crash must not be
+            # reported as :not_found (the edit already succeeded).
+            with {:ok, activity} <- read_single_status(id, current_user),
+                 status when not is_nil(status) <-
+                   Mappers.Status.from_activity(activity, current_user: current_user) do
+              Phoenix.Controller.json(conn, status)
+            else
+              _ -> RestAdapter.error_fn({:error, :not_found}, conn)
+            end
 
-            {:error, :not_found} ->
-              RestAdapter.error_fn({:error, :not_found}, conn)
+          {:error, :not_found} ->
+            RestAdapter.error_fn({:error, :not_found}, conn)
 
-            {:error, _reason} ->
-              RestAdapter.error_fn({:error, :forbidden}, conn)
-          end
-        rescue
-          _ -> RestAdapter.error_fn({:error, :not_found}, conn)
+          {:error, _reason} ->
+            RestAdapter.error_fn({:error, :forbidden}, conn)
         end
       end
+    end
+
+    # Scope the rescue to only the edit call so unexpected exceptions there map to
+    # :not_found/:forbidden, while the reload+map path can surface its own failures.
+    defp edit_post_content(current_user, id, attrs) do
+      case Bonfire.Social.PostContents.edit(current_user, id, attrs) do
+        {:ok, _} = ok ->
+          ok
+
+        {:error, _} = err ->
+          err
+
+        other ->
+          # edit/3 returns nil for a non-existent/unreadable status
+          debug(other, "edit returned non-tuple; treating as not_found")
+          {:error, :not_found}
+      end
+    rescue
+      e ->
+        error(e, "Failed to edit status")
+        {:error, :not_found}
     end
 
     @doc "Delete a status"
@@ -544,51 +617,60 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       end
     end
 
-    @graphql "query ($id: ID!) {
-      thread_context(id: $id) {
-        ancestors {
-          #{@thread_activity}
-        }
-        descendants {
-          #{@thread_activity}
-        }
-      }
-    }"
     @doc "Get thread context (ancestors and descendants)"
     def status_context(%{"id" => id}, conn) do
       current_user = conn.assigns[:current_user]
 
-      case graphql(conn, :status_context, %{"id" => id}) do
-        %{data: %{thread_context: %{ancestors: ancestors, descendants: descendants}}} ->
-          descendants = ensure_descendants(descendants, id, current_user)
-          all_activities = (ancestors || []) ++ descendants
-          object_ids = all_activities |> Enum.map(&get_activity_id/1) |> Enum.reject(&is_nil/1)
+      # The root status must itself be readable; otherwise 404 (don't leak an empty
+      # context for a private/non-existent status).
+      case read_single_status(id, current_user) do
+        {:ok, _root} ->
+          ancestors = ancestor_activities(id, current_user)
+
+          descendants =
+            id
+            |> descendant_reply_ids()
+            |> Enum.flat_map(&load_status_activity(&1, current_user))
+
+          object_ids =
+            (ancestors ++ descendants) |> Enum.map(&get_activity_id/1) |> Enum.reject(&is_nil/1)
+
           map_opts = batch_load_supplementary(current_user, object_ids)
 
           context = %{
-            "ancestors" => Enum.map(ancestors || [], &Mappers.Status.from_activity(&1, map_opts)),
-            "descendants" =>
-              Enum.map(descendants || [], &Mappers.Status.from_activity(&1, map_opts))
+            "ancestors" => Enum.map(ancestors, &Mappers.Status.from_activity(&1, map_opts)),
+            "descendants" => Enum.map(descendants, &Mappers.Status.from_activity(&1, map_opts))
           }
 
           Phoenix.Controller.json(conn, context)
 
-        %{data: %{thread_context: nil}} ->
-          Phoenix.Controller.json(conn, %{"ancestors" => [], "descendants" => []})
-
-        _ ->
-          Phoenix.Controller.json(conn, %{"ancestors" => [], "descendants" => []})
+        {:error, _} ->
+          RestAdapter.error_fn({:error, :not_found}, conn)
       end
     end
 
-    defp ensure_descendants(descendants, _id, _current_user)
-         when is_list(descendants) and descendants != [],
-         do: descendants
-
-    defp ensure_descendants(_descendants, id, current_user) do
+    # Walk the reply_to chain up to the thread root, returning activities ordered
+    # root-first. Boundaries are applied at load time (load_status_activity drops
+    # any ancestor the current user cannot read).
+    defp ancestor_activities(id, current_user) do
       id
-      |> descendant_reply_ids()
+      |> ancestor_ids([], 0)
       |> Enum.flat_map(&load_status_activity(&1, current_user))
+    end
+
+    defp ancestor_ids(_id, acc, depth) when depth > 80, do: acc
+
+    defp ancestor_ids(id, acc, depth) do
+      parent_id =
+        repo().one(
+          from(r in Bonfire.Data.Social.Replied, where: r.id == ^id, select: r.reply_to_id)
+        )
+
+      if is_binary(parent_id) and parent_id != id do
+        ancestor_ids(parent_id, [parent_id | acc], depth + 1)
+      else
+        acc
+      end
     end
 
     defp descendant_reply_ids(id) do
@@ -609,27 +691,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     end
 
     defp load_status_activity(id, current_user) do
-      opts = [
-        current_user: current_user,
-        preload: [
-          :with_subject,
-          :with_creator,
-          :with_media,
-          :with_object_more,
-          :with_object_peered,
-          :with_reply_to
-        ]
-      ]
-
-      case Bonfire.Social.Objects.read(id, opts) do
-        {:ok, %{activity: activity} = object} when is_map(activity) ->
-          [Map.put(activity, :object, object)]
-
-        {:ok, object} ->
-          [%{id: id, object_id: id, object: object}]
-
-        _ ->
-          []
+      case read_single_status(id, current_user) do
+        {:ok, activity} -> [activity]
+        _ -> []
       end
     end
 
@@ -678,323 +742,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     defp get_activity_id(%{id: id}), do: id
     defp get_activity_id(_), do: nil
 
-    defp get_all_object_ids(activity) do
-      main_id = get_activity_id(activity)
-      nested_ids = extract_nested_object_ids(activity)
-      [main_id | nested_ids]
-    end
-
-    defp extract_nested_object_ids(activity) do
-      object = Map.get(activity, :object) || %{}
-      typename = Map.get(object, :__typename) || Map.get(object, "__typename")
-
-      case typename do
-        "Boost" ->
-          edge = Map.get(object, :edge) || %{}
-          nested_object = Map.get(edge, :object) || %{}
-          nested_id = Map.get(nested_object, :id)
-          if nested_id, do: [nested_id], else: []
-
-        "Post" ->
-          post_id = Map.get(object, :id)
-          if post_id, do: [post_id], else: []
-
-        _ ->
-          []
-      end
-    end
-
-    defp batch_load_interaction_states(nil, _object_ids), do: %{}
-    defp batch_load_interaction_states(_user, []), do: %{}
-
-    defp batch_load_interaction_states(current_user, object_ids) do
-      liked_ids = batch_load_liked(current_user, object_ids)
-      boosted_ids = batch_load_boosted(current_user, object_ids)
-      bookmarked_ids = batch_load_bookmarked(current_user, object_ids)
-
-      object_ids
-      |> Enum.map(fn object_id ->
-        {object_id,
-         %{
-           favourited: MapSet.member?(liked_ids, object_id),
-           reblogged: MapSet.member?(boosted_ids, object_id),
-           bookmarked: MapSet.member?(bookmarked_ids, object_id)
-         }}
-      end)
-      |> Map.new()
-    end
-
-    defp batch_load_interaction(current_user, object_ids, interaction_module) do
-      Bonfire.Social.Edges.batch_exists?(interaction_module, current_user, object_ids)
-    end
-
-    defp batch_load_liked(current_user, object_ids),
-      do: batch_load_interaction(current_user, object_ids, Bonfire.Data.Social.Like)
-
-    defp batch_load_boosted(current_user, object_ids),
-      do: batch_load_interaction(current_user, object_ids, Bonfire.Data.Social.Boost)
-
-    defp batch_load_bookmarked(current_user, object_ids),
-      do: batch_load_interaction(current_user, object_ids, Bonfire.Data.Social.Bookmark)
-
-    defp batch_load_followers_grants(object_ids, visibility_by_object) do
-      no_preset_ids =
-        Enum.filter(object_ids, fn id ->
-          case Map.get(visibility_by_object, id) do
-            %MapSet{} = s -> MapSet.size(s) == 0
-            nil -> true
-          end
-        end)
-
-      Bonfire.Boundaries.Controlleds.list_objects_with_followers_grants(no_preset_ids)
-    end
-
-    defp batch_load_mentions([]), do: %{}
-
-    defp batch_load_mentions(object_ids) do
-      import Ecto.Query
-      alias Bonfire.Tag.Tagged
-
-      base_map = Map.new(object_ids, fn id -> {id, []} end)
-
-      tagged_records =
-        from(t in Tagged,
-          where: t.id in ^object_ids,
-          preload: [tag: [:character, :profile]]
-        )
-        |> repo().all()
-
-      mentions_map =
-        tagged_records
-        |> Enum.group_by(& &1.id)
-        |> Enum.map(fn {object_id, tags} ->
-          mentions =
-            tags
-            |> Enum.filter(fn tagged ->
-              tag = tagged.tag
-              character = tag && Map.get(tag, :character)
-
-              is_map(character) && !match?(%Ecto.Association.NotLoaded{}, character) &&
-                map_size(character) > 0
-            end)
-            |> Enum.map(fn tagged ->
-              tag = tagged.tag
-              character = Map.get(tag, :character) || %{}
-
-              %{
-                tag_id: tagged.tag_id,
-                character: character,
-                profile: Map.get(tag, :profile)
-              }
-            end)
-
-          {object_id, mentions}
-        end)
-        |> Map.new()
-
-      Map.merge(base_map, mentions_map)
-    end
-
-    defp batch_load_subjects([]), do: %{}
-
-    defp batch_load_subjects(subject_ids) do
-      import Ecto.Query
-      alias Bonfire.Data.Identity.User
-
-      users =
-        from(u in User,
-          where: u.id in ^subject_ids,
-          preload: [:profile, :character]
-        )
-        |> repo().all()
-
-      users_map =
-        users
-        |> Enum.map(fn user -> {user.id, user} end)
-        |> Map.new()
-
-      found_user_ids = Map.keys(users_map)
-      missing_ids = Enum.reject(subject_ids, &(&1 in found_user_ids))
-
-      characters_map =
-        if missing_ids != [] do
-          pointers =
-            from(p in Needle.Pointer,
-              where: p.id in ^missing_ids
-            )
-            |> repo().all()
-            |> repo().maybe_preload([:character, :profile, :peered])
-
-          pointers
-          |> Enum.filter(fn p ->
-            char = Map.get(p, :character)
-            is_map(char) && !match?(%Ecto.Association.NotLoaded{}, char)
-          end)
-          |> Enum.map(fn p ->
-            {p.id,
-             %{
-               id: p.id,
-               character: Map.get(p, :character),
-               profile: Map.get(p, :profile),
-               peered: Map.get(p, :peered)
-             }}
-          end)
-          |> Map.new()
-        else
-          %{}
-        end
-
-      Map.merge(characters_map, users_map)
-    end
-
-    defp extract_subject_ids_for_batch_load(edges) do
-      edges
-      |> Enum.flat_map(fn edge ->
-        activity = Map.get(edge, :node) || edge
-        account = Map.get(activity, :account)
-        subject_id = Map.get(activity, :subject_id)
-
-        if subject_id && (is_nil(account) || account == %{} || !is_map(account)) do
-          [subject_id]
-        else
-          []
-        end
-      end)
-      |> Enum.uniq()
-    end
-
-    defp batch_load_post_content([]), do: %{}
-
-    defp batch_load_post_content(post_ids) do
-      import Ecto.Query
-      alias Bonfire.Data.Social.PostContent
-
-      from(pc in PostContent, where: pc.id in ^post_ids)
-      |> repo().all()
-      |> Enum.map(fn pc -> {pc.id, pc} end)
-      |> Map.new()
-    end
-
-    defp extract_object_ids_for_content_batch_load(edges) do
-      edges
-      |> Enum.flat_map(fn edge ->
-        activity = Map.get(edge, :node) || edge
-        object = Map.get(activity, :object) || %{}
-        object_post_content = Map.get(activity, :object_post_content)
-        object_id = Map.get(activity, :object_id)
-
-        object_has_content =
-          is_map(object) && map_size(object) > 0 &&
-            (Map.get(object, :post_content) || Map.get(object, "post_content"))
-
-        if object_id && !object_has_content && is_nil(object_post_content) do
-          [object_id]
-        else
-          []
-        end
-      end)
-      |> Enum.uniq()
-    end
-
-    defp feed_direct(params, current_user, feed_type) do
-      filters = Map.get(params, :filter) || Map.get(params, "filter", %{})
-
-      feed_name =
-        Bonfire.Common.Types.maybe_to_atom(
-          Map.get(filters, :feed_name) || Map.get(filters, "feed_name") ||
-            Bonfire.Social.FeedLoader.feed_name_or_default(:default, current_user)
-        )
-
-      pagination_args = Map.take(params, [:first, :last, :after, :before])
-      pagination_args = if map_size(pagination_args) == 0, do: %{first: 20}, else: pagination_args
-
-      feed_result =
-        Bonfire.Social.FeedActivities.feed(
-          feed_name,
-          filters,
-          current_user: current_user,
-          paginate: pagination_args,
-          preload: @masto_preloads
-        )
-
-      case feed_result do
-        {:error, _} = error ->
-          error
-
-        %{edges: edges, page_info: page_info} when is_list(edges) ->
-          edges =
-            Bonfire.Social.Activities.activity_preloads(edges, [:with_media],
-              current_user: current_user,
-              skip_boundary_check: true,
-              preload_nested: {[:activity], []}
-            )
-
-          activities =
-            Enum.map(edges, fn edge -> Map.get(edge, :activity, edge) end)
-
-          object_ids = extract_object_ids(activities)
-          batch_opts = batch_load_supplementary(current_user, object_ids, activities, feed_type)
-
-          mapper_fn =
-            if feed_type == :notification,
-              do: &Mappers.Notification.from_activity(&1, batch_opts),
-              else: &Mappers.Status.from_activity(&1, batch_opts)
-
-          items =
-            Enum.flat_map(activities, fn activity ->
-              case mapper_fn.(activity) do
-                item when is_map(item) -> [item]
-                _ -> []
-              end
-            end)
-
-          {:ok, items, page_info}
-
-        _ ->
-          {:ok, [], %{}}
-      end
-    end
-
-    defp extract_object_ids(activities) when is_list(activities) do
-      activities
-      |> Enum.map(&Map.get(&1, :object_id))
-      |> Enum.reject(&is_nil/1)
-      |> Enum.uniq()
-    end
-
-    defp batch_load_supplementary(current_user, object_ids, activities, :notification) do
-      batch_load_supplementary(current_user, object_ids) ++
-        [
-          subjects_by_id:
-            activities
-            |> Enum.map(&Map.get(&1, :subject_id))
-            |> Enum.reject(&is_nil/1)
-            |> Enum.uniq()
-            |> batch_load_subjects(),
-          post_content_by_id:
-            activities
-            |> Enum.map(&Map.get(&1, :object_id))
-            |> Enum.reject(&is_nil/1)
-            |> Enum.uniq()
-            |> batch_load_post_content()
-        ]
-    end
-
-    defp batch_load_supplementary(current_user, object_ids, _activities, _feed_type) do
-      batch_load_supplementary(current_user, object_ids)
-    end
-
+    # Batch-load supplementary per-object context, ready to merge into mapper opts.
     defp batch_load_supplementary(current_user, object_ids) do
-      visibility_by_object =
-        Bonfire.Boundaries.Controlleds.list_preset_acl_ids_on_objects(object_ids)
-
-      [
-        current_user: current_user,
-        interaction_states: batch_load_interaction_states(current_user, object_ids),
-        mentions_by_object: batch_load_mentions(object_ids),
-        visibility_by_object: visibility_by_object,
-        followers_grant_objects: batch_load_followers_grants(object_ids, visibility_by_object)
-      ]
+      current_user
+      |> BatchLoaders.load(object_ids)
+      |> Keyword.put(:current_user, current_user)
     end
 
     defp respond_with_feed(conn, params, {:ok, items, page_info}) do
@@ -1135,14 +887,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     defp fetch_and_respond_with_pin_state(conn, current_user, id, pinned_value) do
       opts = [
         current_user: current_user,
-        preload: [
-          :with_subject,
-          :with_creator,
-          :with_media,
-          :with_object_more,
-          :with_object_peered,
-          :with_reply_to
-        ]
+        preload: FeedPipeline.single_status_preloads()
       ]
 
       case Bonfire.Social.Objects.read(id, opts) do
@@ -1165,82 +910,62 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       end
     end
 
-    @graphql "query ($filter: SearchFilters!) {
-      search_activities(filter: $filter) {
-        #{@activity}
-      }
-    }"
-    def search_activities_gql(params, conn) do
-      graphql(conn, :search_activities_gql, params)
-    end
-
-    @graphql "query ($filter: SearchFilters!) {
-      search_users(filter: $filter) {
-        #{@user}
-      }
-    }"
-    def search_users_gql(params, conn) do
-      graphql(conn, :search_users_gql, params)
-    end
-
     @doc "Search for statuses/posts, called by the Search adapter."
-    def search_statuses_for_api(query, opts, conn) do
-      search_statuses(query, opts, conn)
-    end
-
-    defp search_statuses(query, opts, conn) do
+    def search_statuses_for_api(query, opts, _conn) do
       current_user = opts[:current_user]
 
-      case search_via_graphql_raw(conn, :search_activities_gql, :search_activities, query, opts) do
-        {:ok, activities} when is_list(activities) and activities != [] ->
-          object_ids =
-            activities
-            |> Enum.map(&get_activity_id/1)
-            |> Enum.reject(&is_nil/1)
-
-          interaction_states = batch_load_interaction_states(current_user, object_ids)
-
-          visibility_by_object =
-            Bonfire.Boundaries.Controlleds.list_preset_acl_ids_on_objects(object_ids)
-
-          followers_grant_objects =
-            batch_load_followers_grants(object_ids, visibility_by_object)
-
-          activities
-          |> Enum.flat_map(fn activity ->
-            case Mappers.Status.from_activity(activity,
-                   current_user: current_user,
-                   interaction_states: interaction_states,
-                   visibility_by_object: visibility_by_object,
-                   followers_grant_objects: followers_grant_objects
-                 ) do
-              status when is_map(status) and map_size(status) > 0 ->
-                if Map.get(status, "id"), do: [status], else: []
-
-              _ ->
-                []
-            end
-          end)
-
-        _ ->
-          []
-      end
+      query
+      |> search_status_ids(opts)
+      |> Enum.flat_map(&load_status_activity(&1, current_user))
+      |> map_statuses_with_batch(current_user)
     end
 
-    defp search_via_graphql_raw(conn, query_name, response_key, query, opts) do
-      filter = %{
-        "query" => query,
-        "limit" => opts[:limit] || 20,
-        "offset" => opts[:offset] || 0
-      }
+    # Search the closed index for Post hits and return their object ids. Returns []
+    # for an empty query or any backend failure (same as the previous behavior).
+    defp search_status_ids(query, opts) do
+      query = to_string(query)
 
-      case graphql(conn, query_name, %{"filter" => filter}) do
-        %{data: data} when is_map(data) ->
-          {:ok, Map.get(data, response_key, [])}
+      if query == "" do
+        []
+      else
+        Bonfire.Search.search(
+          query,
+          %{
+            index: :closed,
+            limit: opts[:limit] || 20,
+            offset: opts[:offset] || 0,
+            current_user: opts[:current_user]
+          },
+          [],
+          %{"index_type" => ["Bonfire.Data.Social.Post"]}
+        )
+        |> case do
+          %{hits: hits} when is_list(hits) ->
+            hits |> Enum.map(&Bonfire.Common.Enums.id/1) |> Enum.reject(&is_nil/1)
 
-        _ ->
-          {:error, :no_results}
+          _ ->
+            []
+        end
       end
+    rescue
+      e ->
+        error(e, "Search statuses failed")
+        []
+    end
+
+    defp map_statuses_with_batch(activities, current_user) do
+      object_ids = activities |> Enum.map(&get_activity_id/1) |> Enum.reject(&is_nil/1)
+      batch_opts = batch_load_supplementary(current_user, object_ids)
+
+      Enum.flat_map(activities, fn activity ->
+        case Mappers.Status.from_activity(activity, batch_opts) do
+          status when is_map(status) ->
+            if Map.get(status, "id"), do: [status], else: []
+
+          _ ->
+            []
+        end
+      end)
     end
 
     # ============================================
@@ -1280,7 +1005,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
     Implements GET /api/v1/reports
     """
-    def list_reports(params, conn) do
+    def list_reports(_params, conn) do
       current_user = conn.assigns[:current_user]
 
       with {:ok, current_user} <- require_user(current_user) do

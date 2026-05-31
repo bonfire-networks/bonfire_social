@@ -24,10 +24,42 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
 
   alias Bonfire.Me.Fake
   alias Bonfire.Posts
-  alias Bonfire.Social.{Likes, Bookmarks}
+  alias Bonfire.Social.Fake, as: SocialFake
+  alias Bonfire.Social.{Likes, Bookmarks, Boosts}
   alias Bonfire.Social.Graph.Follows
 
   @moduletag :masto_api
+
+  describe "GET /api/v1/timelines/public boosts (reblog rendering)" do
+    test "a boosted post renders as a reblog status", %{conn: conn} do
+      account = Fake.fake_account!()
+      viewer = Fake.fake_user!(account)
+      author = Fake.fake_user!()
+      booster = Fake.fake_user!()
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: author,
+          post_attrs: %{post_content: %{html_body: "original boosted content"}},
+          boundary: "public"
+        )
+
+      {:ok, _} = Boosts.boost(booster, post)
+
+      feed =
+        conn
+        |> masto_api_conn(user: viewer, account: account)
+        |> get("/api/v1/timelines/public")
+        |> json_response(200)
+
+      reblog_entry = Enum.find(feed, &(&1["reblog"] != nil))
+
+      assert reblog_entry, "expected a reblog entry in the public timeline"
+      assert reblog_entry["account"]["id"] == booster.id
+      assert reblog_entry["reblog"]["content"] =~ "original boosted content"
+      assert reblog_entry["reblog"]["account"]["id"] == author.id
+    end
+  end
 
   describe "GET /api/v1/timelines/home" do
     test "returns posts from followed users", %{conn: conn} do
@@ -338,6 +370,31 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
       post_ids = Enum.map(response, & &1["id"])
       assert post.id in post_ids
     end
+
+    test "does not include remote/federated posts", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+
+      {:ok, local_post} =
+        Posts.publish(
+          current_user: user,
+          post_attrs: %{post_content: %{html_body: "Local API post"}},
+          boundary: "public"
+        )
+
+      {remote_post, _} = SocialFake.create_test_content(:remote, nil, nil)
+
+      api_conn = masto_api_conn(conn, user: user, account: account)
+
+      response =
+        api_conn
+        |> get("/api/v1/timelines/local")
+        |> json_response(200)
+
+      post_ids = Enum.map(response, & &1["id"])
+      assert local_post.id in post_ids
+      refute remote_post.id in post_ids
+    end
   end
 
   describe "GET /api/v1/timelines/tag/:hashtag" do
@@ -361,6 +418,39 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
 
       assert is_list(response)
       # Note: The post may or may not appear depending on hashtag processing
+    end
+
+    test "returns only posts tagged with the requested hashtag", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+
+      target_tag = "masto_target_#{System.unique_integer([:positive])}"
+      other_tag = "masto_other_#{System.unique_integer([:positive])}"
+
+      {:ok, tagged_post} =
+        Posts.publish(
+          current_user: user,
+          post_attrs: %{post_content: %{html_body: "Post with ##{target_tag}"}},
+          boundary: "public"
+        )
+
+      {:ok, unrelated_post} =
+        Posts.publish(
+          current_user: user,
+          post_attrs: %{post_content: %{html_body: "Post with ##{other_tag}"}},
+          boundary: "public"
+        )
+
+      api_conn = masto_api_conn(conn, user: user, account: account)
+
+      response =
+        api_conn
+        |> get("/api/v1/timelines/tag/#{target_tag}")
+        |> json_response(200)
+
+      post_ids = Enum.map(response, & &1["id"])
+      assert tagged_post.id in post_ids
+      refute unrelated_post.id in post_ids
     end
 
     test "normalizes hashtag (removes # prefix)", %{conn: conn} do
@@ -403,6 +493,36 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
         |> json_response(200)
 
       assert is_list(response)
+    end
+
+    test "includes generated notifications with Mastodon type and status", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+      other_user = Fake.fake_user!()
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: user,
+          post_attrs: %{post_content: %{html_body: "Notify me via Mastodon API"}},
+          boundary: "public"
+        )
+
+      {:ok, _like} = Likes.like(other_user, post)
+
+      api_conn = masto_api_conn(conn, user: user, account: account)
+
+      response =
+        api_conn
+        |> get("/api/v1/notifications")
+        |> json_response(200)
+
+      assert is_list(response)
+
+      assert Enum.any?(response, fn notification ->
+               notification["type"] == "favourite" &&
+                 get_in(notification, ["account", "id"]) == other_user.id &&
+                 get_in(notification, ["status", "id"]) == post.id
+             end)
     end
 
     test "returns 401 when not authenticated", %{conn: conn} do
@@ -588,6 +708,35 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
       assert post.id in post_ids
     end
 
+    test "favourite entry is attributed to the post's author, not the liker", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+      author = Fake.fake_user!()
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: author,
+          post_attrs: %{post_content: %{html_body: "consistent favourite"}},
+          boundary: "public"
+        )
+
+      {:ok, _} = Likes.like(user, post)
+
+      api_conn = masto_api_conn(conn, user: user, account: account)
+
+      fav =
+        api_conn
+        |> get("/api/v1/favourites")
+        |> json_response(200)
+        |> Enum.find(&(&1["id"] == post.id))
+
+      assert fav, "liked post should appear in /favourites"
+      assert fav["content"] =~ "consistent favourite"
+      # The status is correctly attributed to the post's author, not the liker.
+      assert get_in(fav, ["account", "id"]) == author.id
+      assert fav["favourited"] == true
+    end
+
     test "returns empty list when no favourites", %{conn: conn} do
       account = Fake.fake_account!()
       user = Fake.fake_user!(account)
@@ -636,6 +785,78 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
       assert is_list(response)
       post_ids = Enum.map(response, & &1["id"])
       assert post.id in post_ids
+    end
+
+    test "includes the user's boosts (reblogs) with the original content", %{conn: conn} do
+      account = Fake.fake_account!()
+      booster = Fake.fake_user!(account)
+      author = Fake.fake_user!()
+
+      {:ok, original} =
+        Posts.publish(
+          current_user: author,
+          post_attrs: %{post_content: %{html_body: "original to boost"}},
+          boundary: "public"
+        )
+
+      {:ok, _} = Bonfire.Social.Boosts.boost(booster, original)
+
+      response =
+        conn
+        |> masto_api_conn(user: booster, account: account)
+        |> get("/api/v1/accounts/#{booster.id}/statuses")
+        |> json_response(200)
+
+      reblog_entry = Enum.find(response, &(&1["reblog"] != nil))
+      assert reblog_entry, "the booster's profile should include their boost as a reblog"
+      assert get_in(reblog_entry, ["reblog", "content"]) =~ "original to boost"
+      assert get_in(reblog_entry, ["reblog", "account", "id"]) == author.id
+    end
+
+    test "returns only statuses authored by the requested account", %{conn: conn} do
+      account = Fake.fake_account!()
+      viewer = Fake.fake_user!(account)
+      author = Fake.fake_user!()
+      other_user = Fake.fake_user!()
+
+      {:ok, authored_post} =
+        Posts.publish(
+          current_user: author,
+          post_attrs: %{post_content: %{html_body: "Author profile API post"}},
+          boundary: "public"
+        )
+
+      {:ok, other_post} =
+        Posts.publish(
+          current_user: other_user,
+          post_attrs: %{post_content: %{html_body: "Other user API post"}},
+          boundary: "public"
+        )
+
+      {:ok, reply_to_author} =
+        Posts.publish(
+          current_user: other_user,
+          post_attrs: %{
+            post_content: %{html_body: "Other user reply on author profile"},
+            reply_to_id: authored_post.id
+          },
+          boundary: "public"
+        )
+
+      {:ok, _like} = Likes.like(author, other_post)
+
+      api_conn = masto_api_conn(conn, user: viewer, account: account)
+
+      response =
+        api_conn
+        |> get("/api/v1/accounts/#{author.id}/statuses")
+        |> json_response(200)
+
+      status_ids = Enum.map(response, & &1["id"])
+
+      assert authored_post.id in status_ids
+      refute other_post.id in status_ids
+      refute reply_to_author.id in status_ids
     end
 
     test "returns statuses by another user", %{conn: conn} do

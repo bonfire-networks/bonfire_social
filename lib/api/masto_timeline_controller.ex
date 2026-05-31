@@ -83,15 +83,15 @@ if Application.compile_env(:bonfire_social, :modularity) != :disabled do
       if params["pinned"] == "true" do
         Adapter.pinned_statuses(user_id, params, conn)
       else
-        filter =
-          params
-          |> Map.take(["feed_name", "feed_ids", "creators", "objects", "tags"])
-          |> Map.put("subjects", [user_id])
-          |> Map.put("preload", ["with_subject"])
-
+        # The `user_activities` preset is filtered by subject (the actor) and excludes
+        # likes/follows, so the account's posts AND boosts/reblogs both appear — which
+        # the previous `creators` (object author) filter excluded boosts from.
         params
-        |> PaginationHelpers.build_feed_params(filter)
-        |> then(&Adapter.feed(&1, conn))
+        |> PaginationHelpers.build_feed_params(%{
+          "feed_name" => "user_activities",
+          "preload" => @masto_feed_preloads
+        })
+        |> then(&Adapter.user_activities_feed(user_id, &1, conn))
       end
     end
   end
