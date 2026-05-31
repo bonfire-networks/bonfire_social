@@ -279,7 +279,7 @@ defmodule Bonfire.Social.LivePush do
           (e(subject, :profile, :name, nil) || e(subject, :character, :username, "")) <>
             " #{verb_display}",
         message: Text.text_only(content || ""),
-        url: path(object),
+        url: resolve_push_url(object),
         icon: icon || Config.get([:ui, :theme, :instance_icon], nil),
         notify_category: notify_category
       }
@@ -354,6 +354,21 @@ defmodule Bonfire.Social.LivePush do
     else
       debug("Bonfire.Notify not enabled, skipping push notifications")
     end
+  end
+
+  defp resolve_push_url(object) do
+    # For Media link previews (type "Page"), the external URL is stored in media.path.
+    # Optionally, Use it as the push tap destination so the user lands on the actual content,
+    # not the Bonfire wrapper post.
+    # Also check the quoted/replied-to object's media path (for broadcast-quote of a link preview).
+    url =
+      if Config.get([__MODULE__, :broadcast_media_canonical_link], false) do
+        e(object, :path, nil)
+      end
+
+    if is_binary(url) and String.starts_with?(url, "http"),
+      do: url,
+      else: e(object, :quote, :path, nil) || path(object)
   end
 
   defp verb_to_notify_category(verb) do
