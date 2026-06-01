@@ -920,8 +920,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       |> map_statuses_with_batch(current_user)
     end
 
-    # Search the closed index for Post hits and return their object ids. Returns []
-    # for an empty query or any backend failure (same as the previous behavior).
+    # Search the public index (where discoverable Posts are indexed — same index the web UI
+    # search uses; the `:closed` index only holds boundary-restricted content) and return their
+    # object ids. Returns [] for an empty query or any backend failure.
     defp search_status_ids(query, opts) do
       query = to_string(query)
 
@@ -931,7 +932,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         Bonfire.Search.search(
           query,
           %{
-            index: :closed,
+            index: :public,
             limit: opts[:limit] || 20,
             offset: opts[:offset] || 0,
             current_user: opts[:current_user]
