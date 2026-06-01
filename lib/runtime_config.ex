@@ -9,13 +9,18 @@ defmodule Bonfire.Social.RuntimeConfig do
   def config do
     import Config
 
+    # `config/0` runs once at boot under the default locale, so user-facing strings here use
+    # `l_noop/1` (mark for extraction, return the msgid untranslated) rather than `l/1` (which
+    # would freeze the boot-locale value). The actual per-request translation happens at the point
+    # of display, via `Bonfire.Social.Feeds.localise_preset/1` — which covers `name`/`description`
+    # plus the `assigns` display keys (`page_title`/`feed_title`/`feedback_title`/`feedback_message`).
     config :bonfire_social, Bonfire.Social.Feeds,
       query_with_deferred_join: true,
       feed_presets: [
         my: %{
-          name: l("Following"),
+          name: l_noop("Following"),
           built_in: true,
-          description: l("Activities of people I follow"),
+          description: l_noop("Activities of people I follow"),
           filters: %FeedFilters{
             feed_name: :my,
             exclude_activity_types: [:follow]
@@ -26,14 +31,14 @@ defmodule Bonfire.Social.RuntimeConfig do
           # New structured UI-specific settings
           assigns: [
             page: "following",
-            feed_title: l("Following"),
+            feed_title: l_noop("Following"),
             enable_marker: true
           ]
         },
         explore: %{
-          name: l("Explore"),
+          name: l_noop("Explore"),
           built_in: true,
-          description: l("All activities"),
+          description: l_noop("All activities"),
           filters: %FeedFilters{
             feed_name: :explore,
             exclude_activity_types: [:like, :follow, :request]
@@ -42,19 +47,19 @@ defmodule Bonfire.Social.RuntimeConfig do
           icon: "ph:compass-duotone",
           assigns: [
             page: "explore",
-            page_title: "Explore activities",
-            feedback_title: l("There are no activities to explore"),
+            page_title: l_noop("Explore activities"),
+            feedback_title: l_noop("There are no activities to explore"),
             feedback_message:
-              l(
+              l_noop(
                 "It seems like the paint is still fresh and there are no activities to explore..."
               ),
             enable_marker: true
           ]
         },
         local: %{
-          name: l("Local"),
+          name: l_noop("Local"),
           built_in: true,
-          description: l("Local instance activities"),
+          description: l_noop("Local instance activities"),
           filters: %FeedFilters{
             feed_name: :local,
             origin: :local,
@@ -64,16 +69,17 @@ defmodule Bonfire.Social.RuntimeConfig do
           icon: "ph:campfire-duotone",
           assigns: [
             page: "local",
-            page_title: l("Explore local activities"),
-            feedback_title: l("Your local feed is empty"),
-            feedback_message: l("It seems like the paint is still fresh on this instance..."),
+            page_title: l_noop("Explore local activities"),
+            feedback_title: l_noop("Your local feed is empty"),
+            feedback_message:
+              l_noop("It seems like the paint is still fresh on this instance..."),
             enable_marker: true
           ]
         },
         remote: %{
-          name: l("Remote"),
+          name: l_noop("Remote"),
           built_in: true,
-          description: l("Remote activities from other federated instances"),
+          description: l_noop("Remote activities from other federated instances"),
           filters: %FeedFilters{
             feed_name: :remote,
             origin: :remote,
@@ -82,19 +88,19 @@ defmodule Bonfire.Social.RuntimeConfig do
           icon: "ph:planet-duotone",
           assigns: [
             page: "remote",
-            page_title: "Activities from the fediverse",
-            feedback_title: l("Your fediverse feed is empty"),
+            page_title: l_noop("Activities from the fediverse"),
+            feedback_title: l_noop("Your fediverse feed is empty"),
             feedback_message:
-              l(
+              l_noop(
                 "It seems you and other local users do not follow anyone on a different federated instance"
               ),
             enable_marker: true
           ]
         },
         notifications: %{
-          name: l("Notifications"),
+          name: l_noop("Notifications"),
           built_in: true,
-          description: l("Notifications for me"),
+          description: l_noop("Notifications for me"),
           filters: %FeedFilters{
             feed_name: :notifications,
             show_objects_only_once: false,
@@ -109,10 +115,10 @@ defmodule Bonfire.Social.RuntimeConfig do
             showing_within: :notifications,
             back: true,
             page_header_icon: "carbon:notification",
-            page_title: l("Notifications"),
-            feedback_title: l("You have no notifications"),
+            page_title: l_noop("Notifications"),
+            feedback_title: l_noop("You have no notifications"),
             feedback_message:
-              l(
+              l_noop(
                 "Did you know you can customise which activities you want to be notified for in your settings ?"
               )
             # page_header_aside: [
@@ -125,9 +131,9 @@ defmodule Bonfire.Social.RuntimeConfig do
           ]
         },
         likes: %{
-          name: l("Liked"),
+          name: l_noop("Liked"),
           built_in: true,
-          description: l("Things I've liked"),
+          description: l_noop("Things I've liked"),
           filters: %FeedFilters{activity_types: [:like]},
           parameterized: %{subjects: [:me]},
           current_user_required: true,
@@ -137,15 +143,15 @@ defmodule Bonfire.Social.RuntimeConfig do
             hide_filters: true,
             showing_within: :feed_by_subject,
             page: "likes",
-            page_title: "Likes",
+            page_title: l_noop("Likes"),
             no_header: false,
-            feedback_title: l("Have you not liked anything yet?")
+            feedback_title: l_noop("Have you not liked anything yet?")
           ]
         },
         bookmarks: %{
-          name: l("Bookmarked"),
+          name: l_noop("Bookmarked"),
           built_in: true,
-          description: l("Content I've bookmarked"),
+          description: l_noop("Content I've bookmarked"),
           filters: %FeedFilters{activity_types: :bookmark},
           current_user_required: true,
           parameterized: %{subjects: [:me]},
@@ -156,15 +162,15 @@ defmodule Bonfire.Social.RuntimeConfig do
             hide_filters: true,
             showing_within: :feed_by_subject,
             page: "bookmarks",
-            page_title: l("Bookmarks"),
+            page_title: l_noop("Bookmarks"),
             no_header: false,
-            feedback_title: l("Have you not bookmarked anything yet?")
+            feedback_title: l_noop("Have you not bookmarked anything yet?")
           ]
         },
         # saved: %{ # TODO: seems we can't query by multiple activity types here?
-        #   name: l("Saved"),
+        #   name: l_noop("Saved"),
         #   built_in: true,
-        #   description: l("Activities I've found interesting and bookmarked, liked, or boosted"),
+        #   description: l_noop("Activities I've found interesting and bookmarked, liked, or boosted"),
         #   filters: %FeedFilters{activity_types: [ :bookmark, :like, :boost ]},
         #   current_user_required: true,
         #   parameterized: %{subjects: [:me]},
@@ -175,23 +181,23 @@ defmodule Bonfire.Social.RuntimeConfig do
         #     # hide_filters: true,
         #     showing_within: :feed_by_subject,
         #     page: "saved",
-        #     page_title: l("Saved"),
+        #     page_title: l_noop("Saved"),
         #     no_header: false,
-        #     feedback_title: l("Have you not saved anything yet?")
+        #     feedback_title: l_noop("Have you not saved anything yet?")
         #   ]
         # },
         my_requests: %{
-          name: l("Requests"),
+          name: l_noop("Requests"),
           built_in: true,
-          description: l("Pending requests for me"),
+          description: l_noop("Pending requests for me"),
           filters: %FeedFilters{feed_name: :notifications, activity_types: [:request]},
           current_user_required: true,
           icon: "ph:user-plus-duotone"
         },
         my_boosts: %{
-          name: l("Boosted"),
+          name: l_noop("Boosted"),
           built_in: true,
-          description: l("Activities I've shared"),
+          description: l_noop("Activities I've shared"),
           filters: %FeedFilters{activity_types: [:boost]},
           parameterized: %{subjects: [:me]},
           current_user_required: true,
@@ -201,42 +207,42 @@ defmodule Bonfire.Social.RuntimeConfig do
             hide_filters: true,
             showing_within: :feed_by_subject,
             page: "boosts",
-            page_title: l("Boosted"),
+            page_title: l_noop("Boosted"),
             no_header: false,
-            feedback_title: l("Have you not boosted anything yet?")
+            feedback_title: l_noop("Have you not boosted anything yet?")
           ]
         },
 
         # User-specific feeds
         user_activities: %{
-          name: l("User activities"),
+          name: l_noop("User activities"),
           built_in: true,
-          description: l("A specific user's activities"),
+          description: l_noop("A specific user's activities"),
           icon: "ph:user-duotone",
           # $username is replaced at runtime
           filters: %FeedFilters{exclude_activity_types: [:like, :follow]},
           parameterized: %{subjects: [:by]}
         },
         user_followers: %{
-          name: l("Followers"),
+          name: l_noop("Followers"),
           built_in: true,
-          description: l("Followers of a specific user"),
+          description: l_noop("Followers of a specific user"),
           icon: "ph:users-duotone",
           filters: %FeedFilters{activity_types: [:follow]},
           parameterized: %{objects: [:by]}
         },
         user_following: %{
-          name: l("Following"),
+          name: l_noop("Following"),
           built_in: true,
-          description: l("Users followed by a specific user"),
+          description: l_noop("Users followed by a specific user"),
           icon: "ph:user-plus-duotone",
           filters: %FeedFilters{activity_types: [:follow]},
           parameterized: %{subjects: [:by]}
         },
         user_by_object_type: %{
-          name: l("User posts"),
+          name: l_noop("User posts"),
           built_in: true,
-          description: l("Posts by a specific user"),
+          description: l_noop("Posts by a specific user"),
           icon: "ph:note-duotone",
           filters: %FeedFilters{creators: [:by], object_types: [:post]},
           parameterized: %{creators: :by}
@@ -250,8 +256,8 @@ defmodule Bonfire.Social.RuntimeConfig do
         # Content type feeds
         posts: %{
           built_in: true,
-          name: l("Posts"),
-          description: l("Posts (not including replies)"),
+          name: l_noop("Posts"),
+          description: l_noop("Posts (not including replies)"),
           #  TODO: exclude articles?
           filters: %FeedFilters{object_types: [:post], exclude_activity_types: [:reply]},
           icon: "ph:note-duotone",
@@ -260,9 +266,9 @@ defmodule Bonfire.Social.RuntimeConfig do
           ]
         },
         articles: %{
-          name: l("Articles"),
+          name: l_noop("Articles"),
           built_in: true,
-          description: l("All known articles"),
+          description: l_noop("All known articles"),
           filters: %FeedFilters{
             # ActivityPub Event type
             object_types: ["article"],
@@ -271,10 +277,10 @@ defmodule Bonfire.Social.RuntimeConfig do
           icon: "ph:article-ny-times-duotone",
           assigns: [
             page: "articles",
-            page_title: l("Articles"),
-            feedback_title: l("No articles found"),
+            page_title: l_noop("Articles"),
+            feedback_title: l_noop("No articles found"),
             feedback_message:
-              l(
+              l_noop(
                 "There are no known articles to show. Articles from other federated platforms like WriteFreely or Ghost will appear here."
               ),
             enable_marker: true
@@ -283,15 +289,15 @@ defmodule Bonfire.Social.RuntimeConfig do
         # TODO?
         # discussions: %{
         #   built_in: true,
-        #   name: l("Discussions"),
-        #   description: l("Posts and replies"),
+        #   name: l_noop("Discussions"),
+        #   description: l_noop("Posts and replies"),
         #   filters: %FeedFilters{object_types: [:post]},
         #   icon: "mingcute:comment-fill"
         # },
         research: %{
-          name: l("Research"),
+          name: l_noop("Research"),
           built_in: true,
-          description: l("All known research publications"),
+          description: l_noop("All known research publications"),
           filters: %FeedFilters{
             media_types: [:research]
           },
@@ -302,27 +308,27 @@ defmodule Bonfire.Social.RuntimeConfig do
         },
         # TEMPORARILY DISABLED:
         # images: %{
-        #   name: l("Images"),
+        #   name: l_noop("Images"),
         #   built_in: true,
-        #   description: l("All known images"),
+        #   description: l_noop("All known images"),
         #   filters: %FeedFilters{
         #     media_types: ["image"]
         #   },
         #   icon: "ph:image-duotone"
         # },
         # videos: %{
-        #   name: l("Videos"),
+        #   name: l_noop("Videos"),
         #   built_in: true,
-        #   description: l("All known videos"),
+        #   description: l_noop("All known videos"),
         #   filters: %FeedFilters{
         #     media_types: ["video"]
         #   },
         #   icon: "ph:video-duotone"
         # },
         # audio: %{
-        #   name: l("Audio"),
+        #   name: l_noop("Audio"),
         #   built_in: true,
-        #   description: l("All known audio"),
+        #   description: l_noop("All known audio"),
         #   filters: %FeedFilters{
         #     media_types: ["audio"]
         #   },
@@ -331,39 +337,39 @@ defmodule Bonfire.Social.RuntimeConfig do
 
         # Hashtag feeds
         hashtag: %{
-          name: l("Hashtag"),
+          name: l_noop("Hashtag"),
           built_in: true,
-          description: l("Activities with a specific hashtag"),
+          description: l_noop("Activities with a specific hashtag"),
           icon: "ph:hash-duotone",
           filters: %FeedFilters{},
           parameterized: %{tags: [:tags]}
         },
         mentions: %{
-          name: l("Mentions"),
+          name: l_noop("Mentions"),
           built_in: true,
-          description: l("Activities with a specific @ mention"),
+          description: l_noop("Activities with a specific @ mention"),
           icon: "ph:at-duotone",
           filters: %FeedFilters{},
           parameterized: %{tags: [:tags]}
         },
         curated: %{
-          name: l("Curated"),
+          name: l_noop("Curated"),
           built_in: true,
-          description: l("Curated activities"),
+          description: l_noop("Curated activities"),
           icon: "ph:push-pin-duotone",
           filters: %FeedFilters{feed_name: :curated},
           assigns: [
             showing_within: :feed_by_subject,
             page: "curated",
-            page_title: l("(Curated activities)"),
+            page_title: l_noop("(Curated activities)"),
             no_header: :current_user_id,
-            feedback_title: l("Nothing curated yet?")
+            feedback_title: l_noop("Nothing curated yet?")
           ]
         },
         books: %{
-          name: l("Books"),
+          name: l_noop("Books"),
           built_in: true,
-          description: l("All known books"),
+          description: l_noop("All known books"),
           filters: %FeedFilters{
             # ActivityPub Event type
             object_types: ["Edition", "Book"],
@@ -372,19 +378,19 @@ defmodule Bonfire.Social.RuntimeConfig do
           icon: "ph:book-duotone",
           assigns: [
             page: "books",
-            page_title: l("Books"),
-            feedback_title: l("No books found"),
+            page_title: l_noop("Books"),
+            feedback_title: l_noop("No books found"),
             feedback_message:
-              l(
+              l_noop(
                 "There are no known books to show. Books from other federated platforms like BookWyrm will appear here."
               ),
             enable_marker: true
           ]
         },
         events: %{
-          name: l("Events"),
+          name: l_noop("Events"),
           built_in: true,
-          description: l("Events and gatherings"),
+          description: l_noop("Events and gatherings"),
           filters: %FeedFilters{
             # ActivityPub Event type
             object_types: ["Event"],
@@ -393,19 +399,19 @@ defmodule Bonfire.Social.RuntimeConfig do
           icon: "ph:calendar-blank-duotone",
           assigns: [
             page: "events",
-            page_title: l("Events"),
-            feedback_title: l("No events found"),
+            page_title: l_noop("Events"),
+            feedback_title: l_noop("No events found"),
             feedback_message:
-              l(
+              l_noop(
                 "There are no upcoming events to show. Events from other federated platforms like Mobilizon will appear here."
               )
           ],
           enable_marker: true
         },
         polls: %{
-          name: l("Polls"),
+          name: l_noop("Polls"),
           built_in: true,
-          description: l("Polls and group decisions"),
+          description: l_noop("Polls and group decisions"),
           filters: %FeedFilters{
             # Bonfire.Poll.Question pointable; federated AP `Question` objects
             # land here too via Bonfire.Poll.Questions.federation_module/0.
@@ -415,16 +421,16 @@ defmodule Bonfire.Social.RuntimeConfig do
           icon: "ph:list-checks-duotone",
           assigns: [
             page: "polls",
-            page_title: l("Polls"),
-            feedback_title: l("No polls yet"),
-            feedback_message: l("There are no polls to show. Create one to start a vote!"),
+            page_title: l_noop("Polls"),
+            feedback_title: l_noop("No polls yet"),
+            feedback_message: l_noop("There are no polls to show. Create one to start a vote!"),
             enable_marker: true
           ]
         },
         my_flags: %{
-          name: l("Flagged"),
+          name: l_noop("Flagged"),
           built_in: true,
-          description: l("Content I've flagged"),
+          description: l_noop("Content I've flagged"),
           filters: %FeedFilters{
             activity_types: [:flag],
             show_objects_only_once: false
@@ -438,13 +444,13 @@ defmodule Bonfire.Social.RuntimeConfig do
             scope: :instance,
             hide_filters: true,
             page: "flags",
-            feedback_title: l("You have not flagged any activities...")
+            feedback_title: l_noop("You have not flagged any activities...")
           ]
         },
         flagged_content: %{
-          name: l("Flagged (all)"),
+          name: l_noop("Flagged (all)"),
           built_in: true,
-          description: l("Content flagged by anyone (for mods only)"),
+          description: l_noop("Content flagged by anyone (for mods only)"),
           filters: %FeedFilters{
             activity_types: [:flag],
             show_objects_only_once: false
@@ -458,12 +464,12 @@ defmodule Bonfire.Social.RuntimeConfig do
             scope: :instance,
             hide_filters: true,
             page: "flags",
-            feedback_title: l("You have no flagged activities to review...")
+            feedback_title: l_noop("You have no flagged activities to review...")
           ]
         },
 
         # messages: %{
-        #   name: l("Messages"),
+        #   name: l_noop("Messages"),
         #   built_in: true, description: ("Messages for me"),
         #   filters: %FeedFilters{feed_name: :messages},
         #   current_user_required: true
@@ -471,9 +477,9 @@ defmodule Bonfire.Social.RuntimeConfig do
 
         # Combined filters examples
         trending_discussions: %{
-          name: l("Top discussions"),
+          name: l_noop("Top discussions"),
           built_in: true,
-          description: l("Popular discussions from the last 7 days"),
+          description: l_noop("Popular discussions from the last 7 days"),
           filters: %FeedFilters{
             time_limit: 7,
             sort_by: :reply_count,
@@ -487,9 +493,9 @@ defmodule Bonfire.Social.RuntimeConfig do
           ]
         },
         recent_discussions: %{
-          name: l("Recent discussions"),
+          name: l_noop("Recent discussions"),
           built_in: true,
-          description: l("Threads sorted by most recent activity"),
+          description: l_noop("Threads sorted by most recent activity"),
           filters: %FeedFilters{
             sort_order: :desc,
             # NOTE: should not include :boost to work in groups (maybe can later dynamic exlude it from the exclusions when constructing a group query)
@@ -504,9 +510,9 @@ defmodule Bonfire.Social.RuntimeConfig do
         },
         # TEMPORARILY DISABLED:
         # trending: %{
-        #   name: l("Trending"),
+        #   name: l_noop("Trending"),
         #   built_in: true,
-        #   description: l("Most boosted activities from the last week"),
+        #   description: l_noop("Most boosted activities from the last week"),
         #   filters: %FeedFilters{
         #     feed_name: :trending,
         #     exclude_activity_types: [:reply],
@@ -518,15 +524,15 @@ defmodule Bonfire.Social.RuntimeConfig do
         #   icon: "ph:trend-up-duotone",
         #   assigns: [
         #     page: "trending",
-        #     page_title: l("Trending"),
-        #     feedback_title: l("No trending posts yet"),
-        #     feedback_message: l("Posts need to be boosted to appear in trending")
+        #     page_title: l_noop("Trending"),
+        #     feedback_title: l_noop("No trending posts yet"),
+        #     feedback_message: l_noop("Posts need to be boosted to appear in trending")
         #   ]
         # },
         # trending_links: %{
-        #   name: l("Trending links"),
+        #   name: l_noop("Trending links"),
         #   built_in: true,
-        #   description: l("Most boosted posts with links"),
+        #   description: l_noop("Most boosted posts with links"),
         #   filters: %FeedFilters{
         #     feed_name: :trending_links,
         #     exclude_activity_types: [:reply, :boost],
@@ -540,16 +546,16 @@ defmodule Bonfire.Social.RuntimeConfig do
         #   icon: "ph:newspaper-duotone",
         #   assigns: [
         #     page: "trending_links",
-        #     page_title: l("Trending links"),
-        #     feedback_title: l("No trending links yet"),
-        #     feedback_message: l("Share interesting links to see them here")
+        #     page_title: l_noop("Trending links"),
+        #     feedback_title: l_noop("No trending links yet"),
+        #     feedback_message: l_noop("Share interesting links to see them here")
         #     # hide_filters: true
         #   ]
         # },
         local_media: %{
-          name: l("Local Media"),
+          name: l_noop("Local Media"),
           built_in: true,
-          description: l("All media shared on the local instance"),
+          description: l_noop("All media shared on the local instance"),
           filters: %FeedFilters{
             origin: :local,
             media_types: ["*"]
