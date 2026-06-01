@@ -86,10 +86,10 @@ defmodule Bonfire.Social.Feeds do
     {:error, :not_found}
   end
 
-  # Preset `name`/`description` and the `assigns` display keys (`page_title`/`feed_title`/
-  # `feedback_*`) are marked with `l_noop/1` in `RuntimeConfig.config/0` (extracted, but frozen to the
-  # boot locale). `localise_tree/3` re-translates them per-request against the `bonfire_social` domain
-  # — the single point of translation, applied at both preset-fetch chokepoints above.
+  # Preset `name`/`description` and the `assigns` display keys (`page_title`/`feed_title`/`feedback_*`)
+  # use `l/1` in `RuntimeConfig.config/0`, so they're frozen to the boot locale. `localise_tree/3`
+  # re-translates them per-request against the `bonfire_social` domain — the single point of
+  # translation, applied at both preset-fetch chokepoints above.
 
   defp check_feed_preset_permitted(nil, _opts), do: {:error, :not_found}
 
