@@ -923,8 +923,8 @@ defmodule Bonfire.Social.PostContents do
             false
 
           _ ->
-            # if remote Note does't have a sensitive field but has a summary, assume in needs a CW (doesn't apply to Article)
-            post_data["type"] != "Article" and is_binary(post_data["summary"]) and
+            # if remote object doesn't have a sensitive field but has a summary, assume it needs a CW (only applies to Note objects)
+            post_data["type"] == "Note" and is_binary(post_data["summary"]) and
               post_data["summary"] != ""
         end,
       primary_image: e(post_data, "image", nil) || e(post_data, "icon", nil),
