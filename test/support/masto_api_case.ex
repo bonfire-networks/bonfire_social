@@ -10,8 +10,6 @@ defmodule Bonfire.Social.MastoApiCase do
       import Phoenix.ConnTest
 
       import Bonfire.UI.Common.Testing.Helpers
-      import Bonfire.Me.Fake
-
       import Bonfire.Social.MastoApiCase.Helpers
 
       @endpoint Application.compile_env!(:bonfire, :endpoint_module)

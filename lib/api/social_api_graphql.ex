@@ -73,9 +73,57 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       field(:activities, list_of(:activity),
         description: "All activities associated with this post (TODO)"
       )
+
+      field :context, :any_context do
+        resolve(fn post, _, _ ->
+          subject_if_category =
+            if e(post, :subject, :table_id, nil) == "2AGSCANBECATEG0RY0RHASHTAG",
+              do: e(post, :subject, nil)
+
+          context =
+            e(post, :context, nil) || subject_if_category ||
+              e(post, :tree, :parent, nil) ||
+              e(post, :object, :tree, :parent, nil)
+
+          context_id =
+            Bonfire.Common.Enums.id(context) ||
+              e(post, :context_id, nil) ||
+              e(post, :tree, :parent_id, nil) ||
+              e(post, :object, :tree, :parent_id, nil)
+
+          cond do
+            is_struct(context) -> {:ok, context}
+            is_binary(context_id) -> {:ok, %{id: context_id}}
+            true -> {:ok, nil}
+          end
+        end)
+      end
+
+      field :permission_grants, list_of(:boundary_permission) do
+        resolve(fn post, _, _ ->
+          acl_grants = e(post, :controlled, :acl, :grants, nil) || %{}
+
+          if acl_grants == %{} do
+            {:ok, []}
+          else
+            {verb_permissions, _} =
+              Bonfire.Boundaries.VerbGrants.transform_acl_to_verb_format(acl_grants)
+
+            grants =
+              for {verb, circle_map} <- verb_permissions do
+                can_ids = for {id, :can} <- circle_map, do: %{id: id, label: nil}
+                cannot_ids = for {id, :cannot} <- circle_map, do: %{id: id, label: nil}
+                %{permission: verb, can: can_ids, cannot: cannot_ids}
+              end
+
+            {:ok, grants}
+          end
+        end)
+      end
     end
 
     object :other do
+      field(:id, :id)
       field(:json, :json)
     end
 
@@ -770,8 +818,19 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
         arg(:reply_to, :id)
         arg(:to_circles, list_of(:id))
+        arg(:boundary, :string)
+        arg(:permissions, list_of(:boundary_permission_input))
+        arg(:context_id, :id)
 
         resolve(&create_post/2)
+      end
+
+      field :edit_post, :post do
+        arg(:post_id, non_null(:id))
+        arg(:post_content, :post_content_input)
+        arg(:boundary, :string)
+
+        resolve(&update_post/2)
       end
 
       field :follow, :activity do
@@ -1100,10 +1159,71 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     # defp feed(_), do: {:ok, nil}
 
     defp create_post(args, info) do
-      if user = GraphQL.current_user(info) do
-        Bonfire.Posts.publish(post_attrs: args, current_user: user, context: info)
-      else
-        {:error, "Not authenticated"}
+      with {:ok, user} <- GraphQL.current_user_or_not_logged_in(info) do
+        verb_grants =
+          case args[:permissions] do
+            perms when is_list(perms) and perms != [] ->
+              perms
+              |> Map.new(fn %{permission: verb, can: can_ids, cannot: cannot_ids} ->
+                circle_map =
+                  Enum.map(can_ids || [], &{&1, :can}) ++
+                    Enum.map(cannot_ids || [], &{&1, :cannot})
+
+                {verb, Map.new(circle_map)}
+              end)
+              |> Bonfire.Boundaries.VerbGrants.transform_to_verb_grants_format()
+
+            _ ->
+              nil
+          end
+
+        opts =
+          [
+            post_attrs: args,
+            current_user: user,
+            context: info
+          ]
+          |> maybe_put(:boundary, args[:boundary])
+          |> maybe_put(:verb_grants, verb_grants)
+          |> maybe_put(:context_id, args[:context_id])
+
+        with {:ok, post} <- Bonfire.Posts.publish(opts) do
+          {:ok, maybe_put(post, :context_id, args[:context_id])}
+        end
+      end
+    end
+
+    defp update_post(%{post_id: post_id} = args, info) do
+      with {:ok, user} <- GraphQL.current_user_or_not_logged_in(info),
+           {:ok, post} <- Bonfire.Common.Needles.get(post_id, current_user: user) do
+        post =
+          if content = args[:post_content] do
+            case Bonfire.Posts.update(post, %{post_content: content}) do
+              {:ok, updated} ->
+                updated
+
+              {:error, e} ->
+                error(e, "Failed to update post content")
+
+              e ->
+                warn(e, "Unexpected error while updating post content")
+                post
+            end
+          else
+            post
+          end
+
+        if boundary = args[:boundary] do
+          previous_preset = Bonfire.Boundaries.Controlleds.get_preset_on_object(post)
+
+          if boundary != previous_preset,
+            do:
+              Bonfire.Social.Objects.reset_preset_boundary(user, post, previous_preset,
+                to_boundaries: boundary
+              )
+        end
+
+        {:ok, post}
       end
     end
 
