@@ -1793,7 +1793,6 @@ defmodule Bonfire.Social.FeedLoader do
     dedup_by_thread? = false
 
     # NOTE: WIP like/boost dedup should be handled at query level via make_distinct_by_like_boost_object
-    #  = false
     dedup_by_like_boost? =
       (filters[:dedup_by_like_or_boost] != false || show_objects_only_once?)
       |> debug("dedup_by_like_boost?")
@@ -1821,6 +1820,20 @@ defmodule Bonfire.Social.FeedLoader do
                e(item, :activity, :replied, :reply_to_id, nil) ||
                  e(item, :activity, :replied, :thread_id, nil) ||
                  e(item, :activity, :object_id, nil) || e(item, :activity, :id, nil) ||
+                 Enums.id(item)}
+
+            @like_verb_id = verb_id when show_objects_only_once? == true ->
+              # Likes stay in their own verb-specific group so multiple likes aggregate
+              # (subjects_more) without collapsing with create/boost
+              {verb_id,
+               e(item, :activity, :object_id, nil) || e(item, :activity, :id, nil) ||
+                 Enums.id(item)}
+
+            _verb_id when show_objects_only_once? == true ->
+              # Collapse all other verbs (create, boost, announce, …) by object_id alone
+              # so a group boost doesn't show the same post twice in the feed
+              {nil,
+               e(item, :activity, :object_id, nil) || e(item, :activity, :id, nil) ||
                  Enums.id(item)}
 
             verb_id ->
