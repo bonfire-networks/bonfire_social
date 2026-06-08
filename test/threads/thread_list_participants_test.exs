@@ -342,6 +342,53 @@ defmodule Bonfire.Social.ThreadsParticipantsTest do
     assert Enum.all?(participants, &(not is_nil(e(&1, :character, nil))))
   end
 
+  test "list_participants of a boost activity excludes the booster, keeps the author" do
+    author = Fake.fake_user!("author")
+    booster = Fake.fake_user!("booster")
+
+    {:ok, post} =
+      Posts.publish(
+        current_user: author,
+        post_attrs: %{post_content: %{html_body: "<p>boost me</p>"}},
+        boundary: "public"
+      )
+
+    assert {:ok, boost} = Bonfire.Social.Boosts.boost(booster, post)
+
+    # the preview/thread UI passes the boost activity here
+    boost_activity =
+      e(boost, :activity, nil) || boost
+
+    participants = Threads.list_participants(boost_activity, post.id)
+    participant_ids = Enum.map(participants, &id/1)
+
+    assert author.id in participant_ids
+    refute booster.id in participant_ids
+  end
+
+  test "list_participants of a like activity excludes the liker, keeps the author" do
+    author = Fake.fake_user!("author")
+    liker = Fake.fake_user!("liker")
+
+    {:ok, post} =
+      Posts.publish(
+        current_user: author,
+        post_attrs: %{post_content: %{html_body: "<p>like me</p>"}},
+        boundary: "public"
+      )
+
+    assert {:ok, like} = Bonfire.Social.Likes.like(liker, post)
+
+    like_activity =
+      e(like, :activity, nil) || like
+
+    participants = Threads.list_participants(like_activity, post.id)
+    participant_ids = Enum.map(participants, &id/1)
+
+    assert author.id in participant_ids
+    refute liker.id in participant_ids
+  end
+
   test "list_participants_for_threads excludes boost-activity subjects from edges" do
     author = Fake.fake_user!("author")
     booster = Fake.fake_user!("booster")

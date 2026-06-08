@@ -563,8 +563,7 @@ defmodule Bonfire.Social.Threads do
       if thread_or_object_id == :skip do
         nil
       else
-        thread_or_object_id || e(activity_or_object, :replied, :thread_id, nil) ||
-          e(activity_or_object, :replied, :thread_id, nil)
+        thread_or_object_id || e(activity_or_object, :replied, :thread_id, nil)
       end
 
     # Participants already known from preloaded data — exclude from DB query.
@@ -572,9 +571,17 @@ defmodule Bonfire.Social.Threads do
       (e(activity_or_object, :tags, []) ++ e(activity_or_object, :activity, :tags, []))
       |> Enum.filter(&user_tag?/1)
 
+    verb_id =
+      e(activity_or_object, :verb_id, nil) ||
+        e(activity_or_object, :activity, :verb_id, nil)
+
+    subject_if_participant =
+      if is_nil(verb_id) or verb_id in participant_verb_ids(),
+        do: e(activity_or_object, :subject, nil)
+
     already_known =
       [
-        e(activity_or_object, :subject, nil),
+        subject_if_participant,
         e(activity_or_object, :created, :creator, nil),
         e(activity_or_object, :object, :created, :creator, nil),
         e(activity_or_object, :replied, :reply_to, :created, :creator, nil),
