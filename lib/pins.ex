@@ -38,7 +38,17 @@ defmodule Bonfire.Social.Pins do
 
   @behaviour Bonfire.Federate.ActivityPub.FederationModules
   def federation_module,
-    do: ["Pin", {"Create", "Pin"}, {"Undo", "Pin"}, {"Delete", "Pin"}]
+    do: [
+      "Pin",
+      {"Create", "Pin"},
+      {"Undo", "Pin"},
+      {"Delete", "Pin"},
+      # owns the Mastodon-compatible `featured` collection (a user's pinned objects):
+      # served via collection_items/collection_total, mutated via Add/Remove
+      {:collection, "featured"},
+      {"Add", "featured"},
+      {"Remove", "featured"}
+    ]
 
   defp instance_scope,
     do: Bonfire.Boundaries.Circles.get_id(:local) || "3SERSFR0MY0VR10CA11NSTANCE"
@@ -252,10 +262,22 @@ defmodule Bonfire.Social.Pins do
   end
 
   def unpin(subject, %{} = pinned, scope) do
+    scope = scope || subject
+
+    # federate a `Remove` from the owner's `featured` collection *before* deleting locally — the
+    # Remove activity is built synchronously from the pin, so the pin row is safe to delete
+    # afterwards. We force the Pins federation module and use `:remove` (not `:delete`, which
+    # `Outgoing` intercepts into a generic object-`Delete` instead of a collection `Remove`).
+    with {:ok, pin} <- get(scope, pinned) do
+      Social.maybe_federate(scope, :remove, repo().preload(pin, edge: [:object]), nil,
+        federation_module: __MODULE__
+      )
+    end
+
     # delete the Pin
-    Edges.delete_by_both(scope || subject, Pin, pinned)
+    Edges.delete_by_both(scope, Pin, pinned)
     # delete the pin activity & feed entries
-    Activities.delete_by_subject_verb_object(scope || subject, :pin, pinned)
+    Activities.delete_by_subject_verb_object(scope, :pin, pinned)
 
     # Note: the pin count is automatically decremented by DB triggers
   end
@@ -513,29 +535,120 @@ defmodule Bonfire.Social.Pins do
   #   end
   # end
 
+  # MLS-over-AP / Mastodon `featured`: this module owns the `featured` collection type. The generic
+  # adapter routes `collection_items`/`collection_total` here by type (see
+  # `Bonfire.Federate.ActivityPub.Adapter`). We return the owner's pinned objects' **pointer ids**;
+  # the AP lib resolves ids → ap_ids/objects when serving (so no per-item lookups here).
+
+  @doc "Member refs (pointer ids) of a user's `featured` collection — their pinned objects. Supports `limit:`/`offset:`."
+  def collection_items(collection, opts \\ []) do
+    pinned_object_ids(collection, opts) || []
+  end
+
+  @doc "`totalItems` for a `featured` collection."
+  def collection_total(collection, _opts \\ []) do
+    case featured_pins_subject(collection) do
+      subject when is_binary(subject) -> pins_query(subject) |> repo().aggregate(:count)
+      _ -> nil
+    end
+  end
+
+  defp pinned_object_ids(collection, opts) do
+    case featured_pins_subject(collection) do
+      subject when is_binary(subject) ->
+        pins_query(subject)
+        |> select([_p, e], e.object_id)
+        |> order_by([_p, e], desc: e.id)
+        |> maybe_limit(opts[:limit])
+        |> maybe_offset(opts[:offset])
+        |> repo().many()
+
+      _ ->
+        nil
+    end
+  end
+
+  # the `featured` collection id encodes the owner actor's id as its uuid → the pins subject.
+  # The service/Application actor's featured maps to instance-wide pins (subject = instance scope).
+  defp featured_pins_subject(collection) do
+    with %{data: %{"id" => id}} <- collection,
+         {:ok, "featured", uuid} <- ActivityPub.Utils.parse_collection_ap_id(id) do
+      case ActivityPub.Utils.service_actor() do
+        {:ok, %{id: ^uuid}} -> instance_scope()
+        _ -> uuid
+      end
+    else
+      _ -> nil
+    end
+  end
+
+  defp pins_query(uuid) do
+    from(p in Pin,
+      join: e in Bonfire.Data.Edges.Edge,
+      on: e.id == p.id,
+      where: e.subject_id == ^uuid
+    )
+  end
+
+  defp maybe_limit(query, limit) when is_integer(limit), do: limit(query, ^limit)
+  defp maybe_limit(query, _), do: query
+  defp maybe_offset(query, offset) when is_integer(offset), do: offset(query, ^offset)
+  defp maybe_offset(query, _), do: query
+
   @doc """
-  Publishes an ActivityPub activity for a pin.
-
-  ## Parameters
-
-    - subject: The subject of the pin activity.
-    - verb: The verb of the activity (not used - currently pins are federated out as likes)
-    - pin: The `Pin` object.
+  Publishes an ActivityPub activity for a pin: an `Add` (pin) or `Remove` (unpin) against the
+  pinner's `featured` collection (MLS-over-AP / Mastodon featured).
 
   ## Examples
 
       iex> Bonfire.Social.Pins.ap_publish_activity(%User{id: "user123"}, :create, %Pin{})
       {:ok, %ActivityPub.Object{}}
-
   """
-  def ap_publish_activity(subject, _verb, pin) do
-    # info(pin)
+  def ap_publish_activity(subject, verb, pin) do
+    # user pins federate on the user's `featured`; instance-wide pins (subject = instance scope) on
+    # the instance's service/Application actor's `featured`
+    with {:ok, pinner} <- pin_federating_actor(subject || pin.edge.subject_id) do
+      object_ap_id =
+        Bonfire.Common.URIs.canonical_url(e(pin.edge, :object, nil) || pin.edge.object_id)
 
-    with {:ok, pinner} <-
-           ActivityPub.Actor.get_cached(pointer: subject || pin.edge.subject_id),
-         {:ok, object} <-
-           ActivityPub.Object.get_cached(pointer: e(pin.edge, :object, nil) || pin.edge.object_id) do
-      ActivityPub.like(%{actor: pinner, object: object, pointer: uid(pin)})
+      target = ActivityPub.Utils.collection_ap_id("featured", uid(pinner))
+      remove? = verb in [:remove, :delete, :undo, :unpin]
+
+      params = %{
+        actor: pinner,
+        object: object_ap_id,
+        target: target,
+        # only the Add (pin creation) is anchored to the Pin's pointer; a Remove (unpin) isn't a
+        # persistent object and must not reuse the pin's pointer (unique `ap_object.pointer_id`)
+        pointer: if(remove?, do: nil, else: uid(pin)),
+        local: true
+      }
+
+      if remove?, do: ActivityPub.remove(params), else: ActivityPub.add(params)
+    end
+  end
+
+  defp pin_federating_actor(subject_id) do
+    if subject_id == instance_scope(),
+      do: ActivityPub.Utils.service_actor(),
+      else: ActivityPub.Actor.get_cached(pointer: subject_id)
+  end
+
+  @doc """
+  Receives an incoming `Add`/`Remove` to an actor's `featured` collection (MLS-over-AP / Mastodon
+  featured) and reflects it as a (remote-originated) pin/unpin by that actor. Routed here by
+  `incoming.ex` via the `{activity_type, "featured"}` federation_module key. `local: false` so it is
+  not re-federated.
+  """
+  def ap_receive_activity(creator, %{data: %{"type" => type}}, object)
+      when type in ["Add", "Remove"] do
+    with object_id when is_binary(object_id) <-
+           e(object, :pointer_id, nil) || e(object, :pointer, :id, nil),
+         {:ok, pinned} <-
+           Bonfire.Common.Needles.get(object_id, current_user: creator, skip_boundary_check: true) do
+      if type == "Add",
+        do: pin(creator, pinned, nil, local: false),
+        else: unpin(creator, pinned)
     end
   end
 
