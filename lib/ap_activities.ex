@@ -536,37 +536,17 @@ defmodule Bonfire.Social.APActivities do
       end)
       |> debug("loaded pointer objects")
 
-    # Load AP objects
+    # Load AP objects (one batched query, drops unresolved)
     ap_objs =
-      Enum.map(ap_ids, fn {id, _, _, _} ->
-        debug(id, "info: loading ap_id")
+      ap_ids
+      |> Enum.map(fn {id, _, _, _} -> id end)
+      |> ActivityPub.Object.list_cached()
 
-        case ActivityPub.Object.get_cached(id) do
-          {:ok, obj} ->
-            debug(obj, "info: loaded ap_id object")
-
-          other ->
-            warn(other, "info: failed to load ap_id")
-            nil
-        end
-      end)
-      |> Enum.filter(& &1)
-
-    # Load AP actors
+    # Load AP actors (one batched query, drops unresolved)
     ap_actor_objs =
-      Enum.map(ap_actor_ids, fn {id, _, _, _} ->
-        debug(id, "info: loading ap_actor_id")
-
-        case ActivityPub.Actor.get_cached(id) do
-          {:ok, obj} ->
-            debug(obj, "info: loaded ap_actor_id object")
-
-          other ->
-            warn(other, "info: failed to load ap_actor_id")
-            nil
-        end
-      end)
-      |> Enum.filter(& &1)
+      ap_actor_ids
+      |> Enum.map(fn {id, _, _, _} -> id end)
+      |> ActivityPub.Actor.list_cached()
 
     # Merge all loaded objects into a map by id
     (pointer_objs ++ ap_objs ++ ap_actor_objs)
