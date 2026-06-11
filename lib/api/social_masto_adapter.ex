@@ -1139,7 +1139,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     @doc "Get pinned statuses for a user"
     def pinned_statuses(user_id, params, conn) do
       current_user = conn.assigns[:current_user]
-      limit = PaginationHelpers.validate_limit(params["limit"] || 20)
+      # Mastodon status lists cap at 40
+      limit = PaginationHelpers.validate_limit(params["limit"] || 20, max: 40)
 
       case Bonfire.Social.Pins.list_by(user_id, limit: limit, preload: :object_with_creator) do
         %{edges: edges} when is_list(edges) ->

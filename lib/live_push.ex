@@ -78,16 +78,18 @@ defmodule Bonfire.Social.LivePush do
   end
 
   def hide_activity(feed_id, activity_id) do
+    # Payload mirrors `:new_activity` (carries `feed_ids`) so subscribers like the
+    # Mastodon streaming socket can match the deletion to the right stream(s).
     PubSub.broadcast(feed_id, {
       {Bonfire.Social.Feeds, :hide_activity},
-      activity_id
+      [feed_ids: List.wrap(feed_id), activity_id: activity_id]
     })
 
     # also send to the thread
     # TODO: only do this for thread roots, and otherwise notify the actual thread
     PubSub.broadcast(activity_id, {
       {Bonfire.Social.Feeds, :hide_activity},
-      activity_id
+      [feed_ids: List.wrap(activity_id), activity_id: activity_id]
     })
 
     # TODO!
@@ -125,9 +127,10 @@ defmodule Bonfire.Social.LivePush do
       :new_message,
       %{
         feed_ids: inbox_feed_ids,
-        thread_id: e(object, :replied, :thread_id, nil) || e(activity, :replied, :thread_id, nil)
-        # TODO: include the message?
-        # activity: activity
+        thread_id: e(object, :replied, :thread_id, nil) || e(activity, :replied, :thread_id, nil),
+        # the message activity, so consumers (e.g. Mastodon streaming) can render
+        # the conversation's last_status and participating account
+        activity: activity
       }
     })
 
@@ -281,7 +284,9 @@ defmodule Bonfire.Social.LivePush do
         message: Text.text_only(content || ""),
         url: resolve_push_url(object),
         icon: icon || Config.get([:ui, :theme, :instance_icon], nil),
-        notify_category: notify_category
+        notify_category: notify_category,
+        # the account that triggered this notification, for push `policy` enforcement
+        from_id: uid(subject)
       }
 
       # WIP: send email notif?
