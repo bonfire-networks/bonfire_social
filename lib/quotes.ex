@@ -186,6 +186,9 @@ defmodule Bonfire.Social.Quotes do
               e(quoted_object, :created, :creator, nil) ||
               e(request, :edge, :object, :created, :creator_id, nil) ||
               e(quoted_object, :created, :creator_id, nil))
+           # preload `character.peered` so the downstream `is_local?` checks (in
+           # `Requests.ap_publish_activity`/federation) classify locality without an on-demand raise
+           |> repo().maybe_preload(character: [:peered])
            |> info("determined_quoted_object_creator"),
          quote_post_author =
            (quote_post_author ||
@@ -193,6 +196,7 @@ defmodule Bonfire.Social.Quotes do
               e(quote_post, :created, :creator, nil) ||
               e(request, :edge, :subject, :created, :creator_id, nil) ||
               e(quote_post, :created, :creator_id, nil))
+           |> repo().maybe_preload(character: [:peered])
            |> info("determined_quote_post_author"),
          {:ok, quote_post} <-
            update_quote_add(quote_post_author, quote_post, quoted_object, opts)
@@ -468,7 +472,9 @@ defmodule Bonfire.Social.Quotes do
     quote_object =
       (e(request, :edge, :subject, nil) ||
          quote_object)
-      |> repo().maybe_preload(created: [creator: [:character]])
+      # preload `created.creator.character.peered` so the `is_local?(quote_object)` check below
+      # classifies the quote post's locality without an on-demand (raising) preload
+      |> repo().maybe_preload(created: [creator: [character: [:peered]]])
 
     quoted_object =
       (e(request, :edge, :object, nil) ||

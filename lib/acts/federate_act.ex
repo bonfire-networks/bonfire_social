@@ -12,12 +12,14 @@ defmodule Bonfire.Social.Acts.Federate do
   use Arrows
   import Bonfire.Epics
   import Untangle
+  use Bonfire.Common.E
 
   # alias Bonfire.Epics
   # alias Bonfire.Epics.Act
   alias Bonfire.Epics.Epic
 
   alias Bonfire.Common.Utils
+  alias Bonfire.Common.Enums
   # alias Bonfire.Data.Social.Post
   alias Bonfire.Social
   # alias Ecto.Changeset
@@ -30,10 +32,54 @@ defmodule Bonfire.Social.Acts.Federate do
 
     on = Keyword.get(act.options, :on, :post)
     ap_on = Keyword.get(act.options, :ap_on, :ap_object)
-    object = epic.assigns[on]
     options = epic.assigns[:options]
     action = Keyword.get(options, :action, :insert)
     current_user = Utils.current_user(options)
+    object = epic.assigns[on]
+
+    # resolve the object's creator locality once here and pass it along (via `Epic.assign(on, ...)` at the end of run/2), so the `is_local?(object)` check below — and later acts — classify without an N+1 per-build preload
+    io_inspect(object, "FEDERATE_DEBUG object BEFORE resolve")
+
+    object =
+      case object do
+        %{} = object ->
+          if is_struct(current_user) and
+               e(object, :created, :creator_id, nil) == Enums.id(current_user) do
+            # the object was just created by current_user, so carry their already locality-marked struct in for free
+            put_in(object.created.creator, current_user)
+            |> io_inspect("FEDERATE_DEBUG object AFTER put_in")
+          else
+            # boost/reply/delete of someone else's object: preload its locality once — the object's
+            # own `character.peered` (e.g. a user being deleted) and/or its `created.creator`'s
+            object
+            |> Social.repo().maybe_preload(created: [creator: [character: [:peered]]])
+            |> Social.repo().maybe_preload(
+              #  in case it is a Category or such
+              character: [:peered]
+            )
+            |> io_inspect("FEDERATE_DEBUG object AFTER maybe_preload")
+          end
+
+        object ->
+          object
+      end
+
+    io_inspect(
+      %{
+        action: action,
+        current_user:
+          {Enums.id(current_user), e(current_user, :peered, :MISSING),
+           e(current_user, :character, :peered, :MISSING)},
+        object:
+          {Enums.id(object), e(object, :peered, :MISSING),
+           e(object, :character, :peered, :MISSING),
+           e(object, :created, :creator, :peered, :MISSING)}
+      },
+      "FEDERATE_DEBUG id / peered / character.peered / created.creator.peered"
+    )
+
+    io_inspect(current_user, "FEDERATE_DEBUG full current_user")
+    io_inspect(object, "FEDERATE_DEBUG full object")
     # current_user_id = Types.uid(current_user)
 
     cond do
@@ -87,7 +133,8 @@ defmodule Bonfire.Social.Acts.Federate do
 
         nil
 
-      not Social.is_local?(current_user) or not Social.is_local?(object) ->
+      not Social.is_local?(current_user) or
+          not Social.is_local?(object) ->
         warn(current_user, "ActivityPub: Skip pushing remote object")
 
         # should we do this here?

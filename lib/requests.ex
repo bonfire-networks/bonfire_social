@@ -65,7 +65,9 @@ defmodule Bonfire.Social.Requests do
     repo().transact_with(fn ->
       with {:ok, %{edge: %{object: object, subject: subject}} = request} <-
              accept(request, opts)
-             |> repo().maybe_preload(edge: [:subject, :object])
+             # preload the subject's `character.peered` so the outgoing `is_local?` check in
+             # `ap_publish_activity` classifies the actor without an on-demand preload
+             |> repo().maybe_preload(edge: [:object, subject: [character: [:peered]]])
              |> debug("accepted"),
            # remove the Edge (helps so we can recreate one linked to the Follow, because of the unique key on subject/object/table_id)
            _ <- Edges.delete_by_both(subject, type_module, object),

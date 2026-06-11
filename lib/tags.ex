@@ -131,7 +131,9 @@ defmodule Bonfire.Social.Tags do
     preload? = true
 
     mentions
-    |> if(preload?, do: repo().maybe_preload(..., [:character]), else: ...)
+    # preload `character.peered` so the "local" preset's `is_local?` filter classifies without an
+    # on-demand (raising) preload
+    |> if(preload?, do: repo().maybe_preload(..., character: [:peered]), else: ...)
   end
 
   @doc """
@@ -189,7 +191,10 @@ defmodule Bonfire.Social.Tags do
 
   def list_tags_quote(post) do
     post
-    |> repo().maybe_preload(tags: [:character])
+    # a quoted tag may be an actor (mention) or a post — preload `character.peered` and
+    # `created.creator.character.peered` so the quote-federation `is_local?` checks classify
+    |> repo().maybe_preload(tags: [created: [creator: [character: [:peered]]]])
+    |> repo().maybe_preload(tags: [character: [:peered]])
     |> tags_quote()
   end
 

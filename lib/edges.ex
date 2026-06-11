@@ -483,6 +483,13 @@ defmodule Bonfire.Social.Edges do
     |> proload(edge: [subject: {"subject_", [:character]}])
   end
 
+  # like :subject_character but also loads `character.peered` so locality (`is_local?`) can be
+  # classified without an on-demand (raising) preload
+  defp maybe_proload(query, :subject_character_peered, _object_type) do
+    query
+    |> proload(edge: [subject: {"subject_", [character: [:peered]]}])
+  end
+
   defp maybe_proload(query, :subject_profile, _object_type) do
     query
     # |> proload(:edge)
