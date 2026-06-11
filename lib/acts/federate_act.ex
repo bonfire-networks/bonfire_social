@@ -38,7 +38,7 @@ defmodule Bonfire.Social.Acts.Federate do
     object = epic.assigns[on]
 
     # resolve the object's creator locality once here and pass it along (via `Epic.assign(on, ...)` at the end of run/2), so the `is_local?(object)` check below — and later acts — classify without an N+1 per-build preload
-    io_inspect(object, "FEDERATE_DEBUG object BEFORE resolve")
+    debug(object, "FEDERATE_DEBUG object BEFORE resolve")
 
     object =
       case object do
@@ -47,7 +47,7 @@ defmodule Bonfire.Social.Acts.Federate do
                e(object, :created, :creator_id, nil) == Enums.id(current_user) do
             # the object was just created by current_user, so carry their already locality-marked struct in for free
             put_in(object.created.creator, current_user)
-            |> io_inspect("FEDERATE_DEBUG object AFTER put_in")
+            |> debug("FEDERATE_DEBUG object AFTER put_in")
           else
             # boost/reply/delete of someone else's object: preload its locality once — the object's
             # own `character.peered` (e.g. a user being deleted) and/or its `created.creator`'s
@@ -57,14 +57,14 @@ defmodule Bonfire.Social.Acts.Federate do
               #  in case it is a Category or such
               character: [:peered]
             )
-            |> io_inspect("FEDERATE_DEBUG object AFTER maybe_preload")
+            |> debug("FEDERATE_DEBUG object AFTER maybe_preload")
           end
 
         object ->
           object
       end
 
-    io_inspect(
+    debug(
       %{
         action: action,
         current_user:
@@ -78,8 +78,8 @@ defmodule Bonfire.Social.Acts.Federate do
       "FEDERATE_DEBUG id / peered / character.peered / created.creator.peered"
     )
 
-    io_inspect(current_user, "FEDERATE_DEBUG full current_user")
-    io_inspect(object, "FEDERATE_DEBUG full object")
+    debug(current_user, "FEDERATE_DEBUG full current_user")
+    debug(object, "FEDERATE_DEBUG full object")
     # current_user_id = Types.uid(current_user)
 
     cond do

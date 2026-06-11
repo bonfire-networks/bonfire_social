@@ -155,6 +155,10 @@ defmodule Bonfire.Social.LivePush do
 
   def prepare_activity(%Activity{} = activity, opts \\ []) do
     Activities.activity_preloads(activity, [:feed_metadata, :feed_postload], opts)
+    # resolve subject/creator the same way the feed/read paths do, so a locality-marked
+    # `current_user`/`subject_user` (carrying `:peered`) is used — letting the live-rendered
+    # activity classify `is_local?` without an on-demand raising preload
+    |> Activities.prepare_subject_and_creator(opts)
 
     # |> debug("make sure that all needed assocs are preloaded without n+1")
   end

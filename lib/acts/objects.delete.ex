@@ -49,9 +49,12 @@ defmodule Bonfire.Social.Acts.Objects.Delete do
 
         id = Map.get(object, :id)
 
+        # only fall back to an Actor lookup when the deleted thing itself acts as an actor (i.e. has a character), for a plain object (e.g. a Post) whose AP object was pruned, resolving it as an actor would mis-treat the object and hit `is_local?` on a non-actor
         ap_object =
           ActivityPub.Object.get_cached!(pointer: id) ||
-            ActivityPub.Actor.get_cached!(pointer: id)
+            if(Map.get(object, :character),
+              do: ActivityPub.Actor.get_cached!(pointer: id)
+            )
 
         epic
         |> Epic.assign(as, object)

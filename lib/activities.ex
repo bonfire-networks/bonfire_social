@@ -2408,9 +2408,11 @@ defmodule Bonfire.Social.Activities do
       (subject_id || id(subject))
       |> debug("subject_id")
 
-    # Get subject or try to find it using user_if_loaded
-    # || subject_id
-    subject || user_if_loaded(:subject, subject_id, opts)
+    # Prefer a locality-marked `current_user`/`subject_user` (which carries `:peered`) when it
+    # matches this subject, so a later `is_local?` classifies without a raising on-demand preload —
+    # the query/postload-loaded `subject` often has `:character` but not `character.peered`.
+    # Falls back to the loaded `subject` for any other subject.
+    user_if_loaded(:subject, subject_id, opts) || subject
   end
 
   def find_creator(opts) do

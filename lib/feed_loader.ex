@@ -1658,7 +1658,7 @@ defmodule Bonfire.Social.FeedLoader do
 
           other ->
             other
-            #  |> io_inspect("expected a list of results from feed_contains?")
+            #  |> debug("expected a list of results from feed_contains?")
         end
     end
   end
@@ -1703,7 +1703,7 @@ defmodule Bonfire.Social.FeedLoader do
     case feed_contains_query(feed_name, filters, opts) do
       %Ecto.Query{} = query ->
         query
-        # |> io_inspect("feed_contains_query")
+        # |> debug("feed_contains_query")
         |> repo().many()
 
       e ->
