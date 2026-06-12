@@ -8,7 +8,10 @@ if Application.compile_env(:bonfire_social, :modularity) != :disabled do
     alias Bonfire.Boundaries.API.GraphQLMasto.Adapter, as: BoundariesAdapter
     alias Bonfire.API.MastoCompat.{PaginationHelpers, Helpers}
 
-    def home(conn, params), do: feed_by_name(conn, "my", params)
+    # `Markers.timeline_feed_name/1` is the canonical home↔my mapping, shared
+    # with the markers API so reading positions stay on the same feed.
+    def home(conn, params),
+      do: feed_by_name(conn, Bonfire.Social.Markers.timeline_feed_name("home"), params)
 
     def public(conn, params) do
       feed_name = if params["local"] == "true", do: "local", else: "explore"

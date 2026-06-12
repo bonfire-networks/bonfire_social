@@ -294,8 +294,10 @@ defmodule Bonfire.Social.Seen do
     # |> repo().maybe_preload(edge: [:object])
   end
 
+  # Public so other account-based trackers (e.g. `Bonfire.Social.Markers`) can
+  # share the exact same subject normalization.
   @doc false
-  defp normalize_subject(subject) do
+  def normalize_subject(subject) do
     # Use existing current_account helper to infer account from user
     # Falls back to subject itself if no account found (for direct account input)
     current_account(subject) || subject

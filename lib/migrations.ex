@@ -44,6 +44,7 @@ defmodule Bonfire.Social.Migrations do
       # Bonfire.Data.Social.Message.Migration.migrate_message()
       # Bonfire.Data.Social.Request.Migration.migrate_request()
       Bonfire.Data.Social.Seen.Migration.migrate_seen()
+      Bonfire.Social.Marker.Migration.migrate_marker()
       Bonfire.Data.Social.Pin.Migration.migrate_pin()
       Bonfire.Data.Social.Sensitive.Migration.migrate_sensitive()
       add_paper_trail()
@@ -73,6 +74,7 @@ defmodule Bonfire.Social.Migrations do
       require Bonfire.Data.Social.Pin.Migration
       require Bonfire.Data.Social.Sensitive.Migration
 
+      Bonfire.Social.Marker.Migration.migrate_marker()
       Bonfire.Data.Social.Sensitive.Migration.migrate_sensitive()
       Bonfire.Data.Social.Pin.Migration.migrate_pin()
       Bonfire.Data.Social.Seen.Migration.migrate_seen()
