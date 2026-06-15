@@ -12,8 +12,7 @@ defmodule Bonfire.Social.RuntimeConfig do
     # days before a saved reading position is too old to resume from
     # (`:enabled` defaults to true in code so the settings toggle still
     # renders as checked-by-default rather than config-inherited)
-    config :bonfire_social, Bonfire.Social.Markers,
-      resume_max_age_days: 3
+    config :bonfire_social, Bonfire.Social.Markers, resume_max_age_days: 3
 
     # `l/1` here marks these for extraction, but `config/0` runs once at boot under the default
     # locale, so the stored value is effectively the untranslated msgid. The actual per-request
