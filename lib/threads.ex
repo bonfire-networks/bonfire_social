@@ -661,7 +661,8 @@ defmodule Bonfire.Social.Threads do
     end)
     |> Ecto.Query.exclude(:distinct)
     |> distinct([activity: activity], desc: activity.subject_id)
-    |> proload(activity: [subject: [:character, profile: :icon]])
+    # `character.peered` for participant locality (is_local? in message thread list)
+    |> proload(activity: [subject: [profile: :icon, character: [:peered]]])
     |> then(fn q ->
       if exclude_table_ids != [],
         do:

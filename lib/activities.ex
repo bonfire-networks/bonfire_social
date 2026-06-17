@@ -540,7 +540,7 @@ defmodule Bonfire.Social.Activities do
 
           if Extend.module_enabled?(Bonfire.Classify.Tree, opts),
             do:
-              proload(query, activity: [tree: [parent: [:profile, :character]]])
+              proload(query, activity: [tree: [parent: [:profile, character: [:peered]]]])
               |> debug("with_parent proload: query with proload"),
             else: query
 
@@ -724,7 +724,8 @@ defmodule Bonfire.Social.Activities do
             object: [
               created: [
                 creator:
-                  {repo().reject_preload_ids(skip_loading_user_ids), [:character, profile: :icon]}
+                  {repo().reject_preload_ids(skip_loading_user_ids),
+                   [character: [:peered], profile: :icon]}
               ]
             ]
           ]
@@ -739,7 +740,8 @@ defmodule Bonfire.Social.Activities do
 
         :with_subject ->
           # Subject here is standing in for the creator of the root. One day it may be replaced with it.
-          [subject: [:character, profile: :icon]]
+          # (:peered loaded for locality classification)
+          [subject: [character: [:peered], profile: :icon]]
 
         :with_verb ->
           [:verb]
@@ -786,7 +788,9 @@ defmodule Bonfire.Social.Activities do
           )
 
           if Extend.module_enabled?(Bonfire.Classify.Tree, opts),
-            do: [tree: [parent: [:profile, :character]]] |> debug("with_parent: preload list"),
+            do:
+              [tree: [parent: [:profile, character: [:peered]]]]
+              |> debug("with_parent: preload list"),
             else: [] |> debug("with_parent: Tree not enabled, skipping")
 
         :with_reply_to ->
@@ -1069,7 +1073,8 @@ defmodule Bonfire.Social.Activities do
            ]}
       ]
     )
-    |> maybe_preload_subject_peered(:with_object_peered not in (opts[:preload] || []))
+    # always preload actor peered (UI falls back to actor locality when object.peered is nil)
+    |> maybe_preload_subject_peered(true)
   end
 
   def maybe_preload_subject(query, skip_loading_user_ids, opts) do
@@ -1095,7 +1100,8 @@ defmodule Bonfire.Social.Activities do
            ]}
       ]
     )
-    |> maybe_preload_subject_peered(:with_object_peered not in (opts[:preload] || []))
+    # always preload actor peered (UI falls back to actor locality when object.peered is nil)
+    |> maybe_preload_subject_peered(true)
   end
 
   defp maybe_preload_subject_peered(query, true) do
@@ -1152,7 +1158,8 @@ defmodule Bonfire.Social.Activities do
            ]}
       ]
     )
-    |> maybe_preload_creator_peered(:with_object_peered not in (opts[:preload] || []))
+    # always preload actor peered (see maybe_preload_subject)
+    |> maybe_preload_creator_peered(true)
 
     # |> IO.inspect(label: "maybe_preload_creator")
   end

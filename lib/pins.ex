@@ -208,7 +208,13 @@ defmodule Bonfire.Social.Pins do
 
     case create(pinner, pinned, opts) do
       {:ok, pin} ->
-        Social.maybe_federate_and_gift_wrap_activity(pinner, pin)
+        # preload pinner + object `:peered` for federation's locality check
+        Social.maybe_federate_and_gift_wrap_activity(
+          repo().maybe_preload(pinner, character: [:peered]),
+          repo().maybe_preload(pin,
+            edge: [object: [:peered, created: [creator: [character: [:peered]]]]]
+          )
+        )
 
       {:error, e} ->
         case get(pinner, pinned) do
@@ -269,7 +275,15 @@ defmodule Bonfire.Social.Pins do
     # afterwards. We force the Pins federation module and use `:remove` (not `:delete`, which
     # `Outgoing` intercepts into a generic object-`Delete` instead of a collection `Remove`).
     with {:ok, pin} <- get(scope, pinned) do
-      Social.maybe_federate(scope, :remove, repo().preload(pin, edge: [:object]), nil,
+      # federate as the pinner (like `do_pin`), not `scope` which may be a bare container id (not a
+      # valid AP actor); preload actor + object `:peered` for the locality check
+      Social.maybe_federate(
+        repo().maybe_preload(subject, character: [:peered]),
+        :remove,
+        repo().maybe_preload(pin,
+          edge: [object: [:peered, created: [creator: [character: [:peered]]]]]
+        ),
+        nil,
         federation_module: __MODULE__
       )
     end
