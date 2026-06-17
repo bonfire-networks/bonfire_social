@@ -66,7 +66,6 @@ defmodule Bonfire.Social.RuntimeConfig do
           description: l("Local instance activities"),
           filters: %FeedFilters{
             feed_name: :local,
-            origin: :local,
             exclude_activity_types: [:like, :follow, :request]
           },
           exclude_from_nav: false,

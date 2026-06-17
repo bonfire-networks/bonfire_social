@@ -17,6 +17,10 @@ defmodule Bonfire.Social.FeedLoader do
   alias Bonfire.Common.DatesTimes
   alias Bonfire.Common.Enums
   alias Bonfire.Common.Types
+  alias Bonfire.Boundaries.Circles
+  alias Bonfire.Boundaries.Verbs
+  alias Bonfire.Data.AccessControl.Controlled
+  alias Bonfire.Data.AccessControl.Grant
   alias Bonfire.Data.Social.Activity
   alias Bonfire.Data.Social.Message
   alias Bonfire.Data.Social.Seen
@@ -33,6 +37,11 @@ defmodule Bonfire.Social.FeedLoader do
   @like_verb_id "11KES1ND1CATEAM11DAPPR0VA1"
   @boost_verb_id "300ST0R0RANN0VCEANACT1V1TY"
   @reply_verb_id "71TCREAT1NGA11NKEDRESP0NSE"
+  @minimum_deferred_join_multiply_limit 6
+  @refill_deferred_join_multiply_limit 32
+  @max_refill_deferred_join_multiply_limit 256
+  @local_max_refill_deferred_join_multiply_limit 512
+  @guest_visible_acl_verbs [:see, :read]
 
   # ==== START OF CODE TO REFACTOR ====
   def prepare_feed_filters(preset \\ nil, feed_name, opts) do
@@ -497,18 +506,23 @@ defmodule Bonfire.Social.FeedLoader do
   """
   def feed_many_paginated(query, filters, opts) do
     opts = prepare_opts_for_pagination(query, filters, opts)
-    query |> repo().many_maybe_paginated(opts[:paginate] || opts, opts)
+    query |> repo().many_maybe_paginated(pagination_arg(opts), opts)
   end
 
   defp prepare_opts_for_pagination(query, filters, opts) do
     opts = to_options(opts)
 
-    deferred_join_multiply_limit = opts[:deferred_join_multiply_limit]
-
-    if is_integer(deferred_join_multiply_limit) and
-         deferred_join_multiply_limit > 1 do
-      paginate_and_boundarise_feed_deferred_multiplied_opts(deferred_join_multiply_limit, opts)
-      |> info("paginate the deferred join window from the get-go")
+    if is_integer(opts[:deferred_join_multiply_limit]) and
+         opts[:deferred_join_multiply_limit] > 1 do
+      if cursor_pagination?(opts) do
+        opts
+      else
+        paginate_and_boundarise_feed_deferred_multiplied_opts(
+          opts[:deferred_join_multiply_limit],
+          opts
+        )
+        |> info("paginate the deferred join window from the get-go")
+      end
     else
       opts
     end
@@ -516,6 +530,10 @@ defmodule Bonfire.Social.FeedLoader do
       Activities.order_pagination_opts(filters[:sort_by], filters[:sort_order], opts)
     )
     |> debug("prepared opts for pagination")
+  end
+
+  defp pagination_arg(opts) do
+    if Keyword.get(opts, :paginate) == false, do: false, else: opts
   end
 
   @decorate time()
@@ -586,18 +604,16 @@ defmodule Bonfire.Social.FeedLoader do
 
         with %Ecto.Query{} = deferred_query <-
                maybe_prepare_per_media_query(query, filters, opts) ||
-                 maybe_prepare_and_boundarise_feed_deferred_query(query, filters, opts),
-             %{edges: []} when per_media? != true <-
-               deferred_query |> repo().many_maybe_paginated(opts[:paginate] || opts, opts) do
-          debug("empty results in deferred join, trying pagination to next window")
-          # WIP: Try paginating to the next window of results if the initial one is empty
-          paginate_and_boundarise_feed_deferred_fallback(query, filters, opts)
+                 maybe_prepare_and_boundarise_feed_deferred_query(query, filters, opts) do
+          deferred_query
+          |> repo().many_maybe_paginated(pagination_arg(opts), opts)
+          |> maybe_refill_deferred_page(query, filters, opts, per_media?)
         else
           nil ->
             debug("deferred join is not enabled")
 
             paginate_and_boundarise_feed_non_deferred_query(query, filters, opts)
-            |> repo().many_maybe_paginated(opts[:paginate] || opts, opts)
+            |> repo().many_maybe_paginated(pagination_arg(opts), opts)
 
           %Ecto.Query{} = query ->
             query
@@ -617,30 +633,7 @@ defmodule Bonfire.Social.FeedLoader do
       if Enum.any?(query.joins, &(&1.as == :deferred_join_subquery)),
         do: throw("Feed query already deferred")
 
-      initial_query =
-        query
-        # |> debug()
-        |> apply_dedup_strategy(filters, opts)
-        # # WIP: For show_objects_only_once apply dedup on the outer query; inner uses normal activity.id distinct
-        # |> then(
-        #   if filters[:show_objects_only_once] != false and not filters[:dedup_by_thread],
-        #     do: &make_distinct_by_activity_id(&1, filters[:sort_by], filters[:sort_order], opts),
-        #     else: &apply_dedup_strategy(&1, filters, opts)
-        # )
-        |> FeedActivities.query_order(
-          filters[:sort_by],
-          filters[:sort_order],
-          :id,
-          opts[:with_pins?]
-        )
-        |> repo().build_deferred_inner_subquery(
-          filters,
-          Keyword.put(
-            opts,
-            :deferred_join_multiply_limit,
-            max(opts[:deferred_join_multiply_limit] || 2, 6)
-          )
-        )
+      initial_query = build_deferred_inner_query(query, filters, opts)
 
       # |> debug("deferred subquery")
 
@@ -666,6 +659,222 @@ defmodule Bonfire.Social.FeedLoader do
       |> Activities.as_permitted_for(opts)
       |> debug("query with deferred join")
     end
+  end
+
+  defp build_deferred_inner_query(query, filters, opts) do
+    query
+    # |> debug()
+    |> apply_dedup_strategy(filters, opts)
+    |> apply_deferred_id_cursor_filter(opts)
+    |> maybe_apply_deferred_inner_guest_visible_acl_filter(opts)
+    |> maybe_apply_deferred_inner_boundary_filter(opts)
+    # # WIP: For show_objects_only_once apply dedup on the outer query; inner uses normal activity.id distinct
+    # |> then(
+    #   if filters[:show_objects_only_once] != false and not filters[:dedup_by_thread],
+    #     do: &make_distinct_by_activity_id(&1, filters[:sort_by], filters[:sort_order], opts),
+    #     else: &apply_dedup_strategy(&1, filters, opts)
+    # )
+    |> query_order_deferred_inner(filters, opts)
+    |> repo().build_deferred_inner_subquery(filters, deferred_inner_pagination_opts(opts))
+  end
+
+  defp deferred_inner_pagination_opts(opts) do
+    opts
+    |> deferred_join_query_opts(opts[:deferred_join_multiply_limit])
+    |> maybe_drop_deferred_inner_paginator_cursor()
+  end
+
+  defp maybe_apply_deferred_inner_guest_visible_acl_filter(query, opts) do
+    with true <- opts[:deferred_inner_guest_visible_acl_filter],
+         %Ecto.Query{} = guest_visible_ids <-
+           guest_visible_acl_object_ids_query(deferred_guest_visible_acl_candidate_limit(opts)) do
+      join(query, :inner, [main_object: fp], guest_visible_id in subquery(guest_visible_ids),
+        on: guest_visible_id.id == fp.id,
+        as: :deferred_inner_guest_visible_acl
+      )
+    else
+      _ -> query
+    end
+  end
+
+  defp guest_visible_acl_object_ids_query(candidate_limit) do
+    with {guest_id, verb_ids} <- guest_visible_acl_scope() do
+      from(controlled in Controlled,
+        join: grant in Grant,
+        on: grant.acl_id == controlled.acl_id,
+        where: grant.subject_id == ^guest_id,
+        where: grant.verb_id in ^verb_ids,
+        where: grant.value == true,
+        distinct: [desc: controlled.id],
+        order_by: [desc: controlled.id],
+        limit: ^candidate_limit,
+        select: %{id: controlled.id}
+      )
+    end
+  end
+
+  defp guest_visible_acl_scope do
+    with guest_id when is_binary(guest_id) <- Circles.get_id(:guest),
+         [_ | _] = verb_ids <- Verbs.ids(@guest_visible_acl_verbs) do
+      {guest_id, verb_ids}
+    else
+      _ -> nil
+    end
+  end
+
+  defp guest_visible_acl_scope? do
+    match?({_guest_id, [_ | _]}, guest_visible_acl_scope())
+  end
+
+  defp deferred_guest_visible_acl_candidate_limit(opts) do
+    opts
+    |> deferred_join_query_opts(opts[:deferred_join_multiply_limit])
+    |> Keyword.fetch!(:maximum_limit)
+  end
+
+  defp maybe_apply_deferred_inner_boundary_filter(query, opts) do
+    if opts[:deferred_inner_boundary_filter] do
+      Activities.as_permitted_for(query, opts)
+    else
+      query
+    end
+  end
+
+  defp query_order_deferred_inner(query, filters, opts) do
+    case deferred_inner_ordering(query, filters, opts) do
+      {:guest_visible_acl, direction} ->
+        order_deferred_inner_guest_visible_acl(query, direction)
+
+      {:feed_publish, direction} ->
+        order_deferred_inner_feed_publish(query, direction)
+
+      :activity ->
+        FeedActivities.query_order(
+          query,
+          filters[:sort_by],
+          filters[:sort_order],
+          :id,
+          opts[:with_pins?]
+        )
+    end
+  end
+
+  defp deferred_inner_ordering(query, filters, opts) do
+    sort_by = filters[:sort_by] || opts[:sort_by]
+
+    cond do
+      opts[:with_pins?] == true or not is_nil(sort_by) ->
+        :activity
+
+      opts[:deferred_inner_guest_visible_acl_filter] == true and
+          Ecto.Query.has_named_binding?(query, :deferred_inner_guest_visible_acl) ->
+        {:guest_visible_acl, sort_direction(filters, opts)}
+
+      opts[:deferred_inner_order] == :feed_publish_id ->
+        {:feed_publish, sort_direction(filters, opts)}
+
+      true ->
+        :activity
+    end
+  end
+
+  defp sort_direction(filters, opts) do
+    case filters[:sort_order] || opts[:sort_order] || :desc do
+      :asc -> :asc
+      _ -> :desc
+    end
+  end
+
+  defp order_deferred_inner_guest_visible_acl(query, :asc) do
+    order_by(
+      query,
+      [deferred_inner_guest_visible_acl: guest_visible_id],
+      asc: guest_visible_id.id
+    )
+  end
+
+  defp order_deferred_inner_guest_visible_acl(query, _desc) do
+    order_by(
+      query,
+      [deferred_inner_guest_visible_acl: guest_visible_id],
+      desc: guest_visible_id.id
+    )
+  end
+
+  defp order_deferred_inner_feed_publish(query, :asc) do
+    order_by(query, [main_object: fp], asc: fp.id)
+  end
+
+  defp order_deferred_inner_feed_publish(query, _desc) do
+    order_by(query, [main_object: fp], desc: fp.id)
+  end
+
+  defp maybe_drop_deferred_inner_paginator_cursor(opts) do
+    # The inner feed_publish window already has a plain cursor predicate; keeping
+    # Paginator's nullable cursor predicate there prevents an index-bounded scan.
+    if opts[:deferred_inner_order] == :feed_publish_id and
+         (decoded_id_cursor(opts[:after]) || decoded_id_cursor(opts[:before])) do
+      opts
+      |> Keyword.delete(:after)
+      |> Keyword.delete(:before)
+    else
+      opts
+    end
+  end
+
+  defp apply_deferred_id_cursor_filter(query, opts) do
+    opts = repo().pagination_opts(opts)
+
+    case {Keyword.get(opts, :after), Keyword.get(opts, :before),
+          Keyword.get(opts, :cursor_fields)} do
+      {cursor, nil, [{:id, :desc}]} ->
+        maybe_filter_deferred_id_cursor(query, cursor, :lt)
+
+      {nil, cursor, [{:id, :desc}]} ->
+        maybe_filter_deferred_id_cursor(query, cursor, :gt)
+
+      {cursor, nil, [{:id, :asc}]} ->
+        maybe_filter_deferred_id_cursor(query, cursor, :gt)
+
+      {nil, cursor, [{:id, :asc}]} ->
+        maybe_filter_deferred_id_cursor(query, cursor, :lt)
+
+      _ ->
+        query
+    end
+  end
+
+  defp maybe_filter_deferred_id_cursor(query, cursor, direction) do
+    case decoded_id_cursor(cursor) do
+      nil -> query
+      id -> filter_deferred_id_cursor(query, id, direction)
+    end
+  end
+
+  defp decoded_id_cursor(cursor) when is_binary(cursor) do
+    with %{id: id} <- Paginator.Cursor.maybe_decode(cursor),
+         true <- raw_uuid_cursor?(id) do
+      id
+    else
+      _ -> nil
+    end
+  rescue
+    _ -> nil
+  end
+
+  defp decoded_id_cursor(_), do: nil
+
+  defp raw_uuid_cursor?(cursor) when is_binary(cursor),
+    do: match?({:ok, _}, Ecto.UUID.cast(cursor))
+
+  defp raw_uuid_cursor?(_), do: false
+
+  defp filter_deferred_id_cursor(query, cursor, :lt) do
+    where(query, [main_object: fp], fp.id < ^cursor)
+  end
+
+  defp filter_deferred_id_cursor(query, cursor, :gt) do
+    where(query, [main_object: fp], fp.id > ^cursor)
   end
 
   defp maybe_prepare_per_media_query(initial_query, filters, opts) do
@@ -736,67 +945,251 @@ defmodule Bonfire.Social.FeedLoader do
          deferred_join_multiply_limit,
          opts
        ) do
-    # Create new pagination options with the cursor from the empty result
-    deferred_join_multiply_limit =
-      case deferred_join_multiply_limit do
-        0 -> 2
-        limit when is_integer(limit) -> limit
-        _ -> 2
-      end
+    previous_deferred_join_multiply_limit =
+      previous_deferred_join_multiply_limit ||
+        max(div(deferred_join_multiply_limit, 2), 2)
 
     Keyword.merge(
       repo().pagination_opts(opts),
       [
-        # after: after_cursor,
-        # Increase the limit to fetch more results
         deferred_join_multiply_limit: deferred_join_multiply_limit,
-        # Change the pagination offset to match - FIXME: shouldn't this use the previous limit?
         deferred_join_offset:
-          (previous_deferred_join_multiply_limit || 2) *
-            (opts[:limit] || Bonfire.Common.Config.get(:default_pagination_limit, 10))
+          deferred_join_window_limit(opts, previous_deferred_join_multiply_limit)
       ]
       |> info("Empty results in first join window, attempting pagination to next window")
     )
   end
 
+  defp cursor_pagination?(opts) do
+    opts = repo().pagination_opts(opts)
+    opts[:after] || opts[:before]
+  end
+
+  defp effective_deferred_join_multiply_limit(limit, opts \\ []) do
+    minimum_limit =
+      opts[:minimum_deferred_join_multiply_limit] || @minimum_deferred_join_multiply_limit
+
+    case Types.maybe_to_integer(limit) do
+      nil -> minimum_limit
+      limit -> max(limit, minimum_limit)
+    end
+  end
+
+  defp deferred_join_query_opts(opts, deferred_join_multiply_limit) do
+    multiply_limit = effective_deferred_join_multiply_limit(deferred_join_multiply_limit, opts)
+    page_limit = requested_page_limit(opts)
+    maximum_limit = page_limit * multiply_limit
+
+    opts
+    |> Keyword.put(:deferred_join_multiply_limit, multiply_limit)
+    |> Keyword.update(:maximum_limit, maximum_limit, fn current ->
+      max(Types.maybe_to_integer(current) || maximum_limit, maximum_limit)
+    end)
+  end
+
+  defp deferred_join_window_limit(opts, deferred_join_multiply_limit) do
+    opts
+    |> deferred_join_query_opts(deferred_join_multiply_limit)
+    |> Keyword.put_new(:paginate, true)
+    |> Keyword.put(
+      :multiply_limit,
+      effective_deferred_join_multiply_limit(deferred_join_multiply_limit, opts)
+    )
+    |> repo().pagination_opts()
+    |> Paginator.Config.limit()
+  end
+
   defp paginate_and_boundarise_feed_deferred_fallback(query, filters, opts) do
     # WIP: Try paginating to the next window of results if the initial one is empty
 
-    next_page_opts =
-      if :per_media in List.wrap(opts[:preload]) do
-        # For media aggregation when none where found:
-        # We need to get ALL qualifying activities first, then aggregate by media
-        previous_limit = opts[:per_media_multiply_limit] || 5
+    if :per_media in List.wrap(opts[:preload]) do
+      # For media aggregation when none where found:
+      # We need to get ALL qualifying activities first, then aggregate by media
+      previous_limit = opts[:per_media_multiply_limit] || 5
 
+      next_page_opts =
         opts
         |> Keyword.put(:per_media_multiply_limit, 1000)
         |> Keyword.put(:deferred_join_offset, previous_limit)
         |> debug("unlimited opts for per_media non-deferred query")
-      else
-        previous_deferred_join_multiply_limit = opts[:deferred_join_multiply_limit] || 2
 
-        paginate_and_boundarise_feed_deferred_multiplied_opts(
-          previous_deferred_join_multiply_limit,
-          previous_deferred_join_multiply_limit * 2,
-          opts
+      case retry_deferred_page(query, filters, opts, next_page_opts) do
+        %{edges: []} -> fallback_to_non_deferred_page(query, filters, opts)
+        result -> result
+      end
+    else
+      current_limit =
+        effective_deferred_join_multiply_limit(opts[:deferred_join_multiply_limit], opts)
+
+      do_paginate_and_boundarise_feed_deferred_fallback(
+        query,
+        filters,
+        opts,
+        current_limit,
+        empty_refill_deferred_join_multiply_limit(opts, current_limit)
+      )
+    end
+  end
+
+  defp do_paginate_and_boundarise_feed_deferred_fallback(
+         query,
+         filters,
+         opts,
+         previous_limit,
+         next_limit
+       ) do
+    if next_limit <= max_refill_deferred_join_multiply_limit(opts) do
+      next_page_opts =
+        paginate_and_boundarise_feed_deferred_multiplied_opts(previous_limit, next_limit, opts)
+
+      with %{edges: []} <- retry_deferred_page(query, filters, opts, next_page_opts) do
+        do_paginate_and_boundarise_feed_deferred_fallback(
+          query,
+          filters,
+          opts,
+          next_limit,
+          next_limit * 2
         )
       end
+    else
+      fallback_to_non_deferred_page(query, filters, opts)
+    end
+  end
 
-    # Try the query again with the new cursor
+  defp retry_deferred_page(query, filters, opts, next_page_opts) do
     with %Ecto.Query{} = deferred_query <-
            maybe_prepare_per_media_query(query, filters, next_page_opts) ||
              maybe_prepare_and_boundarise_feed_deferred_query(query, filters, next_page_opts),
-         %{edges: []} <-
-           deferred_query
-           |> repo().many_maybe_paginated(
-             next_page_opts[:paginate] || next_page_opts,
+         result <-
+           repo().many_maybe_paginated(
+             deferred_query,
+             pagination_arg(next_page_opts),
              next_page_opts
            ) do
-      debug("No results in next window either, falling back to non-deferred query")
-
-      paginate_and_boundarise_feed_non_deferred_query(query, filters, opts)
-      |> repo().many_maybe_paginated(opts[:paginate] || opts, opts)
+      result
+    else
+      _ -> fallback_to_non_deferred_page(query, filters, opts)
     end
+  end
+
+  defp maybe_refill_deferred_page(result, _query, _filters, _opts, true = _per_media?), do: result
+
+  defp maybe_refill_deferred_page(%{edges: []}, query, filters, opts, _per_media?) do
+    debug("empty results in deferred join, trying pagination to next window")
+    paginate_and_boundarise_feed_deferred_fallback(query, filters, opts)
+  end
+
+  defp maybe_refill_deferred_page(%{edges: edges} = result, query, filters, opts, _per_media?)
+       when is_list(edges) do
+    if length(edges) < requested_page_limit(opts) do
+      refill_deferred_page(result, query, filters, opts)
+    else
+      ensure_deferred_page_cursor(result, opts)
+    end
+  end
+
+  defp maybe_refill_deferred_page(result, _query, _filters, _opts, _per_media?), do: result
+
+  defp refill_deferred_page(result, query, filters, opts) do
+    requested_limit = requested_page_limit(opts)
+
+    current_limit =
+      effective_deferred_join_multiply_limit(opts[:deferred_join_multiply_limit], opts)
+
+    refill_limit = underfilled_refill_deferred_join_multiply_limit(opts, current_limit)
+
+    do_refill_deferred_page(refill_limit, requested_limit, result, query, filters, opts)
+  end
+
+  defp do_refill_deferred_page(refill_limit, requested_limit, _result, query, filters, opts) do
+    if refill_limit <= max_refill_deferred_join_multiply_limit(opts) do
+      refill_opts = refill_deferred_join_opts(opts, refill_limit)
+
+      debug(refill_opts, "under-filled deferred join page, retrying with larger window")
+
+      with %Ecto.Query{} = deferred_query <-
+             maybe_prepare_and_boundarise_feed_deferred_query(query, filters, refill_opts),
+           %{edges: edges} = refilled_result <-
+             repo().many_maybe_paginated(deferred_query, pagination_arg(refill_opts), refill_opts),
+           true <- length(edges) >= requested_limit do
+        ensure_deferred_page_cursor(refilled_result, opts)
+      else
+        %{edges: edges} when is_list(edges) ->
+          do_refill_deferred_page(refill_limit * 2, requested_limit, nil, query, filters, opts)
+
+        _ ->
+          fallback_to_non_deferred_page(query, filters, opts)
+      end
+    else
+      fallback_to_non_deferred_page(query, filters, opts)
+    end
+  end
+
+  defp ensure_deferred_page_cursor(
+         %{edges: edges, page_info: %{end_cursor: nil, final_cursor: cursor} = page_info} =
+           result,
+         opts
+       )
+       when is_list(edges) and is_binary(cursor) do
+    pagination_opts = repo().pagination_opts(opts)
+
+    if Keyword.get(pagination_opts, :before) || length(edges) < requested_page_limit(opts) do
+      result
+    else
+      %{result | page_info: %{page_info | end_cursor: cursor, final_cursor: nil}}
+    end
+  end
+
+  defp ensure_deferred_page_cursor(result, _opts), do: result
+
+  defp fallback_to_non_deferred_page(query, filters, opts) do
+    debug("larger deferred join windows still under-filled, falling back to non-deferred query")
+    emit_deferred_join_fallback(opts)
+
+    paginate_and_boundarise_feed_non_deferred_query(query, filters, opts)
+    |> repo().many_maybe_paginated(pagination_arg(opts), opts)
+  end
+
+  defp emit_deferred_join_fallback(opts) do
+    :telemetry.execute(
+      [:bonfire, :social, :feed_loader, :deferred_join, :fallback],
+      %{},
+      %{
+        cursor_pagination?: !!cursor_pagination?(opts),
+        deferred_join_multiply_limit: opts[:deferred_join_multiply_limit],
+        feed_name: opts[:feed_name],
+        preload: opts[:preload]
+      }
+    )
+  end
+
+  defp refill_deferred_join_opts(opts, multiply_limit) do
+    deferred_join_query_opts(opts, multiply_limit)
+  end
+
+  defp max_refill_deferred_join_multiply_limit(opts) do
+    opts[:max_refill_deferred_join_multiply_limit] || @max_refill_deferred_join_multiply_limit
+  end
+
+  defp empty_refill_deferred_join_multiply_limit(opts, current_limit) do
+    max(opts[:empty_refill_deferred_join_multiply_limit] || 0, current_limit * 2)
+  end
+
+  defp underfilled_refill_deferred_join_multiply_limit(opts, current_limit) do
+    max(
+      opts[:underfilled_refill_deferred_join_multiply_limit] ||
+        @refill_deferred_join_multiply_limit,
+      current_limit * 2
+    )
+  end
+
+  defp requested_page_limit(opts) do
+    opts
+    |> Keyword.delete(:multiply_limit)
+    |> Keyword.put_new(:paginate, true)
+    |> repo().pagination_opts()
+    |> Paginator.Config.limit()
+    |> Types.maybe_to_integer()
   end
 
   defp paginate_and_boundarise_feed_non_deferred_query(query, filters, opts) do
@@ -852,8 +1245,7 @@ defmodule Bonfire.Social.FeedLoader do
     #   |> debug("3a. feed options")
 
     if opts[:cache] do
-      # FIXME: key should include filters
-      key = feed_id_or_ids_or_name
+      key = feed_cache_key(feed_id_or_ids_or_name, filters, opts)
 
       case Cache.get!(key) do
         nil ->
@@ -870,6 +1262,30 @@ defmodule Bonfire.Social.FeedLoader do
 
       actually_do_feed(feed_id_or_ids_or_name, filters, opts)
     end
+  end
+
+  defp feed_cache_key(feed_id_or_ids_or_name, filters, opts) do
+    {
+      __MODULE__,
+      :feed,
+      feed_id_or_ids_or_name,
+      filters,
+      Keyword.take(opts, [
+        :after,
+        :before,
+        :limit,
+        :paginate,
+        :preload,
+        :query_with_deferred_join,
+        :show_objects_only_once,
+        :skip_boundary_check,
+        :sort_by,
+        :sort_order,
+        :time_limit
+      ]),
+      Enums.id(current_user(opts)),
+      Enums.id(current_account(opts))
+    }
   end
 
   defp actually_do_feed(feed_id_or_ids_or_name, filters, opts) do
@@ -922,6 +1338,41 @@ defmodule Bonfire.Social.FeedLoader do
         else: Feeds.my_home_feed_ids(opts)
 
     {home_feed_ids, opts}
+  end
+
+  def feed_ids_and_opts(:local = feed_name, opts) do
+    opts = Keyword.merge(local_feed_deferred_opts(opts), opts)
+
+    {named_feed_ids(feed_name, opts), opts}
+  end
+
+  defp local_feed_deferred_opts(opts) do
+    [
+      minimum_deferred_join_multiply_limit: local_minimum_deferred_join_multiply_limit(opts),
+      max_refill_deferred_join_multiply_limit: @local_max_refill_deferred_join_multiply_limit,
+      empty_refill_deferred_join_multiply_limit: @local_max_refill_deferred_join_multiply_limit,
+      underfilled_refill_deferred_join_multiply_limit:
+        @local_max_refill_deferred_join_multiply_limit,
+      deferred_inner_order: :feed_publish_id,
+      deferred_inner_guest_visible_acl_filter: guest_visible_first_page?(opts),
+      deferred_inner_boundary_filter: !cursor_pagination?(opts)
+    ]
+  end
+
+  defp guest_visible_first_page?(opts) do
+    guest_first_page?(opts) and guest_visible_acl_scope?()
+  end
+
+  defp guest_first_page?(opts) do
+    !cursor_pagination?(opts) and is_nil(current_user(opts)) and is_nil(current_account(opts))
+  end
+
+  defp local_minimum_deferred_join_multiply_limit(opts) do
+    if cursor_pagination?(opts) do
+      @local_max_refill_deferred_join_multiply_limit
+    else
+      @refill_deferred_join_multiply_limit
+    end
   end
 
   # def feed_ids_and_opts(:notifications = feed_name, opts) do
@@ -1047,14 +1498,22 @@ defmodule Bonfire.Social.FeedLoader do
     query
   end
 
-  defp make_distinct_by_activity_id(query, id, :asc, _opts)
+  defp make_distinct_by_activity_id(query, id, :asc, opts)
        when is_nil(id) or id == false or id == :id do
-    distinct(query, [activity: activity], asc: activity.id)
+    if opts[:deferred_inner_order] == :feed_publish_id do
+      distinct(query, [main_object: fp], asc: fp.id)
+    else
+      distinct(query, [activity: activity], asc: activity.id)
+    end
   end
 
-  defp make_distinct_by_activity_id(query, id, _desc, _opts)
+  defp make_distinct_by_activity_id(query, id, _desc, opts)
        when is_nil(id) or id == false or id == :id do
-    distinct(query, [activity: activity], desc: activity.id)
+    if opts[:deferred_inner_order] == :feed_publish_id do
+      distinct(query, [main_object: fp], desc: fp.id)
+    else
+      distinct(query, [activity: activity], desc: activity.id)
+    end
   end
 
   defp make_distinct_by_activity_id(query, other, :asc, opts) do
@@ -1194,9 +1653,17 @@ defmodule Bonfire.Social.FeedLoader do
       #       activity.subject_id == ^fetcher_user_id
       #   )
 
-      :local in specific_feed_ids or :activity_pub in specific_feed_ids or
-        federated_feed_id in specific_feed_ids or local_feed_id in specific_feed_ids ->
-        debug(feed_id_or_ids, "local or remote feed")
+      :local in specific_feed_ids or local_feed_id in specific_feed_ids ->
+        debug(feed_id_or_ids, "local feed")
+
+        query_extras(filters, opts)
+        |> where(
+          [fp, activity: activity],
+          fp.feed_id == ^local_feed_id and activity.subject_id != ^"1ACT1V1TYPVBREM0TESFETCHER"
+        )
+
+      :activity_pub in specific_feed_ids or federated_feed_id in specific_feed_ids ->
+        debug(feed_id_or_ids, "remote feed")
 
         query_extras(filters, opts)
 
@@ -1271,7 +1738,7 @@ defmodule Bonfire.Social.FeedLoader do
     # exclude_feed_ids = e(opts, :exclude_feed_ids, []) |> List.wrap() # WIP - to exclude activities that also appear in another feed
 
     (query || default_or_filtered_query(filters, FeedActivities.base_query(opts), opts))
-    |> reusable_join(:inner, [root], assoc(root, :activity), as: :activity)
+    |> join_activity_for_feed(opts)
     |> proload([:activity])
     |> query_optional_extras(filters, opts)
     |> maybe_filter(filters, opts)
@@ -1283,6 +1750,21 @@ defmodule Bonfire.Social.FeedLoader do
     # |> Activities.activity_preloads(e(opts, :preload, :with_object), opts) # if we want to preload the rest later to allow for caching
     # |> Activities.activity_preloads(opts[:preload], opts)
     # |> debug("post-preloads")
+  end
+
+  defp join_activity_for_feed(%Ecto.Query{aliases: %{activity: _}} = query, _opts), do: query
+
+  defp join_activity_for_feed(query, opts) do
+    if opts[:deferred_inner_order] == :feed_publish_id and cursor_pagination?(opts) do
+      # Keep the cursor window driven by feed_publish; otherwise Postgres may
+      # choose a merge join that walks activity_pkey through old local pages.
+      join(query, :inner, [root], activity in Activity,
+        on: activity.id == fragment("(?::text)::uuid", root.id),
+        as: :activity
+      )
+    else
+      reusable_join(query, :inner, [root], assoc(root, :activity), as: :activity)
+    end
   end
 
   @doc """
