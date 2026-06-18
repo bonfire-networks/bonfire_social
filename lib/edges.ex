@@ -3,7 +3,7 @@ defmodule Bonfire.Social.Edges do
   Shared helpers for modules that implemented Edges to mutate or query them, preload relevant associations, etc.
 
   This is a shared [context](https://hexdocs.pm/phoenix/contexts.html) for `Bonfire.Data.Edges.Edge`, which has these fields:
-  - id: primary key which matches the related Activity 
+  - id: primary key which matches the related Activity
   - subject: the who (eg. a user)
   - table: what kind of action (eg. references Like or Follow in `Needle.Table` ...)
   - object: the what (eg. a specific post)
@@ -735,8 +735,9 @@ defmodule Bonfire.Social.Edges do
   """
   def delete_by_both(me, schema, object),
     do:
-      [subjects: me, objects: object, table_id: Bonfire.Common.Types.table_id(schema)]
+      [subjects: me, objects: object]
       |> query(skip_boundary_check: true)
+      |> where([edge: edge], edge.table_id == ^Bonfire.Common.Types.table_id(schema))
       |> do_delete()
 
   defp do_delete(q),

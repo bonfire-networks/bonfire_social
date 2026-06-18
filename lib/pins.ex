@@ -2,7 +2,7 @@ defmodule Bonfire.Social.Pins do
   @moduledoc """
   Mutate or query pins (which make an activity or object appear at the beginning of feeds or other lists).
 
-  This module provides functionality to manage and query pins, including creating, deleting, and listing pins. 
+  This module provides functionality to manage and query pins, including creating, deleting, and listing pins.
 
   Pins are implemented on top of the `Bonfire.Data.Edges.Edge` schema (see `Bonfire.Social.Edges` for shared functions)
   """
@@ -52,6 +52,67 @@ defmodule Bonfire.Social.Pins do
 
   defp instance_scope,
     do: Bonfire.Boundaries.Circles.get_id(:local) || "3SERSFR0MY0VR10CA11NSTANCE"
+
+  @doc "Subject id for instance-wide pins (the local instance circle, or a fallback constant)."
+  def instance_scope_id, do: instance_scope()
+
+  defp pins_ranked_query(subjects, scope) do
+    from(p in Pin,
+      join: e in Bonfire.Data.Edges.Edge,
+      as: :edge,
+      on: e.id == p.id,
+      left_join: r in Bonfire.Data.Assort.Ranked,
+      as: :ranked,
+      on: r.item_id == e.object_id and r.scope_id == ^scope,
+      where: e.subject_id in ^List.wrap(subjects)
+    )
+  end
+
+  @doc "Instance-pinned object ids, in admin order (`rank_pin(_, :instance, pos)`), unranked last."
+  def instance_pinned_object_ids do
+    scope = instance_scope()
+
+    pins_ranked_query([scope], scope)
+    |> order_by([edge: e, ranked: r], asc_nulls_last: r.rank, asc: e.id)
+    |> select([edge: e], e.object_id)
+    |> repo().many()
+    |> Enum.uniq()
+  end
+
+  @doc """
+  Ordered object ids for a user's groups sidebar, fetched in ONE query: instance-pinned groups first
+  (admin order via `rank_pin`), then the user's own pins (newest first). No boundary check.
+  """
+  def sidebar_pinned_object_ids(user) do
+    scope = instance_scope()
+    subjects = Enum.uniq(Enum.reject([scope, uid(user)], &is_nil/1))
+
+    {instance, user_rows} =
+      pins_ranked_query(subjects, scope)
+      |> select([edge: e, ranked: r], {e.subject_id, e.object_id, r.rank, e.id})
+      |> repo().many()
+      |> Enum.split_with(fn {subject_id, _, _, _} -> subject_id == scope end)
+
+    instance_ids =
+      instance
+      |> Enum.sort_by(fn {_, _, rank, edge_id} -> {is_nil(rank), rank, edge_id} end)
+      |> Enum.map(&elem(&1, 1))
+      |> Enum.uniq()
+
+    instance_set = MapSet.new(instance_ids)
+
+    user_ids =
+      user_rows
+      |> Enum.sort_by(fn {_, _, _, edge_id} -> edge_id end, :desc)
+      |> Enum.map(&elem(&1, 1))
+      |> Enum.uniq()
+      |> Enum.reject(&MapSet.member?(instance_set, &1))
+
+    instance_ids ++ user_ids
+  end
+
+  # category pins are a local sidebar concern, not the Mastodon `featured` (posts) collection — never federate them
+  defp skip_federation?(pinned), do: is_struct(pinned, Bonfire.Classify.Category)
 
   @doc """
   Checks if an object is pinned by the instance.
@@ -166,7 +227,9 @@ defmodule Bonfire.Social.Pins do
   end
 
   def pin(pinner, %{} = object, scope, opts) do
-    if opts[:skip_boundary_check] || Bonfire.Boundaries.can?(pinner, @boundary_verb, object) do
+    # pinning a Category you can reach to your own sidebar never needs the `:boost` verb
+    if opts[:skip_boundary_check] || is_struct(object, Bonfire.Classify.Category) ||
+         Bonfire.Boundaries.can?(pinner, @boundary_verb, object) do
       do_pin(scope || pinner, object, opts)
     else
       error(l("Sorry, you cannot pin this"))
@@ -188,25 +251,32 @@ defmodule Bonfire.Social.Pins do
   end
 
   defp do_pin(pinner, %{} = pinned, opts \\ []) do
-    object_creator =
-      (opts[:object_creator] ||
-         (
-           pinned =
-             Objects.preload_creator(pinned)
-             |> debug("pinned object")
+    skip_federation? = skip_federation?(pinned)
 
-           Objects.object_creator(pinned)
-         ))
-      |> debug("the creator")
+    object_creator =
+      opts[:object_creator] ||
+        (
+          pinned = Objects.preload_creator(pinned)
+          Objects.object_creator(pinned)
+        )
 
     opts = [
       # TODO: make configurable
       boundary: "mentions",
       to_circles: [uid(object_creator)],
-      to_feeds: opts[:to_feeds] || Feeds.maybe_creator_notification(pinner, object_creator, opts)
+      # category pins are private sidebar markers — don't notify the group creator
+      to_feeds:
+        opts[:to_feeds] ||
+          if(skip_federation?,
+            do: [],
+            else: Feeds.maybe_creator_notification(pinner, object_creator, opts)
+          )
     ]
 
     case create(pinner, pinned, opts) do
+      {:ok, pin} when skip_federation? ->
+        {:ok, pin}
+
       {:ok, pin} ->
         # preload pinner + object `:peered` for federation's locality check
         Social.maybe_federate_and_gift_wrap_activity(
@@ -274,7 +344,9 @@ defmodule Bonfire.Social.Pins do
     # Remove activity is built synchronously from the pin, so the pin row is safe to delete
     # afterwards. We force the Pins federation module and use `:remove` (not `:delete`, which
     # `Outgoing` intercepts into a generic object-`Delete` instead of a collection `Remove`).
-    with {:ok, pin} <- get(scope, pinned) do
+    # category pins never federate, so skip the `Remove`
+    with false <- skip_federation?(pinned),
+         {:ok, pin} <- get(scope, pinned) do
       # federate as the pinner (like `do_pin`), not `scope` which may be a bare container id (not a
       # valid AP actor); preload actor + object `:peered` for the locality check
       Social.maybe_federate(
@@ -297,56 +369,50 @@ defmodule Bonfire.Social.Pins do
   end
 
   def unpin(subject, pinned, scope) when is_binary(pinned) do
-    with {:ok, pinned} <- Bonfire.Common.Needles.get(pinned, current_user: subject) do
+    # removing a pin doesn't need a read-boundary check on the object, and `subject` may be the
+    # instance scope (a circle id, not a real user) which would otherwise fail the load.
+    with {:ok, pinned} <-
+           Bonfire.Common.Needles.get(pinned, current_user: subject, skip_boundary_check: true) do
       unpin(subject, pinned, scope)
     end
   end
 
   @doc """
-  Sets the rank/position of a pin within a specific scope.
+  Sets the rank/position of a pinned thing within a scope (idempotent upsert).
 
-  ## Parameters
-
-    - pin: The pin to be ranked.
-    - scope: The scope for ranking (eg. `:instance`).
-    - position: The desired position/rank for the pin.
-
-  ## Examples
-
-      iex> Bonfire.Social.Pins.rank_pin("pin123", :instance, 1)
-      {:ok, %Bonfire.Data.Assort.Ranked{}}
-
-      iex> Bonfire.Social.Pins.rank_pin("pin123", %User{id: "user456"}, 2)
-      {:ok, %Bonfire.Data.Assort.Ranked{}}
-
+  `item` is the id you want to order and MUST match what the reader joins on — the groups sidebar
+  ranks by the pinned OBJECT id (`Pins.instance_pinned_object_ids/0` joins `Ranked.item_id ==
+  edge.object_id`), so pass the object id, not the Pin edge id.
   """
   def rank_pin(pin, :instance, position) do
     rank_pin(pin, instance_scope(), position)
   end
 
   def rank_pin(pin, scope, position) do
-    with {:ok, %Ecto.Changeset{valid?: true} = cs} <-
-           Bonfire.Data.Assort.Ranked.changeset(%{
-             item_id: pin,
-             scope_id: uid(scope),
-             rank_set: position
-           })
-           |> Ecto.Changeset.unique_constraint([:item_id, :scope_id],
-             name: :bonfire_data_ranked_unique_per_scope
-           )
-           |> dump(),
-         {:ok, ins} <- repo().insert(cs) do
-      {:ok, ins}
-    else
-      # poor man's upsert - TODO fix drag and drop ordering and make better and generic
-      {:error, %Ecto.Changeset{} = cs} ->
-        repo().update(cs, [:rank])
+    scope_id = uid(scope)
+    alias Bonfire.Data.Assort.Ranked
 
-      %Ecto.Changeset{} = cs ->
-        repo().upsert(cs, [:rank])
+    # Ordering is keyed by `scope_id` (here the instance circle, or a user) with `rank_type_id` left
+    # nil — the same convention `bonfire_poll` uses (it scopes by the question id). Distinct scope_ids
+    # never share an ordering, so sidebar-pin order can't collide with other ranked features.
+    #
+    # Upsert: update the existing rank for this (item, scope) if present, else insert. Matching the
+    # `[item_id, scope_id, rank_type_id]` unique index exactly needs an explicit `is_nil` (a keyword
+    # `get_by(rank_type_id: nil)` would emit `= NULL`, which matches nothing). The old "poor man's
+    # upsert" re-`update`d a pkey-less changeset on conflict → NoPrimaryKeyValueError.
+    existing =
+      repo().one(
+        from(r in Ranked,
+          where: r.item_id == ^pin and r.scope_id == ^scope_id and is_nil(r.rank_type_id)
+        )
+      )
 
-      e ->
-        error(e)
+    case existing do
+      nil ->
+        Ranked.changeset(%{item_id: pin, scope_id: scope_id, rank_set: position}) |> repo().insert()
+
+      existing ->
+        Ranked.changeset(existing, %{rank_set: position}) |> repo().update()
     end
   end
 

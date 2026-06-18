@@ -1801,6 +1801,11 @@ defmodule Bonfire.Social.FeedLoader do
     dedup_replies_by_parent? = filters[:dedup_replies_by_parent] == true
 
     edges =
+      if show_objects_only_once?,
+        do: drop_boosts_of_present_originals(edges),
+        else: edges
+
+    edges =
       edges
       |> debug("feed resulst before preparing")
       |> Enum.with_index()
@@ -1927,6 +1932,26 @@ defmodule Bonfire.Social.FeedLoader do
     #   end
 
     %{edges: Activities.prepare_subject_and_creator(edges, opts), page_info: page_info}
+  end
+
+  # Drops a boost/announce when an original (create/reply/…) of the same object is
+  # also on the page. Boosts of objects with no original present are left untouched.
+  defp drop_boosts_of_present_originals(edges) do
+    original_object_ids =
+      edges
+      |> Enum.flat_map(fn item ->
+        case e(item, :activity, :verb_id, nil) do
+          verb_id when verb_id in [@boost_verb_id, @like_verb_id] -> []
+          _ -> [e(item, :activity, :object_id, nil)]
+        end
+      end)
+      |> Enum.reject(&is_nil/1)
+      |> MapSet.new()
+
+    Enum.reject(edges, fn item ->
+      e(item, :activity, :verb_id, nil) == @boost_verb_id and
+        MapSet.member?(original_object_ids, e(item, :activity, :object_id, nil))
+    end)
   end
 
   # defp postload_subjects_more(edges, _filters, _opts) do
