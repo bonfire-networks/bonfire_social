@@ -45,7 +45,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           description: l("All activities"),
           filters: %FeedFilters{
             feed_name: :explore,
-            exclude_activity_types: [:like, :follow, :request]
+            exclude_activity_types: [:like, :vote, :follow, :request]
           },
           exclude_from_nav: false,
           icon: "ph:compass-duotone",
@@ -67,7 +67,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %FeedFilters{
             feed_name: :local,
             origin: :local,
-            exclude_activity_types: [:like, :follow, :request]
+            exclude_activity_types: [:like, :vote, :follow, :request]
           },
           exclude_from_nav: false,
           icon: "ph:campfire-duotone",
@@ -86,7 +86,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %FeedFilters{
             feed_name: :remote,
             origin: :remote,
-            exclude_activity_types: [:like, :follow, :request]
+            exclude_activity_types: [:like, :vote, :follow, :request]
           },
           icon: "ph:planet-duotone",
           assigns: [
@@ -113,6 +113,8 @@ defmodule Bonfire.Social.RuntimeConfig do
           opts: [include_flags: :mediate, include_requests: true],
           icon: "ph:bell-duotone",
           assigns: [
+            # notifications should always start at the top, never resume a reading position
+            enable_marker: false,
             hide_filters: true,
             page: "notifications",
             showing_within: :notifications,
@@ -223,8 +225,11 @@ defmodule Bonfire.Social.RuntimeConfig do
           description: l("A specific user's activities"),
           icon: "ph:user-duotone",
           # $username is replaced at runtime
-          filters: %FeedFilters{exclude_activity_types: [:like, :follow]},
-          parameterized: %{subjects: [:by]}
+          # NOTE: :vote is excluded so poll votes stay notify-only (not shown on a user's profile)
+          filters: %FeedFilters{exclude_activity_types: [:like, :vote, :follow]},
+          parameterized: %{subjects: [:by]},
+          # profile feeds should always start at the top, never resume a reading position
+          assigns: [enable_marker: false]
         },
         user_followers: %{
           name: l("Followers"),
@@ -419,7 +424,7 @@ defmodule Bonfire.Social.RuntimeConfig do
             # Bonfire.Poll.Question pointable; federated AP `Question` objects
             # land here too via Bonfire.Poll.Questions.federation_module/0.
             object_types: [Bonfire.Poll.Question],
-            exclude_activity_types: [:like, :boost, :flag, :reply]
+            exclude_activity_types: [:like, :vote, :boost, :flag, :reply]
           },
           icon: "ph:list-checks-duotone",
           assigns: [
@@ -487,7 +492,7 @@ defmodule Bonfire.Social.RuntimeConfig do
             time_limit: 7,
             sort_by: :reply_count,
             sort_order: :desc,
-            exclude_activity_types: [:boost, :like, :follow, :reply]
+            exclude_activity_types: [:boost, :like, :vote, :follow, :reply]
           },
           icon: "ph:chats-circle-duotone",
           assigns: [
@@ -502,7 +507,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %FeedFilters{
             sort_order: :desc,
             # NOTE: should not include :boost to work in groups (maybe can later dynamic exlude it from the exclusions when constructing a group query)
-            exclude_activity_types: [:like, :follow],
+            exclude_activity_types: [:like, :vote, :follow],
             dedup_by_thread: true
           },
           icon: "ph:chats-circle-duotone",
