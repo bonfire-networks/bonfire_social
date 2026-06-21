@@ -249,14 +249,21 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         )
         |> Bonfire.Common.Repo.maybe_preload(controlled: [acl: [grants: [:verb]]])
 
-      verbs =
+      grants =
         e(post, :controlled, [])
         |> List.wrap()
         |> Enum.flat_map(&(e(&1, :acl, :grants, []) |> List.wrap()))
-        |> Enum.map(&e(&1, :verb, :verb, nil))
 
-      assert :quote in verbs or "quote" in verbs,
-             "expected a quote grant persisted on the post, got verbs: #{inspect(verbs)}"
+      # The circle is only referenced by our `permissions` arg, so a Quote grant
+      # naming it proves the deny was applied (not just the preset's defaults).
+      circle_quote_grant =
+        Enum.filter(grants, fn g ->
+          e(g, :subject_id, nil) == circle.id and e(g, :verb, :verb, nil) == "Quote"
+        end)
+
+      assert circle_quote_grant != [],
+             "expected a Quote grant for circle #{circle.id} (the deny), got: " <>
+               inspect(Enum.map(grants, &{e(&1, :subject_id, nil), e(&1, :verb, :verb, nil)}))
     end
   end
 end
