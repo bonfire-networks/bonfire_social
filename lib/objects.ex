@@ -1269,7 +1269,11 @@ defmodule Bonfire.Social.Objects do
         ap_maybe_delete(creator, pointer_id)
 
       _e ->
-        error(object, "Could not find the object to delete")
+        # We received a Delete for an object we don't have locally, so there's nothing to
+        # delete. Skip cleanly rather than returning an error (which the federation Oban
+        # worker would retry 3x and log as a federation error). See bonfire-app#1784.
+        debug(object, "Delete received for an unknown object, skipping (nothing to delete)")
+        {:ok, :skip}
     end
   end
 
@@ -1281,8 +1285,17 @@ defmodule Bonfire.Social.Objects do
     debug(creator, "creator")
     debug(object, "object")
 
-    delete(object, creator)
-    |> debug("ap_maybe_deleted")
+    case delete(object, creator) do
+      {:error, :not_found} ->
+        # The object couldn't be deleted (e.g. already gone locally). For incoming
+        # federation this is a no-op, not an error to retry. See bonfire-app#1784.
+        info(object, "Delete received but the object was not found locally, skipping")
+        {:ok, :skip}
+
+      other ->
+        other
+        |> info("ap_maybe_deleted")
+    end
   end
 
   @doc """
