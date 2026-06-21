@@ -409,7 +409,8 @@ defmodule Bonfire.Social.Pins do
 
     case existing do
       nil ->
-        Ranked.changeset(%{item_id: pin, scope_id: scope_id, rank_set: position}) |> repo().insert()
+        Ranked.changeset(%{item_id: pin, scope_id: scope_id, rank_set: position})
+        |> repo().insert()
 
       existing ->
         Ranked.changeset(existing, %{rank_set: position}) |> repo().update()

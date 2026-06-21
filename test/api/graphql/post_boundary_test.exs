@@ -182,5 +182,81 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
       assert result[:errors]
     end
+
+    @boundary_options_query """
+    { my_boundary_options { id label custom } }
+    """
+
+    test "my_boundary_options returns built-in presets and the user's custom ACLs", %{me: me} do
+      {:ok, _acl} =
+        Bonfire.Boundaries.Acls.create(%{named: %{name: "pandora"}}, current_user: me)
+
+      {:ok, result} =
+        Absinthe.run(@boundary_options_query, Schema,
+          context: Schema.context(%{current_user: me})
+        )
+
+      refute result[:errors]
+      options = get_in(result, [:data, "my_boundary_options"])
+      assert is_list(options) and options != []
+
+      # built-in presets (custom: false) are present
+      assert Enum.any?(options, &(&1["custom"] == false))
+      # the freshly-created custom ACL shows up by name (custom: true)
+      assert Enum.any?(options, &(&1["custom"] == true and &1["label"] == "pandora"))
+    end
+
+    test "create_post with a custom ACL id as the boundary succeeds", %{me: me} do
+      {:ok, acl} =
+        Bonfire.Boundaries.Acls.create(%{named: %{name: "pandora"}}, current_user: me)
+
+      {:ok, result} =
+        Absinthe.run(@create_mutation, Schema,
+          variables: %{
+            "content" => %{"html_body" => "to my custom audience"},
+            "boundary" => acl.id
+          },
+          context: Schema.context(%{current_user: me})
+        )
+
+      refute result[:errors]
+      assert get_in(result, [:data, "create_post", "id"])
+    end
+
+    test "create_post can deny the quote verb via permissions", %{me: me, circle: circle} do
+      {:ok, result} =
+        Absinthe.run(@create_mutation, Schema,
+          variables: %{
+            "content" => %{"html_body" => "no quoting"},
+            "boundary" => "public",
+            "permissions" => [
+              %{"permission" => "quote", "can" => [], "cannot" => [circle.id]}
+            ]
+          },
+          context: Schema.context(%{current_user: me})
+        )
+
+      refute result[:errors]
+      post_id = get_in(result, [:data, "create_post", "id"])
+      assert post_id
+
+      # Verify the deny actually persisted (the create response doesn't preload
+      # grants, so re-read the post's ACL grants and check the quote verb).
+      post =
+        Bonfire.Common.Needles.get!(post_id,
+          current_user: me,
+          skip_boundary_check: true
+        )
+        |> Bonfire.Common.Repo.maybe_preload(controlled: [acl: [grants: [:verb]]])
+
+      verbs =
+        e(post, :controlled, [])
+        |> List.wrap()
+        |> Enum.flat_map(&(e(&1, :acl, :grants, []) |> List.wrap()))
+        |> Enum.map(&e(&1, :verb, :verb, nil))
+
+      assert :quote in verbs or "quote" in verbs,
+             "expected a quote grant persisted on the post, got verbs: #{inspect(verbs)}"
+    end
   end
 end

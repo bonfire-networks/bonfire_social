@@ -30,6 +30,8 @@ defmodule Bonfire.Social.LivePush do
           ]
         })
 
+    if has_feed_ids?, do: maybe_publish_graphql_subscription(to_feeds, activity)
+
     if Keyword.get(opts, :push_to_thread, true), do: maybe_push_thread(activity)
 
     notify(activity, Keyword.put_new(opts, :feed_ids, to_feeds))
@@ -460,10 +462,33 @@ defmodule Bonfire.Social.LivePush do
         {{Bonfire.Social.Threads.LiveHandler, :new_reply}, {reply_to_id, activity}}
       )
     end
+
+    # GraphQL subscribers viewing this discussion (topic = thread_id / reply_to_id)
+    maybe_publish_graphql_subscription([thread_id, reply_to_id], activity)
   end
 
   defp maybe_push_thread(replied, _activity) do
     debug(replied, "maybe_push_thread: no reply_to info found}")
     nil
+  end
+
+  # Publish to GraphQL subscriptions (graphql-ws) keyed by feed/thread id, so a
+  # client subscribed to `feedActivity` (topic = a feed id or thread id) receives
+  # the activity live, without an extra query. No-op if Absinthe subscriptions
+  # aren't available.
+  defp maybe_publish_graphql_subscription(topics, activity) do
+    if Code.ensure_loaded?(Absinthe.Subscription) do
+      endpoint = Bonfire.Common.Config.endpoint_module()
+
+      topics
+      |> List.wrap()
+      |> Enum.filter(&is_binary/1)
+      |> Enum.uniq()
+      |> Enum.each(fn topic ->
+        Absinthe.Subscription.publish(endpoint, activity, feed_activity: topic)
+      end)
+    end
+  rescue
+    e -> warn(e, "could not publish graphql subscription")
   end
 end

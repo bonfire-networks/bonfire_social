@@ -64,7 +64,24 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
                 loader
                 |> Dataloader.load(Needle.Pointer, :created, post)
                 |> Helpers.on_load(fn loader ->
-                  {:ok, e(Dataloader.get(loader, Needle.Pointer, :created, post), :creator, nil)}
+                  created = Dataloader.get(loader, Needle.Pointer, :created, post)
+                  creator = e(created, :creator, nil)
+
+                  if is_struct(creator) and
+                       not is_struct(creator, Ecto.Association.NotLoaded) do
+                    {:ok, creator}
+                  else
+                    # The :created mixin loads without its nested :creator (stays
+                    # NotLoaded → null, e.g. a boosted post's author). Preload it.
+                    {:ok,
+                     e(
+                       Bonfire.Common.Repo.maybe_preload(created,
+                         creator: [:profile, :character]
+                       ),
+                       :creator,
+                       nil
+                     )}
+                  end
                 end)
             end
         end)
@@ -168,6 +185,13 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
           when is_struct(subject) and not is_struct(subject, Ecto.Association.NotLoaded) ->
             {:ok, subject}
 
+          # A replied-to parent resolves to an OBJECT (e.g. a Post) — it has a
+          # creator but no :subject assoc, so return the author instead of
+          # crashing the Dataloader on a schema without :subject. Activities have
+          # a :subject key so they never match this clause.
+          %{__struct__: _} = obj, _args, _info when not is_map_key(obj, :subject) ->
+            {:ok, e(obj, :created, :creator, nil)}
+
           parent, _args, %{context: %{loader: loader}} ->
             loader
             |> Dataloader.load(Needle.Pointer, :subject, parent)
@@ -235,6 +259,14 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
             |> Helpers.on_load(fn loader ->
               Dataloader.get(loader, Needle.Pointer, :object, activity) |> follow_pointer()
             end)
+        end)
+      end
+
+      # The group/topic a post was published in (`activity.tree.parent`), rendered
+      # as "in <group>" in feeds. Needs the feed to preload :with_parent (else nil).
+      field :context, :any_context do
+        resolve(fn activity, _args, _info ->
+          {:ok, e(activity, :tree, :parent, nil)}
         end)
       end
 
@@ -532,8 +564,28 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       field(:reply_to_id, :id)
 
       field :reply_to, :activity do
-        description("The activity being replied to")
-        resolve(Helpers.dataloader(Needle.Pointer, :reply_to))
+        description("The post being replied to")
+        # reply_to points to the parent OBJECT (a Post). Load + follow the
+        # pointer to the concrete struct (a bare Needle.Pointer has no
+        # :subject/:object assoc, so sub-fields on it 500'd the whole query),
+        # and preload its creator so `subject` can return the parent author.
+        resolve(fn parent, _args, %{context: %{loader: loader}} ->
+          loader
+          |> Dataloader.load(Needle.Pointer, :reply_to, parent)
+          |> Helpers.on_load(fn loader ->
+            case Dataloader.get(loader, Needle.Pointer, :reply_to, parent)
+                 |> follow_pointer() do
+              {:ok, %{} = obj} ->
+                {:ok,
+                 Bonfire.Common.Repo.maybe_preload(obj,
+                   created: [creator: [:profile, :character]]
+                 )}
+
+              other ->
+                other
+            end
+          end)
+        end)
       end
 
       field(:direct_replies_count, :integer)
@@ -780,6 +832,14 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         resolve(&feed_preloaded/2)
       end
 
+      @desc "Activities posted in a group (the group's outbox feed)"
+      connection field :group_activities, node_type: :activity do
+        arg(:group_id, non_null(:id))
+        arg(:filter, :feed_filters)
+        complexity(&page_complexity/2)
+        resolve(&group_activities/2)
+      end
+
       @desc "Get objects in a feed (TODO)"
       connection field :feed_objects, node_type: :any_context do
         arg(:filter, :feed_filters)
@@ -821,6 +881,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         arg(:boundary, :string)
         arg(:permissions, list_of(:boundary_permission_input))
         arg(:context_id, :id)
+        arg(:uploaded_media, list_of(:id))
+        # quote a post (FEP-044f)
+        arg(:quote_id, :id)
 
         resolve(&create_post/2)
       end
@@ -837,7 +900,26 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         arg(:username, non_null(:string))
         arg(:id, non_null(:string))
 
-        resolve(&follow/2)
+        resolve(&Bonfire.Social.Graph.API.GraphQL.follow/2)
+      end
+
+      field :unfollow, :boolean do
+        arg(:username, :string)
+        arg(:id, non_null(:string))
+
+        resolve(&Bonfire.Social.Graph.API.GraphQL.unfollow/2)
+      end
+
+      field :accept_follow_request, :boolean do
+        arg(:id, non_null(:id))
+
+        resolve(&Bonfire.Social.Graph.API.GraphQL.accept_follow_request/2)
+      end
+
+      field :reject_follow_request, :boolean do
+        arg(:id, non_null(:id))
+
+        resolve(&Bonfire.Social.Graph.API.GraphQL.reject_follow_request/2)
       end
 
       field :boost, :activity do
@@ -856,6 +938,18 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         arg(:id, non_null(:string))
 
         resolve(&unlike/2)
+      end
+
+      field :bookmark, :activity do
+        arg(:id, non_null(:string))
+
+        resolve(&bookmark/2)
+      end
+
+      field :unbookmark, :boolean do
+        arg(:id, non_null(:string))
+
+        resolve(&unbookmark/2)
       end
 
       field :flag, :activity do
@@ -965,21 +1059,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
        }}
     end
 
-    # defp feed(args, info) do
-    #   user = GraphQL.current_user(info)
-    #   debug(args)
-
-    #   Bonfire.Social.FeedActivities.feed(
-    #     Types.maybe_to_atom(e(args, :filter, :feed_name, :local)),
-    #     current_user: user,
-    #     paginate: e(args, :paginate, nil)
-    #   )
-    #   |> feed()
-    # end
-    # defp feed(%{edges: feed}) when is_list(feed) do
-    #   {:ok, Enum.map(feed, &Map.get(&1, :activity))}
-    # end
-
     def feed_preloaded(args, info), do: feed(:activities_preloaded, nil, args, info)
 
     @doc false
@@ -992,8 +1071,51 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       max(limit, 1) * child_complexity + 1
     end
 
+    @doc "Resolver for the group_activities connection using the group's outbox feed ids."
+    def group_activities(args, info) do
+      current_user = GraphQL.current_user(info)
+      group_id = args[:group_id]
+
+      group =
+        case maybe_apply(Bonfire.Classify.Categories, :get, [
+               group_id,
+               [preload: :character, current_user: current_user]
+             ]) do
+          {:ok, g} -> g
+          %{} = g -> g
+          _ -> nil
+        end
+
+      if group do
+        # Include child topics' feeds for parity with the web group page.
+        subcategories =
+          maybe_apply(Bonfire.Classify.Categories, :list_tree, [
+            [:default, parent_category: group_id, tree_max_depth: 1, preload: :character],
+            [current_user: current_user]
+          ])
+          |> e(:edges, [])
+
+        feed_ids =
+          maybe_apply(Bonfire.Classify.Categories, :group_feed_ids, [
+            group,
+            subcategories
+          ]) || [group_id]
+
+        feed(:activities, feed_ids, args, info)
+      else
+        {:error, "Group not found"}
+      end
+    end
+
     def feed(feed_type \\ :activities, feed_name \\ nil, args, info) do
       current_user = GraphQL.current_user(info)
+
+      # A list feed_name is an explicit feed-id scope, used by group/topic feeds.
+      {explicit_feed_ids, feed_name} =
+        case feed_name do
+          ids when is_list(ids) -> {ids, :custom}
+          other -> {nil, other}
+        end
 
       {pagination_args, filters} =
         Pagination.pagination_args_filter(args)
@@ -1001,77 +1123,76 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       filters = e(filters, :filter, %{})
       filters = if is_map(filters), do: filters, else: Map.new(filters)
 
-      # Check if feed_name was explicitly provided (even if nil) vs not provided at all
-      # This allows callers to explicitly disable feed_name filtering by passing nil
+      # A present feed_name key, even nil, intentionally overrides the default.
       feed_name_explicitly_set? = is_map(filters) and Map.has_key?(filters, :feed_name)
       feed_name_from_filter = e(filters, :feed_name, nil)
 
       feed_name_resolved =
         feed_name ||
           if feed_name_explicitly_set? do
-            # feed_name was explicitly provided (could be nil to disable filtering)
             Types.maybe_to_atom(feed_name_from_filter)
           else
-            # feed_name not provided, use default
             Types.maybe_to_atom(
               Bonfire.Social.FeedLoader.feed_name_or_default(:default, current_user)
             )
           end
 
+      feed_opts = [
+        current_user: current_user,
+        # API feeds should not inherit the FeedLive UI's 7-day default window.
+        time_limit: 0,
+        paginate: feed_paginate_opts(pagination_args),
+        # API feeds rely on field resolvers unless a caller asks for explicit preloads.
+        preload:
+          case e(filters, :preload, nil) || e(filters, "preload", nil) do
+            preload_list when is_list(preload_list) and preload_list != [] ->
+              # Convert string preload options to atoms (for Mastodon API N+1 optimization)
+              Enum.map(preload_list, &Types.maybe_to_atom/1)
+
+            _ ->
+              # Fall back to existing logic based on feed_type
+              case feed_type do
+                :objects ->
+                  :per_object
+
+                :media ->
+                  :per_media
+
+                # Preload the activity subtree for synchronous API reads.
+                :activities_preloaded ->
+                  # :with_verb so the verb name resolves (e.g. "Boost") for reblog detection
+                  [
+                    :with_verb,
+                    :with_subject,
+                    :with_creator,
+                    :with_object_more,
+                    :with_post_content,
+                    :with_replied
+                  ]
+
+                _activities ->
+                  # Keep API feeds light; callers can opt into tree preloads when needed.
+                  false
+              end
+          end
+      ]
+
       feed_result =
-        Bonfire.Social.FeedActivities.feed(
-          feed_name_resolved,
-          filters,
-          current_user: current_user,
-          paginate: feed_paginate_opts(pagination_args),
-          # we don't want to preload anything unnecessarily (relying instead on preloads in sub-field definitions)
-          preload:
-            case e(filters, :preload, nil) || e(filters, "preload", nil) do
-              preload_list when is_list(preload_list) and preload_list != [] ->
-                # Convert string preload options to atoms (for Mastodon API N+1 optimization)
-                Enum.map(preload_list, &Types.maybe_to_atom/1)
+        if is_list(explicit_feed_ids) and explicit_feed_ids != [] do
+          # Bypass preset resolution for explicit group/topic feed ids.
+          Bonfire.Social.FeedLoader.feed_filtered(explicit_feed_ids, filters, feed_opts)
+        else
+          Bonfire.Social.FeedActivities.feed(feed_name_resolved, filters, feed_opts)
+        end
 
-              _ ->
-                # Fall back to existing logic based on feed_type
-                case feed_type do
-                  :objects ->
-                    :per_object
-
-                  :media ->
-                    :per_media
-
-                  # variant-D: preload the activity subtree so sub-fields resolve
-                  # synchronously (no Needle.Pointer Dataloader rounds)
-                  :activities_preloaded ->
-                    # :with_verb so the verb name resolves (e.g. "Boost") for reblog detection
-                    [
-                      :with_verb,
-                      :with_subject,
-                      :with_creator,
-                      :with_object_more,
-                      :with_post_content,
-                      :with_replied
-                    ]
-
-                  _activities ->
-                    false
-                end
-            end
-        )
-        |> debug("feed_result")
-
-      # Handle error tuples from FeedActivities.feed/3 (e.g., {:error, :unauthorized})
       case feed_result do
         {:error, _} = error ->
           error
 
         %{edges: edges} when is_list(edges) and length(edges) > 0 ->
-          # Apply postloads (same pattern as LiveHandler.do_preload_extras)
-          # Media requires postloading because it uses complex join logic
+          # Media requires postloading because it uses complex join logic.
           postloads = [:with_media]
 
-          # Apply postloads to raw feed items before pagination
-          # Use preload_nested to tell activity_preloads about the structure
           edges =
             edges
             |> Activities.activity_preloads(postloads,
@@ -1087,10 +1208,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       end
     end
 
-    # Relay args use `:first`/`:last`, but `FeedActivities.feed` (→ Paginator) reads `:limit`.
-    # Without this translation the requested page size is ignored and the feed falls back to the
-    # default (~10–20), so a client asking for 40 gets a short page and assumes the feed ended
-    # (breaks "load more" on shorter feeds).
+    # Relay uses :first/:last; the Bonfire paginator reads :limit.
     defp feed_paginate_opts(pagination_args) when is_list(pagination_args) do
       case pagination_args[:first] || pagination_args[:last] do
         limit when is_integer(limit) -> Keyword.put_new(pagination_args, :limit, limit)
@@ -1177,19 +1295,50 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
               nil
           end
 
-        opts =
-          [
-            post_attrs: args,
-            current_user: user,
-            context: info
-          ]
-          |> maybe_put(:boundary, args[:boundary])
-          |> maybe_put(:verb_grants, verb_grants)
-          |> maybe_put(:context_id, args[:context_id])
-
-        with {:ok, post} <- Bonfire.Posts.publish(opts) do
+        with {:ok, post_attrs} <- post_attrs_with_uploaded_media(args, user),
+             opts =
+               [
+                 post_attrs: post_attrs,
+                 current_user: user,
+                 context: info
+               ]
+               |> maybe_put(:boundary, args[:boundary])
+               |> maybe_put(:verb_grants, verb_grants)
+               |> maybe_put(:context_id, args[:context_id])
+               |> maybe_put(:quotes, if(args[:quote_id], do: [args[:quote_id]])),
+             {:ok, post} <- Bonfire.Posts.publish(opts) do
           {:ok, maybe_put(post, :context_id, args[:context_id])}
         end
+      end
+    end
+
+    defp post_attrs_with_uploaded_media(%{uploaded_media: ids} = args, user)
+         when is_list(ids) and ids != [] do
+      with {:ok, media} <- fetch_owned_media(ids, user) do
+        {:ok, Map.put(args, :uploaded_media, media)}
+      end
+    end
+
+    defp post_attrs_with_uploaded_media(args, _user), do: {:ok, args}
+
+    # Every requested upload must exist and belong to the posting user.
+    defp fetch_owned_media(ids, user) do
+      user_id = Bonfire.Common.Enums.id(user)
+
+      ids
+      |> List.wrap()
+      |> Enum.reduce_while({:ok, []}, fn id, {:ok, acc} ->
+        with true <- Bonfire.Common.Types.is_uid?(id),
+             {:ok, loaded_media} <- Bonfire.Files.Media.one(id: id),
+             true <- Bonfire.Common.Enums.id(Map.get(loaded_media, :creator_id)) == user_id do
+          {:cont, {:ok, [loaded_media | acc]}}
+        else
+          _ -> {:halt, {:error, "Media not found or not owned"}}
+        end
+      end)
+      |> case do
+        {:ok, media} -> {:ok, Enum.reverse(media)}
+        error -> error
       end
     end
 
@@ -1227,19 +1376,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       end
     end
 
-    defp follow(%{username: username_to_follow}, info) do
-      # Follows.follow already supports username
-      follow(%{id: username_to_follow}, info)
-    end
-
-    defp follow(%{id: to_follow}, info) do
-      user = GraphQL.current_user(info)
-
-      if user do
-        with {:ok, f} <- Bonfire.Social.Graph.Follows.follow(user, to_follow),
-             do: {:ok, e(f, :activity, nil)}
-      else
-        {:error, "Not authenticated"}
+    # Re-read the acted-on object so `*ByMe`/`*Count` reflect persisted reactions.
+    defp reaction_status(reaction, id, info) do
+      case get_status(nil, %{id: id}, info) do
+        {:error, _} -> {:ok, e(reaction, :activity, nil) || reaction}
+        other -> other
       end
     end
 
@@ -1248,7 +1389,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       if user do
         with {:ok, f} <- Bonfire.Social.Boosts.boost(user, id),
-             do: {:ok, e(f, :activity, nil)}
+             do: reaction_status(f, id, info)
       else
         {:error, "Not authenticated"}
       end
@@ -1259,7 +1400,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       if user do
         with {:ok, f} <- Bonfire.Social.Likes.like(user, id),
-             do: {:ok, e(f, :activity, nil)}
+             do: reaction_status(f, id, info)
       else
         {:error, "Not authenticated"}
       end
@@ -1268,6 +1409,27 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     defp unlike(%{id: id}, info) do
       with {:ok, user} <- GraphQL.current_user_or_not_logged_in(info),
            {:ok, _} <- Bonfire.Social.Likes.unlike(user, id) do
+        {:ok, true}
+      end
+    end
+
+    defp bookmark(%{id: id}, info) do
+      user = GraphQL.current_user(info)
+
+      if user do
+        # Bookmarks.bookmark expects an object, while Likes.like accepts an id.
+        with {:ok, object} <- Bonfire.Common.Needles.get(id, current_user: user),
+             {:ok, f} <- Bonfire.Social.Bookmarks.bookmark(user, object) do
+          reaction_status(f, id, info)
+        end
+      else
+        {:error, "Not authenticated"}
+      end
+    end
+
+    defp unbookmark(%{id: id}, info) do
+      with {:ok, user} <- GraphQL.current_user_or_not_logged_in(info),
+           {:ok, _} <- Bonfire.Social.Bookmarks.unbookmark(user, id) do
         {:ok, true}
       end
     end

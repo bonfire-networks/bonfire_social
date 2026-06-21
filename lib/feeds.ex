@@ -491,6 +491,46 @@ defmodule Bonfire.Social.Feeds do
   end
 
   @doc """
+  Resolve the PubSub topic(s) for a `feedActivity` GraphQL subscription, given the
+  subscription args (`%{feed_name: ...}` or `%{thread_id: ...}`) and the current
+  user. Returns a list of feed/thread ids matching what `LivePush` broadcasts to:
+
+    * a `thread_id` → that thread's topic
+    * `feed_name: "my"` → the viewer's home feeds (`my_home_feed_ids/1`)
+    * any other `feed_name` (`notifications`, `local`, `remote`, …) → its feed id
+
+  Empty list when nothing resolves (e.g. a user feed requested without a user).
+  """
+  def subscription_topics(args, current_user) do
+    cond do
+      is_binary(args[:thread_id]) ->
+        # Only subscribe to a thread the viewer can actually read — otherwise a
+        # client could receive replies to a private/DM thread just by knowing its
+        # id (the subscription delivers what LivePush publishes to the topic, with
+        # no later per-activity boundary check). Empty = no topic = denied.
+        case Objects.read(args[:thread_id], current_user: current_user) do
+          {:ok, _} -> [args[:thread_id]]
+          _ -> []
+        end
+
+      is_binary(args[:feed_name]) ->
+        case Bonfire.Common.Types.maybe_to_atom(args[:feed_name]) do
+          :my ->
+            if(current_user, do: my_home_feed_ids(current_user: current_user), else: [])
+
+          other ->
+            user_named_or_feed_id(other, current_user: current_user) |> List.wrap()
+        end
+
+      true ->
+        []
+    end
+    |> List.flatten()
+    |> Enum.filter(&is_binary/1)
+    |> Enum.uniq()
+  end
+
+  @doc """
   Gets the feed ID for a named feed.
 
   ## Examples
