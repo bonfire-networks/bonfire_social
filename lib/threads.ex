@@ -442,7 +442,10 @@ defmodule Bonfire.Social.Threads do
 
   defp do_list_participants_for_threads(edges, opts) do
     opts = to_options(opts)
-    limit_per_thread = opts[:limit] || 5
+    # A sane global bound on how many participants to load for the visible threads.
+    # Display capping (e.g. show top 5) is done at render time — we keep the full
+    # (bounded) list in memory so the UI can reveal the rest without another query.
+    fetch_limit = opts[:limit] || 50
     exclude_table_ids = default_exclude_table_ids()
     participant_verb_ids = participant_verb_ids()
 
@@ -513,7 +516,7 @@ defmodule Bonfire.Social.Threads do
       if all_thread_ids != [] do
         fetch_participants(all_thread_ids,
           current_user: current_user(opts),
-          limit: limit_per_thread * length(edges),
+          limit: fetch_limit,
           exclude_table_ids: exclude_table_ids,
           exclude_subject_ids: opts[:exclude_subject_ids] || [],
           skip_preload_for_subject_ids: skip_preload_for_subject_ids,
@@ -532,17 +535,30 @@ defmodule Bonfire.Social.Threads do
         %{}
       end
 
-    # Merge all participant sources once, then dedup and take limit per thread
+    # Merge all participant sources once, then dedup — keep the FULL (bounded) list per
+    # thread; display capping happens at render time (see `participants_split/2`).
     Map.merge(fetched_by_thread, edge_subjects_by_thread, fn _, a, b -> a ++ b end)
     |> Map.merge(edge_tags_by_thread, fn _, a, b -> a ++ b end)
     |> Map.new(fn {thread_id, participants} ->
       {thread_id,
        participants
        |> filter_empty([])
-       |> Enum.uniq_by(&(e(&1, :character, :id, nil) || id(&1)))
-       |> Enum.take(limit_per_thread)}
+       |> Enum.uniq_by(&(e(&1, :character, :id, nil) || id(&1)))}
     end)
   end
+
+  @doc "Joins participant display names with ` & ` (used for thread titles and search)."
+  def participants_names(participants, joiner \\ " & ")
+
+  def participants_names(participants, joiner) when is_list(participants) do
+    participants
+    |> Enum.map(fn p ->
+      e(p, :profile, :name, nil) || e(p, :character, :username, nil) || l("someone")
+    end)
+    |> Enum.join(joiner)
+  end
+
+  def participants_names(_, _), do: ""
 
   def list_participants(activity_or_object, thread_or_object_id \\ nil, opts \\ []) do
     opts = to_options(opts)
