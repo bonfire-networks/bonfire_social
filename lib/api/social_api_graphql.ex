@@ -18,7 +18,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
     # import_types(Absinthe.Type.Custom)
 
-    # for pagination 
+    # for pagination
     connection(node_type: :any_context)
 
     object :post do
@@ -144,7 +144,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       field(:json, :json)
     end
 
-    # for pagination 
+    # for pagination
     connection(node_type: :post)
 
     object :verb do
@@ -565,10 +565,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       field :reply_to, :activity do
         description("The post being replied to")
-        # reply_to points to the parent OBJECT (a Post). Load + follow the
-        # pointer to the concrete struct (a bare Needle.Pointer has no
-        # :subject/:object assoc, so sub-fields on it 500'd the whole query),
-        # and preload its creator so `subject` can return the parent author.
         resolve(fn parent, _args, %{context: %{loader: loader}} ->
           loader
           |> Dataloader.load(Needle.Pointer, :reply_to, parent)

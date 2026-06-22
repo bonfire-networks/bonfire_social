@@ -184,10 +184,10 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     end
 
     @boundary_options_query """
-    { my_boundary_options { id label custom } }
+    { boundaries(context: "post") { options { id label custom } } }
     """
 
-    test "my_boundary_options returns built-in presets and the user's custom ACLs", %{me: me} do
+    test "boundaries.options returns built-in presets and the user's custom ACLs", %{me: me} do
       {:ok, _acl} =
         Bonfire.Boundaries.Acls.create(%{named: %{name: "pandora"}}, current_user: me)
 
@@ -197,7 +197,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         )
 
       refute result[:errors]
-      options = get_in(result, [:data, "my_boundary_options"])
+      options = get_in(result, [:data, "boundaries", "options"])
       assert is_list(options) and options != []
 
       # built-in presets (custom: false) are present
