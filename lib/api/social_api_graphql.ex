@@ -955,6 +955,25 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       end
     end
 
+    object :social_subscriptions do
+      # `Feeds.subscription_topics/2` resolves the boundary-gated topics LivePush
+      # broadcasts to (a feed id for `feedName`, or a thread id for `threadId`).
+      field :feed_activity, :activity do
+        arg(:feed_name, :string)
+        arg(:thread_id, :id)
+
+        config(fn args, %{context: context} ->
+          case Bonfire.Social.Feeds.subscription_topics(args, Map.get(context, :current_user)) do
+            [] -> {:error, "Not authorized, or no such feed/thread"}
+            topics -> {:ok, topic: topics}
+          end
+        end)
+
+        # the published activity is the resolution root; return it as-is
+        resolve(fn activity, _args, _res -> {:ok, activity} end)
+      end
+    end
+
     def list_posts(_parent, args, info) do
       {pagination_args, filters} =
         Pagination.pagination_args_filter(args)
