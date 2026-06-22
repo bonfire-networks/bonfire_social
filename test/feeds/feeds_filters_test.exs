@@ -562,16 +562,17 @@ defmodule Bonfire.Social.FeedsFiltersTest do
       user = fake_user!("main user")
       other_user = fake_user!("replier")
 
-      # Create an article (long post with a title)
+      # Create an article (now a first-class type, not just a long post)
       article =
-        fake_post!(user, "public", %{
+        Bonfire.Articles.Fake.fake_article!(user, "public", %{
           post_content: %{
             name: "An article title",
             html_body: String.duplicate("long article content ", 100)
           }
         })
 
-      # Create a reply to the article that also looks like an article
+      # Create a reply to the article that also looks like an article — but it's a
+      # reply (a Post), so it must not appear in the articles feed.
       reply_article =
         fake_post!(other_user, "public", %{
           post_content: %{

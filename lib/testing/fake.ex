@@ -369,10 +369,16 @@ defmodule Bonfire.Social.Fake do
           }
         }
 
-        post =
-          Bonfire.Posts.Fake.fake_post!(other_user, "public", attrs)
+        # Articles are now a distinct type — create a real Article (via maybe_apply to
+        # avoid a compile-time dep, since bonfire_articles depends on bonfire_social).
+        article =
+          Bonfire.Common.Utils.maybe_apply(
+            Bonfire.Articles.Fake,
+            :fake_article!,
+            [other_user, "public", attrs]
+          )
 
-        {post, nil}
+        {article, nil}
 
       :polls ->
         {:ok, question} =

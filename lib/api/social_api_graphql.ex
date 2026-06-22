@@ -565,6 +565,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       field :reply_to, :activity do
         description("The post being replied to")
+
         resolve(fn parent, _args, %{context: %{loader: loader}} ->
           loader
           |> Dataloader.load(Needle.Pointer, :reply_to, parent)
