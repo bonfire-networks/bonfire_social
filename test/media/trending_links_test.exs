@@ -249,7 +249,7 @@ defmodule Bonfire.Social.Bonfire.Social.TrendingLinksTest do
     assert is_list(results1)
 
     # Reset cache
-    Bonfire.Social.Media.trending_links_reset(limit: 10)
+    Bonfire.Social.Media.trending_links(limit: 10, cache: :reset)
     # Create new link after reset
     user = Fake.fake_user!()
 
@@ -267,7 +267,7 @@ defmodule Bonfire.Social.Bonfire.Social.TrendingLinksTest do
   end
 
   test "handles posts without boosts" do
-    Bonfire.Social.Media.trending_links_reset(limit: 11)
+    Bonfire.Social.Media.trending_links(limit: 11, cache: :reset)
 
     user = Fake.fake_user!()
 

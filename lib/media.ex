@@ -46,7 +46,8 @@ defmodule Bonfire.Social.Media do
   def trending_links(opts \\ []) do
     Cache.maybe_apply_cached(
       &list_trending_paginated/1,
-      [Keyword.drop(opts, [:cache_ttl])],
+      [trending_links_args(opts)],
+      cache: opts[:cache],
       expire:
         Keyword.get(opts, :cache_ttl) ||
           Config.get([Bonfire.Social.Media, :default_cache_ttl]) || @default_cache_ttl
@@ -59,9 +60,9 @@ defmodule Bonfire.Social.Media do
       []
   end
 
-  def trending_links_reset(opts \\ []) do
-    Cache.reset(&list_trending_paginated/1, [opts])
-  end
+  # the args the cache key is derived from — strips cache-control opts so the key stays stable
+  # whether or not `:cache`/`:cache_ttl` are passed (so reset/refresh hit the same key as the load)
+  defp trending_links_args(opts), do: Keyword.drop(opts, [:cache_ttl, :cache])
 
   @doc """
   Warms the trending links cache by pre-computing results.
@@ -70,11 +71,8 @@ defmodule Bonfire.Social.Media do
   Returns {:ok, count} with number of links cached, or {:error, reason}.
   """
   def warm_cache(opts \\ []) do
-    # Reset any stale cache first
-    trending_links_reset(opts)
-
-    # Now fetch and cache fresh data
-    links = trending_links(opts)
+    # bust any stale cache + recompute in one go (standard `:cache` verb)
+    links = trending_links(Keyword.put(opts, :cache, :refresh))
     {:ok, length(links)}
   rescue
     e ->
@@ -91,7 +89,7 @@ defmodule Bonfire.Social.Media do
     key =
       Cache.key_for_call(
         {Bonfire.Social.Media, :list_trending_paginated},
-        [Keyword.drop(opts, [:cache_ttl])]
+        [trending_links_args(opts)]
       )
 
     Cache.get!(key)
