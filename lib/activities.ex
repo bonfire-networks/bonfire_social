@@ -2220,8 +2220,11 @@ defmodule Bonfire.Social.Activities do
         edges
 
       medias ->
+        # include the creator's `character.peered` (in this one batched query, no N+1) so
+        # locality classification has it loaded — must match the per-activity clause below,
+        # otherwise its guard skips and the feed render hits an unloaded-`:peered` raise
         by_id =
-          repo().maybe_preload(medias, [creator: [profile: [:icon], character: []]], opts)
+          repo().maybe_preload(medias, [creator: [profile: [:icon], character: [:peered]]], opts)
           |> Map.new(fn m -> {m.id, m} end)
 
         Enum.map(edges, &put_preloaded_media(&1, by_id))
@@ -2274,7 +2277,14 @@ defmodule Bonfire.Social.Activities do
     object =
       if is_struct(object, Bonfire.Files.Media) and
            not match?(%{creator: %{profile: %{id: _}}}, object) do
-        repo().maybe_preload(object, [creator: [profile: [:icon], character: []]], opts)
+        repo().maybe_preload(
+          object,
+          # preload the creator's `character.peered` so locality classification (e.g. the
+          # `interaction_allowed?`/`is_local?` check ReplyLive runs) has it loaded — Media roots
+          # aren't covered by the activity's `:with_creator`/`:with_object_peered` preloads
+          [creator: [profile: [:icon], character: [:peered]]],
+          opts
+        )
       else
         object
       end

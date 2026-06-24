@@ -1797,13 +1797,13 @@ defmodule Bonfire.Social.FeedLoader do
       (filters[:dedup_by_like_or_boost] != false || show_objects_only_once?)
       |> debug("dedup_by_like_boost?")
 
-    # Reply dedup (dedup_replies_by_parent) remains in postprocessing for now
+    # NOTE: Reply dedup remains in postprocessing for now
     dedup_replies_by_parent? = filters[:dedup_replies_by_parent] == true
 
-    edges =
-      if show_objects_only_once?,
-        do: drop_boosts_of_present_originals(edges),
-        else: edges
+    # edges =
+    #   if show_objects_only_once?,
+    #     do: drop_boosts_of_present_originals(edges),
+    #     else: edges
 
     edges =
       edges
@@ -1836,10 +1836,21 @@ defmodule Bonfire.Social.FeedLoader do
 
             _verb_id when show_objects_only_once? == true ->
               # Collapse all other verbs (create, boost, announce, …) by object_id alone
-              # so a group boost doesn't show the same post twice in the feed
-              {nil,
-               e(item, :activity, :object_id, nil) || e(item, :activity, :id, nil) ||
-                 Enums.id(item)}
+              # so a group boost doesn't show the same post twice in the feed.
+              # BUT if the (boosted) object is itself a reply, bucket it under the reply's
+              # parent — same key as the `@reply_verb_id` branch above — so a group auto-boost
+              # of a reply collapses with the reply's own Create. Otherwise the reply leaks
+              # twice in the author's feed: its Create is keyed by `reply_to_id` while the
+              # boost would key by the reply's own `object_id`.
+              case e(item, :activity, :replied, :reply_to_id, nil) do
+                nil ->
+                  {nil,
+                   e(item, :activity, :object_id, nil) || e(item, :activity, :id, nil) ||
+                     Enums.id(item)}
+
+                reply_to_id ->
+                  {@reply_verb_id, reply_to_id}
+              end
 
             verb_id ->
               {verb_id,
@@ -1936,23 +1947,23 @@ defmodule Bonfire.Social.FeedLoader do
 
   # Drops a boost/announce when an original (create/reply/…) of the same object is
   # also on the page. Boosts of objects with no original present are left untouched.
-  defp drop_boosts_of_present_originals(edges) do
-    original_object_ids =
-      edges
-      |> Enum.flat_map(fn item ->
-        case e(item, :activity, :verb_id, nil) do
-          verb_id when verb_id in [@boost_verb_id, @like_verb_id] -> []
-          _ -> [e(item, :activity, :object_id, nil)]
-        end
-      end)
-      |> Enum.reject(&is_nil/1)
-      |> MapSet.new()
+  # defp drop_boosts_of_present_originals(edges) do
+  #   original_object_ids =
+  #     edges
+  #     |> Enum.flat_map(fn item ->
+  #       case e(item, :activity, :verb_id, nil) do
+  #         verb_id when verb_id in [@boost_verb_id, @like_verb_id] -> []
+  #         _ -> [e(item, :activity, :object_id, nil)]
+  #       end
+  #     end)
+  #     |> Enum.reject(&is_nil/1)
+  #     |> MapSet.new()
 
-    Enum.reject(edges, fn item ->
-      e(item, :activity, :verb_id, nil) == @boost_verb_id and
-        MapSet.member?(original_object_ids, e(item, :activity, :object_id, nil))
-    end)
-  end
+  #   Enum.reject(edges, fn item ->
+  #     e(item, :activity, :verb_id, nil) == @boost_verb_id and
+  #       MapSet.member?(original_object_ids, e(item, :activity, :object_id, nil))
+  #   end)
+  # end
 
   # defp postload_subjects_more(edges, _filters, _opts) do
   #   like_verb_id = @like_verb_id
