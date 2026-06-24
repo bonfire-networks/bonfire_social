@@ -472,23 +472,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         end)
       end
 
-      field :bookmark_count, :integer do
-        resolve(fn
-          activity, _args, %{context: %{loader: loader}} = _info ->
-            loader
-            |> Dataloader.load(Needle.Pointer, :bookmark_count, activity)
-            |> Helpers.on_load(fn loader ->
-              case Dataloader.get(loader, Needle.Pointer, :bookmark_count, activity) do
-                %{object_count: count} when is_integer(count) -> {:ok, count}
-                _ -> {:ok, 0}
-              end
-            end)
-
-          _activity, _args, _info ->
-            {:ok, 0}
-        end)
-      end
-
       field :replies_count, :integer do
         resolve(fn
           # use-parent fast path: :with_replied preloads the `replied` record,

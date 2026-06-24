@@ -37,7 +37,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       bookmark(id: $id) {
         id
         bookmarked_by_me
-        bookmark_count
       }
     }
     """
@@ -122,7 +121,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       refute result[:errors]
       assert get_in(result, [:data, "bookmark", "id"]) == post.id
       assert get_in(result, [:data, "bookmark", "bookmarked_by_me"]) == true
-      assert get_in(result, [:data, "bookmark", "bookmark_count"]) == 1
     end
 
     test "unbookmark returns true only after the domain action succeeds", %{
