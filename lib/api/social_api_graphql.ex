@@ -15,6 +15,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     alias Bonfire.API.GraphQL
     alias Bonfire.Common.Types
     alias Bonfire.Social.Activities
+    alias Bonfire.Social.API.GraphQLMasto.Notifications, as: NotificationFilters
 
     # import_types(Absinthe.Type.Custom)
 
@@ -229,8 +230,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
           %{activity: %{verb: %{id: _} = verb}}, _, _ ->
             {:ok, verb}
 
-          %{verb_id: verb}, _, _ ->
-            {:ok, %{verb: verb}}
+          %{verb_id: verb_id}, _, _ ->
+            {:ok, Bonfire.Boundaries.Verbs.get(verb_id) || %{verb: verb_id}}
 
           %{verb: %{verb: verb}}, _, _ ->
             {:ok, %{verb: verb}}
@@ -258,6 +259,26 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
             |> Dataloader.load(Needle.Pointer, :object, activity)
             |> Helpers.on_load(fn loader ->
               Dataloader.get(loader, Needle.Pointer, :object, activity) |> follow_pointer()
+            end)
+        end)
+      end
+
+      field :quoted, list_of(:any_context) do
+        resolve(fn
+          %{object: %Needle.Pointer{} = pointer}, _args, _info ->
+            quoted_from_pointer(pointer)
+
+          %{object: object}, _args, _info
+          when is_struct(object) and not is_struct(object, Ecto.Association.NotLoaded) ->
+            quoted_from_pointer(object)
+
+          activity, _args, %{context: %{loader: loader}} ->
+            loader
+            |> Dataloader.load(Needle.Pointer, :object, activity)
+            |> Helpers.on_load(fn loader ->
+              loader
+              |> Dataloader.get(Needle.Pointer, :object, activity)
+              |> quoted_from_pointer()
             end)
         end)
       end
@@ -441,6 +462,23 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
             |> Dataloader.load(Needle.Pointer, :boost_count, activity)
             |> Helpers.on_load(fn loader ->
               case Dataloader.get(loader, Needle.Pointer, :boost_count, activity) do
+                %{object_count: count} when is_integer(count) -> {:ok, count}
+                _ -> {:ok, 0}
+              end
+            end)
+
+          _activity, _args, _info ->
+            {:ok, 0}
+        end)
+      end
+
+      field :bookmark_count, :integer do
+        resolve(fn
+          activity, _args, %{context: %{loader: loader}} = _info ->
+            loader
+            |> Dataloader.load(Needle.Pointer, :bookmark_count, activity)
+            |> Helpers.on_load(fn loader ->
+              case Dataloader.get(loader, Needle.Pointer, :bookmark_count, activity) do
                 %{object_count: count} when is_integer(count) -> {:ok, count}
                 _ -> {:ok, 0}
               end
@@ -719,6 +757,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       field(:activity_types, list_of(:string),
         description: "Filter by activity type (eg. create, boost, follow) (TODO)"
+      )
+
+      field(:notification_types, list_of(:string),
+        description:
+          "Filter notifications by API notification type (eg. mention, favourite, reblog, follow)"
       )
 
       field(:object_types, list_of(:string),
@@ -1005,63 +1048,63 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     def get_status(_parent, %{id: id}, info) do
       current_user = GraphQL.current_user(info)
 
+      case thread_context_status_activity(id, current_user) do
+        %{id: _} = activity -> {:ok, activity}
+        _ -> {:error, :not_found}
+      end
+    end
+
+    defp thread_context_status_activity(id, current_user) when is_binary(id) do
       case Bonfire.Social.Objects.read(id,
              current_user: current_user,
              preload: @single_status_preloads
            ) do
         {:ok, %{activity: activity} = object} when is_map(activity) ->
-          {:ok, Map.put(activity, :object, object)}
+          Map.put(activity, :object, object)
 
         {:ok, object} ->
-          {:ok, %{id: id, object_id: id, object: object}}
+          %{id: id, object_id: id, object: object}
 
         _ ->
-          {:error, :not_found}
+          nil
       end
     end
+
+    defp thread_context_status_activity(_, _), do: nil
 
     def get_thread_context(_parent, %{id: id} = _args, info) do
       current_user = GraphQL.current_user(info)
 
+      with {:ok, _root} <- get_status(nil, %{id: id}, info) do
+        get_thread_context_for_status(id, current_user)
+      end
+    end
+
+    defp get_thread_context_for_status(id, current_user) do
       # Get ancestors (walking up the reply chain to root)
       ancestor_activities =
         case Bonfire.Social.Threads.determine_thread_path(id, current_user: current_user) do
           path when is_list(path) and length(path) > 0 ->
             # Fetch each ancestor activity with preloads for N+1 prevention
             path
-            |> Enum.map(fn ancestor_id ->
-              case Bonfire.Social.Activities.read(ancestor_id,
-                     current_user: current_user,
-                     preload: [:with_subject, :with_media, :with_reply_to]
-                   ) do
-                {:ok, ancestor_activity} -> ancestor_activity
-                _ -> nil
-              end
-            end)
+            |> Enum.map(&thread_context_status_activity(&1, current_user))
             |> Enum.reject(&is_nil/1)
 
           _ ->
             []
         end
 
-      # Get descendants (replies to this activity)
-      # Include with_reply_to preload for threading information
+      thread_id = Bonfire.Social.Threads.fetch_thread_id(id) || id
+
       descendant_activities =
-        case Bonfire.Social.Threads.list_replies(id,
+        case Bonfire.Social.Threads.list_replies(thread_id,
                current_user: current_user,
                preload: [:with_subject, :with_media, :with_reply_to]
              ) do
           %{edges: edges} when is_list(edges) ->
             edges
-            |> Enum.map(fn edge ->
-              case edge do
-                %{id: _, object_id: _} = activity -> activity
-                %{activity: activity} when not is_nil(activity) -> activity
-                %{node: %{activity: activity}} when not is_nil(activity) -> activity
-                %{node: %{id: _, object_id: _} = activity} -> activity
-                _ -> nil
-              end
-            end)
+            |> Enum.filter(&thread_context_descendant?(&1, id))
+            |> Enum.map(&thread_context_activity(&1, current_user))
             |> Enum.reject(&is_nil/1)
 
           _ ->
@@ -1073,6 +1116,57 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
          ancestors: ancestor_activities,
          descendants: descendant_activities
        }}
+    end
+
+    defp thread_context_descendant?(%{reply_to_id: reply_to_id}, id) when reply_to_id == id,
+      do: true
+
+    defp thread_context_descendant?(%{path: path}, id) when is_list(path),
+      do: id in path
+
+    defp thread_context_descendant?(%{activity: activity}, id),
+      do: thread_context_descendant?(activity, id)
+
+    defp thread_context_descendant?(%{node: node}, id),
+      do: thread_context_descendant?(node, id)
+
+    defp thread_context_descendant?(activity, id) do
+      e(activity, :replied, :reply_to_id, nil) == id or id in e(activity, :replied, :path, [])
+    end
+
+    defp thread_context_activity(edge, current_user) do
+      case thread_context_loaded_activity(edge) do
+        %{id: _, object_id: _} = activity ->
+          activity
+
+        _ ->
+          with id when is_binary(id) <- thread_context_edge_id(edge),
+               activity when is_map(activity) <- thread_context_status_activity(id, current_user) do
+            activity
+          else
+            _ -> nil
+          end
+      end
+    end
+
+    defp thread_context_loaded_activity(%{id: _, object_id: _} = activity), do: activity
+    defp thread_context_loaded_activity(%{activity: activity}) when is_map(activity), do: activity
+
+    defp thread_context_loaded_activity(%{node: %{activity: activity}}) when is_map(activity),
+      do: activity
+
+    defp thread_context_loaded_activity(%{node: %{id: _, object_id: _} = activity}), do: activity
+    defp thread_context_loaded_activity(_), do: nil
+
+    defp thread_context_edge_id(%{node: %{id: id}}), do: id
+    defp thread_context_edge_id(%{id: id}), do: id
+    defp thread_context_edge_id(_), do: nil
+
+    defp quoted_from_pointer(pointer_or_object) do
+      case follow_pointer(pointer_or_object) do
+        {:ok, %{id: _} = object} -> {:ok, Bonfire.Social.Tags.list_tags_quote(object)}
+        _ -> {:ok, []}
+      end
     end
 
     def feed_preloaded(args, info), do: feed(:activities_preloaded, nil, args, info)
@@ -1194,11 +1288,13 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       ]
 
       feed_result =
-        if is_list(explicit_feed_ids) and explicit_feed_ids != [] do
-          # Bypass preset resolution for explicit group/topic feed ids.
-          Bonfire.Social.FeedLoader.feed_filtered(explicit_feed_ids, filters, feed_opts)
-        else
-          Bonfire.Social.FeedActivities.feed(feed_name_resolved, filters, feed_opts)
+        with {:ok, filters} <- normalize_notification_filters(feed_name_resolved, filters) do
+          if is_list(explicit_feed_ids) and explicit_feed_ids != [] do
+            # Bypass preset resolution for explicit group/topic feed ids.
+            Bonfire.Social.FeedLoader.feed_filtered(explicit_feed_ids, filters, feed_opts)
+          else
+            Bonfire.Social.FeedActivities.feed(feed_name_resolved, filters, feed_opts)
+          end
         end
 
       case feed_result do
@@ -1233,6 +1329,34 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     end
 
     defp feed_paginate_opts(pagination_args), do: pagination_args || true
+
+    defp normalize_notification_filters(feed_name, filters) do
+      notification_types =
+        e(filters, :notification_types, nil) ||
+          e(filters, "notification_types", nil)
+
+      filters = Map.drop(filters, [:notification_types, "notification_types"])
+
+      cond do
+        is_nil(notification_types) or notification_types == [] ->
+          {:ok, filters}
+
+        Types.maybe_to_atom(feed_name) != :notifications ->
+          {:error, "notificationTypes can only be used with the notifications feed"}
+
+        e(filters, :activity_types, nil) || e(filters, "activity_types", nil) ->
+          {:error, "Use either notificationTypes or activityTypes, not both"}
+
+        true ->
+          activity_types = NotificationFilters.verbs_for_notification_types(notification_types)
+
+          if activity_types == [] do
+            {:error, "Unsupported notificationTypes value"}
+          else
+            {:ok, Map.put(filters, :activity_types, activity_types)}
+          end
+      end
+    end
 
     # Follow a bare Needle.Pointer to its concrete object: boost subjects and object pointers
     # are loaded as unfollowed pointers that the :any_character/:any_context unions can't type,
@@ -1393,11 +1517,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     end
 
     # Re-read the acted-on object so `*ByMe`/`*Count` reflect persisted reactions.
-    defp reaction_status(reaction, id, info) do
-      case get_status(nil, %{id: id}, info) do
-        {:error, _} -> {:ok, e(reaction, :activity, nil) || reaction}
-        other -> other
-      end
+    defp reaction_status(_reaction, id, info) do
+      get_status(nil, %{id: id}, info)
     end
 
     defp boost(%{id: id}, info) do
@@ -1512,9 +1633,21 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       if user do
         with {:ok, f} <- Bonfire.Social.Flags.flag(user, id),
-             do: {:ok, e(f, :activity, nil)}
+             {:ok, activity} <- flag_activity(f) do
+          {:ok, activity}
+        end
       else
         {:error, "Not authenticated"}
+      end
+    end
+
+    defp flag_activity(flag) do
+      flag
+      |> Bonfire.Common.Repo.maybe_preload(:activity)
+      |> e(:activity, nil)
+      |> case do
+        %{id: _} = activity -> {:ok, activity}
+        _ -> {:error, "Could not resolve flag activity"}
       end
     end
   end

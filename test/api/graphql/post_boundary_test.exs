@@ -33,7 +33,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
           context: Schema.context(%{current_user: me})
         )
 
-      assert get_in(result, [:data, "create_post", "id"])
+      post_id = get_in(result, [:data, "create_post", "id"])
+      assert is_binary(post_id) and post_id != ""
       refute result[:errors]
     end
 

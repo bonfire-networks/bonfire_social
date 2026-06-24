@@ -206,6 +206,8 @@ defmodule Bonfire.Social.API.GraphQLMasto.Notifications do
 
   defp verbs_for_types(nil), do: []
 
+  def verbs_for_notification_types(types), do: verbs_for_types(normalize_types(types) || [])
+
   defp verbs_for_types(types) do
     types
     |> List.wrap()

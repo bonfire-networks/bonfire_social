@@ -21,6 +21,20 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     }
     """
 
+    @read_quote """
+    query($id: ID!) {
+      status(id: $id) {
+        id
+        quoted {
+          ... on Post {
+            id
+            post_content { html_body }
+          }
+        }
+      }
+    }
+    """
+
     test "create_post with quote_id of your own post auto-approves and tags the quote", %{me: me} do
       {:ok, quoted} =
         Bonfire.Posts.publish(
@@ -52,6 +66,42 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
       assert Enum.any?(quote_tags, &(e(&1, :id, nil) == quoted_id)),
              "expected the new post to quote-tag #{quoted_id}, got: #{inspect(Enum.map(quote_tags, &e(&1, :id, nil)))}"
+    end
+
+    test "status exposes quoted posts for quote-card rendering", %{me: me} do
+      {:ok, quoted} =
+        Bonfire.Posts.publish(
+          post_attrs: %{post_content: %{html_body: "<p>original quote target</p>"}},
+          current_user: me,
+          boundary: "public"
+        )
+
+      quoted_id = e(quoted, :id, nil) || e(quoted, :post, :id, nil)
+      assert is_binary(quoted_id)
+
+      {:ok, create_result} =
+        Absinthe.run(@create_quote, Schema,
+          variables: %{
+            "content" => %{"html_body" => "<p>quoting it</p>"},
+            "quoteId" => quoted_id
+          },
+          context: Schema.context(%{current_user: me})
+        )
+
+      refute create_result[:errors]
+      quote_post_id = get_in(create_result, [:data, "create_post", "id"])
+      assert is_binary(quote_post_id)
+
+      {:ok, result} =
+        Absinthe.run(@read_quote, Schema,
+          variables: %{"id" => quote_post_id},
+          context: Schema.context(%{current_user: me})
+        )
+
+      refute result[:errors]
+      quoted_posts = get_in(result, [:data, "status", "quoted"])
+      assert is_list(quoted_posts)
+      assert Enum.any?(quoted_posts, &(&1["id"] == quoted_id))
     end
 
     test "create_post without quote_id still works (no quote tag)", %{me: me} do
