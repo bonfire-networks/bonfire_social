@@ -17,7 +17,7 @@ defmodule Bonfire.Social.Bonfire.Social.TrendingLinksExtraTest do
   end
 
   # test "sorting respects unique_sharers_weight option" do
-  #   Bonfire.Social.Media.trending_links_reset()
+  #   Bonfire.Social.Media.trending_links(cache: :reset)
 
   #   user1 = Fake.fake_user!()
   #   user2 = Fake.fake_user!()
@@ -69,7 +69,7 @@ defmodule Bonfire.Social.Bonfire.Social.TrendingLinksExtraTest do
     assert is_list(results1)
 
     # Reset cache
-    Bonfire.Social.Media.trending_links_reset()
+    Bonfire.Social.Media.trending_links(cache: :reset)
 
     # Create new link after reset
     user = Fake.fake_user!()
@@ -87,7 +87,7 @@ defmodule Bonfire.Social.Bonfire.Social.TrendingLinksExtraTest do
   end
 
   test "handles no links gracefully" do
-    Bonfire.Social.Media.trending_links_reset()
+    Bonfire.Social.Media.trending_links(cache: :reset)
 
     # Create posts without links
     user = Fake.fake_user!()
@@ -102,7 +102,7 @@ defmodule Bonfire.Social.Bonfire.Social.TrendingLinksExtraTest do
   end
 
   test "handles posts without boosts" do
-    Bonfire.Social.Media.trending_links_reset()
+    Bonfire.Social.Media.trending_links(cache: :reset)
 
     user = Fake.fake_user!()
 
@@ -122,7 +122,7 @@ defmodule Bonfire.Social.Bonfire.Social.TrendingLinksExtraTest do
   end
 
   test "returns empty list when no trending links exist" do
-    Bonfire.Social.Media.trending_links_reset()
+    Bonfire.Social.Media.trending_links(cache: :reset)
 
     # Test with limit: 0 to get empty list
     results = Bonfire.Social.Media.trending_links(limit: 0)
@@ -130,7 +130,7 @@ defmodule Bonfire.Social.Bonfire.Social.TrendingLinksExtraTest do
   end
 
   test "handles custom cache_ttl option" do
-    Bonfire.Social.Media.trending_links_reset()
+    Bonfire.Social.Media.trending_links(cache: :reset)
 
     # Test that custom TTL doesn't break functionality
     results = Bonfire.Social.Media.trending_links(cache_ms: 5000)
@@ -138,7 +138,7 @@ defmodule Bonfire.Social.Bonfire.Social.TrendingLinksExtraTest do
   end
 
   test "respects limit option, and paginates trending links with after cursor" do
-    Bonfire.Social.Media.trending_links_reset()
+    Bonfire.Social.Media.trending_links(cache: :reset)
 
     user = Fake.fake_user!()
     # Create 10 posts with unique links

@@ -1528,4 +1528,38 @@ defmodule Bonfire.Social.Threads do
         |> ActivityPub.Object.get_cached!(ap_id: ...)
         |> debug()
   end
+
+  # --- Trending ("Top discussions") widget loader (cached per user + limit) ---
+
+  @doc """
+  The most-replied discussions of the last 7 days (`:trending_discussions` feed preset), for the
+  "Top discussions" widget. Cached per user and limit for 1h; the key is built once by
+  `trending_cache_key/2` so the load and any reset always agree. Pass the standard `:cache` opt
+  (`cache: :refresh` busts + recomputes — what the widget's refresh button calls).
+  """
+  def list_trending(current_user, limit, opts \\ []) do
+    Cache.maybe_apply_cached(
+      &do_list_trending/2,
+      [current_user, limit],
+      opts
+      |> Keyword.put(:cache_key, trending_cache_key(current_user, limit))
+      |> Keyword.put_new(:expire, :timer.minutes(60))
+    )
+  end
+
+  defp do_list_trending(current_user, limit) do
+    case Bonfire.Social.FeedLoader.feed(
+           :trending_discussions,
+           current_user: current_user,
+           paginate: %{limit: limit},
+           preload: [:feed]
+         ) do
+      %{edges: edges} when is_list(edges) -> edges
+      _ -> []
+    end
+  end
+
+  @doc "Cache key for `list_trending/3` — used by both the loader and any reset, so they can't drift."
+  def trending_cache_key(current_user, limit),
+    do: "widget_trending_discussions:#{id(current_user) || "guest"}:#{limit}"
 end
