@@ -26,7 +26,7 @@ defmodule Bonfire.Social.Acts.Threaded do
   def run(epic, act) do
     on = Keyword.get(act.options, :on, :post)
     changeset = epic.assigns[on]
-    current_user = Bonfire.Common.Utils.current_user(epic.assigns[:options])
+    current_user = Bonfire.Common.Utils.current_user_or_id(epic.assigns[:options])
 
     debug(changeset && changeset.action, "Threaded Act running on #{on} with changeset action")
 

@@ -34,7 +34,7 @@ defmodule Bonfire.Social.Acts.Federate do
     ap_on = Keyword.get(act.options, :ap_on, :ap_object)
     options = epic.assigns[:options]
     action = Keyword.get(options, :action, :insert)
-    current_user = Utils.current_user(options)
+    current_user = Utils.current_user_or_id(options)
     object = epic.assigns[on]
 
     # resolve the object's creator locality once here and pass it along (via `Epic.assign(on, ...)` at the end of run/2), so the `is_local?(object)` check below — and later acts — classify without an N+1 per-build preload
