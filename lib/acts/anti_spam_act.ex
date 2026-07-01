@@ -27,7 +27,7 @@ defmodule Bonfire.Social.Acts.AntiSpam do
     on = Keyword.get(act.options, :on, :post)
     mode = Keyword.get(act.options, :mode, :halt)
     object = epic.assigns[on]
-    current_user = Bonfire.Common.Utils.current_user(epic.assigns[:options])
+    current_user = Bonfire.Common.Utils.current_user_or_id(epic.assigns[:options])
 
     cond do
       epic.errors != [] ->
