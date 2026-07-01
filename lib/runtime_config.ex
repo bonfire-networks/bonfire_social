@@ -496,8 +496,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           },
           icon: "ph:chats-circle-duotone",
           assigns: [
-            hide_filters: true,
-            custom_preview: Bonfire.UI.Social.Activity.DiscussionPreviewLive
+            hide_filters: true
           ]
         },
         recent_discussions: %{
@@ -512,8 +511,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           },
           icon: "ph:chats-circle-duotone",
           assigns: [
-            hide_filters: true,
-            custom_preview: Bonfire.UI.Social.Activity.DiscussionPreviewLive
+            hide_filters: true
           ]
         },
         # TEMPORARILY DISABLED:
