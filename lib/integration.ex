@@ -8,7 +8,7 @@ defmodule Bonfire.Social do
   # alias Bonfire.Data.Social.Follow
   import Untangle
 
-  declare_extension("Social",
+  declare_extension(l("Social"),
     icon: "ph:rss-simple-duotone",
     # emoji: "📰",
     description: l("Basic social networking functionality, such as feeds and discussions.")
