@@ -1627,6 +1627,27 @@ defmodule Bonfire.Social.Activities do
         # no object types to filter by
         query
 
+      {table_ids, other_types, false}
+      when is_list(table_ids) and table_ids != [] and is_list(other_types) and
+             other_types != [] ->
+        # mixed table-backed types (e.g. articles) and APActivity JSON types (e.g. books):
+        # OR the two checks, with the APActivity LEFT-joined under its own alias so
+        # table-backed objects aren't dropped (join_per_ap_activity's inner join would)
+        query
+        |> maybe_join_filter_activity(exclude_table_ids)
+        |> proload(:inner, activity: [:object])
+        |> reusable_join(:left, [activity: activity], ap_object in Bonfire.Data.Social.APActivity,
+          as: :ap_object,
+          on: activity.object_id == ap_object.id
+        )
+        |> where(
+          [object: object, ap_object: ap_object],
+          is_nil(object.deleted_at) and object.table_id not in ^exclude_table_ids and
+            (object.table_id in ^table_ids or
+               fragment("(?)->'object'->>'type' = ANY(?)", ap_object.json, ^other_types) or
+               fragment("(?)->>'type' = ANY(?)", ap_object.json, ^other_types))
+        )
+
       other ->
         msg =
           l(
