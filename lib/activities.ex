@@ -2360,7 +2360,8 @@ defmodule Bonfire.Social.Activities do
   end
 
   def prepare_subject_and_creator(object, _opts) do
-    error(object, "unrecognised object format, skipping subject and creator preload")
+    # TODO media feeds land %Bonfire.Files.Media{} rows here on EVERY item, add a proper Media clause instead of falling through. 
+    warn(object, "unrecognised object format, skipping subject and creator preload")
     object
   end
 
