@@ -1660,6 +1660,43 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
+  def maybe_filter(query, {:object_categories, categories}, _opts)
+      when not is_nil(categories) and categories != [] do
+    cats =
+      categories
+      |> List.wrap()
+      |> Enum.map(&(&1 |> to_string() |> Bonfire.Social.Events.Categories.normalize()))
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+
+    if cats == [] do
+      query
+    else
+      # FEP-8a8e event `category` lives in the APActivity json (nested under "object" or flat)
+      # with source-defined casing (e.g. Mobilizon emits lowercase "music"), so normalise both
+      # sides to UPPER_SNAKE to match. Events are already inner-joined via the co-present
+      # `object_types: ["Event"]` filter; the join here is reusable so it won't double up.
+      # NOTE: matches a scalar `category` only — array-valued categories (allowed by FEP-8a8e)
+      # aren't filtered yet.
+      query
+      |> join_per_ap_activity(:inner)
+      |> proload(:inner, activity: [:object])
+      |> where(
+        [object: object],
+        fragment(
+          "upper(replace(replace((?)->'object'->>'category', ' ', '_'), '-', '_')) = ANY(?)",
+          object.json,
+          ^cats
+        ) or
+          fragment(
+            "upper(replace(replace((?)->>'category', ' ', '_'), '-', '_')) = ANY(?)",
+            object.json,
+            ^cats
+          )
+      )
+    end
+  end
+
   def maybe_filter(query, {:exclude_object_types, types}, _opts) when not is_nil(types) do
     debug(types, "filter by exclude_object_types")
 

@@ -38,6 +38,9 @@ defmodule Bonfire.Social.FeedFilters do
     field :object_types, AtomOrStringList
     field :exclude_object_types, AtomOrStringList
 
+    # FEP-8a8e event categories (matched against the AS2 `category` in an APActivity's json)
+    field :object_categories, AtomOrStringList
+
     field :creators, StringList
     field :exclude_creators, StringList
     # field :creator_circles, StringList
@@ -98,6 +101,7 @@ defmodule Bonfire.Social.FeedFilters do
       :object_circles,
       :object_types,
       :exclude_object_types,
+      :object_categories,
       :creators,
       :exclude_creators,
       # :creator_circles,
