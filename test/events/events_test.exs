@@ -35,7 +35,8 @@ defmodule Bonfire.Social.EventsTest do
   defp put_if(map, _k, nil), do: map
   defp put_if(map, k, v), do: Map.put(map, k, v)
 
-  defp titles(%{edges: edges}), do: Enum.map(edges, &Events.title(e(&1, :activity, :object, :json, %{})))
+  defp titles(%{edges: edges}),
+    do: Enum.map(edges, &Events.title(e(&1, :activity, :object, :json, %{})))
 
   describe "feed/1" do
     test "attaches the APActivity json onto each feed edge's activity.object" do
@@ -56,6 +57,7 @@ defmodule Bonfire.Social.EventsTest do
       fake_event!(user, name: "Hosted Event")
 
       assert %{edges: [edge | _]} = Events.feed(current_user: user)
+
       # :with_subject comes from the default preload rule — dropping it would break the host line
       assert e(edge, :activity, :subject, nil)
     end
