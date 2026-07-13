@@ -689,8 +689,13 @@ defmodule Bonfire.Social.Pins do
     # user pins federate on the user's `featured`; instance-wide pins (subject = instance scope) on
     # the instance's service/Application actor's `featured`
     with {:ok, pinner} <- pin_federating_actor(subject || pin.edge.subject_id) do
-      object_ap_id =
-        Bonfire.Common.URIs.canonical_url(e(pin.edge, :object, nil) || pin.edge.object_id)
+      # preload locality at the binding so `canonical_url` classifies without an on-demand raise
+      # (pinned objects vary — superset pruned per schema; no-op when we only have the id)
+      object =
+        (e(pin.edge, :object, nil) || pin.edge.object_id)
+        |> repo().maybe_preload([character: [:peered], created: [:peered]], prune: true)
+
+      object_ap_id = Bonfire.Common.URIs.canonical_url(object)
 
       target = ActivityPub.Utils.collection_ap_id("featured", uid(pinner))
       remove? = verb in [:remove, :delete, :undo, :unpin]

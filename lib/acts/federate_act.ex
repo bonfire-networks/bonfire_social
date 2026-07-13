@@ -52,10 +52,10 @@ defmodule Bonfire.Social.Acts.Federate do
             # boost/reply/delete of someone else's object: preload its locality once — the object's
             # own `character.peered` (e.g. a user being deleted) and/or its `created.creator`'s
             object
-            |> Social.repo().maybe_preload(created: [creator: [character: [:peered]]])
             |> Social.repo().maybe_preload(
-              #  in case it is a Category or such
-              character: [:peered]
+              # superset across object types (e.g. a Category has `character`) — pruned per schema
+              [created: [creator: [character: [:peered]]], character: [:peered]],
+              prune: true
             )
             |> debug("FEDERATE_DEBUG object AFTER maybe_preload")
           end

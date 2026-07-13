@@ -73,37 +73,47 @@ defmodule Bonfire.Social.Edges do
     |> preload_inserted(subject, object)
   end
 
+  # superset lists: not every edge-ish record has every assoc (e.g. Alias has no :activity) —
+  # `prune: true` fits the list to the actual schema
   defp preload_inserted(inserted, %{} = subject, %{} = object) do
     inserted
     |> repo().maybe_preload(
-      edge: [
-        subject: fn _ -> [subject] end,
-        object: fn _ -> [object] end
+      [
+        edge: [
+          subject: fn _ -> [subject] end,
+          object: fn _ -> [object] end
+        ],
+        activity: [
+          subject: fn _ -> [subject] end,
+          object: fn _ -> [object] end
+        ]
       ],
-      activity: [
-        subject: fn _ -> [subject] end,
-        object: fn _ -> [object] end
-      ]
+      prune: true
     )
   end
 
   defp preload_inserted(inserted, %{} = subject, _object) do
     inserted
     |> repo().maybe_preload(
-      edge: [
-        :object,
-        subject: fn _ -> [subject] end
+      [
+        edge: [
+          :object,
+          subject: fn _ -> [subject] end
+        ],
+        activity: [
+          :object,
+          subject: fn _ -> [subject] end
+        ]
       ],
-      activity: [
-        :object,
-        subject: fn _ -> [subject] end
-      ]
+      prune: true
     )
   end
 
   defp preload_inserted(inserted, _subject, _object) do
     inserted
-    |> repo().maybe_preload(edge: [:subject, :object], activity: [:subject, :object])
+    |> repo().maybe_preload([edge: [:subject, :object], activity: [:subject, :object]],
+      prune: true
+    )
   end
 
   @doc """

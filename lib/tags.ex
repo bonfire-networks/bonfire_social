@@ -190,11 +190,17 @@ defmodule Bonfire.Social.Tags do
   def auto_boost(_, _), do: debug("not auto-boosting (invalid inputs)")
 
   def list_tags_quote(post) do
-    post
-    # a quoted tag may be an actor (mention) or a post — preload `character.peered` and
-    # `created.creator.character.peered` so the quote-federation `is_local?` checks classify
-    |> repo().maybe_preload(tags: [created: [creator: [character: [:peered]]]])
-    |> repo().maybe_preload(tags: [character: [:peered]])
+    post = repo().maybe_preload(post, :tags)
+
+    # a quoted tag may be an actor (mention), a hashtag, or a post: the loaded tags are MIXED concrete structs, so preload the children directly (split per schema + pruned to what each one has, via `prune: true`) rather than nested under the post: a nested `tags: [...]` descends into the mixed loaded list and raises on the first schema lacking an assoc. `character.peered` and `created.creator.character.peered` are needed so the quote-federation `is_local?` checks classify
+    tags =
+      e(post, :tags, [])
+      |> repo().maybe_preload(
+        [character: [:peered], created: [creator: [character: [:peered]]]],
+        prune: true
+      )
+
+    Map.put(post, :tags, tags)
     |> tags_quote()
   end
 

@@ -1460,6 +1460,8 @@ defmodule Bonfire.Social.Activities do
     opts
     #  NOTE: avoid following all pointers (using preload_nested_throuple and maybe_preloads_per_nested_schema for specific ones instead)
     |> Keyword.put_new(:follow_pointers, false)
+    # a feed is genuinely heterogeneous (posts, polls/votes, follows, media…) and this preload list is a superset, `prune: true` fits it per schema (proactive per-schema batching) instead of relying on the raise-and-recover path (which tripwires in test)
+    |> Keyword.put(:prune, true)
     |> repo().maybe_preload(objects, preloads, ...)
   end
 

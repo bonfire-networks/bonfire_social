@@ -274,7 +274,9 @@ defmodule Bonfire.Social.FeedActivities do
     # preload them all together
     all = Enum.flat_map(keys, &Keyword.get(options, &1, []))
     debug(all, "all characters to preload")
-    all = repo().maybe_preload(all, :character)
+    # deliberately-mixed list (publish targets: Users, group Pointers, ...) — `prune: true`
+    # batches per schema, fitted to each one's assocs
+    all = repo().maybe_preload(all, :character, prune: true)
     # and finally, look up the appropriate feed from the loaded characters
     ids =
       for(

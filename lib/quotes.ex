@@ -77,7 +77,8 @@ defmodule Bonfire.Social.Quotes do
 
   def check_quote_permission(user, quoted_object, _opts \\ []) do
     user_id = id(user)
-    quoted_object = repo().maybe_preload(quoted_object, [:created])
+    # quoted objects vary in type (not all have :created) — pruned per schema
+    quoted_object = repo().maybe_preload(quoted_object, [:created], prune: true)
 
     cond do
       e(quoted_object, :created, :creator_id, nil) == user_id ||
@@ -180,6 +181,12 @@ defmodule Bonfire.Social.Quotes do
 
     with {:ok, %{edge: %{object: quoted_object, subject: quote_post}} = request} <-
            Requests.accept(request, opts) |> info("accepted_quote on #{repo()}"),
+         # preload locality so `canonical_url(quoted_object)` below classifies without an
+         # on-demand raise (quoted objects can be posts etc — pruned to what the schema has)
+         quoted_object =
+           repo().maybe_preload(quoted_object, [character: [:peered], created: [:peered]],
+             prune: true
+           ),
          quoted_object_creator =
            (quoted_object_creator ||
               e(request, :edge, :object, :created, :creator, nil) ||

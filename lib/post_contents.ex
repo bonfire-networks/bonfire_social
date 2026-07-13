@@ -434,9 +434,8 @@ defmodule Bonfire.Social.PostContents do
   # end
   def prepare_text(other, creator, opts) do
     case other
-         # |> debug("pre-nomalise_local_links")
-         |> nomalise_local_links(opts[:output_format] || :markdown)
-         # |> debug("post nomalise_local_links")
+         # normalise local AP links to in-app paths (moved to `Bonfire.Common.URIs`)
+         |> URIs.normalise_local_links(opts[:output_format] || :markdown)
          |> Text.as_html() do
       html when is_binary(html) ->
         html
@@ -447,84 +446,6 @@ defmodule Bonfire.Social.PostContents do
     end
     |> debug("prepared html")
   end
-
-  @doc """
-  Normalizes AP links in the content based on format.
-
-  ## Examples
-
-      > nomalise_local_links("<a href=\"/pub/actors/foo\">Actor</a>", :markdown)
-      "<a href=\"/character/foo\">Actor</a>"
-  """
-  def nomalise_local_links(input, format)
-
-  def nomalise_local_links(input, :html) do
-    local_instance = Bonfire.Common.URIs.base_url()
-
-    input
-    |> Text.as_html_tree()
-    |> LazyHTML.Tree.postwalk(fn
-      {"a", attrs, children} = node ->
-        case List.keyfind(attrs, "href", 0) do
-          {"href", href} ->
-            new_href =
-              href
-              |> String.replace_leading(local_instance, "")
-
-            new_href =
-              new_href
-              |> String.replace_leading("/pub/actors/", "/character/")
-              |> String.replace_leading("/pub/objects/", "/discussion/")
-
-            if new_href != href do
-              new_attrs = List.keyreplace(attrs, "href", 0, {"href", new_href})
-              {"a", new_attrs, children}
-            else
-              node
-            end
-
-          nil ->
-            node
-        end
-
-      node ->
-        node
-    end)
-  end
-
-  def nomalise_local_links(content, :markdown)
-      when is_binary(content) and byte_size(content) > 20 do
-    local_instance = Bonfire.Common.URIs.base_url()
-
-    content
-    # handle AP actors
-    |> Regex.replace(
-      md_ap_actors_regex(local_instance),
-      ...,
-      "\\1/character/\\2"
-    )
-    # handle AP objects
-    |> Regex.replace(
-      md_ap_objects_regex(local_instance),
-      ...,
-      "\\1/discussion/\\2"
-    )
-    # handle local links
-    |> Regex.replace(
-      md_local_links_regex(local_instance),
-      ...,
-      "\\1\\2"
-    )
-
-    # |> debug(content)
-  end
-
-  def nomalise_local_links(content, _format), do: content
-
-  # Regex patterns for normalizing links
-  defp md_ap_actors_regex(local_instance), do: ~r/(\()#{local_instance}\/pub\/actors\/(.+\))/U
-  defp md_ap_objects_regex(local_instance), do: ~r/(\()#{local_instance}\/pub\/objects\/(.+\))/U
-  defp md_local_links_regex(local_instance), do: ~r/(\]\()#{local_instance}(.+\))/U
 
   def editor_output_content_type(user) do
     if Bonfire.Common.Settings.get(

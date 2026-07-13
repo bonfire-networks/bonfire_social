@@ -387,8 +387,10 @@ defmodule Bonfire.Social.Flags do
     list(opts)
     |> repo().maybe_preload(
       # [edge: [object: [created: [creator: [:profile, :character]]]]],
+      # superset: flagged objects vary in type — pruned to what each schema has
       [:named, object: [:media, :sensitive, created: [creator: [:profile, :character]]]],
-      follow_pointers: false
+      follow_pointers: false,
+      prune: true
     )
   end
 
@@ -559,10 +561,9 @@ defmodule Bonfire.Social.Flags do
             }
 
           _ ->
+            # either creator shape depending on the flagged object's type — pruned per schema
             flagged =
-              flagged
-              |> repo().maybe_preload(:created)
-              |> repo().maybe_preload(:creator)
+              repo().maybe_preload(flagged, [:created, :creator], prune: true)
 
             creator =
               e(flagged, :created, :creator_id, nil) || e(flagged, :creator, :id, nil) ||

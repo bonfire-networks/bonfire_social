@@ -43,7 +43,11 @@ defmodule Bonfire.Social.Acts.Objects.Delete do
         object =
           Keyword.get(epic.assigns[:options], as, %{})
           #  preloads needed to be able to federate deletions, and for is_local?
-          |> Social.repo().maybe_preload([:character, :peered, created: [creator: :peered]])
+          # superset: deletable objects range from actors (character/peered) to content
+          # (created.creator) — `prune: true` fits the list to the actual schema
+          |> Social.repo().maybe_preload([:character, :peered, created: [creator: :peered]],
+            prune: true
+          )
 
         maybe_debug(epic, act, object, "Delete object")
 

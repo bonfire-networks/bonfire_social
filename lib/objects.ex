@@ -795,7 +795,8 @@ defmodule Bonfire.Social.Objects do
     # ]
 
     # WIP: load Activity if we don't have it, get the verb, check for a context module for the verb with `Bonfire.Common.ContextModule.context_module(verb)` and call the `delete_activity` function on that module if it exists
-    object = repo().maybe_preload(object, [:activity])
+    # (generic delete path: not every deletable type has :activity — pruned per schema)
+    object = repo().maybe_preload(object, [:activity], prune: true)
 
     if verb = e(object, :activity, :verb_id, nil) |> debug() do
       if verb_slug = Bonfire.Boundaries.Verbs.get_slug(verb) |> debug() do
@@ -919,7 +920,8 @@ defmodule Bonfire.Social.Objects do
       # TODO: handle returns?
     end
 
-    object = repo().maybe_preload(object, [:media])
+    # generic delete path: not every deletable type has :media — pruned per schema
+    object = repo().maybe_preload(object, [:media], prune: true)
     delete_media = e(object, :media, [])
 
     options

@@ -25,8 +25,9 @@ defmodule Bonfire.Social.PinsFederationTest do
       )
 
     # canonical_url is the object's ap_id (matches what Pins/adapter serve), and doesn't require
-    # the object to have been federated into an ap_object row yet
-    {post, Bonfire.Common.URIs.canonical_url(post)}
+    # the object to have been federated into an ap_object row yet (deliberate lazy preload:
+    # a freshly-published post hasn't preloaded its locality assocs)
+    {post, Bonfire.Common.URIs.canonical_url(post, preload_if_needed: true)}
   end
 
   test "the featured collection serves the user's pinned objects as an OrderedCollection" do
