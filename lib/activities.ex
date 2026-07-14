@@ -2129,7 +2129,11 @@ defmodule Bonfire.Social.Activities do
         %{activity: %{object: %{id: _} = enclosed_object} = activity} = top_object
       ) do
     Map.drop(activity, [:object])
-    |> activity_under_object(Map.merge(top_object, enclosed_object))
+    # `maybe_merge_to_struct` (not a raw `Map.merge`) so the result stays a valid struct of the
+    # enclosed object's type: `struct_to_map` drops `NotLoaded`/nil and `struct/2` drops non-schema
+    # keys, so a `Needle.Pointer`'s virtual polymorphic fields (e.g. `:character`) are NOT bolted
+    # onto a typed `Post` (a phantom `:character` would make `canonical_url` mis-route and raise).
+    |> activity_under_object(Enums.maybe_merge_to_struct(enclosed_object, top_object))
   end
 
   def activity_under_object(%{activity: %{id: _} = activity} = top_object) do
