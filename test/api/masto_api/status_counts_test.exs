@@ -22,7 +22,7 @@ defmodule Bonfire.Social.MastoApi.StatusCountsTest do
 
   setup do
     # Make boundary/feed preloading synchronous in tests (see project memory).
-    Process.put(:feed_live_update_many_preload_mode, :inline)
+    Process.put([:bonfire, :feed_live_update_many_preload_mode], :inline)
     :ok
   end
 

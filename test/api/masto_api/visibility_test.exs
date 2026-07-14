@@ -17,7 +17,7 @@ defmodule Bonfire.Social.MastoApi.VisibilityTest do
   @valid_visibilities ~w(public unlisted private direct)
 
   setup do
-    Process.put(:feed_live_update_many_preload_mode, :inline)
+    Process.put([:bonfire, :feed_live_update_many_preload_mode], :inline)
     :ok
   end
 

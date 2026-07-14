@@ -51,7 +51,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     @gql_d String.replace(@gql, "feedActivities(", "feedActivitiesPreloaded(")
 
     setup do
-      Process.put(:feed_live_update_many_preload_mode, :inline)
+      Process.put([:bonfire, :feed_live_update_many_preload_mode], :inline)
       # test config caps default_pagination_limit at 2 (config/test.exs); raise it so
       # the feed returns a representative page (the explicit `first` isn't mapped to
       # opts[:limit], so the default applies — see feed_loader.ex:756).

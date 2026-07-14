@@ -16,7 +16,7 @@ defmodule Bonfire.Social.MastoApi.PaginationLinkTest do
   @moduletag :masto_api
 
   setup do
-    Process.put(:feed_live_update_many_preload_mode, :inline)
+    Process.put([:bonfire, :feed_live_update_many_preload_mode], :inline)
     :ok
   end
 
