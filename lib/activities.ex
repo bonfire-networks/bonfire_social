@@ -1451,7 +1451,7 @@ defmodule Bonfire.Social.Activities do
   defp maybe_preload_quote_tag_children(objects, activity_nested_under, preloads, opts) do
     if :quote_tags in preloads do
       access_path =
-        (if is_list(objects), do: [Access.all()], else: []) ++
+        if(is_list(objects), do: [Access.all()], else: []) ++
           Enum.map(activity_nested_under ++ [:tags], &Access.key(&1, []))
 
       with {_tags, preloaded} <-

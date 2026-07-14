@@ -124,13 +124,16 @@ defmodule Bonfire.Social.PostContents do
       #Ecto.Changeset<...>
   """
   def cast(changeset, attrs, creator, boundary, opts) do
-    has_media = not is_nil(e(attrs, :uploaded_media, nil) || e(attrs, :links, nil))
+    # content is optional when the post carries other primary content: media/links (attachments), or when the caller marks it optional via `content_optional: true` (e.g. polls, whose options are the content, as Mastodon allows for a Question with no body)
+    content_optional =
+      e(opts, :content_optional, false) ||
+        not is_nil(e(attrs, :uploaded_media, nil) || e(attrs, :links, nil))
 
     changeset
     |> repo().maybe_preload(:post_content)
     |> Changeset.cast(%{post_content: maybe_prepare_contents(attrs, creator, boundary, opts)}, [])
     |> Changeset.cast_assoc(:post_content,
-      required: !has_media,
+      required: !content_optional,
       with: &changeset/2
       # with: (if changeset.action==:upsert, do: &changeset_update/2, else: &changeset/2)
     )
