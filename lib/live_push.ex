@@ -156,7 +156,7 @@ defmodule Bonfire.Social.LivePush do
   end
 
   def prepare_activity(%Activity{} = activity, opts \\ []) do
-    Activities.activity_preloads(activity, [:feed_metadata, :feed_postload], opts)
+    Activities.activity_preloads(activity, live_push_preloads(activity), opts)
     # resolve subject/creator the same way the feed/read paths do, so a locality-marked
     # `current_user`/`subject_user` (carrying `:peered`) is used — letting the live-rendered
     # activity classify `is_local?` without an on-demand raising preload
@@ -164,6 +164,21 @@ defmodule Bonfire.Social.LivePush do
 
     # |> debug("make sure that all needed assocs are preloaded without n+1")
   end
+
+  defp live_push_preloads(%Activity{object: object}) do
+    [:feed_metadata, :feed_postload]
+    |> Bonfire.Social.FeedLoader.map_activity_preloads()
+    |> maybe_skip_object_creator(object)
+  end
+
+  defp maybe_skip_object_creator(preloads, object) when is_map(object) do
+    if Map.has_key?(object, :created),
+      do: preloads,
+      else: Enum.reject(preloads, &(&1 == :with_creator))
+  end
+
+  defp maybe_skip_object_creator(preloads, _object),
+    do: Enum.reject(preloads, &(&1 == :with_creator))
 
   def notify(activity, opts),
     do: send_notifications(activity, opts)

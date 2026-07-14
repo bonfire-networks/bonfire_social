@@ -208,10 +208,7 @@ defmodule Bonfire.Social.Tags do
     post
     |> e(:tags, [])
     |> debug("all tags")
-    |> Enum.filter(fn tag ->
-      # Reject hashtags and characters (@ mentions)
-      Types.object_type(tag) != Bonfire.Tag.Hashtag and is_nil(e(tag, :character, nil))
-    end)
+    |> Enum.filter(&(tag_kind(&1) == :quote))
     |> repo().maybe_preload(:sensitive)
   end
 
@@ -221,20 +218,28 @@ defmodule Bonfire.Social.Tags do
     # |> repo().maybe_preload(tags: [:character])
     |> e(:tags, [])
     |> Enum.reduce({[], []}, fn tag, {quotes, hashtags} ->
-      cond do
-        Types.object_type(tag) == Bonfire.Tag.Hashtag ->
+      case tag_kind(tag) do
+        :hashtag ->
           {quotes, [tag | hashtags]}
 
-        is_nil(e(tag, :character, nil)) ->
+        :quote ->
           {[tag | quotes], hashtags}
 
-        true ->
+        :mention ->
           {quotes, hashtags}
       end
     end)
     |> then(fn {quotes, hashtags} ->
       {repo().maybe_preload(quotes, :sensitive), repo().maybe_preload(hashtags, :named)}
     end)
+  end
+
+  defp tag_kind(tag) do
+    case Types.object_type(tag) do
+      Bonfire.Tag.Hashtag -> :hashtag
+      Bonfire.Data.Identity.User -> :mention
+      _ -> if is_nil(e(tag, :character, nil)), do: :quote, else: :mention
+    end
   end
 
   def list_tags_hashtags(post) do

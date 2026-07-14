@@ -735,8 +735,8 @@ defmodule Bonfire.Social.Activities do
           [tags: [:character, profile: :icon]]
 
         :quote_tags ->
-          # Quote posts - TODO: only preload actual posts? excluding hashtags and mentions etc
-          [tags: [:character, :post_content, created: [creator: [:profile, :character]]]]
+          # Quote tags are mixed pointers (posts, actors, and hashtags), so their schema-specific children are loaded from the concrete tag list after this association is loaded.
+          [:tags]
 
         :with_subject ->
           # Subject here is standing in for the creator of the root. One day it may be replaced with it.
@@ -827,7 +827,7 @@ defmodule Bonfire.Social.Activities do
 
           quote_edge_query = from e in Edge, where: e.table_id == ^quote_table_id
 
-          [edge: {quote_edge_query, [:request, subject: [:post_content]]}]
+          [edge: {quote_edge_query, [:request, :subject]}]
 
         nil ->
           []
@@ -1437,6 +1437,8 @@ defmodule Bonfire.Social.Activities do
        ) do
     # FIXME: this is causing n+1 queries for ap_activity when loading a feed with unknown-type remote posts
     objects
+    |> maybe_preload_quote_tag_children(activity_nested_under, preloads, opts)
+    |> maybe_preload_quote_request_subject(activity_nested_under, preloads, opts)
     |> Bonfire.Common.Repo.Preload.maybe_follow_pointer_schemas(
       object_nested_under || activity_nested_under ++ [:object],
       preload_nested,
@@ -1444,6 +1446,41 @@ defmodule Bonfire.Social.Activities do
     )
     # Handle APActivity pointer preloading if needed
     |> maybe_preload_ap_activity_nested_objects(opts)
+  end
+
+  defp maybe_preload_quote_tag_children(objects, activity_nested_under, preloads, opts) do
+    if :quote_tags in preloads do
+      access_path =
+        (if is_list(objects), do: [Access.all()], else: []) ++
+          Enum.map(activity_nested_under ++ [:tags], &Access.key(&1, []))
+
+      with {_tags, preloaded} <-
+             get_and_update_in(objects, access_path, fn tags ->
+               {tags,
+                repo().maybe_preload(
+                  tags,
+                  [:character, :post_content, created: [creator: [:profile, :character]]],
+                  opts |> Keyword.put(:prune, true) |> Keyword.put_new(:follow_pointers, false)
+                )}
+             end) do
+        preloaded
+      end
+    else
+      objects
+    end
+  end
+
+  defp maybe_preload_quote_request_subject(objects, activity_nested_under, preloads, opts) do
+    if :with_quote_post_requested in preloads do
+      Bonfire.Common.Repo.Preload.maybe_follow_pointer_schemas(
+        objects,
+        activity_nested_under ++ [:edge, :subject],
+        [{Bonfire.Data.Social.Post, [:post_content]}],
+        opts
+      )
+    else
+      objects
+    end
   end
 
   defp maybe_preload_ap_activity_nested_objects(objects, opts) do

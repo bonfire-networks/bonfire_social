@@ -353,8 +353,8 @@ defmodule Bonfire.Social.Feeds do
   def target_feeds(%{} = object, creator, opts) do
     object =
       object
-      |> repo().maybe_preload(replied: [reply_to: [created: :creator]])
-      |> repo().maybe_preload(:tags)
+      |> repo().maybe_preload([replied: [reply_to: [created: :creator]]], prune: true)
+      |> repo().maybe_preload(:tags, prune: true)
 
     # maybe include people, tags or other characters that were mentioned/tagged
     # |> debug("mentions")
