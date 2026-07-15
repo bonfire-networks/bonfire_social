@@ -519,22 +519,22 @@ defmodule Bonfire.Social.PostContents do
         |> String.length()
         |> debug("Sss")
 
-      diffed = %{
-        name:
-          diff(ed(version.previous_version, :name, ""), ed(version.current_version, :name, "")),
-        summary:
-          diff(
-            ed(version.previous_version, :summary, ""),
-            ed(version.current_version, :summary, "")
-          ),
-        html_body:
-          diff(
-            ed(version.previous_version, :html_body, ""),
-            ed(version.current_version, :html_body, "")
-          )
-      }
+      field_pairs =
+        Map.new([:name, :summary, :html_body], fn field ->
+          {field,
+           {ed(version.previous_version, field, ""), ed(version.current_version, field, "")}}
+        end)
 
-      diff_count = Enum.map(diffed, fn {_field, v} -> Map.get(v, :length) end) |> Enum.sum()
+      diffed =
+        Map.new(field_pairs, fn {field, {previous, current}} ->
+          {field, diff(previous, current)}
+        end)
+
+      # NOT using Exdiff's `:length` (a signed net difference, so a same-length replacement or a shortening would count as no change)
+      diff_count =
+        field_pairs
+        |> Enum.map(fn {_field, {previous, current}} -> Text.diff_size(previous, current) end)
+        |> Enum.sum()
 
       Map.merge(
         %{
