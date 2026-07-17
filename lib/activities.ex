@@ -2368,21 +2368,11 @@ defmodule Bonfire.Social.Activities do
   end
 
   def prepare_subject_and_creator(%Bonfire.Data.Social.Activity{object: object} = activity, opts) do
-    # `Bonfire.Files.Media` has a direct `belongs_to(:creator)` (no `created`
-    # mixin), and that creator is usually neither the viewer nor the subject
-    # (e.g. media created via `comments_embed`), so it is never resolved by
-    # `find_creator/4`. Preload it here so the author renders.
-    # NOTE: `is_struct/2` (a runtime atom) avoids a compile-time cycle between
-    # `bonfire_social` and `bonfire_files` that a `%Bonfire.Files.Media{}`
-    # literal would introduce.
     object =
-      if is_struct(object, Bonfire.Files.Media) and
-           not match?(%{creator: %{profile: %{id: _}}}, object) do
+      if is_struct(object, Bonfire.Files.Media) do
+        # preload needed for locality classification 
         repo().maybe_preload(
           object,
-          # preload the creator's `character.peered` so locality classification (e.g. the
-          # `interaction_allowed?`/`is_local?` check ReplyLive runs) has it loaded — Media roots
-          # aren't covered by the activity's `:with_creator`/`:with_object_peered` preloads
           [creator: [profile: [:icon], character: [:peered]]],
           opts
         )
