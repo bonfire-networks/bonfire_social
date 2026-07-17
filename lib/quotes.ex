@@ -270,6 +270,8 @@ defmodule Bonfire.Social.Quotes do
   end
 
   defp create_quote_authorization(quoted_object_creator, quote_post, quoted_object_ap_id) do
+    # preload `:peered` at source so `canonical_url(quote_post)` can classify locality without tripping the guard
+    quote_post = repo().maybe_preload(quote_post, [created: [:peered]], prune: true)
     quote_post_ap_id = Bonfire.Common.URIs.canonical_url(quote_post)
 
     with {:ok, actor} <- ActivityPub.Actor.get_cached(pointer: quoted_object_creator),
@@ -355,6 +357,10 @@ defmodule Bonfire.Social.Quotes do
   def ap_quote_fields(actor, post) do
     quoted_objects =
       Bonfire.Social.Tags.list_tags_quote(post)
+      # preload each quoted object's locality assocs at SOURCE so the `canonical_url`/`is_local?` calls
+      # below (on `first_quote` and in the `quote_tags` map) don't trip the preload-at-source guard —
+      # a bare `Needle.Pointer` here resolves to its concrete object, which needs `:peered` to classify locality / build the object URL
+      |> repo().maybe_preload([:peered], prune: true)
       |> debug("include_as_quotes")
 
     # Check if we have stored quote fields on the AP object (from Accept's result or previous federation)
