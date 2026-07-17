@@ -254,6 +254,12 @@ defmodule Bonfire.Social.Feeds do
   end
 
   defp users_to_notify(users, boundary, to_circles \\ []) do
+    # Drop unresolved entries: a mention can be a bare id string rather than a user struct
+    # (e.g. a group posts to itself via `mentions: [group_id]`, which drives tagging/auto-boost
+    # into the group feed but is not a user to notify). Passing a bare id to `maybe_preload`
+    # raises `BadMapError`, so reject them here — as the `public_remote` branch already did.
+    users = Enum.reject(users, &(is_nil(&1) || is_binary(&1)))
+
     # debug(epic, act, users, "users going in")
     cond do
       boundary in ["public", "mentions"] ->
@@ -262,9 +268,7 @@ defmodule Bonfire.Social.Feeds do
         |> repo().maybe_preload([:character, :settings])
 
       boundary in ["public_remote"] ->
-        # filter out non-federating users (where we just have a username rather than a struct)
         users
-        |> Enum.reject(&(is_nil(&1) || is_binary(&1)))
         |> repo().maybe_preload([:character, :settings])
 
       boundary == "local" ->

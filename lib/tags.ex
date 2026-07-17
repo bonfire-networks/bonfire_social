@@ -238,10 +238,23 @@ defmodule Bonfire.Social.Tags do
   end
 
   defp tag_kind(tag) do
-    case Types.object_type(tag) do
-      Bonfire.Tag.Hashtag -> :hashtag
-      Bonfire.Data.Identity.User -> :mention
-      _ -> if is_nil(e(tag, :character, nil)), do: :quote, else: :mention
+    # `only_schemas: true` normalises groups/topics to `Bonfire.Classify.Category` — without it
+    # a group resolves to the `:group` atom and slips past the Category clause below.
+    case Types.object_type(tag, only_schemas: true) do
+      Bonfire.Tag.Hashtag ->
+        :hashtag
+
+      Bonfire.Data.Identity.User ->
+        :mention
+
+      # Groups/topics are characters (audience), never quoted objects. Like the User
+      # clause above, this must not depend on `:character` being preloaded: a freshly
+      # live-pushed group post carries bare tags, which rendered the group as a quote card.
+      Bonfire.Classify.Category ->
+        :mention
+
+      _ ->
+        if is_nil(e(tag, :character, nil)), do: :quote, else: :mention
     end
   end
 
