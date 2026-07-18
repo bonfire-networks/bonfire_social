@@ -579,6 +579,8 @@ defmodule Bonfire.Social.RuntimeConfig do
       :with_reply_to,
       :with_thread_post,
       :with_object_peered,
+      # tree.parent, so activities published in a group/topic show "published in"
+      :with_parent,
       #  TODO: only if quote posts are enabled?
       :quote_tags
     ]
@@ -597,11 +599,11 @@ defmodule Bonfire.Social.RuntimeConfig do
           include: feed_default_include
         },
 
-        # Thread-deduped feeds: skip reply context joins since we show thread roots only
+        # Thread-deduped feeds: skip thread joins since entries are one-per-thread (but keep :with_reply_to — a thread whose root isn't in the feed is represented by a reply, which needs its parent for context)
         "Thread-deduped feed" => %{
           match: %{dedup_by_thread: true},
           include: [],
-          exclude: [:with_reply_to, :with_thread_name, :with_thread_post]
+          exclude: [:with_thread_name, :with_thread_post]
         },
 
         # Specific Feeds

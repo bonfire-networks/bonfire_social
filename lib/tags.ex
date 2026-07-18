@@ -111,10 +111,22 @@ defmodule Bonfire.Social.Tags do
   #   character
   # end
   defp maybe_boostable_category(creator, id) when is_binary(id) do
-    with {:ok, category} <- Bonfire.Common.Needles.get(id, current_user: creator, verbs: [:tag]) do
-      debug(category, "queried as boostable :-)")
-      category
-    else
+    # NOTE: the id may be any object (eg. replies pass the thread root as context_id), and
+    # only categories can be tree parents (`category_tree.parent_id` has a strong FK), so
+    # anything else must be filtered out here rather than treated as boostable
+    case Bonfire.Common.Needles.get(id, current_user: creator, verbs: [:tag]) do
+      {:ok, %{__struct__: schema} = category} when schema == Bonfire.Classify.Category ->
+        debug(category, "queried as boostable :-)")
+        category
+
+      {:ok, %{table_id: "2AGSCANBECATEG0RY0RHASHTAG"} = category} ->
+        debug(category, "queried as boostable :-)")
+        category
+
+      {:ok, other} ->
+        debug(other, "context is not a category, so auto-boosting will be skipped")
+        nil
+
       _ ->
         debug("we don't have tag permission, so auto-boosting will be skipped")
         nil

@@ -339,7 +339,11 @@ defmodule Bonfire.Social.Threads do
     )
     # load the reply_to's Replied and in particular its thread and that creator
     |> proload(replied: [thread: [created: [creator: [:character, :peered]]]])
-    |> proload(created: [creator: [:character, :peered]])
+    # load the reply_to fully enough for `ActivityLive.prepare_reply_to` — this struct rides
+    # along on the created activity and is what the live-pushed feed item renders as the
+    # parent preview (Ecto won't re-preload the already-loaded assoc at push time)
+    |> proload([:post_content])
+    |> proload(created: [creator: [:character, :peered, profile: :icon]])
     |> boundarise(main_object.id, verbs: [:reply], current_user: user)
     # |> boundarise(thread.id, verbs: [:reply], current_user: user) # FIMXE: including this fails when parent has no thread_id
     |> repo().one()
@@ -1552,7 +1556,10 @@ defmodule Bonfire.Social.Threads do
            :trending_discussions,
            current_user: current_user,
            paginate: %{limit: limit},
-           preload: [:feed]
+           # :with_parent loads tree.parent so ActivityLive can show "published in"
+           # (the feed_postload phase that normally loads it doesn't run here, since
+           # the widget renders cached activities outside a feed component)
+           preload: [:feed, :with_parent]
          ) do
       %{edges: edges} when is_list(edges) -> edges
       _ -> []
