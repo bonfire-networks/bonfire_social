@@ -177,7 +177,10 @@ defmodule Bonfire.Social.FeedsDedupThreadTimeLimitTest do
     } do
       root =
         fake_post_days_ago!(author, 15, %{
-          post_content: %{name: "old thread rooted elsewhere", html_body: "old root not in this feed"}
+          post_content: %{
+            name: "old thread rooted elsewhere",
+            html_body: "old root not in this feed"
+          }
         })
 
       old_reply =

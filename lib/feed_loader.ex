@@ -529,7 +529,8 @@ defmodule Bonfire.Social.FeedLoader do
         # Disable deferred join when using :per_media preload as it needs to filter in the main query
         # Disable deferred join for thread dedup: it has its own ordering via latest_reply join
         # Respect explicit `false` (unlike `||` which treats false as falsy)
-        if e(filters, :dedup_by_thread, nil) || Keyword.get(opts, :query_with_deferred_join) == false do
+        if e(filters, :dedup_by_thread, nil) ||
+             Keyword.get(opts, :query_with_deferred_join) == false do
           false
         else
           Keyword.get_lazy(opts, :query_with_deferred_join, fn ->
@@ -1148,7 +1149,10 @@ defmodule Bonfire.Social.FeedLoader do
   defp join_latest_thread_reply(query) do
     query
     |> FeedActivities.maybe_preload_replied()
-    |> join(:left, [activity: activity, replied: replied], lr in subquery(thread_order_by_latest_reply_subquery()),
+    |> join(
+      :left,
+      [activity: activity, replied: replied],
+      lr in subquery(thread_order_by_latest_reply_subquery()),
       # keyed on the THREAD (not the entry's own object) so threads represented by a reply — root not in this feed — still match their latest-reply row
       on: lr.thread_id == fragment("COALESCE(?, ?)", replied.thread_id, activity.object_id),
       as: :latest_reply
