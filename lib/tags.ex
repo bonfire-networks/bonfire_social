@@ -157,10 +157,10 @@ defmodule Bonfire.Social.Tags do
       :ok
 
   """
-  def maybe_auto_boost(creator, category_or_categories, object) do
+  def maybe_auto_boost(creator, category_or_categories, object, opts \\ []) do
     maybe_boostable_categories(creator, category_or_categories)
     |> debug()
-    |> auto_boost(..., object)
+    |> auto_boost(..., object, opts)
   end
 
   @doc """
@@ -172,14 +172,16 @@ defmodule Bonfire.Social.Tags do
       :ok
 
   """
-  def auto_boost(categories_auto_boost, object) when is_list(categories_auto_boost) do
+  def auto_boost(categories_auto_boost, object, opts \\ [])
+
+  def auto_boost(categories_auto_boost, object, opts) when is_list(categories_auto_boost) do
     debug(categories_auto_boost, "many")
 
     categories_auto_boost
-    |> Enum.each(&auto_boost(&1, object))
+    |> Enum.each(&auto_boost(&1, object, opts))
   end
 
-  def auto_boost(%{} = category, object) when is_struct(object) or is_binary(object) do
+  def auto_boost(%{} = category, object, opts) when is_struct(object) or is_binary(object) do
     category =
       category
       |> repo().maybe_preload(:character)
@@ -188,7 +190,7 @@ defmodule Bonfire.Social.Tags do
       category
       |> debug("auto_boost_object to")
 
-      Bonfire.Social.Boosts.maybe_boost(category, object, notify_creator: false)
+      Bonfire.Social.Boosts.maybe_boost(category, object, auto_boost_opts(opts))
 
       # remove it from the inbox ("Submitted" tab)
       if inbox_id,
@@ -199,7 +201,24 @@ defmodule Bonfire.Social.Tags do
     end
   end
 
-  def auto_boost(_, _), do: debug("not auto-boosting (invalid inputs)")
+  def auto_boost(_, _, _), do: debug("not auto-boosting (invalid inputs)")
+
+  defp auto_boost_opts(opts) do
+    opts
+    |> Keyword.delete(:auto_boost_at)
+    |> Keyword.put(:notify_creator, false)
+    |> maybe_put_auto_boost_pointer(opts[:auto_boost_at])
+  end
+
+  defp maybe_put_auto_boost_pointer(opts, nil), do: opts
+
+  defp maybe_put_auto_boost_pointer(opts, auto_boost_at) do
+    Keyword.put(
+      opts,
+      :pointer_id,
+      Bonfire.Common.DatesTimes.generate_ulid_if_past(auto_boost_at)
+    )
+  end
 
   def list_tags_quote(post) do
     post = repo().maybe_preload(post, :tags)
