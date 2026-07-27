@@ -44,6 +44,36 @@ defmodule Bonfire.Social.Feeds do
     end
   end
 
+  @doc """
+  Normalizes string and legacy atom feed names for comparison.
+
+  ## Examples
+
+      iex> normalize_feed_name("  Test ")
+      "test"
+
+      iex> normalize_feed_name(:test)
+      "test"
+
+      iex> normalize_feed_name(nil)
+      nil
+  """
+  def normalize_feed_name(name) when is_binary(name) do
+    name
+    |> String.trim()
+    |> String.downcase()
+  end
+
+  def normalize_feed_name(nil), do: nil
+
+  def normalize_feed_name(name) when is_atom(name) do
+    name
+    |> Atom.to_string()
+    |> normalize_feed_name()
+  end
+
+  def normalize_feed_name(_name), do: nil
+
   def feed_presets_permitted(opts) do
     Bonfire.Social.Feeds.feed_presets(opts)
     |> Enum.filter(fn {_slug, preset} ->
