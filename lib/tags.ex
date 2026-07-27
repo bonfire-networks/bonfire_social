@@ -261,8 +261,6 @@ defmodule Bonfire.Social.Tags do
       end
     end)
     |> then(fn {quotes, hashtags} ->
-      # preload `:post_content` too (not just `:sensitive`): a quoted post's CW overlay renders its
-      # own `post_content.summary` as the warning text, else it falls back to a generic label
       {repo().maybe_preload(quotes, [:sensitive, :post_content], prune: true),
        repo().maybe_preload(hashtags, :named)}
     end)
