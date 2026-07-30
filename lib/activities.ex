@@ -2542,7 +2542,13 @@ defmodule Bonfire.Social.Activities do
         subject_user
 
       true ->
-        ensure_user_loaded!(type, creator_or_subject_id, opts[:preload] || [])
+        # `skip_err: true` annotates a call site that deliberately reads with NO
+        # `current_user`/`subject_user` (e.g. rendering only public content), where the
+        # query already preloads `subject: [character: [:peered]]` (see
+        # `maybe_preload_subject/3`'s empty-skip-list clause) so locality still classifies
+        # without an on-demand preload. The strict default stays for every other caller.
+        if opts[:skip_err] != true,
+          do: ensure_user_loaded!(type, creator_or_subject_id, opts[:preload] || [])
 
         nil
     end
