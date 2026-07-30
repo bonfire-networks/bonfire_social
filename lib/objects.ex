@@ -184,7 +184,10 @@ defmodule Bonfire.Social.Objects do
     if match?(%{creator: %{profile: %{id: _}}}, media) do
       pointer
     else
-      media = repo().maybe_preload(media, [creator: [profile: [:icon], character: []]], opts)
+      # `character: [:peered]` (nested — locality lives on `character.peered`) because the UI classifies the creator's locality: rendering the reply action calls `can_interact_or_unloaded?(..., target_user: creator)` → `is_local?`, which refuses to lazy-load `:peered` and raises in test if it wasn't preloaded at the source
+      media =
+        repo().maybe_preload(media, [creator: [profile: [:icon], character: [:peered]]], opts)
+
       %{pointer | activity: %{activity | object: media}}
     end
   end

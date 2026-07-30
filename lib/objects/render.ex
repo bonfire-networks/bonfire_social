@@ -21,11 +21,7 @@ defmodule Bonfire.Social.Objects.Render do
     object_to_markdown(e(object, :activity, nil), object_with_content(object), opts)
   end
 
-  # The struct actually carrying the `PostContent`, which differs by read path: a type-specific
-  # read (e.g. `Bonfire.Posts.read/2`) returns the object itself with its activity nested under it,
-  # while a pointer read (`Bonfire.Social.Objects.read/2`) can leave a content-less `activity.object`
-  # alongside the loaded outer object. Reply rows loaded by `Threads.list_replies/2` carry it under
-  # `activity.object`.
+  # The struct actually carrying the `PostContent`, which differs by read path: a type-specific read (e.g. `Bonfire.Posts.read/2`) returns the object itself with its activity nested under it, while reply rows loaded by `Threads.list_replies/2` carry it under `activity.object`.
   defp object_with_content(%{post_content: %PostContent{}} = object), do: object
 
   defp object_with_content(%{activity: %{object: %{post_content: %PostContent{}} = object}}),
@@ -128,8 +124,7 @@ defmodule Bonfire.Social.Objects.Render do
       #  NOTE: we only want to include public ones
       current_user: nil,
       preload: [:with_subject, :with_post_content],
-      # reading with no current_user is deliberate here, so don't `err` about the absence of a
-      # locality-marked subject_user: `:with_subject` already preloads `character: [:peered]`
+      # reading with no current_user is deliberate here, so don't `err` about the absence of a locality-marked subject_user: `:with_subject` already preloads `character: [:peered]`
       skip_err: true,
       limit: 5000,
       max_depth: 5000

@@ -2129,10 +2129,7 @@ defmodule Bonfire.Social.Activities do
         %{activity: %{object: %{id: _} = enclosed_object} = activity} = top_object
       ) do
     Map.drop(activity, [:object])
-    # `maybe_merge_to_struct` (not a raw `Map.merge`) so the result stays a valid struct of the
-    # enclosed object's type: `struct_to_map` drops `NotLoaded`/nil and `struct/2` drops non-schema
-    # keys, so a `Needle.Pointer`'s virtual polymorphic fields (e.g. `:character`) are NOT bolted
-    # onto a typed `Post` (a phantom `:character` would make `canonical_url` mis-route and raise).
+    # `maybe_merge_to_struct` (not a raw `Map.merge`) so the result stays a valid struct of the enclosed object's type: `struct/2` drops non-schema keys, so a `Needle.Pointer`'s virtual polymorphic fields (e.g. `:character`) are NOT bolted onto a typed `Post` (a phantom `:character` would make `canonical_url` mis-route and raise). It also keeps assocs the query loaded on the enclosed object when the outer pointer has the same mixin unloaded (`Needle.Pointer` declares them all, see `config/bonfire_data.exs`), while still letting the pointer's loaded-nils overlay — which locality classification relies on, eg. a local object's `:peered` == nil.
     |> activity_under_object(Enums.maybe_merge_to_struct(enclosed_object, top_object))
   end
 
@@ -2542,11 +2539,7 @@ defmodule Bonfire.Social.Activities do
         subject_user
 
       true ->
-        # `skip_err: true` annotates a call site that deliberately reads with NO
-        # `current_user`/`subject_user` (e.g. rendering only public content), where the
-        # query already preloads `subject: [character: [:peered]]` (see
-        # `maybe_preload_subject/3`'s empty-skip-list clause) so locality still classifies
-        # without an on-demand preload. The strict default stays for every other caller.
+        # `skip_err: true` annotates a call site that deliberately reads with NO `current_user`/`subject_user` (e.g. rendering only public content), where the query already preloads `subject: [character: [:peered]]` (see `maybe_preload_subject/3`'s empty-skip-list clause) so locality still classifies without an on-demand preload. The strict default stays for every other caller.
         if opts[:skip_err] != true,
           do: ensure_user_loaded!(type, creator_or_subject_id, opts[:preload] || [])
 
