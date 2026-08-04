@@ -138,6 +138,36 @@ defmodule Bonfire.Social.FeedLoader do
 
   def feed(name_or_filters \\ nil, opts \\ [])
 
+  @doc """
+  Returns the page of activities immediately newer than `cursor`.
+
+  This uses the paginator's native `before` direction so each page is adjacent to the cursor and remains in the usual reverse-chronological display order. Continue toward the newest activity with `page_info.start_cursor`.
+  """
+  @spec feed_newer(map() | atom() | String.t(), map(), String.t(), Keyword.t()) :: map()
+  def feed_newer(feed_name, filters, cursor, opts \\ [])
+      when is_binary(cursor) and cursor != "" and is_list(opts) do
+    filters =
+      filters
+      |> then(fn
+        %_{} = struct -> Map.from_struct(struct)
+        enumerable -> Map.new(enumerable)
+      end)
+      |> Map.put(:sort_by, :date_created)
+      |> Map.put(:sort_order, :desc)
+
+    paginate =
+      opts
+      |> Keyword.get(:paginate, [])
+      |> Keyword.take([:limit])
+      |> Keyword.merge(
+        before: cursor,
+        cursor_fields: [id: :desc],
+        fetch_cursor_value_fun: &Activities.fetch_cursor_value_fun/2
+      )
+
+    feed(feed_name, filters, Keyword.put(opts, :paginate, paginate))
+  end
+
   def feed(:curated, opts) do
     Bonfire.Social.Pins.list_instance_pins_activities(opts)
   end
@@ -318,11 +348,7 @@ defmodule Bonfire.Social.FeedLoader do
     |> Map.put(
       :time_limit,
       e(filters, :time_limit, nil) || e(filters, "time_limit", nil) || opts[:time_limit] ||
-        Settings.get([Bonfire.UI.Social.FeedLive, :time_limit], 7,
-          current_user: current_user,
-          name: l("Default Time Limit"),
-          description: l("Default time window for feed content (in days).")
-        )
+        Config.get([Bonfire.UI.Social.FeedLive, :time_limit], 7)
     )
     |> debug("set sort_by and time_limit")
   end

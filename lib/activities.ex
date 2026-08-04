@@ -827,7 +827,14 @@ defmodule Bonfire.Social.Activities do
 
           quote_edge_query = from e in Edge, where: e.table_id == ^quote_table_id
 
-          [edge: {quote_edge_query, [:request, :subject]}]
+          [
+            edge:
+              {quote_edge_query,
+               [
+                 :request,
+                 subject: [created: [creator: [profile: :icon, character: [:peered]]]]
+               ]}
+          ]
 
         nil ->
           []
@@ -1475,7 +1482,10 @@ defmodule Bonfire.Social.Activities do
       Bonfire.Common.Repo.Preload.maybe_follow_pointer_schemas(
         objects,
         activity_nested_under ++ [:edge, :subject],
-        [{Bonfire.Data.Social.Post, [:post_content]}],
+        [
+          {Bonfire.Data.Social.Post,
+           [:post_content, created: [creator: [profile: :icon, character: [:peered]]]]}
+        ],
         opts
       )
     else

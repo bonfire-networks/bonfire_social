@@ -2,6 +2,7 @@ defmodule Bonfire.Social.FeedsFilterTimeLimitTest do
   use Bonfire.Social.DataCase, async: true
   use Bonfire.Common.Utils
 
+  alias Bonfire.Common.Settings
   alias Bonfire.Social.FeedLoader
   alias Bonfire.Social.Feeds
   alias Bonfire.Posts
@@ -173,6 +174,17 @@ defmodule Bonfire.Social.FeedsFilterTimeLimitTest do
 
       # Test with very large value
       feed = FeedLoader.feed(:custom, %{time_limit: 100_000}, current_user: user)
+    end
+
+    test "ignores a previously saved default time-limit preference", %{user: user} do
+      {:ok, _} =
+        Settings.put([Bonfire.UI.Social.FeedLive, :time_limit], 1,
+          current_user: user,
+          scope: :user
+        )
+
+      assert {:ok, filters} = FeedLoader.prepare_feed_filters(nil, :local, current_user: user)
+      assert filters.time_limit == 7
     end
 
     test "handles invalid time_limit values", %{

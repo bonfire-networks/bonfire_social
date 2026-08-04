@@ -9,11 +9,6 @@ defmodule Bonfire.Social.RuntimeConfig do
   def config do
     import Config
 
-    # days before a saved reading position is too old to resume from
-    # (`:enabled` defaults to true in code so the settings toggle still
-    # renders as checked-by-default rather than config-inherited)
-    config :bonfire_social, Bonfire.Social.Markers, resume_max_age_days: 3
-
     # `l/1` here marks these for extraction, but `config/0` runs once at boot under the default
     # locale, so the stored value is effectively the untranslated msgid. The actual per-request
     # translation happens at the point of display, via `Bonfire.Social.Feeds.localise_tree/3` — which
@@ -412,9 +407,9 @@ defmodule Bonfire.Social.RuntimeConfig do
             feedback_message:
               l(
                 "There are no upcoming events to show. Events from other federated platforms like Mobilizon will appear here."
-              )
-          ],
-          enable_marker: true
+              ),
+            enable_marker: true
+          ]
         },
         polls: %{
           name: l("Polls"),
@@ -487,9 +482,9 @@ defmodule Bonfire.Social.RuntimeConfig do
         trending_discussions: %{
           name: l("Top discussions"),
           built_in: true,
-          description: l("Popular discussions from the last 7 days"),
+          description: l("Popular discussions from the last day"),
           filters: %FeedFilters{
-            time_limit: 7,
+            time_limit: 1,
             sort_by: :reply_count,
             sort_order: :desc,
             exclude_activity_types: [:boost, :like, :vote, :follow, :reply]

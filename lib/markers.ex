@@ -22,6 +22,7 @@ defmodule Bonfire.Social.Markers do
   @valid_timelines ["home", "notifications"]
   # Mastodon timeline names → Bonfire feed names (unlisted ones map to themselves)
   @timeline_to_feed_name %{"home" => "my"}
+  @resume_max_age_days 3
   # Re-confirming the same position must still count as activity for the
   # staleness window (and for clients comparing `updated_at`), but without a
   # write per save: only touch the timestamp when it's over an hour old.
@@ -53,6 +54,12 @@ defmodule Bonfire.Social.Markers do
   end
 
   def get_reading_position(_user, _feed_name, _opts), do: nil
+
+  @doc "Get a reading position only when it is recent enough to resume the web feed."
+  @spec get_resumable_reading_position(any(), atom() | String.t()) :: String.t() | nil
+  def get_resumable_reading_position(user, feed_name) do
+    get_reading_position(user, feed_name, max_age_days: @resume_max_age_days)
+  end
 
   # A non-number max age (nil/false) means no limit; 0 disables resuming.
   defp fresh_enough?(%Marker{updated_at: %DateTime{} = updated_at}, max_age_days)

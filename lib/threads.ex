@@ -1536,7 +1536,7 @@ defmodule Bonfire.Social.Threads do
   # --- Trending ("Top discussions") widget loader (cached per user + limit) ---
 
   @doc """
-  The most-replied discussions of the last 7 days (`:trending_discussions` feed preset), for the
+  The most-replied discussions of the last day (`:trending_discussions` feed preset), for the
   "Top discussions" widget. Cached per user and limit for 1h; the key is built once by
   `trending_cache_key/2` so the load and any reset always agree. Pass the standard `:cache` opt
   (`cache: :refresh` busts + recomputes — what the widget's refresh button calls).
@@ -1561,9 +1561,34 @@ defmodule Bonfire.Social.Threads do
            # the widget renders cached activities outside a feed component)
            preload: [:feed, :with_parent]
          ) do
-      %{edges: edges} when is_list(edges) -> edges
+      %{edges: edges} when is_list(edges) -> attach_trending_participants(edges, current_user)
       _ -> []
     end
+  end
+
+  # Attach up to 3 conversation participants per trending discussion (rendered as a
+  # facepile by the widget), reusing the batched `list_participants_for_threads/2`
+  # so the whole widget stays one extra query — and cached along with the edges by
+  # `list_trending/3`. The root author is dropped here since the activity already
+  # shows them.
+  defp attach_trending_participants(edges, current_user) do
+    participants_by_thread =
+      list_participants_for_threads(edges, current_user: current_user, limit: 30)
+
+    Enum.map(edges, fn edge ->
+      thread_id = e(edge, :activity, :replied, :thread_id, nil)
+
+      subject_id =
+        e(edge, :activity, :subject_id, nil) || id(e(edge, :activity, :subject, nil))
+
+      participants =
+        participants_by_thread
+        |> Map.get(thread_id, [])
+        |> Enum.reject(&(id(&1) == subject_id))
+        |> Enum.take(3)
+
+      Map.put(edge, :participants, participants)
+    end)
   end
 
   @doc "Cache key for `list_trending/3` — used by both the loader and any reset, so they can't drift."
