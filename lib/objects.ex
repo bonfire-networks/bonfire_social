@@ -184,7 +184,10 @@ defmodule Bonfire.Social.Objects do
     if match?(%{creator: %{profile: %{id: _}}}, media) do
       pointer
     else
-      media = repo().maybe_preload(media, [creator: [profile: [:icon], character: []]], opts)
+      # `character: [:peered]` (nested — locality lives on `character.peered`) because the UI classifies the creator's locality: rendering the reply action calls `can_interact_or_unloaded?(..., target_user: creator)` → `is_local?`, which refuses to lazy-load `:peered` and raises in test if it wasn't preloaded at the source
+      media =
+        repo().maybe_preload(media, [creator: [profile: [:icon], character: [:peered]]], opts)
+
       %{pointer | activity: %{activity | object: media}}
     end
   end
@@ -1298,46 +1301,6 @@ defmodule Bonfire.Social.Objects do
         other
         |> info("ap_maybe_deleted")
     end
-  end
-
-  @doc """
-  Gets the permalink for an object.
-
-  ## Examples
-
-      iex> permalink(%{canonical_uri: "https://example.com/object/123"})
-      "https://example.com/object/123"
-
-  """
-  def permalink(%{canonical_uri: permalink}) do
-    permalink
-  end
-
-  def permalink(%{peered: %{canonical_uri: permalink}}) do
-    permalink
-  end
-
-  def permalink(%{peered: _} = object) do
-    warn("FIXME: Peered should already come preloaded in object")
-
-    object
-    # |> repo().maybe_preload(:peered)
-    |> e(:peered, :canonical_uri, nil)
-  end
-
-  def permalink(object) when is_map(object) or is_binary(object) do
-    warn(object, "FIXME: object does not have a :peered assoc, query it instead")
-
-    Utils.maybe_apply(
-      Bonfire.Federate.ActivityPub.Peered,
-      :get_canonical_uri,
-      [object]
-    )
-  end
-
-  def permalink(other) do
-    debug(other, "seems to be a local object")
-    nil
   end
 
   @doc """

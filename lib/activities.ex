@@ -1455,26 +1455,61 @@ defmodule Bonfire.Social.Activities do
     |> maybe_preload_ap_activity_nested_objects(opts)
   end
 
-  defp maybe_preload_quote_tag_children(objects, activity_nested_under, preloads, opts) do
+  defp maybe_preload_quote_tag_children(objects, activity_nested_under, _preloads, opts) do
     if :quote_tags in List.wrap(opts[:preload]) do
-      access_path =
-        if(is_list(objects), do: [Access.all()], else: []) ++
-          Enum.map(activity_nested_under ++ [:tags], &Access.key(&1, []))
+      path = activity_nested_under ++ [:tags]
 
-      with {_tags, preloaded} <-
-             get_and_update_in(objects, access_path, fn tags ->
-               {tags,
-                repo().maybe_preload(
-                  tags,
-                  [:character, :post_content, created: [creator: [:profile, :character]]],
-                  opts |> Keyword.put(:prune, true) |> Keyword.put_new(:follow_pointers, false)
-                )}
-             end) do
-        preloaded
+      if is_list(objects) do
+        # load the tag children for the WHOLE list in one pass (`prune: true` already handles the
+        # mixed schemas the tags can be), then hand each object back its own tags — previously this
+        # ran one `maybe_preload` per object
+        case objects |> Enum.flat_map(&tags_at(&1, path)) |> Enum.uniq_by(&id/1) do
+          [] ->
+            objects
+
+          tags ->
+            by_id = tags |> preload_tag_children(opts) |> Map.new(&{id(&1), &1})
+
+            Enum.map(objects, &put_preloaded_tags(&1, path, by_id))
+        end
+      else
+        case tags_at(objects, path) do
+          [] -> objects
+          tags -> put_in(objects, Enums.access_keys(path), preload_tag_children(tags, opts))
+        end
       end
     else
       objects
     end
+  end
+
+  # NOTE: an object carrying no tags at this path is skipped rather than traversed — eg. a search hit
+  # for a user has no `activity` at all, and `Access.key/2`'s default only covers a *missing* key, so
+  # walking an explicit nil raised `BadMapError` (which 500'd every `@` mention autocomplete request)
+  defp tags_at(object, path) do
+    case ed(object, path, nil) do
+      [_ | _] = tags -> tags
+      _ -> []
+    end
+  end
+
+  defp put_preloaded_tags(object, path, by_id) do
+    case tags_at(object, path) do
+      [] ->
+        object
+
+      tags ->
+        # `maybe_preload` groups by schema, so match the loaded tags back up by id rather than position
+        put_in(object, Enums.access_keys(path), Enum.map(tags, &(by_id[id(&1)] || &1)))
+    end
+  end
+
+  defp preload_tag_children(tags, opts) do
+    repo().maybe_preload(
+      tags,
+      [:character, :post_content, created: [creator: [:profile, :character]]],
+      opts |> Keyword.put(:prune, true) |> Keyword.put_new(:follow_pointers, false)
+    )
   end
 
   defp maybe_preload_quote_request_subject(objects, activity_nested_under, preloads, opts) do
@@ -2139,10 +2174,7 @@ defmodule Bonfire.Social.Activities do
         %{activity: %{object: %{id: _} = enclosed_object} = activity} = top_object
       ) do
     Map.drop(activity, [:object])
-    # `maybe_merge_to_struct` (not a raw `Map.merge`) so the result stays a valid struct of the
-    # enclosed object's type: `struct_to_map` drops `NotLoaded`/nil and `struct/2` drops non-schema
-    # keys, so a `Needle.Pointer`'s virtual polymorphic fields (e.g. `:character`) are NOT bolted
-    # onto a typed `Post` (a phantom `:character` would make `canonical_url` mis-route and raise).
+    # `maybe_merge_to_struct` (not a raw `Map.merge`) so the result stays a valid struct of the enclosed object's type: `struct/2` drops non-schema keys, so a `Needle.Pointer`'s virtual polymorphic fields (e.g. `:character`) are NOT bolted onto a typed `Post` (a phantom `:character` would make `canonical_url` mis-route and raise). It also keeps assocs the query loaded on the enclosed object when the outer pointer has the same mixin unloaded (`Needle.Pointer` declares them all, see `config/bonfire_data.exs`), while still letting the pointer's loaded-nils overlay — which locality classification relies on, eg. a local object's `:peered` == nil.
     |> activity_under_object(Enums.maybe_merge_to_struct(enclosed_object, top_object))
   end
 
@@ -2552,7 +2584,9 @@ defmodule Bonfire.Social.Activities do
         subject_user
 
       true ->
-        ensure_user_loaded!(type, creator_or_subject_id, opts[:preload] || [])
+        # `skip_err: true` annotates a call site that deliberately reads with NO `current_user`/`subject_user` (e.g. rendering only public content), where the query already preloads `subject: [character: [:peered]]` (see `maybe_preload_subject/3`'s empty-skip-list clause) so locality still classifies without an on-demand preload. The strict default stays for every other caller.
+        if opts[:skip_err] != true,
+          do: ensure_user_loaded!(type, creator_or_subject_id, opts[:preload] || [])
 
         nil
     end
