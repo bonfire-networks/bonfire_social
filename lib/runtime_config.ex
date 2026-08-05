@@ -221,7 +221,9 @@ defmodule Bonfire.Social.RuntimeConfig do
           icon: "ph:user-duotone",
           # $username is replaced at runtime
           # NOTE: :vote is excluded so poll votes stay notify-only (not shown on a user's profile)
-          filters: %FeedFilters{exclude_activity_types: [:like, :vote, :follow]},
+          # NOTE: time_limit: 0 because a profile is an archive, not a timeline — the default
+          # 7-day window made infrequent posters look empty and dead-ended on "Show older activities"
+          filters: %FeedFilters{exclude_activity_types: [:like, :vote, :follow], time_limit: 0},
           parameterized: %{subjects: [:by]},
           # profile feeds should always start at the top, never resume a reading position
           assigns: [enable_marker: false]
@@ -231,7 +233,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           built_in: true,
           description: l("Followers of a specific user"),
           icon: "ph:users-duotone",
-          filters: %FeedFilters{activity_types: [:follow]},
+          filters: %FeedFilters{activity_types: [:follow], time_limit: 0},
           parameterized: %{objects: [:by]}
         },
         user_following: %{
@@ -239,7 +241,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           built_in: true,
           description: l("Users followed by a specific user"),
           icon: "ph:user-plus-duotone",
-          filters: %FeedFilters{activity_types: [:follow]},
+          filters: %FeedFilters{activity_types: [:follow], time_limit: 0},
           parameterized: %{subjects: [:by]}
         },
         user_by_object_type: %{
@@ -247,7 +249,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           built_in: true,
           description: l("Posts by a specific user"),
           icon: "ph:note-duotone",
-          filters: %FeedFilters{creators: [:by], object_types: [:post]},
+          filters: %FeedFilters{creators: [:by], object_types: [:post], time_limit: 0},
           parameterized: %{creators: :by}
         },
         # user_research: %{
