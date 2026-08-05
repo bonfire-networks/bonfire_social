@@ -9,19 +9,30 @@ defmodule Bonfire.Social.MarkersTest do
 
     assert {:ok, _marker} = Markers.save_reading_position(user, "my", cursor)
 
-    backdate_markers(4)
+    backdate_markers(31, :minute)
 
     refute Markers.get_resumable_reading_position(user, "my")
     assert Markers.get_reading_position(user, "my") == cursor
 
-    backdate_markers(1)
+    backdate_markers(29, :minute)
 
     assert Markers.get_resumable_reading_position(user, "my") == cursor
   end
 
-  defp backdate_markers(days_ago) do
+  test "reconfirming an unchanged marker refreshes the resume window" do
+    user = fake_user!()
+    cursor = Needle.ULID.generate()
+
+    assert {:ok, _marker} = Markers.save_reading_position(user, "my", cursor)
+    backdate_markers(31, :minute)
+
+    assert {:ok, _marker} = Markers.save_reading_position(user, "my", cursor)
+    assert Markers.get_resumable_reading_position(user, "my") == cursor
+  end
+
+  defp backdate_markers(amount, unit) do
     Bonfire.Common.Repo.update_all(Bonfire.Social.Marker,
-      set: [updated_at: Bonfire.Common.DatesTimes.past(days_ago, :day)]
+      set: [updated_at: Bonfire.Common.DatesTimes.past(amount, unit)]
     )
   end
 end

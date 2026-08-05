@@ -22,11 +22,9 @@ defmodule Bonfire.Social.Markers do
   @valid_timelines ["home", "notifications"]
   # Mastodon timeline names → Bonfire feed names (unlisted ones map to themselves)
   @timeline_to_feed_name %{"home" => "my"}
-  @resume_max_age_days 3
-  # Re-confirming the same position must still count as activity for the
-  # staleness window (and for clients comparing `updated_at`), but without a
-  # write per save: only touch the timestamp when it's over an hour old.
-  @touch_unchanged_after_seconds 3600
+  @resume_max_age_seconds 30 * 60
+  # Re-confirming the same position must still count as activity without causing a write per save.
+  @touch_unchanged_after_seconds div(@resume_max_age_seconds, 2)
 
   def valid_timelines, do: @valid_timelines
 
@@ -37,16 +35,14 @@ defmodule Bonfire.Social.Markers do
   @doc """
   Get the server-side reading position cursor for a Bonfire feed.
 
-  Pass `max_age_days: n` to ignore positions that haven't moved in `n` days
-  (used by feed resume so a long-stale marker doesn't hijack the feed; the
-  marker itself is kept, e.g. for Mastodon clients).
+  Pass `max_age_seconds: n` or `max_age_days: n` to ignore positions that haven't moved within that period (used by feed resume so a long-stale marker doesn't hijack the feed; the marker itself is kept, e.g. for Mastodon clients).
   """
   def get_reading_position(user, feed_name, opts \\ [])
 
   def get_reading_position(user, feed_name, opts) when not is_nil(user) do
     case get_marker(marker_subject_id(user), normalise_feed_name(feed_name)) do
       %Marker{last_read_id: cursor} = marker ->
-        if fresh_enough?(marker, opts[:max_age_days]), do: to_string(cursor)
+        if fresh_enough?(marker, max_age_seconds(opts)), do: to_string(cursor)
 
       _ ->
         nil
@@ -58,16 +54,24 @@ defmodule Bonfire.Social.Markers do
   @doc "Get a reading position only when it is recent enough to resume the web feed."
   @spec get_resumable_reading_position(any(), atom() | String.t()) :: String.t() | nil
   def get_resumable_reading_position(user, feed_name) do
-    get_reading_position(user, feed_name, max_age_days: @resume_max_age_days)
+    get_reading_position(user, feed_name, max_age_seconds: @resume_max_age_seconds)
   end
 
   # A non-number max age (nil/false) means no limit; 0 disables resuming.
-  defp fresh_enough?(%Marker{updated_at: %DateTime{} = updated_at}, max_age_days)
-       when is_number(max_age_days) do
-    DateTime.after?(updated_at, DatesTimes.past(max_age_days, :day))
+  defp fresh_enough?(%Marker{updated_at: %DateTime{} = updated_at}, max_age_seconds)
+       when is_number(max_age_seconds) do
+    DateTime.after?(updated_at, DatesTimes.past(round(max_age_seconds), :second))
   end
 
-  defp fresh_enough?(_marker, _max_age_days), do: true
+  defp fresh_enough?(_marker, _max_age_seconds), do: true
+
+  defp max_age_seconds(opts) do
+    cond do
+      is_number(opts[:max_age_seconds]) -> opts[:max_age_seconds]
+      is_number(opts[:max_age_days]) -> opts[:max_age_days] * 24 * 60 * 60
+      true -> nil
+    end
+  end
 
   @doc "Save the server-side reading position cursor for a Bonfire feed."
   def save_reading_position(user, feed_name, cursor)
