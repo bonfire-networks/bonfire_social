@@ -441,6 +441,8 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
     end
 
     test "PubSub receives activity but it should be filtered by keyword" do
+      # subscribes to the legacy :local feed and expects the public post broadcast there; force write- addressing off 
+      Process.put([:bonfire_social, Bonfire.Social.Feeds, :feed_addressing], false)
       viewer = fake_user!("pubsub_keyword_viewer")
       poster = fake_user!("pubsub_keyword_poster")
 

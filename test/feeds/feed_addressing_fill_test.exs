@@ -18,6 +18,7 @@ defmodule Bonfire.Social.FeedAddressingFillTest do
     do: FeedActivities.feeds_for_activity(e(post, :activity, :id, nil) || raise("no activity"))
 
   test "fills a local_custom row for an old custom post so it shows in addressed :local" do
+    Process.put([:bonfire_social, Bonfire.Social.Feeds, :feed_addressing], false)
     author = Fake.fake_user!()
 
     # published with addressing OFF → a legacy custom post: no global/bucket feed row at all

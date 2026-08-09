@@ -22,6 +22,12 @@ defmodule Bonfire.Social.FeedsPubTest do
   import Tesla.Mock
   # use Mneme
 
+  setup do
+    # these tests assert the LEGACY broadcast feed_ids ([_, guest, local]); force write-addressing off so they're deterministic regardless
+    Process.put([:bonfire_social, Bonfire.Social.Feeds, :feed_addressing], false)
+    :ok
+  end
+
   test "basic PubSub broadcast mechanism works" do
     user = fake_user!("pubsub_local")
     feed_id = "local_feed_test"

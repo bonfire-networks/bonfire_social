@@ -18,6 +18,8 @@ defmodule Bonfire.Social.Feeds.FanOutCharacterizationTest do
   @boundaries ["public", "public_remote", "local", "mentions", "admins", "custom"]
 
   setup do
+    # this characterization pins the LEGACY fan-out feed_ids (incl. the guest row); force write-addressing off so it's deterministic 
+    Process.put([:bonfire_social, Bonfire.Social.Feeds, :feed_addressing], false)
     author = Fake.fake_user!()
     other = Fake.fake_user!()
 
