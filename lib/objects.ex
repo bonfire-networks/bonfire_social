@@ -1060,6 +1060,44 @@ defmodule Bonfire.Social.Objects do
   end
 
   @doc """
+  Shares an object into a boundary and/or circles by re-publishing it as a `:boost` — extending its
+  visibility to whoever the target boundary/circles grant access. Only the object's own
+  creator/caretaker may share it.
+
+  Extracted from the LiveView `handle_event("share", ...)` so the permission + publish logic lives in
+  the context (the LiveView keeps socket assigns resolution + flash/redirect). `opts`:
+  `:to_boundaries` (the target boundary) and `:to_circles`.
+
+  NOTE (kept verbatim from the handler to preserve behavior — a follow-up TDD refactor should replace
+  this inline creator resolution with `object_creator/1`, guarded by these tests).
+  """
+  def share(sharer, thing, opts \\ [])
+
+  def share(_sharer, nil, _opts), do: error(l("No object to share"))
+
+  def share(sharer, thing, opts) do
+    creator =
+      e(thing, :creator, nil) || e(thing, :created, :creator, nil) ||
+        e(thing, :created, :creator_id, nil) || e(thing, :caretaker, :caretaker, nil) ||
+        e(thing, :caretaker, :caretaker_id, nil) || e(thing, :provider, nil)
+
+    cond do
+      is_nil(creator) ->
+        error(l("Oops, an error occured when trying to share"))
+
+      id(creator) != id(sharer) ->
+        error(creator, l("Not allowed"))
+
+      is_struct(thing) ->
+        # TODO: check permission
+        publish(sharer, :boost, thing, opts)
+
+      true ->
+        error(l("No object to share"))
+    end
+  end
+
+  @doc """
   Publishes an object.
 
   ## Examples
@@ -1108,6 +1146,8 @@ defmodule Bonfire.Social.Objects do
     context_id =
       e(opts_or_attrs, :context_id, nil) || e(opts_or_attrs, :attrs, :context_id, nil)
 
+    # no explicit boundary: `"private"` when addressing specific `to_circles` (so a share to a
+    # circle/user isn't silently made public), else the configured default — one shared helper
     boundary_preset =
       e(opts_or_attrs, :boundary, nil) || e(opts_or_attrs, :attrs, :to_boundaries, nil) ||
         e(opts_or_attrs, :to_boundaries, nil) ||
@@ -1115,7 +1155,10 @@ defmodule Bonfire.Social.Objects do
           do: "mentions"
         ) ||
         if(is_binary(context_id), do: {:clone, context_id}) ||
-        Bonfire.Common.Config.get_ext(for_module, :default_boundary_preset, "public")
+        Acls.default_boundary_preset(
+          e(opts_or_attrs, :attrs, :to_circles, nil) || e(opts_or_attrs, :to_circles, nil),
+          for_module
+        )
 
     to_circles =
       e(opts_or_attrs, :attrs, :to_circles, nil) || e(opts_or_attrs, :to_circles, nil) ||

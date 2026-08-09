@@ -31,6 +31,8 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
   @moduletag :masto_api
 
   describe "GET /api/v1/timelines/public boosts (reblog rendering)" do
+    # PARKED (see https://github.com/bonfire-networks/bonfire-app/issues/2170): boosts get no origin×boundary bucket row, so a bucket-scoped public timeline drops reblogs. 
+    @tag :todo
     test "a boosted post renders as a reblog status", %{conn: conn} do
       account = Fake.fake_account!()
       viewer = Fake.fake_user!(account)

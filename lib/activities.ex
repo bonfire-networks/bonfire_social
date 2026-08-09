@@ -1995,75 +1995,114 @@ defmodule Bonfire.Social.Activities do
   def maybe_filter(query, {:origin, origin}, opts) when is_list(origin) and origin != [] do
     fetcher_user_id = "1ACT1V1TYPVBREM0TESFETCHER"
 
+    # When addressing is deployed AND backfilled, switch the origin filter from the query-time OR to a pure indexed `fp.feed_id IN [buckets]` probe.
+    addressed? =
+      Bonfire.Common.Config.get([Bonfire.Social.Feeds, :feed_origin_strategy], :or_filter) ==
+        :addressed
+
     cond do
       :local in origin ->
         debug("local feed")
-        local_feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
 
-        # Guests only need the named local feed. Authenticated viewers also need visible local-user
-        # activities from other feed rows, such as circle/custom-boundary posts.
-        if current_user(opts) do
+        if addressed? do
+          # authed viewers read all local buckets (incl. legacy 3SERS = local_custom, so unbackfilled + custom-boundary content still shows); guests read only the public bucket. No joins, no OR.
+          feed_ids =
+            if current_user(opts),
+              do: Bonfire.Social.Feeds.named_feed_ids(:local),
+              else: [Bonfire.Social.Feeds.named_feed_id(:local_public)]
+
+          # no `subject != fetcher` guard needed: origin-aware addressing routes the fetcher/service
+          # actor's content to the REMOTE buckets (verified in feed_addressing_origin_test), so it
+          # can never be in these local buckets — the fetcher exclusion is handled at write time.
           query
-          |> proload(:inner, activity: [:object])
-          |> reusable_join(
-            :left,
-            [activity: activity],
-            subject in assoc(activity, :subject),
-            as: :subject
-          )
-          |> reusable_join(
-            :left,
-            [subject: subject],
-            subject_character in assoc(subject, :character),
-            as: :subject_character
-          )
-          |> reusable_join(
-            :left,
-            [subject_character: subject_character],
-            subject_peered in assoc(subject_character, :peered),
-            as: :subject_peered
-          )
-          |> reusable_join(
-            :left,
-            [object: object],
-            object_peered in assoc(object, :peered),
-            as: :object_peered
+          |> where([fp], fp.feed_id in ^feed_ids)
+        else
+          local_feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
+
+          # Guests only need the named local feed. Authenticated viewers also need visible local-user activities from other feed rows, such as circle/custom-boundary posts.
+          if current_user(opts) do
+            query
+            |> proload(:inner, activity: [:object])
+            |> reusable_join(
+              :left,
+              [activity: activity],
+              subject in assoc(activity, :subject),
+              as: :subject
+            )
+            |> reusable_join(
+              :left,
+              [subject: subject],
+              subject_character in assoc(subject, :character),
+              as: :subject_character
+            )
+            |> reusable_join(
+              :left,
+              [subject_character: subject_character],
+              subject_peered in assoc(subject_character, :peered),
+              as: :subject_peered
+            )
+            |> reusable_join(
+              :left,
+              [object: object],
+              object_peered in assoc(object, :peered),
+              as: :object_peered
+            )
+            |> where(
+              [
+                fp,
+                activity: activity,
+                subject_character: subject_character,
+                subject_peered: subject_peered,
+                object: object,
+                object_peered: object_peered
+              ],
+              activity.subject_id != ^fetcher_user_id and
+                (fp.feed_id == ^local_feed_id or
+                   ((is_nil(subject_character.id) or is_nil(subject_peered.peer_id)) and
+                      (is_nil(object.id) or is_nil(object_peered.peer_id))))
+            )
+          else
+            query
+            |> where(
+              [fp, activity: activity],
+              activity.subject_id != ^fetcher_user_id and fp.feed_id == ^local_feed_id
+            )
+          end
+        end
+
+      :remote in origin ->
+        debug("remote/federated feed")
+
+        if addressed? do
+          # authed viewers read both remote buckets (incl. legacy 7EDER = remote_custom); guests read only the public bucket. Pure indexed IN, no joins/OR.
+          feed_ids =
+            if current_user(opts),
+              do: Bonfire.Social.Feeds.named_feed_ids(:remote),
+              else: [Bonfire.Social.Feeds.named_feed_id(:remote_public)]
+
+          query
+          |> where([fp], fp.feed_id in ^feed_ids)
+        else
+          federated_feed_id = Bonfire.Social.Feeds.named_feed_id(:activity_pub)
+
+          query
+          |> proload(
+            activity: [
+              subject: {"subject_", character: [:peered]},
+              object: {"object_", [:peered]}
+            ]
           )
           |> where(
             [
               fp,
               activity: activity,
-              subject_character: subject_character,
               subject_peered: subject_peered,
-              object: object,
               object_peered: object_peered
             ],
-            activity.subject_id != ^fetcher_user_id and
-              (fp.feed_id == ^local_feed_id or
-                 ((is_nil(subject_character.id) or is_nil(subject_peered.peer_id)) and
-                    (is_nil(object.id) or is_nil(object_peered.peer_id))))
-          )
-        else
-          query
-          |> where(
-            [fp, activity: activity],
-            activity.subject_id != ^fetcher_user_id and fp.feed_id == ^local_feed_id
+            fp.feed_id == ^federated_feed_id or activity.subject_id == ^fetcher_user_id or
+              not is_nil(subject_peered.peer_id) or not is_nil(object_peered.peer_id)
           )
         end
-
-      :remote in origin ->
-        debug("remote/federated feed")
-        federated_feed_id = Bonfire.Social.Feeds.named_feed_id(:activity_pub)
-
-        query
-        |> proload(
-          activity: [subject: {"subject_", character: [:peered]}, object: {"object_", [:peered]}]
-        )
-        |> where(
-          [fp, activity: activity, subject_peered: subject_peered, object_peered: object_peered],
-          fp.feed_id == ^federated_feed_id or activity.subject_id == ^fetcher_user_id or
-            not is_nil(subject_peered.peer_id) or not is_nil(object_peered.peer_id)
-        )
 
       true ->
         {instance_ids, instance_urls} =

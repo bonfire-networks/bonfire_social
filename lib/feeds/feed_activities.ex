@@ -211,7 +211,7 @@ defmodule Bonfire.Social.FeedActivities do
 
       > changeset = %Ecto.Changeset{}
       > options = [feeds: ["feed123", "feed456"]]
-      > Bonfire.Social.FeedActivities.put_feed_publishes(changeset, options)
+      > put_feed_publishes(changeset, options)
       %Ecto.Changeset{}
   """
   def put_feed_publishes(changeset, options) do
