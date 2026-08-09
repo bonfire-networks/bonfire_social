@@ -19,7 +19,7 @@ defmodule Bonfire.Social.RuntimeConfig do
 
     # Register the one-shot feed-addressing rollout (backfill legacy feeds → buckets, then enable write-addressing), run once per boot by `Bonfire.Common.StartupTasks` and gated on the flag above. Target `:bonfire_common` (the StartupTasks module's app) so it deep-merges with tasks declared by other extensions rather than clobbering them.
     config :bonfire_common, Bonfire.Common.StartupTasks,
-      run: [Bonfire.Social.Feeds.Addressing.Rollout]
+      run: [feeds_addressing: Bonfire.Social.Feeds.Addressing.Rollout]
 
     # Read-side switch for the origin filter (:local/:remote): 
     # `:addressed` = `fp.feed_id IN [buckets]`,
