@@ -8,6 +8,7 @@ defmodule Bonfire.Social.FeedAddressingBackfillTest do
   use Bonfire.Social.DataCase, async: true
 
   alias Bonfire.Social.Feeds.Addressing.Backfill, as: Backfill
+  alias Bonfire.Social.Feeds.Addressing.Rollout
   alias Bonfire.Social.FeedActivities
   alias Bonfire.Posts
   alias Bonfire.Me.Fake
@@ -41,7 +42,7 @@ defmodule Bonfire.Social.FeedAddressingBackfillTest do
   defp feeds_of(post),
     do: FeedActivities.feeds_for_activity(e(post, :activity, :id, nil) || raise("no activity"))
 
-  defp run_backfill, do: Backfill.base_query() |> repo().all() |> Backfill.migrate()
+  defp run_backfill, do: Backfill.run()
 
   test "reclassifies legacy local rows: public→local_public, local→local_instance_only" do
     author = Fake.fake_user!()
@@ -73,24 +74,38 @@ defmodule Bonfire.Social.FeedAddressingBackfillTest do
     refute @legacy_local in feeds_of(local_post)
   end
 
-  test "reclassifies legacy activity_pub rows to remote_public (unconditional)" do
+  test "reclassifies legacy public_remote (guest sibling) → remote_public, but LEAVES addressed remote_custom (no guest sibling) in 7EDER" do
     author = Fake.fake_user!()
 
-    # a "mentions" post gets no legacy global row, so we isolate the remote route by inserting only a
-    # 7EDER (activity_pub) row for its activity — exactly the shape a legacy remote-public ingest left
-    post = publish!(author, "mentions")
-    activity_id = e(post, :activity, :id, nil)
+    # legacy public_remote ingest left BOTH a guest (0AND0M) and an activity_pub (7EDER) row:
+    legacy_public = publish!(author, "mentions")
+    lp = e(legacy_public, :activity, :id, nil)
 
     repo().insert_all(@feed_publish_table, [
-      %{id: Needle.ULID.dump!(activity_id), feed_id: Needle.ULID.dump!(@legacy_activity_pub)}
+      %{id: Needle.ULID.dump!(lp), feed_id: Needle.ULID.dump!(@legacy_activity_pub)},
+      %{id: Needle.ULID.dump!(lp), feed_id: Needle.ULID.dump!(@guest)}
     ])
 
-    assert @legacy_activity_pub in feeds_of(post)
+    # addressed remote_custom (non-public remote content): only a 7EDER row, NO guest sibling. `remote_custom`
+    # reuses the legacy activity_pub id, so this is exactly the shape the addressed ingest path writes.
+    custom_remote = publish!(author, "mentions")
+    cr = e(custom_remote, :activity, :id, nil)
+
+    repo().insert_all(@feed_publish_table, [
+      %{id: Needle.ULID.dump!(cr), feed_id: Needle.ULID.dump!(@legacy_activity_pub)}
+    ])
 
     run_backfill()
 
-    assert @remote_public in feeds_of(post)
-    refute @legacy_activity_pub in feeds_of(post)
+    # legacy public_remote → remote_public; its 7EDER + now-redundant guest rows dropped:
+    assert @remote_public in feeds_of(legacy_public)
+    refute @legacy_activity_pub in feeds_of(legacy_public)
+    refute @guest in feeds_of(legacy_public)
+
+    # addressed remote_custom MUST stay in 7EDER (= remote_custom) — moving it to remote_public would misclassify it
+    # (no leak, boundaries still gate, but it'd drop out of the #1586 :custom_boundaries feed):
+    assert @legacy_activity_pub in feeds_of(custom_remote)
+    refute @remote_public in feeds_of(custom_remote)
   end
 
   test "is idempotent: a second run is a no-op (rows already moved, none left in 3SERS)" do
@@ -104,5 +119,48 @@ defmodule Bonfire.Social.FeedAddressingBackfillTest do
     assert feeds_of(public_post) |> Enum.sort() == before
     assert @local_public in feeds_of(public_post)
     refute @legacy_local in feeds_of(public_post)
+  end
+
+  # The startup-task wrapper (`Rollout`, run once per boot by `Bonfire.Common.StartupTasks`) must be
+  # GATED on the write flag: reclassify only while it's off, no-op once it's on (so the big scan never
+  # re-runs). The `setup` above already forces the flag off.
+  describe "Rollout startup task (gated on feed_addressing)" do
+    test "runs the backfill and reports :ok when write-addressing is OFF" do
+      # precondition (setup forced the flag off): the gate reads off, so the RUN branch is exercised
+      refute Rollout.enabled?(), "precondition: write-addressing gate must read off"
+
+      author = Fake.fake_user!()
+      public_post = publish!(author, "public")
+      assert @legacy_local in feeds_of(public_post)
+      refute @local_public in feeds_of(public_post)
+
+      assert :ok = Rollout.run()
+
+      # legacy local row reclassified into the public bucket → the backfill ran
+      assert @local_public in feeds_of(public_post)
+      refute @legacy_local in feeds_of(public_post)
+
+      # and the gate was flipped ON: dropping the test's process-tree override (which shadows Config in
+      # test), Config.get now reads the value the rollout persisted via Settings.put
+      Process.delete([:bonfire_social, Bonfire.Social.Feeds, :feed_addressing])
+      assert Rollout.enabled?(), "rollout should have enabled write-addressing"
+    end
+
+    test "is a no-op (does NOT reclassify) when write-addressing is already ON" do
+      # publish with the setup's flag OFF → a real legacy 3SERS row is created
+      author = Fake.fake_user!()
+      public_post = publish!(author, "public")
+      assert @legacy_local in feeds_of(public_post)
+
+      # now flip the flag ON → the gate reads on, so the SKIP branch is exercised
+      Process.put([:bonfire_social, Bonfire.Social.Feeds, :feed_addressing], true)
+      assert Rollout.enabled?(), "precondition: write-addressing gate must read on"
+
+      assert :skip = Rollout.run()
+
+      # untouched: still in the legacy feed, not moved to a bucket
+      assert @legacy_local in feeds_of(public_post)
+      refute @local_public in feeds_of(public_post)
+    end
   end
 end

@@ -11,23 +11,25 @@ defmodule Bonfire.Social.RuntimeConfig do
   def config do
     import Config
 
-    # Write-time local/remote feed addressing: off by default. Set `FEED_ADDRESSING=1` per-instance to canary the fleet rollout before flipping the default.
-    # Only set when the env var is present so it doesn't override per-env config (e.g. test.exs); read by `Feeds.global_feed_ids/1`
+    # Write-time local/remote feed addressing (read by `Feeds.global_feed_ids/1`). Normally each instance enables this ITSELF, once, via the `Bonfire.Social.Feeds.Addressing.Rollout` startup task below: while the flag is off it backfills the legacy feeds into buckets and then persists `feed_addressing: true` to instance Settings, so the code default stays off and no env var is needed for the rollout. `FEED_ADDRESSING=1` is a manual override that starts write-addressing WITHOUT the auto-backfill: the gate then reads on, so the rollout treats it as already-done and skips, use it only once the buckets are backfilled by hand (as on a canary). Note `=0` does NOT opt out: the rollout still runs and flips it back on. Only applied when present, so it doesn't clobber per-env config (e.g. test.exs).
     if System.get_env("FEED_ADDRESSING") do
       config :bonfire_social, Bonfire.Social.Feeds,
         feed_addressing: System.get_env("FEED_ADDRESSING") in @yes
     end
 
-    # Read-side switch for the origin filter (:local/:remote): `:addressed` = `fp.feed_id IN [buckets]` (needs the buckets backfilled first), `:or_filter` = the legacy query-time OR. Only flip to :addressed AFTER FEED_ADDRESSING is on and the backfill has run. Read by `Activities.maybe_filter`.
-    case System.get_env("FEED_ORIGIN_STRATEGY") do
-      "addressed" ->
-        config(:bonfire_social, Bonfire.Social.Feeds, feed_origin_strategy: :addressed)
+    # Register the one-shot feed-addressing rollout (backfill legacy feeds → buckets, then enable write-addressing), run once per boot by `Bonfire.Common.StartupTasks` and gated on the flag above. Target `:bonfire_common` (the StartupTasks module's app) so it deep-merges with tasks declared by other extensions rather than clobbering them.
+    config :bonfire_common, Bonfire.Common.StartupTasks,
+      run: [Bonfire.Social.Feeds.Addressing.Rollout]
 
+    # Read-side switch for the origin filter (:local/:remote): 
+    # `:addressed` = `fp.feed_id IN [buckets]`,
+    # `:or_filter` = the legacy query-time OR.
+    case System.get_env("FEED_ORIGIN_STRATEGY") do
       "or_filter" ->
         config(:bonfire_social, Bonfire.Social.Feeds, feed_origin_strategy: :or_filter)
 
-      _ ->
-        nil
+      _addressed ->
+        config(:bonfire_social, Bonfire.Social.Feeds, feed_origin_strategy: :addressed)
     end
 
     # `l/1` here marks these for extraction, but `config/0` runs once at boot under the default
