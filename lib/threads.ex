@@ -490,50 +490,39 @@ defmodule Bonfire.Social.Threads do
     # Filter to user-like tags only (those with a `:character`), so quoted posts
     # and similar non-user tag targets are not listed as participants.
     edge_tags_by_thread =
-      edges
-      |> Enum.flat_map(fn %{activity: activity} ->
-        thread_id = e(activity, :replied, :thread_id, nil)
+      if opts[:include_tags] == false do
+        %{}
+      else
+        edges
+        |> Enum.flat_map(fn %{activity: activity} ->
+          thread_id = e(activity, :replied, :thread_id, nil)
 
-        if thread_id do
-          e(activity, :object, :tags, [])
-          |> Enum.filter(&user_tag?/1)
-          |> Enum.reject(
-            &(e(&1, :table_id, nil) in exclude_table_ids or id(&1) in exclude_subject_ids)
-          )
-          |> Enum.map(&{thread_id, &1})
-        else
-          []
-        end
-      end)
-      |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
-
-    # Flat lookup map of already-loaded subject structs — used to fill nil subjects after skipped JOIN
-    known_subjects_by_id =
-      (Enum.flat_map(edge_subjects_by_thread, fn {_, subjects} -> subjects end) ++
-         Enum.flat_map(edge_tags_by_thread, fn {_, tags} -> tags end))
-      |> filter_empty([])
-      |> Map.new(&{id(&1), &1})
-
-    skip_preload_for_subject_ids = Map.keys(known_subjects_by_id)
+          if thread_id do
+            e(activity, :object, :tags, [])
+            |> Enum.filter(&user_tag?/1)
+            |> Enum.reject(
+              &(e(&1, :table_id, nil) in exclude_table_ids or id(&1) in exclude_subject_ids)
+            )
+            |> Enum.map(&{thread_id, &1})
+          else
+            []
+          end
+        end)
+        |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+      end
 
     fetched_by_thread =
       if all_thread_ids != [] do
-        fetch_participants(all_thread_ids,
+        fetch_participants_for_threads(all_thread_ids,
           current_user: current_user(opts),
           limit: fetch_limit,
           exclude_table_ids: exclude_table_ids,
           exclude_subject_ids: opts[:exclude_subject_ids] || [],
-          skip_preload_for_subject_ids: skip_preload_for_subject_ids,
           skip_boundary_check: opts[:skip_boundary_check]
         )
-        |> e(:edges, [])
-        # |> debug("fetched_by_thread")
         |> Enum.group_by(
           &e(&1, :thread_id, nil),
-          fn edge ->
-            e(edge, :activity, :subject, nil) ||
-              Map.get(known_subjects_by_id, e(edge, :activity, :subject_id, nil))
-          end
+          &e(&1, :activity, :subject, nil)
         )
       else
         %{}
@@ -654,6 +643,38 @@ defmodule Bonfire.Social.Threads do
   defp participant_verb_ids,
     do: Enum.map([:create, :reply], &Verbs.get_id!(&1))
 
+  @doc "Counts the distinct people who posted in each permitted thread."
+  def count_participants_for_threads(thread_ids, opts \\ [])
+
+  def count_participants_for_threads(thread_ids, opts)
+      when is_binary(thread_ids) or (is_list(thread_ids) and thread_ids != []) do
+    opts = to_options(opts)
+    exclude_table_ids = default_exclude_table_ids()
+
+    thread_ids
+    |> List.wrap()
+    |> thread_activities_query()
+    |> reusable_join(:inner, [activity: activity], subject in Pointer,
+      as: :subject,
+      on: activity.subject_id == subject.id
+    )
+    |> where([subject: subject], subject.table_id not in ^exclude_table_ids)
+    |> Activities.as_permitted_for(opts)
+    |> Ecto.Query.exclude(:select)
+    |> Ecto.Query.exclude(:preload)
+    |> Ecto.Query.exclude(:order_by)
+    |> Ecto.Query.exclude(:distinct)
+    |> group_by([replied: replied], replied.thread_id)
+    |> select(
+      [replied: replied, activity: activity],
+      {replied.thread_id, count(activity.subject_id, :distinct)}
+    )
+    |> repo().many()
+    |> Map.new()
+  end
+
+  def count_participants_for_threads(_, _), do: %{}
+
   defp thread_activities_query(thread_ids) do
     verb_ids = participant_verb_ids()
 
@@ -662,6 +683,92 @@ defmodule Bonfire.Social.Threads do
     |> then(&filter(:in_thread, List.wrap(thread_ids), &1))
     |> where([activity: activity], activity.verb_id in ^verb_ids)
   end
+
+  defp fetch_participants_for_threads(thread_ids, opts)
+       when is_binary(thread_ids) or
+              (is_list(thread_ids) and thread_ids != []) do
+    exclude_table_ids = opts[:exclude_table_ids] || []
+    exclude_subject_ids = opts[:exclude_subject_ids] || []
+    limit = opts[:limit] || 50
+
+    distinct_participants =
+      thread_activities_query(thread_ids)
+      |> then(fn query ->
+        if exclude_subject_ids != [] do
+          where(query, [activity: activity], activity.subject_id not in ^exclude_subject_ids)
+        else
+          query
+        end
+      end)
+      |> reusable_join(:inner, [activity: activity], subject in Pointer,
+        as: :subject,
+        on: activity.subject_id == subject.id
+      )
+      |> then(fn query ->
+        if exclude_table_ids != [] do
+          where(query, [subject: subject], subject.table_id not in ^exclude_table_ids)
+        else
+          query
+        end
+      end)
+      |> Activities.as_permitted_for(opts)
+      |> Ecto.Query.exclude(:select)
+      |> Ecto.Query.exclude(:preload)
+      |> Ecto.Query.exclude(:order_by)
+      |> Ecto.Query.exclude(:distinct)
+      |> distinct(
+        [replied: replied, activity: activity],
+        [asc: replied.thread_id, asc: activity.subject_id]
+      )
+      |> order_by(
+        [replied: replied, activity: activity],
+        asc: replied.thread_id,
+        asc: activity.subject_id,
+        desc: activity.id
+      )
+      |> select([replied: replied, activity: activity], %{
+        replied_id: replied.id,
+        thread_id: replied.thread_id,
+        activity_id: activity.id
+      })
+
+    ranked_participants =
+      from participant in subquery(distinct_participants),
+        select: %{
+          replied_id: participant.replied_id,
+          thread_id: participant.thread_id,
+          participant_rank:
+            over(row_number(),
+              partition_by: participant.thread_id,
+              order_by: [desc: participant.activity_id]
+            )
+        }
+
+    limited_participants =
+      from participant in subquery(ranked_participants),
+        where: participant.participant_rank <= ^limit,
+        select: %{
+          replied_id: participant.replied_id,
+          thread_id: participant.thread_id,
+          participant_rank: participant.participant_rank
+        }
+
+    base_query()
+    |> join(:inner, [replied], participant in subquery(limited_participants),
+      as: :participant,
+      on: participant.replied_id == replied.id
+    )
+    |> reusable_join(:inner, [replied], activity in assoc(replied, :activity), as: :activity)
+    |> proload(activity: [subject: [profile: :icon, character: [:peered]]])
+    |> order_by(
+      [participant: participant],
+      asc: participant.thread_id,
+      asc: participant.participant_rank
+    )
+    |> repo().many()
+  end
+
+  defp fetch_participants_for_threads(_, _), do: []
 
   @doc "List unique subjects who posted in a thread, with character and profile preloaded."
   defp fetch_participants(thread_id, opts \\ [])
@@ -672,31 +779,32 @@ defmodule Bonfire.Social.Threads do
     exclude_table_ids = opts[:exclude_table_ids] || []
     exclude_subject_ids = opts[:exclude_subject_ids] || []
     limit = opts[:limit] || 500
+    rows =
+      thread_activities_query(thread_ids)
+      |> then(fn q ->
+        if exclude_subject_ids != [],
+          do: where(q, [activity: activity], activity.subject_id not in ^exclude_subject_ids),
+          else: q
+      end)
+      |> Ecto.Query.exclude(:distinct)
+      |> distinct([activity: activity], desc: activity.subject_id)
+      # `character.peered` for participant locality (is_local? in message thread list)
+      |> proload(activity: [subject: [profile: :icon, character: [:peered]]])
+      |> then(fn q ->
+        if exclude_table_ids != [],
+          do:
+            where(
+              q,
+              [subject: subject],
+              is_nil(subject.id) or subject.table_id not in ^exclude_table_ids
+            ),
+          else: q
+      end)
+      |> Activities.as_permitted_for(opts)
+      |> limit(^limit)
+      |> repo().many()
 
-    thread_activities_query(thread_ids)
-    |> then(fn q ->
-      if exclude_subject_ids != [],
-        do: where(q, [activity: activity], activity.subject_id not in ^exclude_subject_ids),
-        else: q
-    end)
-    |> Ecto.Query.exclude(:distinct)
-    |> distinct([activity: activity], desc: activity.subject_id)
-    # `character.peered` for participant locality (is_local? in message thread list)
-    |> proload(activity: [subject: [profile: :icon, character: [:peered]]])
-    |> then(fn q ->
-      if exclude_table_ids != [],
-        do:
-          where(
-            q,
-            [subject: subject],
-            is_nil(subject.id) or subject.table_id not in ^exclude_table_ids
-          ),
-        else: q
-    end)
-    |> Activities.as_permitted_for(opts)
-    |> limit(^limit)
-    |> repo().many()
-    |> Enum.map(&e(&1, :activity, :subject, nil))
+    Enum.map(rows, &e(&1, :activity, :subject, nil))
   end
 
   defp fetch_participants(_, _), do: []
@@ -901,6 +1009,9 @@ defmodule Bonfire.Social.Threads do
       true ->
         # known-large thread: paginate by root replies (depth=1), then load their full subtrees
         # use a lower limit for root replies since each may have many descendants
+        # NOTE: a hidden/deleted depth-1 root is excluded here, so its subtree is never
+        # fetched and `rescue_orphaned_replies` can't stub it — only the single-query
+        # small-thread path has full orphan coverage
         root_paginate_opts = Keyword.put(paginate_opts, :limit, root_limit)
 
         root_page =
@@ -1292,7 +1403,86 @@ defmodule Bonfire.Social.Threads do
 
     replies
     |> debug("repppl")
+    |> rescue_orphaned_replies(uid(opts[:thread_id]))
     |> Replied.arrange(arrange_opts(opts) ++ [cap: hard_limit])
+  end
+
+  @doc """
+  Adds stub parent nodes for replies whose parent is missing from `replies` (deleted, or hidden from the current user by boundaries).
+
+  `Replied.arrange/2` only attaches a node under a parent present in the list (matched on the last `path` element at the next depth level), and its fallback that appends unattached nodes is skipped whenever a `cap` is set — so without stubs, the whole subtree under a missing parent silently disappears from the nested thread view.
+
+  Stubs are plain maps flagged with `stub: true` (rather than `%Replied{}` structs, which could be confused with real rows) so the UI can render an "unavailable" placeholder while keeping orphans attached at their real depth.
+
+  `root_id` is the id the replies were queried under — the thread root, or a mid-thread comment when loading a branch's deeper replies. Ancestors at or above the query root are absent *by design* (they're rendered elsewhere or already on the page), so the upward walk stops there; without it, loading a subtree would wrap every result in bogus "unavailable" stubs for its own ancestors. The thread root (the only element of a depth-1 `path`) is likewise never stubbed.
+
+  ## Examples
+
+      iex> rescue_orphaned_replies([%{id: "b", path: ["thread", "a"]}], "thread")
+      [%{id: "a", path: ["thread"], stub: true}, %{id: "b", path: ["thread", "a"]}]
+
+      iex> rescue_orphaned_replies([%{id: "a", path: ["thread"]}, %{id: "b", path: ["thread", "a"]}], "thread")
+      [%{id: "a", path: ["thread"]}, %{id: "b", path: ["thread", "a"]}]
+
+      # a whole chain of missing ancestors is reconstructed (down to depth 1)
+      iex> rescue_orphaned_replies([%{id: "c", path: ["thread", "a", "b"]}], "thread") |> length()
+      3
+
+      # but ancestors of the queried root are not stubbed when loading a branch's subtree
+      iex> rescue_orphaned_replies([%{id: "c", path: ["thread", "a", "b"]}], "b")
+      [%{id: "c", path: ["thread", "a", "b"]}]
+  """
+  def rescue_orphaned_replies(replies, root_id \\ nil) when is_list(replies) do
+    present_ids = MapSet.new(replies, &e(&1, :id, nil))
+
+    replies
+    |> Enum.reduce(%{}, fn reply, stubs ->
+      collect_missing_ancestors(e(reply, :path, nil) || [], present_ids, root_id, stubs)
+    end)
+    |> case do
+      stubs when stubs == %{} ->
+        replies
+
+      stubs ->
+        # steady-state for any thread with a deleted/hidden comment, so not worth a warning
+        debug(
+          Map.keys(stubs),
+          "Thread contains replies whose parent is deleted or not visible, adding stub nodes so their subtrees can still be arranged"
+        )
+
+        # insert each stub just before its first present descendant (rather than appending at the end) so the rescued subtree keeps its reading position regardless of sort order — `arrange` preserves the input order within each depth level
+        Enum.reduce(Map.values(stubs), replies, fn stub, acc ->
+          index =
+            Enum.find_index(acc, fn r -> stub.id in (e(r, :path, nil) || []) end) || length(acc)
+
+          List.insert_at(acc, index, stub)
+        end)
+    end
+  end
+
+  # a depth <= 1 node's parent is the thread root, which is never part of the replies list
+  defp collect_missing_ancestors(path, _present_ids, _root_id, stubs) when length(path) <= 1,
+    do: stubs
+
+  defp collect_missing_ancestors(path, present_ids, root_id, stubs) do
+    {parent_path, [parent_id]} = Enum.split(path, -1)
+
+    cond do
+      # reached the query root: anything above is intentionally not loaded
+      parent_id == root_id ->
+        stubs
+
+      MapSet.member?(present_ids, parent_id) or Map.has_key?(stubs, parent_id) ->
+        stubs
+
+      true ->
+        collect_missing_ancestors(
+          parent_path,
+          present_ids,
+          root_id,
+          Map.put(stubs, parent_id, %{id: parent_id, path: parent_path, stub: true})
+        )
+    end
   end
 
   @doc """
@@ -1567,13 +1757,23 @@ defmodule Bonfire.Social.Threads do
   end
 
   # Attach up to 3 conversation participants per trending discussion (rendered as a
-  # facepile by the widget), reusing the batched `list_participants_for_threads/2`
-  # so the whole widget stays one extra query — and cached along with the edges by
-  # `list_trending/3`. The root author is dropped here since the activity already
-  # shows them.
+  # facepile by the widget), using one batched preview query and one batched count
+  # query. Both are cached along with the edges by `list_trending/3`. The root
+  # author is dropped here since the activity already shows them.
   defp attach_trending_participants(edges, current_user) do
     participants_by_thread =
-      list_participants_for_threads(edges, current_user: current_user, limit: 30)
+      list_participants_for_threads(edges,
+        current_user: current_user,
+        limit: 30,
+        include_tags: false
+      )
+
+    participant_counts_by_thread =
+      edges
+      |> Enum.map(&e(&1, :activity, :replied, :thread_id, nil))
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+      |> count_participants_for_threads(current_user: current_user)
 
     Enum.map(edges, fn edge ->
       thread_id = e(edge, :activity, :replied, :thread_id, nil)
@@ -1587,7 +1787,18 @@ defmodule Bonfire.Social.Threads do
         |> Enum.reject(&(id(&1) == subject_id))
         |> Enum.take(3)
 
-      Map.put(edge, :participants, participants)
+      other_participant_count =
+        participant_counts_by_thread
+        |> Map.get(thread_id, 0)
+        |> Kernel.-(1)
+        |> max(0)
+
+      edge
+      |> Map.put(:participants, participants)
+      |> Map.put(
+        :participants_more_count,
+        max(other_participant_count - length(participants), 0)
+      )
     end)
   end
 

@@ -107,7 +107,7 @@ defmodule Bonfire.Social.Objects.Render do
   end
 
   def render_replies(thread_id, render_as, opts) when is_binary(thread_id) do
-    opts = replies_opts(opts)
+    opts = replies_opts(opts) |> Keyword.put(:thread_id, thread_id)
 
     case Threads.list_replies(thread_id, opts) |> debug("repliess") do
       %{edges: replies} when replies != [] ->

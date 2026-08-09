@@ -3,7 +3,6 @@ defmodule Bonfire.Social.ThreadsParticipantsTest do
 
   alias Bonfire.Posts
   alias Bonfire.Social.Threads
-  alias Bonfire.Social.FeedActivities
   alias Bonfire.Boundaries.Verbs
   alias Bonfire.Me.Fake
 
@@ -475,5 +474,236 @@ defmodule Bonfire.Social.ThreadsParticipantsTest do
     assert author.id in participant_ids
     assert mentioned.id in participant_ids
     refute quoted_post.id in participant_ids
+  end
+
+  test "list_participants_for_threads can omit mentioned users from discussion facepiles" do
+    author = Fake.fake_user!("author")
+    mentioned = Fake.fake_user!("mentioned")
+
+    {:ok, post} =
+      Posts.publish(
+        current_user: author,
+        post_attrs: %{post_content: %{html_body: "<p>hi</p>"}},
+        boundary: "public"
+      )
+
+    thread_id = e(post, :replied, :thread_id, nil) || post.id
+
+    edges = [
+      %{
+        activity: %{
+          replied: %{thread_id: thread_id},
+          subject: author,
+          subject_id: author.id,
+          verb_id: Verbs.get_id!(:create),
+          object_id: post.id,
+          object: %{tags: [mentioned]}
+        }
+      }
+    ]
+
+    result =
+      Threads.list_participants_for_threads(edges,
+        include_tags: false,
+        skip_boundary_check: true
+      )
+
+    participant_ids = Map.get(result, thread_id, []) |> Enum.map(&id/1)
+
+    assert author.id in participant_ids
+    refute mentioned.id in participant_ids
+  end
+
+  test "count_participants_for_threads returns distinct permitted poster counts per thread" do
+    author = Fake.fake_user!("author")
+    viewer = Fake.fake_user!("viewer")
+    first_replier = Fake.fake_user!("first replier")
+    second_replier = Fake.fake_user!("second replier")
+    hidden_replier = Fake.fake_user!("hidden replier")
+
+    {:ok, first_post} =
+      Posts.publish(
+        current_user: author,
+        post_attrs: %{post_content: %{html_body: "<p>first thread</p>"}},
+        boundary: "public"
+      )
+
+    {:ok, second_post} =
+      Posts.publish(
+        current_user: author,
+        post_attrs: %{post_content: %{html_body: "<p>second thread</p>"}},
+        boundary: "public"
+      )
+
+    for replier <- [first_replier, second_replier] do
+      assert {:ok, _reply} =
+               Posts.publish(
+                 current_user: replier,
+                 post_attrs: %{
+                   post_content: %{html_body: "<p>reply</p>"},
+                   reply_to_id: first_post.id
+                 },
+                 boundary: "public"
+               )
+    end
+
+    assert {:ok, _reply} =
+             Posts.publish(
+               current_user: first_replier,
+               post_attrs: %{
+                 post_content: %{html_body: "<p>reply</p>"},
+                 reply_to_id: second_post.id
+               },
+               boundary: "public"
+             )
+
+    assert {:ok, _hidden_reply} =
+             Posts.publish(
+               current_user: hidden_replier,
+               post_attrs: %{
+                 post_content: %{html_body: "<p>hidden reply</p>"},
+                 reply_to_id: first_post.id
+               },
+               boundary: "mentions"
+             )
+
+    counts =
+      Threads.count_participants_for_threads(
+        [first_post.id, second_post.id],
+        current_user: viewer
+      )
+
+    assert counts[first_post.id] == 3
+    assert counts[second_post.id] == 2
+  end
+
+  test "list_participants_for_threads applies the preview limit independently to each thread" do
+    first_author = Fake.fake_user!("first author")
+    second_author = Fake.fake_user!("second author")
+    first_replier = Fake.fake_user!("first replier")
+    another_first_replier = Fake.fake_user!("another first replier")
+    second_replier = Fake.fake_user!("second replier")
+
+    {:ok, first_post} =
+      Posts.publish(
+        current_user: first_author,
+        post_attrs: %{post_content: %{html_body: "<p>first thread</p>"}},
+        boundary: "public"
+      )
+
+    {:ok, second_post} =
+      Posts.publish(
+        current_user: second_author,
+        post_attrs: %{post_content: %{html_body: "<p>second thread</p>"}},
+        boundary: "public"
+      )
+
+    for {post, replier} <- [
+          {first_post, first_replier},
+          {first_post, another_first_replier},
+          {second_post, second_replier}
+        ] do
+      assert {:ok, _reply} =
+               Posts.publish(
+                 current_user: replier,
+                 post_attrs: %{
+                   post_content: %{html_body: "<p>reply</p>"},
+                   reply_to_id: post.id
+                 },
+                 boundary: "public"
+               )
+    end
+
+    edges = [
+      %{
+        activity: %{
+          replied: %{thread_id: first_post.id},
+          subject: first_author,
+          subject_id: first_author.id,
+          verb_id: Verbs.get_id!(:create),
+          object_id: first_post.id,
+          object: %{tags: []}
+        }
+      },
+      %{
+        activity: %{
+          replied: %{thread_id: second_post.id},
+          subject: second_author,
+          subject_id: second_author.id,
+          verb_id: Verbs.get_id!(:create),
+          object_id: second_post.id,
+          object: %{tags: []}
+        }
+      }
+    ]
+
+    participants_by_thread =
+      Threads.list_participants_for_threads(edges,
+        current_user: first_author,
+        include_tags: false,
+        limit: 1
+      )
+
+    first_participant_ids =
+      participants_by_thread
+      |> Map.fetch!(first_post.id)
+      |> Enum.map(&id/1)
+
+    second_participant_ids =
+      participants_by_thread
+      |> Map.fetch!(second_post.id)
+      |> Enum.map(&id/1)
+
+    assert first_author.id in first_participant_ids
+    assert length(first_participant_ids) == 2
+    assert second_author.id in second_participant_ids
+    assert second_replier.id in second_participant_ids
+    assert length(second_participant_ids) == 2
+  end
+
+  test "list_participants_for_threads fetches reply authors from stored thread activities" do
+    author = Fake.fake_user!("author")
+    replier = Fake.fake_user!("replier")
+
+    {:ok, post} =
+      Posts.publish(
+        current_user: author,
+        post_attrs: %{post_content: %{html_body: "<p>thread</p>"}},
+        boundary: "public"
+      )
+
+    assert {:ok, _reply} =
+             Posts.publish(
+               current_user: replier,
+               post_attrs: %{
+                 post_content: %{html_body: "<p>reply</p>"},
+                 reply_to_id: post.id
+               },
+               boundary: "public"
+             )
+
+    edges = [
+      %{
+        activity: %{
+          replied: %{thread_id: post.id},
+          subject: author,
+          subject_id: author.id,
+          verb_id: Verbs.get_id!(:create),
+          object_id: post.id,
+          object: %{tags: []}
+        }
+      }
+    ]
+
+    result =
+      Threads.list_participants_for_threads(edges,
+        current_user: author,
+        include_tags: false
+      )
+
+    participant_ids = Map.get(result, post.id, []) |> Enum.map(&id/1)
+
+    assert author.id in participant_ids
+    assert replier.id in participant_ids
   end
 end
