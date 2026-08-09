@@ -55,7 +55,11 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
              :events,
              :trending_links,
              :trending_discussions,
-             :trending
+             :trending,
+             # #1586 bucket presets: only meaningful with write-time feed addressing on: covered by feed_addressing_presets_test
+             :public,
+             :local_instance_only,
+             :custom_boundaries
            ] <-
         feed_preset_test_params() do
     describe "feed preset `#{inspect(preset)}` loads feed and configured preloads" do

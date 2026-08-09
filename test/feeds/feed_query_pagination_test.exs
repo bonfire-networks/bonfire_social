@@ -12,6 +12,14 @@ defmodule Bonfire.Social.FeedPaginationTest do
   alias Bonfire.Posts
   alias Needle.Pointer
 
+  # :local/:remote produce structurally different queries per strategy: the legacy `:or_filter` 4-join
+  # `feed_id == ^ OR <peered joins>` vs the addressed `feed_id in ^[buckets]`. These shape assertions
+  # branch on the active strategy so they hold under both.
+  defp addressed?,
+    do:
+      Bonfire.Common.Config.get([Bonfire.Social.Feeds, :feed_origin_strategy], :or_filter) ==
+        :addressed
+
   test "return: :query returns an Ecto.Query struct" do
     # Get a query using the return: :query option
     query = FeedLoader.feed(:local, return: :query)
@@ -36,7 +44,9 @@ defmodule Bonfire.Social.FeedPaginationTest do
 
     query_string = Inspect.Ecto.Query.to_string(query)
 
-    assert query_string =~ "feed_id == ^"
+    # guest :local = the fast single-feed membership path either way (legacy `== local_public`, addressed
+    # `in [local_public]`) — never the peered origin joins
+    assert query_string =~ if(addressed?(), do: "feed_id in ^", else: "feed_id == ^")
     refute query_string =~ "subject_peered"
     refute query_string =~ "object_peered"
   end
@@ -47,16 +57,24 @@ defmodule Bonfire.Social.FeedPaginationTest do
 
     query_string = Inspect.Ecto.Query.to_string(query)
 
-    assert query_string =~ "feed_id == ^"
-    assert query_string =~ " or "
-    assert query_string =~ "subject_peered"
-    assert query_string =~ "object_peered"
+    if addressed?() do
+      # addressed authenticated :local = `fp.feed_id in [local_public, local_instance_only, local_custom]`
+      # — the bucket list already encodes "local-authored + visible", so no origin OR / peered joins
+      assert query_string =~ "feed_id in ^"
+      refute query_string =~ "subject_peered"
+      refute query_string =~ "object_peered"
+    else
+      assert query_string =~ "feed_id == ^"
+      assert query_string =~ " or "
+      assert query_string =~ "subject_peered"
+      assert query_string =~ "object_peered"
 
-    assert query_string =~ "as: :subject_character" and
-             query_string =~ "as: :subject_peered" and
-             query_string =~ "as: :object_peered" and
-             query_string =~ "is_nil(" and
-             query_string =~ "peer_id"
+      assert query_string =~ "as: :subject_character" and
+               query_string =~ "as: :subject_peered" and
+               query_string =~ "as: :object_peered" and
+               query_string =~ "is_nil(" and
+               query_string =~ "peer_id"
+    end
   end
 
   describe "feed pagination with deferred join" do

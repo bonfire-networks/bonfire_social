@@ -141,8 +141,6 @@ defmodule Bonfire.Social.Feeds do
   @doc """
   Determines the feed IDs to publish based on the provided parameters.
 
-  TODO: de-duplicate `feed_ids_to_publish/4` and `target_feeds/3`
-
   ## Examples
 
   ### When called with the `"admins"` boundary:
@@ -163,22 +161,66 @@ defmodule Bonfire.Social.Feeds do
   end
 
   def feed_ids_to_publish(me, boundary, assigns, notify_feeds) do
-    [
+    fan_out_feed_ids(
+      me,
+      boundary,
+      e(assigns, :mentions, []),
+      e(assigns, :reply_to, :created, :creator, nil),
       e(assigns, :reply_to, :replied, :thread, :id, nil),
-      maybe_my_outbox_feed_id(me, boundary),
-      global_feed_ids(boundary),
-      notify_feeds ||
-        reply_and_or_mentions_notifications_feeds(
-          me,
-          boundary,
-          e(assigns, :mentions, []),
-          e(assigns, :reply_to, :created, :creator, nil)
-        )
+      notify_feeds: notify_feeds
+    )
+  end
+
+  @doc """
+  THE single source of truth for "boundary + context → feed ids". Both `feed_ids_to_publish/4`
+  (the Epic Act path, from the epic's `assigns`) and `target_feeds/3` (the publish/federation-ingest
+  path, from a changeset or object) extract their context — mentions, reply_to_creator, thread_id —
+  and delegate here, so the two can never drift apart again (plan: local-remote-feeds.md Phase 0).
+
+  `boundary` is a boundary preset name. `opts` may carry `:notify_feeds` (precomputed notify feeds
+  that OVERRIDE the computed ones — the Act passes these) and `:to_feeds` (extra custom feeds, via
+  `maybe_custom_feeds/1`). The notify pipeline is `reply_and_or_mentions_notifications_feeds/4`
+  (boundary-aware `users_to_notify` filtering + uniform user resolution), and the creator's own
+  notifications feed is always dropped (no self-notify).
+  """
+  def fan_out_feed_ids(
+        creator,
+        boundary,
+        mentions \\ [],
+        reply_to_creator \\ nil,
+        thread_id \\ nil,
+        opts \\ []
+      )
+
+  def fan_out_feed_ids(_creator, "admins", _mentions, _reply_to_creator, _thread_id, _opts),
+    do: admins_notifications()
+
+  def fan_out_feed_ids(creator, boundary, mentions, reply_to_creator, thread_id, opts) do
+    [
+      maybe_custom_feeds(opts) || [],
+      # thread feed (TODO: so the thread can be followed)
+      # thread_id,
+      # author's timeline
+      maybe_my_outbox_feed_id(creator, boundary),
+      # guest/local/federated instance feeds for this boundary class (origin-aware when addressed)
+      global_feed_ids(creator, boundary, opts),
+      # notifications of reply_to creator + mentions (boundary-filtered), unless the caller
+      # precomputed them (the Act passes `notify[:notify_feeds]`)
+      opts[:notify_feeds] ||
+        reply_and_or_mentions_notifications_feeds(creator, boundary, mentions, reply_to_creator),
+      # when the caller sets `notify_to_circles` (e.g. a deliberate share), also ping the explicit
+      # `to_circles` recipients — their notifications feed, which also surfaces in their home feed
+      if(opts[:notify_to_circles],
+        do: feed_ids(:notifications, maybe_from_opts(opts, :to_circles, [])),
+        else: []
+      )
     ]
     |> List.flatten()
     |> Enum.uniq()
+    # avoid self-notifying (do_target_feeds did this explicitly; the Act relied on filter_reply_and_or_mentions)
+    |> Enum.reject(&(&1 == feed_id(:notifications, creator)))
     |> Enums.filter_empty([])
-    |> debug()
+    |> debug("fan-out feed ids")
   end
 
   @doc """
@@ -213,8 +255,63 @@ defmodule Bonfire.Social.Feeds do
     end
   end
 
-  defp global_feed_ids(boundary),
-    do: Map.get(@global_feeds, boundary, []) |> Enum.map(&named_feed_id/1)
+  defp global_feed_ids(creator, boundary, opts) do
+    if opts[:feed_addressing] || Config.get([__MODULE__, :feed_addressing], false) do
+      addressed_feed_ids(creator, boundary, opts)
+    else
+      Config.get([__MODULE__, :global_feeds], @global_feeds)
+      |> Map.get(boundary, [])
+      |> Enum.map(&named_feed_id/1)
+    end
+  end
+
+  # origin×boundary bucket for a NEW write. Public/local/public_remote are origin-determined by the
+  # boundary preset itself; only the custom catch-all needs the author's origin (`is_local?`) to split
+  # `local_custom` vs `remote_custom` — a remote non-public ingest also gets a custom boundary, and the
+  # fetcher service character classifies as remote, so this routes remote content to the remote bucket.
+  defp addressed_feed_ids(_creator, "public", _opts), do: [named_feed_id(:local_public)]
+  defp addressed_feed_ids(_creator, "local", _opts), do: [named_feed_id(:local_instance_only)]
+  defp addressed_feed_ids(_creator, "public_remote", _opts), do: [named_feed_id(:remote_public)]
+  defp addressed_feed_ids(_creator, "admins", _opts), do: []
+
+  defp addressed_feed_ids(creator, _custom, opts) do
+    # config `:addressing_origin_by` picks whose locality decides for mixed-locality activities (boosts/quotes): `:subject` (the actor's feed) or `:object` (the referenced content's origin). Falls back to the subject when `:object` is set but no object was passed.
+    origin_thing =
+      case opts[:addressing_origin_by] || Config.get([__MODULE__, :addressing_origin_by], :object) do
+        :object -> maybe_from_opts(opts, :object, nil) || creator
+        _ -> creator
+      end
+
+    if is_local?(origin_thing),
+      do: [named_feed_id(:local_custom)],
+      else: [named_feed_id(:remote_custom)]
+  end
+
+  @doc """
+  The feed NAMES (atoms) that make up each multi-bucket feed concept. 
+
+  Note the singular `named_feed_id` gives the ONE legacy id for a name (`named_feed_id(:local)` = 3SERS), so it and `feed_names(:local)` (= all local buckets) are complementary, not the same thing.
+
+    * `:local` — legacy `:local` ∪ local buckets
+    * `:remote` — legacy `:activity_pub` ∪ remote buckets
+    * `:public` — guest-visible: legacy `:guest` ∪ the public buckets
+    * `:custom_boundaries` — custom content, both origins (local `to_circles`/`mentions` ∪ non-public remote ingests)
+    * `:explore` — all activities: guest ∪ local ∪ remote
+  """
+  def feed_names(:local), do: [:local, :local_public, :local_instance_only]
+  def feed_names(:remote), do: [:activity_pub, :remote_public]
+  def feed_names(:public), do: [:guest, :local_public, :remote_public]
+  def feed_names(:custom_boundaries), do: [:local_custom, :remote_custom]
+  def feed_names(:explore), do: [:guest | feed_names(:local) ++ feed_names(:remote)]
+
+  @doc """
+  The origin×boundary bucket ids that the origin filter (`Activities.maybe_filter/3` `:origin`) covers.
+
+  When a feed query carries BOTH an `origin` filter and an explicit feed-id list, these ids are stripped
+  from the list (the origin filter already scopes locality), leaving only non-locality ids (e.g. a group
+  outbox) to apply alongside the origin filter. See `FeedLoader.feed_query/3`.
+  """
+  def locality_feed_ids, do: named_feed_ids(:local) ++ named_feed_ids(:remote)
 
   @doc """
   Generates a list of notification feed IDs based on mentions and replies.
@@ -349,8 +446,6 @@ defmodule Bonfire.Social.Feeds do
   @doc """
   Determines the target feeds for a given changeset, creator, and options.
 
-  TODO: de-duplicate `feed_ids_to_publish/4` and `target_feeds/3`
-
   ## Examples
 
   ### When given a changeset:
@@ -364,24 +459,24 @@ defmodule Bonfire.Social.Feeds do
       # List of target feed IDs based on the object
   """
   def target_feeds(%Ecto.Changeset{} = changeset, creator, opts) do
-    # debug(changeset)
-
-    # maybe include people, tags or other characters that were mentioned/tagged
-    # |> debug("mentions")
+    # extract context from the (not-yet-inserted) changeset, then delegate to the shared interpreter
     mentions = e(changeset, :changes, :post_content, :changes, :mentions, [])
 
-    # maybe include the creator of what we're replying to
-    # |> debug("reply_to")
     reply_to_creator =
       e(changeset, :changes, :replied, :changes, :replying_to, :created, :creator, nil)
 
-    # include the thread as feed, so it can be followed
-    # |> debug("thread_id")
     thread_id =
       e(changeset, :changes, :replied, :changes, :thread_id, nil) ||
         e(changeset, :changes, :replied, :changes, :replying_to, :thread_id, nil)
 
-    do_target_feeds(creator, opts, mentions, reply_to_creator, thread_id)
+    fan_out_feed_ids(
+      creator,
+      maybe_from_opts(opts, :boundary, opts),
+      mentions,
+      reply_to_creator,
+      thread_id,
+      opts
+    )
   end
 
   def target_feeds(%{} = object, creator, opts) do
@@ -390,116 +485,29 @@ defmodule Bonfire.Social.Feeds do
       |> repo().maybe_preload([replied: [reply_to: [created: :creator]]], prune: true)
       |> repo().maybe_preload(:tags, prune: true)
 
-    # maybe include people, tags or other characters that were mentioned/tagged
-    # |> debug("mentions")
     tags = e(object, :tags, [])
-
-    # maybe include the creator of what we're replying to
-    # |> debug("reply_to")
     reply_to_creator = e(object, :replied, :reply_to, :created, :creator, nil)
 
-    # include the thread as feed, so it can be followed
-    # |> debug("thread_id")
     thread_id =
       e(object, :replied, :thread_id, nil) ||
         e(object, :replied, :reply_to, :thread_id, nil)
 
-    do_target_feeds(creator, opts, tags, reply_to_creator, thread_id)
+    # carry the published object so the `:addressing_origin_by == :object` policy can classify a
+    # boost/ingest by the boosted/referenced object's locality (for original posts object==subject)
+    opts = if(Keyword.keyword?(opts), do: Keyword.put(opts, :object, object), else: opts)
+
+    fan_out_feed_ids(
+      creator,
+      maybe_from_opts(opts, :boundary, opts),
+      tags,
+      reply_to_creator,
+      thread_id,
+      opts
+    )
   end
 
   def target_feeds({_, %{} = object}, creator, opts),
     do: target_feeds(object, creator, opts)
-
-  defp do_target_feeds(
-         creator,
-         opts,
-         mentions \\ [],
-         reply_to_creator \\ nil,
-         thread_id \\ nil
-       ) do
-    creator_notifications =
-      feed_id(:notifications, creator)
-      |> debug("creator_notifications")
-
-    # include any extra feeds specified in opts
-    to_feeds_custom =
-      maybe_custom_feeds(opts) ||
-        []
-        |> debug("to_feeds_custom")
-
-    ([] ++
-       [to_feeds_custom] ++
-       case Boundaries.Presets.preset_name(
-              maybe_from_opts(opts, :boundary, opts),
-              true
-            ) do
-         # put in all reply_to creators and mentions inboxes + guest/local feeds
-         "public" ->
-           # put in inboxes (notifications) of any users we're replying to and mentions
-           ([
-              named_feed_id(:guest),
-              named_feed_id(:local),
-              thread_id,
-              my_feed_id(:outbox, creator)
-            ] ++
-              (([reply_to_creator] ++
-                  mentions)
-               |> feed_ids(:notifications, ...)))
-           |> debug("notify reply_to creator and/or mentions")
-
-         # like public but put in remote/federated feed instead of guest and local
-         "public_remote" ->
-           # put in inboxes (notifications) of any users we're replying to and mentions
-           [
-             named_feed_id(:guest),
-             named_feed_id(:activity_pub),
-             thread_id,
-             my_feed_id(:outbox, creator)
-           ] ++
-             (([reply_to_creator] ++
-                 mentions)
-              |> feed_ids(:notifications, ...))
-
-         "local" ->
-           # put in local instance feed
-           # put in inboxes (notifications) of any local users we're replying to and local mentions
-           [
-             named_feed_id(:local),
-             # thread feed
-             thread_id,
-             # author outbox
-             my_feed_id(:outbox, creator)
-           ] ++
-             (([reply_to_creator] ++
-                 mentions)
-              |> Enum.filter(&is_local?/1)
-              |> feed_ids(:notifications, ...))
-
-         "mentions" ->
-           mentions
-           |> feed_ids(:notifications, ...)
-
-         "admins" ->
-           admins_notifications()
-
-         # defaults for custom boundaries with none of the presets selected
-         _ ->
-           # TODO: we should notify mentions & reply_to_creator IF they are included in the object's boundaries
-           # thread feed
-           [
-             thread_id,
-             # author outbox
-             my_feed_id(:outbox, creator)
-           ]
-       end)
-    |> debug("pre-target feeds")
-    |> List.flatten()
-    |> Enum.uniq()
-    # avoid self-notifying
-    |> Enum.reject(&(&1 == creator_notifications))
-    |> Enums.filter_empty([])
-    |> debug("target feeds")
-  end
 
   @doc """
   Retrieves custom feeds if specified in the options.
@@ -583,6 +591,10 @@ defmodule Bonfire.Social.Feeds do
   def named_feed_id(:explore, _), do: nil
   def named_feed_id(:remote, _), do: named_feed_id(:activity_pub)
 
+  # origin×boundary feed buckets: the `_custom` buckets reuse the legacy feed ids (no separate pointer)
+  def named_feed_id(:local_custom, _), do: named_feed_id(:local)
+  def named_feed_id(:remote_custom, _), do: named_feed_id(:activity_pub)
+
   def named_feed_id(:notifications, opts) do
     if current_user = current_user(opts) do
       my_feed_id(:notifications, current_user)
@@ -599,6 +611,29 @@ defmodule Bonfire.Social.Feeds do
 
       _ ->
         warn("Feed: doesn't seem to be a named feed: #{inspect(name)}")
+        nil
+    end
+  end
+
+  @doc """
+  The plural of `named_feed_id/2`: resolves a feed NAME to its feed id(s), use it for feeds that map to a list of buckets (e.g. `:local` → `[:local, :local_public, :local_instance_only]`). Returns a list of feed ids or an empty list if none are found.
+  """
+  def named_feed_ids(feed_name, opts \\ [])
+
+  def named_feed_ids(concept, _opts)
+      when concept in [:local, :remote, :public, :custom_boundaries, :explore],
+      do: Enum.map(feed_names(concept), &named_feed_id/1)
+
+  def named_feed_ids(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
+    case named_feed_id(feed_name, opts) || my_feed_id(feed_name, opts) do
+      feed when is_binary(feed) or is_list(feed) ->
+        feed
+
+      itself when itself == feed_name ->
+        my_feed_id(feed_name, opts)
+
+      e ->
+        error(e, "not a known feed: `#{inspect(feed_name)}`")
         nil
     end
   end

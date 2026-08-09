@@ -80,7 +80,6 @@ defmodule Bonfire.Social.Acts.Activity do
             e(attrs, :to_circles, [])
           )
 
-        # CLEANUP: duplicate implementation of `Feeds.target_feeds`
         feed_ids =
           Feeds.feed_ids_to_publish(
             current_user,
@@ -88,8 +87,6 @@ defmodule Bonfire.Social.Acts.Activity do
             epic.assigns,
             notify[:notify_feeds]
           )
-
-        # feed_ids = Feeds.target_feeds(changeset, current_user, boundary) # duplicate of `Feeds.feed_ids_to_publish`
 
         maybe_debug(epic, act, "activity", "Casting")
 

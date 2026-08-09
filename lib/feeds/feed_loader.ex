@@ -978,11 +978,14 @@ defmodule Bonfire.Social.FeedLoader do
   #   {feed_id, opts}
   # end
 
+  # :all is the global query (boundary-gated, no `fp.feed_id IN` filter), nil means "don't scope by feed id".
+  # This is what :explore used to do; kept as an explicit (unindexed, full-scan) escape hatch.
+  def feed_ids_and_opts(:all, opts), do: {nil, opts}
+
+  # :explore is now a bucket-union query (`fp.feed_id IN [all origin×boundary buckets]`).
+  # The union includes the legacy ids (guest/local/activity_pub) so it matches under both write strategies.
   def feed_ids_and_opts(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
-    {named_feed_ids(
-       feed_name,
-       opts
-     ), opts}
+    {Feeds.named_feed_ids(feed_name, opts), opts}
   end
 
   def feed_ids_and_opts({feed_name, feed_id}, opts)
@@ -1015,34 +1018,6 @@ defmodule Bonfire.Social.FeedLoader do
 
       name ->
         feed_name_or_default(name, opts)
-    end
-  end
-
-  defp named_feed_ids(feed_name, opts \\ [])
-  defp named_feed_ids(:explore, _opts), do: nil
-
-  defp named_feed_ids(feed_name, opts)
-       when is_atom(feed_name) and not is_nil(feed_name) do
-    # current_user = current_user(current_user_or_socket)
-    case Feeds.named_feed_id(feed_name, opts) || Feeds.my_feed_id(feed_name, opts) do
-      feed when is_binary(feed) or is_list(feed) ->
-        # debug(uid(current_user(opts)), "current_user")
-        # debug(feed_name, "feed_name")
-        debug(feed, "feed id(s)")
-        feed
-
-      itself when itself == feed_name ->
-        Feeds.my_feed_id(feed_name, opts) ||
-          (
-            debug(feed_name, "not an internal feed")
-            nil
-          )
-
-      e ->
-        error(e, "not a known feed: `#{inspect(feed_name)}`")
-
-        debug(opts)
-        nil
     end
   end
 
@@ -1220,52 +1195,18 @@ defmodule Bonfire.Social.FeedLoader do
 
     # opts = to_feed_options(filters, opts)
 
-    specific_feed_ids = Types.uids(feed_id_or_ids)
-
-    local_feed_id = Feeds.named_feed_id(:local)
-    federated_feed_id = Feeds.named_feed_id(:activity_pub)
-    # fetcher_user_id = "1ACT1V1TYPVBREM0TESFETCHER"
+    # When an origin filter is ALSO present, it already scopes locality — so strip the locality bucket
+    # ids out of the explicit list and let the origin filter cover them, keeping any NON-locality ids
+    # (e.g. a group/user outbox) as an extra scope. This means :local/:remote (whose id-lists are ALL
+    # locality buckets) collapse to a pure origin query, while a group+origin feed keeps its group id;
+    # and it avoids the old trap where a legacy bucket id in the list silently disabled id-scoping.
+    specific_feed_ids =
+      case e(filters, :origin, nil) do
+        nil -> Types.uids(feed_id_or_ids)
+        _origin -> Types.uids(feed_id_or_ids) -- Feeds.locality_feed_ids()
+      end
 
     cond do
-      # NOTE: made into local and remote filters instead
-      # :local in feed_ids or local_feed_id in feed_ids ->
-      #   debug("local feed")
-
-      #   # excludes likes/etc from local feed - TODO: configurable
-      #   Enums.deep_merge(filters, exclude_activity_types: [:like, :pin])
-      #   # |> debug("local_opts")
-      #   |> query_extras(..., opts)
-      #   |> proload(
-      #     activity: [subject: {"subject_", character: [:peered]}, object: {"object_", [:peered]}]
-      #   )
-      #   |> where(
-      #     [fp, activity: activity, subject_peered: subject_peered, object_peered: object_peered],
-      #     (fp.feed_id == ^local_feed_id or
-      #        (is_nil(subject_peered.id) and is_nil(object_peered.id))) and
-      #       activity.subject_id != ^fetcher_user_id
-      #   )
-
-      # :activity_pub in feed_ids or federated_feed_id in feed_ids ->
-      #   debug("remote/federated feed")
-
-      #   Enums.deep_merge(filters, exclude_activity_types: [:like, :pin])
-      #   |> query_extras(..., opts)
-      #   |> proload(
-      #     activity: [subject: {"subject_", character: [:peered]}, object: {"object_", [:peered]}]
-      #   )
-      #   |> where(
-      #     [fp, activity: activity, subject_peered: subject_peered, object_peered: object_peered],
-      #     fp.feed_id == ^federated_feed_id or
-      #       (not is_nil(subject_peered.id) or not is_nil(object_peered.id)) or
-      #       activity.subject_id == ^fetcher_user_id
-      #   )
-
-      :local in specific_feed_ids or :activity_pub in specific_feed_ids or
-        federated_feed_id in specific_feed_ids or local_feed_id in specific_feed_ids ->
-        debug(feed_id_or_ids, "local or remote feed")
-
-        query_extras(filters, opts)
-
       specific_feed_ids != [] ->
         debug(feed_id_or_ids, "specific feed(s)")
 
@@ -1274,7 +1215,10 @@ defmodule Bonfire.Social.FeedLoader do
         |> debug("generic with ids")
 
       true ->
-        debug(feed_id_or_ids, "unknown feed")
+        debug(
+          feed_id_or_ids,
+          "no (non-locality) feed ids — scope via filters (origin filter) / full scan"
+        )
 
         query_extras(filters, opts)
     end

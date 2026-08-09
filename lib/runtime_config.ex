@@ -4,10 +4,31 @@ defmodule Bonfire.Social.RuntimeConfig do
 
   alias Bonfire.Social.FeedFilters
 
+  @yes ~w(1 true yes on)
+
   def config_module, do: true
 
   def config do
     import Config
+
+    # Write-time local/remote feed addressing: off by default. Set `FEED_ADDRESSING=1` per-instance to canary the fleet rollout before flipping the default.
+    # Only set when the env var is present so it doesn't override per-env config (e.g. test.exs); read by `Feeds.global_feed_ids/1`
+    if System.get_env("FEED_ADDRESSING") do
+      config :bonfire_social, Bonfire.Social.Feeds,
+        feed_addressing: System.get_env("FEED_ADDRESSING") in @yes
+    end
+
+    # Read-side switch for the origin filter (:local/:remote): `:addressed` = `fp.feed_id IN [buckets]` (needs the buckets backfilled first), `:or_filter` = the legacy query-time OR. Only flip to :addressed AFTER FEED_ADDRESSING is on and the backfill has run. Read by `Activities.maybe_filter`.
+    case System.get_env("FEED_ORIGIN_STRATEGY") do
+      "addressed" ->
+        config(:bonfire_social, Bonfire.Social.Feeds, feed_origin_strategy: :addressed)
+
+      "or_filter" ->
+        config(:bonfire_social, Bonfire.Social.Feeds, feed_origin_strategy: :or_filter)
+
+      _ ->
+        nil
+    end
 
     # `l/1` here marks these for extraction, but `config/0` runs once at boot under the default
     # locale, so the stored value is effectively the untranslated msgid. The actual per-request
@@ -15,6 +36,12 @@ defmodule Bonfire.Social.RuntimeConfig do
     # covers `name`/`description` plus the `assigns` display keys (`page_title`/`feed_title`/`feedback_*`).
     config :bonfire_social, Bonfire.Social.Feeds,
       query_with_deferred_join: true,
+      # boundary class → the guest/local/federated instance feeds an activity fans out to (read by `Feeds.global_feed_ids/1`). Promoted from a module attribute so instances can override:
+      global_feeds: %{
+        "public" => [:guest, :local],
+        "public_remote" => [:guest, :activity_pub],
+        "local" => [:local]
+      },
       feed_presets: [
         my: %{
           name: l("Following"),
@@ -55,6 +82,26 @@ defmodule Bonfire.Social.RuntimeConfig do
             enable_marker: true
           ]
         },
+        all: %{
+          name: l("All"),
+          built_in: true,
+          description: l("Every activity I can see"),
+          filters: %FeedFilters{
+            feed_name: :all,
+            exclude_activity_types: [:vote]
+          },
+          # kept as an explicit escape hatch (e.g. for admins/debugging); :explore is the bucketed default
+          exclude_from_nav: true,
+          icon: "ph:list-duotone",
+          assigns: [
+            page: "all",
+            page_title: l("All activities"),
+            feedback_title: l("There are no activities"),
+            feedback_message:
+              l("It seems like the paint is still fresh and there are no activities..."),
+            enable_marker: true
+          ]
+        },
         local: %{
           name: l("Local"),
           built_in: true,
@@ -92,6 +139,66 @@ defmodule Bonfire.Social.RuntimeConfig do
               l(
                 "It seems you and other local users do not follow anyone on a different federated instance"
               ),
+            enable_marker: true
+          ]
+        },
+        # #1586 origin×boundary bucket presets — each resolves (at query time, via
+        # `Feeds.named_feed_ids/1`) to `fp.feed_id IN [its buckets]`, so it reads back exactly its slice.
+        public: %{
+          name: l("Public"),
+          built_in: true,
+          description:
+            l("Show only public activities (from this instance and the wider fediverse)"),
+          filters: %FeedFilters{
+            feed_name: :public,
+            exclude_activity_types: [:like, :vote, :follow, :request]
+          },
+          exclude_from_nav: true,
+          icon: "ph:globe-duotone",
+          assigns: [
+            page: "public",
+            page_title: l("Public activities"),
+            feedback_title: l("There are no public activities"),
+            feedback_message: l("It seems there are no public activities yet..."),
+            enable_marker: true
+          ]
+        },
+        local_instance_only: %{
+          name: l("Local-only"),
+          built_in: true,
+          description:
+            l("Activities shared only with users of this instance (not federated out)"),
+          filters: %FeedFilters{
+            feed_name: :local_instance_only,
+            exclude_activity_types: [:like, :vote, :follow, :request]
+          },
+          current_user_required: true,
+          exclude_from_nav: true,
+          icon: "ph:house-duotone",
+          assigns: [
+            page: "local_instance_only",
+            page_title: l("Local-only activities"),
+            feedback_title: l("Your local-only feed is empty"),
+            feedback_message: l("It seems there are no local-only activities yet..."),
+            enable_marker: true
+          ]
+        },
+        custom_boundaries: %{
+          name: l("Non-public"),
+          built_in: true,
+          description: l("Activities shared with custom boundaries (e.g. specific circles)"),
+          filters: %FeedFilters{
+            feed_name: :custom_boundaries,
+            exclude_activity_types: [:like, :vote, :follow, :request]
+          },
+          current_user_required: true,
+          exclude_from_nav: true,
+          icon: "ph:users-three-duotone",
+          assigns: [
+            page: "custom_boundaries",
+            page_title: l("Custom-boundary activities"),
+            feedback_title: l("Your feed is empty"),
+            feedback_message: l("It seems there are no activities yet..."),
             enable_marker: true
           ]
         },

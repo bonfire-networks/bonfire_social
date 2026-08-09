@@ -98,6 +98,7 @@ defmodule Bonfire.Social.Fake do
         instance_domain = "example.local"
         instance_url = "https://#{instance_domain}"
         actor_url = "#{instance_url}/actors/other_user"
+        boundary = "public"
 
         {:ok, _instance} =
           Bonfire.Federate.ActivityPub.Instances.get_or_create(instance_url)
@@ -108,7 +109,7 @@ defmodule Bonfire.Social.Fake do
           |> debug("user attached to instance")
 
         remote_post =
-          Bonfire.Posts.Fake.fake_post!(remote_user, "public", %{
+          Bonfire.Posts.Fake.fake_post!(remote_user, boundary, %{
             post_content: %{
               name: "remote post #{i}",
               html_body: "content from fediverse #{i}"
@@ -126,7 +127,7 @@ defmodule Bonfire.Social.Fake do
         # feed, so repoint it there: this keeps it visible in the remote/federated feed
         # while excluding it from local timelines (which treat every local-feed entry as
         # local-authored — see Bonfire.Social.Activities.maybe_filter/3 `:origin`).
-        move_to_federated_feed(remote_post)
+        move_to_federated_feed(remote_post, boundary)
 
         {remote_post, nil}
 
@@ -355,7 +356,7 @@ defmodule Bonfire.Social.Fake do
         # feed shows thread roots ordered by latest reply; verify presence of the root
         {original_post, nil}
 
-      :explore ->
+      preset when preset in [:explore, :all] ->
         {local_post, _} = create_test_content(:local, user, other_user, i)
         {remote_post, _} = create_test_content(:remote, user, other_user, i)
 
@@ -405,20 +406,26 @@ defmodule Bonfire.Social.Fake do
     end
   end
 
-  # Move a (locally-published) post out of the instance's local feed and into the
-  # federated feed, to simulate a post that arrived via federation rather than being
-  # authored locally.
-  defp move_to_federated_feed(post) do
-    local_feed_id = Bonfire.Social.Feeds.named_feed_id(:local)
-    federated_feed_id = Bonfire.Social.Feeds.named_feed_id(:activity_pub)
+  # Move a (locally-published) post out of the instance's local feed(s) and into the federated feed for its boundary, to simulate a post that arrived via federation rather than being authored locally. Must be addressed-mode safe: `fake_post!(remote_user, boundary)` files the post into a LOCAL bucket (the boundary is origin-blind, e.g. `"public"` → `local_public` under addressing, or the legacy `local` feed). So delete EVERY local bucket row and re-file into the remote bucket that matches the boundary, mirroring how ingest addresses a genuinely remote post, leaving no local row (else `:local` timelines still show it).
+  def move_to_federated_feed(post, boundary \\ "public") do
+    local_feed_ids = Bonfire.Social.Feeds.named_feed_ids(:local)
+
+    remote_feed_id =
+      case boundary do
+        b when b in ["public", "public_remote"] ->
+          Bonfire.Social.Feeds.named_feed_id(:remote_public)
+
+        _custom ->
+          Bonfire.Social.Feeds.named_feed_id(:remote_custom)
+      end
 
     from(fp in Bonfire.Data.Social.FeedPublish,
-      where: fp.id == ^post.id and fp.feed_id == ^local_feed_id
+      where: fp.id == ^post.id and fp.feed_id in ^local_feed_ids
     )
     |> Common.Repo.delete_all()
 
     Common.Repo.insert(
-      %Bonfire.Data.Social.FeedPublish{id: post.id, feed_id: federated_feed_id},
+      %Bonfire.Data.Social.FeedPublish{id: post.id, feed_id: remote_feed_id},
       on_conflict: :nothing
     )
   end
