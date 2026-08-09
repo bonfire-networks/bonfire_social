@@ -718,7 +718,8 @@ defmodule Bonfire.Social.Threads do
       |> Ecto.Query.exclude(:distinct)
       |> distinct(
         [replied: replied, activity: activity],
-        [asc: replied.thread_id, asc: activity.subject_id]
+        asc: replied.thread_id,
+        asc: activity.subject_id
       )
       |> order_by(
         [replied: replied, activity: activity],
@@ -779,6 +780,7 @@ defmodule Bonfire.Social.Threads do
     exclude_table_ids = opts[:exclude_table_ids] || []
     exclude_subject_ids = opts[:exclude_subject_ids] || []
     limit = opts[:limit] || 500
+
     rows =
       thread_activities_query(thread_ids)
       |> then(fn q ->

@@ -561,7 +561,8 @@ defmodule Bonfire.Social.Feeds do
             if(current_user, do: my_home_feed_ids(current_user: current_user), else: [])
 
           other ->
-            user_named_or_feed_id(other, current_user: current_user) |> List.wrap()
+            # resolve the SAME way the query does (`named_feed_ids`) 
+            named_feed_ids(other, current_user: current_user) |> List.wrap()
         end
 
       true ->
