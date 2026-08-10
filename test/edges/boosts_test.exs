@@ -97,6 +97,27 @@ defmodule Bonfire.Social.BoostsTest do
     assert false == Boosts.boosted?(me, boosted)
   end
 
+  test "unboost_by_id removes only the exact recorded boost" do
+    me = Fake.fake_user!()
+
+    assert {:ok, boosted} =
+             Posts.publish(
+               current_user: me,
+               post_attrs: %{post_content: %{html_body: "Exact rollback target"}},
+               boundary: "public"
+             )
+
+    assert {:ok, recorded_boost} = Boosts.boost(me, boosted)
+    assert {:ok, _} = Boosts.unboost(me, boosted)
+    assert {:ok, replacement_boost} = Boosts.boost(me, boosted)
+
+    assert {:error, :not_found} =
+             Boosts.unboost_by_id(recorded_boost.id, me, boosted)
+
+    assert {:ok, current_boost} = Boosts.get(me, boosted, skip_boundary_check: true)
+    assert current_boost.id == replacement_boost.id
+  end
+
   test "can list my boosts" do
     me = Fake.fake_user!()
 

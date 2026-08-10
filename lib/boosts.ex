@@ -18,7 +18,7 @@ defmodule Bonfire.Social.Boosts do
 
   alias Bonfire.Social.Objects
 
-  # alias Bonfire.Data.Edges.Edge
+  alias Bonfire.Data.Edges.Edge
 
   use Bonfire.Common.Repo,
     searchable_fields: [:booster_id, :boosted_id]
@@ -267,6 +267,41 @@ defmodule Bonfire.Social.Boosts do
       unboost(booster, boosted)
     end
   end
+
+  @doc """
+  Removes one exact boost after verifying its subject and object.
+
+  The edge is locked and deleted by its recorded ID, so a later replacement boost between the same subject and object is never removed.
+  """
+  def unboost_by_id(boost_id, booster, boosted)
+      when is_binary(boost_id) and (is_map(booster) or is_binary(booster)) and
+             (is_map(boosted) or is_binary(boosted)) do
+    booster_id = uid(booster)
+    boosted_id = uid(boosted)
+    boost_table_id = Bonfire.Common.Types.table_id(Boost)
+
+    repo().transaction(fn ->
+      from(edge in Edge,
+        where:
+          edge.id == ^boost_id and edge.subject_id == ^booster_id and
+            edge.object_id == ^boosted_id and edge.table_id == ^boost_table_id,
+        lock: "FOR UPDATE"
+      )
+      |> repo().one()
+      |> case do
+        %Edge{} = edge ->
+          case repo().delete(edge) do
+            {:ok, _edge} -> Activities.delete({:id, boost_id})
+            {:error, reason} -> repo().rollback(reason)
+          end
+
+        nil ->
+          repo().rollback(:not_found)
+      end
+    end)
+  end
+
+  def unboost_by_id(_boost_id, _booster, _boosted), do: {:error, :invalid_boost}
 
   @doc """
   Lists boosts by the current user.
