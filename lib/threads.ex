@@ -380,6 +380,20 @@ defmodule Bonfire.Social.Threads do
     end
   end
 
+  @doc "Returns the stored total number of direct and nested replies for a thread."
+  def count_replies(thread_id) when is_binary(thread_id) do
+    base_query()
+    |> query_filter(id: thread_id)
+    |> select([replied: replied], replied.total_replies_count)
+    |> repo().one()
+    |> case do
+      count when is_integer(count) -> count
+      _ -> 0
+    end
+  end
+
+  def count_replies(_), do: 0
+
   # Try to find the thread_id for a comment
   def fetch_thread_id(comment_id, _opts \\ []) do
     base_query()
