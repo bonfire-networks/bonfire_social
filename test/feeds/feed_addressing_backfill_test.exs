@@ -134,7 +134,8 @@ defmodule Bonfire.Social.FeedAddressingBackfillTest do
       assert @legacy_local in feeds_of(public_post)
       refute @local_public in feeds_of(public_post)
 
-      assert :ok = Rollout.run()
+      # call the work directly: `run/0` declines in the test env (see `Bonfire.Common.StartupTask`), which is what keeps a backfill from firing mid-suite on every boot
+      assert :ok = Rollout.backfill_and_enable()
 
       # legacy local row reclassified into the public bucket → the backfill ran
       assert @local_public in feeds_of(public_post)

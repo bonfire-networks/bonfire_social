@@ -33,7 +33,7 @@ defmodule Bonfire.Social.Feeds.Addressing.Rollout do
         :skip
 
       true ->
-        do_run()
+        backfill_and_enable()
     end
   end
 
@@ -41,7 +41,12 @@ defmodule Bonfire.Social.Feeds.Addressing.Rollout do
   defp run_in_env?,
     do: Config.env() != :test or System.get_env("TEST_INSTANCE") == "yes"
 
-  defp do_run do
+  @doc """
+  The rollout itself: reclassify the legacy origin feeds into buckets, then flip write-addressing on.
+
+  Separate from `run/0` so tests can exercise it directly (`run/0` declines in the test env, per the "called directly" contract in `Bonfire.Common.StartupTask`). Callers other than `run/0` are responsible for checking `enabled?/0` first.
+  """
+  def backfill_and_enable do
     Logger.info(
       "Feed-addressing rollout: reclassifying legacy origin feeds into buckets (write flag still OFF)…"
     )
