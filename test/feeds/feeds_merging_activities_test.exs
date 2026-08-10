@@ -150,8 +150,10 @@ defmodule Bonfire.Social.FeedsMergingActivitiesTest do
         edge.activity.verb_id == Bonfire.Social.Activities.verb_id(:reply)
       end)
 
-    assert List.first(reply_edges).activity.replies_more_count == 1
-    assert length(reply_edges) == 1
+    # assert we got a reply activity at all before indexing into it, so a feed that came back empty
+    # says so instead of failing with a BadMapError on `nil`
+    assert [reply_edge] = reply_edges
+    assert reply_edge.activity.replies_more_count == 1
 
     # reply_subject_ids = Enum.flat_map(reply_edges, &([&1.activity.subject] ++ &1.activity.subjects_more)) |> Enums.ids()
     # assert replier1.id in reply_subject_ids
