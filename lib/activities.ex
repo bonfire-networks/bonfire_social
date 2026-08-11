@@ -196,9 +196,13 @@ defmodule Bonfire.Social.Activities do
   """
   def delete_by_subject_verb_object(subject, verb, object) do
     q = by_subject_verb_object_q(subject, Verbs.get_id!(verb), object)
+    ids = repo().many(q)
     # FIXME? does cascading delete take care of this?
-    FeedActivities.delete(repo().many(q), :id)
-    # TODO? maybe_remove_for_deleters_feeds(id)
+    FeedActivities.delete(ids, :id)
+
+    # also tell any open feed to drop the activity we just deleted, otherwise it lingers on screen with stale controls (eg. an accepted follow request keeps offering its Accept button, and clicking it again errors because the Request is already gone)
+    Enum.each(ids, &maybe_remove_for_deleters_feeds/1)
+
     elem(repo().delete_many(q), 1)
   end
 
@@ -2765,15 +2769,25 @@ defmodule Bonfire.Social.Activities do
     verb = maybe_to_string(verb)
 
     case String.split(verb) do
-      # FIXME: support localisation
       [verb, "to", other_verb] ->
-        Enum.join([verb_congugate(verb), "to", other_verb], " ")
+        # looked up as one whole phrase, not composed from parts. Interpolating the second verb
+        # would hand the translator a placeholder they cannot inflect, where the first verb
+        # governs its form — FR wants "a demandé à suivre" (à + lowercase infinitive), and
+        # case-marking languages need more still. `Bonfire.Social.Localise` enumerates these
+        # phrases so the extractor can find them, since there is no literal call site to walk.
+        Enum.join([verb_congugate(verb) |> sanitise_verb_name(), "to", other_verb], " ")
+        |> String.downcase()
+        |> localise_dynamic(__MODULE__, "verb: past tense")
 
       _ ->
+        # `sanitise_verb_name/1`, the downcasing and `"verb: past tense"` must all match what
+        # `Bonfire.Social.Localise` emits, or the lookup silently falls back to the
+        # context-less entry
         verb_congugate(verb)
+        |> sanitise_verb_name()
+        |> String.downcase()
+        |> localise_dynamic(__MODULE__, "verb: past tense")
     end
-    |> localise_dynamic(__MODULE__)
-    |> String.downcase()
   end
 
   def verb_congugate(verb) do
@@ -2816,25 +2830,43 @@ defmodule Bonfire.Social.Activities do
   end
 
   @doc """
-  Retrieves additional verb names with various formats for localization.
+  Returns every past-tense string `verb_display/1` can render: the conjugated verb on its own ("Boosted"), and the "requested to …" phrase built when a verb governs another ("Requested to follow").
+
+  `Bonfire.Social.Localise` hands these to gettext extraction under the `"verb: past tense"` context. They have to be enumerated because there is no literal `l("Boosted")` call anywhere for `mix gettext.extract` to walk — the strings are assembled at runtime.
+
+  The phrases are listed whole rather than interpolated (`"%{verb} to %{other}"`) on purpose: the second verb's required form is governed by the first, so a placeholder would give the translator something they cannot inflect. French wants "a demandé à suivre" — `à` plus a lowercase infinitive — and case-marking languages need more still. Interpolate data; enumerate phrases.
+
+  Base forms ("Boost") are not included: `bonfire_boundaries` declares those, and emitting them here would duplicate them into a second gettext domain. Nor are the "Boosted by" forms, which are literal `l/4` calls in the UI components that render them.
   """
-  def all_verb_names_extra() do
+  def all_verb_names_conjugated() do
     Enum.flat_map(all_verb_names(), fn v ->
       conjugated =
         v
         |> Bonfire.Social.Activities.verb_congugate()
         |> sanitise_verb_name()
 
-      [
-        v,
-        "Request to " <> v,
-        "Requested to " <> v,
-        conjugated,
-        conjugated <> " by"
-      ]
+      # the governing verb is always "request" (as in "request to follow"), so only the governed
+      # verb varies — `verb_display/1` conjugates the first word and joins with the rest
+      #
+      # downcased to match `verb_display/1`, which downcases *before* looking up: these read
+      # mid-sentence ("alice boosted this"), and downcasing the translation instead would flatten
+      # locales that capitalise. `all_verb_names/0` returns capitalised verbs, so without this the
+      # phrase emitted here ("Requested to Follow") would never match the one looked up
+      # ("requested to follow")
+      [String.downcase(conjugated), String.downcase("Requested to #{v}")]
     end)
+  end
 
-    # |> debug(label: "Making all verb names localisable")
+  @doc """
+  Returns the un-conjugated "request to …" phrases — "Request to follow", "Request to create".
+
+  Kept separate from `all_verb_names_conjugated/0` because these are the base form, not past tense, so they take no context (like the capability names `bonfire_boundaries` declares) rather than `"verb: past tense"`. Emitting both lists under one context would mislabel half of them, and `localise_strings/3` applies a single context per list.
+
+  Listed whole rather than interpolated for the same reason as the past-tense phrases: the governed verb's form depends on the verb governing it, so a placeholder gives the translator nothing they can inflect.
+  """
+  def all_verb_names_request_phrases() do
+    # the governed verb is downcased: `all_verb_names/0` returns them capitalised ("Follow"), but mid-phrase English usually wants "Request to follow" 
+    Enum.map(all_verb_names(), &"Request to #{String.downcase(&1)}")
   end
 
   # workaround `Verbs` bug

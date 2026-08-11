@@ -760,6 +760,8 @@ defmodule Bonfire.Social.Objects do
       :caretaker,
       :activities,
       :peered,
+      # deleting the Replied mixin is what fires the DB trigger that decrements reply counts 
+      :replied,
       :controlled
     ]
 
