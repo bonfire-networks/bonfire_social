@@ -1305,6 +1305,7 @@ defmodule Bonfire.Social.FeedLoader do
       [exclude_activity_types: [:flag, :boost, :follow]]
   """
   def prepare_filters_and_opts(filters, preset_opts, caller_opts) do
+    filters = expand_exclude_group_activities(filters)
     opts = Keyword.merge(caller_opts, preset_opts)
 
     current_user = current_user(opts)
@@ -1459,6 +1460,30 @@ defmodule Bonfire.Social.FeedLoader do
        #  postload: postload
      )}
     |> debug("feed query filters & opts")
+  end
+
+  # The UI's "Group activities" switch is stored as the single compound
+  # `exclude_group_activities` flag; expand it here (the query-building chokepoint) into its
+  # two query-level representations — group/category-AUTHORED activities excluded by subject
+  # type, person-authored objects published INSIDE a group excluded by their category context
+  # — so every other filter surface only ever reads/writes the one flag and the pair can
+  # never get out of sync.
+  defp expand_exclude_group_activities(filters) do
+    if e(filters, :exclude_group_activities, nil) do
+      filters
+      |> Map.put(
+        :exclude_subject_types,
+        # NB the schema module, not the :group/:category atom aliases, so
+        # `Types.table_types/1` can resolve it to a table id
+        Enums.merge_uniq(
+          List.wrap(e(filters, :exclude_subject_types, [])),
+          [Bonfire.Classify.Category]
+        )
+      )
+      |> Map.put(:exclude_category_contexts, true)
+    else
+      filters
+    end
   end
 
   defp maybe_filter(query, filters, opts \\ [])

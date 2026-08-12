@@ -1017,7 +1017,7 @@ defmodule Bonfire.Social.Activities do
       :post_content,
       :media,
       :sensitive,
-      # Also preload the thread root's replied record (for reply counts in DiscussionPreviewLive).
+      # Also preload the thread root's replied record (for reply counts in DiscussionPreviewActionsLive).
       # This adds one batched query to feeds using :with_thread_post, but avoids a more complex
       # conditional preload in the post-processing pipeline where edges aren't Ecto-preloadable.
       :replied,
@@ -1516,8 +1516,8 @@ defmodule Bonfire.Social.Activities do
     )
   end
 
-  defp maybe_preload_quote_request_subject(objects, activity_nested_under, preloads, opts) do
-    if :with_quote_post_requested in preloads do
+  defp maybe_preload_quote_request_subject(objects, activity_nested_under, _preloads, opts) do
+    if :with_quote_post_requested in List.wrap(opts[:preload]) do
       Bonfire.Common.Repo.Preload.maybe_follow_pointer_schemas(
         objects,
         activity_nested_under ++ [:edge, :subject],
@@ -1926,6 +1926,28 @@ defmodule Bonfire.Social.Activities do
         query
     end
   end
+
+  # A post published inside a group/topic keeps the person as its activity subject; its
+  # category context lives on the object's Tree mixin. This complements
+  # exclude_subject_types, which covers activities authored by a Category (for example a
+  # group auto-boost), so the UI's "Group activities" switch can hide both representations.
+  def maybe_filter(query, {:exclude_category_contexts, true}, opts) do
+    if Extend.module_enabled?(Bonfire.Classify.Tree, opts) do
+      query
+      |> reusable_join(
+        :left,
+        [activity: activity],
+        category_context in Bonfire.Classify.Tree,
+        as: :category_context,
+        on: category_context.id == activity.object_id
+      )
+      |> where([category_context: category_context], is_nil(category_context.parent_id))
+    else
+      query
+    end
+  end
+
+  def maybe_filter(query, {:exclude_category_contexts, _}, _opts), do: query
 
   def maybe_filter(query, {:subject_circles, circle_ids}, opts) do
     case Types.uids(circle_ids, nil) do

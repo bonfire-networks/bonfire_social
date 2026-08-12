@@ -29,6 +29,12 @@ defmodule Bonfire.Social.FeedFilters do
 
     field :subject_types, AtomOrStringList
     field :exclude_subject_types, AtomOrStringList
+    # Compound filter behind the UI's single "Group activities" switch — see
+    # FeedLoader.expand_exclude_group_activities/1, which expands it at query time.
+    field :exclude_group_activities, :boolean
+    # NOTE: no defaults on the booleans below — a default would be baked into every validated
+    # struct and clobber a user-set true when merging partial filter updates (nil = "not set")
+    field :exclude_category_contexts, :boolean
 
     field :objects, StringList
     field :exclude_objects, StringList
@@ -96,6 +102,8 @@ defmodule Bonfire.Social.FeedFilters do
       :exclude_subject_circles,
       :subject_types,
       :exclude_subject_types,
+      :exclude_group_activities,
+      :exclude_category_contexts,
       :objects,
       :exclude_objects,
       :object_circles,

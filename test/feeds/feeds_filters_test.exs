@@ -680,4 +680,36 @@ defmodule Bonfire.Social.FeedsFiltersTest do
       refute FeedLoader.feed_contains?(feed, week_ago_post, current_user: user)
     end
   end
+
+  describe "exclude_group_activities compound filter" do
+    # the UI's "Group activities" switch stores this single flag; FeedLoader expands it at
+    # query time into exclude_subject_types (group-AUTHORED activities) +
+    # exclude_category_contexts (person-authored objects published INSIDE a group)
+    test "hides person-authored posts published inside a group but keeps regular posts" do
+      user = fake_user!("group poster")
+      group = Bonfire.Classify.Simulate.fake_group!(user, %{membership: "open"})
+
+      {:ok, group_post} =
+        Posts.publish(
+          post_attrs: %{post_content: %{html_body: "<p>inside a group</p>"}},
+          current_user: user,
+          boundary: "public",
+          context_id: group.id
+        )
+
+      regular_post =
+        fake_post!(user, "public", %{post_content: %{html_body: "<p>not in a group</p>"}})
+
+      # positive control: without the filter both posts show
+      feed = FeedLoader.feed(:custom, %{}, current_user: user)
+      assert FeedLoader.feed_contains?(feed, group_post, current_user: user)
+      assert FeedLoader.feed_contains?(feed, regular_post, current_user: user)
+
+      feed =
+        FeedLoader.feed(:custom, %{exclude_group_activities: true}, current_user: user)
+
+      refute FeedLoader.feed_contains?(feed, group_post, current_user: user)
+      assert FeedLoader.feed_contains?(feed, regular_post, current_user: user)
+    end
+  end
 end
