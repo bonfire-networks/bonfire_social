@@ -166,13 +166,7 @@ defmodule Bonfire.Social.PostContents do
     prepare_remote_content(attrs, creator, opts)
   end
 
-  def maybe_prepare_contents(attrs, creator, boundary, opts)
-      when boundary in ["message"] do
-    debug("do not process messages for tags/mentions")
-    only_prepare_content(attrs, creator, opts)
-  end
-
-  # post from local user
+  # post or message from local user (callers that need to skip tagging, eg. `Bonfire.Messages`, pass `mention: false`/`hashtag: false`)
   def maybe_prepare_contents(attrs, creator, _boundary, opts) do
     if module_enabled?(Bonfire.Social.Tags, creator) do
       # set input format to eg. markdown for parsing
