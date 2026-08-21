@@ -225,6 +225,35 @@ defmodule Bonfire.Social.Events do
   end
 
   @doc """
+  The event's link for humans: its `url`, falling back to the AP `id`.
+
+  The `id` is the canonical ActivityPub identifier and often serves JSON rather than a page, so it is
+  only a last resort. An AS2 `url` may be a plain string, a `Link` object, or a list of either.
+
+  ## Examples
+
+      iex> source_url(%{"id" => "https://gancio.cisti.org/federation/m/42", "url" => "https://gancio.cisti.org/event/42"})
+      "https://gancio.cisti.org/event/42"
+
+      iex> source_url(%{"url" => %{"type" => "Link", "href" => "https://example.org/event/1"}})
+      "https://example.org/event/1"
+
+      iex> source_url(%{"id" => "https://example.org/event/42"})
+      "https://example.org/event/42"
+
+      iex> source_url(%{})
+      nil
+  """
+  def source_url(json) do
+    json |> object_field("url") |> href() || object_field(json, "id")
+  end
+
+  defp href(url) when is_binary(url), do: url
+  defp href(%{"href" => href}) when is_binary(href), do: href
+  defp href([_ | _] = urls), do: Enum.find_value(urls, &href/1)
+  defp href(_), do: nil
+
+  @doc """
   Host of a source URL, for the read-only "View on …" link (e.g. `"gancio.cisti.org"`), or nil.
 
   ## Examples
