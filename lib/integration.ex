@@ -259,7 +259,8 @@ defmodule Bonfire.Social do
   def maybe_federate(subject, verb, object, activity \\ nil, opts \\ []) do
     debug(subject, "subject")
 
-    if federate_outgoing?(subject) |> debug("federate_outgoing?") do
+    # cheap settings-level early exit only, because `Outgoing.maybe_federate` re-runs the full `federate_outgoing?` gate (incl. the actor-boundary check, which needs `:peered` preloaded) after preloading the subject, so checking it here too would both raise on unpreloaded subjects and duplicate the grants query
+    if federating?(subject) |> debug("federating?") do
       debug(verb, "maybe prepare outgoing federation with verb...")
 
       Bonfire.Federate.ActivityPub.Outgoing.maybe_federate(
