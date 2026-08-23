@@ -1335,7 +1335,8 @@ defmodule Bonfire.Social.Objects do
     debug(creator, "creator")
     debug(object, "object")
 
-    case delete(object, creator) do
+    # Authorisation for an INCOMING delete is established by the AP layer (the origin is re-fetched and must report the object gone/Tombstone by `Transformer.check_remote_object_deleted/2`), not by local ACLs: a remote author holds no local `:delete` grant, so a boundarised load silently finds nothing and the delete becomes a no-op (the object survives with no error).
+    case delete(object, current_user: creator, skip_boundary_check: true) do
       {:error, :not_found} ->
         # The object couldn't be deleted (e.g. already gone locally). For incoming
         # federation this is a no-op, not an error to retry. See bonfire-app#1784.
