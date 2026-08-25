@@ -1,4 +1,4 @@
-defmodule Bonfire.Social.Repo.Migrations.BackfillSeenToAccount do
+defmodule Bonfire.Social.Repo.Migrations.BackfillSeenToAccountAgain do
   @moduledoc """
   Backfill migration to change seen/read status tracking from User to Account.
 

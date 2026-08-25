@@ -120,7 +120,8 @@ defmodule Bonfire.Social.Markers do
   end
 
   @doc "Save a Mastodon timeline reading position."
-  def save(user, timeline, last_read_id) do
+  def save(subject, timeline, last_read_id) do
+    user = current_user_required!(subject)
     # Resolve the client-provided status/notification id to the activity id —
     # the canonical stored cursor space (shared with web saves) — so resume
     # pagination and cross-surface sync line up.
@@ -134,7 +135,7 @@ defmodule Bonfire.Social.Markers do
       # some feed items (e.g. like activities in notifications) wouldn't pass an
       # object-level `:see` boundary check, so pass a map to skip it (same path
       # as `mark_all_seen`).
-      if changed? && activity_id, do: Seen.mark_seen(user, %{id: activity_id})
+      if changed? && activity_id, do: Seen.mark_seen(subject, %{id: activity_id})
 
       # Echo the id space the client sent (the stored cursor may differ)
       {:ok, Map.put(format_marker_row(marker), "last_read_id", to_string(last_read_id))}
@@ -344,5 +345,5 @@ defmodule Bonfire.Social.Markers do
   # Markers are account-based like Seen (shared across profiles of an account),
   # using the same subject normalization so the Seen-derived fallback joins on
   # the same id.
-  defp marker_subject_id(user), do: Enums.id(Seen.normalize_subject(user))
+  defp marker_subject_id(user), do: Enums.id(Seen.normalize_subject!(user))
 end

@@ -285,7 +285,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       if is_nil(current_user) do
         RestAdapter.error_fn({:error, :unauthorized}, conn)
       else
-        case Bonfire.Social.Seen.mark_seen(current_user, id) do
+        case Bonfire.Social.Seen.mark_seen(conn.assigns, id) do
           {:ok, _} ->
             # Mastodon API returns empty object on success
             Phoenix.Controller.json(conn, %{})

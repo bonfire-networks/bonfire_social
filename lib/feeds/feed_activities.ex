@@ -653,14 +653,15 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp unseen_query(feed_id, opts) do
     table_id = Bonfire.Common.Types.table_id(Seen)
-    current_user = current_user(opts)
+    current_user = current_user_or_id(opts)
 
     feed_id =
       if is_uid?(feed_id),
         do: feed_id,
         else: Bonfire.Social.Feeds.my_feed_id(feed_id, current_user)
 
-    subject_id = Enums.id(current_account(current_user) || current_account(opts) || current_user)
+    subject_id = Enums.id(Bonfire.Social.Seen.normalize_subject(opts))
+
     fp_mod = feed_activities_schema()
 
     if subject_id && table_id && feed_id,
@@ -709,11 +710,11 @@ defmodule Bonfire.Social.FeedActivities do
       {:ok, number_of_marked_items}
   """
   def mark_all_seen(feed_id, opts) do
-    current_user = current_user_required!(opts)
+    _current_user = current_user_required!(opts)
 
     unseen_query(feed_id, opts)
     ~> select([c], %{id: c.id})
     ~> repo().all()
-    ~> Bonfire.Social.Seen.mark_seen(current_user, ...)
+    ~> Bonfire.Social.Seen.mark_seen(opts, ...)
   end
 end
