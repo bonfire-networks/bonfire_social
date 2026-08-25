@@ -403,6 +403,9 @@ defmodule Bonfire.Social.PostContents do
     |> Regex.replace(~r/@<([^>]+)>/U, ..., " @\\1 ")
     # for @user@domain.tld
     |> String.replace("\\@", "@")
+    |> String.replace(~r/(^|\n)[ \t\x{00A0}]*\\[ \t\x{00A0}]*(?=\r?\n)/u, "\\1")
+    # a hard break directly before a blank line would render as a literal `\` at paragraph end
+    |> String.replace(~r/\\[ \t\x{00A0}]*\n(?=[ \t]*\r?\n)/u, "\n")
     |> normalise_input(do_not_strip_html?, nil)
   end
 
