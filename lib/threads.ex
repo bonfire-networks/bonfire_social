@@ -1323,8 +1323,8 @@ defmodule Bonfire.Social.Threads do
   """
   def unseen_query(filters, opts) do
     table_id = Bonfire.Common.Types.table_id(Seen)
-    current_user = current_user_required!(opts)
-    uid = uid(current_user)
+    current_user_required!(opts)
+    uid = id(Bonfire.Social.Seen.normalize_subject(opts))
 
     if uid && table_id,
       do:
@@ -1374,13 +1374,13 @@ defmodule Bonfire.Social.Threads do
       {:ok, [%{id: "reply1"}, %{id: "reply2"}]}
   """
   def mark_all_seen(filters, opts) do
-    current_user = current_user_required!(opts)
+    _current_user = current_user_required!(opts)
 
     unseen_query(filters, opts)
     ~> select([c], %{id: c.id})
     ~> repo().all()
     ~> debug("iddds")
-    ~> Bonfire.Social.Seen.mark_seen(current_user, ...)
+    ~> Bonfire.Social.Seen.mark_seen(opts, ...)
   end
 
   defp maybe_max_depth(query, max_depth, include_path_ids) when is_integer(max_depth) do

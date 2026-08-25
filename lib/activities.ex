@@ -904,7 +904,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   defp query_preload_seen(q, opts) do
-    if subject_id = Enums.id(current_account(opts) || current_user(opts)) do
+    if subject_id = Enums.id(Bonfire.Social.Seen.normalize_subject(opts)) do
       table_id = Bonfire.Common.Types.table_id(Seen)
 
       q
@@ -923,7 +923,7 @@ defmodule Bonfire.Social.Activities do
   end
 
   defp subquery_preload_seen(opts) do
-    if subject_id = Enums.id(current_account(opts) || current_user(opts)) do
+    if subject_id = Enums.id(Bonfire.Social.Seen.normalize_subject(opts)) do
       table_id = Bonfire.Common.Types.table_id(Seen)
 
       from(seen_edge in Edge,

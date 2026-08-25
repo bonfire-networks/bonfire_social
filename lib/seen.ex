@@ -58,13 +58,13 @@ defmodule Bonfire.Social.Seen do
       true
 
   """
-  def seen?(%{} = user_or_account, object) do
-    subject = normalize_subject(user_or_account)
+  def seen?(user_or_account, object) do
+    subject = normalize_subject!(user_or_account)
     Edges.exists?(__MODULE__, subject, object, skip_boundary_check: true)
   end
 
   def last_date(subject, object) do
-    subject = normalize_subject(subject)
+    subject = normalize_subject!(subject)
     Edges.last_date(__MODULE__, subject, object, skip_boundary_check: true)
   end
 
@@ -89,7 +89,7 @@ defmodule Bonfire.Social.Seen do
 
   """
   def get(subject, object, opts \\ []) do
-    subject = normalize_subject(subject)
+    subject = normalize_subject!(subject)
     Edges.get(__MODULE__, subject, object, opts ++ [skip_boundary_check: true])
   end
 
@@ -97,7 +97,7 @@ defmodule Bonfire.Social.Seen do
     Similar to `get/3`, but raises an error if the Seen edge is not found.
   """
   def get!(subject, object, opts \\ []) do
-    subject = normalize_subject(subject)
+    subject = normalize_subject!(subject)
     Edges.get!(__MODULE__, subject, object, opts ++ [skip_boundary_check: true])
   end
 
@@ -127,8 +127,8 @@ defmodule Bonfire.Social.Seen do
   """
   def mark_seen(subject, object, opts \\ [])
 
-  def mark_seen(%{} = subject, %{id: _} = object, opts) do
-    normalized_subject = normalize_subject(subject)
+  def mark_seen(subject, %{id: _} = object, opts) do
+    normalized_subject = normalize_subject!(subject)
 
     # Check existence first to avoid costly constraint error + rollback on duplicates
     case get(normalized_subject, object) do
@@ -148,8 +148,8 @@ defmodule Bonfire.Social.Seen do
     end
   end
 
-  def mark_seen(%{} = subject, object, opts) when is_binary(object) do
-    normalized_subject = normalize_subject(subject)
+  def mark_seen(subject, object, opts) when is_binary(object) do
+    normalized_subject = normalize_subject!(subject)
 
     with {:ok, seen} <-
            Bonfire.Common.Needles.get(object, current_user: subject, verb: :see) do
@@ -160,8 +160,8 @@ defmodule Bonfire.Social.Seen do
 
   def mark_seen(%{} = _subject, [], _opts), do: 0
 
-  def mark_seen(%{} = subject, objects, opts) when is_list(objects) do
-    subject = normalize_subject(subject)
+  def mark_seen(subject, objects, opts) when is_list(objects) do
+    subject = normalize_subject!(subject)
 
     {bulk_objects, individual_objects} =
       Enum.split_with(objects, fn
@@ -229,16 +229,16 @@ defmodule Bonfire.Social.Seen do
   iex> Bonfire.Social.Seen.mark_unseen(user, "456")
 
   """
-  def mark_unseen(%{} = subject, %{} = object) do
-    normalized_subject = normalize_subject(subject)
+  def mark_unseen(subject, %{} = object) do
+    normalized_subject = normalize_subject!(subject)
     # delete the Seen
     Edges.delete_by_both(normalized_subject, Seen, object)
 
     # Note: the seen count is automatically decremented by DB triggers
   end
 
-  def mark_unseen(%{} = subject, object) when is_binary(object) do
-    normalized_subject = normalize_subject(subject)
+  def mark_unseen(subject, object) when is_binary(object) do
+    normalized_subject = normalize_subject!(subject)
 
     with {:ok, seen} <-
            Bonfire.Common.Needles.get(object, current_user: subject) do
@@ -294,12 +294,45 @@ defmodule Bonfire.Social.Seen do
     # |> repo().maybe_preload(edge: [:object])
   end
 
-  # Public so other account-based trackers (e.g. `Bonfire.Social.Markers`) can
-  # share the exact same subject normalization.
-  @doc false
+  @doc """
+  Resolve a subject to its account (struct or id), or nil if none, resolving an account id already in the assigns/socket/opts (e.g. PersistentLive/badges) and, failing that, preloading a bare user's account. 
+
+  Non-raising: use for guest-possible read paths (e.g. the `:with_seen` preload).
+  """
   def normalize_subject(subject) do
-    # Use existing current_account helper to infer account from user
-    # Falls back to subject itself if no account found (for direct account input)
-    current_account(subject) || subject
+    current_account_or_id(subject) || resolve_account_via_preload(subject)
+  end
+
+  @doc """
+  Like `normalize_subject/1` (same resolution + preload rescue), but flags the caller: a subject that HAS a current_user yet no resolvable account fires `err` (raises in tests; logs+rescues in prod), with a distinct message for the genuinely-unresolvable vs the merely-UNPRELOADED case. See issue #2220.
+  """
+  def normalize_subject!(subject) do
+    current_account_or_id(subject) ||
+      case resolve_account_via_preload(subject) do
+        nil ->
+          err(
+            subject,
+            "Subject reached Seen with NO resolvable account: cannot record per-account Seen (see issue #2220)"
+          )
+
+          current_user_or_id(subject)
+
+        account ->
+          err(
+            subject,
+            "Subject reached Seen with an UNPRELOADED account: its initial query should preload the account (see issue #2220)"
+          )
+
+          account
+      end
+  end
+
+  # Load the account off a bare `current_user` — the preload rescue shared by both `normalize_subject`
+  # variants (nil when there's no current_user at all, e.g. a guest).
+  defp resolve_account_via_preload(subject) do
+    if current_user = current_user(subject),
+      do:
+        repo().maybe_preload(current_user, :accounted)
+        |> current_account()
   end
 end
