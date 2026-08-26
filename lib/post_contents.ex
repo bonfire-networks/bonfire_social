@@ -398,11 +398,10 @@ defmodule Bonfire.Social.PostContents do
 
   defp normalise_input(text, do_not_strip_html?, :markdown) when is_binary(text) do
     text
-    # special for MD links coming from milkdown
-    |> Regex.replace(~r/<(http[^>]+)>/U, ..., " \\1 ")
-    |> Regex.replace(~r/@<([^>]+)>/U, ..., " @\\1 ")
-    # for @user@domain.tld
-    |> String.replace("\\@", "@")
+    # undo the escaping milkdown's CommonMark serializer applies to bare URLs and `@mentions`
+    |> Text.unwrap_markdown_autolinks()
+    # `bonfire_editor_milkdown`'s `serializeMarkdownForSubmit` does the same client-side, but run again here just in case
+    |> Text.normalise_markdown_hard_breaks()
     |> normalise_input(do_not_strip_html?, nil)
   end
 
