@@ -130,8 +130,10 @@ defmodule Bonfire.Social.Seen do
   def mark_seen(subject, %{id: _} = object, opts) do
     normalized_subject = normalize_subject!(subject)
 
-    # Check existence first to avoid costly constraint error + rollback on duplicates
-    case get(normalized_subject, object) do
+    # For upsert, always (re)create so the timestamp refreshes (create/3 does delete-then-insert); otherwise check existence first to avoid a costly constraint error + rollback on duplicates.
+    existing = if !opts[:upsert], do: get(normalized_subject, object)
+
+    case existing do
       {:ok, seen} ->
         debug(seen, "the account has already seen this object")
         {:ok, seen}
