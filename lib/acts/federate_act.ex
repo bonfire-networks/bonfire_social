@@ -118,7 +118,7 @@ defmodule Bonfire.Social.Acts.Federate do
 
         nil
 
-      Social.federate_outgoing?(current_user) != true ->
+      Social.federate_outgoing?(current_user, options) != true ->
         info(
           "ActivityPub: Federation is disabled (possibly just for this user) or an adapter is not available"
         )

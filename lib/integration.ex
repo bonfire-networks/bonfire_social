@@ -292,9 +292,9 @@ defmodule Bonfire.Social do
       false
 
   """
-  def federate_outgoing?(subject \\ nil) do
+  def federate_outgoing?(subject \\ nil, opts \\ []) do
     Bonfire.Common.Extend.module_enabled?(Bonfire.Federate.ActivityPub.Outgoing, subject) and
-      Bonfire.Federate.ActivityPub.Outgoing.federate_outgoing?(subject)
+      Bonfire.Federate.ActivityPub.Outgoing.federate_outgoing?(subject, opts)
   end
 
   @doc """

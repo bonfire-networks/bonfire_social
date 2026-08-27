@@ -966,7 +966,7 @@ defmodule Bonfire.Social.Objects do
       {:ok, [%Object{}, %Object{}]}
 
   """
-  def delete_caretaken(main) do
+  def delete_caretaken(main, opts \\ [skip_boundary_check: true]) do
     mains = List.wrap(main)
     main_ids = Enums.ids(mains)
 
@@ -981,7 +981,7 @@ defmodule Bonfire.Social.Objects do
 
     # TODO: some types of Objects (eg. Feed, Circle) may not need to use a whole Epic but can simply be deleted from DB directly, as long as they cascade deletes to eg. FeedPublish and Encircle
 
-    care_taken(caretaker_ids)
+    care_taken(caretaker_ids, opts)
     |> Enum.reject(&(Enums.id(&1) in caretaker_ids))
     |> debug(
       "then delete list things they are caretaker of (and don't federate deletion of those things individually, as hopefully that cascades from the Actor deletion)"
@@ -1027,13 +1027,14 @@ defmodule Bonfire.Social.Objects do
       [%Object{}, %Object{}]
 
   """
-  def care_taken(ids),
+  def care_taken(ids, opts \\ []),
     do:
       repo().all(
         from(c in Caretaker, where: c.caretaker_id in ^Types.uids(ids))
         |> proload(:pointer)
       )
-      |> repo().maybe_preload(:pointer)
+      # opts are threaded into the pointer→pointed preload so the caller's authorisation applies: when it is boundarised but the caller already established permission, the preload silently returns nothing and those objects never get deleted
+      |> repo().maybe_preload(:pointer, opts)
       |> Enum.map(&(e(&1, :pointer, nil) || Enums.id(&1)))
 
   @doc """
