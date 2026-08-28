@@ -28,6 +28,9 @@ defmodule Bonfire.Social.FeedsCirclesFilterTest do
 
   describe "circle inclusion and exclusion filters" do
     setup do
+      # Nothing here is about federation, but creating a post still runs the Federate act, which looks up a federation module for `{:create, Post}` through a CACHE (`ExtensionBehaviour.apply_modules_cached/2`). Under a loaded parallel run that entry can be missing, and the lookup then raises "No FederationModules or SchemaModules were defined" from inside the federating Task, killing the test. Same reason the sibling feed/group tests turn it off.
+      Process.put(:federating, false)
+
       # Create users
       me = fake_user!("main me")
       alice = fake_user!("alice")
