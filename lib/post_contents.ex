@@ -647,7 +647,11 @@ defmodule Bonfire.Social.PostContents do
     end
   end
 
-  @doc "Prepare an outgoing ActivityPub Note object for publishing."
+  @doc """
+  Prepare an outgoing ActivityPub Note object for publishing.
+
+  Carries the post's own content only; callers add the object's media with `Bonfire.Files.ap_merge_media/2`.
+  """
   def ap_prepare_object_note(subject, verb, post, actor, mentions, context, reply_to) do
     content_format = editor_output_content_type(subject)
 
@@ -662,10 +666,6 @@ defmodule Bonfire.Social.PostContents do
       |> Bonfire.Common.Needles.list!(skip_boundary_check: true)
       |> repo().maybe_preload(:named)
       |> debug("include_as_hashtags")
-
-    %{primary_image: primary_image, images: images, links: _links} =
-      Bonfire.Files.split_media_by_type(e(post, :media, nil))
-      |> debug("media_splits")
 
     # Quote-related fields (quote, quoteAuthorization, and Link tags)
     {quote_fields, quote_tags} = Bonfire.Social.Quotes.ap_quote_fields(actor, post)
@@ -694,10 +694,6 @@ defmodule Bonfire.Social.PostContents do
         if content_format != :html do
           %{"content" => html_body, "mediaType" => "text/#{content_format}"}
         end,
-      "image" =>
-        maybe_apply(Bonfire.Files, :ap_publish_activity, [primary_image], fallback_return: nil),
-      "attachment" =>
-        maybe_apply(Bonfire.Files, :ap_publish_activity, [images], fallback_return: nil),
       "inReplyTo" => reply_to,
       "context" => context,
       "tag" =>
