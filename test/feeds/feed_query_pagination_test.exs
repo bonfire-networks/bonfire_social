@@ -326,7 +326,7 @@ defmodule Bonfire.Social.FeedPaginationTest do
 
     deferred_join_multiply_limit = 4
 
-    # Now get the next window query
+    # Now get the next window query. The offset has to be asked for explicitly: `multiply_limit` alone only widens the window, it must never skip rows, or every load_more would leave a hole in the feed (issue #2245).
     next_window_query =
       FeedLoader.feed(
         :explore,
@@ -335,8 +335,8 @@ defmodule Bonfire.Social.FeedPaginationTest do
         limit: limit,
         query_with_deferred_join: true,
         return: :query,
-        deferred_join_multiply_limit: deferred_join_multiply_limit
-        # deferred_join_offset: deferred_join_multiply_limit * limit
+        deferred_join_multiply_limit: deferred_join_multiply_limit,
+        deferred_join_offset: default_join_multiply_limit * limit
       )
 
     # Verify next window query structure
@@ -349,6 +349,20 @@ defmodule Bonfire.Social.FeedPaginationTest do
     # Should offset limit but NOT have cursor-based filtering
     assert next_query_string =~ "offset: ^#{default_join_multiply_limit * limit}"
     refute next_query_string =~ "where: (a1.id < ^"
+
+    # ...and a multiply_limit on its own must NOT produce an offset
+    plain_query =
+      FeedLoader.feed(
+        :explore,
+        %{},
+        current_user: user,
+        limit: limit,
+        query_with_deferred_join: true,
+        return: :query,
+        deferred_join_multiply_limit: deferred_join_multiply_limit
+      )
+
+    refute Inspect.Ecto.Query.to_string(plain_query) =~ "offset: ^"
 
     # Should have larger limit (multiply_limit: 3)
     # The limit parameter will be bound

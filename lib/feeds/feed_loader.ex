@@ -533,8 +533,11 @@ defmodule Bonfire.Social.FeedLoader do
 
     if is_integer(deferred_join_multiply_limit) and
          deferred_join_multiply_limit > 1 do
-      paginate_and_boundarise_feed_deferred_multiplied_opts(deferred_join_multiply_limit, opts)
-      |> info("paginate the deferred join window from the get-go")
+      # NOTE: widen the window only. Setting `deferred_join_offset` here (it belongs to `paginate_and_boundarise_feed_deferred_fallback`) offsets an already cursor-filtered subquery, dropping the `2 * limit` activities after the cursor, and LoadMoreLive sends `multiply_limit` with every load_more, so every page left a hole in the feed (issue #2245).
+      Keyword.merge(repo().pagination_opts(opts),
+        deferred_join_multiply_limit: deferred_join_multiply_limit
+      )
+      |> debug("widen the deferred join window from the get-go")
     else
       opts
     end
@@ -758,8 +761,9 @@ defmodule Bonfire.Social.FeedLoader do
   #     query
   # end
 
+  # Only for the "previous join window came back empty" retry: widens the window AND skips past the rows already scanned. Never call this for an ordinary cursor page, as the offset would drop activities the reader has not seen yet (issue #2245).
   defp paginate_and_boundarise_feed_deferred_multiplied_opts(
-         previous_deferred_join_multiply_limit \\ nil,
+         previous_deferred_join_multiply_limit,
          deferred_join_multiply_limit,
          opts
        ) do
