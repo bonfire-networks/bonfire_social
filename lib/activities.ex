@@ -1464,9 +1464,7 @@ defmodule Bonfire.Social.Activities do
       path = activity_nested_under ++ [:tags]
 
       if is_list(objects) do
-        # load the tag children for the WHOLE list in one pass (`prune: true` already handles the
-        # mixed schemas the tags can be), then hand each object back its own tags — previously this
-        # ran one `maybe_preload` per object
+        # load the tag children for the WHOLE list in one pass (`prune: true` already handles the mixed schemas the tags can be), then hand each object back its own tags, previously this ran one `maybe_preload` per object
         case objects |> Enum.flat_map(&tags_at(&1, path)) |> Enum.uniq_by(&id/1) do
           [] ->
             objects
@@ -1487,9 +1485,7 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
-  # NOTE: an object carrying no tags at this path is skipped rather than traversed — eg. a search hit
-  # for a user has no `activity` at all, and `Access.key/2`'s default only covers a *missing* key, so
-  # walking an explicit nil raised `BadMapError` (which 500'd every `@` mention autocomplete request)
+  # NOTE: an object carrying no tags at this path is skipped rather than traversed. eg. a search hit for a user has no `activity` at all, and `Access.key/2`'s default only covers a *missing* key, so walking an explicit nil raised `BadMapError` (which 500'd every `@` mention autocomplete request)
   defp tags_at(object, path) do
     case ed(object, path, nil) do
       [_ | _] = tags -> tags

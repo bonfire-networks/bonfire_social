@@ -242,8 +242,8 @@ defmodule Bonfire.Social.PostContents do
     |> debug("processed local input")
   end
 
-  @doc "Given attributes of a remote post, prepares it for processing by detecting languages, and rewriting mentions, hashtags, and urls"
-  defp prepare_remote_content(attrs, creator, opts) do
+  @doc "Given attributes of a remote post (with resolved `:mentions`/`:hashtags` maps), prepares it for processing by detecting languages, and rewriting mentions, hashtags, and urls"
+  def prepare_remote_content(attrs, creator, opts) do
     # debug(creator)
 
     parse_remote_links? = opts[:parse_remote_links]
@@ -253,14 +253,30 @@ defmodule Bonfire.Social.PostContents do
 
     mentions_and_hashtags = Map.merge(mentions, hashtags)
 
-    replacement_urls =
-      mentions_and_hashtags
-      |> Enum.map(fn {url, object} ->
-        {String.downcase(url), path(object) || path(ActivityPub.Actor.format_username(object))}
-      end)
-      |> Map.new()
+    # build both URL sets in one pass over the resolved mentions/hashtags (no fetch, in-hand only). Per entry we match the tag href and its `/users/`->`/@` web form (via `Characters.alt_actor_url_form/1`), all `normalise_for_comparison`'d so the two sets share one case-fold:
+    #   - `replacement_urls` maps each of those forms to the local link, for `replace_links` to rewrite the content anchor
+    #   - `exclude_urls` holds those plus the resolved character's AP-id `canonical_uri`, to drop from unfurling
+    {replacement_urls, exclude_urls} =
+      for {url, object} <- mentions_and_hashtags, reduce: {%{}, MapSet.new()} do
+        {replacements, excludes} ->
+          to = path(object) || path(ActivityPub.Actor.format_username(object))
+          canonical = e(object, :character, :peered, :canonical_uri, nil)
 
-    exclude_urls = Map.keys(mentions_and_hashtags)
+          match_forms =
+            [url, Bonfire.Me.Characters.alt_actor_url_form(url)]
+            |> Enum.filter(&is_binary/1)
+            |> Enum.map(&URIs.normalise_for_comparison/1)
+
+          exclude_forms =
+            if is_binary(canonical),
+              do: [URIs.normalise_for_comparison(canonical) | match_forms],
+              else: match_forms
+
+          {
+            Enum.reduce(match_forms, replacements, &Map.put(&2, &1, to)),
+            Enum.reduce(exclude_forms, excludes, &MapSet.put(&2, &1))
+          }
+      end
 
     with {:ok,
           %{
@@ -283,7 +299,7 @@ defmodule Bonfire.Social.PostContents do
         (urls1 ++ urls2 ++ urls3)
         |> debug("extracted urls")
         |> Enum.reject(fn url ->
-          String.downcase(url) in exclude_urls
+          URIs.normalise_for_comparison(url) in exclude_urls
         end)
         |> Enum.uniq()
         |> debug("filtered urls")
@@ -302,11 +318,14 @@ defmodule Bonfire.Social.PostContents do
   end
 
   defp process_remote_input(input, true = _parse_remote_links?, replacement_urls) do
-    input
-    # first do all the other parsing
-    |> do_process_remote_input(replacement_urls)
-    # then when enabled, extract URLs
-    |> Text.extract_urls_from_html() || {:ok, %{html: nil, urls: []}}
+    # extract urls from the ORIGINAL html, while anchors still carry their class/rel, so the markup filter in `extract_urls_from_html` can drop mention/hashtag anchors, as the sanitiser in `do_process_remote_input` strips those attrs. `exclude_urls` (the reject upstream) still covers the AP-id/key forms, and `replace_links` still rewrites the anchors in the stored html.
+    urls =
+      case Text.extract_urls_from_html(input) do
+        {:ok, %{urls: urls}} -> urls
+        _ -> []
+      end
+
+    {:ok, %{html: do_process_remote_input(input, replacement_urls), urls: urls}}
   end
 
   defp process_remote_input(input, _false, replacement_urls) do
@@ -756,22 +775,21 @@ defmodule Bonfire.Social.PostContents do
     #  TODO: put somewhere reusable by other types
     mentions =
       for %{"type" => "Mention"} = mention <- tags do
-        url =
-          (mention["href"] || "")
-          # workaround for Mastodon using different URLs in text
-          |> String.replace("/users/", "/@")
+        # key mentions by the raw tag href; the content anchor's web form (/@user vs the href's /users/user) is reconciled as a fallback at match time (see do_process_remote_input), so we never store a guessed url that could mis-match an unrelated anchor
+        tag_url = mention["href"]
+        url = tag_url || ""
 
         with %{} = character <-
-               e(direct_recipients, mention["href"], nil) ||
+               ed(direct_recipients, tag_url, nil) ||
                  from_ok(
                    Bonfire.Federate.ActivityPub.AdapterUtils.get_or_fetch_character_by_ap_id(
-                     mention["href"] || mention["name"]
+                     tag_url || mention["name"]
                    )
                  ),
              # with {:ok, %{} = character} <-
-             #        e(direct_recipients, mention["href"], nil) ||
+             #        e(direct_recipients, tag_url, nil) ||
              #          Bonfire.Federate.ActivityPub.AdapterUtils.get_or_fetch_character_by_ap_id(
-             #            mention["href"] || mention["name"]
+             #            tag_url || mention["name"]
              #          ),
              true <- Bonfire.Social.federating?(character) |> debug("federating? check") do
           {
