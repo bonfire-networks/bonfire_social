@@ -1,3 +1,4 @@
+if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 defmodule Bonfire.Social.API.GraphQLMasto.Notifications do
   @moduledoc """
   Resolves Bonfire notification feed entries into Mastodon API notification candidates.
@@ -474,4 +475,5 @@ defmodule Bonfire.Social.API.GraphQLMasto.Notifications do
 
   defp quote_table_id, do: Quotes.quote_verb_id()
   defp follow_table_id, do: Bonfire.Common.Types.table_id(Follow)
+end
 end

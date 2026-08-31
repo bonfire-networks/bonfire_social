@@ -1,3 +1,4 @@
+if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
   @moduledoc """
   Mastodon-compatible Events API adapter using GraphQL.
@@ -487,4 +488,5 @@ defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
     |> Map.put("event", event_attachment)
     |> then(&Helpers.validate_and_return(&1, Schemas.Status))
   end
+end
 end

@@ -1,4 +1,4 @@
-if Application.compile_env(:bonfire_social, :modularity) != :disabled do
+if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
   defmodule Bonfire.Social.Web.MastoReportController do
     @moduledoc "Mastodon-compatible Reports endpoints. In Bonfire, Reports are implemented using Flags."
 

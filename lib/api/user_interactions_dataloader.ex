@@ -1,3 +1,4 @@
+if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 defmodule Bonfire.Social.API.UserInteractionsDataloader do
   @moduledoc """
   Dataloader.KV source for batch-loading user interaction states (liked, boosted, bookmarked).
@@ -109,4 +110,5 @@ defmodule Bonfire.Social.API.UserInteractionsDataloader do
       end)
     end
   end
+end
 end

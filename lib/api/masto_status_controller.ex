@@ -1,4 +1,4 @@
-if Application.compile_env(:bonfire_social, :modularity) != :disabled do
+if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
   defmodule Bonfire.Social.Web.MastoStatusController do
     @moduledoc "Mastodon-compatible status interaction endpoints (show, delete, like, boost, bookmark)"
 
