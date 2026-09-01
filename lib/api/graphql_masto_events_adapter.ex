@@ -1,4 +1,4 @@
-if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
+if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 defmodule Bonfire.Social.Events.API.GraphQLMasto.EventsAdapter do
   @moduledoc """
   Mastodon-compatible Events API adapter using GraphQL.
