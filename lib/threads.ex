@@ -1740,6 +1740,32 @@ defmodule Bonfire.Social.Threads do
   end
 
   @doc """
+  Where an object should be published: the group the caller named, or the one its thread is already in.
+
+  A group only shows an object once the GROUP boosts it, and `Bonfire.Tag.Acts.Tag` decides what to boost into. Arranging that used to be the composer's job alone, so anything created through the Mastodon API, through GraphQL, or arriving over ActivityPub never reached the group it belonged to. The Tag act asks this instead, which covers every object type that runs it rather than each epic separately.
+
+  **Not only for replies.** A caller publishing straight into a group passes `publish_in` and nothing is looked up — the composer holds the group in its assigns for free, so it should say so rather than make us re-derive it. Deriving from the thread is the fallback, for callers that know only what they are replying to.
+
+  ⚠️ **Only from a reply target the epic ACCEPTED**: `assigns[:reply_to]`, which `Bonfire.Social.Acts.Threaded` sets after resolving and boundary-checking it, or the `changes.replied` it wrote on the changeset. Deliberately NOT the caller's raw `attrs.reply_to_id`: `Threaded` leaves those assigns unset when it refuses a target (unreadable, or replying not permitted), and taking the id anyway would derive a group from a thread this author was just refused entry to.
+
+  A happy consequence: whoever accepted the reply already holds the object, so it is passed in and nothing is fetched here. Returns `{:ok, object_or_nil, group_or_nil}`, passing the lookup's answer through, so on the rare path that does load something the object comes back rather than being dropped.
+  """
+  def maybe_publish_in(reply_to \\ nil, attrs, opts) do
+    case opts[:publish_in] || e(attrs, :publish_in, nil) do
+      nil -> group_of(reply_to)
+      already_known -> {:ok, nil, already_known}
+    end
+  end
+
+  defp group_of(nil), do: {:error, :not_found}
+
+  defp group_of(object) do
+    Utils.maybe_apply(Bonfire.Classify.Categories, :group_of_object, [object],
+      fallback_return: {:error, :not_found}
+    )
+  end
+
+  @doc """
   Applies an incoming object's `commentsEnabled`, which is how the threadiverse states a thread's reply status ON THE OBJECT, where a `Lock` activity states a change to it. Both mean the same thing locally, so both end in the same `:lock` block, and reading the field is what makes an already-closed thread arrive closed (a backfill, or a first fetch of an old thread).
 
   No authority check belongs here, and the asymmetry with `Lock` is the point: a `Lock` is one actor's claim about someone else's object, while this is the object's own origin describing the object, which ingest containment has already checked.

@@ -760,8 +760,12 @@ defmodule Bonfire.Social.Feeds do
       [feed_id]
   """
   def feed_ids(feed_name, for_subjects) when is_list(for_subjects) do
-    for_subjects
-    |> repo().maybe_preload([:character])
+    # a list can mix loaded subjects with bare ids (a caller passing `context_id`, say), and
+    # `maybe_preload` raises `BadMapError` on an id. Preload the structs in ONE call and leave the
+    # ids alone — `feed_id/2` looks those up itself.
+    {structs, ids} = Enum.split_with(filter_empty(for_subjects, []), &is_map/1)
+
+    (repo().maybe_preload(structs, [:character]) ++ ids)
     |> Enum.map(&feed_id(feed_name, &1))
     |> List.flatten()
     |> filter_empty([])
