@@ -1739,13 +1739,50 @@ defmodule Bonfire.Social.Threads do
         |> debug()
   end
 
+  @doc """
+  Applies an incoming object's `commentsEnabled`, which is how the threadiverse states a thread's reply status ON THE OBJECT, where a `Lock` activity states a change to it. Both mean the same thing locally, so both end in the same `:lock` block, and reading the field is what makes an already-closed thread arrive closed (a backfill, or a first fetch of an old thread).
+
+  No authority check belongs here, and the asymmetry with `Lock` is the point: a `Lock` is one actor's claim about someone else's object, while this is the object's own origin describing the object, which ingest containment has already checked.
+
+  Called from the type-agnostic ingest seam (`Bonfire.Federate.ActivityPub.Incoming`), not from each context module, because this is a property of any threaded object rather than of posts: a `Post`, an `Article`, a poll `Question`, and the `Media` that a threadiverse LINK post becomes (most of what Lemmy federates) all reach it the same way.
+
+  Takes the created object or its id, since context modules do not all return the same struct.
+  """
+  def ap_receive_comments_enabled(result, creator, object_data, opts \\ [])
+
+  def ap_receive_comments_enabled(
+        {:ok, object} = result,
+        creator,
+        %{"commentsEnabled" => false},
+        _opts
+      ) do
+    debug("incoming object says comments are disabled, so close its thread")
+    Bonfire.Boundaries.Blocks.block(object, :lock, current_user: creator)
+    result
+  end
+
+  # On an UPDATE the same field can also say a thread was REOPENED, which a create cannot: there is nothing to reopen. Only for an object that already has a custom ACL, since one that never had cannot have been locked, and unblocking regardless would write an ACL for every edit of every open thread.
+  def ap_receive_comments_enabled(
+        {:ok, object} = result,
+        creator,
+        %{"commentsEnabled" => true},
+        opts
+      ) do
+    # `match?` deliberately: `get_object_custom_acl/1` answers `{:error, :not_found}`, which is truthy
+    if opts[:updating] && match?({:ok, _}, Bonfire.Boundaries.Acls.get_object_custom_acl(object)) do
+      debug("updated object says comments are enabled again, so reopen its thread")
+      Bonfire.Boundaries.Blocks.unblock(object, :lock, current_user: creator)
+    end
+
+    result
+  end
+
+  def ap_receive_comments_enabled(result, _creator, _object_data, _opts), do: result
+
   # --- Trending ("Top discussions") widget loader (cached per user + limit) ---
 
   @doc """
-  The most-replied discussions of the last day (`:trending_discussions` feed preset), for the
-  "Top discussions" widget. Cached per user and limit for 1h; the key is built once by
-  `trending_cache_key/2` so the load and any reset always agree. Pass the standard `:cache` opt
-  (`cache: :refresh` busts + recomputes — what the widget's refresh button calls).
+  The most-replied discussions of the last day (`:trending_discussions` feed preset), for the "Top discussions" widget. Cached per user and limit for 1h; the key is built once by `trending_cache_key/2` so the load and any reset always agree. Pass the standard `:cache` opt (`cache: :refresh` busts + recomputes — what the widget's refresh button calls).
   """
   def list_trending(current_user, limit, opts \\ []) do
     Cache.maybe_apply_cached(
@@ -1762,9 +1799,7 @@ defmodule Bonfire.Social.Threads do
            :trending_discussions,
            current_user: current_user,
            paginate: %{limit: limit},
-           # :with_parent loads tree.parent so ActivityLive can show "published in"
-           # (the feed_postload phase that normally loads it doesn't run here, since
-           # the widget renders cached activities outside a feed component)
+           # :with_parent loads tree.parent so ActivityLive can show "published in" (the feed_postload phase that normally loads it doesn't run here, since the widget renders cached activities outside a feed component)
            preload: [:feed, :with_parent]
          ) do
       %{edges: edges} when is_list(edges) -> attach_trending_participants(edges, current_user)
@@ -1772,10 +1807,7 @@ defmodule Bonfire.Social.Threads do
     end
   end
 
-  # Attach up to 3 conversation participants per trending discussion (rendered as a
-  # facepile by the widget), using one batched preview query and one batched count
-  # query. Both are cached along with the edges by `list_trending/3`. The root
-  # author is dropped here since the activity already shows them.
+  # Attach up to 3 conversation participants per trending discussion (rendered as a facepile by the widget), using one batched preview query and one batched count query. Both are cached along with the edges by `list_trending/3`. The root author is dropped here since the activity already shows them.
   defp attach_trending_participants(edges, current_user) do
     participants_by_thread =
       list_participants_for_threads(edges,
