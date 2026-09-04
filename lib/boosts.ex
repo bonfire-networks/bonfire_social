@@ -418,16 +418,30 @@ defmodule Bonfire.Social.Boosts do
   def ap_publish_activity(subject, _verb, boost) do
     boost = repo().maybe_preload(boost, :edge)
 
+    boosted = e(boost, :edge, :object, nil) || e(boost, :edge, :object_id, nil)
+    booster = subject || e(boost, :edge, :subject, nil) || e(boost, :edge, :subject_id, nil)
+
     with {:ok, booster} <-
-           ActivityPub.Actor.get_cached(
-             pointer:
-               subject || e(boost, :edge, :subject, nil) || e(boost, :edge, :subject_id, nil)
-           ),
+           ActivityPub.Actor.get_cached(pointer: booster)
+           |> tap(fn
+             {:ok, _} -> nil
+             _ -> warn(booster, "Not federating this boost: found no AP actor for the booster")
+           end),
+         # separated from the actor lookup so a miss says WHICH of the two is missing: they fail for entirely different reasons
          {:ok, object} <-
-           ActivityPub.Object.get_cached(
-             pointer: e(boost, :edge, :object, nil) || e(boost, :edge, :object_id, nil)
-           ) do
-      id = uid(boost)
+           ActivityPub.Object.get_cached(pointer: boosted)
+           |> tap(fn
+             {:ok, _} ->
+               nil
+
+             _ ->
+               warn(
+                 boosted,
+                 "Not federating this boost: what was boosted has no AP object linked to it"
+               )
+           end) do
+      # the BOOST's id: it is what the announce points back at, and what dates it
+      id = Enums.id(boost)
 
       ActivityPub.announce(%{
         actor: booster,
@@ -438,6 +452,7 @@ defmodule Bonfire.Social.Boosts do
           |> DateTime.to_iso8601()
       })
     else
+      # a miss here silently drops the whole Announce, which is indistinguishable from federation being switched off, so it says so rather than passing quietly. Which of the two was missing is said by whichever lookup failed, not guessed at here
       {:error, :not_found} ->
         :ignore
 

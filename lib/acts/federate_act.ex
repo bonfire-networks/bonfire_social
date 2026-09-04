@@ -135,6 +135,15 @@ defmodule Bonfire.Social.Acts.Federate do
 
       not Social.is_local?(current_user) or
           not Social.is_local?(object) ->
+        # nothing to push, but this is where an incoming object should get tied to the local one just created for it, because the epic promises later acts (the group auto-boost, mentions of local categories) that the object exists "including in AP db". Linking after the epic instead would be too late for them, and they would relay nothing, silently
+        # ONLY the AP object an ingest passed in on purpose (`Posts.ap_receive_activity/4` does), never `assigns[ap_on]`: other flows put an AP object there for their own reasons, and linking one of those to the object being created would tie together two unrelated things
+        Utils.maybe_apply(
+          Bonfire.Federate.ActivityPub.Incoming,
+          :link_ap_object,
+          [options[:ap_object], Enums.id(object), [local?: false]],
+          fallback_return: nil
+        )
+
         warn(current_user, "ActivityPub: Skip pushing remote object")
 
         # should we do this here?
