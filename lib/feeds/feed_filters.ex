@@ -218,6 +218,46 @@ defmodule Bonfire.Social.FeedFilters do
     error(attrs, "Invalid filter parameters")
   end
 
+  @doc """
+  Cleans a user-typed hashtag for the `:tags` filter (strips `#`, rejects junk).
+
+      iex> normalise_tag("#Bonfire ")
+      "Bonfire"
+      iex> normalise_tag("bad tag")
+      nil
+  """
+  def normalise_tag(tag) when is_binary(tag) do
+    tag = tag |> String.trim() |> String.trim_leading("#")
+    if tag != "" and not String.contains?(tag, [" ", "/"]), do: tag
+  end
+
+  def normalise_tag(_), do: nil
+
+  @doc """
+  Reduces a user-typed instance reference to a bare domain for the `:origin` filter.
+
+      iex> normalise_instance_domain("https://Mastodon.social/about")
+      "mastodon.social"
+      iex> normalise_instance_domain("@gancio.org")
+      "gancio.org"
+      iex> normalise_instance_domain("not-a-domain")
+      nil
+  """
+  def normalise_instance_domain(domain) when is_binary(domain) do
+    domain =
+      domain
+      |> String.trim()
+      |> String.replace(~r{^[a-z]+://}i, "")
+      |> String.trim_leading("@")
+      |> String.split("/")
+      |> hd()
+      |> String.downcase()
+
+    if String.contains?(domain, ".") and not String.contains?(domain, [" ", "#"]), do: domain
+  end
+
+  def normalise_instance_domain(_), do: nil
+
   # Custom validators
 
   defp validate_mutex(changeset, fields, opts) do

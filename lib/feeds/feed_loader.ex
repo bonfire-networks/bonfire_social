@@ -1272,7 +1272,7 @@ defmodule Bonfire.Social.FeedLoader do
     (query || default_or_filtered_query(filters, FeedActivities.base_query(opts), opts))
     |> proload([:activity])
     |> repo().maybe_filter_out_future_ulids(opts)
-    |> maybe_filter(filters)
+    |> maybe_filter(filters, opts)
     |> query_optional_extras(filters, opts)
     |> Objects.as_permitted_for(opts)
     |> Activities.activity_preloads(
