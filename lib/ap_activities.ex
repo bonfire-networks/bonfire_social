@@ -51,7 +51,7 @@ defmodule Bonfire.Social.APActivities do
       {:ok, %APActivity{}}
 
   """
-  def ap_receive_activity(creator, activity, object) do
+  def ap_receive_activity(creator, activity, object, extra_opts \\ []) do
     is_public? = Bonfire.Federate.ActivityPub.AdapterUtils.is_public?(activity, object)
 
     ap_receive(
@@ -60,6 +60,26 @@ defmodule Bonfire.Social.APActivities do
       e(object, :data, nil) || object,
       is_public?
     )
+    |> maybe_publish_in(creator, object, extra_opts[:publish_in])
+  end
+
+  # An APActivity is the fallback for object types nothing here models, and it runs no epic, so `Bonfire.Tag.Acts.Tag` never sees it and nothing would file it into the group the activity was addressed to. `maybe_tag/3` is the outside-an-epic equivalent: it tags the object and auto-boosts whichever tags are categories, under the same `:tag` permission check, so an unrecognised object still reaches the group's feed rather than being kept and hidden.
+  defp maybe_publish_in(result, creator, ap_object, publish_in) do
+    case {result, List.wrap(publish_in)} do
+      {{:ok, apactivity}, [_ | _] = groups} ->
+        # links the incoming AP object BEFORE tagging, because tagging auto-boosts the group and that boost federates an `Announce` resolved through the AP object — see `Incoming.link_and_tag/5`
+        Utils.maybe_apply(
+          Bonfire.Federate.ActivityPub.Incoming,
+          :link_and_tag,
+          [ap_object, Enums.id(apactivity), creator, groups],
+          fallback_return: nil
+        )
+
+        {:ok, apactivity}
+
+      _ ->
+        result
+    end
   end
 
   def ap_publish_activity(subject, _, %{json: data} = ap_activity) do
