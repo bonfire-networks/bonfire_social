@@ -19,6 +19,40 @@ defmodule Bonfire.Social.Quotes do
   use Arrows
   use Bonfire.Common.Utils
   use Bonfire.Common.Repo
+  import Bonfire.Boundaries.Queries
+
+  @doc "Counts visible quote posts linking to a thread, excluding pending requests."
+  def count([in_thread: thread_id], opts) do
+    query_thread_quotes(thread_id, opts)
+    |> select([post], count(post.id))
+    |> repo().one()
+  end
+
+  @doc "Lists visible quote posts in pages, with their authors preloaded."
+  def list_paginated([in_thread: thread_id], opts) do
+    query_thread_quotes(thread_id, opts)
+    |> proload(created: [creator: [:profile, :character]])
+    |> repo().many_maybe_paginated(true, opts)
+  end
+
+  defp query_thread_quotes(thread_id, opts) do
+    quoted_posts =
+      from(tagged in Bonfire.Tag.Tagged,
+        as: :tagged,
+        join: replied in Bonfire.Data.Social.Replied,
+        as: :replied,
+        on: replied.id == tagged.tag_id,
+        select: tagged.id
+      )
+      |> Bonfire.Social.Threads.filter(:in_thread, thread_id, ...)
+      |> boundarise(tagged.tag_id, opts)
+
+    from(post in Bonfire.Data.Social.Post,
+      as: :main,
+      where: post.id in subquery(quoted_posts)
+    )
+    |> boundarise(main.id, opts)
+  end
 
   @behaviour Bonfire.Federate.ActivityPub.FederationModules
   def federation_module,
