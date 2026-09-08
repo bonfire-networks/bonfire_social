@@ -192,39 +192,6 @@ defmodule Bonfire.Social.Events do
   end
 
   @doc """
-  URL of the first image attachment to use as the event poster, or nil.
-
-  ## Examples
-
-      iex> poster_url(%{"attachment" => [%{"type" => "Document", "mediaType" => "image/png", "url" => "https://example.org/p.png"}]})
-      "https://example.org/p.png"
-
-      iex> poster_url(%{})
-      nil
-  """
-  def poster_url(json) do
-    case object_field(json, "attachment") do
-      attachments when is_list(attachments) ->
-        attachments
-        |> Enum.find(fn a ->
-          e(a, "type", nil) == "Document" and
-            String.starts_with?(to_string(e(a, "mediaType", "")), "image/")
-        end)
-        |> case do
-          nil ->
-            nil
-
-          attachment ->
-            e(attachment, "url", 0, "href", nil) || e(attachment, "url", "href", nil) ||
-              e(attachment, "url", nil)
-        end
-
-      _ ->
-        nil
-    end
-  end
-
-  @doc """
   The event's link for humans: its `url`, falling back to the AP `id`.
 
   The `id` is the canonical ActivityPub identifier and often serves JSON rather than a page, so it is

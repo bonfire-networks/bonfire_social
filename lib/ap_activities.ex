@@ -26,10 +26,15 @@ defmodule Bonfire.Social.APActivities do
   def query_module, do: __MODULE__
 
   @behaviour Bonfire.Federate.ActivityPub.FederationModules
+  @doc """
+  Object types we keep whole as an `APActivity` rather than mapping onto a native type, so a custom preview can render the parts a native type would drop.
+
+  Claiming a type here beats any other module that handles one of the same document's OTHER types: a `["Note", "Preparation"]` recipe is a `Preparation` we keep whole, not a `Note` with the recipe discarded.
+
+  This is also the fallback for any activity type nobody else handles.
+  """
   def federation_module,
-    do: [
-      # fallback for any unhandled activity types
-    ]
+    do: Bonfire.Common.Config.get([__MODULE__, :handle_object_types], [])
 
   @doc """
   Receives and processes an ActivityPub activity.
@@ -175,11 +180,23 @@ defmodule Bonfire.Social.APActivities do
       )
       |> debug("incoming_boundary_circles")
 
+    # store what wasn't consumed: a verb we model is already spent by here (its addressing became boundary/to_circles above, its verb becomes the Activity's verb below), so keeping the wrapper would duplicate what Bonfire models natively. A verb we don't model is itself the content, so it is kept whole with the object nested.
+    modelled_verb? =
+      Enum.any?(
+        List.wrap(e(activity, "type", nil)),
+        &(&1 in ActivityPub.Config.supported_activity_types())
+      )
+
     json =
-      if is_map(object) do
-        Enum.into(%{"object" => fetch_and_create_nested_ap_objects(object)}, activity || %{})
-      else
-        fetch_and_create_nested_ap_objects(activity) || %{}
+      cond do
+        is_map(object) and modelled_verb? ->
+          fetch_and_create_nested_ap_objects(object) || %{}
+
+        is_map(object) ->
+          Enum.into(%{"object" => fetch_and_create_nested_ap_objects(object)}, activity || %{})
+
+        true ->
+          fetch_and_create_nested_ap_objects(activity) || %{}
       end
       |> debug("json to store")
 
@@ -223,7 +240,8 @@ defmodule Bonfire.Social.APActivities do
       |> Objects.cast_creator_caretaker(character)
       # TODO: set boundary and to_circles
       |> Objects.cast_acl(character, opts)
-      |> maybe_attach_video_oembed(json, character)
+      |> maybe_attach_media(object_json(json), character)
+      |> maybe_cast_tags(object_json(json), character)
 
     activity
     |> Activities.cast(
@@ -236,24 +254,33 @@ defmodule Bonfire.Social.APActivities do
     |> debug()
   end
 
-  defp maybe_attach_video_oembed(
-         changeset,
-         %{"object" => %{"type" => "Video", "id" => url}},
-         current_user
-       ) do
-    # because Peertube doesn't give us details to play/embed the video in the AS JSON
-    Bonfire.Files.Media.maybe_fetch_and_save(current_user, url)
-    |> Bonfire.Files.Acts.AttachMedia.cast(changeset, ... || [])
-
-    # TODO clean up: we shouldn't be reaching into the Acts outside of Epics
+  # A federated object carries its images and files as attachments, which become Media here, the
+  # same as a local post's uploads. Without this each card would have to find and render its own
+  # images, and every type without a card would show none at all.
+  # TODO clean up: we shouldn't be reaching into the Acts outside of Epics
+  defp maybe_attach_media(changeset, object, current_user) do
+    case Bonfire.Files.ap_receive_media(current_user, object) do
+      [] -> changeset
+      media -> Bonfire.Files.Acts.AttachMedia.cast(changeset, media)
+    end
   end
 
-  defp maybe_attach_video_oembed(
-         changeset,
-         _json,
-         _current_user
-       ) do
-    changeset
+  # A `Hashtag` in the object's `tag` becomes a real tag, so a federated recipe's #salade is
+  # searchable and shows in the hashtag feed like a local post's, instead of being text that each
+  # card has to render as badges of its own.
+  defp maybe_cast_tags(changeset, object, character) do
+    case Bonfire.Tag.ap_receive_hashtags(e(object, "tag", nil)) |> Map.values() do
+      [] -> changeset
+      tags -> Bonfire.Social.Tags.maybe_cast(changeset, %{tags: tags}, character, [])
+    end
+  end
+
+  # `json` is the object itself for a verb we model, and the whole activity for one we don't
+  defp object_json(json) do
+    case e(json, "object", nil) do
+      %{} = object -> object
+      _ -> json
+    end
   end
 
   def filter_by_type(query \\ Object, activity_type)

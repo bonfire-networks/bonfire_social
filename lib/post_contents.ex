@@ -759,17 +759,7 @@ defmodule Bonfire.Social.PostContents do
 
     #  TODO: put somewhere reusable by other types
     hashtags =
-      for %{"type" => "Hashtag", "name" => name} = tag <- tags do
-        with {:ok, hashtag} <- Bonfire.Tag.get_or_create_hashtag(name) do
-          {String.downcase(tag["href"] || name), hashtag}
-        else
-          none ->
-            warn(none, "could not create Hashtag for #{tag["name"]}")
-            nil
-        end
-      end
-      |> filter_empty([])
-      |> Map.new()
+      Bonfire.Tag.ap_receive_hashtags(tags)
       |> debug("incoming hashtags")
 
     #  TODO: put somewhere reusable by other types
