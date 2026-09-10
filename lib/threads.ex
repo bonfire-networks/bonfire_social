@@ -1783,7 +1783,7 @@ defmodule Bonfire.Social.Threads do
         _opts
       ) do
     debug("incoming object says comments are disabled, so close its thread")
-    Bonfire.Boundaries.Blocks.block(object, :lock, current_user: creator)
+    Bonfire.Boundaries.Blocks.lock(object, current_user: creator)
     result
   end
 
@@ -1797,7 +1797,7 @@ defmodule Bonfire.Social.Threads do
     # `match?` deliberately: `get_object_custom_acl/1` answers `{:error, :not_found}`, which is truthy
     if opts[:updating] && match?({:ok, _}, Bonfire.Boundaries.Acls.get_object_custom_acl(object)) do
       debug("updated object says comments are enabled again, so reopen its thread")
-      Bonfire.Boundaries.Blocks.unblock(object, :lock, current_user: creator)
+      Bonfire.Boundaries.Blocks.unlock(object, current_user: creator)
     end
 
     result

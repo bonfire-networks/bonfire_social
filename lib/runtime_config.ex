@@ -925,6 +925,13 @@ defmodule Bonfire.Social.RuntimeConfig do
         ]
       ]
 
+    # AS2 types kept whole as an `APActivity` (read by `APActivities.federation_module/0`), so a card can render fields no Bonfire schema models. A type listed here also wins over a module handling one of the same document's other types: a cuisine.social recipe arrives as `["Note", "Preparation"]` and would otherwise become a plain Post with the ingredients, steps and serving discarded. Set `AP_HANDLE_OBJECT_TYPES` to a comma-separated list to override, or to an empty string to claim nothing.
+    config :bonfire_social, Bonfire.Social.APActivities,
+      handle_object_types:
+        System.get_env("AP_HANDLE_OBJECT_TYPES", "Preparation")
+        |> String.split(",", trim: true)
+        |> Enum.map(&String.trim/1)
+
     config :bonfire_social, Bonfire.Social.Media,
       default_time_limit:
         System.get_env("TRENDING_LINKS_TIME_LIMIT_DAYS", "7") |> String.to_integer(),
