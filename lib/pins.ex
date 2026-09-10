@@ -603,6 +603,14 @@ defmodule Bonfire.Social.Pins do
     )
   end
 
+  defp create(pinner, pinned, opts) when is_struct(pinned, Bonfire.Classify.Category) do
+    # Sidebar preferences must not become activities, even in feeds without publication filters.
+    Edges.changeset_base(Pin, pinner, pinned, opts)
+    |> Bonfire.Boundaries.Acls.cast(pinner, opts)
+    |> Objects.cast_creator_caretaker(pinner)
+    |> Edges.insert(pinner, pinned)
+  end
+
   defp create(pinner, pinned, opts) do
     Edges.insert(Pin, pinner, :pin, pinned, opts)
   end
