@@ -419,6 +419,7 @@ defmodule Bonfire.Social.PostContents do
     text
     # undo the escaping milkdown's CommonMark serializer applies to bare URLs and `@mentions`
     |> Text.unwrap_markdown_autolinks()
+    |> Text.normalise_markdown_urls()
     # Keep older editor clients compatible without rewriting literal Markdown code.
     |> Text.normalise_markdown_hard_breaks()
     |> normalise_input(do_not_strip_html?, nil)
