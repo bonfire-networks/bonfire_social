@@ -293,11 +293,9 @@ defmodule Bonfire.Social.Objects do
   end
 
   def object_creator(object_id) when is_binary(object_id) do
-    # Look up the object by ID and get its creator
-    object =
-      repo().get(Created, object_id)
-      |> repo().maybe_preload([:creator])
-      |> e(:creator, nil)
+    repo().get(Bonfire.Data.Social.Created, object_id)
+    |> repo().maybe_preload([:creator])
+    |> e(:creator, nil)
   end
 
   def query_maybe_time_limit(query, 0), do: query
@@ -744,6 +742,7 @@ defmodule Bonfire.Social.Objects do
     else
       _ ->
         error(object, l("Object not found or you have no permission to delete it"))
+        {:error, :not_found}
     end
   end
 
