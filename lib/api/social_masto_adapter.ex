@@ -537,17 +537,21 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       end
     end
 
-    @doc "Edit a status"
+    @doc "Edit a status. A blank body uses the submitted warning as text and retains the previous warning, matching Mastodon's update service."
     def update_status(%{"id" => id} = params, conn) do
       current_user = conn.assigns[:current_user]
 
       if is_nil(current_user) do
         RestAdapter.error_fn({:error, :unauthorized}, conn)
       else
-        attrs = %{
-          html_body: params["status"],
-          summary: params["spoiler_text"]
-        }
+        status = params["status"]
+
+        attrs =
+          if is_nil(status) or (is_binary(status) and String.trim(status) == "") do
+            %{html_body: params["spoiler_text"]}
+          else
+            %{html_body: status, summary: params["spoiler_text"]}
+          end
 
         case edit_post_content(current_user, id, attrs) do
           {:ok, _} ->
@@ -565,6 +569,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
           {:error, :not_found} ->
             RestAdapter.error_fn({:error, :not_found}, conn)
 
+          {:error, %Ecto.Changeset{}} = error ->
+            RestAdapter.error_fn(error, conn)
+
           {:error, _reason} ->
             RestAdapter.error_fn({:error, :forbidden}, conn)
         end
@@ -574,16 +581,23 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     # Scope the rescue to only the edit call so unexpected exceptions there map to
     # :not_found/:forbidden, while the reload+map path can surface its own failures.
     defp edit_post_content(current_user, id, attrs) do
-      case Bonfire.Social.PostContents.edit(current_user, id, attrs) do
-        {:ok, _} = ok ->
-          ok
+      with %{} = post <-
+             Bonfire.Boundaries.load_pointer(id, verbs: [:edit], current_user: current_user),
+           post = repo().maybe_preload(post, [:post_content, :media]),
+           %Bonfire.Data.Social.PostContent{} = content <- post.post_content,
+           changeset = Bonfire.Data.Social.PostContent.changeset(content, attrs),
+           changeset =
+             if(post.media == [],
+               do: Ecto.Changeset.validate_required(changeset, [:html_body]),
+               else: changeset
+             ),
+           {:ok, _} <- Ecto.Changeset.apply_action(changeset, :update) do
+        Bonfire.Social.PostContents.edit(current_user, content, attrs)
+      else
+        {:error, _} = error ->
+          error
 
-        {:error, _} = err ->
-          err
-
-        other ->
-          # edit/3 returns nil for a non-existent/unreadable status
-          debug(other, "edit returned non-tuple; treating as not_found")
+        _ ->
           {:error, :not_found}
       end
     rescue
@@ -592,18 +606,18 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         {:error, :not_found}
     end
 
-    @doc "Delete a status"
+    @doc "Delete a status owned by the caller, as required by the Mastodon endpoint."
     def delete_status(%{"id" => id}, conn) do
       current_user = conn.assigns[:current_user]
 
       if is_nil(current_user) do
         RestAdapter.error_fn({:error, :unauthorized}, conn)
       else
-        case Bonfire.Social.Objects.delete(id, current_user: current_user) do
-          {:ok, _} ->
-            # Mastodon API returns the deleted status for delete-and-redraft functionality
-            Phoenix.Controller.json(conn, %{"id" => id})
-
+        with %{id: creator_id} <- Bonfire.Social.Objects.object_creator(id),
+             true <- creator_id == current_user.id,
+             {:ok, _} <- Bonfire.Social.Objects.delete(id, current_user: current_user) do
+          Phoenix.Controller.json(conn, %{"id" => id})
+        else
           {:error, :not_found} ->
             RestAdapter.error_fn({:error, :not_found}, conn)
 
@@ -613,6 +627,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
           {:error, reason} ->
             error(reason, "Failed to delete status")
             RestAdapter.error_fn({:error, reason}, conn)
+
+          _ ->
+            RestAdapter.error_fn({:error, :not_found}, conn)
         end
       end
     end
