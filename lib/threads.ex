@@ -1000,7 +1000,7 @@ defmodule Bonfire.Social.Threads do
     do: list_replies(thread_or_comment_id, opts)
 
   def list_replies(thread_or_comment_id, opts) when is_binary(thread_or_comment_id) do
-    opts = to_options(opts)
+    opts = opts |> to_options() |> Keyword.put(:thread_id, thread_or_comment_id)
     paginate_base = opts[:paginate] || opts
     paginate_base = if is_map(paginate_base), do: Enum.to_list(paginate_base), else: paginate_base
 
@@ -1018,25 +1018,22 @@ defmodule Bonfire.Social.Threads do
         |> do_list_replies_postload(opts)
 
       (is_integer(total_replies) and total_replies <= hard_limit) or
-          Bonfire.Common.Cache.get!(cache_key) == true ->
+          (is_nil(total_replies) and Bonfire.Common.Cache.get!(cache_key) == true) ->
         # known-small — single query is safe, skip two-step overhead
         list_nested_replies(thread_or_comment_id, opts)
 
       true ->
-        # known-large thread: paginate by root replies (depth=1), then load their full subtrees
-        # use a lower limit for root replies since each may have many descendants
-        # NOTE: a hidden/deleted depth-1 root is excluded here, so its subtree is never
-        # fetched and `rescue_orphaned_replies` can't stub it — only the single-query
-        # small-thread path has full orphan coverage
-        root_paginate_opts = Keyword.put(paginate_opts, :limit, root_limit)
+        # Paginate visible branch representatives, including children of hidden roots. Permalink ancestors are loaded separately so they cannot consume the root page.
+        root_paginate_opts = paginate_opts |> Keyword.delete(:paginate) |> Keyword.put(:limit, root_limit)
 
         root_page =
-          query([thread_id: thread_or_comment_id], Keyword.put(opts, :max_depth, 1))
+          query_branch_roots(thread_or_comment_id, opts)
           |> repo().many_paginated(root_paginate_opts)
 
         root_ids =
           root_page.edges
-          |> Enum.map(& &1.id)
+          |> Enum.map(fn reply -> Enum.at(reply.path || [], 1) || reply.id end)
+          |> Enum.uniq()
           |> Enum.reject(&is_nil/1)
 
         debug(root_page.edges |> Enum.map(& &1.id), "root_page edge ids")
@@ -1054,28 +1051,84 @@ defmodule Bonfire.Social.Threads do
               |> repo().many()
               |> debug("deeper_nodes results")
 
-            # Dedup by id: when `include_path_ids` is set, ancestor nodes
-            # can appear in BOTH root_page (via the `or_where id IN path_ids`
-            # bypass in `where_depth`) AND deeper_nodes (via `where_root_in`
-            # matching their depth-1 ancestor) — concatenating without
-            # deduping causes `prepare_replies_tree` to produce duplicate
-            # branches, which crashes LiveView with a duplicate component id.
+            # A visible descendant representing a hidden root also appears in the branch query; deduplicate to avoid repeated component IDs.
             %{
               root_page
               | edges: (root_page.edges ++ deeper_nodes) |> Enum.uniq_by(& &1.id)
             }
           end
 
-        # cache as small if this page had no next page — future visits can skip two-step
-        if is_nil(e(result, :page_info, :end_cursor, nil)),
+        # A terminal continuation page says nothing about the size of the whole thread.
+        if is_nil(paginate_opts[:after]) and is_nil(paginate_opts[:before]) and
+             is_nil(e(result, :page_info, :end_cursor, nil)) and
+             length(result.edges) <= hard_limit and
+             (is_nil(total_replies) or total_replies <= hard_limit),
           do: Bonfire.Common.Cache.put(cache_key, true)
 
         do_list_replies_postload(result, opts)
     end
   end
 
+  defp query_branch_roots(thread_id, opts) do
+    branch_opts = Keyword.delete(opts, :include_path_ids)
+    branch_query = query([thread_id: thread_id], branch_opts)
+
+    representatives =
+      branch_query
+      |> Ecto.Query.exclude(:preload)
+      |> Ecto.Query.exclude(:order_by)
+      |> distinct([replied], fragment("COALESCE((?)[2], ?)", replied.path, replied.id))
+      |> order_by([replied], asc: fragment("cardinality(?)", replied.path), asc: replied.id)
+      |> select([replied], replied.id)
+
+    branch_query
+    |> where([replied], replied.id in subquery(representatives))
+  end
+
+  defp load_reply_ancestors(result, opts, checked_ids \\ MapSet.new()) do
+    opts = with_reply_preloads(opts)
+    if opts[:thread_mode] == :flat do
+      result
+    else
+      replies = result.edges
+      root_id = opts[:thread_id]
+      present_ids = MapSet.new(replies, & &1.id)
+
+      ancestor_ids =
+        replies
+        |> collect_missing_reply_ancestors(root_id)
+        |> Map.keys()
+
+      missing_ids =
+        (ancestor_ids ++ List.wrap(opts[:include_path_ids]))
+        |> Enum.reject(&(&1 == root_id or MapSet.member?(present_ids, &1) or MapSet.member?(checked_ids, &1)))
+        |> Enum.uniq()
+
+      ancestors =
+        if missing_ids == [] do
+          []
+        else
+          from(replied in Replied, where: replied.id in ^missing_ids)
+          |> query_extras(opts)
+          |> repo().many()
+        end
+
+      if ancestors == [] do
+        result
+      else
+        # A permalink may supply only the target ID; its freshly loaded path reveals the remaining ancestors. Keep the original page cursors.
+        load_reply_ancestors(
+          %{result | edges: insert_ancestors(replies, ancestors)},
+          Keyword.delete(opts, :include_path_ids),
+          MapSet.union(checked_ids, MapSet.new(missing_ids))
+        )
+      end
+    end
+  end
+
   defp do_list_replies_postload(result, opts) do
     result
+    |> load_reply_ancestors(opts)
     # preload these after so we can get more than 1
     |> repo().maybe_preload(
       # FIXME: this should happen via `Activities.activity_preloads`
@@ -1098,8 +1151,7 @@ defmodule Bonfire.Social.Threads do
   end
 
   @doc """
-  Like `list_replies/2` but loads up to the pagination hard max limit in a single query.
-  Useful when you need all replies at once (e.g. for export or search indexing).
+  Paginates replies directly, rather than selecting branches first. Readable ancestors are fetched separately and may increase the returned page size; continuation cursors still refer to the original reply query.
   """
   def list_nested_replies(thread_or_comment, opts \\ [])
 
@@ -1110,7 +1162,7 @@ defmodule Bonfire.Social.Threads do
     do: list_nested_replies(thread_or_comment_id, opts)
 
   def list_nested_replies(thread_or_comment_id, opts) when is_binary(thread_or_comment_id) do
-    opts = to_options(opts)
+    opts = opts |> to_options() |> Keyword.put(:thread_id, thread_or_comment_id)
 
     query([thread_id: thread_or_comment_id], opts)
     |> debug("quuuery")
@@ -1157,10 +1209,7 @@ defmodule Bonfire.Social.Threads do
       |> Keyword.put_new_lazy(:max_depth, fn ->
         Settings.get(:thread_default_max_depth, 3, opts)
       end)
-      |> Keyword.put_new_lazy(:preload, fn ->
-        if(opts[:thread_mode] == :flat, do: [:posts_with_reply_to], else: [:posts]) ++
-          if opts[:showing_within] == :messages, do: [:with_seen], else: []
-      end)
+      |> with_reply_preloads()
 
     # |> debug("thread opts")
 
@@ -1224,6 +1273,13 @@ defmodule Bonfire.Social.Threads do
   #     query
   #   end
   # end
+
+  defp with_reply_preloads(opts) do
+    Keyword.put_new_lazy(opts, :preload, fn ->
+      if(opts[:thread_mode] == :flat, do: [:posts_with_reply_to], else: [:posts]) ++
+        if opts[:showing_within] == :messages, do: [:with_seen], else: []
+    end)
+  end
 
   defp query_extras(query, opts) do
     query
@@ -1415,18 +1471,16 @@ defmodule Bonfire.Social.Threads do
   """
 
   def arrange_replies_tree(replies, opts \\ []) do
-    hard_limit = Config.get(:thread_pagination_hard_limit, 50)
-
     replies
     |> debug("repppl")
     |> rescue_orphaned_replies(uid(opts[:thread_id]))
-    |> Replied.arrange(arrange_opts(opts) ++ [cap: hard_limit])
+    |> Replied.arrange(arrange_opts(opts))
   end
 
   @doc """
-  Adds stub parent nodes for replies whose parent is missing from `replies` (deleted, or hidden from the current user by boundaries).
+  Adds stub parent nodes for replies whose parent is missing from `replies`. Callers must resolve readable ancestors first (as the reply listing functions do); absence from an arbitrary page does not imply deletion or denied access.
 
-  `Replied.arrange/2` only attaches a node under a parent present in the list (matched on the last `path` element at the next depth level), and its fallback that appends unattached nodes is skipped whenever a `cap` is set — so without stubs, the whole subtree under a missing parent silently disappears from the nested thread view.
+  `Replied.arrange/2` only attaches a node under a parent present in the list (matched on the last `path` element at the next depth level). Stubs preserve the ancestry instead of relying on its fallback that appends unattached replies at the top level. Pagination belongs in the query: a second cap here would count stubs and discard fetched replies without a usable continuation cursor.
 
   Stubs are plain maps flagged with `stub: true` (rather than `%Replied{}` structs, which could be confused with real rows) so the UI can render an "unavailable" placeholder while keeping orphans attached at their real depth.
 
@@ -1449,12 +1503,8 @@ defmodule Bonfire.Social.Threads do
       [%{id: "c", path: ["thread", "a", "b"]}]
   """
   def rescue_orphaned_replies(replies, root_id \\ nil) when is_list(replies) do
-    present_ids = MapSet.new(replies, &e(&1, :id, nil))
-
     replies
-    |> Enum.reduce(%{}, fn reply, stubs ->
-      collect_missing_ancestors(e(reply, :path, nil) || [], present_ids, root_id, stubs)
-    end)
+    |> collect_missing_reply_ancestors(root_id)
     |> case do
       stubs when stubs == %{} ->
         replies
@@ -1466,14 +1516,24 @@ defmodule Bonfire.Social.Threads do
           "Thread contains replies whose parent is deleted or not visible, adding stub nodes so their subtrees can still be arranged"
         )
 
-        # insert each stub just before its first present descendant (rather than appending at the end) so the rescued subtree keeps its reading position regardless of sort order — `arrange` preserves the input order within each depth level
-        Enum.reduce(Map.values(stubs), replies, fn stub, acc ->
-          index =
-            Enum.find_index(acc, fn r -> stub.id in (e(r, :path, nil) || []) end) || length(acc)
-
-          List.insert_at(acc, index, stub)
-        end)
+        insert_ancestors(replies, Map.values(stubs))
     end
+  end
+
+  defp collect_missing_reply_ancestors(replies, root_id) do
+    present_ids = MapSet.new(replies, &e(&1, :id, nil))
+
+    Enum.reduce(replies, %{}, fn reply, missing ->
+      collect_missing_ancestors(e(reply, :path, nil) || [], present_ids, root_id, missing)
+    end)
+  end
+
+  defp insert_ancestors(replies, ancestors) do
+    # Keep each branch at its first fetched descendant's reading position, whether its missing ancestors resolve to real comments or stubs.
+    Enum.reduce(ancestors, replies, fn ancestor, acc ->
+      index = Enum.find_index(acc, fn reply -> ancestor.id in (e(reply, :path, nil) || []) end) || length(acc)
+      List.insert_at(acc, index, ancestor)
+    end)
   end
 
   # a depth <= 1 node's parent is the thread root, which is never part of the replies list

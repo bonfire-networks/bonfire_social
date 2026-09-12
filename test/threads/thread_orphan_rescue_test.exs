@@ -63,6 +63,17 @@ defmodule Bonfire.Social.Threads.OrphanRescueTest do
       assert length(stubbed) == 3
       assert [%{id: "a", stub: true}] = Enum.filter(stubbed, &(&1[:stub] == true))
     end
+
+    test "placeholder nodes do not discard fetched sibling branches" do
+      Process.put([:bonfire, :thread_pagination_hard_limit], 2)
+      replies = [
+        %{id: "child", path: ["thread", "hidden"]},
+        %{id: "sibling", path: ["thread"]}
+      ]
+
+      assert [{%{id: "hidden", stub: true}, [{%{id: "child"}, []}]}, {%{id: "sibling"}, []}] =
+        Threads.arrange_replies_tree(replies)
+    end
   end
 
   describe "prepare_replies_tree/2 with a boundary-hidden parent" do
@@ -173,6 +184,36 @@ defmodule Bonfire.Social.Threads.OrphanRescueTest do
       assert [{parent, [{child, []}]}] = tree
       assert parent.id == hidden_reply.id
       refute Map.get(parent, :stub) == true
+      assert child.id == public_child.id
+    end
+
+    test "hidden-root branches remain reachable across continuation pages", context do
+      Process.put([:bonfire, :thread_default_root_reply_limit], 1)
+      {:ok, sibling} = Posts.publish(
+        current_user: context.alice,
+        post_attrs: %{post_content: %{html_body: Faker.Lorem.sentence()}, reply_to_id: context.op.id},
+        boundary: "public"
+      )
+      opts = [current_user: context.charlie, total_replies_count: 100, sort_order: :desc]
+      first = Threads.list_replies(context.op.id, opts)
+      assert first.page_info.end_cursor
+      second = Threads.list_replies(context.op.id, opts ++ [after: first.page_info.end_cursor])
+      assert second.page_info.end_cursor == nil
+      ids = Enum.map(first.edges ++ second.edges, & &1.id)
+      assert Enum.sort(ids) == Enum.sort([sibling.id, context.public_child.id])
+      refute context.hidden_reply.id in ids
+    end
+
+    test "the two-step query includes visible descendants of a hidden root", %{
+      charlie: charlie, op: op, hidden_reply: hidden_reply, public_child: public_child
+    } do
+      Process.put([:bonfire, :thread_pagination_hard_limit], 1)
+
+      result = Threads.list_replies(op.id, current_user: charlie, total_replies_count: 2)
+
+      assert Enum.any?(result.edges, &(&1.id == public_child.id))
+      refute Enum.any?(result.edges, &(&1.id == hidden_reply.id))
+      assert [{%{stub: true}, [{child, []}]}] = Threads.prepare_replies_tree(result.edges, thread_id: op.id)
       assert child.id == public_child.id
     end
   end
