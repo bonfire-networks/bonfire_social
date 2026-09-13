@@ -23,7 +23,6 @@ defmodule Bonfire.Social.Objects do
 
   alias Bonfire.Common
   alias Bonfire.Data.Identity.Caretaker
-  alias Bonfire.Data.Identity.CareClosure
   alias Bonfire.Data.Social.Activity
   alias Bonfire.Data.Social.PostContent
 
@@ -1000,18 +999,36 @@ defmodule Bonfire.Social.Objects do
   end
 
   @doc """
-  Retrieves care closures for the given IDs.
-
-  ## Parameters
-
-  - `ids`: A list of IDs to find care closures for.
-
-  ## Examples
-
-      iex> care_closures(["id1", "id2"])
-
+  Returns the starting pointers and their recursive dependents, once each. Traversal is scoped to the supplied IDs so deleting one account does not build a closure over every pointer in the instance.
   """
-  def care_closures(ids), do: repo().all(CareClosure.by_branch(Types.uids(ids)))
+  def care_closures(ids) do
+    ids
+    |> query_care_closures()
+    |> repo().all()
+  end
+
+  @doc """
+  Builds the scoped caretaker traversal for `care_closures/1`. The recursive union tracks only IDs, so duplicate roots, overlapping branches and cycles cannot revisit a pointer.
+  """
+  def query_care_closures(ids) do
+    ids = Types.uids(ids)
+
+    roots = from(p in Pointer, where: p.id in ^ids, select: %{id: p.id})
+
+    descendants =
+      from(c in Caretaker,
+        join: tree in "care_tree",
+        on: c.caretaker_id == tree.id,
+        select: %{id: c.id}
+      )
+
+    tree = roots |> union(^descendants)
+
+    Pointer
+    |> recursive_ctes(true)
+    |> with_cte("care_tree", as: ^tree)
+    |> join(:inner, [p], tree in "care_tree", on: p.id == tree.id)
+  end
 
   @doc """
   Retrieves a list of objects that are taken care of by the given caretaker IDs.
