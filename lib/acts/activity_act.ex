@@ -76,7 +76,8 @@ defmodule Bonfire.Social.Acts.Activity do
             current_user,
             boundary_name,
             e(changeset.changes, :post_content, :changes, :mentions, []),
-            e(attrs, :reply_to, :created, :creator, nil),
+            e(epic.assigns, :reply_to, :created, :creator, nil) ||
+              e(attrs, :reply_to, :created, :creator, nil),
             e(attrs, :to_circles, [])
           )
 

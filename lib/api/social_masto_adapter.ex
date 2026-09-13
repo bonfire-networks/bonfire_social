@@ -33,6 +33,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     # AND Category (groups), without which group-authored activities resolve to an untyped actor
     # and get dropped on validation. See `Bonfire.API.MastoCompat.Fragments.actor_fields/0`.
     @actor_fields Bonfire.API.MastoCompat.Fragments.actor_fields()
+    @thread_fields Bonfire.API.MastoCompat.Fragments.thread_fields()
 
     # Activity-shaped selection for timelines (handles boosts → reblog). The reblog account
     # comes from `object.creator` — the `:post.creator` field resolves synchronously from the
@@ -49,16 +50,19 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       ... on Post {
         id
         post_content: postContent { name summary html_body: rawBody }
-        media { id media_type: mediaType url description metadata }
+        media { id media_type: mediaType url preview_url: thumbnailUrl description metadata }
         creator { #{@actor_fields} }
       }
       ... on Poll { id post_content: postContent { name summary html_body: rawBody } }
     }
-    media { id media_type: mediaType url description metadata }
+    media { id media_type: mediaType url preview_url: thumbnailUrl description metadata }
     liked_by_me: likedByMe
     boosted_by_me: boostedByMe
     bookmarked_by_me: bookmarkedByMe
     replies_count: repliesCount
+    like_count: likeCount
+    boost_count: boostCount
+    #{@thread_fields}
     """
 
     @feed_query """
@@ -162,7 +166,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
             edges
             |> Enum.map(&get_field(&1, :node))
             |> Enum.reject(&is_nil/1)
-            |> map_graphql_statuses(current_user, &Mappers.Status.from_graphql_activity/2)
+            |> map_timeline_statuses(current_user)
 
           {:ok, items, feed_page_info(items, connection)}
 
@@ -223,7 +227,40 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       end
     end
 
-    @doc "Get a single notification by ID"
+    @doc "Maps the existing notification feed's page-local grouping to Mastodon v2."
+    def grouped_notifications(params, conn) do
+      user = conn.assigns[:current_user]
+      cond do
+        is_nil(user) -> RestAdapter.error_fn({:error, :unauthorized}, conn)
+        params["group_key"] ->
+          conn |> Plug.Conn.put_status(:not_implemented) |> Phoenix.Controller.json(%{"error" => "Notification group detail lookup is not supported"})
+        true ->
+          filters = extract_notification_filters(params)
+          grouped_types = List.wrap(params["grouped_types"] || ~w(favourite reblog))
+          types = List.wrap(params["types"] || ~w(favourite reblog follow follow_request mention poll quote admin.report status)) -- List.wrap(params["exclude_types"])
+          groupable_types = Enum.filter(types, &(&1 in ~w(favourite reblog)))
+          group? = groupable_types != [] and Enum.all?(groupable_types, &(&1 in grouped_types))
+          feed_params = PaginationHelpers.build_feed_params(params, %{"feed_name" => "notifications"}, default_limit: 40, max_limit: 80)
+
+          case Bonfire.Social.API.GraphQLMasto.Notifications.list_for_user(user, feed_params,
+                 filters: filters, grouped?: true, group_likes_boosts?: group?) do
+            {:ok, candidates, page_info} ->
+              by_id = Map.new(candidates, &{&1.id, &1})
+              groups = candidates |> map_notification_candidates(user) |> Enum.map(fn item ->
+                candidate = Map.fetch!(by_id, item["id"])
+                actors = candidate.activity["subjects_more"] || []
+                accounts = actors |> Enum.map(&Mappers.Account.from_user/1) |> Enum.reject(&is_nil/1)
+                count = 1 + length(actors)
+                group = %{"key" => if(count > 1, do: "page-" <> item["id"], else: "ungrouped-" <> item["id"]),
+                  "count" => count, "latest_id" => item["id"]}
+                {group, [item | Enum.map(accounts, &Map.put(item, "account", &1))]}
+              end)
+              conn |> PaginationHelpers.add_link_headers(feed_params, page_info, []) |> Phoenix.Controller.json(Mappers.NotificationGroups.from_groups(groups))
+            {:error, _} = error -> RestAdapter.error_fn(error, conn)
+          end
+      end
+    end
+
     def notification(id, conn) do
       current_user = conn.assigns[:current_user]
 
@@ -323,14 +360,36 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     defp notification_candidates_to_items({:error, _} = error, _current_user), do: error
 
     defp map_notification_candidates(candidates, current_user) do
-      candidates
-      |> Enum.flat_map(fn candidate ->
-        case Mappers.Notification.from_candidate(candidate, current_user: current_user) do
-          item when is_map(item) -> [item]
-          _ -> []
+      statuses =
+        candidates
+        |> Enum.map(&notification_status_id/1)
+        |> Enum.reject(&is_nil/1)
+        |> Enum.uniq()
+        |> read_statuses_by_id(current_user)
+
+      Enum.flat_map(candidates, fn candidate ->
+        status_id = notification_status_id(candidate)
+        status = Map.get(statuses, status_id)
+
+        if is_nil(status_id) or is_map(status) do
+          case Mappers.Notification.from_candidate(candidate,
+                 current_user: current_user, status: status) do
+            item when is_map(item) -> [item]
+            _ -> []
+          end
+        else
+          []
         end
       end)
     end
+
+    defp notification_status_id(%{type: :quote, status_post: post}), do: get_field(post, :id)
+
+    defp notification_status_id(%{type: type, object_id: id})
+         when type in [:mention, :status, :reblog, :favourite, :poll, :update, :quoted_update],
+         do: id
+
+    defp notification_status_id(_), do: nil
 
     @doc "Get posts favourited/liked by the current user"
     def favourites(params, conn) do
@@ -351,13 +410,16 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     @status_node_selection """
     id
     post_content: postContent { name summary html_body: rawBody }
-    media { id media_type: mediaType url description metadata }
+    media { id media_type: mediaType url preview_url: thumbnailUrl description metadata }
     activity {
       subject { #{@actor_fields} }
       liked_by_me: likedByMe
       boosted_by_me: boostedByMe
       bookmarked_by_me: bookmarkedByMe
       replies_count: repliesCount
+    like_count: likeCount
+    boost_count: boostCount
+    #{@thread_fields}
     }
     """
 
@@ -379,11 +441,14 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     verb { verb }
     subject { #{@actor_fields} }
     object { __typename ... on Post { id post_content: postContent { name summary html_body: rawBody } } ... on Poll { id post_content: postContent { name summary html_body: rawBody } } }
-    media { id media_type: mediaType url description metadata }
+    media { id media_type: mediaType url preview_url: thumbnailUrl description metadata }
     liked_by_me: likedByMe
     boosted_by_me: boostedByMe
     bookmarked_by_me: bookmarkedByMe
     replies_count: repliesCount
+    like_count: likeCount
+    boost_count: boostCount
+    #{@thread_fields}
     """
 
     @status_query """
@@ -391,6 +456,63 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       status(id: $id) { #{@status_activity_selection} }
     }
     """
+
+    # Notifications and reaction entries must describe the original status, not the reacting actor; aliases share one GraphQL context for the deduplicated objects.
+    defp read_statuses_by_id([], _current_user), do: %{}
+
+    defp read_statuses_by_id(ids, current_user) do
+      indexed = Enum.with_index(ids)
+      declarations = Enum.map_join(indexed, ", ", fn {_, index} -> "$id#{index}: ID!" end)
+      selections = Enum.map_join(indexed, "\n", fn {_, index} ->
+        "s#{index}: status(id: $id#{index}) { #{@status_activity_selection} }"
+      end)
+      variables = Map.new(indexed, fn {id, index} -> {"id#{index}", id} end)
+
+      case Absinthe.run("query NotificationStatuses(#{declarations}) { #{selections} }", Schema,
+             variables: variables, context: Schema.context(%{current_user: current_user})) do
+        {:ok, %{data: data}} when is_map(data) ->
+          data
+          |> Map.values()
+          |> Enum.filter(&is_map/1)
+          |> map_graphql_statuses(current_user, &Mappers.Status.from_graphql_activity/2)
+          |> Map.new(&{Map.fetch!(&1, "id"), &1})
+
+        _ -> %{}
+      end
+    end
+
+    defp map_timeline_statuses(nodes, current_user) do
+      reaction_statuses =
+        nodes
+        |> Enum.filter(&status_reaction?/1)
+        |> Enum.map(&get_field(&1, :object_id))
+        |> Enum.reject(&is_nil/1)
+        |> Enum.uniq()
+        |> read_statuses_by_id(current_user)
+
+      map_graphql_statuses(nodes, current_user, fn node, opts ->
+        status = Mappers.Status.from_graphql_activity(node, opts)
+
+        if status_reaction?(node) do
+          original = Map.get(reaction_statuses, get_field(node, :object_id))
+
+          if is_map(status) and is_map(status["reblog"]) and is_map(original) do
+            Map.put(status, "reblog", original)
+          else
+            original
+          end
+        else
+          status
+        end
+      end)
+    end
+
+    defp status_reaction?(node) do
+      node
+      |> get_field(:verb)
+      |> get_field(:verb)
+      |> then(&(&1 in ["Vote", "vote", "Like", "like", "Boost", "boost", "Edit", "edit"]))
+    end
 
     defp favourite_items(params, current_user) do
       pagination_args =
@@ -465,8 +587,14 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
     @doc "Get single status by ID"
     def show_status(%{"id" => id}, conn) do
-      current_user = conn.assigns[:current_user]
+      case read_status(id, conn.assigns[:current_user]) do
+        {:ok, status} -> Phoenix.Controller.json(conn, status)
+        {:error, reason} -> RestAdapter.error_fn({:error, reason}, conn)
+      end
+    end
 
+    @doc "Reads a Mastodon status through GraphQL, shared by GET and interaction responses."
+    def read_status(id, current_user) do
       result =
         Absinthe.run(@status_query, Schema,
           variables: %{"id" => id},
@@ -477,14 +605,13 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
            [status] <-
              map_graphql_statuses([node], current_user, &Mappers.Status.from_graphql_activity/2),
            true <- is_map(status) and not is_nil(Map.get(status, "id")) do
-        Phoenix.Controller.json(conn, status)
+        {:ok, status}
       else
-        _ -> RestAdapter.error_fn({:error, :not_found}, conn)
+        _ -> {:error, :not_found}
       end
     end
 
-    # Load a single status by id via a direct `Objects.read` (used by the by-id/interaction
-    # paths that stay direct; feeds and `show_status` go through GraphQL). Reads the OBJECT
+    # Load a single status by id via a direct `Objects.read` for thread context. Reads the OBJECT
     # (post) and its create-activity (subject = author) — unlike the old `activity(object_id:)`
     # query, which could match a like-activity and mis-attribute the status to the liker.
     defp read_single_status(id, current_user) do

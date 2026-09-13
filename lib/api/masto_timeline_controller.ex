@@ -49,6 +49,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     def list_timeline(conn, %{"list_id" => list_id} = params),
       do: BoundariesAdapter.list_timeline(list_id, params, conn)
 
+    def grouped_notifications(conn, params), do: Adapter.grouped_notifications(params, conn)
+
     def notification(conn, %{"id" => id}), do: Adapter.notification(id, conn)
     def clear_notifications(conn, _params), do: Adapter.clear_notifications(conn)
     def dismiss_notification(conn, %{"id" => id}), do: Adapter.dismiss_notification(id, conn)

@@ -173,6 +173,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       field(:subject_id, :string)
 
+      @desc "Additional actors retained by the feed's existing page-local like/boost grouping."
+      field(:subjects_more, list_of(:any_character))
+
       field(:subject, :any_character) do
         resolve(fn
           # boost activities carry the subject as a bare Needle.Pointer (preloaded but not
@@ -711,11 +714,15 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         :id_before,
         :id_after,
         :preload,
-        :skip_current_user_preload
+        :skip_current_user_preload,
+        :show_objects_only_once,
+        :dedup_by_like_or_boost
       ]
     end
 
     input_object :feed_filters do
+      field(:show_objects_only_once, :boolean)
+      field(:dedup_by_like_or_boost, :boolean)
       field(:feed_name, :string,
         description: "Specify which feed to query. For example: explore, my, local, remote"
       )
@@ -920,7 +927,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       end
 
       field :follow, :activity do
-        arg(:username, non_null(:string))
+        arg(:username, :string)
         arg(:id, non_null(:string))
 
         resolve(&Bonfire.Social.Graph.API.GraphQL.follow/2)

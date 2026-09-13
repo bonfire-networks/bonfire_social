@@ -127,6 +127,40 @@ defmodule Bonfire.Social.MastoApi.StatusCountsTest do
            "feed and by-id reblogs_count must be consistent for the same status"
   end
 
+  test "direct reply counts agree across status, feed and nested discussion context", %{conn: conn} do
+    account = Fake.fake_account!()
+    author = Fake.fake_user!(account)
+    api_conn = masto_api_conn(conn, user: author, account: account)
+
+    publish = fn parent_id ->
+      api_conn
+      |> post("/api/v1/statuses", %{
+        "status" => "Reply count regression #{Faker.UUID.v4()}",
+        "visibility" => "public",
+        "in_reply_to_id" => parent_id
+      })
+      |> json_response(200)
+    end
+
+    root = publish.(nil)
+    first = publish.(root["id"])
+    sibling = publish.(root["id"])
+    nested = publish.(first["id"])
+
+    by_id = api_conn |> get("/api/v1/statuses/#{root["id"]}") |> json_response(200)
+    feed = api_conn |> get("/api/v1/timelines/public") |> json_response(200)
+    context = api_conn |> get("/api/v1/statuses/#{nested["id"]}/context") |> json_response(200)
+    root_context = api_conn |> get("/api/v1/statuses/#{root["id"]}/context") |> json_response(200)
+
+    assert by_id["replies_count"] == 2
+    assert find_status(feed, root["id"])["replies_count"] == 2
+    assert find_status(context["ancestors"], root["id"])["replies_count"] == 2
+    assert find_status(context["ancestors"], first["id"])["replies_count"] == 1
+    assert find_status(root_context["descendants"], first["id"])["replies_count"] == 1
+    assert find_status(root_context["descendants"], sibling["id"])["replies_count"] == 0
+    assert find_status(root_context["descendants"], nested["id"])["replies_count"] == 0
+  end
+
   test "replies_count reflects the number of replies (by-id)", %{conn: conn} do
     account = Fake.fake_account!()
     author = Fake.fake_user!(account)
