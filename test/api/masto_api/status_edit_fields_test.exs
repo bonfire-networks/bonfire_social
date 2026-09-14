@@ -30,12 +30,12 @@ defmodule Bonfire.Social.MastoApi.StatusEditFieldsTest do
     assert_edit(context, %{"status" => "Updated body"}, "Updated body", nil)
   end
 
-  test "warning-only editing uses the warning as body and retains the old warning", context do
+  test "warning-only editing uses the warning as both body and warning", context do
     assert_edit(
       context,
       %{"spoiler_text" => "Replacement body"},
       "Replacement body",
-      "Original warning"
+      "Replacement body"
     )
   end
 

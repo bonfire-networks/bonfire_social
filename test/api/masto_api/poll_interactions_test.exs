@@ -86,6 +86,24 @@ defmodule Bonfire.Poll.API.MastoPollTest do
     |> response(422)
   end
 
+  test "an expired poll keeps its totals and rejects new votes", context do
+    question = native_poll(context.author)
+
+    context.reader_conn
+    |> post("/api/v1/polls/#{question.id}/votes", %{"choices" => [0]})
+    |> json_response(200)
+
+    expire(question)
+    expired = context.reader_conn |> get("/api/v1/polls/#{question.id}") |> json_response(200)
+    assert expired["expired"]
+    assert expired["votes_count"] == 1
+    assert Enum.map(expired["options"], & &1["votes_count"]) == [1, 0]
+
+    context.author_conn
+    |> post("/api/v1/polls/#{question.id}/votes", %{"choices" => [1]})
+    |> response(422)
+  end
+
   for params <- [
         %{"options" => ["Only"]},
         %{"expires_in" => 0},
@@ -110,15 +128,14 @@ defmodule Bonfire.Poll.API.MastoPollTest do
     assert poll["own_votes"] == [0, 1]
   end
 
-  test "hidden totals stay hidden to a voter before expiry", context do
-    status = create_poll(context.author_conn, %{"hide_totals" => true}) |> json_response(200)
+  test "per-poll hidden totals are explicitly unsupported", context do
+    for hide <- [true, "true", "1"] do
+      error = create_poll(context.author_conn, %{"hide_totals" => hide}) |> json_response(422)
+      assert error["error"] == "Validation failed: Per-poll hidden totals are not supported"
+    end
 
-    poll =
-      context.reader_conn
-      |> post("/api/v1/polls/#{status["poll"]["id"]}/votes", %{"choices" => [0]})
-      |> json_response(200)
-
-    assert Enum.map(poll["options"], & &1["votes_count"]) == [nil, nil]
+    assert (create_poll(context.author_conn, %{"hide_totals" => false})
+            |> json_response(200))["poll"]["id"]
   end
 
   test "poll-only status is accepted", context do
@@ -241,6 +258,14 @@ defmodule Bonfire.Poll.API.MastoPollTest do
       "visibility" => "public",
       "poll" => Map.merge(%{"options" => ["Tea", "Coffee"], "expires_in" => 3600}, overrides)
     })
+  end
+
+  defp expire(question) do
+    now = DateTime.utc_now()
+
+    question
+    |> Ecto.Changeset.change(voting_dates: [DateTime.add(now, -3600), DateTime.add(now, -1)])
+    |> Bonfire.Common.Repo.update!()
   end
 
   defp native_poll(author, seconds \\ 3600) do
