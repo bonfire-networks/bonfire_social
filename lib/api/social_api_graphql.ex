@@ -174,7 +174,24 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       field(:subject_id, :string)
 
       @desc "Additional actors retained by the feed's existing page-local like/boost grouping."
-      field(:subjects_more, list_of(:any_character))
+      field(:subjects_more, list_of(:any_character)) do
+        # FeedLoader falls back to the bare subject_id when an actor isn't loaded; a string
+        # would fail the :any_character union, so follow pointers and drop anything else.
+        resolve(fn activity, _args, _info ->
+          actors =
+            activity
+            |> Map.get(:subjects_more, [])
+            |> List.wrap()
+            |> Enum.flat_map(fn subject ->
+              case follow_pointer(subject) do
+                {:ok, %{__struct__: _} = actor} -> [actor]
+                _ -> []
+              end
+            end)
+
+          {:ok, actors}
+        end)
+      end
 
       field(:subject, :any_character) do
         resolve(fn
@@ -723,6 +740,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     input_object :feed_filters do
       field(:show_objects_only_once, :boolean)
       field(:dedup_by_like_or_boost, :boolean)
+
       field(:feed_name, :string,
         description: "Specify which feed to query. For example: explore, my, local, remote"
       )

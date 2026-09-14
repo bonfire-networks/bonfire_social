@@ -230,33 +230,73 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     @doc "Maps the existing notification feed's page-local grouping to Mastodon v2."
     def grouped_notifications(params, conn) do
       user = conn.assigns[:current_user]
+
       cond do
-        is_nil(user) -> RestAdapter.error_fn({:error, :unauthorized}, conn)
+        is_nil(user) ->
+          RestAdapter.error_fn({:error, :unauthorized}, conn)
+
         params["group_key"] ->
-          conn |> Plug.Conn.put_status(:not_implemented) |> Phoenix.Controller.json(%{"error" => "Notification group detail lookup is not supported"})
+          conn
+          |> Plug.Conn.put_status(:not_implemented)
+          |> Phoenix.Controller.json(%{
+            "error" => "Notification group detail lookup is not supported"
+          })
+
         true ->
           filters = extract_notification_filters(params)
           grouped_types = List.wrap(params["grouped_types"] || ~w(favourite reblog))
-          types = List.wrap(params["types"] || ~w(favourite reblog follow follow_request mention poll quote admin.report status)) -- List.wrap(params["exclude_types"])
+
+          types =
+            List.wrap(
+              params["types"] ||
+                ~w(favourite reblog follow follow_request mention poll quote admin.report status)
+            ) -- List.wrap(params["exclude_types"])
+
           groupable_types = Enum.filter(types, &(&1 in ~w(favourite reblog)))
           group? = groupable_types != [] and Enum.all?(groupable_types, &(&1 in grouped_types))
-          feed_params = PaginationHelpers.build_feed_params(params, %{"feed_name" => "notifications"}, default_limit: 40, max_limit: 80)
+
+          feed_params =
+            PaginationHelpers.build_feed_params(params, %{"feed_name" => "notifications"},
+              default_limit: 40,
+              max_limit: 80
+            )
 
           case Bonfire.Social.API.GraphQLMasto.Notifications.list_for_user(user, feed_params,
-                 filters: filters, grouped?: true, group_likes_boosts?: group?) do
+                 filters: filters,
+                 grouped?: true,
+                 group_likes_boosts?: group?
+               ) do
             {:ok, candidates, page_info} ->
               by_id = Map.new(candidates, &{&1.id, &1})
-              groups = candidates |> map_notification_candidates(user) |> Enum.map(fn item ->
-                candidate = Map.fetch!(by_id, item["id"])
-                actors = candidate.activity["subjects_more"] || []
-                accounts = actors |> Enum.map(&Mappers.Account.from_user/1) |> Enum.reject(&is_nil/1)
-                count = 1 + length(actors)
-                group = %{"key" => if(count > 1, do: "page-" <> item["id"], else: "ungrouped-" <> item["id"]),
-                  "count" => count, "latest_id" => item["id"]}
-                {group, [item | Enum.map(accounts, &Map.put(item, "account", &1))]}
-              end)
-              conn |> PaginationHelpers.add_link_headers(feed_params, page_info, []) |> Phoenix.Controller.json(Mappers.NotificationGroups.from_groups(groups))
-            {:error, _} = error -> RestAdapter.error_fn(error, conn)
+
+              groups =
+                candidates
+                |> map_notification_candidates(user)
+                |> Enum.map(fn item ->
+                  candidate = Map.fetch!(by_id, item["id"])
+                  actors = candidate.activity["subjects_more"] || []
+
+                  accounts =
+                    actors |> Enum.map(&Mappers.Account.from_user/1) |> Enum.reject(&is_nil/1)
+
+                  count = 1 + length(actors)
+
+                  group = %{
+                    "key" =>
+                      if(count > 1, do: "page-" <> item["id"], else: "ungrouped-" <> item["id"]),
+                    "count" => count,
+                    "latest_id" => item["id"]
+                  }
+
+                  {group, [item | Enum.map(accounts, &Map.put(item, "account", &1))]}
+                end)
+
+              conn
+              |> PaginationHelpers.add_link_headers(feed_params, page_info, [])
+              |> Phoenix.Controller.json(Mappers.NotificationGroups.from_groups(groups))
+
+            {:error, _} = error ->
+              RestAdapter.error_fn(error, conn)
           end
       end
     end
@@ -373,7 +413,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
         if is_nil(status_id) or is_map(status) do
           case Mappers.Notification.from_candidate(candidate,
-                 current_user: current_user, status: status) do
+                 current_user: current_user,
+                 status: status
+               ) do
             item when is_map(item) -> [item]
             _ -> []
           end
@@ -386,7 +428,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     defp notification_status_id(%{type: :quote, status_post: post}), do: get_field(post, :id)
 
     defp notification_status_id(%{type: type, object_id: id})
-         when type in [:mention, :status, :reblog, :favourite, :poll, :update, :quoted_update],
+         when type in [:mention, :reblog, :favourite],
          do: id
 
     defp notification_status_id(_), do: nil
@@ -463,13 +505,18 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     defp read_statuses_by_id(ids, current_user) do
       indexed = Enum.with_index(ids)
       declarations = Enum.map_join(indexed, ", ", fn {_, index} -> "$id#{index}: ID!" end)
-      selections = Enum.map_join(indexed, "\n", fn {_, index} ->
-        "s#{index}: status(id: $id#{index}) { #{@status_activity_selection} }"
-      end)
+
+      selections =
+        Enum.map_join(indexed, "\n", fn {_, index} ->
+          "s#{index}: status(id: $id#{index}) { #{@status_activity_selection} }"
+        end)
+
       variables = Map.new(indexed, fn {id, index} -> {"id#{index}", id} end)
 
       case Absinthe.run("query NotificationStatuses(#{declarations}) { #{selections} }", Schema,
-             variables: variables, context: Schema.context(%{current_user: current_user})) do
+             variables: variables,
+             context: Schema.context(%{current_user: current_user})
+           ) do
         {:ok, %{data: data}} when is_map(data) ->
           data
           |> Map.values()
@@ -477,7 +524,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
           |> map_graphql_statuses(current_user, &Mappers.Status.from_graphql_activity/2)
           |> Map.new(&{Map.fetch!(&1, "id"), &1})
 
-        _ -> %{}
+        _ ->
+          %{}
       end
     end
 
@@ -664,7 +712,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       end
     end
 
-    @doc "Edit a status. A blank body uses the submitted warning as text and retains the previous warning, matching Mastodon's update service."
+    @doc "Edit a status. Like Mastodon's update service, a blank body falls back to the submitted warning as text, and the warning is always replaced by the submitted value (or cleared when omitted)."
     def update_status(%{"id" => id} = params, conn) do
       current_user = conn.assigns[:current_user]
 
@@ -672,13 +720,14 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         RestAdapter.error_fn({:error, :unauthorized}, conn)
       else
         status = params["status"]
+        spoiler_text = params["spoiler_text"]
 
-        attrs =
-          if is_nil(status) or (is_binary(status) and String.trim(status) == "") do
-            %{html_body: params["spoiler_text"]}
-          else
-            %{html_body: status, summary: params["spoiler_text"]}
-          end
+        body =
+          if is_nil(status) or (is_binary(status) and String.trim(status) == ""),
+            do: spoiler_text,
+            else: status
+
+        attrs = %{html_body: body, summary: spoiler_text}
 
         case edit_post_content(current_user, id, attrs) do
           {:ok, _} ->

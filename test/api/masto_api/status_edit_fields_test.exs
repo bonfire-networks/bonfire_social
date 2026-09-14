@@ -30,8 +30,13 @@ defmodule Bonfire.Social.MastoApi.StatusEditFieldsTest do
     assert_edit(context, %{"status" => "Updated body"}, "Updated body", nil)
   end
 
-  test "warning-only editing uses the warning as body and retains the old warning", context do
-    assert_edit(context, %{"spoiler_text" => "Replacement body"}, "Replacement body", "Original warning")
+  test "warning-only editing uses the warning as both body and warning", context do
+    assert_edit(
+      context,
+      %{"spoiler_text" => "Replacement body"},
+      "Replacement body",
+      "Replacement body"
+    )
   end
 
   for status <- [nil, "", " \t\n"] do
@@ -40,7 +45,7 @@ defmodule Bonfire.Social.MastoApi.StatusEditFieldsTest do
         context,
         %{"status" => unquote(status), "spoiler_text" => "Replacement body"},
         "Replacement body",
-        "Original warning"
+        "Replacement body"
       )
     end
   end
@@ -68,7 +73,11 @@ defmodule Bonfire.Social.MastoApi.StatusEditFieldsTest do
         Objects.read(context.post.id, current_user: context.user, preload: [:with_post_content])
 
       conn =
-        put(context.conn, "/api/v1/statuses/#{context.post.id}", Jason.encode!(unquote(Macro.escape(params))))
+        put(
+          context.conn,
+          "/api/v1/statuses/#{context.post.id}",
+          Jason.encode!(unquote(Macro.escape(params)))
+        )
 
       {:ok, after_edit} =
         Objects.read(context.post.id, current_user: context.user, preload: [:with_post_content])
@@ -91,15 +100,26 @@ defmodule Bonfire.Social.MastoApi.StatusEditFieldsTest do
 
     created =
       context.conn
-      |> post("/api/v1/statuses", Jason.encode!(%{"status" => "Body with media", "media_ids" => [media.id]}))
+      |> post(
+        "/api/v1/statuses",
+        Jason.encode!(%{"status" => "Body with media", "media_ids" => [media.id]})
+      )
       |> json_response(200)
 
     response =
       context.conn
-      |> put("/api/v1/statuses/#{created["id"]}", Jason.encode!(%{"status" => "", "spoiler_text" => "", "media_ids" => [media.id]}))
+      |> put(
+        "/api/v1/statuses/#{created["id"]}",
+        Jason.encode!(%{"status" => "", "spoiler_text" => "", "media_ids" => [media.id]})
+      )
       |> json_response(200)
 
-    {:ok, saved} = Objects.read(created["id"], current_user: context.user, preload: [:with_post_content, :with_media])
+    {:ok, saved} =
+      Objects.read(created["id"],
+        current_user: context.user,
+        preload: [:with_post_content, :with_media]
+      )
+
     saved = repo().preload(saved, :media)
     assert is_nil(saved.post_content.html_body)
     assert Enum.map(saved.media, & &1.id) == [media.id]
@@ -108,10 +128,18 @@ defmodule Bonfire.Social.MastoApi.StatusEditFieldsTest do
   end
 
   test "a supplied media ID does not bypass validation on a text-only post", context do
-    conn = put(context.conn, "/api/v1/statuses/#{context.post.id}", Jason.encode!(%{"media_ids" => [Needle.ULID.generate()]}))
+    conn =
+      put(
+        context.conn,
+        "/api/v1/statuses/#{context.post.id}",
+        Jason.encode!(%{"media_ids" => [Needle.ULID.generate()]})
+      )
 
     assert json_response(conn, 422)["error"]
-    {:ok, saved} = Objects.read(context.post.id, current_user: context.user, preload: [:with_post_content])
+
+    {:ok, saved} =
+      Objects.read(context.post.id, current_user: context.user, preload: [:with_post_content])
+
     assert saved.post_content.html_body == "Original body"
     assert saved.post_content.summary == "Original warning"
   end
@@ -127,7 +155,10 @@ defmodule Bonfire.Social.MastoApi.StatusEditFieldsTest do
       |> put("/api/v1/statuses/#{context.post.id}", Jason.encode!(%{}))
 
     assert json_response(conn, 404)["error"]
-    {:ok, saved} = Objects.read(context.post.id, current_user: context.user, preload: [:with_post_content])
+
+    {:ok, saved} =
+      Objects.read(context.post.id, current_user: context.user, preload: [:with_post_content])
+
     assert saved.post_content.html_body == "Original body"
     assert saved.post_content.summary == "Original warning"
   end

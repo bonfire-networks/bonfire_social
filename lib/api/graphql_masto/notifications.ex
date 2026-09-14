@@ -3,7 +3,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     @moduledoc """
     Resolves Bonfire notification feed entries into Mastodon API notification candidates.
 
-    Notification verbs are filtered in the feed query. Create/reply entries can come from mentions, replies or opted-in post delivery, so recipient metadata distinguishes mentions from subscribed-post notifications.
+    Notification verbs are filtered in the feed query. Create/reply entries reach the notifications feed only because the user was mentioned, replied to or directly addressed, which Mastodon models as `mention`.
     """
 
     use Bonfire.Common.Utils
@@ -41,14 +41,12 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       follow: [:follow],
       follow_request: [:request],
       quote: [:request],
-      poll: [:edit],
       mention: [:create, :reply],
-      status: [:create, :reply],
       admin_report: [:flag]
     }
 
     # All verbs that can appear as a notification (used when no type filter is given).
-    @default_notification_verbs [:like, :boost, :follow, :request, :edit, :create, :reply, :flag]
+    @default_notification_verbs [:like, :boost, :follow, :request, :create, :reply, :flag]
 
     @doc """
     Lists notification candidates for a user in a single feed query.
@@ -85,9 +83,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
                 post_content: postContent { name summary html_body: rawBody }
                 creator { #{@actor_fields} }
               }
-              ... on Poll { id completion_activity_id: completionActivityId }
+              ... on Poll { id }
             }
-            replied { reply_to: replyTo { created { creator { ... on User { id } } } } }
             edge { table_id: tableId subject_id: subjectId }
           }
         }
@@ -110,7 +107,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
             |> Enum.filter(&candidate_matches?(&1, type_filters))
             |> Enum.take(limit)
 
-          {:ok, candidates, if(Keyword.get(opts, :grouped?, false), do: page_info, else: notifications_page_info(candidates))}
+          {:ok, candidates,
+           if(Keyword.get(opts, :grouped?, false),
+             do: page_info,
+             else: notifications_page_info(candidates)
+           )}
 
         {:error, _} = error ->
           error
@@ -119,7 +120,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
     defp run_notifications_feed(feed_filter, params, current_user, opts) do
       gql_filter =
-        %{"feedName" => get_map_field(feed_filter, :feed_name) || "notifications", "showObjectsOnlyOnce" => false, "dedupByLikeOrBoost" => Keyword.get(opts, :group_likes_boosts?, false)}
+        %{
+          "feedName" => get_map_field(feed_filter, :feed_name) || "notifications",
+          "showObjectsOnlyOnce" => false,
+          "dedupByLikeOrBoost" => Keyword.get(opts, :group_likes_boosts?, false)
+        }
         |> put_var(
           "activityTypes",
           Enum.map(get_map_field(feed_filter, :activity_types, []), &to_string/1)
@@ -139,12 +144,14 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
              variables: variables,
              context: Bonfire.API.GraphQL.Schema.context(%{current_user: current_user})
            ) do
-        {:ok, %{data: %{"feed" => %{"edges" => edges, "page_info" => page_info}}}} when is_list(edges) ->
+        {:ok, %{data: %{"feed" => %{"edges" => edges, "page_info" => page_info}}}}
+        when is_list(edges) ->
           page_info = %{
             start_cursor: page_info["start_cursor"],
             end_cursor: page_info["end_cursor"],
             final_cursor: if(page_info["has_next_page"], do: nil, else: :last)
           }
+
           {:ok, edges |> Enum.map(&get_map_field(&1, :node)) |> Enum.reject(&is_nil/1), page_info}
 
         {:ok, %{errors: errors}} ->
@@ -215,9 +222,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       Enum.filter(base, &(&1 in verbs_for_types(remaining_types)))
     end
 
-    defp verbs_for_types(nil), do: []
-
     def verbs_for_notification_types(types), do: verbs_for_types(normalize_types(types) || [])
+
+    defp verbs_for_types(nil), do: []
 
     defp verbs_for_types(types) do
       types
@@ -248,8 +255,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       end
     end
 
-    @doc "Resolves notification semantics from activity nodes returned by GraphQL."
-    def activities_to_candidates(activities, current_user) do
+    defp activities_to_candidates(activities, current_user) do
       status_context =
         BatchLoaders.load(current_user, raw_object_ids(activities), post_content?: true)
 
@@ -279,7 +285,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       mentions_by_object = Keyword.get(status_context, :mentions_by_object, %{})
       mentions = Map.get(mentions_by_object, object_id, [])
 
-      with type when not is_nil(type) <- candidate_type(activity, current_user, mentions) do
+      with type when not is_nil(type) <- candidate_type(activity) do
         subject = get_map_field(activity, :subject) || get_map_field(activity, :account)
         status_post = status_post(type, activity)
 
@@ -299,8 +305,10 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       end
     end
 
-    # Feed membership establishes delivery; recipient metadata distinguishes mentions from subscriptions.
-    defp candidate_type(activity, current_user, mentions) do
+    # Create/reply activities only land in the notifications feed when the user was mentioned,
+    # replied to or directly addressed. Bonfire has no "notify on every post by this author"
+    # subscription, so there is no producer for Mastodon's `status` type.
+    defp candidate_type(activity) do
       verb_id = get_map_field(activity, :verb_id)
       verb_name = get_verb_name(activity)
 
@@ -309,26 +317,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         verb_matches?(verb_id, verb_name, :boost) -> :reblog
         verb_matches?(verb_id, verb_name, :follow) -> :follow
         verb_matches?(verb_id, verb_name, :request) -> request_type(activity)
-        verb_matches?(verb_id, verb_name, :edit) and poll_completion?(activity) -> :poll
-        verb_matches?(verb_id, verb_name, :create) -> post_notification_type(activity, current_user, mentions)
-        verb_matches?(verb_id, verb_name, :reply) -> post_notification_type(activity, current_user, mentions)
+        verb_matches?(verb_id, verb_name, :create) -> :mention
+        verb_matches?(verb_id, verb_name, :reply) -> :mention
         verb_matches?(verb_id, verb_name, :flag) -> :admin_report
         true -> nil
       end
-    end
-
-    defp post_notification_type(activity, current_user, mentions) do
-      replied = get_map_field(activity, :replied)
-      parent = get_map_field(replied, :reply_to)
-      creator = parent |> get_map_field(:created) |> get_map_field(:creator) |> get_map_field(:id)
-      if creator == id(current_user) or Enum.any?(mentions, &((get_map_field(&1, :tag_id) || get_map_field(&1, :id)) == id(current_user))),
-        do: :mention, else: :status
-    end
-
-    defp poll_completion?(activity) do
-      object = get_map_field(activity, :object)
-      completion_id = get_map_field(object, :completion_activity_id)
-      is_binary(completion_id) and completion_id == get_map_field(activity, :id)
     end
 
     defp request_type(activity) do
