@@ -285,7 +285,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       mentions_by_object = Keyword.get(status_context, :mentions_by_object, %{})
       mentions = Map.get(mentions_by_object, object_id, [])
 
-      with type when not is_nil(type) <- candidate_type(activity) do
+      with type when not is_nil(type) <- candidate_type(activity, current_user, mentions) do
         subject = get_map_field(activity, :subject) || get_map_field(activity, :account)
         status_post = status_post(type, activity)
 
@@ -308,7 +308,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     # Create/reply activities only land in the notifications feed when the user was mentioned,
     # replied to or directly addressed. Bonfire has no "notify on every post by this author"
     # subscription, so there is no producer for Mastodon's `status` type.
-    defp candidate_type(activity) do
+    defp candidate_type(activity, current_user, mentions) do
       verb_id = get_map_field(activity, :verb_id)
       verb_name = get_verb_name(activity)
 
