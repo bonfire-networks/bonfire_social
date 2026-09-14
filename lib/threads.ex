@@ -1024,7 +1024,8 @@ defmodule Bonfire.Social.Threads do
 
       true ->
         # Paginate visible branch representatives, including children of hidden roots. Permalink ancestors are loaded separately so they cannot consume the root page.
-        root_paginate_opts = paginate_opts |> Keyword.delete(:paginate) |> Keyword.put(:limit, root_limit)
+        root_paginate_opts =
+          paginate_opts |> Keyword.delete(:paginate) |> Keyword.put(:limit, root_limit)
 
         root_page =
           query_branch_roots(thread_or_comment_id, opts)
@@ -1063,7 +1064,7 @@ defmodule Bonfire.Social.Threads do
              is_nil(e(result, :page_info, :end_cursor, nil)) and
              length(result.edges) <= hard_limit and
              (is_nil(total_replies) or total_replies <= hard_limit),
-          do: Bonfire.Common.Cache.put(cache_key, true)
+           do: Bonfire.Common.Cache.put(cache_key, true)
 
         do_list_replies_postload(result, opts)
     end
@@ -1087,6 +1088,7 @@ defmodule Bonfire.Social.Threads do
 
   defp load_reply_ancestors(result, opts, checked_ids \\ MapSet.new()) do
     opts = with_reply_preloads(opts)
+
     if opts[:thread_mode] == :flat do
       result
     else
@@ -1101,7 +1103,9 @@ defmodule Bonfire.Social.Threads do
 
       missing_ids =
         (ancestor_ids ++ List.wrap(opts[:include_path_ids]))
-        |> Enum.reject(&(&1 == root_id or MapSet.member?(present_ids, &1) or MapSet.member?(checked_ids, &1)))
+        |> Enum.reject(
+          &(&1 == root_id or MapSet.member?(present_ids, &1) or MapSet.member?(checked_ids, &1))
+        )
         |> Enum.uniq()
 
       ancestors =
@@ -1531,7 +1535,10 @@ defmodule Bonfire.Social.Threads do
   defp insert_ancestors(replies, ancestors) do
     # Keep each branch at its first fetched descendant's reading position, whether its missing ancestors resolve to real comments or stubs.
     Enum.reduce(ancestors, replies, fn ancestor, acc ->
-      index = Enum.find_index(acc, fn reply -> ancestor.id in (e(reply, :path, nil) || []) end) || length(acc)
+      index =
+        Enum.find_index(acc, fn reply -> ancestor.id in (e(reply, :path, nil) || []) end) ||
+          length(acc)
+
       List.insert_at(acc, index, ancestor)
     end)
   end

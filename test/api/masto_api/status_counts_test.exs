@@ -127,7 +127,9 @@ defmodule Bonfire.Social.MastoApi.StatusCountsTest do
            "feed and by-id reblogs_count must be consistent for the same status"
   end
 
-  test "direct reply counts agree across status, feed and nested discussion context", %{conn: conn} do
+  test "direct reply counts agree across status, feed and nested discussion context", %{
+    conn: conn
+  } do
     account = Fake.fake_account!()
     author = Fake.fake_user!(account)
     api_conn = masto_api_conn(conn, user: author, account: account)

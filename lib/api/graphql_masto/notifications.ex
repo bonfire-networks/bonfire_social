@@ -313,15 +313,51 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       verb_name = get_verb_name(activity)
 
       cond do
-        verb_matches?(verb_id, verb_name, :like) -> :favourite
-        verb_matches?(verb_id, verb_name, :boost) -> :reblog
-        verb_matches?(verb_id, verb_name, :follow) -> :follow
-        verb_matches?(verb_id, verb_name, :request) -> request_type(activity)
-        verb_matches?(verb_id, verb_name, :create) -> :mention
-        verb_matches?(verb_id, verb_name, :reply) -> :mention
-        verb_matches?(verb_id, verb_name, :flag) -> :admin_report
-        true -> nil
+        verb_matches?(verb_id, verb_name, :like) ->
+          :favourite
+
+        verb_matches?(verb_id, verb_name, :boost) ->
+          :reblog
+
+        verb_matches?(verb_id, verb_name, :follow) ->
+          :follow
+
+        verb_matches?(verb_id, verb_name, :request) ->
+          request_type(activity)
+
+        verb_matches?(verb_id, verb_name, :edit) and poll_completion?(activity) ->
+          :poll
+
+        verb_matches?(verb_id, verb_name, :create) ->
+          post_notification_type(activity, current_user, mentions)
+
+        verb_matches?(verb_id, verb_name, :reply) ->
+          post_notification_type(activity, current_user, mentions)
+
+        verb_matches?(verb_id, verb_name, :flag) ->
+          :admin_report
+
+        true ->
+          nil
       end
+    end
+
+    defp post_notification_type(activity, current_user, mentions) do
+      replied = get_map_field(activity, :replied)
+      parent = get_map_field(replied, :reply_to)
+      creator = parent |> get_map_field(:created) |> get_map_field(:creator) |> get_map_field(:id)
+
+      if creator == id(current_user) or
+           Enum.any?(
+             mentions,
+             &((get_map_field(&1, :tag_id) || get_map_field(&1, :id)) == id(current_user))
+           ), do: :mention, else: :status
+    end
+
+    defp poll_completion?(activity) do
+      object = get_map_field(activity, :object)
+      completion_id = get_map_field(object, :completion_activity_id)
+      is_binary(completion_id) and completion_id == get_map_field(activity, :id)
     end
 
     defp request_type(activity) do

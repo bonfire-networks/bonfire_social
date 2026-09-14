@@ -292,7 +292,7 @@ defmodule Bonfire.Social.Flags do
       iex> flagger = %Bonfire.Data.Identity.User{id: "user123"}
       iex> flagged = %Bonfire.Data.Social.Post{id: "post456"}
       iex> Bonfire.Social.Flags.unflag(flagger, flagged)
-      :ok
+      {:ok, 1}
   """
   def unflag(%User{} = flagger, %{} = flagged) do
     # delete the Flag

@@ -189,10 +189,12 @@ defmodule Bonfire.Social.Activities do
   @doc """
   Deletes an activity by subject, verb, and object.
 
+  Answers `{:ok, count}` so its callers can pass that on rather than each wrapping it themselves.
+
   ## Examples
 
       > delete_by_subject_verb_object(%User{id: "1"}, :like, %Post{id: "1"})
-      # Number of deleted activities
+      {:ok, 1}
   """
   def delete_by_subject_verb_object(subject, verb, object) do
     q = by_subject_verb_object_q(subject, Verbs.get_id!(verb), object)
@@ -203,7 +205,9 @@ defmodule Bonfire.Social.Activities do
     # also tell any open feed to drop the activity we just deleted, otherwise it lingers on screen with stale controls (eg. an accepted follow request keeps offering its Accept button, and clicking it again errors because the Request is already gone)
     Enum.each(ids, &maybe_remove_for_deleters_feeds/1)
 
-    elem(repo().delete_many(q), 1)
+    repo().delete_many(q)
+    |> elem(0)
+    |> ok()
   end
 
   @doc """

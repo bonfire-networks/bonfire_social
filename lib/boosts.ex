@@ -257,7 +257,7 @@ defmodule Bonfire.Social.Boosts do
     # delete the Boost
     Edges.delete_by_both(booster, Boost, boosted)
     # delete the boost activity & feed entries
-    {:ok, Activities.delete_by_subject_verb_object(booster, :boost, boosted)}
+    Activities.delete_by_subject_verb_object(booster, :boost, boosted)
   end
 
   def unboost(booster, boosted, opts) when is_binary(boosted) do
@@ -495,9 +495,8 @@ defmodule Bonfire.Social.Boosts do
              Bonfire.Federate.ActivityPub.AdapterUtils,
              :return_pointable,
              [object, [current_user: creator, verbs: [:boost]]]
-           ),
-         [id] <- unboost(creator, pointable, skip_boundary_check: true) do
-      {:ok, id}
+           ) do
+      unboost(creator, pointable, skip_boundary_check: true)
     end
   end
 end

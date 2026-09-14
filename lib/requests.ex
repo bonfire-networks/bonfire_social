@@ -436,9 +436,13 @@ defmodule Bonfire.Social.Requests do
   end
 
   def unrequest(requester, type, %{} = object) do
-    with [_id] <- Edges.delete_by_both(requester, type, object) do
-      # delete the like activity & feed entries
+    with {:ok, deleted} when deleted > 0 <- Edges.delete_by_both(requester, type, object) do
+      # delete the request activity & feed entries
       Activities.delete_by_subject_verb_object(requester, :request, object)
+    else
+      e ->
+        error(e, "Could not cancel the request, as no matching one was found")
+        {:error, :not_found}
     end
   end
 

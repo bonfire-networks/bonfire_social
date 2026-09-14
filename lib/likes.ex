@@ -281,10 +281,8 @@ defmodule Bonfire.Social.Likes do
     # delete the Like
     Edges.delete_by_both(liker, Like, liked)
     # delete the like activity & feed entries
-    result = Activities.delete_by_subject_verb_object(liker, :like, liked)
-
     # Note: the like count is automatically decremented by DB triggers
-    {:ok, result}
+    Activities.delete_by_subject_verb_object(liker, :like, liked)
   end
 
   def unlike(%{} = liker, liked, opts) when is_binary(liked) do
@@ -557,9 +555,8 @@ defmodule Bonfire.Social.Likes do
            Bonfire.Federate.ActivityPub.AdapterUtils.return_pointable(object,
              current_user: liker,
              verbs: [:like]
-           ),
-         [id] <- unlike(liker, pointable, skip_boundary_check: true) do
-      {:ok, id}
+           ) do
+      unlike(liker, pointable, skip_boundary_check: true)
     end
   end
 end

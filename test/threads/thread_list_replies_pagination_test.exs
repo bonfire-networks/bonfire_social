@@ -66,40 +66,56 @@ defmodule Bonfire.Social.Threads.ListRepliesPaginationTest do
   end
 
   describe "list_replies/2 — nested two-step path" do
-    test "a deep permalink loads all readable ancestors outside the root page", %{alice: alice, op: op} do
+    test "a deep permalink loads all readable ancestors outside the root page", %{
+      alice: alice,
+      op: op
+    } do
       Process.put([:bonfire, :thread_pagination_hard_limit], 2)
       Process.put([:bonfire, :thread_default_root_reply_limit], 2)
 
       chain = Enum.scan(1..6, op, fn n, parent -> publish_reply(alice, parent.id, n) end)
       target = List.last(chain)
 
-      result = Threads.list_replies(op.id,
-        current_user: alice,
-        total_replies_count: 6,
-        max_depth: 3,
-        include_path_ids: Threads.thread_ancestors_path(target.id)
-      )
+      result =
+        Threads.list_replies(op.id,
+          current_user: alice,
+          total_replies_count: 6,
+          max_depth: 3,
+          include_path_ids: Threads.thread_ancestors_path(target.id)
+        )
 
       assert Enum.all?(chain, fn reply -> Enum.any?(result.edges, &(&1.id == reply.id)) end)
       assert length(result.edges) == 6
-      assert Enum.all?(Threads.rescue_orphaned_replies(result.edges, op.id), &(Map.get(&1, :stub) != true))
+
+      assert Enum.all?(
+               Threads.rescue_orphaned_replies(result.edges, op.id),
+               &(Map.get(&1, :stub) != true)
+             )
     end
 
-    test "nested pages resolve readable ancestors without changing continuation cursors", %{alice: alice, op: op} do
+    test "nested pages resolve readable ancestors without changing continuation cursors", %{
+      alice: alice,
+      op: op
+    } do
       parent = publish_reply(alice, op.id)
       child = publish_reply(alice, parent.id)
 
-      result = Threads.list_nested_replies(op.id, current_user: alice, limit: 1, sort_order: :desc)
+      result =
+        Threads.list_nested_replies(op.id, current_user: alice, limit: 1, sort_order: :desc)
 
       assert Enum.sort(Enum.map(result.edges, & &1.id)) == Enum.sort([parent.id, child.id])
       assert result.page_info.end_cursor
     end
 
-    test "resolved ancestors receive the same default content preloads as replies", %{alice: alice, op: op} do
+    test "resolved ancestors receive the same default content preloads as replies", %{
+      alice: alice,
+      op: op
+    } do
       parent = publish_reply(alice, op.id, 1)
       child = publish_reply(alice, parent.id, 2)
 
-      result = Threads.list_nested_replies(op.id, current_user: alice, limit: 1, sort_order: :desc)
+      result =
+        Threads.list_nested_replies(op.id, current_user: alice, limit: 1, sort_order: :desc)
 
       for post <- [parent, child] do
         reply = Enum.find(result.edges, &(&1.id == post.id))
@@ -107,22 +123,30 @@ defmodule Bonfire.Social.Threads.ListRepliesPaginationTest do
       end
     end
 
-    test "permalink ancestors do not consume or change branch continuation pages", %{alice: alice, op: op} do
+    test "permalink ancestors do not consume or change branch continuation pages", %{
+      alice: alice,
+      op: op
+    } do
       Process.put([:bonfire, :thread_default_root_reply_limit], 1)
       roots = for n <- 1..3, do: publish_reply(alice, op.id, n)
       target = publish_reply(alice, hd(roots).id, 4)
       opts = [current_user: alice, total_replies_count: 100, sort_order: :desc]
-      permalink_opts = Keyword.put(opts, :include_path_ids, Threads.thread_ancestors_path(target.id))
+
+      permalink_opts =
+        Keyword.put(opts, :include_path_ids, Threads.thread_ancestors_path(target.id))
 
       {branch_ids, _cursor} =
         Enum.reduce(1..3, {[], nil}, fn page_number, {ids, cursor} ->
           page = Threads.list_replies(op.id, Keyword.put(opts, :after, cursor))
-          permalink_page = Threads.list_replies(op.id, Keyword.put(permalink_opts, :after, cursor))
+
+          permalink_page =
+            Threads.list_replies(op.id, Keyword.put(permalink_opts, :after, cursor))
+
           assert permalink_page.page_info == page.page_info
           assert Enum.any?(permalink_page.edges, &(&1.id == target.id))
           page_roots = Enum.filter(page.edges, &(length(&1.path) == 1))
           assert length(page_roots) == 1
-          assert (page.page_info.end_cursor == nil) == (page_number == 3)
+          assert page.page_info.end_cursor == nil == (page_number == 3)
           {ids ++ Enum.map(page_roots, & &1.id), page.page_info.end_cursor}
         end)
 
@@ -202,7 +226,10 @@ defmodule Bonfire.Social.Threads.ListRepliesPaginationTest do
       assert Bonfire.Common.Cache.get!(cache_key) == true
     end
 
-    test "a terminal continuation page does not cache the whole thread as small", %{alice: alice, op: op} do
+    test "a terminal continuation page does not cache the whole thread as small", %{
+      alice: alice,
+      op: op
+    } do
       Process.put([:bonfire, :thread_default_root_reply_limit], 1)
       for n <- 1..2, do: publish_reply(alice, op.id, n)
       opts = [current_user: alice]
@@ -223,7 +250,10 @@ defmodule Bonfire.Social.Threads.ListRepliesPaginationTest do
       refute Bonfire.Common.Cache.get!("thread_small:#{op.id}") == true
     end
 
-    test "a known large count takes precedence over an older small cache entry", %{alice: alice, op: op} do
+    test "a known large count takes precedence over an older small cache entry", %{
+      alice: alice,
+      op: op
+    } do
       Process.put([:bonfire, :thread_pagination_hard_limit], 2)
       Process.put([:bonfire, :thread_default_root_reply_limit], 1)
       for n <- 1..3, do: publish_reply(alice, op.id, n)

@@ -717,7 +717,7 @@ defmodule Bonfire.Social.Edges do
   ## Examples
 
       iex> delete_by_subject(%User{id: 1})
-      :ok
+      {:ok, 1}
   """
   def delete_by_subject(user),
     do: query([subjects: user], skip_boundary_check: true) |> do_delete()
@@ -728,7 +728,7 @@ defmodule Bonfire.Social.Edges do
   ## Examples
 
       iex> delete_by_object(%User{id: 1})
-      :ok
+      {:ok, 1}
   """
   def delete_by_object(user),
     do: query([objects: user], skip_boundary_check: true) |> do_delete()
@@ -742,6 +742,7 @@ defmodule Bonfire.Social.Edges do
   ## Examples
 
       iex> delete_by_both(%User{id: 1}, MySchema, %User{id: 2})
+      {:ok, 1}
   """
   def delete_by_both(me, schema, object),
     do:
@@ -750,11 +751,13 @@ defmodule Bonfire.Social.Edges do
       |> where([edge: edge], edge.table_id == ^Bonfire.Common.Types.table_id(schema))
       |> do_delete()
 
+  # `{:ok, count}`, the shape `Activities.delete_by_subject_verb_object/3` gives, so a caller deleting an edge and its activity together gets one answer from both rather than having to know which it is holding
   defp do_delete(q),
     do:
       q
       |> Ecto.Query.exclude(:preload)
       |> Ecto.Query.exclude(:order_by)
       |> repo().delete_many()
-      |> elem(1)
+      |> elem(0)
+      |> ok()
 end

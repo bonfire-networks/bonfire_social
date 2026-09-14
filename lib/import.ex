@@ -388,7 +388,8 @@ defmodule Bonfire.Social.Import do
 
   def perform("follows_import" = op, identifier, scope) do
     with {:ok, %{} = followed} <- AdapterUtils.get_by_url_ap_id_or_username(identifier),
-         {:ok, _followed} <- Follows.follow(Utils.current_user(scope), followed) do
+         # an import is re-runnable and its list routinely overlaps what the account already follows, so an existing follow is a success rather than an error to report per row
+         {:ok, _followed} <- Follows.maybe_follow(Utils.current_user(scope), followed) do
       :ok
     else
       error -> handle_error(op, identifier, error)
