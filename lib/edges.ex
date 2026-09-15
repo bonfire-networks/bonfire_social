@@ -737,19 +737,25 @@ defmodule Bonfire.Social.Edges do
   # defp delete_by_any(me), do: do_delete(by_any_q(me))
 
   @doc """
-  Deletes edges by subject, type, and object
+  Deletes edges by subject, type, and object.
+
+  `type` is a Pointable schema, or a table id directly, which is what an edge typed by a VERB rather than by a schema carries (eg. a join request, typed `{Request, <the :join verb id>}`).
 
   ## Examples
 
       iex> delete_by_both(%User{id: 1}, MySchema, %User{id: 2})
       {:ok, 1}
   """
-  def delete_by_both(me, schema, object),
+  def delete_by_both(me, type, object),
     do:
       [subjects: me, objects: object]
       |> query(skip_boundary_check: true)
-      |> where([edge: edge], edge.table_id == ^Bonfire.Common.Types.table_id(schema))
+      |> where([edge: edge], edge.table_id == ^edge_table_id(type))
       |> do_delete()
+
+  # mirrors what `put_edge_assoc/4` accepts when the edge is created, so anything that can be inserted can be deleted by the same argument
+  defp edge_table_id(type) when is_binary(type), do: type
+  defp edge_table_id(type), do: Bonfire.Common.Types.table_id(type)
 
   # `{:ok, count}`, the shape `Activities.delete_by_subject_verb_object/3` gives, so a caller deleting an edge and its activity together gets one answer from both rather than having to know which it is holding
   defp do_delete(q),
