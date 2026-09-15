@@ -337,13 +337,13 @@ defmodule Bonfire.Social.Threads do
       as: :main_object,
       where: p.id == ^id and p.table_id not in ^exclude_pointables
     )
-    # load the reply_to's Replied and in particular its thread and that creator
-    |> proload(replied: [thread: [created: [creator: [:character, :peered]]]])
+    # load the reply_to's Replied and in particular its thread and that creator.
+    |> proload(replied: [thread: {"thread_", [created: [creator: [:character, :peered]]]}])
     # load the reply_to fully enough for `ActivityLive.prepare_reply_to` — this struct rides
     # along on the created activity and is what the live-pushed feed item renders as the
     # parent preview (Ecto won't re-preload the already-loaded assoc at push time)
     |> proload([:post_content])
-    |> proload(created: [creator: [:character, :peered, profile: :icon]])
+    |> proload(created: {"parent_", [creator: [:character, :peered, profile: :icon]]})
     |> boundarise(main_object.id, verbs: [:reply], current_user: user)
     # |> boundarise(thread.id, verbs: [:reply], current_user: user) # FIMXE: including this fails when parent has no thread_id
     |> repo().one()

@@ -17,7 +17,7 @@ defmodule Bonfire.Social.Acts.Activity do
   alias Ecto.Changeset
   import Epics
   use Bonfire.Common.E
-  import Untangle, only: [warn: 2]
+  import Untangle
   use Arrows
   alias Bonfire.Common.Utils
 

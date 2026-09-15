@@ -392,16 +392,17 @@ defmodule Bonfire.Social.Feeds do
       boundary in ["public", "mentions"] ->
         users
         |> filter_empty([])
-        |> repo().maybe_preload([:character, :settings])
+        # `prune: true` because this list is legitimately heterogeneous: a mention resolves to a `User` or to a bare `Needle.Pointer`, and a post in a group mentions the GROUP alongside whoever it replies to. A batch preload spanning two schemas raises, so fit the preload to each schema present rather than to the first
+        |> repo().maybe_preload([:character, :settings], prune: true)
 
       boundary in ["public_remote"] ->
         users
-        |> repo().maybe_preload([:character, :settings])
+        |> repo().maybe_preload([:character, :settings], prune: true)
 
       boundary == "local" ->
         users
         |> filter_empty([])
-        |> repo().maybe_preload([:character, :peered, :settings])
+        |> repo().maybe_preload([:character, :peered, :settings], prune: true)
         # notify only local users
         |> Enum.filter(&is_local?/1)
 
@@ -414,7 +415,7 @@ defmodule Bonfire.Social.Feeds do
         users
         |> filter_empty([])
         |> Enum.filter(&(id(&1) in to_circles_ids))
-        |> repo().maybe_preload([:character, :settings])
+        |> repo().maybe_preload([:character, :settings], prune: true)
     end
 
     # |> debug()
