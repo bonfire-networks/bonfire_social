@@ -1257,8 +1257,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       feed_opts = [
         current_user: current_user,
-        # API feeds should not inherit the FeedLive UI's 7-day default window.
-        time_limit: 0,
         paginate: feed_paginate_opts(pagination_args),
         # API feeds rely on field resolvers unless a caller asks for explicit preloads.
         preload:

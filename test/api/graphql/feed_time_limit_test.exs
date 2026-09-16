@@ -28,7 +28,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       {:ok, user: user}
     end
 
-    test "feed_activities defaults to an unbounded API time limit", %{user: user} do
+    test "feed_activities inherits the shared feed time limit", %{user: user} do
       parent = self()
 
       Repatch.patch(Bonfire.Social.FeedActivities, :feed, fn feed_name, filters, opts ->
@@ -42,7 +42,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       refute result[:errors]
       assert get_in(result, [:data, "feed_activities", "edges"]) == []
       assert_receive {:feed_call, _feed_name, filters, opts}
-      assert opts[:time_limit] == 0
+      refute Keyword.has_key?(opts, :time_limit)
       refute Map.has_key?(filters, :time_limit)
     end
 
@@ -62,7 +62,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       refute result[:errors]
       assert get_in(result, [:data, "feed_activities", "edges"]) == []
       assert_receive {:feed_call, _feed_name, filters, opts}
-      assert opts[:time_limit] == 0
+      refute Keyword.has_key?(opts, :time_limit)
       assert filters[:time_limit] == 14
     end
   end
