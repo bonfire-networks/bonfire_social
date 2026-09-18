@@ -348,10 +348,13 @@ defmodule Bonfire.Social.FeedLoader do
     |> Map.put(
       :time_limit,
       e(filters, :time_limit, nil) || e(filters, "time_limit", nil) || opts[:time_limit] ||
-        Config.get([Bonfire.UI.Social.FeedLive, :time_limit], 7)
+        default_time_limit()
     )
     |> debug("set sort_by and time_limit")
   end
+
+  # TODO: make per-user?
+  def default_time_limit, do: Config.get([Bonfire.UI.Social.FeedLive, :time_limit], 30)
 
   defp merge_feed_filters(nil, feed_filters), do: feed_filters
   defp merge_feed_filters(custom_filters, nil), do: custom_filters

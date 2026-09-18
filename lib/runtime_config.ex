@@ -934,7 +934,7 @@ defmodule Bonfire.Social.RuntimeConfig do
 
     config :bonfire_social, Bonfire.Social.Media,
       default_time_limit:
-        System.get_env("TRENDING_LINKS_TIME_LIMIT_DAYS", "7") |> String.to_integer(),
+        System.get_env("TRENDING_LINKS_TIME_LIMIT_DAYS", "30") |> String.to_integer(),
       default_cache_ttl:
         to_timeout(
           hour: System.get_env("TRENDING_LINKS_CACHE_TTL_HOURS", "1") |> String.to_integer()
