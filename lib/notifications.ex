@@ -1,0 +1,116 @@
+defmodule Bonfire.Social.Notifications do
+  @moduledoc """
+  Notification categories, and the per-user preferences that filter them.
+
+  A category is one kind of thing you get notified about ("Likes", "Replies"), declared in config
+  with the activity types it covers. One declaration feeds both notification-centre surfaces: the
+  category tabs and the "Notify me about" switches.
+
+  This lives in a context rather than in the UI because the notifications feed is not the only
+  reader. The Mastodon API builds its own filter map (`Bonfire.Social.API.GraphQLMasto.Notifications`),
+  the unseen badge counts rows directly, and the digest and fan-out worker ask the same questions,
+  so a resolution that sat in a LiveView would make one preference behave differently per surface.
+  """
+  use Bonfire.Common.E
+  use Bonfire.Common.Config
+  use Bonfire.Common.Settings
+  use Bonfire.Common.Localise
+
+  alias Bonfire.Boundaries.Verbs
+  alias Bonfire.Common.Utils
+
+  @doc """
+  Notification categories in display order, from config.
+
+  Each entry may declare the `activity_types` it covers (defaulting to the verb its key names), a
+  plural `name_pluralized` and `icon` for surfaces that show it, `path_aliases` for its URLs, and
+  where it appears: `chip` and `row` are `true`, `false`, or `:unimplemented` for a category
+  nothing honours yet, which then shows only behind the `:show_unimplemented` flag.
+  """
+  def categories do
+    Config.get([__MODULE__, :categories], [],
+      name: l("Notification categories"),
+      description: l("Which kinds of notification this instance distinguishes.")
+    )
+  end
+
+  @doc "One category by key, or nil."
+  def category(key), do: categories() |> e(key, nil)
+
+  @doc """
+  The activity types a category covers, defaulting to the verb its key names.
+
+  Both the chip that shows a category and the switch that hides it read this, so the two can never
+  disagree, including approximations (Mentions is `:create` until Phase 4's tagged-me predicate).
+  """
+  def activity_types_for(key) do
+    # not `e/3`, which reads an empty list as nothing set, while `activity_types: []` means "every type" for the default category
+    case category(key) do
+      %{activity_types: types} -> types
+      _ -> [key]
+    end
+  end
+
+  @doc "A category's plural label: what it declares, else the verb's own (singular) name, else its key."
+  def label_for(key) do
+    e(category(key), :name_pluralized, nil) || e(Verbs.get(key), :verb, nil) || to_string(key)
+  end
+
+  @doc """
+  Whether a category appears on a surface (`:chip` or `:row`) for the current reader.
+
+  `:unimplemented` entries are declared so their shape is visible, and render only while the
+  instance shows unbuilt UI.
+  """
+  def shown?(key, surface) do
+    case e(category(key), surface, true) do
+      :unimplemented -> Utils.show_unimplemented?()
+      shown? -> shown? != false
+    end
+  end
+
+  @doc "Categories shown on a surface (`:chip` or `:row`), in display order."
+  def categories_shown(surface) do
+    Enum.filter(categories(), fn {key, _category} -> shown?(key, surface) end)
+  end
+
+  @doc "Whether a category's surface is wired, rather than declared to show its shape."
+  def implemented?(key, surface), do: e(category(key), surface, true) == true
+
+  @doc "The settings key holding whether a category appears in this user's notifications feed."
+  def show_in_centre_key(key), do: [:notifications, :centre, key]
+
+  @doc "Whether this user wants a category in their notifications feed. On unless they said otherwise."
+  def show_in_centre?(key, context \\ nil) do
+    Settings.get(show_in_centre_key(key), true, context)
+  end
+
+  @doc "Whether this user switched a category out of their notifications feed."
+  def hidden_from_centre?(key, context \\ nil), do: show_in_centre?(key, context) == false
+
+  @doc """
+  The activity types this user switched off, as a feed `exclude_activity_types` value.
+
+  `false` when nothing is off, which is what the `:notifications` preset uses to mean "exclude
+  nothing". Only categories with something to exclude are consulted, so an `:unimplemented` row
+  never contributes a filter term.
+
+  `showing` is what the reader asked for explicitly (a category's own chip, an API query naming
+  types), and outranks the switches, since that view is the way back to a category the feed hides.
+  """
+  def excluded_activity_types(context \\ nil, showing \\ []) do
+    # config declares verbs as atoms and `showing` comes from a feed filter or a query, which allows either, so both sides meet as strings rather than paying for atom lookups
+    asked_for = Enum.map(showing, &to_string/1)
+
+    case categories()
+         |> Enum.filter(fn {key, category} ->
+           e(category, :row, true) == true and hidden_from_centre?(key, context)
+         end)
+         |> Enum.flat_map(fn {key, _category} -> activity_types_for(key) end)
+         |> Enum.uniq()
+         |> Enum.reject(&(to_string(&1) in asked_for)) do
+      [] -> false
+      excluded -> excluded
+    end
+  end
+end

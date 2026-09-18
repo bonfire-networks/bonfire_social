@@ -32,6 +32,53 @@ defmodule Bonfire.Social.RuntimeConfig do
         config(:bonfire_social, Bonfire.Social.Feeds, feed_origin_strategy: :addressed)
     end
 
+    # The kinds of notification this instance distinguishes, in display order, read by `Bonfire.Social.Notifications`. ONE declaration per category, shared by the notification centre's chips and its "Notify me about" switches, so a switch can never hide something different from what its chip shows. The key is the verb the category covers, `activity_types` overrides that where a category isn't one verb, `name_pluralized`/`icon` override what the verb registry declares, and `chip`/`row` say where it appears (`false` nowhere, `:unimplemented` only while the instance shows unbuilt UI). Labels and icons are UI-facing but live here because the Mastodon API, the unseen badge and the digest read the same taxonomy, as feed presets already do below
+    config :bonfire_social, Bonfire.Social.Notifications,
+      categories: [
+        # not "All": categories switched off in preferences are excluded from this view, and there is nothing to switch off for it
+        latest: %{name_pluralized: l("Latest"), activity_types: [], row: false},
+        mention: %{
+          name_pluralized: l("Mentions"),
+          description: l("Posts that mention or address you"),
+          # a non-reply post reaching your notifications feed mentioned or addressed you; a reply that mentions you is stored as a reply, so it shows under Replies until a filter can ask "does a tag point at me", at which point this becomes Mentions vs Other replies
+          activity_types: [:create],
+          path_aliases: ["mentions"]
+        },
+        reply: %{name_pluralized: l("Replies"), path_aliases: ["replies"]},
+        request: %{
+          name_pluralized: l("Requests"),
+          description: l("Follow and quote requests"),
+          path_aliases: ["requests"]
+        },
+        boost: %{name_pluralized: l("Boosts"), path_aliases: ["boosts"]},
+        like: %{name_pluralized: l("Likes"), path_aliases: ["likes"]},
+        follow: %{
+          name_pluralized: l("New followers"),
+          # overrides the verb's own icon, which the other categories inherit (the `follow` verb declares none)
+          icon: "ph:user-plus",
+          path_aliases: ["follows", "followers"]
+        },
+        # TODO: an accepted quote ("X quoted your post") needs a chip once a filter can read `accepted_at`; the switch already works, as it excludes the verb
+        quote: %{name_pluralized: l("Quotes"), chip: :unimplemented, path_aliases: ["quotes"]},
+        # TODO: whatever no other category covers, so its chip needs the union of their types as an exclusion, and its switch needs a catch-all filter rather than a verb
+        other: %{
+          name_pluralized: l("Other activity"),
+          chip: :unimplemented,
+          row: :unimplemented,
+          path_aliases: ["other"]
+        },
+        # TODO: D5's way back to notifications from audiences you told the instance to hide
+        hidden: %{
+          name_pluralized: l("Hidden"),
+          description: l("Notifications from people you hear less from"),
+          chip: :unimplemented,
+          row: false,
+          path_aliases: ["hidden"]
+        },
+        # shows the existing mod queue, whose preset supplies the label, icon, filters, opts and the `instance_permission_required: :mediate` gate that hides this chip from everyone else. Not a row: it is a shared queue, not a kind of notification you get
+        flag: %{preset: :flagged_content, row: false, path_aliases: ["flags"]}
+      ]
+
     # `l/1` here marks these for extraction, but `config/0` runs once at boot under the default
     # locale, so the stored value is effectively the untranslated msgid. The actual per-request
     # translation happens at the point of display, via `Bonfire.Social.Feeds.localise_tree/3` — which
