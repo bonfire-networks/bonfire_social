@@ -123,7 +123,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         %{
           "feedName" => get_map_field(feed_filter, :feed_name) || "notifications",
           "showObjectsOnlyOnce" => false,
-          "dedupByLikeOrBoost" => Keyword.get(opts, :group_likes_boosts?, false)
+          "dedupByLikeOrBoost" => Keyword.get(opts, :group_likes_boosts?, false),
+          # Mastodon filters kinds per request (`types[]`/`exclude_types[]`) and stores no per-kind preference, so a client gets every category whatever the user hid in Bonfire's own UI
+          "includeHiddenTypes" => true
         }
         |> put_var(
           "activityTypes",

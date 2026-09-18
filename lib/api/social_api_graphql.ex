@@ -772,6 +772,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
           "Filter notifications by API notification type (eg. mention, favourite, reblog, follow)"
       )
 
+      field(:include_hidden_types, :boolean,
+        description:
+          "Notifications feed only: include the categories this user switched off in their preferences. Defaults to false, i.e. their own saved view. A read option rather than a filter, like `preload`."
+      )
+
       field(:object_types, list_of(:string),
         description: "Filter by object type (eg. post, poll) (TODO)"
       )
@@ -869,13 +874,15 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       # end
       connection field :feed_activities, node_type: :activity do
         arg(:filter, :feed_filters)
+
         complexity(&page_complexity/2)
         resolve(&feed/2)
       end
 
-      @desc "Variant-D: feed with the activity subtree preloaded so sub-fields resolve synchronously (no Needle.Pointer Dataloader rounds)"
+      @desc "Feed with the activity subtree preloaded so sub-fields resolve synchronously (no Needle.Pointer Dataloader rounds)"
       connection field :feed_activities_preloaded, node_type: :activity do
         arg(:filter, :feed_filters)
+
         complexity(&page_complexity/2)
         resolve(&feed_preloaded/2)
       end
@@ -1258,6 +1265,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       feed_opts = [
         current_user: current_user,
         paginate: feed_paginate_opts(pagination_args),
+        # a notifications read applies this user's hidden categories unless the caller asks for everything, which the Mastodon adapter always does (it has no stored per-kind preference of its own to honour). Lifted out of `filter` into an option, as `preload` is, since it says how to read the feed rather than what to select
+        include_hidden:
+          e(filters, :include_hidden_types, nil) || e(filters, "include_hidden_types", false),
         # API feeds rely on field resolvers unless a caller asks for explicit preloads.
         preload:
           case e(filters, :preload, nil) || e(filters, "preload", nil) do

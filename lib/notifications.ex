@@ -17,6 +17,7 @@ defmodule Bonfire.Social.Notifications do
   use Bonfire.Common.Localise
 
   alias Bonfire.Boundaries.Verbs
+  alias Bonfire.Common.Types
   alias Bonfire.Common.Utils
 
   @doc """
@@ -87,6 +88,32 @@ defmodule Bonfire.Social.Notifications do
 
   @doc "Whether this user switched a category out of their notifications feed."
   def hidden_from_centre?(key, context \\ nil), do: show_in_centre?(key, context) == false
+
+  @doc """
+  Applies this user's hidden categories to a set of feed filters, for any reader of the feed.
+
+  Called once, where a notifications read resolves its preset (`FeedLoader`), so the LiveView, the GraphQL API and anything else answer the same way. 
+  Filters come back untouched for any other feed, for a reader with no user, and when the caller passes `include_hidden: true`, which is how the Mastodon adapter keeps its own semantics (kinds are per request there, nothing stored). 
+  Types the caller named explicitly outrank the preference, and a caller's own exclusions are added to rather than replaced.
+  """
+  def exclude_hidden_types(filters, opts) do
+    if (Types.maybe_to_atom(e(filters, :feed_name, nil)) == :notifications and
+          Utils.current_user_id(opts)) && !e(opts, :include_hidden, false) do
+      case excluded_activity_types(opts, List.wrap(e(filters, :activity_types, []))) do
+        false ->
+          filters
+
+        excluded ->
+          Map.put(
+            filters,
+            :exclude_activity_types,
+            Enum.uniq(List.wrap(e(filters, :exclude_activity_types, []) || []) ++ excluded)
+          )
+      end
+    else
+      filters
+    end
+  end
 
   @doc """
   The activity types this user switched off, as a feed `exclude_activity_types` value.

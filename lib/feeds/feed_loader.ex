@@ -72,6 +72,8 @@ defmodule Bonfire.Social.FeedLoader do
         |> parameterize_filters(parameters, opts)
         |> merge_some_defaults(opts)
         |> debug("merged feed_filters")
+        # after merging, so types the caller asked for are visible and outrank the preference. A no-op for every feed but notifications
+        |> Bonfire.Social.Notifications.exclude_hidden_types(opts)
         |> FeedFilters.validate()
         |> debug("validated & parameterized feed_filters")
         ~> {:ok, preset, ...}
@@ -81,6 +83,7 @@ defmodule Bonfire.Social.FeedLoader do
         |> merge_feed_filters(custom_filters, opts[:feed_filters])
         |> merge_some_defaults(opts)
         |> debug("merged feed_filters")
+        |> Bonfire.Social.Notifications.exclude_hidden_types(opts)
         |> FeedFilters.validate()
         |> debug("validated feed_filters")
         ~> {:ok, preset, ...}

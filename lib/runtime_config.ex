@@ -67,7 +67,7 @@ defmodule Bonfire.Social.RuntimeConfig do
           row: :unimplemented,
           path_aliases: ["other"]
         },
-        # TODO: D5's way back to notifications from audiences you told the instance to hide
+        # TODO: D5's way back to notifications from audiences you told the instance to hide. A different axis from every entry above: it selects by AUDIENCE (`subject_circles`), not by activity type, so it needs an audience filter of its own rather than the "my key names a verb" default, and `hidden` is not a verb
         hidden: %{
           name_pluralized: l("Hidden"),
           description: l("Notifications from people you hear less from"),

@@ -184,7 +184,9 @@ defmodule Bonfire.Social.FeedsFilterTimeLimitTest do
         )
 
       assert {:ok, filters} = FeedLoader.prepare_feed_filters(nil, :local, current_user: user)
-      assert filters.time_limit == 7
+      # the instance default, whatever it is configured to, rather than the user's saved 1
+      assert filters.time_limit == FeedLoader.default_time_limit()
+      assert filters.time_limit != 1
     end
 
     test "handles invalid time_limit values", %{

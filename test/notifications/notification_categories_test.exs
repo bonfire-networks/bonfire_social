@@ -94,4 +94,53 @@ defmodule Bonfire.Social.NotificationCategoriesTest do
     assert Notifications.excluded_activity_types(current_user: me) |> Enum.sort() ==
              [:boost, :create]
   end
+
+  describe "exclude_hidden_types/2, the seam every reader passes through" do
+    setup do
+      me = Fake.fake_user!()
+      {:ok, me: switch_off!(me, :boost)}
+    end
+
+    defp notifications(filters \\ %{}), do: Map.put(filters, :feed_name, :notifications)
+
+    test "applies the preference to a notifications read", %{me: me} do
+      assert Notifications.exclude_hidden_types(notifications(), current_user: me) ==
+               notifications(%{exclude_activity_types: [:boost]})
+
+      # a string name arrives this way from the API
+      assert Notifications.exclude_hidden_types(%{feed_name: "notifications"},
+               current_user: me
+             ) == %{feed_name: "notifications", exclude_activity_types: [:boost]}
+    end
+
+    test "leaves any other feed alone", %{me: me} do
+      for feed_name <- [:my, :local, :custom, nil] do
+        filters = %{feed_name: feed_name}
+        assert Notifications.exclude_hidden_types(filters, current_user: me) == filters
+      end
+    end
+
+    test "leaves a reader with no user alone" do
+      assert Notifications.exclude_hidden_types(notifications(), []) == notifications()
+    end
+
+    test "a caller asking for everything gets everything", %{me: me} do
+      assert Notifications.exclude_hidden_types(notifications(),
+               current_user: me,
+               include_hidden: true
+             ) == notifications()
+    end
+
+    test "types the caller named explicitly outrank the preference", %{me: me} do
+      filters = notifications(%{activity_types: [:boost]})
+      assert Notifications.exclude_hidden_types(filters, current_user: me) == filters
+    end
+
+    test "unions with the caller's own exclusions rather than replacing them", %{me: me} do
+      assert Notifications.exclude_hidden_types(
+               notifications(%{exclude_activity_types: [:like]}),
+               current_user: me
+             ) == notifications(%{exclude_activity_types: [:like, :boost]})
+    end
+  end
 end
