@@ -42,7 +42,7 @@ defmodule Bonfire.Social.Notifications do
   The activity types a category covers, defaulting to the verb its key names.
 
   Both the chip that shows a category and the switch that hides it read this, so the two can never
-  disagree, including approximations (Mentions is `:create` until Phase 4's tagged-me predicate).
+  disagree, including approximations (Mentions is `:create` until a filter can ask whether a tag points at you).
   """
   def activity_types_for(key) do
     # not `e/3`, which reads an empty list as nothing set, while `activity_types: []` means "every type" for the default category
@@ -50,6 +50,25 @@ defmodule Bonfire.Social.Notifications do
       %{activity_types: types} -> types
       _ -> [key]
     end
+  end
+
+  @doc """
+  Which category covers activities of this type, or nil if none declares it.
+
+  The inverse of `activity_types_for/1`, so one declaration answers both directions and a chip and a switch can never disagree about what they cover.
+
+  A category is a grouping people are shown and choose by, not a verb: what it *means* can be narrower than the types it covers, and deciding it properly takes more than an activity type. Mentions is the clearest case, since it means "something addressed me" while all it can filter on today is `create`, so an announcement lands in it too; answering it needs the recipient ("does a tag point at me"). The object can matter as much as the verb: a direct message is a `create` of a `Message`, which is why `Bonfire.Notify.Content` already overrides the verb by object type to tell a DM from a post.
+
+  So this is an approximation, and it is the same one the feed's own chips and switches make, so they move together. The exact answer is the recipient-relative verb Phase 1 adds, and this reads whatever it is told either way.
+
+  Excludes the catch-all (`other`) and the everything category (`latest`): a caller that wants "nothing covers this" should see nil and decide, rather than be handed a key whose filter means something else.
+  """
+  def category_for_activity_type(activity_type) do
+    Enum.find_value(categories(), fn {key, _category} ->
+      types = activity_types_for(key)
+
+      if types != [] and activity_type in types, do: key
+    end)
   end
 
   @doc "A category's plural label: what it declares, else the verb's own (singular) name, else its key."

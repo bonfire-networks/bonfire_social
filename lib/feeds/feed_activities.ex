@@ -54,14 +54,22 @@ defmodule Bonfire.Social.FeedActivities do
   def cast(changeset, creator, opts) do
     case opts[:feed_ids] do
       nil ->
-        # the fan-out already worked out which of these feeds notify someone, so pass that along rather than making a later reader ask again
-        %{all: feeds, notifications: notifications} =
+        # the fan-out already worked out who is notified and which feeds that is, so pass both along rather than making a later reader ask again
+        %{all: feeds, notifications: notifications, notify_users: notify_users} =
           Feeds.target_feeds_classified(changeset, creator, opts)
 
-        put_feed_publishes(changeset, feeds, notifications_class: notifications)
+        put_feed_publishes(changeset, feeds,
+          notifications_class: notifications,
+          notify_users: notify_users
+        )
 
       feeds ->
-        put_feed_publishes(changeset, feeds)
+        # a caller that resolved the feeds itself (the Epic's activity Act) tells us which ones notify, and who
+        put_feed_publishes(changeset, feeds,
+          notifications_class: opts[:notifications_class],
+          notify_users: opts[:notify_users],
+          enqueue_notify: opts[:enqueue_notify]
+        )
     end
   end
 
@@ -207,7 +215,7 @@ defmodule Bonfire.Social.FeedActivities do
   Arranges for an insert changeset to also publish to feeds related to some objects.
 
   The one place FeedPublish rows are built, whichever route asked for them, which is what lets a
-  notify job be enqueued in exactly one place (plan §3.0.2).
+  notify job be enqueued in exactly one place.
 
   Options: see `get_publish_feed_ids/1`, plus `:notifications_class` — which of these feeds notify
   someone, when the caller already knows (`Feeds.fan_out_feeds/6` works it out while fanning out).
@@ -220,28 +228,60 @@ defmodule Bonfire.Social.FeedActivities do
       %Ecto.Changeset{}
   """
   def put_feed_publishes(changeset, options, opts \\ []) do
-    %{all: feed_ids, notifications: notifications} = get_publish_feed_ids_classified(options)
+    %{all: feed_ids, notifications: notifications, notify_users: notify_users} =
+      get_publish_feed_ids_classified(options)
 
-    feed_ids
-    |> Enum.map(&%{feed_id: &1})
-    |> debug("got_feed_publishes")
-    |> Changesets.put_assoc!(changeset, :feed_publishes, ...)
-    |> maybe_enqueue_notify(opts[:notifications_class] || notifications)
+    notifying = %{
+      feeds: opts[:notifications_class] || notifications,
+      users: List.wrap(opts[:notify_users] || notify_users)
+    }
+
+    rows =
+      feed_ids
+      |> Enum.map(&%{feed_id: &1})
+      |> debug("got_feed_publishes")
+      |> Changesets.put_assoc!(changeset, :feed_publishes, ...)
+
+    # `enqueue_notify: false` from a caller that notifies after its own transaction commits, where a failure can be reported to whoever caused it. Default is to enqueue, so a route that says nothing still notifies
+    if opts[:enqueue_notify] == false,
+      do: rows,
+      else: maybe_enqueue_notify(rows, notifying)
   end
 
   @doc """
   Enqueues one notify job for an activity that reaches someone's notifications, or nothing when it reaches nobody's.
 
-  A no-op while `bonfire_notify` is disabled or not installed, so `bonfire_social` never depends on it.
+  Takes `%{feeds: [feed_id], users: [user]}`: the recipients where the write path resolved them,
+  which it usually did, and the notifying feed ids either way, for the paths that only know those
+  (a circle's notifications, the admin feeds). A no-op while `bonfire_notify` is disabled or not
+  installed, so `bonfire_social` never depends on it.
   """
-  def maybe_enqueue_notify(changeset, notification_feed_ids)
+  def maybe_enqueue_notify(changeset, notifying)
 
-  def maybe_enqueue_notify(changeset, []), do: changeset
+  def maybe_enqueue_notify(changeset, %{feeds: [], users: []}), do: changeset
 
-  def maybe_enqueue_notify(changeset, notification_feed_ids) do
-    # TODO (Phase 0.1b): co-insert the job here via `prepare_changes`, so it shares this changeset's transaction and a rollback takes the job with it
-    debug(notification_feed_ids, "would enqueue a notify job for these feeds")
-    changeset
+  def maybe_enqueue_notify(changeset, notifying) do
+    # inside the insert's own transaction, so the job cannot outlive a publish that rolls back, and the activity id is available by then (`Activities.cast/4` sets it from the object, `Edges` set the edge id up front)
+    Ecto.Changeset.prepare_changes(changeset, fn cs ->
+      enqueue_notify(notifying, Ecto.Changeset.get_field(cs, :id))
+      cs
+    end)
+  end
+
+  # what a notify job is and how it is inserted belongs to the notify extension; here we only say who is being notified. A no-op when that extension isn't installed or is disabled
+  defp enqueue_notify(notifying, activity_id) do
+    recipients =
+      Enum.map(notifying.users, fn
+        {character, feed} -> %{user_id: uid(character), feed: feed}
+        character -> %{user_id: uid(character), feed: :notifications}
+      end)
+
+    maybe_apply(
+      Bonfire.Notify.Worker,
+      :enqueue_fan_out,
+      [activity_id, %{feeds: notifying.feeds, recipients: recipients}],
+      fallback_return: :skip
+    )
   end
 
   @doc """
@@ -309,15 +349,28 @@ defmodule Bonfire.Social.FeedActivities do
       for(
         character <- all,
         feed <- index[uid(character)],
-        do: {feed, Feeds.feed_id(feed, character)}
+        do: {feed, character, Feeds.feed_id(feed, character)}
       )
 
     debug(resolved, "resolved feed IDs")
 
     %{
-      all: unique_feed_ids(Enum.map(resolved, &elem(&1, 1)) ++ Keyword.get(options, :feeds, [])),
+      all:
+        unique_feed_ids(
+          for({_feed, _character, id} <- resolved, do: id) ++ Keyword.get(options, :feeds, [])
+        ),
       notifications:
-        unique_feed_ids(for({feed, id} <- resolved, feed in [:notifications, :inbox], do: id))
+        unique_feed_ids(
+          for({feed, _character, id} <- resolved, feed in [:notifications, :inbox], do: id)
+        ),
+      # the recipients themselves, already loaded here, so whoever notifies them doesn't start by turning feed ids back into people. Paired with the feed that reached them, since an inbox means a DM and those are delivered differently
+      notify_users:
+        for(
+          {feed, character, _id} <- resolved,
+          feed in [:notifications, :inbox],
+          do: {character, feed}
+        )
+        |> Enum.uniq_by(fn {character, feed} -> {uid(character), feed} end)
     }
   end
 
@@ -592,7 +645,7 @@ defmodule Bonfire.Social.FeedActivities do
           {:ok, _} ->
             # only once the rows are committed: broadcasting first tells clients about activities that a rollback then takes away
             if push?,
-              do: maybe_apply(Bonfire.Social.LivePush, :push_activity, [feed_ids, activity])
+              do: maybe_apply(Bonfire.Social.LivePush, :emit_live, [activity, feed_ids])
 
           e ->
             error(e, "FeedActivities: could not put_in_feeds")
@@ -664,7 +717,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp hide_activities(fp) when is_list(fp) do
     for %{id: activity, feed_id: feed_id} <- fp do
-      maybe_apply(Bonfire.Social.LivePush, :hide_activity, [
+      maybe_apply(Bonfire.Social.LivePush, :hide_live, [
         feed_id,
         activity
       ])

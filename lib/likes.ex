@@ -225,11 +225,15 @@ defmodule Bonfire.Social.Likes do
             do: [Feeds.feed_id(:notifications, object_creator)],
             else: []
 
-        maybe_apply(Bonfire.Social.LivePush, :push_activity_object, [
-          feed_ids,
+        maybe_apply(Bonfire.Social.LivePush, :emit_live, [
           like,
-          Objects.preload_creator(liked, force: true),
-          [push_to_thread: false, notify: creator_notify_feeds]
+          feed_ids,
+          [
+            # shown as being about what was liked, rather than about the like
+            object: Objects.preload_creator(liked, force: true),
+            push_to_thread: false,
+            notify: creator_notify_feeds
+          ]
         ])
 
         if !opts[:skip_federation],

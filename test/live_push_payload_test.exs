@@ -2,7 +2,7 @@ defmodule Bonfire.Social.LivePushPayloadTest do
   @moduledoc """
   What a live-pushed `:new_activity` payload carries.
 
-  `LivePush.push_activity/3`'s object clause builds the payload via `activity_from_object/1`, which merges the object into the activity with `maybe_merge_to_struct/2`. Both sides are structs sharing mixins (`:replied`, `:created`, `:sensitive`, `:named`), and a struct precedence is copied verbatim — `%NotLoaded{}` included — so an assoc unloaded on the object can in principle replace one loaded on the activity. This test exists to establish whether that actually reaches subscribers, or whether `prepare_activity/2`'s preloading repairs it first: the answer decides whether `Enums.maybe_merge_to_struct/3`'s shared default needs changing (see the plan's Task D) or whether the per-site fix in `activity_under_object/1` is the whole story.
+  `LivePush.emit_live/3`'s object clause builds the payload via `activity_from_object/1`, which merges the object into the activity with `maybe_merge_to_struct/2`. Both sides are structs sharing mixins (`:replied`, `:created`, `:sensitive`, `:named`), and a struct precedence is copied verbatim — `%NotLoaded{}` included — so an assoc unloaded on the object can in principle replace one loaded on the activity. This test exists to establish whether that actually reaches subscribers, or whether `prepare_activity/2`'s preloading repairs it first: the answer decides whether `Enums.maybe_merge_to_struct/3`'s shared default needs changing (see the plan's Task D) or whether the per-site fix in `activity_under_object/1` is the whole story.
   """
   use Bonfire.Social.DataCase, async: true
   use Bonfire.Common.Utils
@@ -50,7 +50,7 @@ defmodule Bonfire.Social.LivePushPayloadTest do
     feed_id = "live_push_merge_retention_test"
     :ok = PubSub.subscribe(feed_id, current_user: me)
 
-    LivePush.push_activity(feed_id, object)
+    LivePush.emit_live(object, feed_id)
 
     assert_receive {
       {Bonfire.Social.Feeds, :new_activity},
@@ -95,7 +95,7 @@ defmodule Bonfire.Social.LivePushPayloadTest do
     feed_id = "live_push_unrepaired_assoc_test"
     :ok = PubSub.subscribe(feed_id, current_user: me)
 
-    LivePush.push_activity(feed_id, object)
+    LivePush.emit_live(object, feed_id)
 
     assert_receive {
       {Bonfire.Social.Feeds, :new_activity},

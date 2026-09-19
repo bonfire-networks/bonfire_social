@@ -12,14 +12,10 @@ defmodule Bonfire.Social.FeedsMergingActivitiesTest do
   alias Bonfire.Posts
   alias Needle.Pointer
 
-  setup_all do
-    orig2 = Config.get(:default_pagination_limit)
-
-    Config.put(:default_pagination_limit, 10)
-
-    on_exit(fn ->
-      Config.put(:default_pagination_limit, orig2)
-    end)
+  setup do
+    # per process rather than `Config.put`, which is global: while this file ran, every other test saw a limit of 10 instead of the test default, which is how `masto_api/favourites_test.exs` came to fail only in a full-suite run
+    Process.put([:bonfire, :default_pagination_limit], 10)
+    :ok
   end
 
   test "notifications feed combines likes and boosts on same object but keeps each reply separate" do
