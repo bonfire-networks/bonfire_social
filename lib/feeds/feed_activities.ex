@@ -39,7 +39,12 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   @doc """
-  Casts the changeset to publish an activity to the given creator and feed IDs.
+  Casts the changeset to publish an activity to the feeds this creator and opts imply.
+
+  Works out the target feeds here rather than at the call site, so deciding which feeds an activity
+  belongs in stays a feeds concern; `opts[:feed_ids]` overrides it. Mirrors `Acls.cast/3`, and the
+  rows themselves are built by `put_feed_publishes/2`, the one place every changeset route goes
+  through, which is what gives a notify job a single place to hang from.
 
   ## Examples
 
@@ -47,21 +52,17 @@ defmodule Bonfire.Social.FeedActivities do
       %Ecto.Changeset{}
   """
   def cast(changeset, creator, opts) do
-    Feeds.target_feeds(changeset, creator, opts)
-    |> cast(changeset, ...)
-  end
+    case opts[:feed_ids] do
+      nil ->
+        # the fan-out already worked out which of these feeds notify someone, so pass that along rather than making a later reader ask again
+        %{all: feeds, notifications: notifications} =
+          Feeds.target_feeds_classified(changeset, creator, opts)
 
-  @doc """
-  Casts the changeset to publish an activity to the given feed IDs.
+        put_feed_publishes(changeset, feeds, notifications_class: notifications)
 
-  ## Examples
-
-      > cast(changeset, feed_ids)
-      %Ecto.Changeset{}
-  """
-  def cast(changeset, feed_ids) do
-    Enum.map(feed_ids || [], &%{feed_id: &1})
-    |> Changesets.put_assoc!(changeset, :feed_publishes, ...)
+      feeds ->
+        put_feed_publishes(changeset, feeds)
+    end
   end
 
   defdelegate feed(name \\ nil, opts \\ []), to: FeedLoader
@@ -205,7 +206,11 @@ defmodule Bonfire.Social.FeedActivities do
   @doc """
   Arranges for an insert changeset to also publish to feeds related to some objects.
 
-  Options: see `get_publish_feed_ids/1`
+  The one place FeedPublish rows are built, whichever route asked for them, which is what lets a
+  notify job be enqueued in exactly one place (plan §3.0.2).
+
+  Options: see `get_publish_feed_ids/1`, plus `:notifications_class` — which of these feeds notify
+  someone, when the caller already knows (`Feeds.fan_out_feeds/6` works it out while fanning out).
 
   ## Examples
 
@@ -214,10 +219,29 @@ defmodule Bonfire.Social.FeedActivities do
       > put_feed_publishes(changeset, options)
       %Ecto.Changeset{}
   """
-  def put_feed_publishes(changeset, options) do
-    get_feed_publishes(options)
+  def put_feed_publishes(changeset, options, opts \\ []) do
+    %{all: feed_ids, notifications: notifications} = get_publish_feed_ids_classified(options)
+
+    feed_ids
+    |> Enum.map(&%{feed_id: &1})
     |> debug("got_feed_publishes")
     |> Changesets.put_assoc!(changeset, :feed_publishes, ...)
+    |> maybe_enqueue_notify(opts[:notifications_class] || notifications)
+  end
+
+  @doc """
+  Enqueues one notify job for an activity that reaches someone's notifications, or nothing when it reaches nobody's.
+
+  A no-op while `bonfire_notify` is disabled or not installed, so `bonfire_social` never depends on it.
+  """
+  def maybe_enqueue_notify(changeset, notification_feed_ids)
+
+  def maybe_enqueue_notify(changeset, []), do: changeset
+
+  def maybe_enqueue_notify(changeset, notification_feed_ids) do
+    # TODO (Phase 0.1b): co-insert the job here via `prepare_changes`, so it shares this changeset's transaction and a rollback takes the job with it
+    debug(notification_feed_ids, "would enqueue a notify job for these feeds")
+    changeset
   end
 
   @doc """
@@ -235,17 +259,8 @@ defmodule Bonfire.Social.FeedActivities do
     debug(options, "get_feed_publishes input")
 
     options
-    # |> info()
     |> get_publish_feed_ids()
-    # |> info()
-    # Dedup
-    |> MapSet.new()
-    |> MapSet.delete(nil)
-    # turn into attrs
-    # |> Enum.map(&(%FeedPublish{feed_id: &1}))
     |> Enum.map(&%{feed_id: &1})
-
-    # |> info()
   end
 
   @doc """
@@ -263,7 +278,18 @@ defmodule Bonfire.Social.FeedActivities do
       > Bonfire.Social.FeedActivities.get_publish_feed_ids(options)
       ["inbox_feed_id_for_user123", "feed456"]
   """
-  def get_publish_feed_ids(options) do
+  def get_publish_feed_ids(options), do: get_publish_feed_ids_classified(options).all
+
+  @doc """
+  Same as `get_publish_feed_ids/1`, but keeps which of the feeds notify someone.
+
+  Knowable from the option keys alone, since `:notifications` and `:inbox` name recipients while
+  `:outbox` and `:feeds` are places to publish, so this costs nothing beyond the resolution that was
+  happening anyway. Returns `%{all: [feed_id], notifications: [feed_id]}`, deduplicated and without
+  nils, `notifications` being a subset of `all`. `Feeds.fan_out_feeds/6` answers the same question
+  for the route that passes bare feed ids.
+  """
+  def get_publish_feed_ids_classified(options) do
     keys = [:inbox, :outbox, :notifications]
     # process all the specifications
     options = get_feed_publishes_options(options)
@@ -277,18 +303,25 @@ defmodule Bonfire.Social.FeedActivities do
     # deliberately-mixed list (publish targets: Users, group Pointers, ...) — `prune: true`
     # batches per schema, fitted to each one's assocs
     all = repo().maybe_preload(all, :character, prune: true)
-    # and finally, look up the appropriate feed from the loaded characters
-    ids =
+
+    # and finally, look up the appropriate feed from the loaded characters, keeping the feed type each id came from
+    resolved =
       for(
         character <- all,
         feed <- index[uid(character)],
-        do: Feeds.feed_id(feed, character)
+        do: {feed, Feeds.feed_id(feed, character)}
       )
 
-    debug(ids, "resolved feed IDs")
+    debug(resolved, "resolved feed IDs")
 
-    ids ++ Keyword.get(options, :feeds, [])
+    %{
+      all: unique_feed_ids(Enum.map(resolved, &elem(&1, 1)) ++ Keyword.get(options, :feeds, [])),
+      notifications:
+        unique_feed_ids(for({feed, id} <- resolved, feed in [:notifications, :inbox], do: id))
+    }
   end
+
+  defp unique_feed_ids(ids), do: ids |> MapSet.new() |> MapSet.delete(nil) |> Enum.to_list()
 
   defp get_feed_publishes_options(options) do
     for item <- options, reduce: %{} do
@@ -545,41 +578,39 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp put_in_feeds(feeds, activity, push? \\ true)
 
-  defp put_in_feeds(feeds, activity, push?) when is_list(feeds) and feeds != [] do
-    # fa =
-    feeds
-    # |> Circles.circle_ids()
-    |> Enum.map(fn x -> put_in_feeds(x, id(activity), false) end)
+  defp put_in_feeds(feeds, activity, push?) do
+    activity_id = uid(activity)
 
-    if push?, do: maybe_apply(Bonfire.Social.LivePush, :push_activity, [feeds, activity])
-  end
+    case feeds |> List.wrap() |> Enum.map(&uid/1) |> Enum.reject(&is_nil/1) |> Enum.uniq() do
+      [] ->
+        error(feeds, "FeedActivities: did not put_in_feeds")
+        nil
 
-  defp put_in_feeds(feed_or_subject, activity, push?)
-       when is_map(feed_or_subject) or
-              (is_binary(feed_or_subject) and feed_or_subject != "") do
-    with feed_id <- uid(feed_or_subject),
-         {:ok, _published} <- do_put_in_feeds(feed_id, uid(activity)) do
-      # push to feeds of online users
-      if push?, do: maybe_apply(Bonfire.Social.LivePush, :push_activity, [feed_id, activity])
-    else
-      e ->
-        error(
-          "FeedActivities.put_in_feeds: error when trying with feed_or_subject: #{inspect(e)}"
-        )
+      feed_ids when is_binary(activity_id) ->
+        # one transaction for the batch, so a partly-published fan-out can't outlive the failure that interrupted it, and so the notify job has an open transaction to be co-inserted into. NOT `transact_with/2`: its `rescue Postgrex.Error` calls `rollback/1` after the transaction has already unwound, which raises "cannot call rollback outside of transaction" and hides the real error
+        case repo().transaction(fn -> publish_to_feeds(feed_ids, activity_id) end) do
+          {:ok, _} ->
+            # only once the rows are committed: broadcasting first tells clients about activities that a rollback then takes away
+            if push?,
+              do: maybe_apply(Bonfire.Social.LivePush, :push_activity, [feed_ids, activity])
 
+          e ->
+            error(e, "FeedActivities: could not put_in_feeds")
+            nil
+        end
+
+      _no_activity_id ->
+        error(activity, "FeedActivities: did not put_in_feeds, no activity id")
         nil
     end
   end
 
-  defp put_in_feeds(_, _, _) do
-    error("FeedActivities: did not put_in_feeds")
-    nil
-  end
-
-  defp do_put_in_feeds(feed, activity)
-       when is_binary(activity) and is_binary(feed) do
-    repo().upsert(
-      Ecto.Changeset.cast(%FeedPublish{}, %{feed_id: feed, id: activity}, [:feed_id, :id])
+  # one statement rather than a write per feed: a fan-out to a busy thread or a group addresses many feeds at once, and the rows are a two-column mixin with no timestamps, so there is nothing per-row to compute. `on_conflict: :nothing` keeps the upsert semantics of publishing the same activity twice
+  defp publish_to_feeds(feed_ids, activity_id) do
+    repo().insert_all(
+      feed_activities_schema(),
+      Enum.map(feed_ids, &%{id: activity_id, feed_id: &1}),
+      on_conflict: :nothing
     )
   end
 

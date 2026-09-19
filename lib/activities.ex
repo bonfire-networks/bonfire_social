@@ -63,7 +63,7 @@ defmodule Bonfire.Social.Activities do
     # debug(changeset)
     changeset
     |> put_assoc(verb, creator, opts[:object_id])
-    |> FeedActivities.cast(opts[:feed_ids] || Feeds.target_feeds(changeset, creator, opts))
+    |> FeedActivities.cast(creator, opts)
 
     # |> debug("csss")
   end

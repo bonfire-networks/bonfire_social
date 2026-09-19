@@ -192,35 +192,74 @@ defmodule Bonfire.Social.Feeds do
         opts \\ []
       )
 
-  def fan_out_feed_ids(_creator, "admins", _mentions, _reply_to_creator, _thread_id, _opts),
-    do: admins_notifications()
+  def fan_out_feed_ids(creator, boundary, mentions, reply_to_creator, thread_id, opts),
+    do: fan_out_feeds(creator, boundary, mentions, reply_to_creator, thread_id, opts).all
 
-  def fan_out_feed_ids(creator, boundary, mentions, reply_to_creator, thread_id, opts) do
-    [
-      maybe_custom_feeds(opts) || [],
-      # thread feed (TODO: so the thread can be followed)
-      # thread_id,
-      # author's timeline
-      maybe_my_outbox_feed_id(creator, boundary),
-      # guest/local/federated instance feeds for this boundary class (origin-aware when addressed)
-      global_feed_ids(creator, boundary, opts),
-      # notifications of reply_to creator + mentions (boundary-filtered), unless the caller
-      # precomputed them (the Act passes `notify[:notify_feeds]`)
-      opts[:notify_feeds] ||
-        reply_and_or_mentions_notifications_feeds(creator, boundary, mentions, reply_to_creator),
-      # when the caller sets `notify_to_circles` (e.g. a deliberate share), also ping the explicit
-      # `to_circles` recipients — their notifications feed, which also surfaces in their home feed
-      if(opts[:notify_to_circles],
-        do: feed_ids(:notifications, maybe_from_opts(opts, :to_circles, [])),
-        else: []
+  @doc """
+  Same as `fan_out_feed_ids/6`, but also returns which of those feeds are notifications-class.
+
+  The fan-out already knows: notifying is two of the entries it concatenates. Keeping the answer
+  saves every later reader from working it out again, whether that is the notify job deciding
+  whether there is anyone to notify at all (plan §3.0.2) or a caller wanting to publish without
+  notifying. Returns `%{all: [feed_id], notifications: [feed_id]}`, where `notifications` is a
+  subset of `all`.
+  """
+  def fan_out_feeds(
+        creator,
+        boundary,
+        mentions \\ [],
+        reply_to_creator \\ nil,
+        thread_id \\ nil,
+        opts \\ []
       )
-    ]
+
+  def fan_out_feeds(_creator, "admins", _mentions, _reply_to_creator, _thread_id, _opts) do
+    admins = admins_notifications()
+    %{all: admins, notifications: admins}
+  end
+
+  def fan_out_feeds(creator, boundary, mentions, reply_to_creator, _thread_id, opts) do
+    own_notifications = feed_id(:notifications, creator)
+
+    notifications =
+      [
+        # notifications of reply_to creator + mentions (boundary-filtered), unless the caller
+        # precomputed them (the Act passes `notify[:notify_feeds]`)
+        opts[:notify_feeds] ||
+          reply_and_or_mentions_notifications_feeds(creator, boundary, mentions, reply_to_creator),
+        # when the caller sets `notify_to_circles` (e.g. a deliberate share), also ping the explicit
+        # `to_circles` recipients — their notifications feed, which also surfaces in their home feed
+        if(opts[:notify_to_circles],
+          do: feed_ids(:notifications, maybe_from_opts(opts, :to_circles, [])),
+          else: []
+        )
+      ]
+      |> flatten_feed_ids(own_notifications)
+
+    all =
+      [
+        maybe_custom_feeds(opts) || [],
+        # thread feed (TODO: so the thread can be followed)
+        # thread_id,
+        # author's timeline
+        maybe_my_outbox_feed_id(creator, boundary),
+        # guest/local/federated instance feeds for this boundary class (origin-aware when addressed)
+        global_feed_ids(creator, boundary, opts),
+        notifications
+      ]
+      |> flatten_feed_ids(own_notifications)
+      |> debug("fan-out feed ids")
+
+    %{all: all, notifications: notifications}
+  end
+
+  defp flatten_feed_ids(lists, own_notifications) do
+    lists
     |> List.flatten()
     |> Enum.uniq()
     # avoid self-notifying (do_target_feeds did this explicitly; the Act relied on filter_reply_and_or_mentions)
-    |> Enum.reject(&(&1 == feed_id(:notifications, creator)))
+    |> Enum.reject(&(&1 == own_notifications))
     |> Enums.filter_empty([])
-    |> debug("fan-out feed ids")
   end
 
   @doc """
@@ -459,7 +498,16 @@ defmodule Bonfire.Social.Feeds do
       > Bonfire.Social.Feeds.target_feeds(object, creator, opts)
       # List of target feed IDs based on the object
   """
-  def target_feeds(%Ecto.Changeset{} = changeset, creator, opts) do
+  def target_feeds(changeset_or_object, creator, opts),
+    do: target_feeds_classified(changeset_or_object, creator, opts).all
+
+  @doc """
+  Same as `target_feeds/3`, but keeps the notifications-class subset (see `fan_out_feeds/6`).
+
+  What publishes and what notifies are different questions, and the fan-out answers both at once, so
+  a caller that needs to know whether anyone is being notified doesn't have to ask again.
+  """
+  def target_feeds_classified(%Ecto.Changeset{} = changeset, creator, opts) do
     # extract context from the (not-yet-inserted) changeset, then delegate to the shared interpreter
     mentions = e(changeset, :changes, :post_content, :changes, :mentions, [])
 
@@ -470,7 +518,7 @@ defmodule Bonfire.Social.Feeds do
       e(changeset, :changes, :replied, :changes, :thread_id, nil) ||
         e(changeset, :changes, :replied, :changes, :replying_to, :thread_id, nil)
 
-    fan_out_feed_ids(
+    fan_out_feeds(
       creator,
       maybe_from_opts(opts, :boundary, opts),
       mentions,
@@ -480,7 +528,7 @@ defmodule Bonfire.Social.Feeds do
     )
   end
 
-  def target_feeds(%{} = object, creator, opts) do
+  def target_feeds_classified(%{} = object, creator, opts) do
     object =
       object
       |> repo().maybe_preload([replied: [reply_to: [created: :creator]]], prune: true)
@@ -497,7 +545,7 @@ defmodule Bonfire.Social.Feeds do
     # boost/ingest by the boosted/referenced object's locality (for original posts object==subject)
     opts = if(Keyword.keyword?(opts), do: Keyword.put(opts, :object, object), else: opts)
 
-    fan_out_feed_ids(
+    fan_out_feeds(
       creator,
       maybe_from_opts(opts, :boundary, opts),
       tags,
@@ -507,8 +555,8 @@ defmodule Bonfire.Social.Feeds do
     )
   end
 
-  def target_feeds({_, %{} = object}, creator, opts),
-    do: target_feeds(object, creator, opts)
+  def target_feeds_classified({_, %{} = object}, creator, opts),
+    do: target_feeds_classified(object, creator, opts)
 
   @doc """
   Retrieves custom feeds if specified in the options.
