@@ -24,7 +24,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
     def feed_by_name(conn, feed_name, params) do
       params
-      |> PaginationHelpers.build_feed_params(%{
+      |> PaginationHelpers.build_timeline_params(%{
         "feed_name" => feed_name,
         "preload" => @masto_feed_preloads
       })
@@ -36,7 +36,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       normalized_tag = Helpers.normalize_hashtag(hashtag)
 
       params
-      |> PaginationHelpers.build_feed_params(%{
+      |> PaginationHelpers.build_timeline_params(%{
         "feed_name" => feed_name,
         "tags" => [normalized_tag],
         "preload" => @masto_feed_preloads
