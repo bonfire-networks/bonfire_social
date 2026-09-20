@@ -44,7 +44,7 @@ defmodule Bonfire.Social.FeedsPubTest do
 
     activity = post.activity
 
-    Bonfire.Social.LivePush.push_activity(feed_id, activity)
+    Bonfire.Social.LivePush.emit_live(activity, feed_id)
 
     assert_receive {
       {Bonfire.Social.Feeds, :new_activity},

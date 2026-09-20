@@ -226,11 +226,15 @@ defmodule Bonfire.Social.Boosts do
           else: []
 
       if !opts[:skip_live_push] do
-        maybe_apply(Bonfire.Social.LivePush, :push_activity_object, [
-          feed_ids,
+        maybe_apply(Bonfire.Social.LivePush, :emit_live, [
           boost,
-          Objects.preload_creator(boosted, force: true),
-          [push_to_thread: false, notify: creator_notify_feeds]
+          feed_ids,
+          [
+            # shown as being about what was boosted, rather than about the boost
+            object: Objects.preload_creator(boosted, force: true),
+            push_to_thread: false,
+            notify: creator_notify_feeds
+          ]
         ])
       end
 

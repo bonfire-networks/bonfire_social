@@ -1,5 +1,13 @@
 defmodule Bonfire.Social.LivePush do
-  @moduledoc "Handles pushing activities (via PubSub and/or email) to active feeds and notifications"
+  @moduledoc """
+  Telling whoever has this open, right now.
+
+  One function does it: `emit_live/3` broadcasts an activity to the feeds it reached, publishes it to GraphQL subscribers, shows it in the thread anyone is reading, bumps their unseen counters, and flashes it to people who are online. `hide_live/2` is the same for a retraction.
+
+  Durable delivery is not here and never runs from here: that is `Bonfire.Notify.FanOut`, reached after the transaction commits, and sending from both places would deliver everything twice. The two are meant to be different: a missed broadcast is harmless because the feed row is the record, while a missed notification is a real loss.
+
+  Called after a commit, from whoever committed: the Epic's Act for posts, and the funnel's own exits for edges, messages and the post-hoc publish route.
+  """
 
   use Bonfire.Common.Utils
   import Untangle
@@ -10,159 +18,163 @@ defmodule Bonfire.Social.LivePush do
   alias Bonfire.Data.Social.Activity
 
   @doc """
-  Receives an activity with a nested object, or vice versa, uses PubSub to pushes to feeds and optionally notifications
+  Broadcasts an activity to everyone who has somewhere it appears open, and returns it.
+
+  Takes an activity or an object carrying one, plus the feed ids it was published to.
+
+  Options:
+    * `:object` — a different object to show the activity as being about, for an edge whose own object
+      is the thing being liked or boosted rather than the edge.
+    * `:notify` / `:notify_feeds` — which of the feeds are notifications, since those are the ones
+      whose unseen counters move and whose owners get a flash. Accepts the map the write path already
+      built, a list of feed ids, or `true` to mean all of them.
+    * `:box` — which counter the notifications belong to, `:notifications` (default) or `:inbox`.
+    * `:push_to_thread` — whether anyone reading the thread should see it appear, default true.
   """
-  def push_activity(to_feeds, activity, opts \\ [])
+  def emit_live(activity_or_object, feed_ids, opts \\ [])
 
-  def push_activity(to_feeds, %Activity{} = activity, opts) do
-    debug(to_feeds, "push a :new_activity to feed_ids")
-    activity = prepare_activity(activity, opts)
+  def emit_live(%Activity{} = activity, feed_ids, opts) do
+    activity = activity |> with_object(opts[:object]) |> prepare_activity(opts)
 
-    has_feed_ids? = is_binary(to_feeds) or (is_list(to_feeds) and to_feeds != [])
+    # passed through as given rather than normalised: a subscriber matches on what it subscribed to, which is not always an id (a thread topic, a test topic), and the payload carries the same value back
+    has_feed_ids? = is_binary(feed_ids) or (is_list(feed_ids) and feed_ids != [])
 
-    if has_feed_ids?,
-      do:
-        PubSub.broadcast(to_feeds, {
-          {Bonfire.Social.Feeds, :new_activity},
-          [
-            feed_ids: to_feeds,
-            activity: activity
-          ]
-        })
+    if has_feed_ids? do
+      debug(feed_ids, "broadcast a :new_activity to feeds")
 
-    if has_feed_ids?, do: maybe_publish_graphql_subscription(to_feeds, activity)
+      PubSub.broadcast(feed_ids, {
+        {Bonfire.Social.Feeds, :new_activity},
+        [feed_ids: feed_ids, activity: activity]
+      })
+
+      maybe_publish_graphql_subscription(feed_ids, activity)
+    end
 
     if Keyword.get(opts, :push_to_thread, true), do: maybe_push_thread(activity)
 
-    notify(activity, Keyword.put_new(opts, :feed_ids, to_feeds))
+    case notified_feed_ids(opts) do
+      [] ->
+        nil
+
+      notified ->
+        increment_counters(notified, Keyword.get(opts, :box, :notifications))
+        flash_to_subscribers(activity, notified)
+    end
 
     activity
   end
 
-  def push_activity(
-        to_notify,
-        %{id: _, activity: _activity} = object,
-        opts
-      ) do
-    # debug(to_notify, "push an object as :new_activity")
-
+  def emit_live(%{id: _, activity: _activity} = object, feed_ids, opts) do
     activity_from_object(object)
-    |> push_activity(to_notify, ..., opts)
-    # returns the object + the preloaded activity
+    |> emit_live(feed_ids, opts)
+    # hand back the object with its prepared activity, since that is what a caller of this shape has
     |> Map.put(object, :activity, ...)
   end
 
-  def push_activity(_to_notify, activity, _opts) do
-    warn(activity, "skip invalid activity")
-    activity
+  def emit_live(other, _feed_ids, _opts) do
+    warn(other, "nothing to broadcast: not an activity, and carrying none")
+    other
   end
 
   @doc """
-  Receives an activity *and* object, uses PubSub to pushes to feeds and optionally notifications, and returns an Activity.
+  Tells everyone who has it open that an activity is gone.
+
+  The payload carries `feed_ids` like `:new_activity` does, so a subscriber that tracks several feeds (the Mastodon streaming socket) can match the retraction to the right stream. Already-delivered notifications are not recalled, which is what the delivery job's existence check covers for the ones that haven't gone out yet.
   """
-  def push_activity_object(
-        to_notify,
-        %{id: _, activity: %{id: _}} = parent_object,
-        object,
-        opts
-      ) do
-    debug(to_notify, "push an activity with custom object as :new_activity")
-
-    # add object assocs to the activity
-    maybe_merge_to_struct(
-      parent_object.activity,
-      Map.drop(parent_object, [:activity])
-    )
-    # push as activity with :object
-    |> Map.put(:object, Map.drop(object, [:activity]))
-    |> Map.drop([:activity])
-    |> push_activity(to_notify, ..., opts)
-  end
-
-  def hide_activity(feed_id, activity_id) do
-    # Payload mirrors `:new_activity` (carries `feed_ids`) so subscribers like the
-    # Mastodon streaming socket can match the deletion to the right stream(s).
-    PubSub.broadcast(feed_id, {
+  def hide_live(feed_ids, activity_id) do
+    PubSub.broadcast(feed_ids, {
       {Bonfire.Social.Feeds, :hide_activity},
-      [feed_ids: List.wrap(feed_id), activity_id: activity_id]
+      [feed_ids: List.wrap(feed_ids), activity_id: activity_id]
     })
 
-    # also send to the thread
-    # TODO: only do this for thread roots, and otherwise notify the actual thread
+    # and to anyone reading the thread it was in
     PubSub.broadcast(activity_id, {
       {Bonfire.Social.Feeds, :hide_activity},
       [feed_ids: List.wrap(activity_id), activity_id: activity_id]
     })
-
-    # TODO!
-    # if Keyword.get(opts, :push_to_thread, true), do: maybe_push_thread(activity)
   end
 
-  def notify_of_message(subject, verb, object, users) do
-    activity =
-      activity_from_object(object)
-      |> prepare_activity()
+  @doc """
+  The live half of sending a direct message: everything `emit_live/3` does, plus what only messages need.
 
-    # show the message in the thread if user has it open
-    maybe_push_thread(activity)
-
+  A DM has one more audience than a notification does, the messages list itself, so everyone in the conversation is told a thread has a new message even if they are looking at the list rather than the thread. Counters go to the inbox box rather than notifications, since that is the badge a DM moves.
+  """
+  def emit_live_message(subject, object, users) do
+    activity = activity_from_object(object) |> prepare_activity()
     subject_id = uid(subject)
+    others = Enum.reject(users, &(uid(&1) == subject_id))
 
-    users_excluding_me =
-      users
-      |> Enum.reject(&(uid(&1) == subject_id))
-      |> debug()
+    inbox_feed_ids = FeedActivities.get_publish_feed_ids(inbox: users ++ [subject]) |> uids()
 
-    # FIXME: avoid querying this several times
-    FeedActivities.get_publish_feed_ids(inbox: users_excluding_me)
-    |> uids()
-    # increment the badge in nav
-    |> increment_counters(:inbox)
-
-    # FIXME: avoid querying this several times
-    inbox_feed_ids =
-      FeedActivities.get_publish_feed_ids(inbox: users ++ [subject])
-      |> uids()
-
-    # show the thread in messages list view if the user has it open
     PubSub.broadcast(inbox_feed_ids, {
       :new_message,
       %{
         feed_ids: inbox_feed_ids,
         thread_id: e(object, :replied, :thread_id, nil) || e(activity, :replied, :thread_id, nil),
-        # the message activity, so consumers (e.g. Mastodon streaming) can render
-        # the conversation's last_status and participating account
+        # the message activity, so consumers (the Mastodon streaming socket) can render the conversation's last status and who is in it
         activity: activity
       }
     })
 
-    # finally send a regular notification too
-    notify_users(subject, verb, object, users_excluding_me)
+    emit_live(activity, inbox_feed_ids,
+      notify_feeds: FeedActivities.get_publish_feed_ids(inbox: others) |> uids(),
+      box: :inbox
+    )
   end
 
   @doc """
-  Sends a notification about an activity to a list of users, excluding the author/subject
+  Preloads an activity to the point where it can be displayed.
+
+  The same set the feed itself uses, so what a live-rendered activity shows matches what a reload would.
   """
-  def notify_users(subject, verb, object, users) do
-    subject_id = uid(subject)
-
-    # TODO: send email notif
-
-    users
-    |> Enum.reject(&(uid(&1) == subject_id))
-    |> FeedActivities.get_publish_feed_ids(notifications: ...)
-    |> uids()
-    |> notify(subject, verb, object, ...)
-  end
-
   def prepare_activity(%Activity{} = activity, opts \\ []) do
     Activities.activity_preloads(activity, live_push_preloads(activity), opts)
     # resolve subject/creator the same way the feed/read paths do, so a locality-marked
     # `current_user`/`subject_user` (carrying `:peered`) is used — letting the live-rendered
     # activity classify `is_local?` without an on-demand raising preload
     |> Activities.prepare_subject_and_creator(opts)
+  end
 
-    # |> debug("make sure that all needed assocs are preloaded without n+1")
+  # an edge's activity is about the edge, so a like or boost has to be shown as being about what was liked or boosted
+  defp with_object(activity, nil), do: activity
+
+  defp with_object(activity, object) do
+    activity
+    |> maybe_merge_to_struct(Map.drop(object, [:activity]))
+    |> Map.put(:object, Map.drop(object, [:activity]))
+    |> Map.drop([:activity])
+  end
+
+  # which of the published feeds are notifications, in whichever shape the caller has: the map the write path built, a bare list, or `true` for all of them
+  defp notified_feed_ids(opts) do
+    notify = e(opts, :notify, nil)
+
+    cond do
+      notify == true -> e(opts, :feed_ids, [])
+      feeds = e(notify, :notify_feeds, nil) || e(opts, :notify_feeds, nil) -> feeds
+      is_list(notify) -> notify
+      true -> []
+    end
+    |> uids()
+  end
+
+  # an in-app flash for whoever has one of these feeds open. Described by `Activities.describe/1`, the same function a notification's content is built from, so a flash and a push say the same thing about the same activity
+  defp flash_to_subscribers(activity, notified_feed_ids) do
+    %{title: title, body: body, url: url, icon: icon} = Activities.describe(activity)
+
+    maybe_apply(Bonfire.UI.Common.Notifications, :notify_broadcast, [
+      notified_feed_ids,
+      %{title: title, message: body, url: url, icon: icon}
+    ])
+  end
+
+  defp increment_counters(feed_ids, box) do
+    Enum.each(feed_ids, fn feed_id ->
+      PubSub.broadcast(
+        "unseen_count:#{feed_id}",
+        {{Bonfire.Social.Feeds, :count_increment}, %{box: box, feed_id: feed_id}}
+      )
+    end)
   end
 
   defp live_push_preloads(%Activity{object: object}) do
@@ -177,258 +189,13 @@ defmodule Bonfire.Social.LivePush do
       else: Enum.reject(preloads, &(&1 == :with_creator))
   end
 
-  defp maybe_skip_object_creator(preloads, _object),
-    do: Enum.reject(preloads, &(&1 == :with_creator))
-
-  def notify(activity, opts),
-    do: send_notifications(activity, opts)
-
-  def notify(subject, verb, object, opts) do
-    send_notifications(%{subject: subject, verb: verb, object: object}, opts)
-  end
-
-  defp send_notifications(%{subject: subject, verb: verb, object: object} = activity, opts \\ []) do
-    verb_display =
-      Bonfire.Social.Activities.verb_name(verb)
-      |> Bonfire.Social.Activities.verb_display()
-
-    avatar = Media.avatar_url(subject)
-
-    icon =
-      cond do
-        is_binary(avatar) and avatar != Media.avatar_fallback() -> avatar
-        true -> Config.get([:ui, :theme, :instance_icon], "/images/bonfire-icon.png")
-      end
-
-    opt_notify =
-      e(opts, :notify, nil)
-      |> debug("notify opt")
-
-    all_feed_ids = e(opts, :feed_ids, [])
-
-    notify_feed_ids =
-      cond do
-        opt_notify == true ->
-          all_feed_ids
-
-        notify_feeds = e(opt_notify, :notify_feeds, nil) || e(opts, :notify_feeds, nil) ->
-          notify_feeds
-
-        is_list(opt_notify) ->
-          opt_notify
-
-        true ->
-          []
-      end
-      |> debug("send_notify_feed_ids")
-      |> uids()
-
-    notify_emails =
-      cond do
-        notify_emails = e(opt_notify, :notify_emails, nil) || e(opts, :notify_emails, nil) ->
-          notify_emails
-
-        true ->
-          []
-      end
-      |> uids()
-
-    # {notify_feed_ids, notify_emails} =
-    #   case (Keyword.keyword?(opts) && Keyword.get(opts, :notify)) || opts do
-    #     %{notify_feeds: notify_feeds, notify_emails: notify_emails} ->
-    #       {notify_feeds, notify_emails}
-
-    #     %{notify_emails: notify_emails} ->
-    #       {[], notify_emails}
-
-    #     %{notify_feeds: notify_feeds} ->
-    #       {notify_feeds, []}
-
-    #     notify_feeds when is_list(notify_feeds) and notify_feeds != [] ->
-    #       {notify_feeds, []}
-
-    #     true ->
-    #       {Keyword.get(opts, :feed_ids, []), []}
-
-    #     _ ->
-    #       {[], []}
-    #   end
-
-    # notify_feed_ids = uids(notify_feed_ids)
-
-    # increment currently visible unread counters
-    if notify_feed_ids != [] do
-      increment_counters(notify_feed_ids, :notifications)
-    end
-
-    if notify_feed_ids != [] or notify_emails != [] do
-      content =
-        e(
-          object,
-          :post_content,
-          :name,
-          nil
-        ) ||
-          e(
-            object,
-            :named,
-            :name,
-            nil
-          ) ||
-          e(
-            object,
-            :name,
-            nil
-          ) ||
-          e(
-            object,
-            :post_content,
-            :summary,
-            nil
-          ) ||
-          Text.maybe_markdown_to_html(
-            e(
-              object,
-              :post_content,
-              :html_body,
-              nil
-            )
-          ) || e(object, :profile, :name, nil) ||
-          e(object, :character, :username, nil)
-
-      notify_category = verb_to_notify_category(verb)
-
-      preview_assigns = %{
-        title:
-          (e(subject, :profile, :name, nil) || e(subject, :character, :username, "")) <>
-            " #{verb_display}",
-        message: Text.text_only(content || ""),
-        url: resolve_push_url(object),
-        icon: icon || Config.get([:ui, :theme, :instance_icon], nil),
-        notify_category: notify_category,
-        # the account that triggered this notification, for push `policy` enforcement
-        from_id: uid(subject)
-      }
-
-      # WIP: send email notif?
-      if is_list(notify_emails) and notify_emails != [] do
-        debug(notify_emails, "WIP - send email notifications")
-        # debug(Bonfire.UI.Social.ActivityLive.activity_components(
-        #      %{subject: subject, verb: verb},
-        #      object,
-        #      :email
-        #    ))
-
-        url = URIs.based_url(preview_assigns[:url])
-
-        assigns =
-          Bonfire.UI.Social.ActivityLive.prepare_assigns(%{
-            activity: activity,
-            object: object,
-            permalink: url
-          })
-
-        email =
-          Bonfire.Mailer.new(
-            subject: "[Bonfire] " <> preview_assigns[:title]
-            # html_body: preview_assigns[:title] <> "<p> #{content}<p><a href='#{url}'>See details</a>",
-            # text_body: preview_assigns[:title] <> "\n\n" <> preview_assigns[:message] <> "\n\n" <> url
-          )
-          |> Bonfire.Mailer.Render.templated(Bonfire.UI.Social.ActivityLive, assigns,
-            layout: Bonfire.UI.Common.Email.Basic
-          )
-          |> debug()
-
-        Enum.map(notify_emails, &(Bonfire.Mailer.send_now(email, &1) |> debug()))
-      end
-
-      # Send in-app flash notifications to online users
-      maybe_apply(Bonfire.UI.Common.Notifications, :notify_broadcast, [
-        notify_feed_ids,
-        preview_assigns
-      ])
-
-      # Send web push notifications (filtering by user preferences happens in Bonfire.Notify)
-      send_push_notifications(notify_feed_ids, preview_assigns)
-    end
-  end
-
-  defp send_push_notifications([], _preview_assigns), do: :ok
-
-  defp send_push_notifications(user_ids, preview_assigns) do
-    debug(preview_assigns, "📤 send_push_notifications called with preview_assigns")
-    debug(user_ids, "📤 Sending to user_ids")
-
-    if module_enabled?(Bonfire.Notify) do
-      results = Bonfire.Notify.notify(preview_assigns, user_ids)
-
-      debug(results, "📤 Push notification results")
-
-      # Log results for debugging
-      case results do
-        {:error, reason} ->
-          warn(reason, "Push notification error")
-
-        results when is_list(results) ->
-          successful = Enum.count(results, fn {status, _, _} -> status == :ok end)
-          failed = Enum.count(results, fn {status, _, _} -> status == :error end)
-          debug("Web push sent: #{successful} successful, #{failed} failed")
-
-        other ->
-          warn(other, "Unexpected result from notify")
-      end
-    else
-      debug("Bonfire.Notify not enabled, skipping push notifications")
-    end
-  end
-
-  defp resolve_push_url(object) do
-    # For Media link previews (type "Page"), the external URL is stored in media.path.
-    # Optionally, Use it as the push tap destination so the user lands on the actual content,
-    # not the Bonfire wrapper post.
-    # Also check the quoted/replied-to object's media path (for broadcast-quote of a link preview).
-    url =
-      if Config.get([__MODULE__, :broadcast_media_canonical_link], false) do
-        e(object, :path, nil)
-      end
-
-    if is_binary(url) and String.starts_with?(url, "http"),
-      do: url,
-      else: e(object, :quote, :path, nil) || path(object)
-  end
-
-  defp verb_to_notify_category(verb) do
-    case Bonfire.Social.Activities.verb_name(verb) do
-      "Like" -> :likes
-      "Boost" -> :boosts
-      "Follow" -> :follows
-      "Message" -> :messages
-      _ -> :replies_and_mentions
-    end
-  end
-
-  defp increment_counters(feed_ids, box) do
-    Enum.each(feed_ids, fn feed_id ->
-      PubSub.broadcast(
-        "unseen_count:#{feed_id}",
-        {{Bonfire.Social.Feeds, :count_increment}, %{box: box, feed_id: feed_id}}
-      )
-    end)
-  end
+  defp maybe_skip_object_creator(preloads, _object), do: preloads
 
   defp activity_from_object(%{id: _, activity: _activity} = object) do
     # TODO: optimise and put elsewhere
-    object =
-      object
-      |> repo().maybe_preload(:activity)
-
-    activity =
-      object
-      |> Map.get(:activity)
-
-    object =
-      object
-      |> Map.drop([:activity])
+    object = repo().maybe_preload(object, :activity)
+    activity = Map.get(object, :activity)
+    object = Map.drop(object, [:activity])
 
     # add object assocs to the activity
     maybe_merge_to_struct(activity, object)
@@ -487,10 +254,7 @@ defmodule Bonfire.Social.LivePush do
     nil
   end
 
-  # Publish to GraphQL subscriptions (graphql-ws) keyed by feed/thread id, so a
-  # client subscribed to `feedActivity` (topic = a feed id or thread id) receives
-  # the activity live, without an extra query. No-op if Absinthe subscriptions
-  # aren't available.
+  # Publish to GraphQL subscriptions (graphql-ws) keyed by feed/thread id, so a client subscribed to `feedActivity` (topic = a feed id or thread id) receives the activity live, without an extra query. No-op if Absinthe subscriptions aren't available.
   defp maybe_publish_graphql_subscription(topics, activity) do
     if Code.ensure_loaded?(Absinthe.Subscription) do
       endpoint = Bonfire.Common.Config.endpoint_module()

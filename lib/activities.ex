@@ -2693,6 +2693,24 @@ defmodule Bonfire.Social.Activities do
   def verb_name(%{verb_id: id}), do: Bonfire.Boundaries.Verbs.get(id)[:verb]
   def verb_name(%{verb: verb}) when is_binary(verb), do: verb
 
+  @doc """
+  The verb of an activity as its slug, whether or not the verb is preloaded.
+
+  The slug is what the verb registry and every per-verb setting are keyed by, while a preloaded verb carries its display name ("Create") and an unloaded one only an id, so reading either directly gives two different answers for the same activity.
+
+  ## Examples
+
+      iex> verb_slug(%{verb: %{verb: "Create"}})
+      :create
+  """
+  def verb_slug(%{verb: %{verb: name}}) when is_binary(name),
+    do: Bonfire.Boundaries.Verbs.get_slug(name)
+
+  def verb_slug(%{verb_id: id}) when is_binary(id), do: Bonfire.Boundaries.Verbs.get_slug(id)
+  def verb_slug(%{verb: name}) when is_binary(name), do: Bonfire.Boundaries.Verbs.get_slug(name)
+  def verb_slug(slug) when is_atom(slug) and not is_nil(slug), do: slug
+  def verb_slug(_), do: nil
+
   # @decorate time()
   @doc """
   Optionally modifies the verb based on activity context.
@@ -2775,6 +2793,67 @@ defmodule Bonfire.Social.Activities do
     else
       verb
     end
+  end
+
+  @doc """
+  Describes an activity for somewhere it appears out of context, away from the feed row that would otherwise explain it.
+
+  Used by both things that tell someone about an activity when they are not looking at it: the in-app flash (`Bonfire.Social.LivePush`) and a notification's content (`Bonfire.Notify.Content`). It lives here because every choice in it is about this data model, which is also why both of those asking for it beats each keeping its own copy to drift.
+
+  Returns `%{title:, body:, url:, icon:}`: who did what, what it said, where tapping it lands, and a picture of whoever did it (their avatar, or the instance's icon when they have none).
+
+  Two things it deliberately leaves to the caller. It does not shorten the body, since how much room there is differs (a push payload has a size limit, a flash does not). And it does not decide whether the body may be shown at all: a direct message says who wrote rather than what they wrote, which belongs with the per-verb delivery data.
+  """
+  def describe(activity) do
+    subject = e(activity, :subject, nil)
+    object = e(activity, :object, nil)
+
+    %{
+      title:
+        (e(subject, :profile, :name, nil) || e(subject, :character, :username, "")) <>
+          " #{described_verb(activity)}",
+      body: described_body(object),
+      url: described_url(object),
+      icon: described_icon(subject)
+    }
+  end
+
+  # read in context, the way a feed row reads it: `verb_maybe_modify/2` is what turns a bare "Create" into "Reply", "Write" or "Send", and a "Request" into what was requested. Without it a notification would say somebody "created", which describes nothing
+  defp described_verb(activity) do
+    (e(activity, :verb, :verb, nil) || e(activity, :verb, nil) || e(activity, :verb_id, nil))
+    |> verb_maybe_modify(activity)
+    |> verb_display()
+  end
+
+  defp described_body(object) do
+    (e(object, :post_content, :name, nil) ||
+       e(object, :named, :name, nil) ||
+       e(object, :name, nil) ||
+       e(object, :post_content, :summary, nil) ||
+       Bonfire.Common.Text.maybe_markdown_to_html(e(object, :post_content, :html_body, nil)) ||
+       e(object, :profile, :name, nil) ||
+       e(object, :character, :username, nil))
+    |> Bonfire.Common.Text.text_only()
+  end
+
+  # where tapping it should land. A link preview's own URL is the useful destination rather than the post wrapping it, when the instance prefers that
+  defp described_url(object) do
+    external =
+      if Config.get([Bonfire.Social.LivePush, :broadcast_media_canonical_link], false) do
+        e(object, :path, nil)
+      end
+
+    if is_binary(external) and String.starts_with?(external, "http"),
+      do: external,
+      else: e(object, :quote, :path, nil) || Bonfire.Common.URIs.path(object)
+  end
+
+  defp described_icon(subject) do
+    avatar = Bonfire.Common.Media.avatar_url(subject)
+
+    if is_binary(avatar) and avatar != Bonfire.Common.Media.avatar_fallback(),
+      do: avatar,
+      else: Config.get([:ui, :theme, :instance_icon], "/images/bonfire-icon.png")
   end
 
   # |> String.downcase()

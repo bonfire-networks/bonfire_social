@@ -200,7 +200,7 @@ defmodule Bonfire.Social.Feeds do
 
   The fan-out already knows: notifying is two of the entries it concatenates. Keeping the answer
   saves every later reader from working it out again, whether that is the notify job deciding
-  whether there is anyone to notify at all (plan §3.0.2) or a caller wanting to publish without
+  whether there is anyone to notify at all, or a caller wanting to publish without
   notifying. Returns `%{all: [feed_id], notifications: [feed_id]}`, where `notifications` is a
   subset of `all`.
   """
@@ -215,18 +215,23 @@ defmodule Bonfire.Social.Feeds do
 
   def fan_out_feeds(_creator, "admins", _mentions, _reply_to_creator, _thread_id, _opts) do
     admins = admins_notifications()
-    %{all: admins, notifications: admins}
+    %{all: admins, notifications: admins, notify_users: []}
   end
 
   def fan_out_feeds(creator, boundary, mentions, reply_to_creator, _thread_id, opts) do
     own_notifications = feed_id(:notifications, creator)
 
+    # the people, where we resolved them: notifying is done per person, so passing them on saves turning their feed ids back into them later. Empty when the caller precomputed feeds, or for the circle path below, and then whoever notifies resolves the feeds instead
+    notify_users =
+      if opts[:notify_feeds],
+        do: List.wrap(opts[:notify_users]),
+        else: reply_and_or_mentions_users_to_notify(creator, boundary, mentions, reply_to_creator)
+
     notifications =
       [
         # notifications of reply_to creator + mentions (boundary-filtered), unless the caller
         # precomputed them (the Act passes `notify[:notify_feeds]`)
-        opts[:notify_feeds] ||
-          reply_and_or_mentions_notifications_feeds(creator, boundary, mentions, reply_to_creator),
+        opts[:notify_feeds] || notify_feeds(notify_users),
         # when the caller sets `notify_to_circles` (e.g. a deliberate share), also ping the explicit
         # `to_circles` recipients — their notifications feed, which also surfaces in their home feed
         if(opts[:notify_to_circles],
@@ -250,7 +255,7 @@ defmodule Bonfire.Social.Feeds do
       |> flatten_feed_ids(own_notifications)
       |> debug("fan-out feed ids")
 
-    %{all: all, notifications: notifications}
+    %{all: all, notifications: notifications, notify_users: notify_users}
   end
 
   defp flatten_feed_ids(lists, own_notifications) do
@@ -374,18 +379,28 @@ defmodule Bonfire.Social.Feeds do
         reply_to_creator,
         to_circles \\ []
       ) do
-    # my_notifications = feed_id(:notifications, me)
-
-    filter_reply_and_or_mentions(me, reply_to_creator, mentions)
-    |> users_to_notify(
-      boundary,
-      to_circles
-    )
+    reply_and_or_mentions_users_to_notify(me, boundary, mentions, reply_to_creator, to_circles)
     |> notify_feeds()
+  end
 
-    # avoid self-notifying
-    # |> Enum.reject(&(&1 == my_notifications))
-    # |> debug()
+  @doc """
+  The users a reply or mention notifies, boundary-filtered, before they are reduced to feed ids.
+
+  Callers that only want somewhere to write rows take `reply_and_or_mentions_notifications_feeds/5`;
+  this exists because whoever is going to notify these people needs the people, and resolving them
+  once here is cheaper than turning feed ids back into users later.
+  """
+  def reply_and_or_mentions_users_to_notify(
+        me,
+        boundary,
+        mentions,
+        reply_to_creator,
+        to_circles \\ []
+      ) do
+    filter_reply_and_or_mentions(me, reply_to_creator, mentions)
+    |> debug("filtered")
+    |> users_to_notify(boundary, to_circles)
+    |> debug("users to notify")
   end
 
   def reply_and_or_mentions_to_notify(
@@ -396,15 +411,11 @@ defmodule Bonfire.Social.Feeds do
         to_circles \\ []
       ) do
     users =
-      filter_reply_and_or_mentions(me, reply_to_creator, mentions)
-      |> debug("filtered")
-      |> users_to_notify(
-        boundary,
-        to_circles
-      )
-      |> debug("users to notify")
+      reply_and_or_mentions_users_to_notify(me, boundary, mentions, reply_to_creator, to_circles)
 
     %{
+      # kept as well as their feeds, so whoever notifies them doesn't have to look them up again
+      notify_users: users,
       notify_feeds: notify_feeds(users),
       notify_emails: notify_emails(users)
     }
@@ -419,7 +430,7 @@ defmodule Bonfire.Social.Feeds do
     |> Enum.reject(&(Enums.id(&1) == my_id))
   end
 
-  defp users_to_notify(users, boundary, to_circles \\ []) do
+  defp users_to_notify(users, boundary, to_circles) do
     # Drop unresolved entries: a mention can be a bare id string rather than a user struct
     # (e.g. a group posts to itself via `mentions: [group_id]`, which drives tagging/auto-boost
     # into the group feed but is not a user to notify). Passing a bare id to `maybe_preload`

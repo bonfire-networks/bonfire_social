@@ -91,14 +91,22 @@ defmodule Bonfire.Social.Acts.Activity do
 
         maybe_debug(epic, act, "activity", "Casting")
 
+        # `enqueue_notify: false` in this Act's options means a later Act notifies after the transaction commits, where a failure can be reported to whoever caused it. An Act inside a parallel group cannot see what runs later (the runner empties `next` for the group), so this is declared in the epic rather than detected, and the assign is how the later Act knows the work is its
+        enqueue_notify? = Keyword.get(act.options, :enqueue_notify, true)
+
         changeset
         |> Activities.cast(verb, current_user,
           feed_ids: feed_ids,
+          # who is notified and which feeds that is, both already worked out just above, so the funnel doesn't have to ask again
+          notifications_class: e(notify, :notify_feeds, []),
+          notify_users: e(notify, :notify_users, []),
+          enqueue_notify: enqueue_notify?,
           boundary: boundary
         )
         |> Epic.assign(epic, on, ...)
         |> Epic.assign(..., feeds_key, feed_ids)
         |> Epic.assign(..., notify_feeds_key, notify)
+        |> Epic.assign(..., :notify_inline, !enqueue_notify?)
 
       changeset.action == :delete ->
         # TODO: deletion
