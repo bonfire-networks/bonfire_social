@@ -335,18 +335,18 @@ defmodule Bonfire.Social.FeedLoader do
   # end
 
   defp merge_some_defaults(filters, opts) do
-    # WIP: optimise by only loading if none is set in preset_filters/custom_filters
-    current_user = current_user(opts)
+    # Saved default sorting is suspended along with its settings control.
+    # current_user = current_user(opts)
 
     filters
     |> Map.put(
       :sort_by,
-      e(filters, :sort_by, nil) || e(filters, "sort_by", nil) || opts[:sort_by] ||
-        Settings.get([Bonfire.UI.Social.FeedLive, :sort_by], nil,
-          current_user: current_user,
-          name: l("Default Sort Order"),
-          description: l("Default sorting order for feeds.")
-        )
+      e(filters, :sort_by, nil) || e(filters, "sort_by", nil) || opts[:sort_by]
+      # || Settings.get([Bonfire.UI.Social.FeedLive, :sort_by], nil,
+      #   current_user: current_user,
+      #   name: l("Default Sort Order"),
+      #   description: l("Default sorting order for feeds.")
+      # )
     )
     |> Map.put(
       :time_limit,

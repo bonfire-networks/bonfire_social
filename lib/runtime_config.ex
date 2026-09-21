@@ -95,7 +95,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         my: %{
           name: l("Following"),
           built_in: true,
-          description: l("Activities of people I follow"),
+          description: l("Posts and conversations from people you follow."),
           filters: %FeedFilters{
             feed_name: :my,
             exclude_activity_types: [:follow]
@@ -154,7 +154,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         local: %{
           name: l("Local"),
           built_in: true,
-          description: l("Local instance activities"),
+          description: l("Posts and conversations from people on this server."),
           filters: %FeedFilters{
             feed_name: :local,
             origin: :local,
