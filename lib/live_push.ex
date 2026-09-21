@@ -158,13 +158,12 @@ defmodule Bonfire.Social.LivePush do
     |> uids()
   end
 
-  # an in-app flash for whoever has one of these feeds open. Described by `Activities.describe/1`, the same function a notification's content is built from, so a flash and a push say the same thing about the same activity
+  # An in-app notification for whoever has one of these feeds open, from the same description a push notification's content comes from, so both say the same thing about the same activity.
+  # Sent as fields rather than as a sentence: this process resolved what happened, and each recipient's own process puts it into their language. The activity id travels with it, which is what a client collapses on, so an activity several open tabs all hear about becomes one popup rather than one each.
   defp flash_to_subscribers(activity, notified_feed_ids) do
-    %{title: title, body: body, url: url, icon: icon} = Activities.describe(activity)
-
     maybe_apply(Bonfire.UI.Common.Notifications, :notify_broadcast, [
       notified_feed_ids,
-      %{title: title, message: body, url: url, icon: icon}
+      Activities.describe_parts(activity) |> Map.put(:activity_id, uid(activity))
     ])
   end
 

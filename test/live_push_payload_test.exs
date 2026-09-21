@@ -104,4 +104,37 @@ defmodule Bonfire.Social.LivePushPayloadTest do
 
     assert %Sensitive{} = pushed.sensitive
   end
+
+  test "the notification broadcast carries fields to word, not a sentence already worded" do
+    me = fake_user!()
+    other = fake_user!()
+
+    post =
+      fake_post!(other, "public", %{post_content: %{html_body: "something worth hearing about"}})
+
+    # a real feed id, not a made-up topic: the notified subset goes through `uids/1`, which drops anything that is not an id
+    feed_id = Bonfire.Social.Feeds.my_feed_id(:notifications, me)
+    :ok = PubSub.subscribe(feed_id, current_user: me)
+
+    LivePush.emit_live(post, [], notify: [feed_id])
+
+    assert_receive {Bonfire.UI.Common.Notifications, %{} = parts}
+
+    assert is_binary(parts.subject_name) and parts.subject_name != "",
+           "who did it does not depend on a language, so it travels as it is"
+
+    assert parts.verb,
+           "the verb is resolved here, where the activity is, and worded by each reader"
+
+    assert parts.activity_id, "what a client collapses on"
+
+    refute Map.has_key?(parts, :title),
+           "a title would be in this process's language, and would then say that to everybody"
+
+    # the other end: turning those fields into words, which is what each reader's own process does
+    worded = Bonfire.Social.Activities.localise_describe(parts)
+
+    assert worded.title =~ parts.subject_name
+    refute worded.title == parts.subject_name, "the verb is part of what it says"
+  end
 end

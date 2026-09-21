@@ -2805,24 +2805,47 @@ defmodule Bonfire.Social.Activities do
   Two things it deliberately leaves to the caller. It does not shorten the body, since how much room there is differs (a push payload has a size limit, a flash does not). And it does not decide whether the body may be shown at all: a direct message says who wrote rather than what they wrote, which belongs with the per-verb delivery data.
   """
   def describe(activity) do
+    activity
+    |> describe_parts()
+    |> localise_describe()
+  end
+
+  @doc """
+  The same description before any of it is put into words: `%{subject_name:, verb:, body:, url:, icon:}`.
+
+  Everything here comes from the data and none of it from a language, so it can be sent somewhere else to be worded there. Which is what the live path does: it holds the activity, so it resolves the verb (`verb_maybe_modify/2` needs the activity to know that a "Create" is really a reply), and broadcasts these fields, while each person's own process turns the verb into words in their own language. Rendering it once in the publisher's language would tell everybody what the publisher reads.
+  """
+  def describe_parts(activity) do
     subject = e(activity, :subject, nil)
     object = e(activity, :object, nil)
 
     %{
-      title:
-        (e(subject, :profile, :name, nil) || e(subject, :character, :username, "")) <>
-          " #{described_verb(activity)}",
+      subject_name: e(subject, :profile, :name, nil) || e(subject, :character, :username, ""),
+      verb: described_verb(activity),
       body: described_body(object),
       url: described_url(object),
       icon: described_icon(subject)
     }
   end
 
-  # read in context, the way a feed row reads it: `verb_maybe_modify/2` is what turns a bare "Create" into "Reply", "Write" or "Send", and a "Request" into what was requested. Without it a notification would say somebody "created", which describes nothing
+  @doc """
+  Puts `describe_parts/1` into words, in the language of whoever is running this.
+
+  Only the verb needs a language, so only it is replaced: everything else the parts carry passes through, which is also what keeps a new field from having to be listed here as well.
+  """
+  def localise_describe(%{} = parts) do
+    parts
+    |> Map.drop([:subject_name, :verb])
+    |> Map.put(
+      :title,
+      String.trim("#{e(parts, :subject_name, "")} #{verb_display(e(parts, :verb, nil))}")
+    )
+  end
+
+  # read in context, the way a feed row reads it: `verb_maybe_modify/2` is what turns a bare "Create" into "Reply", "Write" or "Send", and a "Request" into what was requested. Without it a notification would say somebody "created", which describes nothing. Not put into words here, since that happens wherever it is read
   defp described_verb(activity) do
     (e(activity, :verb, :verb, nil) || e(activity, :verb, nil) || e(activity, :verb_id, nil))
     |> verb_maybe_modify(activity)
-    |> verb_display()
   end
 
   defp described_body(object) do
