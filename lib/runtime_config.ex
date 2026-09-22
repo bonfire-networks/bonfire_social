@@ -33,36 +33,113 @@ defmodule Bonfire.Social.RuntimeConfig do
     end
 
     # The kinds of notification this instance distinguishes, in display order, read by `Bonfire.Social.Notifications`. ONE declaration per category, shared by the notification centre's chips and its "Notify me about" switches, so a switch can never hide something different from what its chip shows. The key is the verb the category covers, `activity_types` overrides that where a category isn't one verb, `name_pluralized`/`icon` override what the verb registry declares, and `chip`/`row` say where it appears (`false` nowhere, `:unimplemented` only while the instance shows unbuilt UI). Labels and icons are UI-facing but live here because the Mastodon API, the unseen badge and the digest read the same taxonomy, as feed presets already do below
+    # `experiences` is the other half: which of `Bonfire.Social.Activities.experienced_as/2`'s answers this category covers, defaulting to its own key. That is what a preference, an icon and a phrase turn on, while `activity_types` is what a query can select, and the two cannot be derived from each other: the same stored `:create` row is a mention to one person and nothing in particular to another. Declaring both keeps a category wrong in one place rather than in four, and an experience no category claims falls to `other`
     config :bonfire_social, Bonfire.Social.Notifications,
       categories: [
         # not "All": categories switched off in preferences are excluded from this view, and there is nothing to switch off for it
-        latest: %{name_pluralized: l("Latest"), activity_types: [], row: false},
+        latest: %{name_pluralized: l("Latest"), activity_types: [], experiences: [], row: false},
         mention: %{
           name_pluralized: l("Mentions"),
           description: l("Posts that mention or address you"),
           # a non-reply post reaching your notifications feed mentioned or addressed you; a reply that mentions you is stored as a reply, so it shows under Replies until a filter can ask "does a tag point at me", at which point this becomes Mentions vs Other replies
           activity_types: [:create],
+          phrases: %{mention: l("mentioned you")},
+          # what a Mastodon client calls this, which is a coarser vocabulary: it has one type for anything somebody posted at you
+          masto: :mention,
           path_aliases: ["mentions"]
         },
-        reply: %{name_pluralized: l("Replies"), path_aliases: ["replies"]},
+        # answering a post and answering something that is not a post are one thing to be told about and two things to render
+        reply: %{
+          name_pluralized: l("Replies"),
+          experiences: [:reply, :respond, :annotate],
+          icon_class: "text-info",
+          phrases: %{
+            reply: l("replied to you"),
+            respond: l("replied to you"),
+            annotate: l("replied to you")
+          },
+          # Mastodon has no reply type: a reply reaches a client as a mention
+          masto: :mention,
+          path_aliases: ["replies"]
+        },
         request: %{
-          name_pluralized: l("Requests"),
-          description: l("Follow and quote requests"),
+          name_pluralized: l("Follow requests"),
+          description: l("People asking to follow you"),
+          # narrowed to follow asks now that asking to quote has its own category. The query still selects every `:request` row, since only the edge says what was asked for, so this chip shows quote asks too until a filter can read the edge
+          experiences: [:follow_request],
+          # a pair where the wording turns on who was asked: `self` when that is the reader
+          phrases: %{
+            follow_request: %{
+              self: l("requested to follow you"),
+              other: l("requested to follow")
+            }
+          },
+          masto: :follow_request,
           path_aliases: ["requests"]
         },
-        boost: %{name_pluralized: l("Boosts"), path_aliases: ["boosts"]},
-        like: %{name_pluralized: l("Likes"), path_aliases: ["likes"]},
+        # TODO: the chip needs a filter that reads what the edge asked for, since every ask is stored as one `:request` verb; the switch works already, as it turns on the experience
+        quote_request: %{
+          name_pluralized: l("Quote requests"),
+          description: l("People asking to quote your posts"),
+          activity_types: [:request],
+          phrases: %{quote_request: l("wants to quote your post")},
+          masto: :quote,
+          chip: :unimplemented,
+          path_aliases: ["quote_requests"]
+        },
+        boost: %{
+          name_pluralized: l("Boosts"),
+          phrases: %{boost: l("boosted your activity")},
+          masto: :reblog,
+          icon_class: "stroke-1 fill-info",
+          aggregate: true,
+          path_aliases: ["boosts"]
+        },
+        # named for the general thing rather than the one kind of it: an emoji reaction is a like carrying an emoji, and somebody who stopped wanting likes did not mean "except the ones with a picture on". The query still selects the `like` verb, which is what both are stored as, and the key names no verb so the icon is declared here rather than inherited
+        react: %{
+          name_pluralized: l("Reactions"),
+          activity_types: [:like],
+          experiences: [:like, :react],
+          icon: "ph:fire-duotone",
+          # one switch, two sentences: an emoji says something a plain like does not
+          phrases: %{
+            like: l("liked your activity"),
+            react: l("reacted to your activity")
+          },
+          # a Mastodon client knows only favourites, so an emoji reaction arrives as one
+          masto: :favourite,
+          icon_class: "text-warning",
+          # a hundred of these are one thing that happened to you, so a row says "A, B and 1 other" rather than repeating
+          aggregate: true,
+          # the first is the chip's own URL; the rest keep the links that existed when this category was called `like` working
+          path_aliases: ["reactions", "likes", "like"]
+        },
         follow: %{
           name_pluralized: l("New followers"),
           # overrides the verb's own icon, which the other categories inherit (the `follow` verb declares none)
           icon: "ph:user-plus",
+          icon_class: "text-info",
+          phrases: %{follow: %{self: l("followed you"), other: l("followed")}},
+          masto: :follow,
           path_aliases: ["follows", "followers"]
         },
         # TODO: an accepted quote ("X quoted your post") needs a chip once a filter can read `accepted_at`; the switch already works, as it excludes the verb
         quote: %{name_pluralized: l("Quotes"), chip: :unimplemented, path_aliases: ["quotes"]},
+        # nowhere in the UI yet, and here to say what a vote row reads as and that votes collapse into one the way likes and boosts do. Give it a chip and a row when poll notifications are worth switching separately
+        vote: %{
+          name_pluralized: l("Poll votes"),
+          phrases: %{vote: l("voted on your poll")},
+          aggregate: true,
+          chip: false,
+          row: false
+        },
+        # likewise: no UI of its own, and here so that pinning reads as pinning
+        pin: %{name_pluralized: l("Pins"), phrases: %{pin: l("pinned")}, chip: false, row: false},
         # TODO: whatever no other category covers, so its chip needs the union of their types as an exclusion, and its switch needs a catch-all filter rather than a verb
+        # Claims no experience of its own: `Notifications.category_for/1` answers nil for anything undeclared and the caller reads this switch, so an experience nothing names (a write, a vote, an ask for something unusual) lands here without being listed
         other: %{
           name_pluralized: l("Other activity"),
+          experiences: [],
           chip: :unimplemented,
           row: :unimplemented,
           path_aliases: ["other"]
@@ -76,7 +153,13 @@ defmodule Bonfire.Social.RuntimeConfig do
           path_aliases: ["hidden"]
         },
         # shows the existing mod queue, whose preset supplies the label, icon, filters, opts and the `instance_permission_required: :mediate` gate that hides this chip from everyone else. Not a row: it is a shared queue, not a kind of notification you get
-        flag: %{preset: :flagged_content, row: false, path_aliases: ["flags"]}
+        flag: %{
+          preset: :flagged_content,
+          masto: :admin_report,
+          icon_class: "text-error",
+          row: false,
+          path_aliases: ["flags"]
+        }
       ]
 
     # `l/1` here marks these for extraction, but `config/0` runs once at boot under the default
@@ -285,6 +368,19 @@ defmodule Bonfire.Social.RuntimeConfig do
             #    ]}
             # ]
           ]
+        },
+        # Everything somebody was notified about, wherever it was delivered: the notifications feed plus the inbox, since a direct message arrives in the latter and is still a notification. `hidden`, so it never appears in a feed picker: it exists for the Mastodon API, which models a DM as a mention and so has to read both, and reading only the notifications feed made a fetch by id answer "not found" for a message the list had just shown.
+        notifications_class: %{
+          name: l("Notifications and messages"),
+          built_in: true,
+          hidden: true,
+          filters: %FeedFilters{
+            feed_name: :notifications_class,
+            show_objects_only_once: false,
+            exclude_activity_types: false
+          },
+          current_user_required: true,
+          opts: [include_flags: :mediate, include_requests: true]
         },
         likes: %{
           name: l("Liked"),

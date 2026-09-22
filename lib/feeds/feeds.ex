@@ -74,13 +74,19 @@ defmodule Bonfire.Social.Feeds do
 
   def normalize_feed_name(_name), do: nil
 
+  @doc """
+  The presets to offer somebody, which is not every preset that exists.
+
+  A preset declared `hidden: true` is for code to ask for by name, not for a person to pick: the notifications-class feed is one query the Mastodon API needs and nothing anybody would choose from a list. `feed_preset_if_permitted/2` still finds it, so hiding it costs nothing but its place in the pickers.
+  """
   def feed_presets_permitted(opts) do
     Bonfire.Social.Feeds.feed_presets(opts)
     |> Enum.filter(fn {_slug, preset} ->
-      case check_feed_preset_permitted(preset, opts) |> debug(inspect(preset)) do
-        true -> true
-        _error -> false
-      end
+      e(preset, :hidden, nil) != true and
+        case check_feed_preset_permitted(preset, opts) |> debug(inspect(preset)) do
+          true -> true
+          _error -> false
+        end
     end)
     |> localise_tree(__MODULE__)
   end
@@ -685,6 +691,9 @@ defmodule Bonfire.Social.Feeds do
       when concept in [:local, :remote, :public, :custom_boundaries, :explore],
       do: Enum.map(feed_names(concept), &named_feed_id/1)
 
+  # everything somebody was notified about, wherever it was delivered: a direct message arrives in the inbox rather than the notifications feed, and it is still a notification
+  def named_feed_ids(:notifications_class, opts), do: notifications_class_ids(opts)
+
   def named_feed_ids(feed_name, opts) when is_atom(feed_name) and not is_nil(feed_name) do
     case named_feed_id(feed_name, opts) || my_feed_id(feed_name, opts) do
       feed when is_binary(feed) or is_list(feed) ->
@@ -783,6 +792,19 @@ defmodule Bonfire.Social.Feeds do
   def my_home_feed_ids(_, extra_feeds), do: extra_feeds
 
   @doc """
+  The feeds whose arrivals are *delivered* to somebody: their notifications feed, and their inbox.
+
+  Two feeds rather than one because a direct message lands in the inbox and is still pushed, and because Mastodon models a DM as a `mention` notification, so its API has to see both or a DM is missing from the list and a fetch by its id answers "not found".
+
+  **Not what the notification centre counts.** Bonfire keeps direct messages in `/messages`, with their own unread state, and the bell counts the notifications feed alone. So this answers "would this reach them as a notification", not "does this belong in their notifications feed", and the two have deliberately different answers.
+  """
+  def notifications_class_ids(user) do
+    [my_feed_id(:notifications, user), my_feed_id(:inbox, user)]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+  end
+
+  @doc """
   Retrieves the feed ID for a given type and subject.
 
   ## Examples
@@ -792,6 +814,7 @@ defmodule Bonfire.Social.Feeds do
       > Bonfire.Social.Feeds.my_feed_id(:notifications, user)
       # Feed ID for notifications of the user
   """
+
   def my_feed_id(type, other) do
     case current_user(other) do
       nil ->

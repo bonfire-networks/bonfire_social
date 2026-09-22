@@ -8,6 +8,8 @@ defmodule Bonfire.Social.Localise do
 
   The phrases are enumerated whole rather than interpolated as `"%{verb} to %{other}"`. The governed verb's form depends on the verb governing it, French wants "a demandé à suivre", `à` plus a lowercase infinitive, and case-marking languages need more, so a placeholder would hand the translator something they cannot inflect. Interpolate data; enumerate phrases.
 
+  Covers the kinds no verb declares too, whose names `Activities.experience_display_names/0` holds, or "wrote" and "sent" would read as English everywhere. Those names are in a compile-time config file for exactly this reason: what is enumerated here has to be readable while this extension compiles, and a ConfigModule only runs at boot.
+
   This lives in `bonfire_social` rather than in a flavour extension because `Activities.all_verb_names/0` falls back to the `:verb_names` config (set statically in `config/bonfire_data.exs`), so it resolves at this extension's own compile time without needing sibling apps loaded. Keeping it here also puts the strings in the `bonfire_social` gettext domain, the same domain `verb_display/1` looks them up in, which is the whole point (a domain mismatch between extraction and lookup is silent).
   """
 

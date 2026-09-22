@@ -53,22 +53,120 @@ defmodule Bonfire.Social.Notifications do
   end
 
   @doc """
-  Which category covers activities of this type, or nil if none declares it.
+  The experiences a category covers, defaulting to the one its key names.
 
-  The inverse of `activity_types_for/1`, so one declaration answers both directions and a chip and a switch can never disagree about what they cover.
-
-  A category is a grouping people are shown and choose by, not a verb: what it *means* can be narrower than the types it covers, and deciding it properly takes more than an activity type. Mentions is the clearest case, since it means "something addressed me" while all it can filter on today is `create`, so an announcement lands in it too; answering it needs the recipient ("does a tag point at me"). The object can matter as much as the verb: a direct message is a `create` of a `Message`, which is why `Bonfire.Notify.Content` already overrides the verb by object type to tell a DM from a post.
-
-  So this is an approximation, and it is the same one the feed's own chips and switches make, so they move together. The exact answer is the recipient-relative verb Phase 1 adds, and this reads whatever it is told either way.
-
-  Excludes the catch-all (`other`) and the everything category (`latest`): a caller that wants "nothing covers this" should see nil and decide, rather than be handed a key whose filter means something else.
+  What `Bonfire.Social.Activities.experienced_as/2` answers, rather than what a query can select: the same stored `:create` row is a mention to the person it names and nothing in particular to somebody who got it through a circle. A category usually covers one, and covers several where a distinction matters to a reader but not to a preference (a reply and a response).
   """
-  def category_for_activity_type(activity_type) do
-    Enum.find_value(categories(), fn {key, _category} ->
-      types = activity_types_for(key)
+  def experiences_for(key) do
+    # not `e/3`: `experiences: []` means "claims nothing", which is how `other` and `latest` stay out of this lookup
+    case category(key) do
+      %{experiences: experiences} -> experiences
+      _ -> [key]
+    end
+  end
 
-      if types != [] and activity_type in types, do: key
+  @doc """
+  Which category covers this experience, or nil if none declares it.
+
+  The inverse of `experiences_for/1`, so one declaration answers both directions. Exact, unlike guessing from the stored verb, which cannot tell a mention from any other post reaching your feed, nor asking to follow from asking to quote: it is told what the activity was for the person being notified.
+
+  Answers nil rather than `other` for anything undeclared, so the caller decides: a preference reads its catch-all switch, while a chip has nothing to show. That is also what lets an experience arrive that no category has been written for yet.
+  """
+  def category_for(experience) do
+    Enum.find_value(categories(), fn {key, _category} ->
+      if experience in experiences_for(key), do: key
     end)
+  end
+
+  @doc """
+  The icon for an experience: what its category declares, else the verb the category's key names, else the verb the experience itself names.
+
+  One resolution for the chip bar and the notification rows, so a kind cannot be a fire in one place and a heart in the other. Nothing is declared here: the icons live on the categories (`Bonfire.Social.RuntimeConfig`) and on the verbs (`Bonfire.Boundaries.RuntimeConfig`).
+  """
+  def icon_for(experience, fallback_verb \\ nil) do
+    key = category_for(experience) || experience
+
+    e(category(key), :icon, nil) || e(Verbs.get(key), :icon, nil) ||
+      e(Verbs.get(experience), :icon, nil) || e(Verbs.get(fallback_verb), :icon, nil)
+  end
+
+  @doc """
+  The colour a surface gives that icon, as the category declares it, else the neutral one.
+
+  Declared rather than written into each template, so a kind looks the same wherever it appears, and most kinds declare nothing because most are not worth colouring. A class named only here has to appear in the `@source inline(...)` list in `bonfire_ui_common/assets/css/app.css` if it is used nowhere else, since Tailwind scans templates and `*_live.ex` and never reads config.
+  """
+  def icon_class_for(experience, default \\ "text-primary") do
+    case category_for(experience) || experience do
+      nil -> default
+      key -> e(category(key), :icon_class, nil) || default
+    end
+  end
+
+  @doc """
+  What a row says happened: "liked your activity", "mentioned you", "requested to follow you".
+
+  Declared by the category that covers the experience, so one sentence serves the notification row, a push body and a digest line. `nil` for a kind with no phrase, and the caller shows the plain word instead ("alice wrote").
+
+  `object_id` and `current_user_id` decide between a pair like `%{self: "followed you", other: "followed"}`, which is the only thing the wording turns on beyond the kind itself.
+
+  Translated here rather than where it was declared: `config/0` runs at boot under the default locale, so what it holds is the msgid.
+  """
+  def phrase_for(experience, object_id \\ nil, current_user_id \\ nil) do
+    case category_for(experience) do
+      nil ->
+        nil
+
+      key ->
+        e(category(key), :phrases, %{})
+        |> Map.get(experience)
+        |> case do
+          %{self: self_phrase, other: other_phrase} ->
+            if object_id && object_id == current_user_id, do: self_phrase, else: other_phrase
+
+          phrase ->
+            phrase
+        end
+        |> case do
+          phrase when is_binary(phrase) -> localise_dynamic(phrase, __MODULE__)
+          _ -> nil
+        end
+    end
+  end
+
+  @doc """
+  What a Mastodon client calls this experience, or nil for something its vocabulary has no name for.
+
+  Declared per category, since that is the grouping Mastodon's types line up with, and several of ours share one of theirs: a reply and a mention are both `mention` to a client, a like and an emoji reaction are both `favourite`.
+  """
+  def masto_type_for(experience) do
+    case category_for(experience) do
+      nil -> nil
+      key -> e(category(key), :masto, nil)
+    end
+  end
+
+  @doc """
+  The activity types to query for a Mastodon notification type, from the categories that declare it.
+
+  The inverse of `masto_type_for/1` but in the *query* vocabulary, because that is what a filter can select: a client asking for `favourite` gets the types the categories claiming that name cover.
+  """
+  def activity_types_for_masto_type(masto_type) do
+    categories()
+    |> Enum.filter(fn {_key, category} -> e(category, :masto, nil) == masto_type end)
+    |> Enum.flat_map(fn {key, _category} -> activity_types_for(key) end)
+    |> Enum.uniq()
+  end
+
+  @doc """
+  Whether several of these collapse into one row ("A, B and 1 other") rather than getting a row each.
+
+  Declared per category, since it is a property of the kind: a hundred likes are one thing that happened to you, a hundred replies are a hundred.
+  """
+  def aggregate?(experience) do
+    case category_for(experience) do
+      nil -> false
+      key -> e(category(key), :aggregate, false) == true
+    end
   end
 
   @doc "A category's plural label: what it declares, else the verb's own (singular) name, else its key."

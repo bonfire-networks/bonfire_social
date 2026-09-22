@@ -32,12 +32,40 @@ defmodule Bonfire.Social.NotificationCategoriesTest do
 
   test "a category covers the activity types it declares, else the verb its key names" do
     assert Notifications.activity_types_for(:mention) == [:create]
-    assert Notifications.activity_types_for(:like) == [:like]
+    assert Notifications.activity_types_for(:boost) == [:boost]
+    # its key names no verb, since reacting is a like with an emoji on it
+    assert Notifications.activity_types_for(:react) == [:like]
     assert Notifications.activity_types_for(:latest) == []
   end
 
+  test "a category covers the experiences it declares, else the one its key names" do
+    # what `Activities.experienced_as/2` answers, which is not what a query can select: a reply and a response are one thing to be told about, and so are a like and a reaction
+    assert Notifications.experiences_for(:reply) == [:reply, :respond, :annotate]
+    assert Notifications.experiences_for(:react) == [:like, :react]
+    assert Notifications.experiences_for(:boost) == [:boost]
+    # claims nothing, so nothing resolves to it by experience
+    assert Notifications.experiences_for(:other) == []
+  end
+
+  test "an experience resolves to the category that declares it, and to nothing otherwise" do
+    assert Notifications.category_for(:respond) == :reply
+
+    # both kinds of reaction answer the same switch, which is named for the general one
+    assert Notifications.category_for(:like) == :react
+    assert Notifications.category_for(:react) == :react
+
+    # the two kinds of ask are told apart here, which is the whole point of declaring experiences: a query cannot tell them apart, since both are stored as one `:request` verb
+    assert Notifications.category_for(:follow_request) == :request
+    assert Notifications.category_for(:quote_request) == :quote_request
+
+    # nil, not `:other`, so a preference reads its catch-all switch while a chip has nothing to show
+    assert Notifications.category_for(:request) == nil
+    assert Notifications.category_for(:write) == nil
+    assert Notifications.category_for(:nonsense) == nil
+  end
+
   test "a category's label is its own plural, else the verb's singular, else the key" do
-    assert Notifications.label_for(:like) == "Likes"
+    assert Notifications.label_for(:react) == "Reactions"
     assert Notifications.label_for(:follow) == "New followers"
 
     declare!(bookmark: %{}, nonsense: %{})
@@ -76,7 +104,7 @@ defmodule Bonfire.Social.NotificationCategoriesTest do
     assert Notifications.show_in_centre?(:boost, current_user: me) == false
     assert Notifications.hidden_from_centre?(:boost, current_user: me) == true
     # one category at a time
-    assert Notifications.hidden_from_centre?(:like, current_user: me) == false
+    assert Notifications.hidden_from_centre?(:react, current_user: me) == false
   end
 
   test "switched-off categories resolve to the feed's exclude_activity_types" do
