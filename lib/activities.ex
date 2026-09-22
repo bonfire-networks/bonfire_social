@@ -2738,10 +2738,15 @@ defmodule Bonfire.Social.Activities do
       iex> experienced_as(%{verb: %{verb: "Like"}})
       :like
 
-  Asking is one verb for every kind of ask, so what was asked for is read from the edge:
+  Asking is one verb for every kind of ask, and a quote ask is the one whose edge a feed loads:
 
       iex> experienced_as(%{verb: %{verb: "Request"}, edge: %{table_id: Bonfire.Social.Quotes.quote_verb_id()}})
       :quote_request
+
+  Anything else asked for is taken to be an ask to follow, which is the only other kind there is:
+
+      iex> experienced_as(%{verb: %{verb: "Request"}})
+      :follow_request
 
   A create that names the reader is a mention of them, and the same row is nothing in particular to anybody else:
 
@@ -2761,10 +2766,18 @@ defmodule Bonfire.Social.Activities do
       :react
     else
       case verb_slug(activity) do
-        :request -> requested_as(activity)
-        :reply -> replied_as(activity)
-        :create -> created_as(activity, recipient)
-        verb -> verb
+        :request ->
+          requested_as(activity)
+
+        :reply ->
+          replied_as(activity)
+
+        # a row does not always keep the verb it was stored with: a search hit arrives carrying what it answers and what it holds, and no verb at all. What it carries is what it was, which is the same question a create asks
+        verb when verb in [:create, nil] ->
+          created_as(activity, recipient)
+
+        verb ->
+          verb
       end
     end
   end
@@ -2776,6 +2789,13 @@ defmodule Bonfire.Social.Activities do
       %{summary: summary} -> not is_nil(summary)
       _ -> false
     end
+  end
+
+  # a reply carries what it answers, by id where the parent is not loaded
+  defp replies_to_something?(activity) do
+    not is_nil(
+      e(activity, :replied, :reply_to_id, nil) || e(activity, :replied, :reply_to, :id, nil)
+    )
   end
 
   # answering a post and answering anything else are one thing to be told about and two things to render, so they are two kinds here and one category there
@@ -2790,12 +2810,19 @@ defmodule Bonfire.Social.Activities do
   # what was asked for lives on the edge, since asking is one verb for every kind of ask. The kinds somebody is told about separately get a key, and a category carries that same key; any other ask stays `:request`, is named after its edge when displayed, and belongs to whatever category catches what nothing else names
   defp requested_as(activity) do
     quote_table_id = Bonfire.Social.Quotes.quote_verb_id()
-    follow_table_id = Bonfire.Common.Types.table_id(Bonfire.Data.Social.Follow)
+    # follow_table_id = Bonfire.Common.Types.table_id(Bonfire.Data.Social.Follow)
 
     case e(activity, :edge, :table_id, nil) do
-      ^quote_table_id -> :quote_request
-      ^follow_table_id -> :follow_request
-      _ -> :request
+      ^quote_table_id ->
+        :quote_request
+
+      # matching the follow table is parked rather than used: a feed preloads the edge only for quote asks (`:with_quote_post_requested`), so a follow ask arrives carrying none and this would never match. Restore it, with the edge preloaded for every ask, when there is a third kind to tell apart
+      # ^follow_table_id -> :follow_request
+
+      _ ->
+        # until then asking to follow is the only other kind there is, so anything that is not a quote ask is one
+        :follow_request
+        # :request
     end
   end
 
@@ -2822,6 +2849,8 @@ defmodule Bonfire.Social.Activities do
       message?(activity) -> :message
       reply_to_recipient?(activity, recipient) -> :reply
       mentions_recipient?(activity, recipient) -> :mention
+      # answering something stays an answer for whoever reads it, and is what a row has to say and show: the reader-relative part is the clause above, which is about being answered rather than about the answer
+      replies_to_something?(activity) -> replied_as(activity)
       # writing something to read is not the same kind of thing as creating an object, which is what a create is when it carries no post
       wrote_post?(activity) -> :write
       true -> :create

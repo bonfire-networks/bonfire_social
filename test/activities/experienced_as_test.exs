@@ -43,6 +43,32 @@ defmodule Bonfire.Social.ExperiencedAsTest do
     assert Activities.experienced_as(activity, bystander) == :reply
   end
 
+  test "a create that carries what it answers is an answer too, since not every row keeps its verb" do
+    # the shape a search result arrives in: what it answers is there and the verb is not, so the parent is the only thing that says this answers something. A row that read as a create here lost the parent it answers, because the row shows that from what this says
+    parent = %{
+      id: "01M35MK048J7HQ145FBP5N3H78",
+      post_content: %{id: "01M35MK048J7HQ145FBP5N3H78"}
+    }
+
+    from_the_index = %{replied: %{reply_to: parent}}
+    reader = Fake.fake_user!()
+
+    assert Activities.experienced_as(from_the_index, reader) == :reply
+
+    # and the same row that did keep its verb says the same thing
+    assert Activities.experienced_as(Map.put(from_the_index, :verb, %{verb: "Create"}), reader) ==
+             :reply
+
+    # answering something that is not a post is the other half of the same question
+    assert Activities.experienced_as(
+             %{
+               verb: %{verb: "Create"},
+               replied: %{reply_to: %{id: "01M35MK048J7HQ145FBP5N3H78"}}
+             },
+             nil
+           ) == :respond
+  end
+
   test "a post that is neither a reply nor a mention is something somebody wrote, whoever reads it" do
     author = Fake.fake_user!()
     bystander = Fake.fake_user!()
@@ -113,17 +139,17 @@ defmodule Bonfire.Social.ExperiencedAsTest do
     assert Activities.experienced_as(activity_for(follow), me) == :follow
   end
 
-  test "asking is told apart by what was asked for, and an unnamed ask stays a plain request" do
+  test "a quote ask is told apart by its edge, and every other ask is taken to be a follow ask" do
     request = fn table_id ->
       Activities.experienced_as(%{verb: %{verb: "Request"}, edge: %{table_id: table_id}})
     end
 
-    assert request.(Bonfire.Common.Types.table_id(Bonfire.Data.Social.Follow)) == :follow_request
     assert request.(Bonfire.Social.Quotes.quote_verb_id()) == :quote_request
+    assert request.(Bonfire.Common.Types.table_id(Bonfire.Data.Social.Follow)) == :follow_request
 
-    # asking for something nothing names here: the verb is all there is to say, rather than calling it a kind of ask it isn't
-    assert request.(Bonfire.Common.Types.table_id(Bonfire.Data.Social.Flag)) == :request
-    assert request.(nil) == :request
+    # a feed preloads the edge for quote asks alone, so a follow ask arrives with none: reading that as a follow ask is what puts the Accept button on the row, and asking to follow is the only other kind there is
+    assert request.(nil) == :follow_request
+    assert request.(Bonfire.Common.Types.table_id(Bonfire.Data.Social.Flag)) == :follow_request
   end
 
   test "an emoji makes it a reaction, whatever verb carried it" do

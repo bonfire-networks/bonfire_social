@@ -125,16 +125,12 @@ defmodule Bonfire.Social.ExperienceDisplayNameTest do
     assert new_name(follow_edge) == "Request to follow"
     assert new_name(quote_edge) == "Request to quote"
 
-    # any other ask stays `:request` and is named from its edge, in the form the extractor emits
-    boost_edge = %{
-      verb: %{verb: "Request"},
-      edge: %{table_id: Bonfire.Common.Types.table_id(Bonfire.Data.Social.Boost)}
-    }
+    # an ask that is not a quote ask is taken to be a follow ask, since that is the only other kind and a feed preloads the edge for quote asks alone
+    assert new_name(%{verb: %{verb: "Request"}}) == "Request to follow"
 
-    assert Activities.experienced_as(boost_edge) == :request
-    assert new_name(boost_edge) == "Request to boost"
+    # a bare `:request` still names itself from its edge, for anything that asks `experience_display_name/2` directly
+    boost_edge = %{edge: %{table_id: Bonfire.Common.Types.table_id(Bonfire.Data.Social.Boost)}}
 
-    # and an ask whose edge says nothing is just an ask
-    assert new_name(%{verb: %{verb: "Request"}}) == "Request"
+    assert Activities.experience_display_name(:request, boost_edge) == "Request to boost"
   end
 end
