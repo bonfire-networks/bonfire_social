@@ -2720,11 +2720,303 @@ defmodule Bonfire.Social.Activities do
       iex> verb_maybe_modify("Create", %{object: %{post_content: %{id: 1}}})
       "Write"
   """
+  @doc """
+  What kind of thing an activity was for the person being told about it: `:reply`, `:respond`, `:write`, `:mention`, `:message`, `:follow_request`, `:quote_request`, or whatever verb it was stored as.
+
+  Not called a verb, because half of these are not one: no verb is declared for writing a post, for answering something that is not a post, or for asking to quote, since those are shapes an activity takes rather than permissions anyone grants. `experience_display_names/0` is what names the ones the verb registry cannot.
+
+  Two things the stored verb cannot say on its own, which is why this takes a recipient. A `:create` is the same row whether it reached somebody because they wrote what it replies to, because it names them, or because it went to a circle they are in, and those are three different notifications. And a `:request` is stored once for asking anything, with what was asked for on the edge.
+
+  One place answers it, because everything downstream has to agree: the notifications feed, what a push says, which preference decides whether to send it, and which Mastodon type a client is given. Callers that only have the activity (a feed row rendering for whoever is reading) pass that reader as the recipient.
+
+  A quote somebody made of your post is not here yet: an accepted quote is a `:request` edge with an `accepted_at`, not an activity of its own, so it arrives as `:quote_request` until that gets a row to point at.
+
+  ## Examples
+
+  A verb that says what it is needs no recipient:
+
+      iex> experienced_as(%{verb: %{verb: "Like"}})
+      :like
+
+  Asking is one verb for every kind of ask, and a quote ask is the one whose edge a feed loads:
+
+      iex> experienced_as(%{verb: %{verb: "Request"}, edge: %{table_id: Bonfire.Social.Quotes.quote_verb_id()}})
+      :quote_request
+
+  Anything else asked for is taken to be an ask to follow, which is the only other kind there is:
+
+      iex> experienced_as(%{verb: %{verb: "Request"}})
+      :follow_request
+
+  A create that names the reader is a mention of them, and the same row is nothing in particular to anybody else:
+
+      iex> experienced_as(%{verb: %{verb: "Create"}, tags: [%{id: "01ARZ3NDEKTSV4RRFFQ69G5FAV"}]}, "01ARZ3NDEKTSV4RRFFQ69G5FAV")
+      :mention
+
+      iex> experienced_as(%{verb: %{verb: "Create"}, tags: [%{id: "01ARZ3NDEKTSV4RRFFQ69G5FAV"}]}, "01BX5ZZKBKACTAV9WEVGEMMVRZ")
+      :create
+
+  An emoji on something is a reaction, whatever verb carried it:
+
+      iex> experienced_as(%{verb: %{verb: "Like"}, emoji: %{media_type: "emoji"}})
+      :react
+  """
+  def experienced_as(activity, recipient \\ nil) do
+    if reaction?(activity) do
+      :react
+    else
+      case verb_slug(activity) do
+        :request ->
+          requested_as(activity)
+
+        :reply ->
+          replied_as(activity)
+
+        # a row does not always keep the verb it was stored with: a search hit arrives carrying what it answers and what it holds, and no verb at all. What it carries is what it was, which is the same question a create asks
+        verb when verb in [:create, nil] ->
+          created_as(activity, recipient)
+
+        verb ->
+          verb
+      end
+    end
+  end
+
+  # an emoji carries its own meaning, so what the activity was stored as says less than the emoji does. No verb declares this: reacting is a like or a boost with an emoji attached
+  defp reaction?(activity) do
+    case e(activity, :emoji, nil) do
+      %{media_type: "emoji"} -> true
+      %{summary: summary} -> not is_nil(summary)
+      _ -> false
+    end
+  end
+
+  # a reply carries what it answers, by id where the parent is not loaded
+  defp replies_to_something?(activity) do
+    not is_nil(
+      e(activity, :replied, :reply_to_id, nil) || e(activity, :replied, :reply_to, :id, nil)
+    )
+  end
+
+  # answering a post and answering anything else are one thing to be told about and two things to render, so they are two kinds here and one category there
+  defp replied_as(activity) do
+    case e(activity, :replied, :reply_to, nil) do
+      %{post_content: %{id: _}} -> :reply
+      %{id: _} -> :respond
+      _ -> :reply
+    end
+  end
+
+  # what was asked for lives on the edge, since asking is one verb for every kind of ask. The kinds somebody is told about separately get a key, and a category carries that same key; any other ask stays `:request`, is named after its edge when displayed, and belongs to whatever category catches what nothing else names
+  defp requested_as(activity) do
+    quote_table_id = Bonfire.Social.Quotes.quote_verb_id()
+    # follow_table_id = Bonfire.Common.Types.table_id(Bonfire.Data.Social.Follow)
+
+    case e(activity, :edge, :table_id, nil) do
+      ^quote_table_id ->
+        :quote_request
+
+      # matching the follow table is parked rather than used: a feed preloads the edge only for quote asks (`:with_quote_post_requested`), so a follow ask arrives carrying none and this would never match. Restore it, with the edge preloaded for every ask, when there is a third kind to tell apart
+      # ^follow_table_id -> :follow_request
+
+      _ ->
+        # until then asking to follow is the only other kind there is, so anything that is not a quote ask is one
+        :follow_request
+        # :request
+    end
+  end
+
+  # the edge holds either the verb asked for (asking to quote) or the table of the thing granting it would make (asking to follow), so both are read back to a verb
+  defp asked_for(id) when is_binary(id), do: Verbs.get_slug(id) || table_verb(id)
+  defp asked_for(_), do: nil
+
+  # an edge table is named after the verb it records, a `Follow` row being what asking to follow would make, so the name *is* the mapping; a table whose name is not a verb falls through
+  defp table_verb(table_id) do
+    with {:ok, schema} <- Needle.Tables.schema(table_id),
+         verb when is_atom(verb) <-
+           Module.split(schema) |> List.last() |> String.downcase() |> maybe_to_atom!(),
+         %{} <- Verbs.get(verb) do
+      verb
+    else
+      _ -> nil
+    end
+  end
+
+  # the same row is a mention of one person and nothing in particular to another, so it is read per recipient. A direct message is told apart by what it is rather than by the feed it arrived in, so a DM quoted into a public thread does not read as one.
+  # The reply check is here for a `:create` that carries a `reply_to` without having been stored as a reply, which is what a remote activity can arrive as; anything published here is already `:reply` by then (`Bonfire.Social.Acts.Threaded`)
+  defp created_as(activity, recipient) do
+    cond do
+      message?(activity) -> :message
+      reply_to_recipient?(activity, recipient) -> :reply
+      mentions_recipient?(activity, recipient) -> :mention
+      # answering something stays an answer for whoever reads it, and is what a row has to say and show: the reader-relative part is the clause above, which is about being answered rather than about the answer
+      replies_to_something?(activity) -> replied_as(activity)
+      # writing something to read is not the same kind of thing as creating an object, which is what a create is when it carries no post
+      wrote_post?(activity) -> :write
+      true -> :create
+    end
+  end
+
+  # Carrying written content is what makes a create a `:write`, whatever kind of thing holds it: a post, an article, or whatever an extension adds. Recognised by the content rather than by the type where it is loaded, and by type where it is not, which is what the list is for
+  defp wrote_post?(activity) do
+    case e(activity, :object, nil) do
+      %{post_content: %{id: _}} ->
+        true
+
+      object ->
+        Types.object_type(object) in written_object_types()
+    end
+  end
+
+  # Added to rather than replaced: config merges a list by replacing it, so an extension naming its own kind (an article) would otherwise drop the built-in ones. A post is written whatever else an instance installs
+  defp written_object_types do
+    [Bonfire.Data.Social.Post, Bonfire.Data.Social.PostContent] ++
+      List.wrap(
+        Config.get(
+          [__MODULE__, :written_object_types],
+          [],
+          name: l("Other written things"),
+          description:
+            l(
+              "Kinds of object that count as something written rather than something created, besides posts."
+            )
+        )
+      )
+  end
+
+  defp message?(activity) do
+    case e(activity, :object, nil) || e(activity, :object_id, nil) do
+      %Bonfire.Data.Social.Message{} -> true
+      object -> Types.object_type(object) == Bonfire.Data.Social.Message
+    end
+  end
+
+  defp reply_to_recipient?(activity, recipient) do
+    with recipient_id when is_binary(recipient_id) <- uid(recipient),
+         reply_to when not is_nil(reply_to) <- e(activity, :replied, :reply_to, nil) do
+      uid(e(reply_to, :created, :creator, nil) || e(reply_to, :created, :creator_id, nil)) ==
+        recipient_id
+    else
+      _ -> false
+    end
+  end
+
+  defp mentions_recipient?(activity, recipient) do
+    with recipient_id when is_binary(recipient_id) <- uid(recipient) do
+      e(activity, :tags, [])
+      |> List.wrap()
+      |> Enum.any?(&(uid(&1) == recipient_id))
+    else
+      _ -> false
+    end
+  end
+
+  @doc """
+  The name to display for what `experienced_as/2` decided this is, before it is conjugated by `verb_display/1`.
+
+  Keyed on the atom rather than on a display string, so the wording is looked up from what the activity *is* instead of being pattern-matched back out of what some other locale already called it. Most kinds take the name the verb registry declares; the rest are named by `experience_display_names/0`.
+
+  Two refinements stay in code, because they turn on the shape of the object rather than on wording: a `:reply` to something that is not a post reads as answering rather than replying, and a create that carries an economic action takes that action's own label.
+
+  ## Examples
+
+  A registry verb carries its own name:
+
+      iex> experience_display_name(:like)
+      "Like"
+
+  Kinds no verb declares are named in config, which is also where a translator sees them:
+
+      iex> experience_display_name(:respond)
+      "Respond"
+
+      iex> experience_display_name(:write)
+      "Write"
+
+      iex> experience_display_name(:quote_request)
+      "Request to quote"
+
+  An ask of a kind nothing names is named after what was asked for:
+
+      iex> experience_display_name(:request, %{edge: %{table_id: Bonfire.Common.Types.table_id(Bonfire.Data.Social.Boost)}})
+      "Request to boost"
+
+  An economic event is named by the action it records:
+
+      iex> experience_display_name(:create, %{object: %{action: %{label: "consume"}}})
+      "consume"
+  """
+  def experience_display_name(experience, activity \\ nil)
+
+  # the one case that is wording rather than a kind: an economic event is named by the action it records, which is data with no bounded set to be an atom of
+  def experience_display_name(:create, activity) do
+    case e(activity, :object, nil) do
+      %{action: %{label: label}} when is_binary(label) -> label
+      %{action: %{id: id}} when is_binary(id) -> id
+      %{action_id: label} when is_binary(label) -> label
+      %{action: label} when is_binary(label) -> label
+      _ -> named_experience(:create)
+    end
+  end
+
+  # a notification row says "mentioned you" instead of the word, so this word is the one a feed row shows, where "alice wrote" is right and "alice mentioned" is not
+  def experience_display_name(:mention, activity) do
+    experience_display_name(if(wrote_post?(activity), do: :write, else: :create), activity)
+  end
+
+  # an ask that is not one of the kinds with a key of its own names itself after what its edge points at, rather than reading as a bare "Request". Downcased to match the "Request to follow" that `Bonfire.Social.Localise` extracts, since `verb_display/1` is what localises this downstream
+  def experience_display_name(:request, activity) do
+    case asked_for(e(activity, :edge, :table_id, nil)) do
+      nil -> named_experience(:request)
+      verb -> "Request to #{String.downcase(verb_name(verb) || to_string(verb))}"
+    end
+  end
+
+  def experience_display_name(experience, _activity)
+      when is_atom(experience) and not is_nil(experience),
+      do: named_experience(experience)
+
+  def experience_display_name(_experience, _activity), do: nil
+
+  @doc """
+  The word a row prints for what an activity was: "wrote", "boosted", "requested to follow".
+
+  Names the experience and conjugates the name into the reader's language, which is two steps a template should not have to know about. Call it where the word is printed rather than passing a word down the tree: a component that knows more can then say something else entirely, as a notification row does when it replaces the word with "mentioned you", and a locale cannot leave half the tree in English.
+
+  ## Examples
+
+      iex> experience_display(:boost)
+      "boosted"
+
+      iex> experience_display(:write)
+      "wrote"
+  """
+  def experience_display(experience, activity \\ nil) do
+    case experience_display_name(experience, activity) do
+      name when is_binary(name) -> verb_display(name)
+      # nothing names it, which is what a row rendered without an experience looks like
+      _ -> nil
+    end
+  end
+
+  defp named_experience(experience) do
+    experience_display_names()
+    |> Map.get(experience) || verb_name(experience) || to_string(experience)
+  end
+
+  @doc """
+  What to call each kind `experienced_as/2` can return, where the name the verb registry declares is not what a reader should see.
+
+  Declared in `Bonfire.Social.RuntimeConfig`, which is also where the reason for it being config rather than a map here is written. Holds only the differences: kinds no verb covers, and kinds whose verb names the mechanism rather than the experience. Everything absent falls through to the verb's own declared name, so this never becomes a second copy of the registry.
+  """
+  def experience_display_names(), do: Config.get([__MODULE__, :experience_display_names], %{})
+
   def verb_maybe_modify(verb, activity \\ nil)
 
   # FIXME: temporary as we may later request other things
   def verb_maybe_modify("Request", activity) do
-    follow_table_id = Bonfire.Common.Types.table_id(Follow)
+    # `Follow` unqualified is no module at all here, so this comparison was against nil and every follow ask read as a bare "Request"
+    follow_table_id = Bonfire.Common.Types.table_id(Bonfire.Data.Social.Follow)
     quote_table_id = Bonfire.Social.Quotes.quote_verb_id()
 
     case e(activity, :edge, :table_id, nil) do
@@ -2890,28 +3182,34 @@ defmodule Bonfire.Social.Activities do
       iex> verb_display("create")
   """
   def verb_display(verb) do
-    verb = maybe_to_string(verb)
+    case verb_past_tense(verb) do
+      past when is_binary(past) -> localise_dynamic(past, __MODULE__, "verb: past tense")
+      _ -> nil
+    end
+  end
 
-    case String.split(verb) do
+  @doc """
+  The English past-tense form of a verb or phrase, which is the msgid `verb_display/1` looks up.
+
+  `Bonfire.Social.Localise` builds what it hands to gettext extraction with this same function, so extraction and lookup cannot drift: conjugation, the `Verbs` workaround and the downcasing all happen in one place rather than being restated on each side and matching by luck.
+
+  Downcased because these read mid-sentence ("alice boosted this") and the names they come from are capitalised. Downcasing the *translation* instead would flatten locales that capitalise.
+  """
+  def verb_past_tense(verb) when verb in [nil, ""], do: nil
+
+  def verb_past_tense(verb) do
+    case String.split(maybe_to_string(verb)) do
       [verb, "to", other_verb] ->
         # looked up as one whole phrase, not composed from parts. Interpolating the second verb
         # would hand the translator a placeholder they cannot inflect, where the first verb
         # governs its form — FR wants "a demandé à suivre" (à + lowercase infinitive), and
-        # case-marking languages need more still. `Bonfire.Social.Localise` enumerates these
-        # phrases so the extractor can find them, since there is no literal call site to walk.
+        # case-marking languages need more still
         Enum.join([verb_congugate(verb) |> sanitise_verb_name(), "to", other_verb], " ")
-        |> String.downcase()
-        |> localise_dynamic(__MODULE__, "verb: past tense")
 
       _ ->
-        # `sanitise_verb_name/1`, the downcasing and `"verb: past tense"` must all match what
-        # `Bonfire.Social.Localise` emits, or the lookup silently falls back to the
-        # context-less entry
-        verb_congugate(verb)
-        |> sanitise_verb_name()
-        |> String.downcase()
-        |> localise_dynamic(__MODULE__, "verb: past tense")
+        verb_congugate(verb) |> sanitise_verb_name()
     end
+    |> String.downcase()
   end
 
   def verb_congugate(verb) do
@@ -2939,46 +3237,40 @@ defmodule Bonfire.Social.Activities do
   Outputs the names of all object verbs for localization, for the purpose of adding to the localisation strings, as long as the output is piped through to localise_strings/1 at compile time.
   """
   def all_verb_names() do
-    # Bonfire.Boundaries.Verbs.verbs()
     case Bonfire.Common.Config.get(:verbs, nil, :bonfire) do
       verbs when is_map(verbs) or (is_list(verbs) and verbs != []) ->
-        verbs
-        |> Enum.flat_map(fn {_key, data} ->
-          List.wrap(data[:verb])
-        end)
+        verb_names(verbs)
 
       other ->
-        debug(other, ":verbs list not found in Config, fallback to :verb_names")
-        Bonfire.Common.Config.get!([:verb_names])
+        # nothing has loaded the config yet, which is the case while the extensions compile, and compiling is exactly when `Bonfire.Social.Localise` needs this to register what a feed row will ask gettext for
+        debug(other, ":verbs not in config (as at compile time), reading the declaration itself")
+        verb_names(Bonfire.Boundaries.RuntimeConfig.declared_verbs())
     end
   end
+
+  defp verb_names(verbs), do: Enum.flat_map(verbs, fn {_key, data} -> List.wrap(data[:verb]) end)
 
   @doc """
   Returns every past-tense string `verb_display/1` can render: the conjugated verb on its own ("Boosted"), and the "requested to …" phrase built when a verb governs another ("Requested to follow").
 
-  `Bonfire.Social.Localise` hands these to gettext extraction under the `"verb: past tense"` context. They have to be enumerated because there is no literal `l("Boosted")` call anywhere for `mix gettext.extract` to walk — the strings are assembled at runtime.
+  `Bonfire.Social.Localise` hands these to gettext extraction under the `"verb: past tense"` context. They have to be enumerated because there is no literal `l("Boosted")` call anywhere for `mix gettext.extract` to walk, the strings are assembled at runtime.
 
   The phrases are listed whole rather than interpolated (`"%{verb} to %{other}"`) on purpose: the second verb's required form is governed by the first, so a placeholder would give the translator something they cannot inflect. French wants "a demandé à suivre" — `à` plus a lowercase infinitive — and case-marking languages need more still. Interpolate data; enumerate phrases.
 
   Base forms ("Boost") are not included: `bonfire_boundaries` declares those, and emitting them here would duplicate them into a second gettext domain. Nor are the "Boosted by" forms, which are literal `l/4` calls in the UI components that render them.
+
+  The names `experience_display_names/0` gives the kinds no verb declares are included too, or "wrote" and "sent" would read as English in every locale, in exactly the silent way this module's docs warn about. Built with `verb_past_tense/1`, the same function a render goes through, so what is extracted is what will be asked for.
   """
   def all_verb_names_conjugated() do
-    Enum.flat_map(all_verb_names(), fn v ->
-      conjugated =
-        v
-        |> Bonfire.Social.Activities.verb_congugate()
-        |> sanitise_verb_name()
+    verb_phrases =
+      Enum.flat_map(all_verb_names(), fn verb ->
+        # the governing verb is always "request" (as in "request to follow"), so only the governed verb varies
+        [verb, "Request to #{verb}"]
+      end)
 
-      # the governing verb is always "request" (as in "request to follow"), so only the governed
-      # verb varies — `verb_display/1` conjugates the first word and joins with the rest
-      #
-      # downcased to match `verb_display/1`, which downcases *before* looking up: these read
-      # mid-sentence ("alice boosted this"), and downcasing the translation instead would flatten
-      # locales that capitalise. `all_verb_names/0` returns capitalised verbs, so without this the
-      # phrase emitted here ("Requested to Follow") would never match the one looked up
-      # ("requested to follow")
-      [String.downcase(conjugated), String.downcase("Requested to #{v}")]
-    end)
+    (verb_phrases ++ Map.values(experience_display_names()))
+    |> Enum.map(&verb_past_tense/1)
+    |> Enum.uniq()
   end
 
   @doc """

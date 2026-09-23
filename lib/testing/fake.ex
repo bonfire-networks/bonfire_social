@@ -137,6 +137,10 @@ defmodule Bonfire.Social.Fake do
         create_test_content(:mentions, user, other_user, i)
         create_test_content(:my_boosts, other_user, user, i)
 
+      # the same content as the notifications feed, which is what this preset's query must still return when it unions the inbox in. The inbox half wants a direct message, and `:messages` above is still a stub, so that case arrives with it
+      :notifications_class ->
+        create_test_content(:notifications, user, other_user, i)
+
       :likes ->
         post =
           Bonfire.Posts.Fake.fake_post!(other_user, "public", %{

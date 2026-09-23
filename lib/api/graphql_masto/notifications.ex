@@ -34,19 +34,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       "update" => :update
     }
 
-    # Mastodon notification type -> the Bonfire verbs that produce it.
-    @type_to_verbs %{
-      favourite: [:like],
-      reblog: [:boost],
-      follow: [:follow],
-      follow_request: [:request],
-      quote: [:request],
-      mention: [:create, :reply],
-      admin_report: [:flag]
-    }
-
-    # All verbs that can appear as a notification (used when no type filter is given).
-    @default_notification_verbs [:like, :boost, :follow, :request, :create, :reply, :flag]
+    # Which Mastodon type each kind of notification is, and which activity types to query for one, are both declared by the notification categories (`Bonfire.Social.RuntimeConfig`) and read through `Bonfire.Social.Notifications`, so this API and the notifications feed cannot disagree about what a favourite is.
+    @masto_types [:favourite, :reblog, :follow, :follow_request, :quote, :mention, :admin_report]
 
     @doc """
     Lists notification candidates for a user in a single feed query.
@@ -121,7 +110,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     defp run_notifications_feed(feed_filter, params, current_user, opts) do
       gql_filter =
         %{
-          "feedName" => get_map_field(feed_filter, :feed_name) || "notifications",
+          # the notifications-class feeds, notifications ∪ inbox: Mastodon models a direct message as a `mention`, and a DM is delivered to the inbox, so reading the notifications feed alone hid every message from a client
+          "feedName" => get_map_field(feed_filter, :feed_name) || "notifications_class",
           "showObjectsOnlyOnce" => false,
           "dedupByLikeOrBoost" => Keyword.get(opts, :group_likes_boosts?, false),
           # Mastodon filters kinds per request (`types[]`/`exclude_types[]`) and stores no per-kind preference, so a client gets every category whatever the user hid in Bonfire's own UI
@@ -204,7 +194,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       filter =
         params
         |> get_map_field(:filter, %{})
-        |> Map.put_new("feed_name", "notifications")
+        |> Map.put_new("feed_name", "notifications_class")
         |> Map.put("activity_types", query_verbs(type_filters))
         |> maybe_put_subjects(type_filters.account_id)
 
@@ -216,11 +206,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     defp query_verbs(%{types: types, exclude_types: exclude}) do
       base =
         case verbs_for_types(types) do
-          [] -> @default_notification_verbs
+          [] -> verbs_for_types(@masto_types)
           verbs -> verbs
         end
 
-      remaining_types = (types || Map.keys(@type_to_verbs)) -- (exclude || [])
+      remaining_types = (types || @masto_types) -- (exclude || [])
       Enum.filter(base, &(&1 in verbs_for_types(remaining_types)))
     end
 
@@ -231,7 +221,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     defp verbs_for_types(types) do
       types
       |> List.wrap()
-      |> Enum.flat_map(&Map.get(@type_to_verbs, &1, []))
+      |> Enum.flat_map(&Bonfire.Social.Notifications.activity_types_for_masto_type/1)
       |> Enum.uniq()
     end
 
@@ -287,7 +277,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       mentions_by_object = Keyword.get(status_context, :mentions_by_object, %{})
       mentions = Map.get(mentions_by_object, object_id, [])
 
-      with type when not is_nil(type) <- candidate_type(activity) do
+      with type when not is_nil(type) <- candidate_type(activity, current_user) do
         subject = get_map_field(activity, :subject) || get_map_field(activity, :account)
         status_post = status_post(type, activity)
 
@@ -310,31 +300,30 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     # Create/reply activities only land in the notifications feed when the user was mentioned,
     # replied to or directly addressed. Bonfire has no "notify on every post by this author"
     # subscription, so there is no producer for Mastodon's `status` type.
-    defp candidate_type(activity) do
-      verb_id = get_map_field(activity, :verb_id)
-      verb_name = get_verb_name(activity)
+    defp candidate_type(activity, current_user \\ nil) do
+      case Activities.experienced_as(atom_keyed(activity), current_user) do
+        # something written that reached this feed did so because it was addressed to them, which is the only thing Mastodon's vocabulary can call it
+        experience when experience in [:create, :write] ->
+          :mention
 
-      cond do
-        verb_matches?(verb_id, verb_name, :like) -> :favourite
-        verb_matches?(verb_id, verb_name, :boost) -> :reblog
-        verb_matches?(verb_id, verb_name, :follow) -> :follow
-        verb_matches?(verb_id, verb_name, :request) -> request_type(activity)
-        verb_matches?(verb_id, verb_name, :create) -> :mention
-        verb_matches?(verb_id, verb_name, :reply) -> :mention
-        verb_matches?(verb_id, verb_name, :flag) -> :admin_report
-        true -> nil
+        experience ->
+          Bonfire.Social.Notifications.masto_type_for(experience)
       end
     end
 
-    defp request_type(activity) do
-      edge = get_map_field(activity, :edge)
-      table_id = get_map_field(edge, :table_id)
+    # This pipeline passes activities around as maps that can be keyed by string, which `Activities.experienced_as/2` cannot read: it is built on `e/3`, which only sees atom keys and would answer `nil` for every row. So the few fields it reads are lifted through the same accessor everything else here uses.
+    defp atom_keyed(activity) do
+      verb = get_map_field(activity, :verb)
 
-      cond do
-        table_id == quote_table_id() -> :quote
-        table_id == follow_table_id() -> :follow_request
-        true -> nil
-      end
+      %{
+        verb_id: get_map_field(activity, :verb_id),
+        verb: if(is_map(verb), do: %{verb: get_map_field(verb, :verb)}, else: verb),
+        edge: get_map_field(activity, :edge),
+        object: get_map_field(activity, :object),
+        tags: get_map_field(activity, :tags) || [],
+        replied: get_map_field(activity, :replied),
+        emoji: get_map_field(activity, :emoji)
+      }
     end
 
     defp status_post(:quote, activity) do
@@ -392,14 +381,16 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       |> Enum.reject(&is_nil/1)
     end
 
+    # Mastodon models a direct message as a `mention` notification, so the inbox counts here as well as the notifications feed: reading only the latter made a fetch by id answer "not found" for a DM the list had already shown.
+    # FIXME: one query, not two. 
     defp published_to_user_notifications?(current_user, activity_id) do
-      case Feeds.my_feed_id(:notifications, current_user) do
-        nil ->
+      case Feeds.notifications_class_ids(current_user) do
+        [] ->
           false
 
-        feed_id ->
+        feed_ids ->
           from(fp in FeedPublish,
-            where: fp.id == ^activity_id and fp.feed_id == ^feed_id,
+            where: fp.id == ^activity_id and fp.feed_id in ^feed_ids,
             select: true
           )
           |> repo().exists?()
@@ -468,20 +459,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
     defp take_map_set_keys(_set, _ids), do: MapSet.new()
 
-    defp verb_matches?(verb_id, verb_name, verb) do
-      verb_id == Bonfire.Boundaries.Verbs.get_id!(verb) ||
-        verb_name == Bonfire.Boundaries.Verbs.get(verb)[:verb]
-    end
-
-    defp get_verb_name(activity) do
-      case get_map_field(activity, :verb) do
-        %{verb: verb} when is_binary(verb) -> verb
-        %{"verb" => verb} when is_binary(verb) -> verb
-        verb when is_binary(verb) -> verb
-        _ -> nil
-      end
-    end
-
     defp get_map_field(value, field, default \\ nil)
     defp get_map_field(nil, _field, default), do: default
 
@@ -492,6 +469,5 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     defp get_map_field(_other, _field, _default), do: nil
 
     defp quote_table_id, do: Quotes.quote_verb_id()
-    defp follow_table_id, do: Bonfire.Common.Types.table_id(Follow)
   end
 end
