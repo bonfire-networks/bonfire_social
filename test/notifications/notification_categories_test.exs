@@ -58,12 +58,18 @@ defmodule Bonfire.Social.NotificationCategoriesTest do
     assert Notifications.category_for(:like) == :react
     assert Notifications.category_for(:react) == :react
 
-    # the two kinds of ask are told apart here, which is the whole point of declaring experiences: a query cannot tell them apart, since both are stored as one `:request` verb
+    # parked with the separate Follow requests and Quotes categories, which need a query that tells the kinds of ask apart
+    # # the two kinds of ask are told apart here, which is the whole point of declaring experiences: a query cannot tell them apart, since both are stored as one `:request` verb
+    # assert Notifications.category_for(:follow_request) == :follow_request
+    # assert Notifications.category_for(:quote_request) == :quote
+
+    # every kind of ask is one switch for now, since a query cannot tell them apart: all are stored as one `:request` verb
     assert Notifications.category_for(:follow_request) == :request
-    assert Notifications.category_for(:quote_request) == :quote_request
+    assert Notifications.category_for(:quote_request) == :request
+    assert Notifications.category_for(:request) == :request
 
     # nil, not `:other`, so a preference reads its catch-all switch while a chip has nothing to show
-    assert Notifications.category_for(:request) == nil
+    # assert Notifications.category_for(:request) == nil
     assert Notifications.category_for(:write) == nil
     assert Notifications.category_for(:nonsense) == nil
   end
@@ -76,6 +82,15 @@ defmodule Bonfire.Social.NotificationCategoriesTest do
     # from the verb registry, which only declares singulars
     assert Notifications.label_for(:bookmark) == "Bookmark"
     assert Notifications.label_for(:nonsense) == "nonsense"
+  end
+
+  test "a Mastodon type is the category's, or the one it declares for that experience" do
+    assert Notifications.masto_type_for(:like) == :favourite
+    # one category of ours, two types of theirs
+    assert Notifications.masto_type_for(:follow_request) == :follow_request
+    assert Notifications.masto_type_for(:quote_request) == :quote
+    # an ask with no type of its own is something a client has no name for
+    assert Notifications.masto_type_for(:request) == nil
   end
 
   test "`chip` and `row` say where a category appears" do

@@ -79,7 +79,9 @@ defmodule Bonfire.Social.FeedFilters do
         :boost_count,
         :like_count,
         :latest_reply,
-        :popularity_score
+        :popularity_score,
+        # media feeds only: how many times a piece of media was shared
+        :object_count
       ],
       default: nil
 

@@ -208,8 +208,10 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       masto_types = (types || @masto_types) -- (exclude || [])
 
       Bonfire.Social.Notifications.categories()
-      |> Enum.filter(fn {_key, category} -> Map.get(category, :masto) in masto_types end)
       |> Enum.map(fn {key, _category} -> key end)
+      |> Enum.filter(fn key ->
+        Enum.any?(Bonfire.Social.Notifications.masto_types_of(key), &(&1 in masto_types))
+      end)
     end
 
     defp maybe_put_subjects(filter, nil), do: filter

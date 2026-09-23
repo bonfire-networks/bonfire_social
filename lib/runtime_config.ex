@@ -74,33 +74,59 @@ defmodule Bonfire.Social.RuntimeConfig do
           # the first is the chip's own URL, kept from when this category was called `reply`
           path_aliases: ["replies", "extra_replies"]
         },
+        # every kind of ask, as one switch and one chip. A query cannot tell the kinds apart, since all are one `:request` verb and only the edge says what was asked for, so a category per kind would select every ask. TODO: split into `follow_request` and `quote` below once a filter can read what the edge asked for
         request: %{
-          name_pluralized: l("Follow requests"),
-          description: l("People asking to follow you"),
-          # narrowed to follow asks now that asking to quote has its own category. The query still selects every `:request` row, since only the edge says what was asked for, so this chip shows quote asks too until a filter can read the edge
-          experiences: [:follow_request],
-          # a pair where the wording turns on who was asked: `self` when that is the reader
+          name_pluralized: l("Requests"),
+          description: l("People asking to follow you or to quote a post of yours"),
+          # an ask of a kind nobody is told about separately stays `:request`, and belongs here too
+          experiences: [:request, :follow_request, :quote_request],
+          # a pair where the wording turns on who was asked: `self` when that is the reader. A bare `:request` has none, and is named after its edge instead ("Request to boost")
           phrases: %{
             follow_request: %{
               self: l("requested to follow you"),
               other: l("requested to follow")
-            }
+            },
+            quote_request: l("wants to quote your post")
           },
-          masto: :follow_request,
-          # what the chip shows: asks still waiting for an answer. One set aside stays in the list, since ignoring keeps the row, so without this the chip would keep offering buttons for a question already answered
-          filters: %{activity_types: [:request], request_status: [:pending]},
-          path_aliases: ["requests"]
+          # per experience, since Mastodon has a type for each of these kinds of ask and none for the rest
+          masto: %{follow_request: :follow_request, quote_request: :quote},
+          # what the chip shows: every ask, whatever its status
+          filters: %{
+            activity_types: [:request]
+            # request_status: [:pending]
+            # ^ we want to include accepted requests in the chip, so that the user can see them and take action on them (e.g. retroactively reject a quote request).
+          },
+          path_aliases: ["requests", "follow_requests", "quote_requests"]
         },
-        # TODO: the chip needs a filter that reads what the edge asked for, since every ask is stored as one `:request` verb; the switch works already, as it turns on the experience
-        quote_request: %{
-          name_pluralized: l("Quote requests"),
-          description: l("People asking to quote your posts"),
-          activity_types: [:request],
-          phrases: %{quote_request: l("wants to quote your post")},
-          masto: :quote,
-          chip: :unimplemented,
-          path_aliases: ["quote_requests"]
-        },
+        # parked with `quote` below until a query can tell a follow ask from a quote ask; the catch-all `request` above covers both meanwhile
+        # # was `request`, from when one chip covered both kinds of ask and was named for the verb they share. Its key now names its one experience, and the verb is declared since the key no longer names one
+        # follow_request: %{
+        #   name_pluralized: l("Follow requests"),
+        #   description: l("People asking to follow you"),
+        #   activity_types: [:request],
+        #   # a pair where the wording turns on who was asked: `self` when that is the reader
+        #   phrases: %{
+        #     follow_request: %{
+        #       self: l("requested to follow you"),
+        #       other: l("requested to follow")
+        #     }
+        #   },
+        #   masto: :follow_request,
+        #   # what the chip shows: asks still waiting for an answer. One set aside stays in the list, since ignoring keeps the row, so without the status this chip would keep offering buttons for a question already answered. TODO: only asks to follow, which needs a filter on what the edge asked for, since both kinds of ask are one `:request` verb
+        #   filters: %{activity_types: [:request], request_status: [:pending]},
+        #   # the first is the chip's own URL, kept from when this category was called `request`
+        #   path_aliases: ["requests", "follow_requests"]
+        # },
+        # merged into `quote` below, which covers asking to quote as well as having quoted
+        # quote_request: %{
+        #   name_pluralized: l("Quote requests"),
+        #   description: l("People asking to quote your posts"),
+        #   activity_types: [:request],
+        #   phrases: %{quote_request: l("wants to quote your post")},
+        #   masto: :quote,
+        #   chip: :unimplemented,
+        #   path_aliases: ["quote_requests"]
+        # },
         boost: %{
           name_pluralized: l("Boosts"),
           phrases: %{boost: l("boosted your activity")},
@@ -137,6 +163,20 @@ defmodule Bonfire.Social.RuntimeConfig do
           masto: :follow,
           path_aliases: ["follows", "followers"]
         },
+        # parked with `follow_request` above until a query can tell a follow ask from a quote ask; the catch-all `request` covers both meanwhile
+        # # everything about quoting your posts, whatever its status: asks still waiting, asks set aside, and accepted ones, which are what "X quoted your post" is (an accepted quote ask stays as a row, unlike an accepted follow ask, whose activity `Requests.accept_and_delete/3` removes)
+        # quote: %{
+        #   name_pluralized: l("Quotes"),
+        #   description: l("People quoting your posts, or asking to"),
+        #   activity_types: [:request],
+        #   experiences: [:quote_request],
+        #   phrases: %{quote_request: l("wants to quote your post")},
+        #   masto: :quote,
+        #   # TODO: only asks to quote, which needs a filter on what the edge asked for, since both kinds of ask are one `:request` verb
+        #   filters: %{activity_types: [:request]},
+        #   # the second keeps the URL of the separate Quote requests category this replaced
+        #   path_aliases: ["quotes", "quote_requests"]
+        # },
         # TODO: an accepted quote ("X quoted your post") needs a chip once a filter can read `accepted_at`; the switch already works, as it excludes the verb
         quote: %{name_pluralized: l("Quotes"), chip: :unimplemented, path_aliases: ["quotes"]},
         # nowhere in the UI yet, and here to say what a vote row reads as and that votes collapse into one the way likes and boosts do. Give it a chip and a row when poll notifications are worth switching separately
@@ -149,22 +189,15 @@ defmodule Bonfire.Social.RuntimeConfig do
         },
         # likewise: no UI of its own, and here so that pinning reads as pinning
         pin: %{name_pluralized: l("Pins"), phrases: %{pin: l("pinned")}, chip: false, row: false},
-        # TODO: whatever no other category covers, so its chip needs the union of their types as an exclusion, and its switch needs a catch-all filter rather than a verb
         # Claims no experience of its own: `Notifications.category_for/1` answers nil for anything undeclared and the caller reads this switch, so an experience nothing names (a write, a vote, an ask for something unusual) lands here without being listed
+        # `catch_all`: its chip shows what no other chip does, which `Notifications.query_filters_for/2` computes from the chips, so a new chip narrows it by itself. TODO: its switch, which would need the same catch-all as a filter rather than a verb
         other: %{
           name_pluralized: l("Other activity"),
           experiences: [],
-          chip: :unimplemented,
+          catch_all: true,
+          chip: true,
           row: :unimplemented,
           path_aliases: ["other"]
-        },
-        # TODO: D5's way back to notifications from audiences you told the instance to hide. A different axis from every entry above: it selects by AUDIENCE (`subject_circles`), not by activity type, so it needs an audience filter of its own rather than the "my key names a verb" default, and `hidden` is not a verb
-        hidden: %{
-          name_pluralized: l("Hidden"),
-          description: l("Notifications from people you hear less from"),
-          chip: :unimplemented,
-          row: false,
-          path_aliases: ["hidden"]
         },
         # shows the existing mod queue, whose preset supplies the label, icon, filters, opts and the `instance_permission_required: :mediate` gate that hides this chip from everyone else. Not a row: it is a shared queue, not a kind of notification you get
         flag: %{
@@ -188,6 +221,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         "public_remote" => [:guest, :activity_pub],
         "local" => [:local]
       },
+      # TODO: should we declare every preset's `filters:` as a plain map rather than `%FeedFilters{}`, with a test that each key is in `FeedFilters.supported_filters()` and each preset validates. A struct literal cannot name a field another extension declares, and `FeedFilters.validate/1` passes a struct through uncast, so its values (and the caller's filters merged into it) are never checked
       feed_presets: [
         my: %{
           name: l("Following"),
@@ -569,7 +603,9 @@ defmodule Bonfire.Social.RuntimeConfig do
           name: l("Research"),
           built_in: true,
           description: l("All known research publications"),
-          filters: %FeedFilters{
+          # TODO: move this preset to `bonfire_files`' config, beside the `media_types` field it filters by
+          # a map rather than `%FeedFilters{}`, since `media_types` is declared by `bonfire_files` and a struct literal would need it at compile time
+          filters: %{
             media_types: [:research]
           },
           icon: "ph:microscope-duotone",
@@ -607,6 +643,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         # },
 
         # Hashtag feeds
+        # TODO: move this preset and `mentions` below to `bonfire_tag`'s config, beside the `tags` field they filter by
         hashtag: %{
           name: l("Hashtag"),
           built_in: true,
@@ -825,7 +862,9 @@ defmodule Bonfire.Social.RuntimeConfig do
           name: l("Local Media"),
           built_in: true,
           description: l("All media shared on the local instance"),
-          filters: %FeedFilters{
+          # TODO: move this preset to `bonfire_files`' config, beside the `media_types` field it filters by
+          # a map for the same reason as `research` above
+          filters: %{
             origin: :local,
             media_types: ["*"]
           },
@@ -935,6 +974,7 @@ defmodule Bonfire.Social.RuntimeConfig do
             :with_reply_to
           ]
         },
+        # TODO: move this rule to `bonfire_tag`'s config, beside the `tags` field it matches on
         "Activities with a Specific Hashtag or @ mention" => %{
           match: %{tags: "*"},
           include: [],
@@ -983,6 +1023,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         #     :with_reply_to
         #   ]
         # },
+        # TODO: move this rule to `bonfire_files`' config, beside the `media_types` field it matches on
         # Only trending_links uses per_media aggregation (returns Media structs)
         # Other media feeds (images, videos, audio) use standard activity format
         "Media" => %{

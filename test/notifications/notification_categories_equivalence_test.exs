@@ -75,7 +75,7 @@ defmodule Bonfire.Social.NotificationCategoriesEquivalenceTest do
   # the in-memory side, as fan-out asks it, from an activity loaded with what `experienced_as/2` reads
   defp push_category(thing, reader) do
     thing.activity
-    |> repo().maybe_preload([:verb, :replied, :tags, :object])
+    |> repo().maybe_preload([:verb, :replied, :tags, :object, :edge])
     |> Activities.experienced_as(reader)
     |> Notifications.category_for()
   end
@@ -115,13 +115,32 @@ defmodule Bonfire.Social.NotificationCategoriesEquivalenceTest do
     assert push_category(kinds.reply_naming_somebody_else, me) == :extra_replies
   end
 
-  @tag skip:
-         "asks are one `:request` verb, and neither Follow requests nor Quote requests can yet ask the edge what was asked for, so both select every ask; needs a filter on the edge's table, as the `quote_request` category's TODO says"
-  test "a follow ask is Follow requests alone, and a quote ask is Quote requests alone" do
+  # both kinds of ask are one `:request` verb, so the query side cannot tell them apart while the in-memory side reads the edge. Both land in the one Requests category until a filter can read what the edge asked for, and then this is where the two sides have to agree on separate ones
+  test "a follow ask and a quote ask are each Requests alone, both ways" do
     account = fake_account!()
     asked = Fake.fake_user!(account, %{}, request_before_follow: true)
-    {:ok, ask} = Follows.follow(Fake.fake_user!(account), asked)
 
-    assert query_categories(%{activity: ask}, asked) == [push_category(%{activity: ask}, asked)]
+    {:ok, follow_ask} = Follows.follow(Fake.fake_user!(account), asked)
+
+    quoted = fake_post!(asked, "public", %{post_content: %{html_body: "worth quoting"}})
+
+    {:ok, quoting} =
+      Posts.publish(
+        current_user: Fake.fake_user!(account),
+        boundary: "public",
+        post_attrs: %{post_content: %{html_body: "quoting it"}},
+        quotes: [quoted]
+      )
+
+    assert {:ok, quote_ask} = Bonfire.Social.Quotes.requested(quoting, quoted)
+
+    for {kind, ask} <- [follow_ask: follow_ask, quote_ask: quote_ask] do
+      # the edge is what tells the two kinds apart in memory, so the push side loads it
+      thing = %{activity: repo().maybe_preload(ask, activity: [:edge]).activity}
+      pushed_as = push_category(thing, asked)
+
+      assert query_categories(thing, asked) == [pushed_as],
+             "#{kind}: push resolves it to #{inspect(pushed_as)}, the queries select it as #{inspect(query_categories(thing, asked))}"
+    end
   end
 end

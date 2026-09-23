@@ -64,12 +64,27 @@ defmodule Bonfire.Social.Notifications do
   def query_filters_for(key, opts \\ []) do
     category = category(key)
 
-    # kept apart from `filters:` the way a preset keeps them, because resolving a plain value as a parameter logs it as a missing one
-    Bonfire.Social.FeedLoader.parameterize_filters(
-      e(category, :filters, nil) || %{activity_types: activity_types_for(key)},
-      e(category, :parameterized, nil) || %{},
-      current_user: Utils.current_user(opts)
-    )
+    if e(category, :catch_all, nil) do
+      # what no other chip shows, each excluded as exactly what it selects, so a new chip narrows this by itself
+      %{exclude_notification_categories: chipped_categories_besides(key)}
+    else
+      # kept apart from `filters:` the way a preset keeps them, because resolving a plain value as a parameter logs it as a missing one
+      Bonfire.Social.FeedLoader.parameterize_filters(
+        e(category, :filters, nil) || %{activity_types: activity_types_for(key)},
+        e(category, :parameterized, nil) || %{},
+        current_user: Utils.current_user(opts)
+      )
+    end
+  end
+
+  # the chips a catch-all is the rest of: not itself or another catch-all, and not a chip that selects everything (Latest), which would leave nothing
+  defp chipped_categories_besides(key) do
+    categories_shown(:chip)
+    |> Enum.reject(fn {other_key, category} ->
+      other_key == key or e(category, :catch_all, nil) == true or
+        (is_nil(e(category, :filters, nil)) and activity_types_for(other_key) == [])
+    end)
+    |> Enum.map(fn {other_key, _category} -> other_key end)
   end
 
   @impl Bonfire.Common.FeedFilterModule
@@ -118,6 +133,10 @@ defmodule Bonfire.Social.Notifications do
         dynamic([activity: activity], activity.verb_id in ^verb_ids)
 
       filters ->
+        # prepared as a feed's filters are (`exclude_object_types` becomes `exclude_table_ids` there, for one), and with the outer feed's opts, so a category selects the same as a condition as it does as a chip
+        {filters, opts} =
+          Bonfire.Social.FeedLoader.prepare_filters_and_opts(filters, [], opts)
+
         matching =
           Bonfire.Social.FeedActivities.base_query(opts)
           |> where([activity: activity], activity.id == parent_as(:activity).id)
@@ -215,12 +234,27 @@ defmodule Bonfire.Social.Notifications do
   @doc """
   What a Mastodon client calls this experience, or nil for something its vocabulary has no name for.
 
-  Declared per category, since that is the grouping Mastodon's types line up with, and several of ours share one of theirs: a reply and a mention are both `mention` to a client, a like and an emoji reaction are both `favourite`.
+  Declared per category, since that is the grouping Mastodon's types line up with, and several of ours share one of theirs: a reply and a mention are both `mention` to a client, a like and an emoji reaction are both `favourite`. A category covering kinds that Mastodon names apart declares a map by experience instead, the way `phrases:` does.
   """
   def masto_type_for(experience) do
     case category_for(experience) do
-      nil -> nil
-      key -> e(category(key), :masto, nil)
+      nil ->
+        nil
+
+      key ->
+        case e(category(key), :masto, nil) do
+          %{} = by_experience -> Map.get(by_experience, experience)
+          masto_type -> masto_type
+        end
+    end
+  end
+
+  @doc "Every Mastodon type a category declares, whether one for the category or one per experience."
+  def masto_types_of(key) do
+    case e(category(key), :masto, nil) do
+      nil -> []
+      %{} = by_experience -> Map.values(by_experience)
+      masto_type -> [masto_type]
     end
   end
 
