@@ -80,6 +80,32 @@ defmodule Bonfire.Social.FeedNewerTest do
     assert length(all_newer_cursors) == MapSet.size(MapSet.new(all_newer_cursors))
   end
 
+  test "chronological sort dedups in place instead of deduping the whole feed in a subquery", %{
+    author: author
+  } do
+    # `feed_newer` sorts by :date_created; that must not take the "sort by another field" dedup path
+    for sort_order <- [:asc, :desc] do
+      filters = %FeedFilters{
+        subjects: [author.id],
+        activity_types: [:create],
+        time_limit: 0,
+        sort_by: :date_created,
+        sort_order: sort_order
+      }
+
+      query_string =
+        FeedLoader.feed(:custom, filters,
+          current_user: author,
+          query_with_deferred_join: true,
+          return: :query
+        )
+        |> Inspect.Ecto.Query.to_string()
+
+      # an unbounded DISTINCT ON subquery can't receive the cursor/limit, so it would scan the whole feed
+      refute query_string =~ "distinct_activity_id_subquery"
+    end
+  end
+
   defp entry_cursor(entry) do
     id(entry) || e(entry, :activity, :id, nil) || e(entry, :object, :id, nil) ||
       e(entry, :edge, :id, nil)

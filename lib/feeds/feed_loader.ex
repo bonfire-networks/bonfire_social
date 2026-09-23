@@ -144,7 +144,7 @@ defmodule Bonfire.Social.FeedLoader do
   @doc """
   Returns the page of activities immediately newer than `cursor`.
 
-  This uses the paginator's native `before` direction so each page is adjacent to the cursor and remains in the usual reverse-chronological display order. Continue toward the newest activity with `page_info.start_cursor`.
+  Queries ascending `after` the cursor (then reverses the page into the usual reverse-chronological display order) rather than using the paginator's `before` direction: `before` reverses the ORDER BY but not the dedup's `DISTINCT ON (activity.id DESC)`, which would return the newest page instead of the adjacent one. Ascending keeps DISTINCT and ORDER BY aligned so the index scan stops at the limit, same as a normal "load more". Continue toward the newest activity with `page_info.start_cursor`.
   """
   @spec feed_newer(map() | atom() | String.t(), map(), String.t(), Keyword.t()) :: map()
   def feed_newer(feed_name, filters, cursor, opts \\ [])
@@ -156,19 +156,30 @@ defmodule Bonfire.Social.FeedLoader do
         enumerable -> Map.new(enumerable)
       end)
       |> Map.put(:sort_by, :date_created)
-      |> Map.put(:sort_order, :desc)
+      |> Map.put(:sort_order, :asc)
 
     paginate =
       opts
       |> Keyword.get(:paginate, [])
       |> Keyword.take([:limit])
       |> Keyword.merge(
-        before: cursor,
-        cursor_fields: [id: :desc],
+        after: cursor,
+        cursor_fields: [id: :asc],
         fetch_cursor_value_fun: &Activities.fetch_cursor_value_fun/2
       )
 
-    feed(feed_name, filters, Keyword.put(opts, :paginate, paginate))
+    case feed(feed_name, filters, Keyword.put(opts, :paginate, paginate)) do
+      %{edges: edges, page_info: page_info} = page when is_list(edges) ->
+        # ascending page: its last entry is the newest, so `end_cursor` (nil once exhausted) is where to continue
+        %{
+          page
+          | edges: Enum.reverse(edges),
+            page_info: Map.put(page_info, :start_cursor, e(page_info, :end_cursor, nil))
+        }
+
+      other ->
+        other
+    end
   end
 
   def feed(:curated, opts) do
@@ -1059,13 +1070,14 @@ defmodule Bonfire.Social.FeedLoader do
     query
   end
 
+  # `:date_created` orders by `activity.id` too, so it must take this in-place DISTINCT path: the subquery branch below dedups the entire feed before the cursor and limit can apply (made "load newer" pages scan the whole feed)
   defp make_distinct_by_activity_id(query, id, :asc, _opts)
-       when is_nil(id) or id == false or id == :id do
+       when is_nil(id) or id == false or id == :id or id == :date_created do
     distinct(query, [activity: activity], asc: activity.id)
   end
 
   defp make_distinct_by_activity_id(query, id, _desc, _opts)
-       when is_nil(id) or id == false or id == :id do
+       when is_nil(id) or id == false or id == :id or id == :date_created do
     distinct(query, [activity: activity], desc: activity.id)
   end
 
