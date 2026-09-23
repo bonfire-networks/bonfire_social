@@ -190,13 +190,13 @@ defmodule Bonfire.Social.RuntimeConfig do
         # likewise: no UI of its own, and here so that pinning reads as pinning
         pin: %{name_pluralized: l("Pins"), phrases: %{pin: l("pinned")}, chip: false, row: false},
         # Claims no experience of its own: `Notifications.category_for/1` answers nil for anything undeclared and the caller reads this switch, so an experience nothing names (a write, a vote, an ask for something unusual) lands here without being listed
-        # `catch_all`: its chip shows what no other chip does, which `Notifications.query_filters_for/2` computes from the chips, so a new chip narrows it by itself. TODO: its switch, which would need the same catch-all as a filter rather than a verb
+        # `catch_all`: its chip shows what no other chip does, which `Notifications` computes from the chips, so a new chip narrows it by itself. Its switch hides the same, and its chip still shows it while the switch is off
         other: %{
           name_pluralized: l("Other activity"),
           experiences: [],
           catch_all: true,
           chip: true,
-          row: :unimplemented,
+          # row: :unimplemented,
           path_aliases: ["other"]
         },
         # shows the existing mod queue, whose preset supplies the label, icon, filters, opts and the `instance_permission_required: :mediate` gate that hides this chip from everyone else. Not a row: it is a shared queue, not a kind of notification you get

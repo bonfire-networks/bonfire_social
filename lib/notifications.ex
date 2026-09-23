@@ -65,8 +65,8 @@ defmodule Bonfire.Social.Notifications do
     category = category(key)
 
     if e(category, :catch_all, nil) do
-      # what no other chip shows, each excluded as exactly what it selects, so a new chip narrows this by itself
-      %{exclude_notification_categories: chipped_categories_besides(key)}
+      # named rather than spelled out, so a view of it says which category it is showing, which is what keeps it visible there when its switch is off (`exclude_hidden_categories/2`). `category_condition/2` expands it
+      %{notification_categories: [key]}
     else
       # kept apart from `filters:` the way a preset keeps them, because resolving a plain value as a parameter logs it as a missing one
       Bonfire.Social.FeedLoader.parameterize_filters(
@@ -122,7 +122,20 @@ defmodule Bonfire.Social.Notifications do
 
   # a category whose filters are verbs alone is a plain test on the row; any other runs its own filters, unchanged, inside a correlated subquery shaped like a feed's, which is what every filter module expects
   defp category_condition(key, opts) do
-    case query_filters_for(Types.maybe_to_atom!(key), opts) do
+    key = Types.maybe_to_atom!(key)
+
+    if e(category(key), :catch_all, nil) do
+      # what no other chip shows, each excluded as exactly what it selects, so a new chip narrows this by itself
+      Enum.reduce(chipped_categories_besides(key), dynamic(true), fn other_key, none ->
+        dynamic(^none and not (^category_condition(other_key, opts)))
+      end)
+    else
+      filters_condition(key, opts)
+    end
+  end
+
+  defp filters_condition(key, opts) do
+    case query_filters_for(key, opts) do
       # `[]` is "every type", as for the default category
       %{activity_types: []} = filters when map_size(filters) == 1 ->
         dynamic(true)
@@ -325,7 +338,11 @@ defmodule Bonfire.Social.Notifications do
   def exclude_hidden_categories(filters, opts) do
     if (Types.maybe_to_atom(e(filters, :feed_name, nil)) == :notifications and
           Utils.current_user_id(opts)) && !e(opts, :include_hidden, false) do
-      case hidden_categories(opts, List.wrap(e(filters, :activity_types, []))) do
+      # a category the view names is what it is showing, the way a chip that asks for a category's verbs is, so its switch does not empty its own chip
+      named = Enum.map(List.wrap(e(filters, :notification_categories, [])), &to_string/1)
+
+      case hidden_categories(opts, List.wrap(e(filters, :activity_types, [])))
+           |> Enum.reject(&(to_string(&1) in named)) do
         [] ->
           filters
 

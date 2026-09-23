@@ -105,6 +105,8 @@ defmodule Bonfire.Social.LivePushPayloadTest do
     assert %Sensitive{} = pushed.sensitive
   end
 
+  @tag skip:
+         "with bonfire_notify, connected clients are told by `Bonfire.Notify.Live`, which `Bonfire.Notify.Deliveries` words in each recipient's own language; this flash only runs without that extension, which the test env always has"
   test "the notification broadcast carries fields to word, not a sentence already worded" do
     me = fake_user!()
     other = fake_user!()

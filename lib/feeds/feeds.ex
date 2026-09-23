@@ -422,8 +422,9 @@ defmodule Bonfire.Social.Feeds do
     %{
       # kept as well as their feeds, so whoever notifies them doesn't have to look them up again
       notify_users: users,
-      notify_feeds: notify_feeds(users),
-      notify_emails: notify_emails(users)
+      notify_feeds: notify_feeds(users)
+      # nothing reads it, and it cost a settings read and an account preload per notified user on every post. The email preference will be read by `Bonfire.Notify.Preferences.enabled?/3` on the `:email` channel, when there is an email channel
+      # notify_emails: notify_emails(users)
     }
     |> debug("to notify")
   end
@@ -484,21 +485,22 @@ defmodule Bonfire.Social.Feeds do
     |> Enum.uniq()
   end
 
-  defp notify_emails(users) do
-    users
-    |> Enum.filter(
-      &(Settings.get([:email_notifications, :reply_or_mentions], false,
-          context: &1,
-          name: l("Email on Mentions/Replies"),
-          description: l("Get email notifications for replies or mentions.")
-        )
-        |> debug("notify_enabled?"))
-    )
-    |> repo().maybe_preload(accounted: [account: [:email]])
-    |> Enum.map(&e(&1, :accounted, :account, :email, :email_address, nil))
-    |> Enums.filter_empty([])
-    |> Enum.uniq()
-  end
+  # unused, see `reply_and_or_mentions_to_notify/5`
+  # defp notify_emails(users) do
+  #   users
+  #   |> Enum.filter(
+  #     &(Settings.get([:email_notifications, :reply_or_mentions], false,
+  #         context: &1,
+  #         name: l("Email on Mentions/Replies"),
+  #         description: l("Get email notifications for replies or mentions.")
+  #       )
+  #       |> debug("notify_enabled?"))
+  #   )
+  #   |> repo().maybe_preload(accounted: [account: [:email]])
+  #   |> Enum.map(&e(&1, :accounted, :account, :email, :email_address, nil))
+  #   |> Enums.filter_empty([])
+  #   |> Enum.uniq()
+  # end
 
   @doc """
   Determines the target feeds for a given changeset, creator, and options.

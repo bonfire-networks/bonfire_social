@@ -160,11 +160,14 @@ defmodule Bonfire.Social.LivePush do
 
   # An in-app notification for whoever has one of these feeds open, from the same description a push notification's content comes from, so both say the same thing about the same activity.
   # Sent as fields rather than as a sentence: this process resolved what happened, and each recipient's own process puts it into their language. The activity id travels with it, which is what a client collapses on, so an activity several open tabs all hear about becomes one popup rather than one each.
+  # Only without `bonfire_notify`: with it, this is `Bonfire.Notify.Live`, a delivery channel the fan-out sends on after asking who can still see it, who hasn't seen it, and whether they switched that kind off under Push. Sending it from here as well reached people who had switched it off. Without the extension there is no fan-out, so connected clients still hear about it, unfiltered
   defp flash_to_subscribers(activity, notified_feed_ids) do
-    maybe_apply(Bonfire.UI.Common.Notifications, :notify_broadcast, [
-      notified_feed_ids,
-      Activities.describe_parts(activity) |> Map.put(:activity_id, uid(activity))
-    ])
+    if not Bonfire.Common.Extend.module_enabled?(Bonfire.Notify.Live) do
+      maybe_apply(Bonfire.UI.Common.Notifications, :notify_broadcast, [
+        notified_feed_ids,
+        Activities.describe_parts(activity) |> Map.put(:activity_id, uid(activity))
+      ])
+    end
   end
 
   defp increment_counters(feed_ids, box) do
