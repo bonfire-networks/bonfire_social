@@ -226,17 +226,19 @@ defmodule Bonfire.Social.Media do
   #     raise "Debugging query ^"
   # end
 
+  # the media filters are `bonfire_files`' (`Bonfire.Files.FeedFilters`), an optional dependency here, so without it trending is simply unfiltered by media type
   defp apply_media_filters(query, filters, opts) do
-    query =
-      case filters[:media_types] do
-        nil -> query
-        types -> maybe_filter(query, {:media_types, types}, opts)
-      end
+    Enum.reduce([:media_types, :exclude_media_types], query, fn key, query ->
+      case filters[key] do
+        nil ->
+          query
 
-    case filters[:exclude_media_types] do
-      nil -> query
-      types -> maybe_filter(query, {:exclude_media_types, types}, opts)
-    end
+        types ->
+          maybe_apply(Bonfire.Files.FeedFilters, :maybe_filter, [query, {key, types}, opts],
+            fallback_return: query
+          )
+      end
+    end)
   end
 
   defp maybe_preload_and_select_boosts_metric(query, false), do: query
@@ -330,115 +332,7 @@ defmodule Bonfire.Social.Media do
     })
   end
 
-  defp filter_has_media(query) do
-    query
-    |> maybe_proload_media(:has_one)
-    |> where([media: media], not is_nil(media.media_type))
-  end
-
-  def maybe_filter(query, {:media_types, types}, opts) when is_list(types) and types != [] do
-    per_media? = :per_media in List.wrap(opts[:preload])
-
-    case prepare_filter_media_type(types) do
-      :all ->
-        filter_has_media(query)
-
-      [first | rest] ->
-        # Build the OR conditions as a dynamic query
-        media_type_filter =
-          rest
-          |> Enum.reduce(
-            dynamic([media: media], ilike(media.media_type, ^"#{first}%")),
-            fn type, dynamic_query ->
-              dynamic([media: media], ^dynamic_query or ilike(media.media_type, ^"#{type}%"))
-            end
-          )
-
-        # Apply as a single WHERE clause
-        query
-        |> maybe_proload_media(per_media? || :left)
-        |> where(^media_type_filter)
-
-      other ->
-        warn(other, "Unrecognised media type")
-        query
-    end
-  end
-
-  def maybe_filter(query, {:exclude_media_types, types}, opts)
-      when is_list(types) and types != [] do
-    per_media? = :per_media in List.wrap(opts[:preload])
-
-    case prepare_filter_media_type(types) do
-      :all ->
-        query
-        |> maybe_proload_media(per_media? || :has_one)
-        |> where([media: media], is_nil(media.media_type))
-
-      [first | rest] ->
-        # Build combined exclusion filter
-        media_type_filter =
-          rest
-          |> Enum.reduce(
-            dynamic(
-              [media: media],
-              is_nil(media.id) or not ilike(media.media_type, ^"#{first}%")
-            ),
-            fn type, dynamic_query ->
-              dynamic([media: media], ^dynamic_query and not ilike(media.media_type, ^"#{type}%"))
-            end
-          )
-
-        query
-        |> maybe_proload_media(per_media? || :left)
-        |> where(^media_type_filter)
-
-      other ->
-        warn(other, "Unrecognised media type")
-        query
-    end
-  end
-
-  def maybe_filter(query, filters, _opts) do
-    debug(filters, "no supported Media-related filters defined")
-    query
-  end
-
-  def maybe_proload_media(query, per_media_or_join) do
-    if per_media_or_join == true do
-      query
-      |> projoin(:inner, activity: [:media])
-    else
-      if per_media_or_join == :has_one do
-        query
-        |> projoin(:inner, activity: [:media])
-      else
-        #  :left 
-        if per_media_or_join == :inner do
-          query
-          |> Bonfire.Social.Activities.join_media(:inner)
-          |> proload(:inner, activity: [:media])
-        else
-          query
-          |> Bonfire.Social.Activities.join_media(:left)
-          |> proload(:left, activity: [:media])
-        end
-      end
-    end || query
-  end
-
-  defp prepare_filter_media_type(types) do
-    cond do
-      "*" in types or :* in types ->
-        :all
-
-      :link in types or "link" in types ->
-        ["link", "article", "profile", "website"] ++ types
-
-      true ->
-        types
-    end
-  end
+  # the media feed filters (`media_types`, `exclude_media_types`), the join that reaches an activity's media, and their helpers moved to `Bonfire.Files.FeedFilters`: media are `bonfire_files`', which `bonfire_social` holds only as an optional dependency, and the filters reach feeds through `Bonfire.Common.FeedFilterModule`
 
   def preload_newest_activity(%{edges: edges} = result) do
     %{result | edges: preload_newest_activity(edges)}

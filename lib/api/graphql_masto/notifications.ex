@@ -118,8 +118,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
           "includeHiddenTypes" => true
         }
         |> put_var(
-          "activityTypes",
-          Enum.map(get_map_field(feed_filter, :activity_types, []), &to_string/1)
+          "notificationCategories",
+          Enum.map(get_map_field(feed_filter, :notification_categories, []), &to_string/1)
         )
         |> put_var("subjects", get_map_field(feed_filter, :subjects))
         # Mastodon wants full history, not the 7-day default window — forward time_limit: 0.
@@ -195,7 +195,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         params
         |> get_map_field(:filter, %{})
         |> Map.put_new("feed_name", "notifications_class")
-        |> Map.put("activity_types", query_verbs(type_filters))
+        |> Map.put("notification_categories", query_categories(type_filters))
         |> maybe_put_subjects(type_filters.account_id)
 
       params
@@ -203,26 +203,15 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       |> Map.put("filter", filter)
     end
 
-    defp query_verbs(%{types: types, exclude_types: exclude}) do
-      base =
-        case verbs_for_types(types) do
-          [] -> verbs_for_types(@masto_types)
-          verbs -> verbs
-        end
+    # Mastodon's type names are read here and nowhere else: each is the categories whose `masto:` names it (Mastodon's one `mention` is both Mentions and Replies (without mentioning you)), and the feed filter then selects exactly what those categories select. With no `types[]`, every type this adapter maps, so a page holds only activities a client can be shown
+    defp query_categories(%{types: types, exclude_types: exclude}) do
+      masto_types = (types || @masto_types) -- (exclude || [])
 
-      remaining_types = (types || @masto_types) -- (exclude || [])
-      Enum.filter(base, &(&1 in verbs_for_types(remaining_types)))
-    end
-
-    def verbs_for_notification_types(types), do: verbs_for_types(normalize_types(types) || [])
-
-    defp verbs_for_types(nil), do: []
-
-    defp verbs_for_types(types) do
-      types
-      |> List.wrap()
-      |> Enum.flat_map(&Bonfire.Social.Notifications.activity_types_for_masto_type/1)
-      |> Enum.uniq()
+      Bonfire.Social.Notifications.categories()
+      |> Enum.map(fn {key, _category} -> key end)
+      |> Enum.filter(fn key ->
+        Enum.any?(Bonfire.Social.Notifications.masto_types_of(key), &(&1 in masto_types))
+      end)
     end
 
     defp maybe_put_subjects(filter, nil), do: filter

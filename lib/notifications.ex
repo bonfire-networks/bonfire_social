@@ -16,9 +16,14 @@ defmodule Bonfire.Social.Notifications do
   use Bonfire.Common.Settings
   use Bonfire.Common.Localise
 
+  import Ecto.Query, only: [dynamic: 1, dynamic: 2, where: 2, where: 3, select: 2, exclude: 2]
+
   alias Bonfire.Boundaries.Verbs
   alias Bonfire.Common.Types
   alias Bonfire.Common.Utils
+
+  # the `notification_categories`/`exclude_notification_categories` feed filters, which turn a category into a condition
+  @behaviour Bonfire.Common.FeedFilterModule
 
   @doc """
   Notification categories in display order, from config.
@@ -41,14 +46,107 @@ defmodule Bonfire.Social.Notifications do
   @doc """
   The activity types a category covers, defaulting to the verb its key names.
 
-  Both the chip that shows a category and the switch that hides it read this, so the two can never
-  disagree, including approximations (Mentions is `:create` until a filter can ask whether a tag points at you).
+  Only a category's verbs: what it selects in a feed is `query_filters_for/2`, which starts from these when a category declares no filters of its own.
   """
   def activity_types_for(key) do
     # not `e/3`, which reads an empty list as nothing set, while `activity_types: []` means "every type" for the default category
     case category(key) do
       %{activity_types: types} -> types
       _ -> [key]
+    end
+  end
+
+  @doc """
+  What a category selects in a feed query, for the person reading: its `filters:` with its `parameterized:` resolved for them (`tags: [:me]` becomes the reader), or its activity types when it declares no filters.
+
+  The query side of what a category is, and the only one: chips apply it directly, and the centre's switches and the Mastodon API's type filters reach it through the `notification_categories`/`exclude_notification_categories` feed filters. The in-memory side is `Bonfire.Social.Activities.experienced_as/2` with each category's `experiences:`, which is what push, email, a row's wording and the Mastodon type go by, since fan-out decides per recipient without a query each. The two cannot share code, so `Bonfire.Social.NotificationCategoriesEquivalenceTest` holds them together: change what a category selects here, or what `experienced_as/2` answers, and that test says whether the other needs the same change.
+  """
+  def query_filters_for(key, opts \\ []) do
+    category = category(key)
+
+    if e(category, :catch_all, nil) do
+      # what no other chip shows, each excluded as exactly what it selects, so a new chip narrows this by itself
+      %{exclude_notification_categories: chipped_categories_besides(key)}
+    else
+      # kept apart from `filters:` the way a preset keeps them, because resolving a plain value as a parameter logs it as a missing one
+      Bonfire.Social.FeedLoader.parameterize_filters(
+        e(category, :filters, nil) || %{activity_types: activity_types_for(key)},
+        e(category, :parameterized, nil) || %{},
+        current_user: Utils.current_user(opts)
+      )
+    end
+  end
+
+  # the chips a catch-all is the rest of: not itself or another catch-all, and not a chip that selects everything (Latest), which would leave nothing
+  defp chipped_categories_besides(key) do
+    categories_shown(:chip)
+    |> Enum.reject(fn {other_key, category} ->
+      other_key == key or e(category, :catch_all, nil) == true or
+        (is_nil(e(category, :filters, nil)) and activity_types_for(other_key) == [])
+    end)
+    |> Enum.map(fn {other_key, _category} -> other_key end)
+  end
+
+  @impl Bonfire.Common.FeedFilterModule
+  def feed_filter_module, do: __MODULE__
+
+  @impl Bonfire.Common.FeedFilterModule
+  @doc """
+  Categories as conditions on a feed query: `notification_categories` keeps rows any of them selects, `exclude_notification_categories` keeps rows none of them does.
+
+  Each category is what `query_filters_for/2` says it selects, so a switch hides exactly what its chip shows and the Mastodon API's type filters agree with both.
+  """
+  def maybe_filter(query, filter, opts \\ [])
+
+  def maybe_filter(query, {:notification_categories, keys}, opts)
+      when is_list(keys) and keys != [] do
+    where(
+      query,
+      ^Enum.reduce(keys, dynamic(false), fn key, any ->
+        dynamic(^any or ^category_condition(key, opts))
+      end)
+    )
+  end
+
+  def maybe_filter(query, {:exclude_notification_categories, keys}, opts)
+      when is_list(keys) and keys != [] do
+    where(
+      query,
+      ^Enum.reduce(keys, dynamic(true), fn key, none ->
+        dynamic(^none and not (^category_condition(key, opts)))
+      end)
+    )
+  end
+
+  def maybe_filter(query, _filter, _opts), do: query
+
+  # a category whose filters are verbs alone is a plain test on the row; any other runs its own filters, unchanged, inside a correlated subquery shaped like a feed's, which is what every filter module expects
+  defp category_condition(key, opts) do
+    case query_filters_for(Types.maybe_to_atom!(key), opts) do
+      # `[]` is "every type", as for the default category
+      %{activity_types: []} = filters when map_size(filters) == 1 ->
+        dynamic(true)
+
+      # the same test `Activities.maybe_filter/3` applies for `activity_types`, written as a condition to spare a subquery for every verbs-only category a switch hides; keep the two in step
+      %{activity_types: types} = filters when map_size(filters) == 1 ->
+        verb_ids = Verbs.ids(types)
+        dynamic([activity: activity], activity.verb_id in ^verb_ids)
+
+      filters ->
+        # prepared as a feed's filters are (`exclude_object_types` becomes `exclude_table_ids` there, for one), and with the outer feed's opts, so a category selects the same as a condition as it does as a chip
+        {filters, opts} =
+          Bonfire.Social.FeedLoader.prepare_filters_and_opts(filters, [], opts)
+
+        matching =
+          Bonfire.Social.FeedActivities.base_query(opts)
+          |> where([activity: activity], activity.id == parent_as(:activity).id)
+          |> Bonfire.Social.FeedLoader.maybe_filter(filters, opts)
+          # a subquery can carry joins but not preloads, and the filters' `proload`s add both
+          |> exclude(:preload)
+          |> exclude(:select)
+          |> select(1)
+
+        dynamic(exists(matching))
     end
   end
 
@@ -136,26 +234,37 @@ defmodule Bonfire.Social.Notifications do
   @doc """
   What a Mastodon client calls this experience, or nil for something its vocabulary has no name for.
 
-  Declared per category, since that is the grouping Mastodon's types line up with, and several of ours share one of theirs: a reply and a mention are both `mention` to a client, a like and an emoji reaction are both `favourite`.
+  Declared per category, since that is the grouping Mastodon's types line up with, and several of ours share one of theirs: a reply and a mention are both `mention` to a client, a like and an emoji reaction are both `favourite`. A category covering kinds that Mastodon names apart declares a map by experience instead, the way `phrases:` does.
   """
   def masto_type_for(experience) do
     case category_for(experience) do
-      nil -> nil
-      key -> e(category(key), :masto, nil)
+      nil ->
+        nil
+
+      key ->
+        case e(category(key), :masto, nil) do
+          %{} = by_experience -> Map.get(by_experience, experience)
+          masto_type -> masto_type
+        end
     end
   end
 
-  @doc """
-  The activity types to query for a Mastodon notification type, from the categories that declare it.
-
-  The inverse of `masto_type_for/1` but in the *query* vocabulary, because that is what a filter can select: a client asking for `favourite` gets the types the categories claiming that name cover.
-  """
-  def activity_types_for_masto_type(masto_type) do
-    categories()
-    |> Enum.filter(fn {_key, category} -> e(category, :masto, nil) == masto_type end)
-    |> Enum.flat_map(fn {key, _category} -> activity_types_for(key) end)
-    |> Enum.uniq()
+  @doc "Every Mastodon type a category declares, whether one for the category or one per experience."
+  def masto_types_of(key) do
+    case e(category(key), :masto, nil) do
+      nil -> []
+      %{} = by_experience -> Map.values(by_experience)
+      masto_type -> [masto_type]
+    end
   end
+
+  # replaced by the Mastodon adapter mapping its types to category keys (`GraphQLMasto.Notifications`) and the `notification_categories` filter: a category's verbs are not what it selects, so `mention` meant every non-reply post rather than what names you
+  # def activity_types_for_masto_type(masto_type) do
+  #   categories()
+  #   |> Enum.filter(fn {_key, category} -> e(category, :masto, nil) == masto_type end)
+  #   |> Enum.flat_map(fn {key, _category} -> activity_types_for(key) end)
+  #   |> Enum.uniq()
+  # end
 
   @doc """
   Whether several of these collapse into one row ("A, B and 1 other") rather than getting a row each.
@@ -213,18 +322,18 @@ defmodule Bonfire.Social.Notifications do
   Filters come back untouched for any other feed, for a reader with no user, and when the caller passes `include_hidden: true`, which is how the Mastodon adapter keeps its own semantics (kinds are per request there, nothing stored). 
   Types the caller named explicitly outrank the preference, and a caller's own exclusions are added to rather than replaced.
   """
-  def exclude_hidden_types(filters, opts) do
+  def exclude_hidden_categories(filters, opts) do
     if (Types.maybe_to_atom(e(filters, :feed_name, nil)) == :notifications and
           Utils.current_user_id(opts)) && !e(opts, :include_hidden, false) do
-      case excluded_activity_types(opts, List.wrap(e(filters, :activity_types, []))) do
-        false ->
+      case hidden_categories(opts, List.wrap(e(filters, :activity_types, []))) do
+        [] ->
           filters
 
-        excluded ->
+        hidden ->
           Map.put(
             filters,
-            :exclude_activity_types,
-            Enum.uniq(List.wrap(e(filters, :exclude_activity_types, []) || []) ++ excluded)
+            :exclude_notification_categories,
+            Enum.uniq(List.wrap(e(filters, :exclude_notification_categories, []) || []) ++ hidden)
           )
       end
     else
@@ -233,28 +342,39 @@ defmodule Bonfire.Social.Notifications do
   end
 
   @doc """
-  The activity types this user switched off, as a feed `exclude_activity_types` value.
+  The categories this user switched off, as a feed `exclude_notification_categories` value, so each is hidden as exactly what its chip shows (`query_filters_for/2`) rather than as its verbs.
 
-  `false` when nothing is off, which is what the `:notifications` preset uses to mean "exclude
-  nothing". Only categories with something to exclude are consulted, so an `:unimplemented` row
-  never contributes a filter term.
+  Only rows that are wired are consulted, so an `:unimplemented` row never contributes a filter term.
 
-  `showing` is what the reader asked for explicitly (a category's own chip, an API query naming
-  types), and outranks the switches, since that view is the way back to a category the feed hides.
+  `showing` is what the reader asked for explicitly (a category's own chip, an API query naming types), and outranks the switches, since that view is the way back to a category the feed hides: a category whose verbs the reader asked for is not hidden.
   """
-  def excluded_activity_types(context \\ nil, showing \\ []) do
+  def hidden_categories(context \\ nil, showing \\ []) do
     # config declares verbs as atoms and `showing` comes from a feed filter or a query, which allows either, so both sides meet as strings rather than paying for atom lookups
     asked_for = Enum.map(showing, &to_string/1)
 
-    case categories()
-         |> Enum.filter(fn {key, category} ->
-           e(category, :row, true) == true and hidden_from_centre?(key, context)
-         end)
-         |> Enum.flat_map(fn {key, _category} -> activity_types_for(key) end)
-         |> Enum.uniq()
-         |> Enum.reject(&(to_string(&1) in asked_for)) do
-      [] -> false
-      excluded -> excluded
-    end
+    categories()
+    |> Enum.filter(fn {key, category} ->
+      e(category, :row, true) == true and hidden_from_centre?(key, context)
+    end)
+    |> Enum.reject(fn {key, _category} ->
+      Enum.any?(activity_types_for(key), &(to_string(&1) in asked_for))
+    end)
+    |> Enum.map(fn {key, _category} -> key end)
   end
+
+  # replaced by `hidden_categories/2`: hiding a category by its verbs hid every reply when "Replies (without mentioning you)" was off, mentions included, and left replies that name you when Mentions was off
+  # def excluded_activity_types(context \\ nil, showing \\ []) do
+  #   asked_for = Enum.map(showing, &to_string/1)
+  #
+  #   case categories()
+  #        |> Enum.filter(fn {key, category} ->
+  #          e(category, :row, true) == true and hidden_from_centre?(key, context)
+  #        end)
+  #        |> Enum.flat_map(fn {key, _category} -> activity_types_for(key) end)
+  #        |> Enum.uniq()
+  #        |> Enum.reject(&(to_string(&1) in asked_for)) do
+  #     [] -> false
+  #     excluded -> excluded
+  #   end
+  # end
 end

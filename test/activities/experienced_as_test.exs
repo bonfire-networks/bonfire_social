@@ -99,7 +99,31 @@ defmodule Bonfire.Social.ExperiencedAsTest do
     assert Activities.experienced_as(activity_for(post), me) == :mention
   end
 
-  test "answering my post while naming me reads as the reply, which is the more specific thing" do
+  test "answering my post while naming me is a mention, the way Mastodon has it" do
+    me = Fake.fake_user!()
+    other = Fake.fake_user!()
+    bystander = Fake.fake_user!()
+
+    mine = fake_post!(me, "public", %{post_content: %{html_body: "the first word"}})
+
+    {:ok, answer} =
+      Posts.publish(
+        current_user: other,
+        boundary: "public",
+        post_attrs: %{
+          post_content: %{html_body: "answering you @#{me.character.username}"},
+          reply_to_id: id(mine)
+        }
+      )
+
+    # every reply federated from Mastodon names its parent's author, since that is how Mastodon notifies anyone, so a reply that names you is governed by the Mentions switch, and replies of their own are the ones that name nobody
+    assert Activities.experienced_as(activity_for(answer), me) == :mention
+
+    # and to anybody it does not name, it is still an answer
+    assert Activities.experienced_as(activity_for(answer), bystander) == :reply
+  end
+
+  test "answering my post without naming me stays a reply" do
     me = Fake.fake_user!()
     other = Fake.fake_user!()
 
@@ -110,7 +134,7 @@ defmodule Bonfire.Social.ExperiencedAsTest do
         current_user: other,
         boundary: "public",
         post_attrs: %{
-          post_content: %{html_body: "answering you @#{me.character.username}"},
+          post_content: %{html_body: "answering without naming anyone"},
           reply_to_id: id(mine)
         }
       )

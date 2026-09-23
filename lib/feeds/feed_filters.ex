@@ -3,6 +3,7 @@ defmodule Bonfire.Social.FeedFilters do
   use Accessible
   import Ecto.Changeset
   import Untangle
+  require Exto
 
   alias Bonfire.Common.Enums
   alias Bonfire.Common.Types
@@ -24,6 +25,7 @@ defmodule Bonfire.Social.FeedFilters do
     field :subjects, AtomOrStringList
     field :exclude_subjects, AtomOrStringList
 
+    # TODO: move to `bonfire_boundaries`, which owns the Encircle row these join: declare the keys in its config for `Exto` to add here (see `flex_schema` at the end of this block) and implement `Bonfire.Common.FeedFilterModule` there for the query, as `bonfire_tag` does for `tags`. Takes the two commented-out circle filters below with it
     field :subject_circles, StringList
     field :exclude_subject_circles, StringList
 
@@ -34,27 +36,33 @@ defmodule Bonfire.Social.FeedFilters do
     field :exclude_group_activities, :boolean
     # NOTE: no defaults on the booleans below — a default would be baked into every validated
     # struct and clobber a user-set true when merging partial filter updates (nil = "not set")
+    # TODO: move to `bonfire_classify` the same way (its config declares the key for `Exto`, it implements `Bonfire.Common.FeedFilterModule` for the query), along with the Category-shaped `exclude_subject_types` expansion `FeedLoader` does beside it
     field :exclude_category_contexts, :boolean
+
+    # notification categories as conditions: rows matching any of these, or none of them. A category is what `Bonfire.Social.Notifications.query_filters_for/2` says it selects, so these reach it rather than restating it; this is how the centre's switches and the Mastodon API's `types[]`/`exclude_types[]` ask for one
+    field :notification_categories, AtomOrStringList
+    field :exclude_notification_categories, AtomOrStringList
+
+    # asks by where they stand. A list, since statuses combine; `:pending` also keeps what is not an ask, which has no request row, so it can quiet a mixed feed as well as narrow a list of asks
+    field :request_status, {:array, Ecto.Enum}, values: [:pending, :accepted, :ignored]
 
     field :objects, StringList
     field :exclude_objects, StringList
-
-    field :object_circles, StringList
 
     field :object_types, AtomOrStringList
     field :exclude_object_types, AtomOrStringList
 
     # FEP-8a8e event categories (matched against the AS2 `category` in an APActivity's json)
+    # TODO: clearer name? also moves with events, wherever they end up living (`lib/events/` here today): same two halves, a config declaration for `Exto` and a `Bonfire.Common.FeedFilterModule` implementation for the query
     field :object_categories, AtomOrStringList
 
     field :creators, StringList
     field :exclude_creators, StringList
     # field :creator_circles, StringList
 
-    field :media_types, AtomOrStringList
-    field :exclude_media_types, AtomOrStringList
+    # field :object_circles, StringList
 
-    field :tags, StringList
+    # `media_types`/`exclude_media_types` are declared by `bonfire_files`, which owns media and the join that reaches them
 
     #  can be :local, :remote, or ID(s) or domain name(s) of remote instance(s)
     field :origin, AtomOrStringList
@@ -71,7 +79,9 @@ defmodule Bonfire.Social.FeedFilters do
         :boost_count,
         :like_count,
         :latest_reply,
-        :popularity_score
+        :popularity_score,
+        # media feeds only: how many times a piece of media was shared
+        :object_count
       ],
       default: nil
 
@@ -87,49 +97,17 @@ defmodule Bonfire.Social.FeedFilters do
     # Pagination fields for Mastodon API compatibility
     field :id_before, :string
     field :id_after, :string
+
+    # what an extension adds to this struct from its own config, declared the way a data schema's fields and assocs are (`config :bonfire_social, Bonfire.Social.FeedFilters, field: [my_filter: {:boolean, default: nil}]`). Read at compile time, so a change to that config needs this dep rebuilt, and a field arrives without the typespec the ones above carry. A field declared here is validated and carried; making it *filter* takes a handler as well
+    Exto.flex_schema(:bonfire_social)
   end
 
-  # TODO: how can we generate this from the list above to make sure they stay in sync?
-  def supported_filters,
-    do: [
-      :feed_name,
-      :feed_ids,
-      :activity_types,
-      :exclude_activity_types,
-      :subjects,
-      :exclude_subjects,
-      :subject_circles,
-      :exclude_subject_circles,
-      :subject_types,
-      :exclude_subject_types,
-      :exclude_group_activities,
-      :exclude_category_contexts,
-      :objects,
-      :exclude_objects,
-      :object_circles,
-      :object_types,
-      :exclude_object_types,
-      :object_categories,
-      :creators,
-      :exclude_creators,
-      # :creator_circles,
-      :media_types,
-      :exclude_media_types,
-      :tags,
-      :origin,
-      :time_limit,
-      :sort_by,
-      :sort_order,
-      #  FIXME should only be set in config
-      # :include_flags,
-      :show_objects_only_once,
-      :dedup_by_thread,
-      :dedup_replies_by_parent,
-      :dedup_by_like_or_boost,
-      # Pagination fields for Mastodon API compatibility
-      :id_before,
-      :id_after
-    ]
+  @doc """
+  The filter keys this struct accepts, which is every field it has, including the ones an extension declared in config.
+
+  Derived rather than listed, since it is extensible.
+  """
+  def supported_filters, do: __schema__(:fields)
 
   @doc """
   Creates a changeset for feed filters.
@@ -217,21 +195,6 @@ defmodule Bonfire.Social.FeedFilters do
   def validate(attrs) do
     error(attrs, "Invalid filter parameters")
   end
-
-  @doc """
-  Cleans a user-typed hashtag for the `:tags` filter (strips `#`, rejects junk).
-
-      iex> normalise_tag("#Bonfire ")
-      "Bonfire"
-      iex> normalise_tag("bad tag")
-      nil
-  """
-  def normalise_tag(tag) when is_binary(tag) do
-    tag = tag |> String.trim() |> String.trim_leading("#")
-    if tag != "" and not String.contains?(tag, [" ", "/"]), do: tag
-  end
-
-  def normalise_tag(_), do: nil
 
   @doc """
   Reduces a user-typed instance reference to a bare domain for the `:origin` filter.

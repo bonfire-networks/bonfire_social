@@ -73,7 +73,7 @@ defmodule Bonfire.Social.FeedLoader do
         |> merge_some_defaults(opts)
         |> debug("merged feed_filters")
         # after merging, so types the caller asked for are visible and outrank the preference. A no-op for every feed but notifications
-        |> Bonfire.Social.Notifications.exclude_hidden_types(opts)
+        |> Bonfire.Social.Notifications.exclude_hidden_categories(opts)
         |> FeedFilters.validate()
         |> debug("validated & parameterized feed_filters")
         ~> {:ok, preset, ...}
@@ -83,7 +83,7 @@ defmodule Bonfire.Social.FeedLoader do
         |> merge_feed_filters(custom_filters, opts[:feed_filters])
         |> merge_some_defaults(opts)
         |> debug("merged feed_filters")
-        |> Bonfire.Social.Notifications.exclude_hidden_types(opts)
+        |> Bonfire.Social.Notifications.exclude_hidden_categories(opts)
         |> FeedFilters.validate()
         |> debug("validated feed_filters")
         ~> {:ok, preset, ...}
@@ -1508,9 +1508,14 @@ defmodule Bonfire.Social.FeedLoader do
     end
   end
 
-  defp maybe_filter(query, filters, opts \\ [])
+  @doc """
+  Applies a map of feed filters to a query shaped like a feed's (`FeedActivities.base_query/1`), through every module that can turn a filter into query terms.
 
-  defp maybe_filter(query, filters, opts) when is_list(filters) or is_map(filters) do
+  Public so a filter can be applied somewhere other than a whole feed: a notification category used as a condition runs its own filters inside a correlated subquery of this shape (`Bonfire.Social.Notifications.query_filters_for/2`).
+  """
+  def maybe_filter(query, filters, opts \\ [])
+
+  def maybe_filter(query, filters, opts) when is_list(filters) or is_map(filters) do
     opts
     #  so the rest of filters are available in filter functions
     |> Keyword.put(:filters, filters)
@@ -1532,7 +1537,7 @@ defmodule Bonfire.Social.FeedLoader do
     |> debug("query with Activities & Objects filters applied")
   end
 
-  defp maybe_filter(query, filters, _opts) do
+  def maybe_filter(query, filters, _opts) do
     # cond do
 
     #   # is_list(filters) or (is_map(filters) and Map.keys(filters) |> List.first() |> is_atom()) ->
@@ -1563,8 +1568,15 @@ defmodule Bonfire.Social.FeedLoader do
       #  TODO: can we avoid loading the object if not needed by a filter?
       # |> proload(activity: [:object])
       |> Objects.maybe_filter(filter, opts)
-      |> Bonfire.Social.Media.maybe_filter(filter, opts)
+      |> apply_registered_filter_modules(filter, opts)
     end)
+  end
+
+  # a filter belongs to whatever owns the thing it filters on, and that extension often cannot be named from here: `bonfire_tag` and `bonfire_files` register themselves instead (see `Bonfire.Common.FeedFilterModule`), the one because `bonfire_social` depends on it and so cannot be depended on back, the other because it is optional here. The two above stay named rather than discovered, so a feed cannot silently lose all of its filtering if discovery ever comes back empty
+  defp apply_registered_filter_modules(query, filter, opts) do
+    Bonfire.Common.FeedFilterModule.modules()
+    |> Enum.reject(&(&1 in [Activities, Objects]))
+    |> Enum.reduce(query, fn module, query -> module.maybe_filter(query, filter, opts) end)
   end
 
   defp query_optional_extras(query, filters, opts) do
