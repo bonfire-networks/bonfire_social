@@ -778,6 +778,19 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   @doc """
+  Whether a feed has at least one unseen item for the current user. Cheaper than `unseen_count/2` when a yes/no is enough.
+
+  ## Examples
+
+      > any_unseen?(feed_id, current_user: me)
+      true
+  """
+  def any_unseen?(feed_id, opts) do
+    unseen_query(feed_id, opts)
+    ~> repo().exists?()
+  end
+
+  @doc """
   Returns the total count of activities in feeds.
   """
   def count_total() do
