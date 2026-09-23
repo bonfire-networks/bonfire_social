@@ -629,7 +629,10 @@ defmodule Bonfire.Social.Activities do
         :with_media ->
           query
           |> proload(activity: [:sensitive])
-          |> join_media(:left)
+          # the join is `bonfire_files`', an optional dependency here, so without it this loads no media
+          |> then(
+            &maybe_apply(Bonfire.Files.FeedFilters, :join_media, [&1, :left], fallback_return: &1)
+          )
           # use preload (postload) instead of proload (join) because there can be many media
           |> preload(activity: [:media])
 
@@ -854,45 +857,7 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
-  def join_media(query, :inner) do
-    query
-    # |> reusable_join(:inner, [activity: activity], media in Bonfire.Files.Media,
-    #     as: :media,
-    #     on:
-    #       activity.object_id == media.id
-    #   )
-    # ^ adds a join to show ONLY media objects in activities (does not include media attached to an object)
-    |> reusable_join(
-      :left,
-      [activity: activity],
-      files in assoc(activity, :files),
-      as: :files
-    )
-    |> reusable_join(
-      :inner,
-      [activity: activity, files: files],
-      media in Bonfire.Files.Media,
-      as: :media,
-      on: files.media_id == media.id or activity.id == media.id
-    )
-  end
-
-  def join_media(query, _) do
-    query
-    |> reusable_join(
-      :left,
-      [activity: activity],
-      files in assoc(activity, :files),
-      as: :files
-    )
-    |> reusable_join(
-      :left,
-      [activity: activity, files: files],
-      media in Bonfire.Files.Media,
-      as: :media,
-      on: files.media_id == media.id or activity.id == media.id
-    )
-  end
+  # FYI: join_media moved to `Bonfire.Files.FeedFilters.join_media/2`, since media are `bonfire_files`', an optional dependency here; parked
 
   def join_per_ap_activity(query, _inner) do
     query
@@ -2178,9 +2143,40 @@ defmodule Bonfire.Social.Activities do
     |> where([tree: tree], tree.parent_id in ^uids(parents))
   end
 
+  # an ask records its answer on the Request, and an Activity is a mixin, so for an ask the activity's own id is the request's. A LEFT join because `:pending` has to leave what is not an ask alone: a post has no request row, both timestamps come back null, and it counts as not answered
+  def maybe_filter(query, {:request_status, statuses}, _opts)
+      when is_list(statuses) and statuses != [] do
+    query
+    |> reusable_join(:left, [activity: activity], request in Bonfire.Data.Social.Request,
+      as: :request_status,
+      on: request.id == activity.id
+    )
+    |> where(^request_status_matches(statuses))
+  end
+
   def maybe_filter(query, filters, _opts) do
     debug(filters, "no supported activity-related filters defined")
     query
+  end
+
+  # several statuses are either of them. Accepting clears `ignored_at` and ignoring clears `accepted_at` (`Requests.accept/2`, `Requests.ignore/2`), so at most one timestamp is ever set
+  defp request_status_matches(statuses) do
+    Enum.reduce(statuses, dynamic([], false), fn
+      :pending, matches ->
+        dynamic(
+          [request_status: request],
+          ^matches or (is_nil(request.accepted_at) and is_nil(request.ignored_at))
+        )
+
+      :accepted, matches ->
+        dynamic([request_status: request], ^matches or not is_nil(request.accepted_at))
+
+      :ignored, matches ->
+        dynamic([request_status: request], ^matches or not is_nil(request.ignored_at))
+
+      _unknown, matches ->
+        matches
+    end)
   end
 
   def maybe_join_filter_activity(query, exclude_table_ids) do
@@ -2729,6 +2725,8 @@ defmodule Bonfire.Social.Activities do
 
   One place answers it, because everything downstream has to agree: the notifications feed, what a push says, which preference decides whether to send it, and which Mastodon type a client is given. Callers that only have the activity (a feed row rendering for whoever is reading) pass that reader as the recipient.
 
+  This is the in-memory half of what a notification category is. The query half is `Bonfire.Social.Notifications.query_filters_for/2`, which chips, the centre's switches and both APIs select by. The two cannot share code, since one judges a loaded activity and the other writes SQL, so `Bonfire.Social.NotificationCategoriesEquivalenceTest` holds them together: a change here that moves a kind of activity from one category to another needs the matching change to that category's `filters:` in config, and that test says so.
+
   A quote somebody made of your post is not here yet: an accepted quote is a `:request` edge with an `accepted_at`, not an activity of its own, so it arrives as `:quote_request` until that gets a row to point at.
 
   ## Examples
@@ -2769,8 +2767,11 @@ defmodule Bonfire.Social.Activities do
         :request ->
           requested_as(activity)
 
+        # a reply that names you is a mention, which is how Mastodon notifies anyone and so how every reply from there arrives; a reply of its own is one that names nobody
         :reply ->
-          replied_as(activity)
+          if mentions_recipient?(activity, recipient),
+            do: :mention,
+            else: replied_as(activity)
 
         # a row does not always keep the verb it was stored with: a search hit arrives carrying what it answers and what it holds, and no verb at all. What it carries is what it was, which is the same question a create asks
         verb when verb in [:create, nil] ->
@@ -2847,8 +2848,9 @@ defmodule Bonfire.Social.Activities do
   defp created_as(activity, recipient) do
     cond do
       message?(activity) -> :message
-      reply_to_recipient?(activity, recipient) -> :reply
+      # naming you comes first, as on the `:reply` path above
       mentions_recipient?(activity, recipient) -> :mention
+      reply_to_recipient?(activity, recipient) -> :reply
       # answering something stays an answer for whoever reads it, and is what a row has to say and show: the reader-relative part is the clause above, which is about being answered rather than about the answer
       replies_to_something?(activity) -> replied_as(activity)
       # writing something to read is not the same kind of thing as creating an object, which is what a create is when it carries no post

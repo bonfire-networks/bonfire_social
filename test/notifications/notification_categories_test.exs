@@ -40,7 +40,7 @@ defmodule Bonfire.Social.NotificationCategoriesTest do
 
   test "a category covers the experiences it declares, else the one its key names" do
     # what `Activities.experienced_as/2` answers, which is not what a query can select: a reply and a response are one thing to be told about, and so are a like and a reaction
-    assert Notifications.experiences_for(:reply) == [:reply, :respond, :annotate]
+    assert Notifications.experiences_for(:extra_replies) == [:reply, :respond, :annotate]
     assert Notifications.experiences_for(:react) == [:like, :react]
     assert Notifications.experiences_for(:boost) == [:boost]
     # claims nothing, so nothing resolves to it by experience
@@ -48,7 +48,11 @@ defmodule Bonfire.Social.NotificationCategoriesTest do
   end
 
   test "an experience resolves to the category that declares it, and to nothing otherwise" do
-    assert Notifications.category_for(:respond) == :reply
+    # the category's key names no verb, so an answer resolves to it by what it declares
+    assert Notifications.category_for(:reply) == :extra_replies
+    assert Notifications.category_for(:respond) == :extra_replies
+    # a reply that names you is experienced as a mention, and resolves there
+    assert Notifications.category_for(:mention) == :mention
 
     # both kinds of reaction answer the same switch, which is named for the general one
     assert Notifications.category_for(:like) == :react
@@ -107,23 +111,22 @@ defmodule Bonfire.Social.NotificationCategoriesTest do
     assert Notifications.hidden_from_centre?(:react, current_user: me) == false
   end
 
-  test "switched-off categories resolve to the feed's exclude_activity_types" do
+  test "switched-off categories resolve to the feed's exclude_notification_categories" do
     me = Fake.fake_user!()
 
-    # what the `:notifications` preset means by "exclude nothing"
-    assert Notifications.excluded_activity_types(current_user: me) == false
+    assert Notifications.hidden_categories(current_user: me) == []
 
     me = switch_off!(me, :boost)
-    assert Notifications.excluded_activity_types(current_user: me) == [:boost]
+    assert Notifications.hidden_categories(current_user: me) == [:boost]
 
-    # the types the category covers, not its key, so a switch hides exactly what its chip shows
+    # the category itself rather than its verbs, so a switch hides exactly what its chip shows: Mentions is not `:create`, it is whatever names you
     me = switch_off!(me, :mention)
 
-    assert Notifications.excluded_activity_types(current_user: me) |> Enum.sort() ==
-             [:boost, :create]
+    assert Notifications.hidden_categories(current_user: me) |> Enum.sort() ==
+             [:boost, :mention]
   end
 
-  describe "exclude_hidden_types/2, the seam every reader passes through" do
+  describe "exclude_hidden_categories/2, the seam every reader passes through" do
     setup do
       me = Fake.fake_user!()
       {:ok, me: switch_off!(me, :boost)}
@@ -132,28 +135,28 @@ defmodule Bonfire.Social.NotificationCategoriesTest do
     defp notifications(filters \\ %{}), do: Map.put(filters, :feed_name, :notifications)
 
     test "applies the preference to a notifications read", %{me: me} do
-      assert Notifications.exclude_hidden_types(notifications(), current_user: me) ==
-               notifications(%{exclude_activity_types: [:boost]})
+      assert Notifications.exclude_hidden_categories(notifications(), current_user: me) ==
+               notifications(%{exclude_notification_categories: [:boost]})
 
       # a string name arrives this way from the API
-      assert Notifications.exclude_hidden_types(%{feed_name: "notifications"},
+      assert Notifications.exclude_hidden_categories(%{feed_name: "notifications"},
                current_user: me
-             ) == %{feed_name: "notifications", exclude_activity_types: [:boost]}
+             ) == %{feed_name: "notifications", exclude_notification_categories: [:boost]}
     end
 
     test "leaves any other feed alone", %{me: me} do
       for feed_name <- [:my, :local, :custom, nil] do
         filters = %{feed_name: feed_name}
-        assert Notifications.exclude_hidden_types(filters, current_user: me) == filters
+        assert Notifications.exclude_hidden_categories(filters, current_user: me) == filters
       end
     end
 
     test "leaves a reader with no user alone" do
-      assert Notifications.exclude_hidden_types(notifications(), []) == notifications()
+      assert Notifications.exclude_hidden_categories(notifications(), []) == notifications()
     end
 
     test "a caller asking for everything gets everything", %{me: me} do
-      assert Notifications.exclude_hidden_types(notifications(),
+      assert Notifications.exclude_hidden_categories(notifications(),
                current_user: me,
                include_hidden: true
              ) == notifications()
@@ -161,14 +164,25 @@ defmodule Bonfire.Social.NotificationCategoriesTest do
 
     test "types the caller named explicitly outrank the preference", %{me: me} do
       filters = notifications(%{activity_types: [:boost]})
-      assert Notifications.exclude_hidden_types(filters, current_user: me) == filters
+      assert Notifications.exclude_hidden_categories(filters, current_user: me) == filters
     end
 
     test "unions with the caller's own exclusions rather than replacing them", %{me: me} do
-      assert Notifications.exclude_hidden_types(
+      assert Notifications.exclude_hidden_categories(
+               notifications(%{exclude_notification_categories: [:react]}),
+               current_user: me
+             ) == notifications(%{exclude_notification_categories: [:react, :boost]})
+    end
+
+    test "leaves the caller's own type exclusions to themselves", %{me: me} do
+      assert Notifications.exclude_hidden_categories(
                notifications(%{exclude_activity_types: [:like]}),
                current_user: me
-             ) == notifications(%{exclude_activity_types: [:like, :boost]})
+             ) ==
+               notifications(%{
+                 exclude_activity_types: [:like],
+                 exclude_notification_categories: [:boost]
+               })
     end
   end
 end

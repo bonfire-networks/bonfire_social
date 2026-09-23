@@ -15,7 +15,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     alias Bonfire.API.GraphQL
     alias Bonfire.Common.Types
     alias Bonfire.Social.Activities
-    alias Bonfire.Social.API.GraphQLMasto.Notifications, as: NotificationFilters
+
+    # no longer needed: this API filters by Bonfire's notification categories, and only the Mastodon adapter reads Mastodon's type names
+    # alias Bonfire.Social.API.GraphQLMasto.Notifications, as: NotificationFilters
 
     # import_types(Absinthe.Type.Custom)
 
@@ -767,9 +769,20 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         description: "Filter by activity type (eg. create, boost, follow) (TODO)"
       )
 
-      field(:notification_types, list_of(:string),
+      # replaced by the two fields below: it took Mastodon's type names, which are the Mastodon adapter's vocabulary rather than this API's, and turned them into verbs, which is not what a category selects
+      # field(:notification_types, list_of(:string),
+      #   description:
+      #     "Filter notifications by API notification type (eg. mention, favourite, reblog, follow)"
+      # )
+
+      field(:notification_categories, list_of(:string),
         description:
-          "Filter notifications by API notification type (eg. mention, favourite, reblog, follow)"
+          "Notifications feeds only: keep what any of these notification categories selects (eg. mention, extra_replies, react, request), exactly as their tabs show it"
+      )
+
+      field(:exclude_notification_categories, list_of(:string),
+        description:
+          "Notifications feeds only: leave out what any of these notification categories selects"
       )
 
       field(:include_hidden_types, :boolean,
@@ -1346,31 +1359,30 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
     defp feed_paginate_opts(pagination_args), do: pagination_args || true
 
+    # notification categories are Bonfire's own (`Bonfire.Social.Notifications.categories/0`), and pass straight through to the feed filters of the same names, which select exactly what each category's chip shows. Mastodon's type names are the Mastodon adapter's to translate, not this API's. A key naming no category is refused, since it would otherwise filter nothing and look like an empty result
     defp normalize_notification_filters(feed_name, filters) do
-      notification_types =
-        e(filters, :notification_types, nil) ||
-          e(filters, "notification_types", nil)
+      asked =
+        Enum.flat_map(
+          ["notification_categories", "exclude_notification_categories"],
+          # both key forms, since `e/3` reads atom keys only and a filter can arrive with either
+          &List.wrap(Map.get(filters, String.to_existing_atom(&1)) || Map.get(filters, &1))
+        )
 
-      filters = Map.drop(filters, [:notification_types, "notification_types"])
+      known =
+        Enum.map(Bonfire.Social.Notifications.categories(), fn {key, _} -> to_string(key) end)
 
       cond do
-        is_nil(notification_types) or notification_types == [] ->
+        asked == [] ->
           {:ok, filters}
 
-        Types.maybe_to_atom(feed_name) != :notifications ->
-          {:error, "notificationTypes can only be used with the notifications feed"}
+        Types.maybe_to_atom(feed_name) not in [:notifications, :notifications_class] ->
+          {:error, "notificationCategories can only be used with a notifications feed"}
 
-        e(filters, :activity_types, nil) || e(filters, "activity_types", nil) ->
-          {:error, "Use either notificationTypes or activityTypes, not both"}
+        Enum.any?(asked, &(to_string(&1) not in known)) ->
+          {:error, "Unsupported notification category"}
 
         true ->
-          activity_types = NotificationFilters.verbs_for_notification_types(notification_types)
-
-          if activity_types == [] do
-            {:error, "Unsupported notificationTypes value"}
-          else
-            {:ok, Map.put(filters, :activity_types, activity_types)}
-          end
+          {:ok, filters}
       end
     end
 

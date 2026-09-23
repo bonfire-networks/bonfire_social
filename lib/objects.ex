@@ -539,44 +539,7 @@ defmodule Bonfire.Social.Objects do
   #   # )
   # end
 
-  def maybe_filter(query, {:tags, tags}, _opts)
-      when is_binary(tags) or (is_list(tags) and tags != []) do
-    case tags
-         |> debug("tags provided")
-         |> Types.partition_uids(
-           prepare_non_uid_fun: fn tag ->
-             maybe_apply(Bonfire.Tag.Hashtag, :normalize_name, [tag], fallback_return: tag)
-           end
-         )
-         |> debug("partitioned") do
-      {[], []} ->
-        query
-
-      {ids, []} ->
-        query
-        # |> proload(:inner, activity: [:object])
-        #   |> reusable_join(:inner, [object: object], object_tagged in Tagged,
-        #   as: :object_tagged,
-        #   on: tagged.tag_id in ^ids and object_tagged.object_id == object.id
-        # )
-        |> proload(:inner, activity: [object: [:tagged]])
-        |> where([tagged: tagged], tagged.tag_id in ^ids)
-
-      {[], hashtags} ->
-        query
-        |> proload(:inner, activity: [object: [tagged: {"tagged_", [:named]}]])
-        |> where([tagged_named: tagged_named], tagged_named.name in ^hashtags)
-
-      {ids, hashtags} ->
-        query
-        |> proload(:inner, activity: [object: [:tagged]])
-        |> proload(activity: [object: [tagged: {"tagged_", [:named]}]])
-        |> where(
-          [tagged: tagged, tagged_named: tagged_named],
-          tagged.tag_id in ^ids or tagged_named.name in ^hashtags
-        )
-    end
-  end
+  # the `tags` filter moved to `Bonfire.Tag.FeedFilters`, which is the extension that owns a Tagged row, and reaches feed queries through `Bonfire.Common.FeedFilterModule`
 
   def maybe_filter(query, filters, _opts) do
     debug(filters, "no supported object-related filters defined")

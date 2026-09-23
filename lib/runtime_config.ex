@@ -34,6 +34,7 @@ defmodule Bonfire.Social.RuntimeConfig do
 
     # The kinds of notification this instance distinguishes, in display order, read by `Bonfire.Social.Notifications`. ONE declaration per category, shared by the notification centre's chips and its "Notify me about" switches, so a switch can never hide something different from what its chip shows. The key is the verb the category covers, `activity_types` overrides that where a category isn't one verb, `name_pluralized`/`icon` override what the verb registry declares, and `chip`/`row` say where it appears (`false` nowhere, `:unimplemented` only while the instance shows unbuilt UI). Labels and icons are UI-facing but live here because the Mastodon API, the unseen badge and the digest read the same taxonomy, as feed presets already do below
     # `experiences` is the other half: which of `Bonfire.Social.Activities.experienced_as/2`'s answers this category covers, defaulting to its own key. That is what a preference, an icon and a phrase turn on, while `activity_types` is what a query can select, and the two cannot be derived from each other: the same stored `:create` row is a mention to one person and nothing in particular to another. Declaring both keeps a category wrong in one place rather than in four, and an experience no category claims falls to `other`
+    # Each category is read two ways that cannot share code, so keep them in step: queries select by its `filters:` (else its `activity_types`) through `Notifications.query_filters_for/2`, and push, email, wording and the Mastodon type go by its `experiences:` through `Activities.experienced_as/2`. `Bonfire.Social.NotificationCategoriesEquivalenceTest` fails when the two disagree about a kind of notification
     config :bonfire_social, Bonfire.Social.Notifications,
       categories: [
         # not "All": categories switched off in preferences are excluded from this view, and there is nothing to switch off for it
@@ -41,17 +42,24 @@ defmodule Bonfire.Social.RuntimeConfig do
         mention: %{
           name_pluralized: l("Mentions"),
           description: l("Posts that mention or address you"),
-          # a non-reply post reaching your notifications feed mentioned or addressed you; a reply that mentions you is stored as a reply, so it shows under Replies until a filter can ask "does a tag point at me", at which point this becomes Mentions vs Other replies
+          # what the preference switch selects by, which can only ask for a verb: every non-reply post reaching your notifications. TODO: exact once there is a filter for leaving out what names you, which is the exclusion side of the chip's `tags` below
           activity_types: [:create],
+          # what the chip shows: posts and replies carrying a tag that points at the viewer, since a mention is that tag and not a verb. A reply that names you is in Replies as well, which is right, as it is both
+          filters: %{activity_types: [:create, :reply]},
+          parameterized: %{tags: [:me]},
           phrases: %{mention: l("mentioned you")},
           # what a Mastodon client calls this, which is a coarser vocabulary: it has one type for anything somebody posted at you
           masto: :mention,
           path_aliases: ["mentions"]
         },
-        # answering a post and answering something that is not a post are one thing to be told about and two things to render
-        reply: %{
-          name_pluralized: l("Replies"),
+        # replies that do not name you. One that does is a mention (`experienced_as/2` asks that first), which is how Mastodon notifies anyone and so how every reply from there arrives; what is left here is the kind Mastodon would not notify at all. Answering a post and answering something that is not a post are one thing to be told about and two things to render
+        extra_replies: %{
+          name_pluralized: l("Replies (without mention)"),
+          description: l("Replies to your posts that don't mention you"),
           experiences: [:reply, :respond, :annotate],
+          # the key names no verb, so what it selects and its icon are declared rather than inherited
+          activity_types: [:reply],
+          icon: "ph:chat-circle-duotone",
           icon_class: "text-info",
           phrases: %{
             reply: l("replied to you"),
@@ -60,7 +68,11 @@ defmodule Bonfire.Social.RuntimeConfig do
           },
           # Mastodon has no reply type: a reply reaches a client as a mention
           masto: :mention,
-          path_aliases: ["replies"]
+          # what the chip shows: replies that do not name the viewer, the same line the experience draws
+          filters: %{activity_types: [:reply]},
+          parameterized: %{exclude_tags: [:me]},
+          # the first is the chip's own URL, kept from when this category was called `reply`
+          path_aliases: ["replies", "extra_replies"]
         },
         request: %{
           name_pluralized: l("Follow requests"),
@@ -75,6 +87,8 @@ defmodule Bonfire.Social.RuntimeConfig do
             }
           },
           masto: :follow_request,
+          # what the chip shows: asks still waiting for an answer. One set aside stays in the list, since ignoring keeps the row, so without this the chip would keep offering buttons for a question already answered
+          filters: %{activity_types: [:request], request_status: [:pending]},
           path_aliases: ["requests"]
         },
         # TODO: the chip needs a filter that reads what the edge asked for, since every ask is stored as one `:request` verb; the switch works already, as it turns on the experience
