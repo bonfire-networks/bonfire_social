@@ -7,7 +7,7 @@ defmodule Bonfire.Social.Feeds.ReplyParentNotificationsTest do
     * a direct reply notifies the person it replies to, and since `:my` carries notifications it turns up there too, even with no follow between them
     * a reply further down notifies the author of ITS parent (plus any mentions), NOT whoever started the thread
 
-  The second is the one that regresses quietly. `Threads.load_replyable/2` proloads two branches that both end in `created: [creator: …]`, the thread's creator and the parent's own, so with unnamed bindings the parent's creator resolves to the THREAD's, and everything reading `reply_to.created.creator` (`Feeds.reply_and_or_mentions_to_notify/5` and `Feeds.feed_ids_to_publish/4`) notifies the thread originator for every reply in the thread. Nothing else observes the difference until a thread is three deep, which is why this test builds one.
+  The second is the one that regresses quietly. `Threads.load_replyable/2` proloads two branches that both end in `created: [creator: …]`, the thread's creator and the parent's own, so with unnamed bindings the parent's creator resolves to the THREAD's, and everything reading `reply_to.created.creator` (`Feeds.to_notify_of_this/5` and `Feeds.feed_ids_to_publish/4`) notifies the thread originator for every reply in the thread. Nothing else observes the difference until a thread is three deep, which is why this test builds one.
   """
   use Bonfire.Social.DataCase, async: true
   use Bonfire.Common.Utils

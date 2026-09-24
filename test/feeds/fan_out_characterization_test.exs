@@ -96,7 +96,7 @@ defmodule Bonfire.Social.Feeds.FanOutCharacterizationTest do
   # Regression for the divergence found during Phase 0a: the OLD `do_target_feeds` object-variant
   # built a heterogeneous notify list — `[reply_to_creator %User{}] ++ tag %Pointer{}s` — and fed it
   # to `feed_ids(:notifications, ...)`, which tripped preload-recovery (raised in test env). The merged
-  # `fan_out_feed_ids` routes it through `reply_and_or_mentions_notifications_feeds`/`users_to_notify`,
+  # `fan_out_feed_ids` routes it through `notifications_feeds_of_this`/`within_boundary`,
   # which resolves per-schema, so `target_feeds(object)` with a real @mention must NOT crash and must
   # still notify the mentioned user (plan: local-remote-feeds.md Phase 0).
   test "target_feeds/3 object-variant handles a real @mention (Pointer tags) without crashing" do

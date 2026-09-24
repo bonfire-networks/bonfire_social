@@ -61,10 +61,11 @@ defmodule Bonfire.Social.RuntimeConfig do
           activity_types: [:reply],
           icon: "ph:chat-circle-duotone",
           icon_class: "text-info",
+          # `self` when it answered a post of yours; otherwise it reached you through a bell on its thread
           phrases: %{
-            reply: l("replied to you"),
-            respond: l("replied to you"),
-            annotate: l("replied to you")
+            reply: %{self: l("replied to you"), other: l("replied to a discussion")},
+            respond: %{self: l("responded to you"), other: l("responded to something")},
+            annotate: %{self: l("annotated your post"), other: l("annotated")}
           },
           # Mastodon has no reply type: a reply reaches a client as a mention
           masto: :mention,

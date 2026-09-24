@@ -185,8 +185,8 @@ defmodule Bonfire.Social.Feeds do
 
   `boundary` is a boundary preset name. `opts` may carry `:notify_feeds` (precomputed notify feeds
   that OVERRIDE the computed ones — the Act passes these) and `:to_feeds` (extra custom feeds, via
-  `maybe_custom_feeds/1`). The notify pipeline is `reply_and_or_mentions_notifications_feeds/4`
-  (boundary-aware `users_to_notify` filtering + uniform user resolution), and the creator's own
+  `maybe_custom_feeds/1`). The notify pipeline is `notifications_feeds_of_this/4`
+  (boundary-aware `within_boundary` filtering + uniform user resolution), and the creator's own
   notifications feed is always dropped (no self-notify).
   """
   def fan_out_feed_ids(
@@ -224,14 +224,17 @@ defmodule Bonfire.Social.Feeds do
     %{all: admins, notifications: admins, notify_users: []}
   end
 
-  def fan_out_feeds(creator, boundary, mentions, reply_to_creator, _thread_id, opts) do
+  def fan_out_feeds(creator, boundary, mentions, reply_to_creator, thread_id, opts) do
     own_notifications = feed_id(:notifications, creator)
 
     # the people, where we resolved them: notifying is done per person, so passing them on saves turning their feed ids back into them later. Empty when the caller precomputed feeds, or for the circle path below, and then whoever notifies resolves the feeds instead
     notify_users =
       if opts[:notify_feeds],
         do: List.wrap(opts[:notify_users]),
-        else: reply_and_or_mentions_users_to_notify(creator, boundary, mentions, reply_to_creator)
+        else:
+          users_to_notify_of_this(creator, boundary, mentions, reply_to_creator, [],
+            thread_id: thread_id
+          )
 
     notifications =
       [
@@ -370,54 +373,86 @@ defmodule Bonfire.Social.Feeds do
 
   ### When there are mentions and a reply to creator:
 
-      > Bonfire.Social.Feeds.reply_and_or_mentions_notifications_feeds(me, "public", ["mention1"], "creator_id")
+      > Bonfire.Social.Feeds.notifications_feeds_of_this(me, "public", ["mention1"], "creator_id")
       # List of notification feed IDs
 
   ### When no mentions and no reply to creator:
 
-      > Bonfire.Social.Feeds.reply_and_or_mentions_notifications_feeds(me, "local", [], nil)
+      > Bonfire.Social.Feeds.notifications_feeds_of_this(me, "local", [], nil)
       # List of notification feed IDs for local boundary
   """
-  def reply_and_or_mentions_notifications_feeds(
+  def notifications_feeds_of_this(
         me,
         boundary,
         mentions,
         reply_to_creator,
         to_circles \\ []
       ) do
-    reply_and_or_mentions_users_to_notify(me, boundary, mentions, reply_to_creator, to_circles)
+    users_to_notify_of_this(me, boundary, mentions, reply_to_creator, to_circles)
     |> notify_feeds()
   end
 
   @doc """
-  The users a reply or mention notifies, boundary-filtered, before they are reduced to feed ids.
+  The users a post notifies, boundary-filtered, before they are reduced to feed ids: whoever it replies to, whoever it mentions, and whoever enabled a bell (`Bonfire.Notify.Bells`): for a new post, on its author or on a group it is posted in (`opts[:in]`); for a reply, on its thread (`opts[:thread_id]`, the thread's first post).
 
-  Callers that only want somewhere to write rows take `reply_and_or_mentions_notifications_feeds/5`;
+  The one place both publishing paths ask (the Act's `to_notify_of_this/6`, and `fan_out_feeds/6` for everything else), so bells reach notifications feeds and delivery alike. Bell subscribers go through the same boundary filter as mentions.
+
+  Callers that only want somewhere to write rows take `notifications_feeds_of_this/5`;
   this exists because whoever is going to notify these people needs the people, and resolving them
   once here is cheaper than turning feed ids back into users later.
   """
-  def reply_and_or_mentions_users_to_notify(
+  def users_to_notify_of_this(
         me,
         boundary,
         mentions,
         reply_to_creator,
-        to_circles \\ []
+        to_circles \\ [],
+        opts \\ []
       ) do
-    filter_reply_and_or_mentions(me, reply_to_creator, mentions)
-    |> debug("filtered")
-    |> users_to_notify(boundary, to_circles)
+    named =
+      filter_reply_and_or_mentions(me, reply_to_creator, mentions)
+      |> debug("filtered")
+      |> within_boundary(boundary, to_circles)
+
+    # not through the custom-boundary rule above, which keeps only those named in `to_circles` and so would drop every subscriber of a post with its own boundaries (a group's posts, for one). Whether a subscriber may read the post is checked at delivery and when their feed is read, as for anyone
+    bells =
+      bell_subscribers(me, boundary, reply_to_creator, opts)
+      |> within_boundary(if(boundary == "local", do: "local", else: "public"), [])
+
+    (named ++ bells)
+    # someone both mentioned and with a bell on the author is one person to notify
+    |> Enum.uniq_by(&id/1)
     |> debug("users to notify")
   end
 
-  def reply_and_or_mentions_to_notify(
+  # whoever enabled a bell on the author or a group the post is in, for a new post, or on the thread, for a reply: a bell on a person or group covers new posts, not replies, which belong to the threads they are in. Not for a post only its mentions may read, since the boundary filter lets everyone it is given through for those, and a subscriber was not mentioned
+  defp bell_subscribers(_me, "mentions", _reply_to_creator, _opts), do: []
+
+  defp bell_subscribers(me, _boundary, nil = _reply_to_creator, opts),
+    do: bell_subscribers_of([me | List.wrap(opts[:in])], me)
+
+  defp bell_subscribers(me, _boundary, _reply_to_creator, opts) do
+    case opts[:thread_id] do
+      nil -> []
+      thread_id -> bell_subscribers_of([thread_id], me)
+    end
+  end
+
+  defp bell_subscribers_of(object_ids, author),
+    do:
+      maybe_apply(Bonfire.Notify.Bells, :subscribers, [object_ids, author], fallback_return: [])
+      |> List.wrap()
+
+  def to_notify_of_this(
         me,
         boundary,
         mentions,
         reply_to_creator,
-        to_circles \\ []
+        to_circles \\ [],
+        opts \\ []
       ) do
     users =
-      reply_and_or_mentions_users_to_notify(me, boundary, mentions, reply_to_creator, to_circles)
+      users_to_notify_of_this(me, boundary, mentions, reply_to_creator, to_circles, opts)
 
     %{
       # kept as well as their feeds, so whoever notifies them doesn't have to look them up again
@@ -437,7 +472,7 @@ defmodule Bonfire.Social.Feeds do
     |> Enum.reject(&(Enums.id(&1) == my_id))
   end
 
-  defp users_to_notify(users, boundary, to_circles) do
+  defp within_boundary(users, boundary, to_circles) do
     # Drop unresolved entries: a mention can be a bare id string rather than a user struct
     # (e.g. a group posts to itself via `mentions: [group_id]`, which drives tagging/auto-boost
     # into the group feed but is not a user to notify). Passing a bare id to `maybe_preload`
@@ -485,7 +520,7 @@ defmodule Bonfire.Social.Feeds do
     |> Enum.uniq()
   end
 
-  # unused, see `reply_and_or_mentions_to_notify/5`
+  # unused, see `to_notify_of_this/5`
   # defp notify_emails(users) do
   #   users
   #   |> Enum.filter(

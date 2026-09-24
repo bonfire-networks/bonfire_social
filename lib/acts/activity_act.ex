@@ -71,14 +71,29 @@ defmodule Bonfire.Social.Acts.Activity do
 
         attrs = Keyword.get(epic.assigns[:options], attrs_key, %{})
 
+        reply_to = e(epic.assigns, :reply_to, nil) || e(attrs, :reply_to, nil)
+
         notify =
-          Feeds.reply_and_or_mentions_to_notify(
+          Feeds.to_notify_of_this(
             current_user,
             boundary_name,
             e(changeset.changes, :post_content, :changes, :mentions, []),
             e(epic.assigns, :reply_to, :created, :creator, nil) ||
               e(attrs, :reply_to, :created, :creator, nil),
-            e(attrs, :to_circles, [])
+            e(attrs, :to_circles, []),
+            # for whoever enabled a bell on them: the thread a reply is in (the parent's thread, or the parent itself when it is the thread's first post), and the groups a new post is in (which the Tag act, running before this one, has already checked the author may post in)
+            thread_id:
+              if(reply_to,
+                do:
+                  e(reply_to, :replied, :thread_id, nil) ||
+                    e(reply_to, :replied, :thread, :id, nil) ||
+                    Bonfire.Common.Types.uid(reply_to)
+              ),
+            in:
+              Enum.map(
+                List.wrap(epic.assigns[:categories_auto_boost]),
+                &Bonfire.Common.Types.uid/1
+              )
           )
 
         feed_ids =
