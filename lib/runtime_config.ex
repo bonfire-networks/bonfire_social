@@ -78,7 +78,9 @@ defmodule Bonfire.Social.RuntimeConfig do
         request: %{
           name_pluralized: l("Requests"),
           description:
-            l("People asking to follow you, to join a group you moderate, or to quote a post of yours"),
+            l(
+              "People asking to follow you, to join a group you moderate, or to quote a post of yours"
+            ),
           # an ask of a kind nobody is told about separately stays `:request`, and belongs here too
           experiences: [:request, :follow_request, :join_request, :quote_request],
           # a pair where the wording turns on who was asked: `self` when that is the reader. A bare `:request` has none, and is named after its edge instead ("Request to boost")
