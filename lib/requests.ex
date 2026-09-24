@@ -264,6 +264,12 @@ defmodule Bonfire.Social.Requests do
     |> query_base(opts)
   end
 
+  # a table id given directly, which is what a request typed by a VERB rather than by a schema carries (a join request's edge is the `:join` verb). Compared as-is rather than through `activity_types`, which resolves ids as pointers and so finds no table for a verb, silently dropping the filter and returning every kind of request on the object
+  defp query_base(filters, type, opts) when is_binary(type) do
+    query_base(filters, nil, opts)
+    |> where([edge: edge], edge.table_id == ^type)
+  end
+
   defp query_base(filters, _, opts) do
     Edges.query_parent(Request, filters, opts)
     |> query_filter(Keyword.drop(filters, [:objects, :subjects, :activity_types]))
