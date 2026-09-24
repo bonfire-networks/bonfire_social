@@ -691,6 +691,10 @@ defmodule Bonfire.Social.Activities do
           query
           |> proload(activity: [object: [:extra_info]])
 
+        # post-loaded only, see below
+        :with_request_edge ->
+          query
+
         :with_quote_post_requested ->
           # NOTE: better only as postload
           #   quote_table_id = Bonfire.Social.Quotes.quote_verb_id()
@@ -832,6 +836,17 @@ defmodule Bonfire.Social.Activities do
 
         :extra_info ->
           [object: [:extra_info]]
+
+        # every ask's edge, which is the only thing that says what was asked for (to follow, to join, to quote: `requested_as/1`), joined to Request so the other edges an activity can have (likes, boosts, follows) stay unloaded. The quote details come along for the quote asks, which `maybe_preload_quote_request_subject/4` then completes
+        :with_request_edge ->
+          [
+            edge:
+              {from(e in Edge, join: r in Bonfire.Data.Social.Request, on: r.id == e.id),
+               [
+                 :request,
+                 subject: [created: [creator: [profile: :icon, character: [:peered]]]]
+               ]}
+          ]
 
         :with_quote_post_requested ->
           quote_table_id = Bonfire.Social.Quotes.quote_verb_id()
@@ -1482,7 +1497,10 @@ defmodule Bonfire.Social.Activities do
   end
 
   defp maybe_preload_quote_request_subject(objects, activity_nested_under, _preloads, opts) do
-    if :with_quote_post_requested in List.wrap(opts[:preload]) do
+    if Enum.any?(
+         [:with_request_edge, :with_quote_post_requested],
+         &(&1 in List.wrap(opts[:preload]))
+       ) do
       Bonfire.Common.Repo.Preload.maybe_follow_pointer_schemas(
         objects,
         activity_nested_under ++ [:edge, :subject],
@@ -2717,7 +2735,7 @@ defmodule Bonfire.Social.Activities do
       "Write"
   """
   @doc """
-  What kind of thing an activity was for the person being told about it: `:reply`, `:respond`, `:write`, `:mention`, `:message`, `:follow_request`, `:quote_request`, or whatever verb it was stored as.
+  What kind of thing an activity was for the person being told about it: `:reply`, `:respond`, `:write`, `:mention`, `:message`, `:follow_request`, `:join_request`, `:quote_request`, or whatever verb it was stored as.
 
   Not called a verb, because half of these are not one: no verb is declared for writing a post, for answering something that is not a post, or for asking to quote, since those are shapes an activity takes rather than permissions anyone grants. `experience_display_names/0` is what names the ones the verb registry cannot.
 
@@ -2740,6 +2758,11 @@ defmodule Bonfire.Social.Activities do
 
       iex> experienced_as(%{verb: %{verb: "Request"}, edge: %{table_id: Bonfire.Social.Quotes.quote_verb_id()}})
       :quote_request
+
+  An ask to join a group is the one whose edge carries the join verb:
+
+      iex> experienced_as(%{verb: %{verb: "Request"}, edge: %{table_id: Bonfire.Boundaries.Verbs.get_id!(:join)}})
+      :join_request
 
   Anything else asked for is taken to be an ask to follow, which is the only other kind there is:
 
@@ -2811,17 +2834,22 @@ defmodule Bonfire.Social.Activities do
   # what was asked for lives on the edge, since asking is one verb for every kind of ask. The kinds somebody is told about separately get a key, and a category carries that same key; any other ask stays `:request`, is named after its edge when displayed, and belongs to whatever category catches what nothing else names
   defp requested_as(activity) do
     quote_table_id = Bonfire.Social.Quotes.quote_verb_id()
+    join_verb_id = Bonfire.Boundaries.Verbs.get_id(:join)
     # follow_table_id = Bonfire.Common.Types.table_id(Bonfire.Data.Social.Follow)
 
     case e(activity, :edge, :table_id, nil) do
       ^quote_table_id ->
         :quote_request
 
-      # matching the follow table is parked rather than used: a feed preloads the edge only for quote asks (`:with_quote_post_requested`), so a follow ask arrives carrying none and this would never match. Restore it, with the edge preloaded for every ask, when there is a third kind to tell apart
+      # an ask to join a group, whose edge carries the `:join` verb. Read from the edge rather than the object being a group, since a group can also be asked to be followed. Only where the edge is loaded (`:with_request_edge`, in the notifications views that show asks)
+      table_id when not is_nil(table_id) and table_id == join_verb_id ->
+        :join_request
+
+      # matching the follow table is parked rather than used: a feed that does not load every ask's edge (anything but those notifications views) has a follow ask arrive carrying none, so this would not match there
       # ^follow_table_id -> :follow_request
 
       _ ->
-        # until then asking to follow is the only other kind there is, so anything that is not a quote ask is one
+        # so anything that is neither a quote ask nor a join ask is taken to be an ask to follow, the only other kind there is
         :follow_request
         # :request
     end

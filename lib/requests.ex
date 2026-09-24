@@ -176,6 +176,25 @@ defmodule Bonfire.Social.Requests do
         opts
       )
 
+  @doc """
+  The edge of a request, whose `table_id` is the only record of what was asked for: the `Follow` table for a follow request, the `:join` verb for a join request, the `:quote` verb for a quote request. Read without a boundary check, so callers decide who may act on it.
+
+  ## Examples
+
+      iex> edge(request_id)
+      %Bonfire.Data.Edges.Edge{table_id: "70110WTHE1EADER1EADER1EADE"}
+  """
+  def edge(%{edge: %{table_id: _} = edge}), do: edge
+
+  def edge(request_or_id) do
+    request =
+      if is_binary(request_or_id),
+        do: repo().get(Request, request_or_id),
+        else: request_or_id
+
+    request && e(repo().maybe_preload(request, :edge), :edge, nil)
+  end
+
   # TODO: abstract the next few functions into Edges
 
   @doc """

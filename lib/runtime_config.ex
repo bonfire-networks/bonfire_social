@@ -77,18 +77,21 @@ defmodule Bonfire.Social.RuntimeConfig do
         # every kind of ask, as one switch and one chip. A query cannot tell the kinds apart, since all are one `:request` verb and only the edge says what was asked for, so a category per kind would select every ask. TODO: split into `follow_request` and `quote` below once a filter can read what the edge asked for
         request: %{
           name_pluralized: l("Requests"),
-          description: l("People asking to follow you or to quote a post of yours"),
+          description:
+            l("People asking to follow you, to join a group you moderate, or to quote a post of yours"),
           # an ask of a kind nobody is told about separately stays `:request`, and belongs here too
-          experiences: [:request, :follow_request, :quote_request],
+          experiences: [:request, :follow_request, :join_request, :quote_request],
           # a pair where the wording turns on who was asked: `self` when that is the reader. A bare `:request` has none, and is named after its edge instead ("Request to boost")
           phrases: %{
             follow_request: %{
               self: l("requested to follow you"),
               other: l("requested to follow")
             },
+            # always asked of a group, which the row's preview names
+            join_request: l("requested to join"),
             quote_request: l("wants to quote your post")
           },
-          # per experience, since Mastodon has a type for each of these kinds of ask and none for the rest
+          # per experience, since Mastodon has a type for each of these kinds of ask and none for the rest (so none for asking to join)
           masto: %{follow_request: :follow_request, quote_request: :quote},
           # what the chip shows: every ask, whatever its status
           filters: %{
@@ -935,9 +938,17 @@ defmodule Bonfire.Social.RuntimeConfig do
             :with_reply_to,
             :emoji,
             :sensitivity,
-            :activity_name,
-            :with_quote_post_requested
+            :activity_name
           ]
+        },
+        # what each ask was for (to follow, to join, to quote) is only on its edge, loaded where asks can show: Latest, which has every category and so no filter of its own, and the Requests chip. Every other chip leaves asks out
+        "Notifications with asks (Latest)" => %{
+          match: %{feed_name: :notifications, activity_types: nil, notification_categories: nil},
+          include: [:with_request_edge]
+        },
+        "Notifications with asks (Requests)" => %{
+          match: %{feed_name: :notifications, activity_types: [:request]},
+          include: [:with_request_edge]
         },
         # "Messages Feed (Only for me)" => %{
         #   match: %{feed_name: :messages},
