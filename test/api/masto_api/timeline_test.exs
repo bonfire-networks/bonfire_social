@@ -30,6 +30,8 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
 
   @moduletag :masto_api
 
+  import Bonfire.Common.Testing, only: [count_queries: 1]
+
   describe "GET /api/v1/timelines/public boosts (reblog rendering)" do
     # PARKED (see https://github.com/bonfire-networks/bonfire-app/issues/2170): boosts get no origin×boundary bucket row, so a bucket-scoped public timeline drops reblogs. 
     @tag :todo
@@ -88,6 +90,52 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
       assert is_list(response)
       post_ids = Enum.map(response, & &1["id"])
       assert post.id in post_ids
+    end
+
+    test "a page's reblogged statuses come with the timeline, not one read each", %{conn: conn} do
+      account = Fake.fake_account!()
+      viewer = Fake.fake_user!(account)
+      author = Fake.fake_user!()
+      booster = Fake.fake_user!()
+      {:ok, _} = Follows.follow(viewer, booster)
+      api_conn = masto_api_conn(conn, user: viewer, account: account)
+
+      boost_one = fn ->
+        {:ok, post} =
+          Posts.publish(
+            current_user: author,
+            post_attrs: %{post_content: %{html_body: Faker.Lorem.sentence()}},
+            boundary: "public"
+          )
+
+        {:ok, _} = Boosts.boost(booster, post)
+        post
+      end
+
+      queries_for_page = fn ->
+        {response, queries} =
+          count_queries(fn -> get(api_conn, "/api/v1/timelines/home?limit=20") end)
+
+        {json_response(response, 200), queries}
+      end
+
+      post = boost_one.()
+
+      # the first request of a test also fills caches (one query, whatever the page holds), so it isn't the one measured
+      queries_for_page.()
+      {timeline, for_one} = queries_for_page.()
+
+      # the positive first: the boost is there as a reblog of the author's post, with its content
+      reblog = Enum.find(timeline, &(get_in(&1, ["reblog", "id"]) == post.id))
+      assert reblog, "the boost is in the viewer's home timeline"
+      assert reblog["account"]["id"] == booster.id
+      assert reblog["reblog"]["account"]["id"] == author.id
+
+      boost_one.()
+      boost_one.()
+
+      {_, for_three} = queries_for_page.()
+      assert for_three == for_one
     end
 
     test "does not include posts from non-followed users", %{conn: conn} do

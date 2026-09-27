@@ -41,9 +41,9 @@ defmodule Bonfire.Social.FeedNewerTest do
     marker_cursor = Enum.at(base_cursors, marker_index)
 
     first_newer_page =
-      FeedLoader.feed_newer(:custom, filters, marker_cursor,
+      FeedLoader.feed(:custom, filters,
         current_user: author,
-        paginate: [limit: 2]
+        paginate: [before: marker_cursor, limit: 2]
       )
 
     assert Enum.map(first_newer_page.edges, &entry_cursor/1) ==
@@ -52,9 +52,9 @@ defmodule Bonfire.Social.FeedNewerTest do
     next_cursor = unwrap_cursor(first_newer_page.page_info.start_cursor)
 
     second_newer_page =
-      FeedLoader.feed_newer(:custom, filters, next_cursor,
+      FeedLoader.feed(:custom, filters,
         current_user: author,
-        paginate: [limit: 2]
+        paginate: [before: next_cursor, limit: 2]
       )
 
     assert Enum.map(second_newer_page.edges, &entry_cursor/1) ==
@@ -63,9 +63,9 @@ defmodule Bonfire.Social.FeedNewerTest do
     final_cursor = unwrap_cursor(second_newer_page.page_info.start_cursor)
 
     final_newer_page =
-      FeedLoader.feed_newer(:custom, filters, final_cursor,
+      FeedLoader.feed(:custom, filters,
         current_user: author,
-        paginate: [limit: 2]
+        paginate: [before: final_cursor, limit: 2]
       )
 
     assert Enum.map(final_newer_page.edges, &entry_cursor/1) ==
@@ -83,7 +83,7 @@ defmodule Bonfire.Social.FeedNewerTest do
   test "chronological sort dedups in place instead of deduping the whole feed in a subquery", %{
     author: author
   } do
-    # `feed_newer` sorts by :date_created; that must not take the "sort by another field" dedup path
+    # a page newer than a `before` cursor sorts by :date_created; that must not take the "sort by another field" dedup path
     for sort_order <- [:asc, :desc] do
       filters = %FeedFilters{
         subjects: [author.id],

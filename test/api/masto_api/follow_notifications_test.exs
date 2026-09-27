@@ -70,7 +70,8 @@ defmodule Bonfire.Social.API.FollowNotificationsTest do
            )
   end
 
-  test "replies still notify the parent author as mentions", c do
+  # as a `status`, since the reply doesn't name them: a mention is only a reply that does
+  test "replies still notify the parent author", c do
     parent = publish(c.conn, "public")
 
     reply =
@@ -81,8 +82,8 @@ defmodule Bonfire.Social.API.FollowNotificationsTest do
       })
       |> json_response(200)
 
-    mentions = c.conn |> get("/api/v1/notifications?types[]=mention") |> json_response(200)
-    assert Enum.any?(mentions, &(&1["type"] == "mention" and &1["status"]["id"] == reply["id"]))
+    statuses = c.conn |> get("/api/v1/notifications?types[]=status") |> json_response(200)
+    assert Enum.any?(statuses, &(&1["type"] == "status" and &1["status"]["id"] == reply["id"]))
   end
 
   test "explicit mentions still notify through the native delivery path", c do

@@ -40,7 +40,9 @@ defmodule Bonfire.Social.API.ReplyNotificationsTest do
       notifications = context.author_conn |> get("/api/v1/notifications") |> json_response(200)
       notification = Enum.find(notifications, &(get_in(&1, ["status", "id"]) == reply["id"]))
       assert notification
-      assert notification["type"] == "mention"
+
+      # not a mention, since it doesn't name them: a post they're told about, as Mastodon would not notify it at all
+      assert notification["type"] == "status"
       assert notification["account"]["id"] == context.replier.id
       assert notification["status"]["in_reply_to_id"] == parent["id"]
 

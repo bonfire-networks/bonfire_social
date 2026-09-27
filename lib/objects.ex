@@ -472,26 +472,64 @@ defmodule Bonfire.Social.Objects do
     # |> where([post_content: post_content], not is_nil(translated(PostContent, post_content, locales))) # NOTE: if using compile-time list of locales we could use this macro from cldr_trans
   end
 
-  # doc "List objects created by a user and which are in their outbox, which are not replies"
-  def maybe_filter(query, {:creators, user}, _opts) do
-    case uid(user) do
+  # activities whose object one of these people created: a create or reply by them, where the subject is the creator, and for any other verb (a boost, a like) an object they created, read from its `created`. No top-level check: it dates from before replies had their own verb, and every reply is now stored as `:reply` (`Bonfire.Social.Acts.Threaded`, incoming ones too), so a caller that wants only posts excludes that verb
+  def maybe_filter(query, {:creators, creators}, _opts) do
+    case Types.uids(creators) do
       nil ->
         query
 
-      id ->
-        # user = repo().maybe_preload(user, [:character])
-        verb_id = Verbs.get_id!(:create)
+      ids ->
+        verb_ids = Bonfire.Social.Activities.families_verb_ids([:create, :reply])
 
         query
-        |> proload(activity: [:object, :replied])
+        # the same `:object_created` binding `Activities.maybe_join_creator/3` uses, so a query that already has it doesn't join it twice
+        |> proload(activity: [object: {"object_", [:created]}])
         |> where(
-          [activity: activity, replied: replied],
-          is_nil(replied.reply_to_id) and
-            activity.verb_id == ^verb_id and
-            activity.subject_id == ^id
+          [activity: activity, object_created: object_created],
+          (activity.verb_id in ^verb_ids and activity.subject_id in ^ids) or
+            (activity.verb_id not in ^verb_ids and object_created.creator_id in ^ids)
         )
     end
   end
+
+  def maybe_filter(query, {:exclude_creators, creators}, _opts) do
+    case Types.uids(creators) do
+      nil ->
+        query
+
+      ids ->
+        verb_ids = Bonfire.Social.Activities.verb_ids_in_families([:create, :reply])
+
+        query
+        |> proload(activity: [object: {"object_", [:created]}])
+        |> where(
+          [activity: activity, object_created: object_created],
+          not ((activity.verb_id in ^verb_ids and activity.subject_id in ^ids) or
+                 (activity.verb_id not in ^verb_ids and
+                    coalesce(object_created.creator_id in ^ids, false)))
+        )
+    end
+  end
+
+  # Replaced 2026-09-27 by the clause above: creates only, and top-level only
+  # def maybe_filter(query, {:creators, user}, _opts) do
+  #   case uid(user) do
+  #     nil ->
+  #       query
+  #
+  #     id ->
+  #       verb_id = Verbs.get_id!(:create)
+  #
+  #       query
+  #       |> proload(activity: [:object, :replied])
+  #       |> where(
+  #         [activity: activity, replied: replied],
+  #         is_nil(replied.reply_to_id) and
+  #           activity.verb_id == ^verb_id and
+  #           activity.subject_id == ^id
+  #       )
+  #   end
+  # end
 
   # def maybe_filter(query, {:objects, object}, _opts) do
   #   # TODO? for cases where we're not already filtering by object_id in Activities.maybe_filter

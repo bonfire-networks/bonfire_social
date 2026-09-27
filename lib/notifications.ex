@@ -40,8 +40,15 @@ defmodule Bonfire.Social.Notifications do
     )
   end
 
-  @doc "One category by key, or nil."
+  @doc """
+  One category by key, or nil. Also takes `{key, category}` as `categories_shown/1` gives it, and returns that category without reading config again, so a caller already holding one can pass it to any function here that takes a key.
+  """
+  def category({_key, %{} = category}), do: category
   def category(key), do: categories() |> e(key, nil)
+
+  @doc "The key, whether given the key or `{key, category}`."
+  def category_key({key, %{}}), do: key
+  def category_key(key), do: key
 
   @doc """
   The activity types a category covers, defaulting to the verb its key names.
@@ -77,14 +84,18 @@ defmodule Bonfire.Social.Notifications do
     end
   end
 
-  # the chips a catch-all is the rest of: not itself or another catch-all, and not a chip that selects everything (Latest), which would leave nothing
+  # the chips a catch-all is the rest of: not itself or another catch-all, and not a chip with no condition of its own (Latest), whose absence of one would leave nothing
   defp chipped_categories_besides(key) do
     categories_shown(:chip)
     |> Enum.reject(fn {other_key, category} ->
-      other_key == key or e(category, :catch_all, nil) == true or
-        (is_nil(e(category, :filters, nil)) and activity_types_for(other_key) == [])
+      other_key == key or e(category, :catch_all, nil) == true or not own_condition?(other_key)
     end)
     |> Enum.map(fn {other_key, _category} -> other_key end)
+  end
+
+  @doc "Whether a category declares a condition of its own (filters or activity types). Latest doesn't: what it shows is decided by the other categories' \"Show in Latest\" switches."
+  def own_condition?(key) do
+    not (is_nil(e(category(key), :filters, nil)) and activity_types_for(key) == [])
   end
 
   @impl Bonfire.Common.FeedFilterModule
@@ -292,7 +303,14 @@ defmodule Bonfire.Social.Notifications do
     end
   end
 
-  @doc "Every Mastodon type a category declares, whether one for the category or one per experience."
+  @doc "Every Mastodon type the categories declare, once each: what a Mastodon client can be shown, and what its lists select when it names no `types[]`."
+  def masto_types do
+    categories()
+    |> Enum.flat_map(&masto_types_of/1)
+    |> Enum.uniq()
+  end
+
+  @doc "Every Mastodon type a category declares, whether one for the category or one per experience. Takes the key or `{key, category}` (`category/1`)."
   def masto_types_of(key) do
     case e(category(key), :masto, nil) do
       nil -> []
@@ -321,9 +339,25 @@ defmodule Bonfire.Social.Notifications do
     end
   end
 
-  @doc "A category's plural label: what it declares, else the verb's own (singular) name, else its key."
-  def label_for(key) do
-    e(category(key), :name_pluralized, nil) || e(Verbs.get(key), :verb, nil) || to_string(key)
+  @doc "The categories that collapse into one row (`aggregate: true`), for what groups them: the feed by their activity types, a Mastodon client by their types."
+  def aggregated_categories do
+    Enum.filter(categories(), fn {_key, category} -> e(category, :aggregate, false) == true end)
+  end
+
+  @doc "A category's plural label: what it declares, else the verb's own (singular) name, else its key. Takes the key or `{key, category}` (`category/1`)."
+  def label_for(key_or_category) do
+    key = category_key(key_or_category)
+
+    e(category(key_or_category), :name_pluralized, nil) || e(Verbs.get(key), :verb, nil) ||
+      to_string(key)
+  end
+
+  @doc "What a category covers, in a sentence, as it declares it (translated here, as `phrase_for/3` does, since config holds the msgid). `nil` when it declares none. Takes the key or `{key, category}` (`category/1`)."
+  def description_for(key_or_category) do
+    case e(category(key_or_category), :description, nil) do
+      description when is_binary(description) -> localise_dynamic(description, __MODULE__)
+      _ -> nil
+    end
   end
 
   @doc """

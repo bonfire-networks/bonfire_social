@@ -58,6 +58,10 @@ defmodule Bonfire.Social.FeedFilters do
 
     field :creators, StringList
     field :exclude_creators, StringList
+
+    # replies by whose posts they sit below: one of these people wrote any post above the reply in its thread (its `Replied.path`), so the post it answers, the thread's root, or anything between. `creators` can't say this, since it is who wrote the reply. The Replies chip asks for `:me`, which is what tells a reply to me from one a bell on someone else's thread brought
+    field :reply_to_creators, StringList
+    field :exclude_reply_to_creators, StringList
     # field :creator_circles, StringList
 
     # field :object_circles, StringList

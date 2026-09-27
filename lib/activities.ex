@@ -922,6 +922,16 @@ defmodule Bonfire.Social.Activities do
       else: []
   end
 
+  # A post by one of these people above the outer query's reply: its `Replied.path` holds every ancestor, from the thread's root to the post it answers, so this is primary-key lookups on `created`, as many as the thread is deep. Correlated through the `:replied` binding the caller proloads
+  defp posts_above_by(creator_ids) do
+    from(created in Bonfire.Data.Social.Created,
+      where:
+        fragment("? = ANY(?)", created.id, parent_as(:replied).path) and
+          created.creator_id in ^creator_ids,
+      select: 1
+    )
+  end
+
   defp maybe_preload_reply_to([], opts) do
     # If the root replied to anything, fetch that and its creator too. e.g.
     # * Alice's post that replied to Bob's post
@@ -1801,43 +1811,31 @@ defmodule Bonfire.Social.Activities do
     )
   end
 
-  # doc "List objects created by a user and which are in their outbox, which are not replies"
-  def maybe_filter(query, {:creators, creators}, _opts) do
+  # `creators` and `exclude_creators` are `Bonfire.Social.Objects.maybe_filter/3`'s, since they are about who created the object. `FeedLoader` runs both modules' clauses for every filter, so a second copy here would apply twice
+
+  # replies with a post by one of these people anywhere above them in the thread
+  def maybe_filter(query, {:reply_to_creators, creators}, _opts) do
     case Types.uids(creators) do
       nil ->
         query
 
       ids ->
-        # user = repo().maybe_preload(user, [:character])
-        verb_id = Verbs.get_id!(:create)
-
         query
         |> proload(activity: [:replied])
-        |> where(
-          [activity: activity, replied: replied],
-          is_nil(replied.reply_to_id) and
-            activity.verb_id == ^verb_id and
-            activity.subject_id in ^ids
-        )
+        |> where(exists(posts_above_by(ids)))
     end
   end
 
-  def maybe_filter(query, {:exclude_creators, creators}, _opts) do
+  # the rest, including what is not a reply at all, whose `path` is empty
+  def maybe_filter(query, {:exclude_reply_to_creators, creators}, _opts) do
     case Types.uids(creators) do
       nil ->
         query
 
       ids ->
-        # user = repo().maybe_preload(user, [:character])
-        verb_id = Verbs.get_id!(:create)
-
         query
         |> proload(activity: [:replied])
-        |> where(
-          [activity: activity, replied: replied],
-          not (is_nil(replied.reply_to_id) and activity.verb_id == ^verb_id and
-                 activity.subject_id in ^ids)
-        )
+        |> where(not exists(posts_above_by(ids)))
     end
   end
 
@@ -2706,6 +2704,16 @@ defmodule Bonfire.Social.Activities do
   def verb_name(%{verb: %{verb: verb}}), do: verb
   def verb_name(%{verb_id: id}), do: Bonfire.Boundaries.Verbs.get(id)[:verb]
   def verb_name(%{verb: verb}) when is_binary(verb), do: verb
+
+  @doc """
+  The ids of the verbs in these families of `config :bonfire, :verb_families`, the same families `Bonfire.UI.Social.ActivityLive` renders by. For example `[:create, :reply]` is the verbs whose subject wrote the object. A name in a family that isn't a stored verb (an experience such as `:write`) is skipped.
+  """
+  def families_verb_ids(families) do
+    families
+    |> List.wrap()
+    |> Enum.flat_map(&List.wrap(Config.get([:verb_families, &1], [], :bonfire)))
+    |> Verbs.ids()
+  end
 
   @doc """
   The verb of an activity as its slug, whether or not the verb is preloaded.

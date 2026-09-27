@@ -106,6 +106,44 @@ defmodule Bonfire.Social.FeedsMergingActivitiesTest do
     assert replier2.id in reply_subject_ids
   end
 
+  # which kinds collapse into one row is declared once, by the notification categories' `aggregate:`, and the Vote category declares it, as React and Boost do
+  test "notifications feed combines votes on the same poll, as the categories declare" do
+    user = fake_user!("poll_author")
+    voter1 = fake_user!("voter1")
+    voter2 = fake_user!("voter2")
+
+    {:ok, question} =
+      Bonfire.Poll.Fake.fake_question_with_choices(
+        %{post_content: %{html_body: "Vote here"}, voting_dates: [DateTime.utc_now()]},
+        [%{name: "A"}],
+        current_user: user
+      )
+
+    [choice] = question.choices
+
+    for voter <- [voter1, voter2] do
+      assert {:ok, _} =
+               Bonfire.Poll.Votes.vote(voter, question, [%{choice_id: choice.id, weight: 1}])
+    end
+
+    {:ok, filters} = FeedLoader.preset_feed_filters(:notifications, current_user: user)
+    %{edges: edges} = FeedLoader.feed(filters, [])
+
+    vote_edges =
+      Enum.filter(edges, &(&1.activity.verb_id == Bonfire.Social.Activities.verb_id(:vote)))
+
+    # the positive first: both votes reached the author's notifications
+    voter_ids =
+      vote_edges
+      |> Enum.flat_map(&[&1.activity.subject | e(&1.activity, :subjects_more, [])])
+      |> Enum.map(&Enums.id/1)
+
+    assert voter1.id in voter_ids
+    assert voter2.id in voter_ids
+
+    assert [_one_row] = vote_edges
+  end
+
   test "regular feed shows only 1 reply even when there are several replies to the same post (but merges likes/boosts by object and verb)" do
     user = fake_user!("feed_target")
     # liker1 = fake_user!("feed_liker1")

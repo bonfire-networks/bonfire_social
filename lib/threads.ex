@@ -655,7 +655,7 @@ defmodule Bonfire.Social.Threads do
   defp user_tag?(tag), do: not is_nil(e(tag, :character, nil))
 
   defp participant_verb_ids,
-    do: Enum.map([:create, :reply], &Verbs.get_id!(&1))
+    do: Bonfire.Social.Activities.families_verb_ids([:create, :reply])
 
   @doc "Counts the distinct people who posted in each permitted thread."
   def count_participants_for_threads(thread_ids, opts \\ [])

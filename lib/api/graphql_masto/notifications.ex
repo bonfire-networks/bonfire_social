@@ -20,22 +20,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     alias Bonfire.API.MastoCompat.FeedPipeline
     alias Bonfire.API.MastoCompat.BatchLoaders
 
-    @type_by_api_name %{
-      "favourite" => :favourite,
-      "reblog" => :reblog,
-      "follow" => :follow,
-      "follow_request" => :follow_request,
-      "poll" => :poll,
-      "mention" => :mention,
-      "admin.report" => :admin_report,
-      "quote" => :quote,
-      "quoted_update" => :quoted_update,
-      "status" => :status,
-      "update" => :update
-    }
-
-    # Which Mastodon type each kind of notification is, and which activity types to query for one, are both declared by the notification categories (`Bonfire.Social.RuntimeConfig`) and read through `Bonfire.Social.Notifications`, so this API and the notifications feed cannot disagree about what a favourite is.
-    @masto_types [:favourite, :reblog, :follow, :follow_request, :quote, :mention, :admin_report]
+    # Which Mastodon type each kind of notification is, and which activity types to query for one, are both declared by the notification categories (`Bonfire.Social.RuntimeConfig`) and read through `Bonfire.Social.Notifications` (`masto_types/0`), so this API and the notifications feed cannot disagree about what a favourite is. Mastodon's names for them come from `Bonfire.API.MastoCompat.Schemas.Notification`
 
     @doc """
     Lists notification candidates for a user in a single feed query.
@@ -49,6 +34,15 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     # Actor fields, shared with the timeline adapter — covers User + Category (groups), without
     # which group-authored notifications resolve to an untyped actor and get dropped on validation.
     @actor_fields Bonfire.API.MastoCompat.Fragments.actor_fields()
+
+    # What a notification's status needs beyond its object, selected on the notification's own activity so the status comes with the page instead of one read per status: an activity's media, counts and thread are its object's (`object_media`, `like_count` etc. join on `object_id`), so on a like or a boost they describe the post liked or boosted. Whether the reader liked, boosted or bookmarked it is batch-loaded by object alongside (`BatchLoaders.interaction_states/2`)
+    @status_fields """
+    #{Bonfire.API.MastoCompat.Fragments.status_media()}
+    replies_count: repliesCount
+    like_count: likeCount
+    boost_count: boostCount
+    #{Bonfire.API.MastoCompat.Fragments.thread_fields()}
+    """
 
     # REST-on-GraphQL (Phase 7): verb-filtered notifications feed via `feedActivitiesPreloaded`,
     # candidates built from the activity nodes.
@@ -67,13 +61,19 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
             subject { #{@actor_fields} }
             subjects_more: subjectsMore @include(if: $grouped) { #{@actor_fields} }
             object {
+              __typename
               ... on Post {
                 id
                 post_content: postContent { name summary html_body: rawBody }
                 creator { #{@actor_fields} }
               }
-              ... on Poll { id }
+              ... on Poll {
+                id
+                post_content: postContent { name summary html_body: rawBody }
+                creator { #{@actor_fields} }
+              }
             }
+            #{@status_fields}
             edge { table_id: tableId subject_id: subjectId }
           }
         }
@@ -120,6 +120,10 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         |> put_var(
           "notificationCategories",
           Enum.map(get_map_field(feed_filter, :notification_categories, []), &to_string/1)
+        )
+        |> put_var(
+          "excludeNotificationCategories",
+          Enum.map(get_map_field(feed_filter, :exclude_notification_categories, []), &to_string/1)
         )
         |> put_var("subjects", get_map_field(feed_filter, :subjects))
         # Mastodon wants full history, not the 7-day default window — forward time_limit: 0.
@@ -196,6 +200,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         |> get_map_field(:filter, %{})
         |> Map.put_new("feed_name", "notifications_class")
         |> Map.put("notification_categories", query_categories(type_filters))
+        |> Map.put("exclude_notification_categories", categories_without_masto_type())
         |> maybe_put_subjects(type_filters.account_id)
 
       params
@@ -205,13 +210,25 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
     # Mastodon's type names are read here and nowhere else: each is the categories whose `masto:` names it (Mastodon's one `mention` is both Mentions and Replies (without mentioning you)), and the feed filter then selects exactly what those categories select. With no `types[]`, every type this adapter maps, so a page holds only activities a client can be shown
     defp query_categories(%{types: types, exclude_types: exclude}) do
-      masto_types = (types || @masto_types) -- (exclude || [])
+      masto_types = (types || Bonfire.Social.Notifications.masto_types()) -- (exclude || [])
 
       Bonfire.Social.Notifications.categories()
       |> Enum.map(fn {key, _category} -> key end)
       |> Enum.filter(fn key ->
         Enum.any?(Bonfire.Social.Notifications.masto_types_of(key), &(&1 in masto_types))
       end)
+    end
+
+    # What a client has no type for is left out of the query, since the mapper would drop it and leave the page short: a catch-all (Other) selects whatever no chip does, which includes kinds that have a category but no chip (votes, pins).
+    # TODO: translate these into a type a client knows (eg. a note-like `status`) as needed, rather than leaving them out
+    defp categories_without_masto_type do
+      Bonfire.Social.Notifications.categories()
+      |> Enum.map(fn {key, _category} -> key end)
+      # only kinds with a condition of their own: Latest has none, and excluding it would exclude every row
+      |> Enum.filter(
+        &(Bonfire.Social.Notifications.masto_types_of(&1) == [] and
+            Bonfire.Social.Notifications.own_condition?(&1))
+      )
     end
 
     defp maybe_put_subjects(filter, nil), do: filter
@@ -266,7 +283,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       mentions_by_object = Keyword.get(status_context, :mentions_by_object, %{})
       mentions = Map.get(mentions_by_object, object_id, [])
 
-      with type when not is_nil(type) <- candidate_type(activity, current_user) do
+      with type when not is_nil(type) <- candidate_type(activity, current_user, mentions) do
         subject = get_map_field(activity, :subject) || get_map_field(activity, :account)
         status_post = status_post(type, activity)
 
@@ -286,13 +303,14 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       end
     end
 
-    # Create/reply activities only land in the notifications feed when the user was mentioned,
-    # replied to or directly addressed. Bonfire has no "notify on every post by this author"
-    # subscription, so there is no producer for Mastodon's `status` type.
-    defp candidate_type(activity, current_user \\ nil) do
-      case Activities.experienced_as(atom_keyed(activity), current_user) do
-        # something written that reached this feed did so because it was addressed to them, which is the only thing Mastodon's vocabulary can call it
-        experience when experience in [:create, :write] ->
+    # A post reaches the notifications feed by naming the reader (a `:mention`), answering them (a `:reply`), or without doing either: through a bell on its author or group, or addressed to a circle they're in. That last kind is Mastodon's `status`, "a new post you asked to hear about"
+    defp candidate_type(activity, current_user, mentions) do
+      case Activities.experienced_as(atom_keyed(activity, mentions), current_user) do
+        :write ->
+          :status
+
+        # something created that isn't a post, and reached this feed by being addressed to them
+        :create ->
           :mention
 
         experience ->
@@ -301,17 +319,44 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     end
 
     # This pipeline passes activities around as maps that can be keyed by string, which `Activities.experienced_as/2` cannot read: it is built on `e/3`, which only sees atom keys and would answer `nil` for every row. So the few fields it reads are lifted through the same accessor everything else here uses.
-    defp atom_keyed(activity) do
+    # `mentions` are the post's, loaded for the whole page (`BatchLoaders.mentions/1`): the query itself carries no tags, and without them a post naming the reader would read as a plain post (`:write`, a `status`) instead of a mention
+    defp atom_keyed(activity, mentions) do
       verb = get_map_field(activity, :verb)
 
       %{
         verb_id: get_map_field(activity, :verb_id),
         verb: if(is_map(verb), do: %{verb: get_map_field(verb, :verb)}, else: verb),
-        edge: get_map_field(activity, :edge),
-        object: get_map_field(activity, :object),
-        tags: get_map_field(activity, :tags) || [],
+        edge: atom_keyed_edge(get_map_field(activity, :edge)),
+        object: atom_keyed_object(get_map_field(activity, :object)),
+        tags:
+          get_map_field(activity, :tags) ||
+            Enum.map(List.wrap(mentions), &%{id: get_map_field(&1, :tag_id)}),
         replied: get_map_field(activity, :replied),
         emoji: get_map_field(activity, :emoji)
+      }
+    end
+
+    # what `experienced_as/2` reads of the object: its id, and whether it carries written content, which is what makes a create a `:write` (a post) rather than a `:create`. The query's object is keyed by string, so its post content is lifted the same way
+    # what was asked for, on a request: its edge's table (a quote, a follow, a join)
+    defp atom_keyed_edge(nil), do: nil
+
+    defp atom_keyed_edge(edge) do
+      %{
+        table_id: get_map_field(edge, :table_id),
+        subject_id: get_map_field(edge, :subject_id)
+      }
+    end
+
+    defp atom_keyed_object(nil), do: nil
+
+    defp atom_keyed_object(object) do
+      %{
+        id: get_map_field(object, :id),
+        post_content:
+          case get_map_field(object, :post_content) do
+            nil -> nil
+            post_content -> %{id: get_map_field(post_content, :id)}
+          end
       }
     end
 
@@ -364,7 +409,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       |> List.wrap()
       |> Enum.map(fn
         type when is_atom(type) -> type
-        type when is_binary(type) -> Map.get(@type_by_api_name, type)
+        type when is_binary(type) -> Bonfire.API.MastoCompat.Schemas.Notification.type_atom(type)
         _ -> nil
       end)
       |> Enum.reject(&is_nil/1)
@@ -415,6 +460,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
           take_map_keys(Keyword.get(status_context, :interaction_states, %{}), ids),
         mentions_by_object:
           take_map_keys(Keyword.get(status_context, :mentions_by_object, %{}), ids),
+        hashtags_by_object:
+          take_map_keys(Keyword.get(status_context, :hashtags_by_object, %{}), ids),
         post_content_by_id:
           take_map_keys(Keyword.get(status_context, :post_content_by_id, %{}), ids),
         visibility_by_object:

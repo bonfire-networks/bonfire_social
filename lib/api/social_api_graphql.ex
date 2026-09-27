@@ -56,38 +56,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       @desc "The post's author. Resolves synchronously from a `:with_creator`-preloaded `created.creator`; falls back to loading the `created` mixin."
       field :creator, :any_character do
-        resolve(fn
-          post, _args, %{context: %{loader: loader}} ->
-            case e(post, :created, :creator, nil) || e(post, :creator, nil) do
-              creator
-              when is_struct(creator) and not is_struct(creator, Ecto.Association.NotLoaded) ->
-                {:ok, creator}
-
-              _ ->
-                loader
-                |> Dataloader.load(Needle.Pointer, :created, post)
-                |> Helpers.on_load(fn loader ->
-                  created = Dataloader.get(loader, Needle.Pointer, :created, post)
-                  creator = e(created, :creator, nil)
-
-                  if is_struct(creator) and
-                       not is_struct(creator, Ecto.Association.NotLoaded) do
-                    {:ok, creator}
-                  else
-                    # The :created mixin loads without its nested :creator (stays
-                    # NotLoaded → null, e.g. a boosted post's author). Preload it.
-                    {:ok,
-                     e(
-                       Bonfire.Common.Repo.maybe_preload(created,
-                         creator: [:profile, :character]
-                       ),
-                       :creator,
-                       nil
-                     )}
-                  end
-                end)
-            end
-        end)
+        resolve(&Bonfire.Social.API.GraphQL.resolve_creator/3)
       end
 
       field(:activities, list_of(:activity),
@@ -1073,6 +1042,39 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     # richly preloaded so the :activity sub-fields resolve synchronously (no Dataloader storm).
     # Single source of truth shared with the direct read path (`read_single_status`).
     @single_status_preloads Bonfire.API.MastoCompat.FeedPipeline.single_status_preloads()
+    @doc "Resolves an object's author: synchronously from a `:with_creator`-preloaded `created.creator`, else by loading the `created` mixin. Shared by every object type that has one (posts, polls)."
+    def resolve_creator(object, _args, %{context: %{loader: loader}}) do
+      case e(object, :created, :creator, nil) || e(object, :creator, nil) do
+        creator
+        when is_struct(creator) and not is_struct(creator, Ecto.Association.NotLoaded) ->
+          {:ok, creator}
+
+        _ ->
+          loader
+          |> Dataloader.load(Needle.Pointer, :created, object)
+          |> Helpers.on_load(fn loader ->
+            created = Dataloader.get(loader, Needle.Pointer, :created, object)
+            creator = e(created, :creator, nil)
+
+            if is_struct(creator) and
+                 not is_struct(creator, Ecto.Association.NotLoaded) do
+              {:ok, creator}
+            else
+              # The :created mixin loads without its nested :creator (stays
+              # NotLoaded → null, e.g. a boosted post's author). Preload it.
+              {:ok,
+               e(
+                 Bonfire.Common.Repo.maybe_preload(created,
+                   creator: [:profile, :character]
+                 ),
+                 :creator,
+                 nil
+               )}
+            end
+          end)
+      end
+    end
+
     def get_status(_parent, %{id: id}, info) do
       current_user = GraphQL.current_user(info)
 

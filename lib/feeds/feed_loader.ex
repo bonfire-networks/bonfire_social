@@ -30,7 +30,8 @@ defmodule Bonfire.Social.FeedLoader do
   alias Bonfire.Social.Threads
   alias Needle.Pointer
 
-  @like_verb_id "11KES1ND1CATEAM11DAPPR0VA1"
+  # which verbs aggregate comes from the notification categories now (`aggregated_verb_ids/0`)
+  # @like_verb_id "11KES1ND1CATEAM11DAPPR0VA1"
   @boost_verb_id "300ST0R0RANN0VCEANACT1V1TY"
   @reply_verb_id "71TCREAT1NGA11NKEDRESP0NSE"
 
@@ -140,47 +141,6 @@ defmodule Bonfire.Social.FeedLoader do
   end
 
   def feed(name_or_filters \\ nil, opts \\ [])
-
-  @doc """
-  Returns the page of activities immediately newer than `cursor`.
-
-  Queries ascending `after` the cursor (then reverses the page into the usual reverse-chronological display order) rather than using the paginator's `before` direction: `before` reverses the ORDER BY but not the dedup's `DISTINCT ON (activity.id DESC)`, which would return the newest page instead of the adjacent one. Ascending keeps DISTINCT and ORDER BY aligned so the index scan stops at the limit, same as a normal "load more". Continue toward the newest activity with `page_info.start_cursor`.
-  """
-  @spec feed_newer(map() | atom() | String.t(), map(), String.t(), Keyword.t()) :: map()
-  def feed_newer(feed_name, filters, cursor, opts \\ [])
-      when is_binary(cursor) and cursor != "" and is_list(opts) do
-    filters =
-      filters
-      |> then(fn
-        %_{} = struct -> Map.from_struct(struct)
-        enumerable -> Map.new(enumerable)
-      end)
-      |> Map.put(:sort_by, :date_created)
-      |> Map.put(:sort_order, :asc)
-
-    paginate =
-      opts
-      |> Keyword.get(:paginate, [])
-      |> Keyword.take([:limit])
-      |> Keyword.merge(
-        after: cursor,
-        cursor_fields: [id: :asc],
-        fetch_cursor_value_fun: &Activities.fetch_cursor_value_fun/2
-      )
-
-    case feed(feed_name, filters, Keyword.put(opts, :paginate, paginate)) do
-      %{edges: edges, page_info: page_info} = page when is_list(edges) ->
-        # ascending page: its last entry is the newest, so `end_cursor` (nil once exhausted) is where to continue
-        %{
-          page
-          | edges: Enum.reverse(edges),
-            page_info: Map.put(page_info, :start_cursor, e(page_info, :end_cursor, nil))
-        }
-
-      other ->
-        other
-    end
-  end
 
   def feed(:curated, opts) do
     Bonfire.Social.Pins.list_instance_pins_activities(opts)
@@ -406,7 +366,56 @@ defmodule Bonfire.Social.FeedLoader do
         description: l("Object types to exclude by default")
       )
 
-  def feed_filtered(feed_name, filters, opts) when is_atom(feed_name) and not is_nil(feed_name) do
+  @doc """
+  A page of a feed: named, by feed id(s), or from a query, with its filters.
+
+  Given `paginate: [before: cursor]` (and no `after`), it returns the page just newer than the cursor, the one nearest it, still in reverse-chronological order: it queries ascending `after` the cursor and reverses the page. The paginator's own `before` reverses the ORDER BY but not the dedup's `DISTINCT ON (activity.id DESC)`, which would return the newest page instead of the adjacent one. Ascending keeps DISTINCT and ORDER BY aligned so the index scan stops at the limit, same as a normal "load more". Continue toward the newest activity with `page_info.start_cursor`.
+  """
+  def feed_filtered(source, filters, opts) do
+    case opts[:paginate] do
+      paginate when is_list(paginate) ->
+        before = paginate[:before]
+
+        if is_binary(before) and before != "" and is_nil(paginate[:after]),
+          do: feed_newer_than(source, filters, before, paginate, opts),
+          else: feed_filtered_page(source, filters, opts)
+
+      _ ->
+        feed_filtered_page(source, filters, opts)
+    end
+  end
+
+  defp feed_newer_than(source, filters, cursor, paginate, opts) do
+    filters =
+      filters
+      |> Map.put(:sort_by, :date_created)
+      |> Map.put(:sort_order, :asc)
+
+    paginate =
+      paginate
+      |> Keyword.take([:limit])
+      |> Keyword.merge(
+        after: cursor,
+        cursor_fields: [id: :asc],
+        fetch_cursor_value_fun: &Activities.fetch_cursor_value_fun/2
+      )
+
+    case feed_filtered_page(source, filters, Keyword.put(opts, :paginate, paginate)) do
+      %{edges: edges, page_info: page_info} = page when is_list(edges) ->
+        # ascending page: its last entry is the newest, so `end_cursor` (nil once exhausted) is where to continue
+        %{
+          page
+          | edges: Enum.reverse(edges),
+            page_info: Map.put(page_info, :start_cursor, e(page_info, :end_cursor, nil))
+        }
+
+      other ->
+        other
+    end
+  end
+
+  defp feed_filtered_page(feed_name, filters, opts)
+       when is_atom(feed_name) and not is_nil(feed_name) do
     debug(feed_name, "Starting feed with name")
 
     {feed_ids, opts} =
@@ -417,26 +426,26 @@ defmodule Bonfire.Social.FeedLoader do
     # (e.g. preset names like :recent_discussions are not registered named feeds, but a caller may still want to scope the preset to specific feed_ids — like a group's outbox)
     feed_ids = feed_ids || e(filters, :feed_ids, nil) || opts[:feed_ids]
 
-    feed_filtered(feed_ids, filters, opts)
+    feed_filtered_page(feed_ids, filters, opts)
   end
 
-  def feed_filtered({feed_name, feed_id_or_ids}, filters, opts)
-      when is_atom(feed_name) and not is_nil(feed_name) and
-             (is_binary(feed_id_or_ids) or is_list(feed_id_or_ids)) do
+  defp feed_filtered_page({feed_name, feed_id_or_ids}, filters, opts)
+       when is_atom(feed_name) and not is_nil(feed_name) and
+              (is_binary(feed_id_or_ids) or is_list(feed_id_or_ids)) do
     {feed_ids, opts} =
       feed_ids_and_opts({feed_name, feed_id_or_ids}, opts)
       |> debug("feed_ids_and_opts")
 
-    feed_filtered(feed_ids, filters, opts)
+    feed_filtered_page(feed_ids, filters, opts)
   end
 
-  def feed_filtered({feed_name, nil}, filters, opts) do
-    feed_filtered(feed_name, filters, opts)
+  defp feed_filtered_page({feed_name, nil}, filters, opts) do
+    feed_filtered_page(feed_name, filters, opts)
   end
 
-  def feed_filtered({feed_name, feed_name_again}, filters, opts)
-      when is_atom(feed_name) and not is_nil(feed_name) and is_atom(feed_name_again) do
-    feed_filtered(feed_name, filters, opts)
+  defp feed_filtered_page({feed_name, feed_name_again}, filters, opts)
+       when is_atom(feed_name) and not is_nil(feed_name) and is_atom(feed_name_again) do
+    feed_filtered_page(feed_name, filters, opts)
   end
 
   # def feed_filtered(
@@ -448,7 +457,7 @@ defmodule Bonfire.Social.FeedLoader do
   #   feed_filtered(base_query_fun.(), filters, opts)
   # end
 
-  def feed_filtered(%Ecto.Query{} = custom_query, filters, opts) do
+  defp feed_filtered_page(%Ecto.Query{} = custom_query, filters, opts) do
     # opts = to_feed_options(filters, opts)
 
     custom_query
@@ -459,18 +468,18 @@ defmodule Bonfire.Social.FeedLoader do
     |> prepare_feed(filters, opts)
   end
 
-  def feed_filtered({feed_name, %{} = extra_filters}, filters, opts) do
-    feed_filtered(feed_name, Map.merge(filters, extra_filters), opts)
+  defp feed_filtered_page({feed_name, %{} = extra_filters}, filters, opts) do
+    feed_filtered_page(feed_name, Map.merge(filters, extra_filters), opts)
   end
 
-  def feed_filtered(id_or_ids, filters, opts)
-      when is_binary(id_or_ids) or (is_list(id_or_ids) and id_or_ids != []) do
+  defp feed_filtered_page(id_or_ids, filters, opts)
+       when is_binary(id_or_ids) or (is_list(id_or_ids) and id_or_ids != []) do
     if Keyword.keyword?(id_or_ids) do
       id_or_ids
       |> debug("id_or_idsss")
       |> feed_name_or_default(opts)
       |> debug("kkkk")
-      |> feed_filtered(filters, opts)
+      |> feed_filtered_page(filters, opts)
     else
       debug(opts, "feed_opts for #{id_or_ids}")
 
@@ -479,16 +488,16 @@ defmodule Bonfire.Social.FeedLoader do
     end
   end
 
-  def feed_filtered(
-        nil,
-        %Bonfire.Social.FeedFilters{feed_name: {:notifications, _} = feed_name} = filters,
-        opts
-      )
-      when not is_nil(feed_name) do
-    feed_filtered(feed_name, filters, opts)
+  defp feed_filtered_page(
+         nil,
+         %Bonfire.Social.FeedFilters{feed_name: {:notifications, _} = feed_name} = filters,
+         opts
+       )
+       when not is_nil(feed_name) do
+    feed_filtered_page(feed_name, filters, opts)
   end
 
-  def feed_filtered(:custom, filters, opts) do
+  defp feed_filtered_page(:custom, filters, opts) do
     # For custom feeds, directly use the filters without looking up presets
     query_extras(filters, opts)
     |> debug("feed query before pagination/boundaries")
@@ -496,7 +505,7 @@ defmodule Bonfire.Social.FeedLoader do
     |> prepare_feed(filters, opts)
   end
 
-  def feed_filtered(other, filters, opts) do
+  defp feed_filtered_page(other, filters, opts) do
     debug(other, "Not a DB-based feed to query, defaulting to explore? with any provided filters")
     debug(filters, "provided filters")
     # raise e
@@ -1864,6 +1873,26 @@ defmodule Bonfire.Social.FeedLoader do
     result
   end
 
+  # any other group: its most recent activity when each object shows once, else all of them
+  defp keep_once({_key, [first | _rest] = items}, show_objects_only_once?) do
+    if show_objects_only_once? do
+      [
+        first
+        # Enum.min_by(items, fn {_item, idx} -> idx end)
+      ]
+    else
+      items
+    end
+  end
+
+  defp aggregated_verb_ids do
+    Bonfire.Social.Notifications.aggregated_categories()
+    |> Enum.flat_map(fn {key, _category} ->
+      Bonfire.Social.Notifications.activity_types_for(key)
+    end)
+    |> Bonfire.Boundaries.Verbs.ids()
+  end
+
   defp do_prepare_feed(edges, page_info, filters, opts) do
     # debug(length(edges), "Starting prepare_feed with N edges")
 
@@ -1880,6 +1909,12 @@ defmodule Bonfire.Social.FeedLoader do
 
     # NOTE: Reply dedup remains in postprocessing for now
     dedup_replies_by_parent? = filters[:dedup_replies_by_parent] == true
+
+    # the verbs whose activities on one object collapse into one row naming everyone ("A, B and 1 other"), as the notification categories declare (`aggregate:`), so the feed groups what a row says it groups
+    aggregated_verb_ids = aggregated_verb_ids()
+
+    # of those, the ones kept in a group of their own when each object shows once: a boost instead collapses with the post's own create, so a group's boost doesn't show the post twice
+    own_group_verb_ids = aggregated_verb_ids -- [@boost_verb_id]
 
     # edges =
     #   if show_objects_only_once?,
@@ -1908,29 +1943,31 @@ defmodule Bonfire.Social.FeedLoader do
                  e(item, :activity, :object_id, nil) || e(item, :activity, :id, nil) ||
                  Enums.id(item)}
 
-            @like_verb_id = verb_id when show_objects_only_once? == true ->
-              # Likes stay in their own verb-specific group so multiple likes aggregate
-              # (subjects_more) without collapsing with create/boost
-              {verb_id,
-               e(item, :activity, :object_id, nil) || e(item, :activity, :id, nil) ||
-                 Enums.id(item)}
+            verb_id when show_objects_only_once? == true ->
+              # (a runtime list, so tested here rather than in a guard)
+              if verb_id in own_group_verb_ids do
+                # Likes (and the other aggregated verbs) stay in their own verb-specific group so they aggregate
+                # (subjects_more) without collapsing with create/boost
+                {verb_id,
+                 e(item, :activity, :object_id, nil) || e(item, :activity, :id, nil) ||
+                   Enums.id(item)}
+              else
+                # Collapse all other verbs (create, boost, announce, …) by object_id alone
+                # so a group boost doesn't show the same post twice in the feed.
+                # BUT if the (boosted) object is itself a reply, bucket it under the reply's
+                # parent — same key as the `@reply_verb_id` branch above — so a group auto-boost
+                # of a reply collapses with the reply's own Create. Otherwise the reply leaks
+                # twice in the author's feed: its Create is keyed by `reply_to_id` while the
+                # boost would key by the reply's own `object_id`.
+                case e(item, :activity, :replied, :reply_to_id, nil) do
+                  nil ->
+                    {nil,
+                     e(item, :activity, :object_id, nil) || e(item, :activity, :id, nil) ||
+                       Enums.id(item)}
 
-            _verb_id when show_objects_only_once? == true ->
-              # Collapse all other verbs (create, boost, announce, …) by object_id alone
-              # so a group boost doesn't show the same post twice in the feed.
-              # BUT if the (boosted) object is itself a reply, bucket it under the reply's
-              # parent — same key as the `@reply_verb_id` branch above — so a group auto-boost
-              # of a reply collapses with the reply's own Create. Otherwise the reply leaks
-              # twice in the author's feed: its Create is keyed by `reply_to_id` while the
-              # boost would key by the reply's own `object_id`.
-              case e(item, :activity, :replied, :reply_to_id, nil) do
-                nil ->
-                  {nil,
-                   e(item, :activity, :object_id, nil) || e(item, :activity, :id, nil) ||
-                     Enums.id(item)}
-
-                reply_to_id ->
-                  {@reply_verb_id, reply_to_id}
+                  reply_to_id ->
+                    {@reply_verb_id, reply_to_id}
+                end
               end
 
             verb_id ->
@@ -1960,34 +1997,31 @@ defmodule Bonfire.Social.FeedLoader do
              end), idx}
           ]
 
-        {{verb_id, _object_id}, [{first, idx} | rest] = items}
-        when verb_id in [@like_verb_id, @boost_verb_id] and
-               rest != [] ->
-          if dedup_by_like_boost? do
-            [
-              {Map.update(first, :activity, %{}, fn activity ->
-                 Map.put(
-                   activity,
-                   :subjects_more,
-                   Enum.map(rest, fn {item, _} ->
-                     e(item, :activity, :subject, nil) || e(item, :activity, :subject_id, nil)
-                   end)
-                 )
-               end), idx}
-            ]
+        # an aggregated verb (a runtime list, so tested here rather than in a guard)
+        {{verb_id, _object_id}, [{first, idx} | rest] = items} = group
+        when rest != [] and is_binary(verb_id) ->
+          if verb_id in aggregated_verb_ids do
+            if dedup_by_like_boost? do
+              [
+                {Map.update(first, :activity, %{}, fn activity ->
+                   Map.put(
+                     activity,
+                     :subjects_more,
+                     Enum.map(rest, fn {item, _} ->
+                       e(item, :activity, :subject, nil) || e(item, :activity, :subject_id, nil)
+                     end)
+                   )
+                 end), idx}
+              ]
+            else
+              items
+            end
           else
-            items
+            keep_once(group, show_objects_only_once?)
           end
 
-        {{_other_verb_id, _object_id}, [first | _rest] = items} ->
-          if show_objects_only_once? do
-            [
-              first
-              # Enum.min_by(items, fn {_item, idx} -> idx end)
-            ]
-          else
-            items
-          end
+        group ->
+          keep_once(group, show_objects_only_once?)
       end)
       # Resort by original index
       |> Enum.sort_by(fn {_item, idx} -> idx end)

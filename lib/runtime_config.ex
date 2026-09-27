@@ -67,11 +67,11 @@ defmodule Bonfire.Social.RuntimeConfig do
             respond: %{self: l("responded to you"), other: l("responded to something")},
             annotate: %{self: l("annotated your post"), other: l("annotated")}
           },
-          # Mastodon has no reply type: a reply reaches a client as a mention
-          masto: :mention,
-          # what the chip shows: replies that do not name the viewer, the same line the experience draws
+          # Mastodon has no reply type, and would not notify a reply that doesn't name you at all. It's a post you're told about, so a client gets it as one, whether it answers your post or reached you through a bell. A reply that names you is a mention, above
+          masto: :status,
+          # what the chip shows: replies below a post of the viewer's that do not name them. A reply that reached them through a bell on someone else's thread is not a reply to them, and is left to Other until bells have a category of their own
           filters: %{activity_types: [:reply]},
-          parameterized: %{exclude_tags: [:me]},
+          parameterized: %{exclude_tags: [:me], reply_to_creators: [:me]},
           # the first is the chip's own URL, kept from when this category was called `reply`
           path_aliases: ["replies", "extra_replies"]
         },
@@ -136,6 +136,9 @@ defmodule Bonfire.Social.RuntimeConfig do
         boost: %{
           name_pluralized: l("Boosts"),
           phrases: %{boost: l("boosted your activity")},
+          filters: %{activity_types: [:boost]},
+          # Parked until needed: the chip as boosts of the viewer's own posts. Nothing needs it yet: a boost only notifies the boosted post's creator, and a group's automatic boost of a member's post, brought by a bell on the group, is not under Boosts without it (`bells_test.exs`, "… not under Boosts tab")
+          # parameterized: %{creators: [:me]},
           masto: :reblog,
           icon_class: "stroke-1 fill-info",
           aggregate: true,
@@ -208,8 +211,15 @@ defmodule Bonfire.Social.RuntimeConfig do
         # `catch_all`: its chip shows what no other chip does, which `Notifications` computes from the chips, so a new chip narrows it by itself. Its switch hides the same, and its chip still shows it while the switch is off
         other: %{
           name_pluralized: l("Other activity"),
+          # its name can't say what it holds, since that is whatever no other row does, so the preferences row shows this beside it. Only what its switches govern: bell replies still follow Replies' until they have an experience of their own
+          description:
+            l(
+              "Includes new posts from people, groups, and discussions you asked to be notified about, and anything else the other categories don't cover"
+            ),
           experiences: [],
           catch_all: true,
+          # what a Mastodon client's list selects this by: a new post from someone the reader asked to hear from is Mastodon's `status`. Without it the Mastodon list never queries this category, so a bell post never reaches a client. A non-post create in here is still typed a mention per row (`GraphQLMasto.Notifications`)
+          masto: :status,
           chip: true,
           # row: :unimplemented,
           path_aliases: ["other"]
@@ -564,7 +574,13 @@ defmodule Bonfire.Social.RuntimeConfig do
           built_in: true,
           description: l("Posts by a specific user"),
           icon: "ph:note-duotone",
-          filters: %FeedFilters{creators: [:by], object_types: [:post], time_limit: 0},
+          # `creators` also matches a reply they wrote (a `:reply`, whose object is theirs), so replies are left out explicitly
+          filters: %FeedFilters{
+            creators: [:by],
+            exclude_activity_types: [:reply],
+            object_types: [:post],
+            time_limit: 0
+          },
           parameterized: %{creators: :by}
         },
         # user_research: %{

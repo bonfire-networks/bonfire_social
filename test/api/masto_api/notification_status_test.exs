@@ -4,6 +4,8 @@ defmodule Bonfire.Social.API.NotificationStatusTest do
   @moduletag :masto_api
   @moduletag capture_log: true
 
+  import Bonfire.Common.Testing, only: [count_queries: 1]
+
   setup %{conn: conn} do
     account = Bonfire.Me.Fake.fake_account!()
     author = Bonfire.Me.Fake.fake_user!(account)
@@ -123,6 +125,61 @@ defmodule Bonfire.Social.API.NotificationStatusTest do
     assert notification["status"]["content"] == status["content"]
     assert notification["status"]["content"] =~ "<strong>Hello</strong>"
     refute notification["status"]["content"] =~ "[@"
+  end
+
+  test "a page's statuses come with the notifications, not one read each", context do
+    Process.put([:bonfire, :default_pagination_limit], 20)
+    liked_post = liked_and_mentioned(context)
+
+    # the viewer's own interaction still shows on the status, now read for the whole page at once
+    assert {:ok, _} = Bonfire.Social.Likes.like(context.author, liked_post)
+
+    favourite =
+      context.conn
+      |> get("/api/v1/notifications")
+      |> json_response(200)
+      |> Enum.find(&(&1["type"] == "favourite" and &1["status"]["id"] == liked_post.id))
+
+    assert favourite["status"]["favourited"] == true
+    assert favourite["status"]["favourites_count"] == 2
+
+    queries_for = fn path ->
+      {response, queries} = count_queries(fn -> get(context.conn, path) end)
+      assert json_response(response, 200) != []
+      queries
+    end
+
+    v1_for_one = queries_for.("/api/v1/notifications")
+    v2_for_one = queries_for.("/api/v2/notifications")
+
+    liked_and_mentioned(context)
+    liked_and_mentioned(context)
+
+    assert queries_for.("/api/v1/notifications") == v1_for_one
+    assert queries_for.("/api/v2/notifications") == v2_for_one
+  end
+
+  # one post of the author's liked by the reactor, and one of the reactor's mentioning the author: two notifications, each about a distinct status
+  defp liked_and_mentioned(context) do
+    {:ok, post} =
+      Bonfire.Posts.publish(
+        current_user: context.author,
+        post_attrs: %{post_content: %{html_body: Faker.Lorem.sentence()}},
+        boundary: "public"
+      )
+
+    assert {:ok, _} = Bonfire.Social.Likes.like(context.reactor, post)
+
+    assert {:ok, _} =
+             Bonfire.Posts.publish(
+               current_user: context.reactor,
+               post_attrs: %{
+                 post_content: %{html_body: "@#{context.author.character.username} hi"}
+               },
+               boundary: "public"
+             )
+
+    post
   end
 
   test "outsider cannot read another account's notification detail", context do
