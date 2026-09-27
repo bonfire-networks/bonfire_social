@@ -218,11 +218,14 @@ defmodule Bonfire.Social.Notifications do
 
   Declared by the category that covers the experience, so one sentence serves the notification row, a push body and a digest line. `nil` for a kind with no phrase, and the caller shows the plain word instead ("alice wrote").
 
-  `object_id` and `current_user_id` decide between a pair like `%{self: "followed you", other: "followed"}`, which is the only thing the wording turns on beyond the kind itself.
+  `object_id` and `current_user_id` decide between a pair like `%{self: "followed you", other: "followed"}`, which is the only thing the wording turns on beyond the kind itself. A caller that has already decided whether it is about the reader passes that instead, as `phrase_for(experience, true | false)`.
 
   Translated here rather than where it was declared: `config/0` runs at boot under the default locale, so what it holds is the msgid.
   """
-  def phrase_for(experience, object_id \\ nil, current_user_id \\ nil) do
+  def phrase_for(experience, object_id \\ nil, current_user_id \\ nil)
+
+  # whether it is about the reader, already decided by a caller that has no single reader to compare with (a notification assembled once for everyone it is about)
+  def phrase_for(experience, about_reader?, nil) when is_boolean(about_reader?) do
     case category_for(experience) do
       nil ->
         nil
@@ -232,7 +235,7 @@ defmodule Bonfire.Social.Notifications do
         |> Map.get(experience)
         |> case do
           %{self: self_phrase, other: other_phrase} ->
-            if object_id && object_id == current_user_id, do: self_phrase, else: other_phrase
+            if about_reader?, do: self_phrase, else: other_phrase
 
           phrase ->
             phrase
@@ -242,6 +245,33 @@ defmodule Bonfire.Social.Notifications do
           _ -> nil
         end
     end
+  end
+
+  def phrase_for(experience, object_id, current_user_id),
+    do: phrase_for(experience, not is_nil(object_id) and object_id == current_user_id, nil)
+
+  @doc """
+  Whose notification this is about, which `phrase_for/3` compares with the reader to choose between "replied to you" and "replied to a discussion". For a reply, the author of the post it answers, and otherwise its object.
+
+  Reads the reply from the activity, or else from the object, since a feed row can carry it on either. Needs `replied: [reply_to: :created]` loaded to recognise a reply.
+
+  ## Examples
+
+      iex> about_id(%{object_id: "post", replied: %{reply_to: %{created: %{creator_id: "bob"}}}})
+      "bob"
+
+      iex> about_id(%{object_id: "post"}, %{replied: %{reply_to: %{created: %{creator_id: "bob"}}}})
+      "bob"
+
+      iex> about_id(%{object_id: "alice"})
+      "alice"
+  """
+  def about_id(activity, object \\ nil) do
+    object = object || e(activity, :object, nil)
+
+    e(activity, :replied, :reply_to, :created, :creator_id, nil) ||
+      e(object, :replied, :reply_to, :created, :creator_id, nil) ||
+      e(activity, :object_id, nil) || Types.uid(object)
   end
 
   @doc """

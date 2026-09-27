@@ -3144,7 +3144,12 @@ defmodule Bonfire.Social.Activities do
     %{
       subject_name: e(subject, :profile, :name, nil) || e(subject, :character, :username, ""),
       verb: described_verb(activity),
-      body: described_body(object),
+      # a notification of a follow only ever reaches the one followed, so it is about the follower, as its row shows (`show_subject_instead_of_object?/1`)
+      body:
+        if(show_subject_instead_of_object?(experienced_as(activity)),
+          do: described_bio(subject),
+          else: described_body(object)
+        ),
       url: described_url(object),
       icon: described_icon(subject)
     }
@@ -3178,6 +3183,25 @@ defmodule Bonfire.Social.Activities do
        Bonfire.Common.Text.maybe_markdown_to_html(e(object, :post_content, :html_body, nil)) ||
        e(object, :profile, :name, nil) ||
        e(object, :character, :username, nil))
+    |> Bonfire.Common.Text.text_only()
+  end
+
+  @doc """
+  Whether an activity of this kind, shown to the person it is about, shows whoever acted rather than its object: being followed, or asked to be followed, the object is the reader themselves, so what tells them something is who did it.
+
+  The one place this is decided, for the feed's card of a character (`Bonfire.UI.Me.Preview.CharacterLive`) and for how a notification of it is described out of context (`describe_parts/1`).
+
+      iex> show_subject_instead_of_object?(:follow)
+      true
+
+      iex> show_subject_instead_of_object?(:like)
+      false
+  """
+  def show_subject_instead_of_object?(experience), do: experience in [:follow, :follow_request]
+
+  defp described_bio(subject) do
+    e(subject, :profile, :summary, nil)
+    |> Bonfire.Common.Text.maybe_markdown_to_html()
     |> Bonfire.Common.Text.text_only()
   end
 

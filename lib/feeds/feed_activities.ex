@@ -737,6 +737,7 @@ defmodule Bonfire.Social.FeedActivities do
 
   defp unseen_query(feed_id, opts) do
     table_id = Bonfire.Common.Types.table_id(Seen)
+    opts = to_options(opts)
     current_user = current_user_or_id(opts)
 
     feed_id =
@@ -758,18 +759,31 @@ defmodule Bonfire.Social.FeedActivities do
                seen_edge.subject_id == ^subject_id,
            where: fp.feed_id == ^feed_id,
            where: is_nil(seen_edge.id)
-         )}
+         )
+         # callers pass a socket as opts too (`mark_all_seen/2` on a feed visit), which has no Access
+         |> arrived_since(opts[:since])}
 
     # |> debug()
   end
 
+  # an activity's id is a ULID, which sorts by when it was made, so "since" is a bound on the id and needs no join
+  defp arrived_since(query, %DateTime{} = since),
+    do: where(query, [fp], fp.id >= ^Bonfire.Common.DatesTimes.generate_ulid(since))
+
+  defp arrived_since(query, _), do: query
+
   @doc """
   Returns the count of unseen items in a feed for the current user.
+
+  With `since:` (a `DateTime`), only those that arrived from then on, which is how a digest counts what is new in its window rather than everything ever left unread.
 
   ## Examples
 
       > unseen_count(feed_id, current_user: me)
       5
+
+      > unseen_count(:inbox, current_user: me, since: yesterday)
+      2
   """
   def unseen_count(feed_id, opts) do
     unseen_query(feed_id, opts)

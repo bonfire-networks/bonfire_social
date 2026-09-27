@@ -185,6 +185,15 @@ defmodule Bonfire.Social.RuntimeConfig do
         # },
         # TODO: an accepted quote ("X quoted your post") needs a chip once a filter can read `accepted_at`; the switch already works, as it excludes the verb
         quote: %{name_pluralized: l("Quotes"), chip: :unimplemented, path_aliases: ["quotes"]},
+        # direct messages, so they have switches of their own rather than falling to Other's, where quieting votes and pins would also silence them. A row but no chip, and no "Show in Latest" switch (`centre: false`), since messages arrive in the inbox and never in the notifications feed
+        message: %{
+          name_pluralized: l("Messages"),
+          description: l("Direct messages sent to you"),
+          chip: false,
+          centre: false,
+          # Mastodon has no message type: a direct message reaches a client as a mention
+          masto: :mention
+        },
         # nowhere in the UI yet, and here to say what a vote row reads as and that votes collapse into one the way likes and boosts do. Give it a chip and a row when poll notifications are worth switching separately
         vote: %{
           name_pluralized: l("Poll votes"),
