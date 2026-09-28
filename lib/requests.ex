@@ -148,6 +148,22 @@ defmodule Bonfire.Social.Requests do
   """
   def get(filters, opts \\ []), do: Edges.get(__MODULE__, filters, opts)
 
+  @doc "Returns visible requests by ID in one query, including ignored requests so reviewers can see their previous decision."
+  def list_by_ids(ids, opts \\ [])
+  def list_by_ids([], _opts), do: []
+
+  def list_by_ids(ids, opts) do
+    query([], Keyword.put(opts, :preload, false))
+    |> where([request], request.id in ^ids)
+    |> repo().all()
+  end
+
+  @doc "The decision recorded on a request (as loaded by `list_by_ids/2`): `:approved`, `:declined`, `:pending`, or `nil` when it no longer exists or isn't visible."
+  def review_status(%{accepted_at: accepted_at}) when not is_nil(accepted_at), do: :approved
+  def review_status(%{ignored_at: ignored_at}) when not is_nil(ignored_at), do: :declined
+  def review_status(%{id: _}), do: :pending
+  def review_status(_), do: nil
+
   @doc """
   Checks if a request exists.
 
