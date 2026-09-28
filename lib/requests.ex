@@ -494,7 +494,10 @@ defmodule Bonfire.Social.Requests do
   end
 
   defp request_ids(subject, type, object, ignored? \\ false) do
-    Edges.edge_query({__MODULE__, type}, subject, object, skip_boundary_check: true, preload: :skip)
+    Edges.edge_query({__MODULE__, type}, subject, object,
+      skip_boundary_check: true,
+      preload: :skip
+    )
     |> then(&if ignored?, do: where(&1, [r], not is_nil(r.ignored_at)), else: &1)
     |> select([r], r.id)
     |> repo().all()
