@@ -484,8 +484,9 @@ defmodule Bonfire.Social.Quotes do
   def ap_extract_quote_tags(_), do: {[], []}
 
   def reject_quote(quote_object, quoted_object, opts \\ []) do
+    # `verb:` here picks how the rejection federates, so it stays out of the request lookup, which would read it as the boundary verb to check
     with {:ok, request} <-
-           requested(quote_object, quoted_object, opts)
+           requested(quote_object, quoted_object, Keyword.delete(opts, :verb))
            |> info("got quote request to reject"),
          {:ok, request} <- reject(request, quote_object, quoted_object, opts) do
       {:ok, request}
@@ -535,11 +536,14 @@ defmodule Bonfire.Social.Quotes do
          e(quoted_object, :created, :creator_id, nil))
       |> info("determined_quoted_object_creator")
 
+    # `verb:` picks how the rejection federates (`:delete` deletes the QuoteAuthorization instead of sending a Reject), and is not passed on, where it would mean a boundary verb or override the `:update` below
+    {reject_verb, opts} = Keyword.pop(opts, :verb)
+
     with {:ok, request} <- Requests.ignore(request, opts) |> info("ignored_quote_request"),
          {:ok, quote_object} <-
            update_quote_remove(quote_object, quoted_object) |> info("removed_quote_tag"),
          {:ok, _} <-
-           federate_reject(opts[:verb], request, quote_object, quoted_object)
+           federate_reject(reject_verb, request, quote_object, quoted_object)
            |> info("ap_rejected_quote_request"),
          _ <- remove_quote_authorization_from_ap_object(quote_object) do
       # Then send Update for the now-unauthorized quote post (only if this is a local quote_post) 
