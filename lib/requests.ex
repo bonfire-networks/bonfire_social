@@ -72,8 +72,7 @@ defmodule Bonfire.Social.Requests do
            # remove the Edge (helps so we can recreate one linked to the Follow, because of the unique key on subject/object/table_id)
            _ <- Edges.delete_by_both(subject, type_module, object),
            # remove the Request Activity from notifications
-           _ <-
-             Activities.delete_by_subject_verb_object(subject, :request, object) do
+           _ <- delete_activities([id(request)]) do
         {:ok, request}
       else
         e ->
@@ -126,6 +125,20 @@ defmodule Bonfire.Social.Requests do
 
   def get!(subject, type, object, opts \\ []),
     do: Edges.get!({__MODULE__, type}, subject, object, opts)
+
+  @doc """
+  Like `get!/4` with a list of objects, but excluding ignored requests (as `requested?/3` does).
+
+  ## Examples
+
+      iex> get_pending!(user, join_verb_id, [group_id], skip_boundary_check: true)
+      [%Request{}]
+  """
+  def get_pending!(subject, type, objects, opts \\ []) do
+    Edges.edge_query({__MODULE__, type}, subject, objects, opts)
+    |> where([r], is_nil(r.ignored_at))
+    |> repo().all()
+  end
 
   @doc """
   Retrieves a request by filters.
@@ -416,6 +429,9 @@ defmodule Bonfire.Social.Requests do
       |> Keyword.put_new(:to_circles, [id(object)])
       |> Keyword.put_new(:to_feeds, notifications: object)
 
+    # asking again after being ignored is a new request (new id and notification), rather than `maybe_already/4` returning the ignored one
+    if ignored?(requester, type, object), do: unrequest(requester, type, object)
+
     case create(requester, type, object, opts) do
       {:ok, request} ->
         if opts[:incoming] != true,
@@ -460,10 +476,13 @@ defmodule Bonfire.Social.Requests do
     end
   end
 
-  def unrequest(requester, type, %{} = object) do
-    with {:ok, deleted} when deleted > 0 <- Edges.delete_by_both(requester, type, object) do
-      # delete the request activity & feed entries
-      Activities.delete_by_subject_verb_object(requester, :request, object)
+  @doc "Deletes the subject's requests of this type on the object, with their notifications. Only ever the subject's own rows, so the object can be an id without a boundary-checked fetch."
+  def unrequest(requester, type, object) do
+    request_ids = request_ids(requester, type, object)
+
+    with [_ | _] <- request_ids,
+         {:ok, deleted} when deleted > 0 <- Edges.delete_by_both(requester, type, object) do
+      delete_activities(request_ids)
     else
       e ->
         error(e, "Could not cancel the request, as no matching one was found")
@@ -471,11 +490,22 @@ defmodule Bonfire.Social.Requests do
     end
   end
 
-  def unrequest(%{} = user, type, object) when is_binary(object) do
-    with {:ok, object} <-
-           Bonfire.Common.Needles.get(object, current_user: user) do
-      unrequest(user, type, object)
-    end
+  # by id, since every kind of request shares the `:request` verb: deleting by subject/verb/object would also remove a sibling request's notification (eg. the follow request made alongside a join request)
+  defp delete_activities(ids) do
+    Enum.each(ids, &Activities.maybe_remove_for_deleters_feeds/1)
+    {:ok, Activities.delete(id: ids)}
+  end
+
+  defp request_ids(subject, type, object) do
+    Edges.edge_query({__MODULE__, type}, subject, object, skip_boundary_check: true, preload: :skip)
+    |> select([r], r.id)
+    |> repo().all()
+  end
+
+  defp ignored?(subject, type, object) do
+    Edges.edge_query({__MODULE__, type}, subject, object, skip_boundary_check: true, preload: false)
+    |> where([r], not is_nil(r.ignored_at))
+    |> repo().exists?()
   end
 
   defp create(requester, type, object, opts) do
