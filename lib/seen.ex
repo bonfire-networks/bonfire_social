@@ -154,7 +154,7 @@ defmodule Bonfire.Social.Seen do
     normalized_subject = normalize_subject!(subject)
 
     with {:ok, seen} <-
-           Bonfire.Common.Needles.get(object, current_user: subject, verb: :see) do
+           Bonfire.Common.Needles.get(object, current_user: subject, verbs: [:see]) do
       # debug(seen)
       mark_seen(normalized_subject, seen, opts)
     end

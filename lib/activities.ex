@@ -238,8 +238,13 @@ defmodule Bonfire.Social.Activities do
 
     # TODO: move call Objects.maybe_unindex here to delete from search index?
 
+    activities = repo().many(q)
+
     # FIXME? does cascading delete take care of deleting the activities from feeds?
-    FeedActivities.delete(repo().many(q), :id)
+    FeedActivities.delete(activities, :id)
+
+    # also tell any open feed to drop them, otherwise they linger on screen with stale controls (eg. an accepted request keeps offering its Accept button)
+    Enum.each(activities, &maybe_remove_for_deleters_feeds/1)
 
     q
     |> repo().delete_many()
