@@ -753,6 +753,21 @@ defmodule Bonfire.Social.Edges do
       |> where([edge: edge], edge.table_id == ^edge_table_id(type))
       |> do_delete()
 
+  @doc """
+  Deletes edges by their ids.
+
+  ## Examples
+
+      iex> delete_by_ids([edge_id])
+      {:ok, 1}
+  """
+  def delete_by_ids(ids),
+    do:
+      []
+      |> query(skip_boundary_check: true)
+      |> where([edge: edge], edge.id in ^List.wrap(ids))
+      |> do_delete()
+
   # mirrors what `put_edge_assoc/4` accepts when the edge is created, so anything that can be inserted can be deleted by the same argument
   defp edge_table_id(type) when is_binary(type), do: type
   defp edge_table_id(type), do: Bonfire.Common.Types.table_id(type)
