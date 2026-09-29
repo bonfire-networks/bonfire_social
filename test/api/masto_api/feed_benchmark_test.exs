@@ -55,7 +55,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       # test config caps default_pagination_limit at 2 (config/test.exs); raise it so
       # the feed returns a representative page (the explicit `first` isn't mapped to
       # opts[:limit], so the default applies — see feed_loader.ex:756).
-      Bonfire.Common.Config.put(:default_pagination_limit, 50)
+      Process.put([:bonfire, :default_pagination_limit], 50)
       account = Fake.fake_account!()
       viewer = Fake.fake_user!(account)
       author = Fake.fake_user!()

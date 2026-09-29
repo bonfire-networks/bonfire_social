@@ -93,16 +93,8 @@ defmodule Bonfire.Social.FeedPaginationTest do
           })
         end
 
-      # Save the original config
-      original_config = Config.get([Bonfire.Social.Feeds, :query_with_deferred_join])
-
-      # Ensure deferred join is enabled for these tests
-      Config.put([Bonfire.Social.Feeds, :query_with_deferred_join], true)
-
-      # Return the original config to be used in on_exit
-      on_exit(fn ->
-        Config.put([Bonfire.Social.Feeds, :query_with_deferred_join], original_config)
-      end)
+      # Ensure deferred join is enabled for these tests, for this test process only, so async tests running alongside keep the global value
+      Process.put([:bonfire_social, Bonfire.Social.Feeds, :query_with_deferred_join], true)
 
       # Return the context for tests
       %{

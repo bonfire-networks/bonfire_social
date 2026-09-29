@@ -26,12 +26,8 @@ defmodule Bonfire.Social.FeedPaginationNoGapTest do
         })
       end
 
-    original_config = Config.get([Bonfire.Social.Feeds, :query_with_deferred_join])
-    Config.put([Bonfire.Social.Feeds, :query_with_deferred_join], true)
-
-    on_exit(fn ->
-      Config.put([Bonfire.Social.Feeds, :query_with_deferred_join], original_config)
-    end)
+    # for this test process (and what it starts) only, so async tests running alongside keep the global value
+    Process.put([:bonfire_social, Bonfire.Social.Feeds, :query_with_deferred_join], true)
 
     # newest first, matching feed order
     expected_ids = posts |> Enum.map(&id/1) |> Enum.reverse()
