@@ -250,15 +250,26 @@ defmodule Bonfire.Social.RuntimeConfig do
           path_aliases: ["flags"]
         }
       ],
-      # Who a person can hide notifications from, in display order. Each is a set of feed filters on who is behind a row, with its reader-relative parts under `parameterized:` (`:my_followed` is their followed circle); hiding one drops the rows it matches, through the same engine as a hidden category, so hiding two keeps what's in neither
+      # Who a person can hide notifications and messages from, in display order. Each is a set of feed filters on who is behind a row, with its reader-relative parts under `parameterized:` (`:my_followed` is their followed circle); hiding one drops the rows it matches, through the same engine as a hidden category, so hiding two keeps what's in neither. Each covers direct messages too (`Notifications.audience_condition/2`)
       audiences: [
+        not_followed_making_contact: %{
+          name:
+            l("Mentions or messages from people you don't follow, unless they're replying to you"),
+          # a stranger answering something you wrote still reaches you: for messages, their reply in a conversation you started
+          filters: %{},
+          parameterized: %{
+            tags: [:me],
+            exclude_subject_circles: [:my_followed],
+            exclude_reply_to_creators: [:me]
+          }
+        },
         not_followed: %{
-          name: l("People you don't follow"),
+          name: l("Anything from anyone you don't follow"),
           filters: %{},
           parameterized: %{exclude_subject_circles: [:my_followed]}
         },
         not_following: %{
-          name: l("People who don't follow you"),
+          name: l("Anything from anyone who doesn't follow you"),
           filters: %{},
           parameterized: %{exclude_subject_circles: [:my_followers]}
         },
@@ -266,24 +277,21 @@ defmodule Bonfire.Social.RuntimeConfig do
         # an account known here for at most this many days: registered, or first seen from another server
         new_accounts: %{
           # not "new users": a remote account first seen here last week may be years old on its own server
-          name: l("People new to this server"),
+          name: l("Anything from people new to this instance"),
           description:
             l(
-              "Less than 30 days since they signed up here or were first seen from another server"
+              "Less than 30 days since they signed up here or were first seen if they're from another instance"
             ),
           filters: %{subject_known_since_days: 30}
-        },
-        mentions_not_followed: %{
-          name: l("Mentions from people you don't follow"),
-          filters: %{},
-          parameterized: %{tags: [:me], exclude_subject_circles: [:my_followed]}
-        },
-        # a mention that isn't a reply below something you wrote (a new thread naming you, or someone else's thread), whoever it's from
-        mentions_not_replying: %{
-          name: l("Mentions, unless they're replying to you"),
-          filters: %{},
-          parameterized: %{tags: [:me], exclude_reply_to_creators: [:me]}
         }
+
+        # replaced by "People you don't follow, unless they're replying to you", which also means something for messages, where every message is a mention
+        # a mention that isn't a reply below something you wrote (a new thread naming you, or someone else's thread), whoever it's from
+        # mentions_not_replying: %{
+        #   name: l("Mentions, unless they're replying to you"),
+        #   filters: %{},
+        #   parameterized: %{tags: [:me], exclude_reply_to_creators: [:me]}
+        # }
       ],
       # What a Mastodon client calls the experiences no category claims, read by `Notifications.masto_type_for/1` after the categories' `masto:`, so the list, push and streaming name them alike
       masto_unclaimed: %{

@@ -111,22 +111,40 @@ defmodule Bonfire.Social.NotificationAudiencesTest do
     # a like from the same stranger isn't a mention, so this row leaves it
     liked = liked_by(me, stranger)
 
-    me = hide(me, :mentions_not_followed)
+    me = hide(me, :not_followed_making_contact)
 
     refute notified?(me, from_stranger)
     assert notified?(me, from_followed)
     assert notified?(me, liked)
   end
 
-  test "hiding mentions unless they're replying to you keeps a mention in a reply to you, not one elsewhere",
-       %{me: me, stranger: stranger} do
+  # the "Mentions, unless they're replying to you" row was replaced by "People you don't follow, unless they're replying to you", tested below
+  # test "hiding mentions unless they're replying to you keeps a mention in a reply to you, not one elsewhere",
+  #      %{me: me, stranger: stranger} do
+  #   mine = fake_post!(me, "public", %{post_content: %{html_body: "my thread"}})
+  #   in_reply_to_me = mentioning(stranger, me, reply_to_id: mine.id)
+  #   elsewhere = mentioning(stranger, me)
+  #
+  #   me = hide(me, :mentions_not_replying)
+  #
+  #   assert notified?(me, in_reply_to_me)
+  #   refute notified?(me, elsewhere)
+  # end
+
+  test "hiding strangers making contact keeps their reply to you and their like, and hides their mention elsewhere",
+       %{me: me, stranger: stranger, followed: followed} do
     mine = fake_post!(me, "public", %{post_content: %{html_body: "my thread"}})
     in_reply_to_me = mentioning(stranger, me, reply_to_id: mine.id)
     elsewhere = mentioning(stranger, me)
+    # not a mention or a message, so not making contact
+    liked = liked_by(me, stranger)
+    from_followed = mentioning(followed, me)
 
-    me = hide(me, :mentions_not_replying)
+    me = hide(me, :not_followed_making_contact)
 
     assert notified?(me, in_reply_to_me)
+    assert notified?(me, from_followed)
+    assert notified?(me, liked)
     refute notified?(me, elsewhere)
   end
 

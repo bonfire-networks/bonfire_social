@@ -140,7 +140,7 @@ defmodule Bonfire.Social.Notifications do
     cond do
       # an audience (who is behind a row) named where a category would be: its filters, so the category fields hide one and the Hidden chip shows any of them, with no fields of their own
       is_nil(category(key)) and audience?(key) ->
-        matching_condition(audience_filters(key, opts), opts)
+        audience_condition(key, opts)
 
       true ->
         kind_condition(key, opts)
@@ -218,11 +218,23 @@ defmodule Bonfire.Social.Notifications do
   @doc "The settings key a person's choice for an audience is stored at: `:accept` or `:hide`."
   def audience_key(key), do: [:notifications, :audience, key]
 
-  @doc "The audiences this person hides notifications from."
+  @doc "The audiences this person hides notifications and messages from."
   def hidden_audiences(context) do
     for {key, _audience} <- audiences(),
         Settings.get(audience_key(key), :accept, context) in [:hide, "hide"],
         do: key
+  end
+
+  @doc """
+  Whether the row bound as `:activity` is from this audience, for the person reading: the condition the feed, the Hidden chip, delivery and the messages list all hide by.
+
+  Messages included, which a feed's filters leave out by default (`FeedLoader.skip_types_default/0`), so one switch hides an audience's notifications and messages alike.
+  """
+  def audience_condition(key, opts) do
+    matching_condition(
+      audience_filters(key, opts),
+      Keyword.put(Utils.to_options(opts), :exclude_object_types, ["*"])
+    )
   end
 
   @doc """

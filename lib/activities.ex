@@ -930,8 +930,11 @@ defmodule Bonfire.Social.Activities do
   # A post by one of these people above the outer query's reply: its `Replied.path` holds every ancestor, from the thread's root to the post it answers, so this is primary-key lookups on `created`, as many as the thread is deep. Correlated through the `:replied` binding the caller proloads
   defp posts_above_by(creator_ids) do
     from(created in Bonfire.Data.Social.Created,
+      # with no reply link (some clients, like the encrypted messaging ones, put a message in a conversation by its thread alone), the thread's first post is what it answers, unless it is that post. Where there is a path, it already holds the thread's first post
       where:
-        fragment("? = ANY(?)", created.id, parent_as(:replied).path) and
+        (fragment("? = ANY(?)", created.id, parent_as(:replied).path) or
+           (created.id == parent_as(:replied).thread_id and
+              created.id != parent_as(:replied).id)) and
           created.creator_id in ^creator_ids,
       select: 1
     )
