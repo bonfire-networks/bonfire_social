@@ -91,7 +91,11 @@ defmodule Bonfire.Social.Tags do
       debug(category, "boostable :-)")
       category
     else
-      debug("we don't have tag permission, so category auto-boosting will be skipped")
+      # warn rather than debug: this silently keeps a post out of its group, which is otherwise invisible in CI logs
+      warn(
+        {id(creator), id(category)},
+        "no tag permission on this category, so the post is not put in it or boosted there"
+      )
       nil
     end
   end
@@ -101,7 +105,11 @@ defmodule Bonfire.Social.Tags do
       debug(category, "boostable :-)")
       category
     else
-      debug("we don't have tag permission, so category auto-boosting will be skipped")
+      # warn rather than debug: this silently keeps a post out of its group, which is otherwise invisible in CI logs
+      warn(
+        {id(creator), id(category)},
+        "no tag permission on this category, so the post is not put in it or boosted there"
+      )
       nil
     end
   end
@@ -127,8 +135,13 @@ defmodule Bonfire.Social.Tags do
         debug(other, "context is not a category, so auto-boosting will be skipped")
         nil
 
-      _ ->
-        debug("we don't have tag permission, so auto-boosting will be skipped")
+      other ->
+        # warn rather than debug: this silently keeps a post out of its group, which is otherwise invisible in CI logs
+        warn(
+          {id(creator), id, other},
+          "no tag permission on this category (or it could not be loaded), so the post is not put in it or boosted there"
+        )
+
         nil
     end
   end
