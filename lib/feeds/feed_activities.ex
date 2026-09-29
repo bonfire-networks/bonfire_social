@@ -56,11 +56,12 @@ defmodule Bonfire.Social.FeedActivities do
       nil ->
         # the fan-out already worked out who is notified and which feeds that is, so pass both along rather than making a later reader ask again
         %{all: feeds, notifications: notifications, notify_users: notify_users} =
-          Feeds.target_feeds_classified(changeset, creator, opts)
+          classified = Feeds.target_feeds_classified(changeset, creator, opts)
 
         put_feed_publishes(changeset, feeds,
           notifications_class: notifications,
-          notify_users: notify_users
+          notify_users: notify_users,
+          wrote_above: Map.get(classified, :wrote_above)
         )
 
       feeds ->
@@ -68,6 +69,7 @@ defmodule Bonfire.Social.FeedActivities do
         put_feed_publishes(changeset, feeds,
           notifications_class: opts[:notifications_class],
           notify_users: opts[:notify_users],
+          wrote_above: opts[:wrote_above],
           enqueue_notify: opts[:enqueue_notify]
         )
     end
@@ -233,7 +235,9 @@ defmodule Bonfire.Social.FeedActivities do
 
     notifying = %{
       feeds: opts[:notifications_class] || notifications,
-      users: List.wrap(opts[:notify_users] || notify_users)
+      users: List.wrap(opts[:notify_users] || notify_users),
+      # who of them wrote the post they follow a discussion by (`Feeds.to_notify_of_this/6`), for the fan-out to tell Replies from a followed discussion
+      wrote_above: opts[:wrote_above]
     }
 
     rows =
@@ -279,7 +283,10 @@ defmodule Bonfire.Social.FeedActivities do
     maybe_apply(
       Bonfire.Notify.Worker,
       :enqueue_fan_out,
-      [activity_id, %{feeds: notifying.feeds, recipients: recipients}],
+      [
+        activity_id,
+        %{feeds: notifying.feeds, recipients: recipients, wrote_above: notifying[:wrote_above]}
+      ],
       fallback_return: :skip
     )
   end

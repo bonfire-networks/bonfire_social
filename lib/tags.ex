@@ -182,26 +182,37 @@ defmodule Bonfire.Social.Tags do
   end
 
   def auto_boost(%{} = category, object, opts) when is_struct(object) or is_binary(object) do
+    # `prune:` since what is tagged may be a post, which has no `character`
     category =
       category
-      |> repo().maybe_preload(:character)
+      |> repo().maybe_preload([character: [:peered]], prune: true)
 
-    if inbox_id = e(category, :character, :notifications_id, nil) do
-      category
-      |> debug("auto_boost_object to")
+    inbox_id = e(category, :character, :notifications_id, nil)
 
-      Bonfire.Social.Boosts.maybe_boost(category, object, auto_boost_opts(opts))
+    cond do
+      is_nil(inbox_id) ->
+        debug("skip boosting, because not a character")
 
-      # remove it from the inbox ("Submitted" tab)
-      if inbox_id,
-        do: Bonfire.Social.FeedActivities.delete(feed_id: inbox_id, id: uid(object)) |> debug(),
-        else: debug("no inbox ID")
-    else
-      debug("skip boosting, because not a character")
+      # a remote group relays its own posts: its `Announce` is the boost, and one we made in its name would make that real one look like a duplicate
+      not Bonfire.Social.is_local?(category) ->
+        debug("skip boosting, because the group is remote and boosts for itself")
+
+      true ->
+        do_auto_boost(category, object, inbox_id, opts)
     end
   end
 
   def auto_boost(_, _, _), do: debug("not auto-boosting (invalid inputs)")
+
+  defp do_auto_boost(category, object, inbox_id, opts) do
+    category
+    |> debug("auto_boost_object to")
+
+    Bonfire.Social.Boosts.maybe_boost(category, object, auto_boost_opts(opts))
+
+    # remove it from the inbox ("Submitted" tab)
+    Bonfire.Social.FeedActivities.delete(feed_id: inbox_id, id: uid(object)) |> debug()
+  end
 
   defp auto_boost_opts(opts) do
     opts

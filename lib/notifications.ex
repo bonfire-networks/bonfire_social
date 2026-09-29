@@ -16,7 +16,8 @@ defmodule Bonfire.Social.Notifications do
   use Bonfire.Common.Settings
   use Bonfire.Common.Localise
 
-  import Ecto.Query, only: [dynamic: 1, dynamic: 2, where: 2, where: 3, select: 2, exclude: 2]
+  import Ecto.Query,
+    only: [dynamic: 1, dynamic: 2, where: 2, where: 3, select: 2, exclude: 2, from: 2]
 
   alias Bonfire.Boundaries.Verbs
   alias Bonfire.Common.Types
@@ -88,7 +89,8 @@ defmodule Bonfire.Social.Notifications do
   defp chipped_categories_besides(key) do
     categories_shown(:chip)
     |> Enum.reject(fn {other_key, category} ->
-      other_key == key or e(category, :catch_all, nil) == true or not own_condition?(other_key)
+      other_key == key or e(category, :catch_all, nil) == true or not own_condition?(other_key) or
+        audience_view?(other_key)
     end)
     |> Enum.map(fn {other_key, _category} -> other_key end)
   end
@@ -135,6 +137,17 @@ defmodule Bonfire.Social.Notifications do
   defp category_condition(key, opts) do
     key = Types.maybe_to_atom!(key)
 
+    cond do
+      # an audience (who is behind a row) named where a category would be: its filters, so the category fields hide one and the Hidden chip shows any of them, with no fields of their own
+      is_nil(category(key)) and audience?(key) ->
+        matching_condition(audience_filters(key, opts), opts)
+
+      true ->
+        kind_condition(key, opts)
+    end
+  end
+
+  defp kind_condition(key, opts) do
     if e(category(key), :catch_all, nil) do
       # what no other chip shows, each excluded as exactly what it selects, so a new chip narrows this by itself
       Enum.reduce(chipped_categories_besides(key), dynamic(true), fn other_key, none ->
@@ -147,6 +160,10 @@ defmodule Bonfire.Social.Notifications do
 
   defp filters_condition(key, opts) do
     case query_filters_for(key, opts) do
+      # a view of the reader's hidden audiences, when they hide none: nothing, rather than every row
+      %{notification_categories: []} ->
+        dynamic(false)
+
       # `[]` is "every type", as for the default category
       %{activity_types: []} = filters when map_size(filters) == 1 ->
         dynamic(true)
@@ -157,22 +174,149 @@ defmodule Bonfire.Social.Notifications do
         dynamic([activity: activity], activity.verb_id in ^verb_ids)
 
       filters ->
-        # prepared as a feed's filters are (`exclude_object_types` becomes `exclude_table_ids` there, for one), and with the outer feed's opts, so a category selects the same as a condition as it does as a chip
-        {filters, opts} =
-          Bonfire.Social.FeedLoader.prepare_filters_and_opts(filters, [], opts)
-
-        matching =
-          Bonfire.Social.FeedActivities.base_query(opts)
-          |> where([activity: activity], activity.id == parent_as(:activity).id)
-          |> Bonfire.Social.FeedLoader.maybe_filter(filters, opts)
-          # a subquery can carry joins but not preloads, and the filters' `proload`s add both
-          |> exclude(:preload)
-          |> exclude(:select)
-          |> select(1)
-
-        dynamic(exists(matching))
+        matching_condition(filters, opts)
     end
   end
+
+  # whether the row matches a set of feed filters, as a correlated subquery shaped like a feed's, which is what every filter module expects: a category's filters, or an audience's
+  defp matching_condition(filters, opts) do
+    # prepared as a feed's filters are (`exclude_object_types` becomes `exclude_table_ids` there, for one), and with the outer feed's opts, so a category selects the same as a condition as it does as a chip
+    {filters, opts} =
+      Bonfire.Social.FeedLoader.prepare_filters_and_opts(filters, [], opts)
+
+    matching =
+      Bonfire.Social.FeedActivities.base_query(opts)
+      |> where([activity: activity], activity.id == parent_as(:activity).id)
+      |> Bonfire.Social.FeedLoader.maybe_filter(filters, opts)
+      # a subquery can carry joins but not preloads, and the filters' `proload`s add both
+      |> exclude(:preload)
+      |> exclude(:select)
+      |> select(1)
+
+    dynamic(exists(matching))
+  end
+
+  @doc "The audiences a person can hide notifications from (`audiences:` beside the categories), each a set of feed filters on who is behind a row."
+  def audiences do
+    Config.get([__MODULE__, :audiences], [],
+      name: l("Notification audiences"),
+      description: l("Who a person can hide notifications from.")
+    )
+  end
+
+  @doc "What an audience selects, for the person reading: its `filters:` with its `parameterized:` resolved for them (`:my_followed` becomes their followed circle)."
+  def audience_filters(key, opts \\ []) do
+    audience = audiences() |> e(Types.maybe_to_atom!(key), nil)
+
+    Bonfire.Social.FeedLoader.parameterize_filters(
+      e(audience, :filters, nil) || %{},
+      e(audience, :parameterized, nil) || %{},
+      current_user: Utils.current_user(opts)
+    )
+  end
+
+  @doc "The settings key a person's choice for an audience is stored at: `:accept` or `:hide`."
+  def audience_key(key), do: [:notifications, :audience, key]
+
+  @doc "The audiences this person hides notifications from."
+  def hidden_audiences(context) do
+    for {key, _audience} <- audiences(),
+        Settings.get(audience_key(key), :accept, context) in [:hide, "hide"],
+        do: key
+  end
+
+  @doc """
+  Applies this person's hidden audiences to a set of feed filters, as `exclude_hidden_categories/2` does their hidden categories: once, where a notifications read resolves its preset. Untouched for any other feed, a reader with no user, or `include_hidden: true` (which is how the Mastodon adapter keeps its own semantics).
+  """
+  def exclude_hidden_audiences(filters, opts) do
+    with true <- Types.maybe_to_atom(e(filters, :feed_name, nil)) == :notifications,
+         true <- not is_nil(Utils.current_user_id(opts)),
+         false <- !!e(opts, :include_hidden, false),
+         # a view of the hidden audiences (the Hidden chip) is the way back to them, as a category's own chip is for its switch
+         false <-
+           Enum.any?(
+             List.wrap(e(filters, :notification_categories, [])),
+             &(audience_view?(&1) or audience?(&1))
+           ),
+         [_ | _] = hidden <- hidden_audiences(opts) do
+      # named where categories are, which `category_condition/2` resolves to each audience's filters
+      Map.put(
+        filters,
+        :exclude_notification_categories,
+        Enum.uniq(List.wrap(e(filters, :exclude_notification_categories, []) || []) ++ hidden)
+      )
+    else
+      _ -> filters
+    end
+  end
+
+  @doc """
+  Which of these people hide this activity, by the audiences they chose not to hear from: the ids of those it shouldn't be pushed or emailed to. One query for all of them, built from the same audience filters the feed and the Hidden chip use, so delivery can't disagree with what they see.
+
+  Only people who hide something are asked about. An audience with nothing relative to the reader (no `parameterized:`, like "Accounts new to this server") is one condition shared by everyone who hides it; the others are one per person, resolved for them.
+  """
+  def hidden_from(_activity_id, []), do: []
+
+  def hidden_from(activity_id, people) do
+    hiding =
+      for person <- people,
+          keys = hidden_audiences(current_user: person),
+          keys != [],
+          do: {Bonfire.Common.Enums.id(person), person, keys}
+
+    shared_keys =
+      for {_id, _person, keys} <- hiding,
+          key <- keys,
+          not reader_relative?(key),
+          uniq: true,
+          do: key
+
+    columns =
+      Map.merge(
+        Map.new(shared_keys, &{"shared:#{&1}", category_condition(&1, [])}),
+        Map.new(hiding, fn {id, person, keys} ->
+          {"person:#{id}",
+           keys
+           |> Enum.filter(&reader_relative?/1)
+           |> Enum.reduce(dynamic(false), fn key, any ->
+             dynamic(^any or ^category_condition(key, current_user: person))
+           end)}
+        end)
+      )
+
+    case map_size(columns) do
+      0 ->
+        []
+
+      _ ->
+        answers =
+          from(activity in Bonfire.Data.Social.Activity,
+            as: :activity,
+            where: activity.id == ^Types.uid(activity_id),
+            select: ^columns
+          )
+          |> Bonfire.Common.Repo.one() || %{}
+
+        for {id, _person, keys} <- hiding,
+            answers["person:#{id}"] == true or
+              Enum.any?(keys, &(answers["shared:#{&1}"] == true)),
+            do: id
+    end
+  end
+
+  # whether an audience depends on who is reading (their circles, `:me`), so it needs a condition per person
+  defp reader_relative?(key) do
+    audiences() |> e(Types.maybe_to_atom!(key), :parameterized, nil) |> is_map_and_not_empty?()
+  end
+
+  defp is_map_and_not_empty?(%{} = map), do: map_size(map) > 0
+  defp is_map_and_not_empty?(_), do: false
+
+  @doc "Whether this names an audience (who is behind a row) rather than a category."
+  def audience?(key), do: not is_nil(audiences() |> e(Types.maybe_to_atom!(key), nil))
+
+  @doc "Whether a category is a view of audiences (the Hidden chip) rather than a kind of notification, so what treats categories as kinds (the Mastodon list's exclusions, Other, the preference rows) leaves it out."
+  def audience_view?(key), do: e(category(key), :audience_view, nil) == true
 
   @doc """
   The experiences a category covers, defaulting to the one its key names.
@@ -288,12 +432,12 @@ defmodule Bonfire.Social.Notifications do
   @doc """
   What a Mastodon client calls this experience, or nil for something its vocabulary has no name for.
 
-  Declared per category, since that is the grouping Mastodon's types line up with, and several of ours share one of theirs: a reply and a mention are both `mention` to a client, a like and an emoji reaction are both `favourite`. A category covering kinds that Mastodon names apart declares a map by experience instead, the way `phrases:` does.
+  Declared per category, since that is the grouping Mastodon's types line up with, and several of ours share one of theirs: a reply and a mention are both `mention` to a client, a like and an emoji reaction are both `favourite`. A category covering kinds that Mastodon names apart declares a map by experience instead, the way `phrases:` does. An experience no category claims is named by the `masto_unclaimed` config beside the categories.
   """
   def masto_type_for(experience) do
     case category_for(experience) do
       nil ->
-        nil
+        Config.get([__MODULE__, :masto_unclaimed], %{}) |> Map.get(experience)
 
       key ->
         case e(category(key), :masto, nil) do

@@ -75,6 +75,7 @@ defmodule Bonfire.Social.FeedLoader do
         |> debug("merged feed_filters")
         # after merging, so types the caller asked for are visible and outrank the preference. A no-op for every feed but notifications
         |> Bonfire.Social.Notifications.exclude_hidden_categories(opts)
+        |> Bonfire.Social.Notifications.exclude_hidden_audiences(opts)
         |> FeedFilters.validate()
         |> debug("validated & parameterized feed_filters")
         ~> {:ok, preset, ...}
@@ -85,6 +86,7 @@ defmodule Bonfire.Social.FeedLoader do
         |> merge_some_defaults(opts)
         |> debug("merged feed_filters")
         |> Bonfire.Social.Notifications.exclude_hidden_categories(opts)
+        |> Bonfire.Social.Notifications.exclude_hidden_audiences(opts)
         |> FeedFilters.validate()
         |> debug("validated feed_filters")
         ~> {:ok, preset, ...}
@@ -2326,6 +2328,23 @@ defmodule Bonfire.Social.FeedLoader do
 
   def replace_parameters(:me, _filters, opts) do
     current_user(opts)
+  end
+
+  # the audiences the reader hides notifications from, for the view that shows them (the Hidden chip)
+  def replace_parameters(:my_hidden_audiences, _filters, opts),
+    do: Bonfire.Social.Notifications.hidden_audiences(opts)
+
+  # the reader's own stereotype circles, for a circle filter relative to them (who they follow, who follows them)
+  def replace_parameters(stereotype, _filters, opts)
+      when stereotype in [:my_followed, :my_followers] do
+    stereotype = if stereotype == :my_followed, do: :followed, else: :followers
+
+    maybe_apply(
+      Bonfire.Boundaries.Circles,
+      :stereotype_circle_ids_for,
+      [current_user(opts), [stereotype]],
+      fallback_return: []
+    )
   end
 
   def replace_parameters(:current_user_required, _filters, opts) do

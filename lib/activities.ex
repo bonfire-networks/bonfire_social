@@ -1956,6 +1956,17 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
+  # an id is a ULID, which sorts by when it was made, so "known for at most n days" is a bound on the subject's id and needs no join
+  def maybe_filter(query, {:subject_known_since_days, days}, _opts) when is_integer(days) do
+    since = DateTime.add(DateTime.utc_now(), -days, :day)
+
+    where(
+      query,
+      [activity: activity],
+      activity.subject_id >= ^Bonfire.Common.DatesTimes.generate_ulid(since)
+    )
+  end
+
   def maybe_filter(query, {:exclude_subject_circles, circle_ids}, opts) do
     case Types.uids(circle_ids, nil) do
       nil ->
@@ -2795,7 +2806,7 @@ defmodule Bonfire.Social.Activities do
       iex> experienced_as(%{verb: %{verb: "Like"}, emoji: %{media_type: "emoji"}})
       :react
   """
-  def experienced_as(activity, recipient \\ nil) do
+  def experienced_as(activity, recipient \\ nil, opts \\ []) do
     if reaction?(activity) do
       :react
     else
@@ -2807,11 +2818,11 @@ defmodule Bonfire.Social.Activities do
         :reply ->
           if mentions_recipient?(activity, recipient),
             do: :mention,
-            else: replied_as(activity)
+            else: replied_as(activity, recipient, opts)
 
         # a row does not always keep the verb it was stored with: a search hit arrives carrying what it answers and what it holds, and no verb at all. What it carries is what it was, which is the same question a create asks
         verb when verb in [:create, nil] ->
-          created_as(activity, recipient)
+          created_as(activity, recipient, opts)
 
         verb ->
           verb
@@ -2842,6 +2853,13 @@ defmodule Bonfire.Social.Activities do
       %{id: _} -> :respond
       _ -> :reply
     end
+  end
+
+  # a reply with nothing the reader wrote above it reached them because they follow that discussion, not because they were answered: the line the Replies chip's `reply_to_creators` draws in SQL. Known only where the caller says (`wrote_above:`, which the fan-out takes from who wrote the post a subscriber follows); otherwise a reply stays what `replied_as/1` says
+  defp replied_as(activity, recipient, opts) do
+    if opts[:wrote_above] == false and not reply_to_recipient?(activity, recipient),
+      do: :thread_reply,
+      else: replied_as(activity)
   end
 
   # what was asked for lives on the edge, since asking is one verb for every kind of ask. The kinds somebody is told about separately get a key, and a category carries that same key; any other ask stays `:request`, is named after its edge when displayed, and belongs to whatever category catches what nothing else names
@@ -2886,14 +2904,14 @@ defmodule Bonfire.Social.Activities do
 
   # the same row is a mention of one person and nothing in particular to another, so it is read per recipient. A direct message is told apart by what it is rather than by the feed it arrived in, so a DM quoted into a public thread does not read as one.
   # The reply check is here for a `:create` that carries a `reply_to` without having been stored as a reply, which is what a remote activity can arrive as; anything published here is already `:reply` by then (`Bonfire.Social.Acts.Threaded`)
-  defp created_as(activity, recipient) do
+  defp created_as(activity, recipient, opts) do
     cond do
       message?(activity) -> :message
       # naming you comes first, as on the `:reply` path above
       mentions_recipient?(activity, recipient) -> :mention
       reply_to_recipient?(activity, recipient) -> :reply
       # answering something stays an answer for whoever reads it, and is what a row has to say and show: the reader-relative part is the clause above, which is about being answered rather than about the answer
-      replies_to_something?(activity) -> replied_as(activity)
+      replies_to_something?(activity) -> replied_as(activity, recipient, opts)
       # writing something to read is not the same kind of thing as creating an object, which is what a create is when it carries no post
       wrote_post?(activity) -> :write
       true -> :create

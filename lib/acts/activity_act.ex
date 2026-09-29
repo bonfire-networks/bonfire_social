@@ -73,6 +73,18 @@ defmodule Bonfire.Social.Acts.Activity do
 
         reply_to = e(epic.assigns, :reply_to, nil) || e(attrs, :reply_to, nil)
 
+        # the posts above a reply, from the thread's first post to the one it answers: a bell on any of them covers it, and the author's own bell on one of them covers what they write below it
+        ancestors =
+          if reply_to,
+            do:
+              e(changeset.changes, :replied, :changes, :path, nil) ||
+                List.wrap(e(reply_to, :replied, :path, nil)) ++
+                  [Bonfire.Common.Types.uid(reply_to)],
+            else: []
+
+        # known before the insert, so the author's bell on it can go in with it
+        changeset = with_id(changeset)
+
         notify =
           Feeds.to_notify_of_this(
             current_user,
@@ -89,6 +101,7 @@ defmodule Bonfire.Social.Acts.Activity do
                     e(reply_to, :replied, :thread, :id, nil) ||
                     Bonfire.Common.Types.uid(reply_to)
               ),
+            ancestors: ancestors,
             in:
               Enum.map(
                 List.wrap(epic.assigns[:categories_auto_boost]),
@@ -115,6 +128,7 @@ defmodule Bonfire.Social.Acts.Activity do
           # who is notified and which feeds that is, both already worked out just above, so the funnel doesn't have to ask again
           notifications_class: e(notify, :notify_feeds, []),
           notify_users: e(notify, :notify_users, []),
+          wrote_above: e(notify, :wrote_above, []),
           enqueue_notify: enqueue_notify?,
           boundary: boundary
         )
@@ -122,9 +136,38 @@ defmodule Bonfire.Social.Acts.Activity do
         |> Epic.assign(..., feeds_key, feed_ids)
         |> Epic.assign(..., notify_feeds_key, notify)
         |> Epic.assign(..., :notify_inline, !enqueue_notify?)
+        |> maybe_enable_thread_notifications(
+          current_user,
+          Changeset.get_field(changeset, :id),
+          ancestors
+        )
 
       changeset.action == :delete ->
         # TODO: deletion
+        epic
+    end
+  end
+
+  defp with_id(changeset) do
+    if Changeset.get_field(changeset, :id),
+      do: changeset,
+      else: Changeset.put_change(changeset, :id, Needle.ULID.generate())
+  end
+
+  # what the author writes enables notifications of the replies below it for them (`Bonfire.Notify.Bells.enable_thread_notifications_changeset/3` says when not), inserted in the same transaction, after the post it points at
+  defp maybe_enable_thread_notifications(epic, author, object_id, ancestors) do
+    case Utils.maybe_apply(
+           Bonfire.Notify.Bells,
+           :enable_thread_notifications_changeset,
+           [author, object_id, ancestors],
+           fallback_return: nil
+         ) do
+      %Changeset{} = changeset ->
+        epic
+        |> Epic.assign(:thread_notifications, changeset)
+        |> Bonfire.Ecto.Acts.Work.add_after(:thread_notifications)
+
+      _ ->
         epic
     end
   end

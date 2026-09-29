@@ -34,7 +34,12 @@ defmodule Bonfire.Social.LivePush do
   def emit_live(activity_or_object, feed_ids, opts \\ [])
 
   def emit_live(%Activity{} = activity, feed_ids, opts) do
-    activity = activity |> with_object(opts[:object]) |> prepare_activity(opts)
+    notified = notified_feed_ids(feed_ids, opts)
+
+    activity =
+      activity
+      |> with_object(opts[:object])
+      |> prepare_activity(Keyword.put(opts, :notify_feeds, notified))
 
     # passed through as given rather than normalised: a subscriber matches on what it subscribed to, which is not always an id (a thread topic, a test topic), and the payload carries the same value back
     has_feed_ids? = is_binary(feed_ids) or (is_list(feed_ids) and feed_ids != [])
@@ -52,12 +57,15 @@ defmodule Bonfire.Social.LivePush do
 
     if Keyword.get(opts, :push_to_thread, true), do: maybe_push_thread(activity)
 
-    case notified_feed_ids(opts) do
+    case notified do
       [] ->
         nil
 
       notified ->
-        increment_counters(notified, Keyword.get(opts, :box, :notifications))
+        # with `bonfire_notify`, its fan-out bumps the counters, only for who can still see it and hasn't seen it (`Bonfire.Notify.FanOut`), as it flashes them: bumping here too counted a post for someone who can't read it
+        if not Bonfire.Common.Extend.module_enabled?(Bonfire.Notify.FanOut),
+          do: increment_counters(notified, Keyword.get(opts, :box, :notifications))
+
         flash_to_subscribers(activity, notified)
     end
 
@@ -128,7 +136,7 @@ defmodule Bonfire.Social.LivePush do
   The same set the feed itself uses, so what a live-rendered activity shows matches what a reload would.
   """
   def prepare_activity(%Activity{} = activity, opts \\ []) do
-    Activities.activity_preloads(activity, live_push_preloads(activity), opts)
+    Activities.activity_preloads(activity, live_push_preloads(activity, opts), opts)
     # resolve subject/creator the same way the feed/read paths do, so a locality-marked
     # `current_user`/`subject_user` (carrying `:peered`) is used — letting the live-rendered
     # activity classify `is_local?` without an on-demand raising preload
@@ -145,12 +153,12 @@ defmodule Bonfire.Social.LivePush do
     |> Map.drop([:activity])
   end
 
-  # which of the published feeds are notifications, in whichever shape the caller has: the map the write path built, a bare list, or `true` for all of them
-  defp notified_feed_ids(opts) do
+  # which of the published feeds are notifications, in whichever shape the caller has: the map the write path built, a bare list, or `true` for all of them (the feed ids `emit_live/3` was given, which never arrive in its opts)
+  defp notified_feed_ids(feed_ids, opts) do
     notify = e(opts, :notify, nil)
 
     cond do
-      notify == true -> e(opts, :feed_ids, [])
+      notify == true -> List.wrap(feed_ids)
       feeds = e(notify, :notify_feeds, nil) || e(opts, :notify_feeds, nil) -> feeds
       is_list(notify) -> notify
       true -> []
@@ -170,7 +178,8 @@ defmodule Bonfire.Social.LivePush do
     end
   end
 
-  defp increment_counters(feed_ids, box) do
+  @doc "Tells whoever has these feeds open that each has one more unseen item: here, or from `Bonfire.Notify.FanOut` for who is still to be told when that extension is installed."
+  def increment_counters(feed_ids, box) do
     Enum.each(feed_ids, fn feed_id ->
       PubSub.broadcast(
         "unseen_count:#{feed_id}",
@@ -179,10 +188,16 @@ defmodule Bonfire.Social.LivePush do
     end)
   end
 
-  defp live_push_preloads(%Activity{object: object}) do
+  defp live_push_preloads(%Activity{object: object}, opts) do
     [:feed_metadata, :feed_postload]
     |> Bonfire.Social.FeedLoader.map_activity_preloads()
+    |> Kernel.++(notification_preloads(opts))
     |> maybe_skip_object_creator(object)
+  end
+
+  # what telling a notification apart needs (`Activities.experienced_as/2`), as the notifications view loads it: the tags, to know who was named, and an ask's edge, to know what was asked. Once per broadcast, for every subscriber, and only when it reaches someone's notifications
+  defp notification_preloads(opts) do
+    if uids(e(opts, :notify_feeds, [])) != [], do: [:tags, :with_request_edge], else: []
   end
 
   defp maybe_skip_object_creator(preloads, object) when is_map(object) do

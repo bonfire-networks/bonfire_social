@@ -46,7 +46,10 @@ defmodule Bonfire.Social.Acts.LivePush do
           pushed = Bonfire.Social.LivePush.emit_live(activity, feeds, notify: notify)
 
           # durable delivery, run here rather than from the write path so that a failure reaches whoever caused it. Only when the write path stood down (`Bonfire.Social.Acts.Activity` with `enqueue_notify: false`), or an activity would be notified twice. This Act is skipped when the epic has errors, so a failed insert never gets this far
-          notified = if epic.assigns[:notify_inline], do: notify_recipients(activity, notify)
+          # the activity, not what this Act is `on` (a post): the fan-out checks who may still see its `object`, and a post has none, so handing it the post notified nobody. `emit_live/3` hands back the object with its prepared activity, whose `object` is the post
+          notified =
+            if epic.assigns[:notify_inline],
+              do: notify_recipients(e(pushed, :activity, nil) || activity, notify)
 
           pushed
           # |> debug("pushed")
@@ -66,7 +69,11 @@ defmodule Bonfire.Social.Acts.LivePush do
       :notify,
       [
         activity,
-        %{feeds: e(notify, :notify_feeds, []), recipients: e(notify, :notify_users, [])}
+        %{
+          feeds: e(notify, :notify_feeds, []),
+          recipients: e(notify, :notify_users, []),
+          wrote_above: e(notify, :wrote_above, [])
+        }
       ],
       fallback_return: :skip
     )

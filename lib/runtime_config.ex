@@ -55,7 +55,10 @@ defmodule Bonfire.Social.RuntimeConfig do
         # replies that do not name you. One that does is a mention (`experienced_as/2` asks that first), which is how Mastodon notifies anyone and so how every reply from there arrives; what is left here is the kind Mastodon would not notify at all. Answering a post and answering something that is not a post are one thing to be told about and two things to render
         extra_replies: %{
           name_pluralized: l("Replies (without mention)"),
-          description: l("Replies to your posts that don't mention you"),
+          description:
+            l(
+              "Replies to your posts and comments that don't mention you, however far down. Replies between people on other servers only arrive if they reach this one"
+            ),
           experiences: [:reply, :respond, :annotate],
           # the key names no verb, so what it selects and its icon are declared rather than inherited
           activity_types: [:reply],
@@ -211,18 +214,32 @@ defmodule Bonfire.Social.RuntimeConfig do
         # `catch_all`: its chip shows what no other chip does, which `Notifications` computes from the chips, so a new chip narrows it by itself. Its switch hides the same, and its chip still shows it while the switch is off
         other: %{
           name_pluralized: l("Other activity"),
-          # its name can't say what it holds, since that is whatever no other row does, so the preferences row shows this beside it. Only what its switches govern: bell replies still follow Replies' until they have an experience of their own
+          # its name can't say what it holds, since that is whatever no other row does, so the preferences row shows this beside it. Only what its switches govern
           description:
             l(
               "Includes new posts from people, groups, and discussions you asked to be notified about, and anything else the other categories don't cover"
             ),
-          experiences: [],
+          # a reply with nothing the reader wrote above it, which reached them because they follow that discussion (`experienced_as/3` knows it where the fan-out says so): the same line the Replies chip's `reply_to_creators` draws
+          experiences: [:thread_reply],
+          phrases: %{thread_reply: l("replied in a discussion you follow")},
           catch_all: true,
-          # what a Mastodon client's list selects this by: a new post from someone the reader asked to hear from is Mastodon's `status`. Without it the Mastodon list never queries this category, so a bell post never reaches a client. A non-post create in here is still typed a mention per row (`GraphQLMasto.Notifications`)
+          # what a Mastodon client's list selects this by: a new post from someone the reader asked to hear from is Mastodon's `status`. Without it the Mastodon list never queries this category, so a bell post never reaches a client
           masto: :status,
           chip: true,
           # row: :unimplemented,
           path_aliases: ["other"]
+        },
+        # what the reader's "Who you hear from" switches keep out of every other view: a view of audiences, not a kind of notification (`audience_view`), so the Mastodon list's exclusions, Other and the preference rows leave it out. Selects nothing when nothing is hidden
+        hidden: %{
+          name_pluralized: l("Hidden"),
+          icon: "ph:eye-slash-duotone",
+          description: l("Notifications from people you chose not to hear from"),
+          audience_view: true,
+          filters: %{},
+          parameterized: %{notification_categories: [:my_hidden_audiences]},
+          experiences: [],
+          row: false,
+          path_aliases: ["hidden"]
         },
         # shows the existing mod queue, whose preset supplies the label, icon, filters, opts and the `instance_permission_required: :mediate` gate that hides this chip from everyone else. Not a row: it is a shared queue, not a kind of notification you get
         flag: %{
@@ -232,7 +249,52 @@ defmodule Bonfire.Social.RuntimeConfig do
           row: false,
           path_aliases: ["flags"]
         }
-      ]
+      ],
+      # Who a person can hide notifications from, in display order. Each is a set of feed filters on who is behind a row, with its reader-relative parts under `parameterized:` (`:my_followed` is their followed circle); hiding one drops the rows it matches, through the same engine as a hidden category, so hiding two keeps what's in neither
+      audiences: [
+        not_followed: %{
+          name: l("People you don't follow"),
+          filters: %{},
+          parameterized: %{exclude_subject_circles: [:my_followed]}
+        },
+        not_following: %{
+          name: l("People who don't follow you"),
+          filters: %{},
+          parameterized: %{exclude_subject_circles: [:my_followers]}
+        },
+        # a private mention is a message, which goes to the inbox rather than here, so one row covers mentions
+        # an account known here for at most this many days: registered, or first seen from another server
+        new_accounts: %{
+          # not "new users": a remote account first seen here last week may be years old on its own server
+          name: l("People new to this server"),
+          description:
+            l(
+              "Less than 30 days since they signed up here or were first seen from another server"
+            ),
+          filters: %{subject_known_since_days: 30}
+        },
+        mentions_not_followed: %{
+          name: l("Mentions from people you don't follow"),
+          filters: %{},
+          parameterized: %{tags: [:me], exclude_subject_circles: [:my_followed]}
+        },
+        # a mention that isn't a reply below something you wrote (a new thread naming you, or someone else's thread), whoever it's from
+        mentions_not_replying: %{
+          name: l("Mentions, unless they're replying to you"),
+          filters: %{},
+          parameterized: %{tags: [:me], exclude_reply_to_creators: [:me]}
+        }
+      ],
+      # What a Mastodon client calls the experiences no category claims, read by `Notifications.masto_type_for/1` after the categories' `masto:`, so the list, push and streaming name them alike
+      masto_unclaimed: %{
+        # something created that reached you without naming you (one naming you is already a `:mention`) and with no written content: a `status`, like a post that doesn't name you, since Mastodon's `mention` means you were named
+        create: :status,
+        # a post that reached you without naming you, which is what a bell on a person or group brings: Mastodon's `status`, what it sends for an account you turned notifications on for
+        write: :status,
+        # an admin broadcast is a post, and `status` means "a new post you asked to hear about"
+        broadcast: :status,
+        edit: :update
+      }
 
     # `l/1` here marks these for extraction, but `config/0` runs once at boot under the default
     # locale, so the stored value is effectively the untranslated msgid. The actual per-request

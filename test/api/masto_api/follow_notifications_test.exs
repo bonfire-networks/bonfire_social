@@ -16,17 +16,42 @@ defmodule Bonfire.Social.API.FollowNotificationsTest do
      author_conn: masto_api_conn(conn, user: author, account: author_account)}
   end
 
-  test "rejects author-post notifications without creating or changing a follow", c do
+  # was "rejects author-post notifications without creating or changing a follow", from before notifications of someone's posts existed (`Bonfire.Notify.Bells`)
+  test "following with notify turns on notifications of their posts, and reports it", c do
     path = "/api/v1/accounts/#{c.author.id}/follow"
 
     for notify <- [true, "true", "1", 1] do
-      error = c.conn |> post(path, %{"notify" => notify}) |> json_response(422)
-      assert error["error"] == "Notifications for every post by an author are not supported"
-      refute Bonfire.Social.Graph.Follows.following?(c.follower, c.author)
+      result = c.conn |> post(path, %{"notify" => notify}) |> json_response(200)
+      assert result["following"]
+      assert result["notifying"] == true
     end
 
-    assert (c.conn |> post(path, %{}) |> json_response(200))["following"]
-    c.conn |> post(path, %{"notify" => true}) |> response(422)
+    assert Bonfire.Notify.Bells.enabled?(c.follower, c.author)
+
+    [relationship] =
+      c.conn |> get("/api/v1/accounts/relationships?id[]=#{c.author.id}") |> json_response(200)
+
+    assert relationship["notifying"] == true
+
+    # and their next post reaches the follower's notifications, as a `status`
+    post = publish(c.author_conn, "public")
+
+    assert Enum.any?(
+             notifications(c.conn),
+             &(&1["type"] == "status" and get_in(&1, ["status", "id"]) == post["id"])
+           )
+  end
+
+  test "notify false turns them off again, and leaving it out leaves them as they were", c do
+    path = "/api/v1/accounts/#{c.author.id}/follow"
+
+    assert (c.conn |> post(path, %{"notify" => true}) |> json_response(200))["notifying"]
+    assert (c.conn |> post(path, %{}) |> json_response(200))["notifying"] == true
+
+    assert (c.conn |> post(path, %{"notify" => false}) |> json_response(200))["notifying"] ==
+             false
+
+    refute Bonfire.Notify.Bells.enabled?(c.follower, c.author)
     assert Bonfire.Social.Graph.Follows.following?(c.follower, c.author)
   end
 

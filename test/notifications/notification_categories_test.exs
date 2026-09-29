@@ -43,8 +43,11 @@ defmodule Bonfire.Social.NotificationCategoriesTest do
     assert Notifications.experiences_for(:extra_replies) == [:reply, :respond, :annotate]
     assert Notifications.experiences_for(:react) == [:like, :react]
     assert Notifications.experiences_for(:boost) == [:boost]
-    # claims nothing, so nothing resolves to it by experience
-    assert Notifications.experiences_for(:other) == []
+
+    # claims only a reply with nothing the reader wrote above it, which reached them by following that discussion; anything else lands here by claiming nothing
+    assert Notifications.experiences_for(:other) == [:thread_reply]
+    # and Latest claims nothing, so nothing resolves to it by experience
+    assert Notifications.experiences_for(:latest) == []
   end
 
   test "an experience resolves to the category that declares it, and to nothing otherwise" do

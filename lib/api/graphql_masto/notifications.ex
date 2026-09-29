@@ -226,8 +226,10 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       |> Enum.map(fn {key, _category} -> key end)
       # only kinds with a condition of their own: Latest has none, and excluding it would exclude every row
       |> Enum.filter(
+        # the Hidden chip is a view of who is behind rows, not a kind, and a Mastodon client gets everything regardless
         &(Bonfire.Social.Notifications.masto_types_of(&1) == [] and
-            Bonfire.Social.Notifications.own_condition?(&1))
+            Bonfire.Social.Notifications.own_condition?(&1) and
+            not Bonfire.Social.Notifications.audience_view?(&1))
       )
     end
 
@@ -305,17 +307,10 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
     # A post reaches the notifications feed by naming the reader (a `:mention`), answering them (a `:reply`), or without doing either: through a bell on its author or group, or addressed to a circle they're in. That last kind is Mastodon's `status`, "a new post you asked to hear about"
     defp candidate_type(activity, current_user, mentions) do
-      case Activities.experienced_as(atom_keyed(activity, mentions), current_user) do
-        :write ->
-          :status
-
-        # something created that isn't a post, and reached this feed by being addressed to them
-        :create ->
-          :mention
-
-        experience ->
-          Bonfire.Social.Notifications.masto_type_for(experience)
-      end
+      # `:write` and `:create`, which no category claims, are named by the `masto_unclaimed` config beside the categories, which push and streaming read too
+      atom_keyed(activity, mentions)
+      |> Activities.experienced_as(current_user)
+      |> Bonfire.Social.Notifications.masto_type_for()
     end
 
     # This pipeline passes activities around as maps that can be keyed by string, which `Activities.experienced_as/2` cannot read: it is built on `e/3`, which only sees atom keys and would answer `nil` for every row. So the few fields it reads are lifted through the same accessor everything else here uses.

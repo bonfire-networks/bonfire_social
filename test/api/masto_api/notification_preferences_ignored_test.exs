@@ -38,6 +38,13 @@ defmodule Bonfire.Social.API.NotificationPreferencesIgnoredTest do
     assert [%{"type" => "reblog"}] = conn |> get("/api/v1/notifications") |> json_response(200)
   end
 
+  # who you hear from is Bonfire's too: the boost is from someone the user doesn't follow, and a Mastodon client still gets it
+  test "an audience hidden in Bonfire still reaches a Mastodon client", %{conn: conn, user: user} do
+    Settings.put(Notifications.audience_key(:not_followed), :hide, current_user: user)
+
+    assert [%{"type" => "reblog"}] = conn |> get("/api/v1/notifications") |> json_response(200)
+  end
+
   test "the client's own exclude_types still works", %{conn: conn} do
     assert [] =
              conn

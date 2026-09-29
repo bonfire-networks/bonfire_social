@@ -228,12 +228,13 @@ defmodule Bonfire.Social.Feeds do
     own_notifications = feed_id(:notifications, creator)
 
     # the people, where we resolved them: notifying is done per person, so passing them on saves turning their feed ids back into them later. Empty when the caller precomputed feeds, or for the circle path below, and then whoever notifies resolves the feeds instead
-    notify_users =
+    {notify_users, wrote_above} =
       if opts[:notify_feeds],
-        do: List.wrap(opts[:notify_users]),
+        do: {List.wrap(opts[:notify_users]), List.wrap(opts[:wrote_above])},
         else:
-          users_to_notify_of_this(creator, boundary, mentions, reply_to_creator, [],
-            thread_id: thread_id
+          users_and_wrote_above(creator, boundary, mentions, reply_to_creator, [],
+            thread_id: thread_id,
+            ancestors: opts[:ancestors]
           )
 
     notifications =
@@ -264,14 +265,19 @@ defmodule Bonfire.Social.Feeds do
       |> flatten_feed_ids(own_notifications)
       |> debug("fan-out feed ids")
 
-    %{all: all, notifications: notifications, notify_users: notify_users}
+    %{
+      all: all,
+      notifications: notifications,
+      notify_users: notify_users,
+      wrote_above: wrote_above
+    }
   end
 
   defp flatten_feed_ids(lists, own_notifications) do
     lists
     |> List.flatten()
     |> Enum.uniq()
-    # avoid self-notifying (do_target_feeds did this explicitly; the Act relied on filter_reply_and_or_mentions)
+    # avoid self-notifying (do_target_feeds did this explicitly; the Act relies on `mentioned_others/2` and `Bells.subscribers/2` leaving the author out)
     |> Enum.reject(&(&1 == own_notifications))
     |> Enums.filter_empty([])
   end
@@ -409,38 +415,58 @@ defmodule Bonfire.Social.Feeds do
         to_circles \\ [],
         opts \\ []
       ) do
+    {users, _wrote_above} =
+      users_and_wrote_above(me, boundary, mentions, reply_to_creator, to_circles, opts)
+
+    users
+  end
+
+  # the users to notify, and, of those following the discussion, the ids of the ones who wrote the post they follow it by: what tells a reply below something they wrote from one in a discussion they only follow (`Activities.experienced_as/3`'s `wrote_above:`), known from the query that found them
+  defp users_and_wrote_above(me, boundary, mentions, reply_to_creator, to_circles, opts) do
     named =
-      filter_reply_and_or_mentions(me, reply_to_creator, mentions)
+      mentioned_others(me, mentions)
       |> debug("filtered")
       |> within_boundary(boundary, to_circles)
 
-    # not through the custom-boundary rule above, which keeps only those named in `to_circles` and so would drop every subscriber of a post with its own boundaries (a group's posts, for one). Whether a subscriber may read the post is checked at delivery and when their feed is read, as for anyone
-    bells =
-      bell_subscribers(me, boundary, reply_to_creator, opts)
-      |> within_boundary(if(boundary == "local", do: "local", else: "public"), [])
+    {subscribers, wrote_above} = bell_subscribers(me, boundary, reply_to_creator, opts)
 
-    (named ++ bells)
-    # someone both mentioned and with a bell on the author is one person to notify
-    |> Enum.uniq_by(&id/1)
-    |> debug("users to notify")
+    # not through the custom-boundary rule above, which keeps only those named in `to_circles` and so would drop every subscriber of a post with its own boundaries (a group's posts, for one). Whether a subscriber may read the post is checked at delivery and when their feed is read, as for anyone
+    bells = within_boundary(subscribers, if(boundary == "local", do: "local", else: "public"), [])
+
+    users =
+      (named ++ bells)
+      # someone both mentioned and with a bell on the author is one person to notify
+      |> Enum.uniq_by(&id/1)
+      |> debug("users to notify")
+
+    {users, wrote_above}
   end
 
-  # whoever enabled a bell on the author or a group the post is in, for a new post, or on the thread, for a reply: a bell on a person or group covers new posts, not replies, which belong to the threads they are in. Not for a post only its mentions may read, since the boundary filter lets everyone it is given through for those, and a subscriber was not mentioned
-  defp bell_subscribers(_me, "mentions", _reply_to_creator, _opts), do: []
+  # whoever enabled a bell on the author or a group the post is in, for a new post, or on any post above a reply: a bell on a person or group covers new posts, not replies, which belong to the threads they are in, and a bell on a post covers the replies below it, however deep (the thread's first post is the top of every path, so a thread bell covers the whole thread). The author of the post being answered is here too, through the bell their post rang when they wrote it. Not for a post only its mentions may read, since the boundary filter lets everyone it is given through for those, and a subscriber was not mentioned
+  # Returns `{subscribers, wrote_above_ids}`, the ids only for a reply
+  defp bell_subscribers(_me, "mentions", _reply_to_creator, _opts), do: {[], []}
 
   defp bell_subscribers(me, _boundary, nil = _reply_to_creator, opts),
-    do: bell_subscribers_of([me | List.wrap(opts[:in])], me)
+    do: {bell_subscribers_of([me | List.wrap(opts[:in])], me), []}
 
   defp bell_subscribers(me, _boundary, _reply_to_creator, opts) do
-    case opts[:thread_id] do
-      nil -> []
-      thread_id -> bell_subscribers_of([thread_id], me)
+    case Enums.filter_empty(List.wrap(opts[:ancestors]) ++ List.wrap(opts[:thread_id]), []) do
+      [] ->
+        {[], []}
+
+      object_ids ->
+        with_authorship = bell_subscribers_of(Enum.uniq(object_ids), me, authorship: true)
+
+        {Enum.map(with_authorship, &elem(&1, 0)),
+         for({subscriber, true} <- with_authorship, do: id(subscriber))}
     end
   end
 
-  defp bell_subscribers_of(object_ids, author),
+  defp bell_subscribers_of(object_ids, author, opts \\ []),
     do:
-      maybe_apply(Bonfire.Notify.Bells, :subscribers, [object_ids, author], fallback_return: [])
+      maybe_apply(Bonfire.Notify.Bells, :subscribers, [object_ids, author, opts],
+        fallback_return: []
+      )
       |> List.wrap()
 
   def to_notify_of_this(
@@ -451,23 +477,27 @@ defmodule Bonfire.Social.Feeds do
         to_circles \\ [],
         opts \\ []
       ) do
-    users =
-      users_to_notify_of_this(me, boundary, mentions, reply_to_creator, to_circles, opts)
+    {users, wrote_above} =
+      users_and_wrote_above(me, boundary, mentions, reply_to_creator, to_circles, opts)
 
     %{
       # kept as well as their feeds, so whoever notifies them doesn't have to look them up again
       notify_users: users,
-      notify_feeds: notify_feeds(users)
+      notify_feeds: notify_feeds(users),
+      # carried to the fan-out, which reads each recipient's experience with it
+      wrote_above: wrote_above
       # nothing reads it, and it cost a settings read and an account preload per notified user on every post. The email preference will be read by `Bonfire.Notify.Preferences.enabled?/3` on the `:email` channel, when there is an email channel
       # notify_emails: notify_emails(users)
     }
     |> debug("to notify")
   end
 
-  defp filter_reply_and_or_mentions(me, reply_to_creator, mentions) do
+  # whoever the post names, but its author. The author of the post being answered used to be added here too, and is now notified through their bell on it (`bell_subscribers/4`), which they can turn off for that post
+  defp mentioned_others(me, mentions) do
     my_id = Enums.id(me)
 
-    ([reply_to_creator] ++ mentions)
+    # ([reply_to_creator] ++ mentions)
+    mentions
     # avoid self-notifying
     |> Enum.reject(&(Enums.id(&1) == my_id))
   end
@@ -578,7 +608,7 @@ defmodule Bonfire.Social.Feeds do
       mentions,
       reply_to_creator,
       thread_id,
-      opts
+      with_ancestors(opts, e(changeset, :changes, :replied, :changes, :path, nil))
     )
   end
 
@@ -605,9 +635,15 @@ defmodule Bonfire.Social.Feeds do
       tags,
       reply_to_creator,
       thread_id,
-      opts
+      with_ancestors(opts, e(object, :replied, :path, nil))
     )
   end
+
+  # the posts above a reply, from the thread's first post to the one it answers, whose bells cover it (`bell_subscribers/4`)
+  defp with_ancestors(opts, path) when is_list(opts) and is_list(path) and path != [],
+    do: Keyword.put_new(opts, :ancestors, path)
+
+  defp with_ancestors(opts, _), do: opts
 
   def target_feeds_classified({_, %{} = object}, creator, opts),
     do: target_feeds_classified(object, creator, opts)

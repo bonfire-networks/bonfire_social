@@ -56,27 +56,57 @@ defmodule Bonfire.Social.NotificationCategoriesEquivalenceTest do
         }
       )
 
+    # below something I wrote, further down than a direct reply
+    {:ok, nested_below_mine} =
+      Posts.publish(
+        current_user: bystander,
+        boundary: "public",
+        post_attrs: %{
+          post_content: %{html_body: "answering the reply to my post"},
+          reply_to_id: id(reply_naming_somebody_else)
+        }
+      )
+
+    # in a thread I follow, with nothing I wrote above it
+    their_post = fake_post!(other, "public", %{post_content: %{html_body: "their thread"}})
+    {:ok, _} = Bonfire.Notify.Bells.enable(me, their_post)
+
+    {:ok, in_followed_thread} =
+      Posts.publish(
+        current_user: bystander,
+        boundary: "public",
+        post_attrs: %{
+          post_content: %{html_body: "answering their thread"},
+          reply_to_id: id(their_post)
+        }
+      )
+
     {:ok, like} = Likes.like(other, my_post)
     {:ok, boost} = Boosts.boost(other, my_post)
     {:ok, follow} = Follows.follow(other, me)
 
-    {:ok,
-     me: me,
-     kinds: %{
-       post_naming_me: naming_me,
-       reply_naming_me: reply_naming_me,
-       reply_naming_somebody_else: reply_naming_somebody_else,
-       like: like,
-       boost: boost,
-       follow: follow
-     }}
+    {
+      :ok,
+      # apart from `kinds`: which side of the line it's on depends on who wrote what above it, which the fan-out tells `experienced_as/3` and a bare call can't know
+      me: me,
+      in_followed_thread: in_followed_thread,
+      kinds: %{
+        post_naming_me: naming_me,
+        reply_naming_me: reply_naming_me,
+        reply_naming_somebody_else: reply_naming_somebody_else,
+        nested_below_mine: nested_below_mine,
+        like: like,
+        boost: boost,
+        follow: follow
+      }
+    }
   end
 
   # the in-memory side, as fan-out asks it, from an activity loaded with what `experienced_as/2` reads
-  defp push_category(thing, reader) do
+  defp push_category(thing, reader, opts \\ []) do
     thing.activity
     |> repo().maybe_preload([:verb, :replied, :tags, :object, :edge])
-    |> Activities.experienced_as(reader)
+    |> Activities.experienced_as(reader, opts)
     |> Notifications.category_for()
   end
 
@@ -113,6 +143,17 @@ defmodule Bonfire.Social.NotificationCategoriesEquivalenceTest do
     # spelled out because this is the line most likely to be moved on one side only
     assert push_category(kinds.reply_naming_me, me) == :mention
     assert push_category(kinds.reply_naming_somebody_else, me) == :extra_replies
+  end
+
+  # a reply below something you wrote is Replies however deep, and one with nothing you wrote above it came from following that thread, which Other holds, on both sides
+  # `wrote_above:` as the fan-out passes it: whether the post the reader's notifications are on is one they wrote
+  test "a reply is Replies when something you wrote is above it, and Other when you only follow the thread",
+       %{me: me, kinds: kinds, in_followed_thread: in_followed_thread} do
+    assert push_category(kinds.nested_below_mine, me, wrote_above: true) == :extra_replies
+    assert query_categories(kinds.nested_below_mine, me) == [:extra_replies]
+
+    assert push_category(in_followed_thread, me, wrote_above: false) == :other
+    assert query_categories(in_followed_thread, me) == [:other]
   end
 
   # both kinds of ask are one `:request` verb, so the query side cannot tell them apart while the in-memory side reads the edge. Both land in the one Requests category until a filter can read what the edge asked for, and then this is where the two sides have to agree on separate ones

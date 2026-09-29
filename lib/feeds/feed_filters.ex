@@ -43,6 +43,9 @@ defmodule Bonfire.Social.FeedFilters do
     field :notification_categories, AtomOrStringList
     field :exclude_notification_categories, AtomOrStringList
 
+    # rows whose subject has been known here for at most this many days: its id dates from when it was first stored, so registration for a local account and first sight for a remote one
+    field :subject_known_since_days, :integer
+
     # asks by where they stand. A list, since statuses combine; `:pending` also keeps what is not an ask, which has no request row, so it can quiet a mixed feed as well as narrow a list of asks
     field :request_status, {:array, Ecto.Enum}, values: [:pending, :accepted, :ignored]
 
