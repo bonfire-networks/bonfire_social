@@ -204,11 +204,19 @@ defmodule Bonfire.Social.Tags do
 
     cond do
       is_nil(inbox_id) ->
-        debug("skip boosting, because not a character")
+        # TEMP probe for CI (was debug)
+        warn(
+          {Map.get(category, :__struct__), id(category), e(category, :character, nil)},
+          "DEBUG skip boosting, because not a character"
+        )
 
       # a remote group relays its own posts: its `Announce` is the boost, and one we made in its name would make that real one look like a duplicate
       not Bonfire.Social.is_local?(category) ->
-        debug("skip boosting, because the group is remote and boosts for itself")
+        # TEMP probe for CI (was debug)
+        warn(
+          {id(category), e(category, :character, :peered, nil)},
+          "DEBUG skip boosting, because the group is remote and boosts for itself"
+        )
 
       true ->
         do_auto_boost(category, object, inbox_id, opts)
