@@ -96,6 +96,7 @@ defmodule Bonfire.Social.Tags do
         {id(creator), id(category)},
         "no tag permission on this category, so the post is not put in it or boosted there"
       )
+
       nil
     end
   end
@@ -110,6 +111,7 @@ defmodule Bonfire.Social.Tags do
         {id(creator), id(category)},
         "no tag permission on this category, so the post is not put in it or boosted there"
       )
+
       nil
     end
   end

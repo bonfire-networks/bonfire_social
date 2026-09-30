@@ -146,6 +146,13 @@ defmodule Bonfire.Social.Acts.Threaded do
         |> put_replied(thread_id, nil, thread_title)
         |> maybe_put_name(thread_title)
         |> Epic.assign(epic, on, ...)
+        # a post placed in a thread without replying to anything is a reply to its opening post, just not marked as one, so its audience follows that post like a reply's follows its parent. Kept apart from `:reply_to` so that nothing else (eg. notifications) treats it as a marked reply
+        |> then(fn epic ->
+          case custom_thread do
+            {:ok, %{} = context_thread} -> Epic.assign(epic, :context_thread, context_thread)
+            _ -> epic
+          end
+        end)
     end
   end
 
