@@ -443,7 +443,9 @@ defmodule Bonfire.Social.Boosts do
                  boosted,
                  "Not federating this boost: what was boosted has no AP object linked to it"
                )
-           end) do
+           end),
+         # an object not addressed to Public (eg. a post in a group that doesn't federate, capped to `nonfederated`, yet with an AP object addressed to the group) can't be announced (`ActivityPub.announce/2` checks the same): the boost stays local, which isn't an error
+         true <- ActivityPub.Utils.public?(object.data) do
       # the BOOST's id: it is what the announce points back at, and what dates it
       id = Enums.id(boost)
 
@@ -458,6 +460,10 @@ defmodule Bonfire.Social.Boosts do
     else
       # a miss here silently drops the whole Announce, which is indistinguishable from federation being switched off, so it says so rather than passing quietly. Which of the two was missing is said by whichever lookup failed, not guessed at here
       {:error, :not_found} ->
+        :ignore
+
+      false ->
+        debug(boosted, "Not federating this boost: what was boosted isn't public")
         :ignore
 
       e ->

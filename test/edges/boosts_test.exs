@@ -33,6 +33,39 @@ defmodule Bonfire.Social.BoostsTest do
     assert true == Boosts.boosted?(me, boosted)
   end
 
+  # a post that doesn't federate (eg. `local`) can still be boosted locally: there's no Announce to send for it, which isn't an error
+  test "can boost a post that doesn't federate, without announcing it" do
+    author = Fake.fake_user!()
+    booster = Fake.fake_user!()
+
+    {:ok, post} =
+      Posts.publish(
+        current_user: author,
+        post_attrs: %{post_content: %{html_body: "<p>for users of this instance</p>"}},
+        boundary: "local"
+      )
+
+    refute Bonfire.Boundaries.object_public?(post), "control: it doesn't federate"
+    assert {:ok, boost} = Boosts.boost(booster, post)
+    assert boost.edge.object_id == post.id
+    assert {:error, :not_found} = ActivityPub.Object.get_cached(pointer: boost), "not announced"
+  end
+
+  test "control: boosting a public post announces it" do
+    author = Fake.fake_user!()
+    booster = Fake.fake_user!()
+
+    {:ok, post} =
+      Posts.publish(
+        current_user: author,
+        post_attrs: %{post_content: %{html_body: "<p>for everyone</p>"}},
+        boundary: "public"
+      )
+
+    assert {:ok, boost} = Boosts.boost(booster, post)
+    assert {:ok, _announce} = ActivityPub.Object.get_cached(pointer: boost), "announced"
+  end
+
   test "cannot boost something repeatedly in too short a time" do
     me = Fake.fake_user!()
 
