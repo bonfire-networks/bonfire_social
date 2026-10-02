@@ -87,11 +87,10 @@ defmodule Bonfire.Social.PostContentsHardbreaksTest do
     assert body =~ "roses\\\nviolets"
   end
 
-  @tag :todo
   test "a backslash line inside an indented code block is left alone" do
     me = fake_user!()
 
-    # KNOWN GAP: the normalisation is not code-block aware, so it deletes the `\` line and the resulting unindented blank line splits one indented code block into two. Same limitation exists client-side in `serializeMarkdownForSubmit`.
+    # code is masked during input processing (`Text.mask_markdown_code/1`), so the normalisation never sees it
     body = prepared_body("    code\n    \\\n    more", me)
 
     assert body =~ "    code\n    \\\n    more"

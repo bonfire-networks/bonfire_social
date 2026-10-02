@@ -191,7 +191,8 @@ defmodule Bonfire.Social.PostContents do
             text: html_body,
             mentions: mentions1,
             hashtags: hashtags1,
-            urls: urls1
+            urls: urls1,
+            unmask_code: unmask_html_body
           }} <-
            process_local_input(
              :html_body,
@@ -201,14 +202,22 @@ defmodule Bonfire.Social.PostContents do
              output_format,
              opts
            ),
-         {:ok, %{text: name, mentions: mentions2, hashtags: hashtags2, urls: urls2}} <-
+         {:ok,
+          %{
+            text: name,
+            mentions: mentions2,
+            hashtags: hashtags2,
+            urls: urls2,
+            unmask_code: unmask_name
+          }} <-
            process_local_input(:name, creator, attrs, do_not_strip_html?, output_format, opts),
          {:ok,
           %{
             text: summary,
             mentions: mentions3,
             hashtags: hashtags3,
-            urls: urls3
+            urls: urls3,
+            unmask_code: unmask_summary
           }} <-
            process_local_input(:summary, creator, attrs, do_not_strip_html?, output_format, opts) do
       # little easter egg to test error handling
@@ -218,9 +227,13 @@ defmodule Bonfire.Social.PostContents do
       merge_with_body_or_nil(
         attrs,
         %{
-          name: prepare_text(name, creator, opts ++ [do_not_strip_html: true]),
-          summary: prepare_text(summary, creator, opts ++ [do_not_strip_html: true]),
-          html_body: prepare_text(html_body, creator, opts ++ [do_not_strip_html: true]),
+          name: prepare_text(name, creator, opts ++ [do_not_strip_html: true]) |> unmask_name.(),
+          summary:
+            prepare_text(summary, creator, opts ++ [do_not_strip_html: true])
+            |> unmask_summary.(),
+          html_body:
+            prepare_text(html_body, creator, opts ++ [do_not_strip_html: true])
+            |> unmask_html_body.(),
           mentions: e(attrs, :mentions, []) ++ mentions1 ++ mentions2 ++ mentions3,
           hashtags: e(attrs, :hashtags, []) ++ hashtags1 ++ hashtags2 ++ hashtags3,
           urls: urls1 ++ urls2 ++ urls3,
@@ -236,9 +249,19 @@ defmodule Bonfire.Social.PostContents do
   end
 
   defp process_local_input(field, creator, attrs, do_not_strip_html?, output_format, opts) do
-    get_attr(attrs, field)
+    # code in markdown is swapped for tokens until `prepare_text/3` is done, so no processing meant for prose can alter it
+    {text, unmask_code} =
+      if (output_format || editor_output_content_type(creator)) == :markdown,
+        do: Text.mask_markdown_code(get_attr(attrs, field)),
+        else: {get_attr(attrs, field), & &1}
+
+    text
     |> normalise_input(do_not_strip_html?, output_format)
     |> then(&Bonfire.Social.Tags.maybe_process(creator, &1, opts))
+    |> case do
+      {:ok, processed} -> {:ok, Map.put(processed, :unmask_code, unmask_code)}
+      other -> other
+    end
     |> debug("processed local input")
   end
 
