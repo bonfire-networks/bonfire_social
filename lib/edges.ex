@@ -228,13 +228,26 @@ defmodule Bonfire.Social.Edges do
       when is_atom(type_of_edge_schema) and not is_nil(type_of_edge_schema) do
     # NOTE: type_of_edge_schema has to be a Pointable Ecto Schema
 
-    put_edge_assoc(changeset, Bonfire.Common.Types.table_id(type_of_edge_schema), subject, object)
-    |> Ecto.Changeset.unique_constraint([:subject_id, :object_id, :table_id],
-      name: "bonfire_data_edges_edge_#{type_of_edge_schema.__schema__(:source)}_unique_index"
+    unique_index = "bonfire_data_edges_edge_#{type_of_edge_schema.__schema__(:source)}_unique_index"
+
+    # the constraint goes on the edge's own changeset, since that's the insert a duplicate violates: on the parent it never matches, and Ecto raises instead of returning an error
+    put_edge_assoc(
+      changeset,
+      Bonfire.Common.Types.table_id(type_of_edge_schema),
+      subject,
+      object,
+      &(Edge.changeset(&1, &2)
+        |> Ecto.Changeset.unique_constraint([:subject_id, :object_id, :table_id],
+          name: unique_index
+        ))
     )
   end
 
-  def put_edge_assoc(changeset, type_id, subject, object) when is_binary(type_id) do
+  def put_edge_assoc(changeset, type_id, subject, object) when is_binary(type_id),
+    do: put_edge_assoc(changeset, type_id, subject, object, &Edge.changeset/2)
+
+  def put_edge_assoc(changeset, type_id, subject, object, edge_changeset)
+      when is_binary(type_id) do
     %{
       # subject: subject,
       subject_id: uid(subject),
@@ -246,7 +259,7 @@ defmodule Bonfire.Social.Edges do
     |> debug()
     # |> Changesets.put_assoc(changeset, :edge, ...)
     |> Ecto.Changeset.cast(changeset, %{edge: ...}, [])
-    |> Ecto.Changeset.cast_assoc(:edge, with: &Edge.changeset/2)
+    |> Ecto.Changeset.cast_assoc(:edge, with: edge_changeset)
     |> debug()
   end
 
