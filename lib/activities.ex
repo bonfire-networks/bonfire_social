@@ -740,13 +740,12 @@ defmodule Bonfire.Social.Activities do
           #   |> debug()
           # end
 
+          # `creator` is through the `created` mixin on most objects, and a field of its own on those without it (eg. `Media`); Ecto applies the custom loader to the last link of a through chain, so this is `created: [creator: …]` for a post
           [
             object: [
-              created: [
-                creator:
-                  {repo().reject_preload_ids(skip_loading_user_ids),
-                   [character: [:peered], profile: :icon]}
-              ]
+              creator:
+                {repo().reject_preload_ids(skip_loading_user_ids),
+                 [character: [:peered], profile: :icon]}
             ]
           ]
 

@@ -228,7 +228,8 @@ defmodule Bonfire.Social.Edges do
       when is_atom(type_of_edge_schema) and not is_nil(type_of_edge_schema) do
     # NOTE: type_of_edge_schema has to be a Pointable Ecto Schema
 
-    unique_index = "bonfire_data_edges_edge_#{type_of_edge_schema.__schema__(:source)}_unique_index"
+    unique_index =
+      "bonfire_data_edges_edge_#{type_of_edge_schema.__schema__(:source)}_unique_index"
 
     # the constraint goes on the edge's own changeset, since that's the insert a duplicate violates: on the parent it never matches, and Ecto raises instead of returning an error
     put_edge_assoc(

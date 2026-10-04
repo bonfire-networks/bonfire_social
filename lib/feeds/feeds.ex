@@ -439,15 +439,6 @@ defmodule Bonfire.Social.Feeds do
       |> Enum.uniq_by(&id/1)
       |> debug("users to notify")
 
-    # TEMP probe
-    warn(
-      {Enums.id(me), boundary, Enum.map(List.wrap(mentions), &Enums.id/1),
-       Enums.id(reply_to_creator), to_circles,
-       Keyword.take(List.wrap(opts), [:thread_id, :ancestors, :in]), Enum.map(named, &id/1),
-       Enum.map(subscribers, &id/1), Enum.map(users, &id/1)},
-      "DEBUG users_and_wrote_above {me, boundary, mentions, reply_to_creator, to_circles, opts, named, bell subscribers, => users}"
-    )
-
     {users, wrote_above}
   end
 
@@ -488,13 +479,6 @@ defmodule Bonfire.Social.Feeds do
       ) do
     {users, wrote_above} =
       users_and_wrote_above(me, boundary, mentions, reply_to_creator, to_circles, opts)
-
-    # TEMP probe
-    warn(
-      {Enum.map(users, &{id(&1), e(&1, :character, :notifications_id, :no_character_loaded)}),
-       notify_feeds(users)},
-      "DEBUG to_notify_of_this {users with their notifications feed, => notify_feeds}"
-    )
 
     %{
       # kept as well as their feeds, so whoever notifies them doesn't have to look them up again
