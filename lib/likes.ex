@@ -281,7 +281,7 @@ defmodule Bonfire.Social.Likes do
   """
   def unlike(liker, object, opts \\ [])
 
-  def unlike(%{} = liker, %{} = liked, _opts) do
+  def unlike(%{} = liker, %{} = liked, opts) do
     # loaded before it goes, since federating its undo reads who liked what off its edge
     like =
       with {:ok, like} <- get(liker, liked, skip_boundary_check: true),
@@ -293,7 +293,9 @@ defmodule Bonfire.Social.Likes do
     # Note: the like count is automatically decremented by DB triggers
     with {:ok, _} = deleted <- Activities.delete_by_subject_verb_object(liker, :like, liked) do
       # servers the like reached keep counting it until told, by an `Undo{Like}`
-      if match?(%Like{}, like), do: Social.maybe_federate(liker, :delete, like)
+      if match?(%Like{}, like) and !opts[:skip_federation],
+        do: Social.maybe_federate(liker, :delete, like)
+
       deleted
     end
   end
@@ -572,7 +574,8 @@ defmodule Bonfire.Social.Likes do
              current_user: liker,
              verbs: [:like]
            ) do
-      unlike(liker, pointable, skip_boundary_check: true)
+      # the `Undo` being applied IS the federated one (from another server, or posted by a local actor through C2S), so applying it sends nothing more
+      unlike(liker, pointable, skip_boundary_check: true, skip_federation: true)
     end
   end
 end

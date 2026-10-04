@@ -257,7 +257,7 @@ defmodule Bonfire.Social.Boosts do
   """
   def unboost(booster, boosted, opts \\ [])
 
-  def unboost(booster, %{} = boosted, _opts) do
+  def unboost(booster, %{} = boosted, opts) do
     # loaded before it goes, since federating its undo reads who boosted what off its edge
     boost =
       with {:ok, boost} <- get(booster, boosted, skip_boundary_check: true),
@@ -268,7 +268,9 @@ defmodule Bonfire.Social.Boosts do
     # delete the boost activity & feed entries
     with {:ok, _} = deleted <- Activities.delete_by_subject_verb_object(booster, :boost, boosted) do
       # servers the boost reached keep showing it until told, by an `Undo{Announce}`
-      if match?(%Boost{}, boost), do: Social.maybe_federate(booster, :delete, boost)
+      if match?(%Boost{}, boost) and !opts[:skip_federation],
+        do: Social.maybe_federate(booster, :delete, boost)
+
       deleted
     end
   end
@@ -518,7 +520,8 @@ defmodule Bonfire.Social.Boosts do
              :return_pointable,
              [object, [current_user: creator, verbs: [:boost]]]
            ) do
-      unboost(creator, pointable, skip_boundary_check: true)
+      # the `Undo` being applied IS the federated one (from another server, or posted by a local actor through C2S), so applying it sends nothing more
+      unboost(creator, pointable, skip_boundary_check: true, skip_federation: true)
     end
   end
 end

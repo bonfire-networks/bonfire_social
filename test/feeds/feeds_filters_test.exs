@@ -254,36 +254,43 @@ defmodule Bonfire.Social.FeedsFiltersTest do
         user: user,
         post: post,
         malformed_id: "not@valid#id",
-        valid_feed_id: Feeds.named_feed_id(:local),
+        # the author's outbox, which holds the post (so scoping by it has something to find)
+        valid_feed_id: Feeds.feed_id(:outbox, user),
         unfiltered_feed: FeedLoader.feed(:custom, %{}, current_user: user) |> fas()
       }
     end
 
     defp fas(%{edges: edges}), do: Enum.map(edges, & &1.activity)
 
-    test "handles non-feed UIDs", %{user: user, post: post, unfiltered_feed: unfiltered_feed} do
-      feed = FeedLoader.feed(:custom, %{feed_ids: [post.id]}, current_user: user)
-      assert FeedLoader.feed_contains?(feed, post, current_user: user)
-      assert feed |> fas() == unfiltered_feed
-    end
-
-    test "handles mixed valid non-feed UID and malformed IDs", %{
+    # any pointer can be a feed (`FeedPublish.feed` references `Pointer`), so a UID that isn't a `Feed` still scopes the query, to whatever was published to it
+    test "scopes by a UID that is not a Feed", %{
       user: user,
       post: post,
-      malformed_id: malformed_id,
       unfiltered_feed: unfiltered_feed
     } do
-      feed = FeedLoader.feed(:custom, %{feed_ids: [post.id, malformed_id]}, current_user: user)
-      assert FeedLoader.feed_contains?(feed, post, current_user: user)
-      assert feed |> fas() == unfiltered_feed
+      assert Enum.any?(unfiltered_feed, &(&1.object_id == post.id)),
+             "the post should be in the unscoped feed"
+
+      feed = FeedLoader.feed(:custom, %{feed_ids: [post.id]}, current_user: user)
+      assert feed |> fas() == [], "nothing was published to the post, so its feed is empty"
     end
 
-    test "handles mixed valid non-feed UID, malformed IDs, and valid feed IDs", %{
+    test "ignores malformed IDs mixed with a UID that is not a Feed", %{
+      user: user,
+      post: post,
+      malformed_id: malformed_id
+    } do
+      feed = FeedLoader.feed(:custom, %{feed_ids: [post.id, malformed_id]}, current_user: user)
+
+      assert feed |> fas() ==
+               FeedLoader.feed(:custom, %{feed_ids: [post.id]}, current_user: user) |> fas()
+    end
+
+    test "scopes by the valid IDs when mixed with a UID that is not a Feed and malformed IDs", %{
       user: user,
       post: post,
       valid_feed_id: valid_feed_id,
-      malformed_id: malformed_id,
-      unfiltered_feed: unfiltered_feed
+      malformed_id: malformed_id
     } do
       feed =
         FeedLoader.feed(:custom, %{feed_ids: [valid_feed_id, post.id, malformed_id]},
@@ -291,7 +298,10 @@ defmodule Bonfire.Social.FeedsFiltersTest do
         )
 
       assert FeedLoader.feed_contains?(feed, post, current_user: user)
-      assert feed |> fas() == FeedLoader.feed(:custom, %{}, current_user: user) |> fas()
+
+      assert feed |> fas() ==
+               FeedLoader.feed(:custom, %{feed_ids: [valid_feed_id]}, current_user: user)
+               |> fas()
     end
 
     test "handles malformed IDs", %{

@@ -499,6 +499,11 @@ defmodule Bonfire.Social.FeedLoader do
     feed_filtered_page(feed_name, filters, opts)
   end
 
+  # no feed name (a `:custom` or filters-only call with no matching preset): scope by the filters' feed_ids, the same fallback named feeds use above
+  defp feed_filtered_page(nil, %{feed_ids: [_ | _] = feed_ids} = filters, opts) do
+    feed_filtered_page(feed_ids, filters, opts)
+  end
+
   defp feed_filtered_page(:custom, filters, opts) do
     # For custom feeds, directly use the filters without looking up presets
     query_extras(filters, opts)
@@ -569,10 +574,46 @@ defmodule Bonfire.Social.FeedLoader do
     else
       opts
     end
-    |> Keyword.merge(
-      Activities.order_pagination_opts(filters[:sort_by], filters[:sort_order], opts)
-    )
+    |> put_pagination_order_opts(filters)
     |> debug("prepared opts for pagination")
+  end
+
+  # The cursor fields matching the feed's ORDER BY go in the top-level opts and, when a caller passes `paginate:` (e.g. load more's cursor), in there too: Paginator then reads only that list for the outer query, while the deferred inner query reads the full opts, and both must encode and decode the same cursor. Thread-deduped feeds override the caller's cursor fields, because callers derive them from `sort_by` alone (feeds_live_handler) and don't know the feed is thread-deduped. For other feeds the caller's win (e.g. `feed_newer_than/5` pages ascending by id). The caller's `after`/`before`/`limit` always apply.
+  defp put_pagination_order_opts(opts, filters) do
+    {order_opts, override_callers?} =
+      if e(filters, :dedup_by_thread, nil),
+        do: {Threads.latest_activity_pagination_opts(), true},
+        else:
+          {Activities.order_pagination_opts(filters[:sort_by], filters[:sort_order], opts), false}
+
+    opts = Keyword.merge(opts, order_opts)
+
+    case opts[:paginate] do
+      paginate when is_list(paginate) ->
+        Keyword.put(
+          opts,
+          :paginate,
+          if(override_callers?,
+            do: Keyword.merge(paginate, order_opts),
+            else: Keyword.merge(order_opts, paginate)
+          )
+        )
+
+      %{} = paginate ->
+        order_opts = Map.new(order_opts)
+
+        Keyword.put(
+          opts,
+          :paginate,
+          if(override_callers?,
+            do: Map.merge(paginate, order_opts),
+            else: Map.merge(order_opts, paginate)
+          )
+        )
+
+      _ ->
+        opts
+    end
   end
 
   @decorate time()
@@ -584,10 +625,11 @@ defmodule Bonfire.Social.FeedLoader do
       |> Keyword.put(
         :query_with_deferred_join,
         # Disable deferred join when using :per_media preload as it needs to filter in the main query
-        # Disable deferred join for thread dedup: it has its own ordering via latest_reply join
         # Respect explicit `false` (unlike `||` which treats false as falsy)
-        if e(filters, :dedup_by_thread, nil) ||
-             Keyword.get(opts, :query_with_deferred_join) == false do
+        # Thread dedup uses the deferred join too: the inner LIMIT tells Postgres it has one page of candidates, so boundaries and preloads probe them by primary key whatever the size of the instance
+        # if e(filters, :dedup_by_thread, nil) ||
+        #      Keyword.get(opts, :query_with_deferred_join) == false do
+        if Keyword.get(opts, :query_with_deferred_join) == false do
           false
         else
           Keyword.get_lazy(opts, :query_with_deferred_join, fn ->
@@ -702,13 +744,18 @@ defmodule Bonfire.Social.FeedLoader do
 
       # |> debug("deferred subquery")
 
-      default_or_filtered_query(FeedActivities.base_query(opts), opts)
+      # thread dedup roots the outer query on Pointer, like `make_distinct_by_activity_id_subquery`: a FeedPublish root returns one row per feed the entry was published to, and its outer query only orders, so nothing would collapse them
+      if(e(filters, :dedup_by_thread, nil),
+        do: default_query(opts),
+        else: FeedActivities.base_query(opts)
+      )
+      |> default_or_filtered_query(opts)
       |> join(:inner, [fp], ^initial_query, on: [id: fp.id], as: :deferred_join_subquery)
       # NOTE: deduping needs to come before preloads as it may create a subquery.
       |> then(
         # For thread dedup the outer query only needs ordering (inner already picked one entry per thread).
         if e(filters, :dedup_by_thread, nil),
-          do: &order_by_latest_thread_reply(&1),
+          do: &Threads.order_by_latest_activity/1,
           else: &apply_dedup_strategy(&1, filters, opts)
       )
       |> Activities.activity_preloads(
@@ -1147,78 +1194,13 @@ defmodule Bonfire.Social.FeedLoader do
   #   )
   # end
 
-  defp thread_order_by_latest_reply_subquery do
-    alias Bonfire.Data.Social.Replied
-
-    from(r in Replied,
-      where: r.id != r.thread_id,
-      group_by: r.thread_id,
-      select: %{thread_id: r.thread_id, last_reply_id: max(r.id)}
-    )
-  end
-
-  # Keeps one feed entry per thread: the thread root's own entry when the root was published to this feed, otherwise the earliest entry (so a thread whose root predates the feed — e.g. a discussion older than the group it was later continued in — is represented by its first reply instead of being invisible). The thread-aware time window is applied upstream in `query_optional_extras` so it also bounds this inner query.
+  # One feed entry per thread, ordered by each thread's latest activity (see `Threads.distinct_by_thread/1`). The thread-aware time window is applied upstream in `query_optional_extras` so it also bounds this inner query.
   defp make_distinct_by_thread(query, opts) do
     query
-    |> FeedActivities.maybe_preload_replied()
-    # a pre-existing order_by (e.g. on a custom query) would take precedence over the representative-picking order below, making DISTINCT ON pick an arbitrary entry per thread
-    |> Ecto.Query.exclude(:order_by)
-    |> distinct(
-      [activity: activity, replied: replied],
-      fragment("COALESCE(?, ?, ?)", replied.thread_id, activity.object_id, activity.id)
-    )
-    |> order_by(
-      [activity: activity, replied: replied],
-      # false sorts before true, so thread-root entries win over replies, then earliest entry
-      asc: not (is_nil(replied.id) or replied.thread_id == activity.object_id),
-      asc: activity.id
-    )
+    |> Threads.distinct_by_thread()
     # NOTE: the Pointer-rooted outer query (rather than a FeedPublish-rooted one) also collapses the same entry published to several of the queried feeds (e.g. a group and its topic) into one row
     |> make_distinct_by_activity_id_subquery(opts)
-    |> order_by_latest_thread_reply()
-  end
-
-  defp join_latest_thread_reply(%{aliases: %{latest_reply: _}} = query), do: query
-
-  defp join_latest_thread_reply(query) do
-    query
-    |> FeedActivities.maybe_preload_replied()
-    |> join(
-      :left,
-      [activity: activity, replied: replied],
-      lr in subquery(thread_order_by_latest_reply_subquery()),
-      # keyed on the THREAD (not the entry's own object) so threads represented by a reply — root not in this feed — still match their latest-reply row
-      on: lr.thread_id == fragment("COALESCE(?, ?)", replied.thread_id, activity.object_id),
-      as: :latest_reply
-    )
-  end
-
-  # Order-only — used for the outer query where entries are already one-per-thread. GREATEST also counts the entry itself (e.g. a fresh boost of an old post) as thread activity, consistent with the time window below; GREATEST ignores NULLs and activity.id is never NULL.
-  defp order_by_latest_thread_reply(query) do
-    query
-    |> join_latest_thread_reply()
-    |> order_by(
-      [activity: activity, latest_reply: lr],
-      desc: fragment("GREATEST(?, ?)", lr.last_reply_id, activity.id)
-    )
-  end
-
-  # Thread-aware time window: keeps entries whose thread has recent activity — its latest reply OR the entry itself (a fresh boost/share of an old object counts) — unlike `Objects.query_maybe_time_limit` which would hide old-but-active threads by filtering each entry's own timestamp.
-  defp maybe_time_limit_by_thread_latest_activity(query, time_limit) do
-    case Types.maybe_to_integer(time_limit, 0) do
-      x_days when is_integer(x_days) and x_days > 0 ->
-        limit_pointer = Objects.ulid_for_x_days_ago(x_days)
-
-        query
-        |> join_latest_thread_reply()
-        |> where(
-          [activity: activity, latest_reply: lr],
-          lr.last_reply_id > ^limit_pointer or activity.id > ^limit_pointer
-        )
-
-      _ ->
-        query
-    end
+    |> Threads.order_by_latest_activity()
   end
 
   # @decorate time()
@@ -1602,7 +1584,7 @@ defmodule Bonfire.Social.FeedLoader do
     |> then(fn query ->
       if e(filters, :dedup_by_thread, nil) do
         # window on the thread's latest activity rather than each entry's own timestamp (which would hide threads started before the window even when they have recent replies); applied here rather than in `make_distinct_by_thread` so count/stream/object-list paths that never run the dedup strategy keep a time window too
-        maybe_time_limit_by_thread_latest_activity(
+        Threads.query_maybe_time_limit_by_latest_activity(
           query,
           (e(filters, :time_limit, nil) || opts[:time_limit])
           |> debug("apply_thread_time_limit")

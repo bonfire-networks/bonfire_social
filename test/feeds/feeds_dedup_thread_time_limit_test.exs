@@ -7,6 +7,8 @@ defmodule Bonfire.Social.FeedsDedupThreadTimeLimitTest do
   2. a thread whose root was never published to the queried feed (e.g. it predates the group) must still appear, represented by its earliest entry in that feed — and its window/ranking must still follow the thread's latest reply, not that earliest entry's own age
 
   3. an entry that is itself recent (e.g. a fresh boost of an old post) counts as thread activity for the window
+
+  4. the query picks a page of thread candidates in a deferred inner query with a `LIMIT`, so boundaries and preloads only run on those rows and Postgres plans for one page whatever the size of the instance; each candidate's latest reply comes from a per-thread lookup
   """
   use Bonfire.Social.DataCase, async: true
   use Bonfire.Common.Utils
@@ -189,7 +191,7 @@ defmodule Bonfire.Social.FeedsDedupThreadTimeLimitTest do
           reply_to_id: root.id
         })
 
-      _fresh_reply =
+      fresh_reply =
         fake_post!(replier, "public", %{
           post_content: %{html_body: "fresh reply in this feed"},
           reply_to_id: root.id
@@ -203,8 +205,25 @@ defmodule Bonfire.Social.FeedsDedupThreadTimeLimitTest do
         )
 
       # the representative entry (the old first reply) predates the window, but the thread's latest reply is fresh
+      # the message lists what the feed returned, so a failure shows whether the entry was missing, replaced or on another page
       assert FeedLoader.feed_contains?(feed, old_reply, current_user: user),
-             "an active rootless thread should stay visible even when its earliest in-feed entry is older than the window"
+             "an active rootless thread should stay visible even when its earliest in-feed entry is older than the window. Expected root=#{root.id} old_reply=#{old_reply.id} fresh_reply=#{fresh_reply.id}, got: " <>
+               inspect(
+                 case feed do
+                   %{edges: edges, page_info: page_info} ->
+                     %{
+                       rows:
+                         Enum.map(
+                           edges,
+                           &{e(&1, :activity, :id, nil), e(&1, :activity, :object_id, nil)}
+                         ),
+                       page_info: page_info
+                     }
+
+                   other ->
+                     other
+                 end
+               )
     end
 
     test "still prefers the root's own entry when it is in the feed", %{
@@ -259,6 +278,108 @@ defmodule Bonfire.Social.FeedsDedupThreadTimeLimitTest do
 
       assert FeedLoader.feed_contains?(feed, old_post, current_user: user),
              "a fresh boost should count as recent thread activity even though the boosted post is older than the window"
+    end
+  end
+
+  describe "dedup_by_thread pagination" do
+    test "pages in latest-activity order when an old thread has the newest reply" do
+      user = fake_user!("thread paging viewer")
+      author = fake_user!("thread paging author")
+      replier = fake_user!("thread paging replier")
+
+      thread_a =
+        fake_post_days_ago!(author, 3, %{
+          post_content: %{name: "thread A", html_body: "oldest root, newest reply"}
+        })
+
+      thread_b =
+        fake_post_days_ago!(author, 2, %{
+          post_content: %{name: "thread B", html_body: "middle root, no replies"}
+        })
+
+      thread_c =
+        fake_post_days_ago!(author, 1, %{
+          post_content: %{name: "thread C", html_body: "newest root, no replies"}
+        })
+
+      # by the replier, so the author's outbox only holds the three roots
+      _reply_to_a =
+        fake_post!(replier, "public", %{
+          post_content: %{html_body: "newest reply overall"},
+          reply_to_id: thread_a.id
+        })
+
+      # one thread per page, so every page boundary needs a correct cursor
+      pages =
+        Stream.unfold({:first, 0}, fn
+          {nil, _} ->
+            nil
+
+          {_, 5} ->
+            nil
+
+          {cursor, n} ->
+            paginate = if cursor == :first, do: [limit: 1], else: [limit: 1, after: cursor]
+
+            %{edges: edges, page_info: page_info} =
+              FeedLoader.feed(
+                :recent_discussions,
+                %{feed_ids: [Feeds.feed_id(:outbox, author)], time_limit: 0},
+                current_user: user,
+                paginate: paginate
+              )
+
+            {Enum.map(edges, &e(&1, :activity, :object_id, nil)), {page_info.end_cursor, n + 1}}
+        end)
+        |> Enum.to_list()
+
+      assert List.flatten(pages) == [thread_a.id, thread_c.id, thread_b.id],
+             "expected pages [A], [C], [B] (A=#{thread_a.id} B=#{thread_b.id} C=#{thread_c.id}), got: #{inspect(pages)}"
+    end
+  end
+
+  describe "dedup_by_thread query shape" do
+    test "limits thread candidates in a deferred inner query before boundaries and preloads" do
+      user = fake_user!("deferred dedup viewer")
+      author = fake_user!("deferred dedup author")
+
+      # same call as the group Discussions tab
+      query =
+        FeedLoader.feed(
+          :recent_discussions,
+          %{feed_ids: [Feeds.feed_id(:outbox, author)]},
+          current_user: user,
+          return: :query
+        )
+
+      assert %Ecto.Query{} = query
+
+      deferred_join = Enum.find(query.joins, &(&1.as == :deferred_join_subquery))
+      assert deferred_join, "the thread-deduped feed should use a deferred join"
+
+      # Ecto stores a joined subquery as a query selecting from it
+      assert %Ecto.Query{from: %{source: %Ecto.SubQuery{query: %Ecto.Query{limit: %{}}}}} =
+               deferred_join.source
+    end
+
+    test "looks up each candidate thread's latest reply instead of aggregating every thread" do
+      user = fake_user!("lateral dedup viewer")
+      author = fake_user!("lateral dedup author")
+
+      query =
+        FeedLoader.feed(
+          :recent_discussions,
+          %{feed_ids: [Feeds.feed_id(:outbox, author)], time_limit: 7},
+          current_user: user,
+          return: :query
+        )
+
+      {sql, _params} = Ecto.Adapters.SQL.to_sql(:all, Bonfire.Common.Repo, query)
+
+      refute sql =~ ~r/GROUP BY \w+\."thread_id"/,
+             "the latest reply should not be aggregated over every thread on the instance"
+
+      assert sql =~ "LATERAL"
     end
   end
 end

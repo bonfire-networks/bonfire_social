@@ -51,6 +51,38 @@ defmodule Bonfire.Social.FeedPaginationTest do
     refute query_string =~ "object_peered"
   end
 
+  describe "feed_ids filter scopes the query" do
+    # the preset form is the group page's call; the other two must scope the same way
+    for {label, call} <- [
+          preset: {:recent_discussions},
+          custom: {:custom},
+          map_only: {}
+        ] do
+      test "when called as #{label}" do
+        user = fake_user!("feed_ids scope viewer")
+        outbox_id = Feeds.feed_id(:outbox, fake_user!("feed_ids scope author"))
+
+        query =
+          case unquote(Macro.escape(call)) do
+            {name} ->
+              FeedLoader.feed(name, %{feed_ids: [outbox_id]},
+                current_user: user,
+                return: :query
+              )
+
+            {} ->
+              FeedLoader.feed(%{feed_ids: [outbox_id]}, current_user: user, return: :query)
+          end
+
+        assert %Ecto.Query{} = query
+        {_sql, params} = Ecto.Adapters.SQL.to_sql(:all, Bonfire.Common.Repo, query)
+
+        assert Needle.ULID.dump!(outbox_id) in List.flatten(params),
+               "the query should filter by the given feed_ids"
+      end
+    end
+  end
+
   test "authenticated local feed origin filter also includes visible local actor activities" do
     user = fake_user!("viewer")
     query = FeedLoader.feed(:local, return: :query, preload: false, current_user: user)
@@ -397,6 +429,53 @@ defmodule Bonfire.Social.FeedPaginationTest do
     assert %{edges: next_edges} = next_window_results
     assert length(next_edges) > 0
     assert FeedLoader.feed_contains?(next_edges, "next_window_test")
+  end
+
+  describe "like_count sorting paged through `paginate:`" do
+    # load more passes the cursor as `paginate: [after: …]`, so the sort's cursor fields must reach Paginator from there; counts run opposite to id order so an id-only cursor can't pass by accident
+    test "pages in like order when the oldest post has the most likes" do
+      viewer = fake_user!("like paging viewer")
+      author = fake_user!("like paging author")
+      likers = for n <- 1..3, do: fake_user!("like paging liker #{n}")
+
+      [oldest, middle, newest] =
+        for name <- ["oldest", "middle", "newest"] do
+          fake_post!(author, "public", %{post_content: %{name: name, html_body: name}})
+        end
+
+      for {post, like_count} <- [{oldest, 3}, {middle, 2}, {newest, 1}],
+          liker <- Enum.take(likers, like_count) do
+        {:ok, _} = Bonfire.Social.Likes.like(liker, post)
+      end
+
+      filters = %{
+        feed_ids: [Feeds.feed_id(:outbox, author)],
+        sort_by: :like_count,
+        sort_order: :desc,
+        time_limit: 0
+      }
+
+      pages =
+        Stream.unfold({:first, 0}, fn
+          {nil, _} ->
+            nil
+
+          {_, 5} ->
+            nil
+
+          {cursor, n} ->
+            paginate = if cursor == :first, do: [limit: 1], else: [limit: 1, after: cursor]
+
+            %{edges: edges, page_info: page_info} =
+              FeedLoader.feed(:custom, filters, current_user: viewer, paginate: paginate)
+
+            {Enum.map(edges, &e(&1, :activity, :object_id, nil)), {page_info.end_cursor, n + 1}}
+        end)
+        |> Enum.to_list()
+
+      assert List.flatten(pages) == [oldest.id, middle.id, newest.id],
+             "expected pages [oldest], [middle], [newest] (oldest=#{oldest.id} middle=#{middle.id} newest=#{newest.id}), got: #{inspect(pages)}"
+    end
   end
 
   describe "reply_count sorting with exclude_activity_types: [:reply]" do

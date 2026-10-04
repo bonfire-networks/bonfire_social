@@ -308,6 +308,10 @@ defmodule Bonfire.Social.Fake do
         # TODO
         {nil, nil}
 
+      # only meaningful with the caller's feeds (a group's notifications and inbox), which these preset-generic tests don't pass; covered by the group moderation page tests (`group_moderation_inbox_test.exs`). TODO: a real fixture once the preset also serves the instance or personal moderation logs, which won't need a caller's feeds
+      :moderation ->
+        {nil, nil}
+
       :events ->
         # TODO
         {nil, nil}

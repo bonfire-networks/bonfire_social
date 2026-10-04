@@ -856,6 +856,21 @@ defmodule Bonfire.Social.RuntimeConfig do
             feedback_title: l("You have not flagged any activities...")
           ]
         },
+        # a moderation inbox and log (a group's moderation page): the caller names the feed (eg. the group's notifications), this names what it is, so its records get their reasons (`preload_rules`)
+        moderation: %{
+          name: l("Moderation"),
+          built_in: true,
+          description: l("Reports, requests and moderation actions"),
+          filters: %FeedFilters{
+            feed_name: :moderation,
+            show_objects_only_once: false
+          },
+          current_user_required: true,
+          assigns: [
+            selected_tab: "moderation",
+            hide_filters: true
+          ]
+        },
         flagged_content: %{
           name: l("Flagged (all)"),
           built_in: true,
@@ -1060,6 +1075,11 @@ defmodule Bonfire.Social.RuntimeConfig do
           # NOTE: include parent to show "published in" for posts in group
           include: [:with_creator, :with_parent],
           exclude: [:with_subject]
+        },
+        # a moderation record's reason is its activity's own name
+        "Moderation feeds" => %{
+          match: %{feed_name: :moderation},
+          include: [:activity_name]
         },
         "Requests for Me" => %{
           match: %{activity_types: [:request]},

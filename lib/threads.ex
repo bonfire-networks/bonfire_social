@@ -935,8 +935,6 @@ defmodule Bonfire.Social.Threads do
 
       iex> filter(:in_thread, "thread_123", query)
       %Ecto.Query{}
-
-      iex> filter(:distinct, :threads, query)
   """
   def filter(:in_thread, thread_id, query) when not is_list(thread_id),
     do: filter(:in_thread, [thread_id], query)
@@ -951,32 +949,140 @@ defmodule Bonfire.Social.Threads do
     )
   end
 
-  @doc "Group per-thread "
-  def filter(:distinct, :threads, query) do
-    query
-    |> reusable_join(:left, [root], assoc(root, :activity), as: :activity)
-    |> reusable_join(:left, [activity: activity], assoc(activity, :replied), as: :replied)
-    |> Ecto.Query.exclude(:distinct)
-    |> distinct([replied: replied], desc: replied.thread_id)
-    |> order_by([root], desc: root.id)
-    |> select([root, replied: replied], %{root | thread_id: replied.thread_id})
-  end
+  # Parked: no callers; thread-grouped feeds use `distinct_by_thread/1` + `order_by_latest_activity/1` below, which keep a representative entry per thread and order and paginate by the thread's latest activity.
+  # @doc "Group per-thread "
+  # def filter(:distinct, :threads, query) do
+  #   query
+  #   |> reusable_join(:left, [root], assoc(root, :activity), as: :activity)
+  #   |> reusable_join(:left, [activity: activity], assoc(activity, :replied), as: :replied)
+  #   |> Ecto.Query.exclude(:distinct)
+  #   |> distinct([replied: replied], desc: replied.thread_id)
+  #   |> order_by([root], desc: root.id)
+  #   |> select([root, replied: replied], %{root | thread_id: replied.thread_id})
+  # end
 
-  @doc "re-order distinct threads after DISTINCT ON ordered them by thread_id - Note: this results in (Ecto.QueryError) cannot preload associations in subquery in query"
-  #
-  def re_order_using_subquery(query, _opts) do
-    from(all in subquery(query),
-      # select: %{all | thread_id: all.thread_id},
-      order_by: [desc: all.id]
+  # Parked with `filter(:distinct, :threads, query)` above, whose ordering these two re-sorted; no callers.
+  # @doc "re-order distinct threads after DISTINCT ON ordered them by thread_id - Note: this results in (Ecto.QueryError) cannot preload associations in subquery in query"
+  # #
+  # def re_order_using_subquery(query, _opts) do
+  #   from(all in subquery(query),
+  #     # select: %{all | thread_id: all.thread_id},
+  #     order_by: [desc: all.id]
+  #   )
+  # end
+
+  # @doc "re-order distinct threads after DISTINCT ON ordered them by thread_id - Note: does not support pagination"
+  # def maybe_re_order_result(%{edges: list} = result, opts) do
+  #   if opts[:latest_in_threads],
+  #     do: Map.put(result, :edges, Enum.sort_by(list, fn i -> i.id end, :desc)),
+  #     else: result
+  # end
+
+  @doc """
+  Keeps one entry per thread in an activity query (needs the `:activity` binding): the thread root's own entry when the root is in the query, otherwise the earliest entry, so a thread whose root predates the feed (e.g. a discussion older than the group it was later continued in) is represented by its first reply. Order the result with `order_by_latest_activity/1`, usually after wrapping it in a subquery.
+  """
+  def distinct_by_thread(query) do
+    query
+    |> FeedActivities.maybe_preload_replied()
+    # a pre-existing order_by (e.g. on a custom query) would take precedence over the representative-picking order below, making DISTINCT ON pick an arbitrary entry per thread
+    |> Ecto.Query.exclude(:order_by)
+    |> distinct(
+      [activity: activity, replied: replied],
+      fragment("COALESCE(?, ?, ?)", replied.thread_id, activity.object_id, activity.id)
+    )
+    |> order_by(
+      [activity: activity, replied: replied],
+      # false sorts before true, so thread-root entries win over replies, then earliest entry
+      asc: not (is_nil(replied.id) or replied.thread_id == activity.object_id),
+      asc: activity.id
     )
   end
 
-  @doc "re-order distinct threads after DISTINCT ON ordered them by thread_id - Note: does not support pagination"
-  def maybe_re_order_result(%{edges: list} = result, opts) do
-    if opts[:latest_in_threads],
-      do: Map.put(result, :edges, Enum.sort_by(list, fn i -> i.id end, :desc)),
-      else: result
+  @doc """
+  Orders a query of one entry per thread (see `distinct_by_thread/1`) by each thread's latest activity, newest first, and selects that sort key onto Pointer rows so `latest_activity_pagination_opts/0` can build the cursor from it.
+  """
+  def order_by_latest_activity(query) do
+    query
+    |> join_latest_activity()
+    |> order_by([latest_reply: lr], desc: lr.last_activity_id)
+    |> maybe_select_last_activity_id()
   end
+
+  @doc """
+  Thread-aware time window: keeps entries whose thread has activity within the last `time_limit` days, counting its latest reply and the entry itself (a fresh boost of an old object counts), so an old thread with recent replies stays in. A `time_limit` of 0 or nil applies no window.
+  """
+  def query_maybe_time_limit_by_latest_activity(query, time_limit) do
+    case Types.maybe_to_integer(time_limit, 0) do
+      x_days when is_integer(x_days) and x_days > 0 ->
+        limit_pointer = Bonfire.Social.Objects.ulid_for_x_days_ago(x_days)
+
+        query
+        |> join_latest_activity()
+        |> where([latest_reply: lr], lr.last_activity_id > ^limit_pointer)
+
+      _ ->
+        query
+    end
+  end
+
+  @doc """
+  Keyset pagination opts matching `order_by_latest_activity/1`: by the thread's latest activity, then the entry's own id as tie-breaker. The cursor uses the same key as the ORDER BY so the next page continues where this one ended, including when an old thread holds the newest activity.
+  """
+  def latest_activity_pagination_opts do
+    [
+      cursor_fields: [{{:latest_reply, :last_activity_id}, :desc}, {{:activity, :id}, :desc}],
+      fetch_cursor_value_fun: &fetch_latest_activity_cursor_value/2
+    ]
+  end
+
+  defp fetch_latest_activity_cursor_value(
+         %{thread_last_activity_id: id},
+         {:latest_reply, :last_activity_id}
+       ),
+       do: id
+
+  defp fetch_latest_activity_cursor_value(record, field),
+    do: Activities.fetch_cursor_value_fun(record, field)
+
+  defp join_latest_activity(%{aliases: %{latest_reply: _}} = query), do: query
+
+  defp join_latest_activity(query) do
+    query
+    |> FeedActivities.maybe_preload_replied()
+    |> join(
+      :left_lateral,
+      [],
+      # keyed on the THREAD (not the entry's own object) so threads represented by a reply — root not in this query — still match their latest reply
+      lr in subquery(latest_activity_subquery()),
+      on: true,
+      as: :latest_reply
+    )
+  end
+
+  # Latest activity of the current row's thread only (used as a LATERAL join): one index probe per candidate on `replied.thread_id`, so the cost follows the query's size rather than the instance's, and Postgres can plan the join as one row per candidate. GREATEST also counts the entry itself (e.g. a fresh boost of an old post) as thread activity; it ignores NULLs (no replies) and activity.id is never NULL. Returned as a column so it can be both the sort key and the pagination cursor field.
+  defp latest_activity_subquery do
+    from(r in Replied,
+      where:
+        r.thread_id ==
+          fragment(
+            "COALESCE(?, ?)",
+            parent_as(:replied).thread_id,
+            parent_as(:activity).object_id
+          ) and r.id != r.thread_id,
+      # Ecto lets a lateral subquery's select reach only the parent's `from` binding, so the entry's id comes from `:main_object` (a Pointer or FeedPublish, both keyed by the activity id) rather than `:activity`
+      select: %{
+        last_activity_id:
+          type(fragment("GREATEST(max(?), ?)", r.id, parent_as(:main_object).id), r.id)
+      }
+    )
+  end
+
+  # only Pointer-rooted queries (the ones thread-grouped feeds build) have the virtual field to receive it
+  defp maybe_select_last_activity_id(%{from: %{source: {_, Pointer}}} = query) do
+    select_merge(query, [latest_reply: lr], %{thread_last_activity_id: lr.last_activity_id})
+  end
+
+  defp maybe_select_last_activity_id(query), do: query
 
   @doc """
   Lists replies in a thread.

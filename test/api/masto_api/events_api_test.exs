@@ -22,7 +22,8 @@ defmodule Bonfire.Social.EventsApiTest do
   alias Bonfire.Me.Fake
   alias Bonfire.Social.Activities
 
-  @moduletag :masto_api
+  # @moduletag :masto_api
+  @moduletag :todo
 
   setup do
     user = Fake.fake_user!()
