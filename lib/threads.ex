@@ -935,6 +935,8 @@ defmodule Bonfire.Social.Threads do
 
       iex> filter(:in_thread, "thread_123", query)
       %Ecto.Query{}
+
+      iex> filter(:distinct, :threads, query)
   """
   def filter(:in_thread, thread_id, query) when not is_list(thread_id),
     do: filter(:in_thread, [thread_id], query)
@@ -949,19 +951,19 @@ defmodule Bonfire.Social.Threads do
     )
   end
 
-  # Parked: no callers; thread-grouped feeds use `distinct_by_thread/1` + `order_by_latest_activity/1` below, which keep a representative entry per thread and order and paginate by the thread's latest activity.
-  # @doc "Group per-thread "
-  # def filter(:distinct, :threads, query) do
-  #   query
-  #   |> reusable_join(:left, [root], assoc(root, :activity), as: :activity)
-  #   |> reusable_join(:left, [activity: activity], assoc(activity, :replied), as: :replied)
-  #   |> Ecto.Query.exclude(:distinct)
-  #   |> distinct([replied: replied], desc: replied.thread_id)
-  #   |> order_by([root], desc: root.id)
-  #   |> select([root, replied: replied], %{root | thread_id: replied.thread_id})
-  # end
+  # Keeps the latest entry of each thread (DISTINCT ON thread_id, newest id first) and selects its `thread_id` onto the row: a conversation list showing each thread's newest message (`Bonfire.Messages.list/3` with `latest_in_threads: true`, which passes it as `distinct: {:threads, &Threads.filter/3}`). Feeds that keep each thread's root or earliest entry and order by latest activity use `distinct_by_thread/1` + `order_by_latest_activity/1` instead.
+  # TODO: merge with `distinct_by_thread/1` as `distinct_by_thread(query, keep: :latest | :root_or_earliest)` sharing the joins and DISTINCT ON, with this clause calling it with `keep: :latest`. That means keying Messages on `COALESCE(replied.thread_id, activity.object_id, activity.id)` like feeds, so a message without a `replied` row is its own thread instead of sharing the NULL group; add a Messages test for that case first.
+  def filter(:distinct, :threads, query) do
+    query
+    |> reusable_join(:left, [root], assoc(root, :activity), as: :activity)
+    |> reusable_join(:left, [activity: activity], assoc(activity, :replied), as: :replied)
+    |> Ecto.Query.exclude(:distinct)
+    |> distinct([replied: replied], desc: replied.thread_id)
+    |> order_by([root], desc: root.id)
+    |> select([root, replied: replied], %{root | thread_id: replied.thread_id})
+  end
 
-  # Parked with `filter(:distinct, :threads, query)` above, whose ordering these two re-sorted; no callers.
+  # Parked: no callers in any form (direct, `&Threads.re_order_using_subquery/2` capture, or opts). They re-sort the output of `filter(:distinct, :threads, query)`, which `Bonfire.Messages` instead orders through its own paginated outer query.
   # @doc "re-order distinct threads after DISTINCT ON ordered them by thread_id - Note: this results in (Ecto.QueryError) cannot preload associations in subquery in query"
   # #
   # def re_order_using_subquery(query, _opts) do
