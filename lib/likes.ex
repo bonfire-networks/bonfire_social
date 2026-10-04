@@ -282,11 +282,20 @@ defmodule Bonfire.Social.Likes do
   def unlike(liker, object, opts \\ [])
 
   def unlike(%{} = liker, %{} = liked, _opts) do
+    # loaded before it goes, since federating its undo reads who liked what off its edge
+    like =
+      with {:ok, like} <- get(liker, liked, skip_boundary_check: true),
+           do: repo().maybe_preload(like, :edge)
+
     # delete the Like
     Edges.delete_by_both(liker, Like, liked)
     # delete the like activity & feed entries
     # Note: the like count is automatically decremented by DB triggers
-    Activities.delete_by_subject_verb_object(liker, :like, liked)
+    with {:ok, _} = deleted <- Activities.delete_by_subject_verb_object(liker, :like, liked) do
+      # servers the like reached keep counting it until told, by an `Undo{Like}`
+      if match?(%Like{}, like), do: Social.maybe_federate(liker, :delete, like)
+      deleted
+    end
   end
 
   def unlike(%{} = liker, liked, opts) when is_binary(liked) do
@@ -470,7 +479,10 @@ defmodule Bonfire.Social.Likes do
            ActivityPub.Object.get_cached(
              pointer: e(like.edge, :object, nil) || like.edge.object_id
            ) do
-      ActivityPub.unlike(%{actor: liker, object: object})
+      # only the liker's own instance can undo their like, so an incoming `Undo` isn't sent back out as them; `== false` because `local` is nil on a tombstoned actor
+      if liker.local == false,
+        do: {:ignore, "Not our like to undo, so nothing to federate"},
+        else: ActivityPub.unlike(%{actor: liker, object: object})
     else
       {:error, :not_found} ->
         :ignore

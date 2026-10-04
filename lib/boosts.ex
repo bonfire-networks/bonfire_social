@@ -258,17 +258,26 @@ defmodule Bonfire.Social.Boosts do
   def unboost(booster, boosted, opts \\ [])
 
   def unboost(booster, %{} = boosted, _opts) do
+    # loaded before it goes, since federating its undo reads who boosted what off its edge
+    boost =
+      with {:ok, boost} <- get(booster, boosted, skip_boundary_check: true),
+           do: repo().maybe_preload(boost, :edge)
+
     # delete the Boost
     Edges.delete_by_both(booster, Boost, boosted)
     # delete the boost activity & feed entries
-    Activities.delete_by_subject_verb_object(booster, :boost, boosted)
+    with {:ok, _} = deleted <- Activities.delete_by_subject_verb_object(booster, :boost, boosted) do
+      # servers the boost reached keep showing it until told, by an `Undo{Announce}`
+      if match?(%Boost{}, boost), do: Social.maybe_federate(booster, :delete, boost)
+      deleted
+    end
   end
 
   def unboost(booster, boosted, opts) when is_binary(boosted) do
     with {:ok, boosted} <-
            Bonfire.Common.Needles.get(boosted, opts ++ [current_user: booster]) do
       # debug(liked)
-      unboost(booster, boosted)
+      unboost(booster, boosted, opts)
     end
   end
 
@@ -409,7 +418,10 @@ defmodule Bonfire.Social.Boosts do
            ActivityPub.Object.get_cached(
              pointer: e(boost.edge, :object, nil) || e(boost.edge, :object_id, nil)
            ) do
-      ActivityPub.unannounce(%{actor: booster, object: object})
+      # only the booster's own instance can undo their boost, so an incoming `Undo` isn't sent back out as them; `== false` because `local` is nil on a tombstoned actor
+      if booster.local == false,
+        do: {:ignore, "Not our boost to undo, so nothing to federate"},
+        else: ActivityPub.unannounce(%{actor: booster, object: object})
     else
       {:error, :not_found} ->
         :ignore
