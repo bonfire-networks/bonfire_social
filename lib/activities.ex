@@ -3183,7 +3183,7 @@ defmodule Bonfire.Social.Activities do
           do: described_bio(subject),
           else: described_body(object)
         ),
-      url: described_url(object),
+      url: described_url(object, e(activity, :replied, nil)),
       icon: described_icon(subject)
     }
   end
@@ -3239,7 +3239,8 @@ defmodule Bonfire.Social.Activities do
   end
 
   # where tapping it should land. A link preview's own URL is the useful destination rather than the post wrapping it, when the instance prefers that
-  defp described_url(object) do
+  # a reply opens at its place in the thread, as feeds link it, so a tapped notification shows the thread from its start
+  defp described_url(object, replied) do
     external =
       if Config.get([Bonfire.Social.LivePush, :broadcast_media_canonical_link], false) do
         e(object, :path, nil)
@@ -3247,7 +3248,7 @@ defmodule Bonfire.Social.Activities do
 
     if is_binary(external) and String.starts_with?(external, "http"),
       do: external,
-      else: e(object, :quote, :path, nil) || Bonfire.Common.URIs.path(object)
+      else: e(object, :quote, :path, nil) || Bonfire.Social.Threads.permalink(object, replied)
   end
 
   defp described_icon(subject) do

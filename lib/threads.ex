@@ -45,6 +45,26 @@ defmodule Bonfire.Social.Threads do
   def base_query, do: from(Replied, as: :replied)
 
   @doc """
+  Where a post is shown within its thread, as feeds link it: `/discussion/<thread id>/reply/<level>/<id>` for a reply, the level being how many posts are above it, and the post's own page for the start of a thread or anything not in one.
+
+  `replied` is the post's thread info, when it is loaded somewhere other than on the post (on its activity, say).
+  """
+  def permalink(object, replied \\ nil) do
+    replied = replied || e(object, :replied, nil)
+    thread_id = e(replied, :thread_id, nil) || id(e(replied, :thread, nil))
+    object_id = id(object)
+
+    if thread_id && thread_id != object_id do
+      case length(e(replied, :path, nil) || []) do
+        0 -> "/discussion/#{thread_id}/reply/#{object_id}"
+        level -> "/discussion/#{thread_id}/reply/#{level}/#{object_id}"
+      end
+    else
+      Bonfire.Common.URIs.path(object)
+    end
+  end
+
+  @doc """
   Casts a changeset with reply_to and threading info.
 
   If it's not a reply or the user is not permitted to reply to the thing, a new thread will be created.
