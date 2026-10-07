@@ -473,7 +473,20 @@ defmodule Bonfire.Social.Requests do
       {:ok, request} ->
         if Social.is_local?(requester) and !Social.is_local?(object) do
           info(type, "was already requested, but will attempt re-federating the request")
-          Social.maybe_federate_and_gift_wrap_activity(current_user(opts) || requester, request)
+
+          case ActivityPub.Object.get_cached(pointer: id(request)) do
+            # re-deliver the activity sent the first time: a new one would collide with it on `pointer_id` (one AP object per local record), and that insert raises
+            {:ok, %{local: true} = activity} ->
+              ActivityPub.Federator.publish(activity)
+              {:ok, request}
+
+            # never stored, eg. the first federation failed, so this is the first one
+            _ ->
+              Social.maybe_federate_and_gift_wrap_activity(
+                current_user(opts) || requester,
+                request
+              )
+          end
         else
           debug(type, "was already requested")
           {:ok, request}
