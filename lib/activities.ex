@@ -553,7 +553,7 @@ defmodule Bonfire.Social.Activities do
 
           if Extend.module_enabled?(Bonfire.Classify.Tree, opts),
             do:
-              proload(query, activity: [tree: [parent: [:profile, character: [:peered]]]])
+              proload(query, activity: [tree: [parent: [character: [:peered], profile: :icon]]])
               |> debug("with_parent proload: query with proload"),
             else: query
 
@@ -808,7 +808,7 @@ defmodule Bonfire.Social.Activities do
 
           if Extend.module_enabled?(Bonfire.Classify.Tree, opts),
             do:
-              [tree: [parent: [:profile, character: [:peered]]]]
+              [tree: [parent: [character: [:peered], profile: :icon]]]
               |> debug("with_parent: preload list"),
             else: [] |> debug("with_parent: Tree not enabled, skipping")
 
