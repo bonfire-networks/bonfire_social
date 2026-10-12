@@ -170,6 +170,13 @@ defmodule Bonfire.Social.Flags do
     case check_flag(flagger, object, opts)
          ~> create(flagger, ..., opts) do
       {:ok, flag} ->
+        # looked up once, and only when the report may leave the instance
+        group =
+          if opts[:forward] == true or opts[:forward_to_group] == true,
+            do: remote_group_for_report(object)
+
+        maybe_send_to_group(flagger, object, group, opts)
+
         if opts[:forward] == true and opts[:skip_federation] != true and
              id(flagger) not in maybe_apply(
                Bonfire.Federate.ActivityPub,
@@ -178,7 +185,10 @@ defmodule Bonfire.Social.Flags do
                fallback_return: []
              )
              |> debug("do_not_federate_user_ids") do
-          Social.maybe_federate_and_gift_wrap_activity(flagger, flag)
+          Social.maybe_federate_and_gift_wrap_activity(flagger, flag,
+            # the anonymous report names the remote group too, unless the reporter sent the group a named one
+            anonymous_to_group: if(opts[:forward_to_group] != true, do: group)
+          )
           |> debug("federated flag activity")
         else
           {:ok, flag}
@@ -191,6 +201,66 @@ defmodule Bonfire.Social.Flags do
     e in Ecto.ConstraintError ->
       maybe_dup(flagger, object, e)
   end
+
+  @doc "The group on another instance that `object` is in, whose moderators a report about it can be sent to, or nil. A local group's moderators see reports on its moderation page already."
+  def remote_group_for_report(object) do
+    case maybe_apply(Bonfire.Classify.Categories, :group_of_object, [object],
+           fallback_return: nil
+         ) do
+      {:ok, _, %{} = group} ->
+        group = repo().maybe_preload(group, character: [:peered])
+        if Social.is_local?(group), do: nil, else: group
+
+      _ ->
+        nil
+    end
+  end
+
+  # A NAMED report to the moderators of the remote group the object is in, when the reporter asks for it (`forward_to_group: true`). Sent as the reporter, unlike the anonymous one: the threadiverse accepts a report only from a person (Lemmy's `Report.actor` is an `ApubPerson`), which the flag form warns about
+  defp maybe_send_to_group(flagger, object, %{} = group, opts) do
+    if opts[:forward_to_group] == true and opts[:skip_federation] != true and
+         id(flagger) not in maybe_apply(
+           Bonfire.Federate.ActivityPub,
+           :do_not_federate_user_ids,
+           [],
+           fallback_return: []
+         ) do
+      with {:ok, %{ap_id: group_ap_id}} <- ActivityPub.Actor.get_cached(pointer: group),
+           {:ok, reporter} <- ActivityPub.Actor.get_cached(pointer: flagger),
+           {:ok, ap_object} <- ActivityPub.Object.get_cached(pointer: object) do
+        ActivityPub.flag(%{
+          actor: reporter,
+          statuses: [ap_object],
+          content: opts[:comment],
+          # `summary` is where Lemmy reads the reason, `content` where Mastodon-family software does
+          additional: %{
+            "to" => [group_ap_id],
+            "audience" => group_ap_id,
+            "summary" => opts[:comment]
+          }
+        })
+        |> debug("report sent to the group's moderators")
+      else
+        e -> debug(e, "could not send the report to the group")
+      end
+    end
+  end
+
+  # not in a remote group
+  defp maybe_send_to_group(_flagger, _object, _group, _opts), do: nil
+
+  # the anonymous report also names the remote group the object is in, so it reaches that group's moderators where their software accepts an anonymous report (Bonfire does, Lemmy does not)
+  defp anonymous_to_group(%{} = group, content) do
+    case ActivityPub.Actor.get_cached(pointer: group) do
+      {:ok, %{ap_id: group_ap_id}} ->
+        %{"to" => [group_ap_id], "audience" => group_ap_id, "summary" => content}
+
+      _ ->
+        %{}
+    end
+  end
+
+  defp anonymous_to_group(_, _), do: %{}
 
   @doc """
   Retrieves moderators for a given object.
@@ -579,15 +649,18 @@ defmodule Bonfire.Social.Flags do
             }
         end
 
+      content = e(flag, :named, :name, nil)
+
       ActivityPub.flag(
         %{
           # actor: flagger, # exclude actor so we send an anonymised flag instead (using a service actor)
           statuses: params.statuses,
           account: params.account,
-          content: e(flag, :named, :name, nil),
+          content: content,
           # assume true here because we are skipping federation in flag/3
           forward: opts[:forward] != false,
-          pointer: flag
+          pointer: flag,
+          additional: anonymous_to_group(opts[:anonymous_to_group], content)
         }
         |> debug("publish flag params")
       )

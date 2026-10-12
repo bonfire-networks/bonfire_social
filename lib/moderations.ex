@@ -35,6 +35,31 @@ defmodule Bonfire.Social.Moderations do
     |> repo().insert()
   end
 
+  @doc """
+  The reason a moderation action federates with, as its `summary`: the one given, else the action's default (config `[Bonfire.Social.Moderations, :default_reasons, verb]`, falling back to the wording below).
+
+  Every moderator activity sends one, whether a lock, a removal, a hide or a block, because the threadiverse reads its presence as what makes it a moderation action: Lemmy treats a `Delete` without a `summary` as the author deleting their own post, and logs its own default reason for a mod action given none.
+
+  ## Examples
+
+      iex> Bonfire.Social.Moderations.summary("off topic", :lock)
+      "off topic"
+
+      iex> is_binary(Bonfire.Social.Moderations.summary(nil, :hide))
+      true
+  """
+  def summary(reason, _verb) when is_binary(reason) and reason != "", do: reason
+
+  def summary(_, verb),
+    do: Config.get([__MODULE__, :default_reasons, verb], nil) || default_reason(verb)
+
+  defp default_reason(:lock), do: l("Locked by a moderator")
+  defp default_reason(:unlock), do: l("Reopened by a moderator")
+
+  # `hide` is everything reversible, taking a post out of a group included (the "Remove from group" action)
+  defp default_reason(:hide), do: l("Hidden by a moderator")
+  defp default_reason(_), do: l("No reason given")
+
   # the group the object is in, if any. Through `maybe_apply` since groups live in bonfire_classify, which social doesn't depend on
   defp group_of(object) do
     case maybe_apply(Bonfire.Classify.Categories, :group_of_object, [object],

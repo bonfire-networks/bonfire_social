@@ -1330,6 +1330,51 @@ defmodule Bonfire.Social.Objects do
     {:ok, pointer |> Map.put(:sensitive, nil)}
   end
 
+  # A moderator's REMOVAL, which the threadiverse sends as a `Delete` of the post (Lemmy with the reason in `summary`: "if summary is present, this is a mod action (Remove in Lemmy terms)"). It takes the post out of the group and nothing more: a group's moderator has no standing to erase someone's post from their own profile, so it never deletes it. `remove_post_from_group/3` checks the moderator's `:mediate` on the group, as an incoming `Lock` does.
+  # Told apart from a deletion by its object: the AP layer tombstones what it has VERIFIED as deleted at its origin before handing the `Delete` over, and hands a removal over with the object untouched, since its origin still has it (`Transformer.handle_remote_delete/4`). So whatever the sender marked it with, an object that is not a `Tombstone` here is one that still exists
+  def ap_receive_activity(
+        creator,
+        %{data: %{"type" => "Delete"} = data} = _activity,
+        %{data: %{"type" => object_type}} = object
+      )
+      when object_type != "Tombstone" do
+    with pointer_id when is_binary(pointer_id) <- pointer_id_from_ap_object(object),
+         {:ok, post} <- Bonfire.Common.Needles.get(pointer_id, skip_boundary_check: true),
+         %{} = group <- removed_from_group(data, pointer_id) do
+      maybe_apply(Bonfire.Classify.Categories, :remove_post_from_group, [creator, group, post])
+    else
+      _ ->
+        debug(
+          object,
+          "a moderator's removal of something we hold in no group, so nothing to remove"
+        )
+
+        {:ok, :skip}
+    end
+  end
+
+  # The group a removal is from: the one its `audience` names, as Lemmy and we both send it, since a post from a group we only FOLLOW belongs to it through the group's boost and was not published in our mirror of it. Else the group the post was published in. Through `maybe_apply` since groups and AP lookups live in extensions social doesn't depend on
+  defp removed_from_group(data, pointer_id) do
+    with audience when is_binary(audience) <- ActivityPub.Object.get_ap_id(data["audience"]),
+         {:ok, %{} = group} <-
+           maybe_apply(
+             Bonfire.Federate.ActivityPub.AdapterUtils,
+             :get_by_url_ap_id_or_username,
+             [audience],
+             fallback_return: nil
+           ) do
+      group
+    else
+      _ ->
+        case maybe_apply(Bonfire.Classify.Categories, :group_of_object, [pointer_id],
+               fallback_return: nil
+             ) do
+          {:ok, _post, %{} = group} -> group
+          _ -> nil
+        end
+    end
+  end
+
   def ap_receive_activity(creator, _activity, object) do
     # TODO: double check for Delete activity type?
     case pointer_id_from_ap_object(object) do

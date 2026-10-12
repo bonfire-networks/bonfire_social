@@ -496,15 +496,19 @@ defmodule Bonfire.Social.Boosts do
   """
   def ap_receive_activity(
         creator,
-        %{data: %{"type" => "Announce"}} = _activity,
+        %{data: %{"type" => "Announce"} = data} = _activity,
         object
       ) do
-    Utils.maybe_apply(
-      Bonfire.Federate.ActivityPub.AdapterUtils,
-      :return_pointable,
-      [object, [current_user: creator, verbs: [:boost]]]
-    )
-    ~> boost(creator, ..., local: false)
+    with {:ok, pointable} <-
+           Utils.maybe_apply(
+             Bonfire.Federate.ActivityPub.AdapterUtils,
+             :return_pointable,
+             [object, [current_user: creator, verbs: [:boost]]]
+           ),
+         {:ok, _} = boosted <- boost(creator, pointable, local: false) do
+      maybe_publish_in_announcing_group(creator, data, object, pointable)
+      boosted
+    end
   end
 
   def ap_receive_activity(
@@ -524,4 +528,31 @@ defmodule Bonfire.Social.Boosts do
       unboost(creator, pointable, skip_boundary_check: true, skip_federation: true)
     end
   end
+
+  # A group announcing a post whose own `audience` names that group is relaying a post published in it: that is how a Bonfire group relays its members' posts, as a plain `Announce` of the post where the threadiverse wraps the `Create`. So it is published in the mirror, as a post the group relays as an activity is, and carries the group's moderators ACL that gives its moderators standing over it (eg. to lock it). Both halves are needed: an author naming a group does not put a post in it, and a group boosting a post that names another group (or none) only shares it
+  defp maybe_publish_in_announcing_group(
+         %{__struct__: Bonfire.Classify.Category} = group,
+         %{"actor" => announcer},
+         %{data: %{"audience" => audience}},
+         pointable
+       ) do
+    if ActivityPub.Object.get_ap_id(announcer) in Enum.map(
+         List.wrap(audience),
+         &ActivityPub.Object.get_ap_id/1
+       ) do
+      # locality loaded here, as the `:tag` check `publish_existing_in/3` makes on the author requires
+      author =
+        Objects.object_creator(Objects.preload_creator(pointable))
+        |> repo().maybe_preload(character: [:peered])
+
+      Utils.maybe_apply(
+        Bonfire.Classify,
+        :publish_existing_in,
+        [pointable, author, [group]],
+        fallback_return: nil
+      )
+    end
+  end
+
+  defp maybe_publish_in_announcing_group(_group, _data, _object, _pointable), do: nil
 end

@@ -484,7 +484,11 @@ defmodule Bonfire.Social.Likes do
       # only the liker's own instance can undo their like, so an incoming `Undo` isn't sent back out as them; `== false` because `local` is nil on a tombstoned actor
       if liker.local == false,
         do: {:ignore, "Not our like to undo, so nothing to federate"},
-        else: ActivityPub.unlike(%{actor: liker, object: object})
+        else:
+          with(
+            {:ok, undo} = done <- ActivityPub.unlike(%{actor: liker, object: object}),
+            do: maybe_group_relays(like.edge, undo, done)
+          )
     else
       {:error, :not_found} ->
         :ignore
@@ -503,7 +507,9 @@ defmodule Bonfire.Social.Likes do
            ActivityPub.Object.get_cached(
              pointer: e(like.edge, :object, nil) || like.edge.object_id
            ) do
-      ActivityPub.like(%{actor: liker, object: object, pointer: uid(like)})
+      with {:ok, activity} = done <-
+             ActivityPub.like(%{actor: liker, object: object, pointer: uid(like)}),
+           do: maybe_group_relays(like.edge, activity, done)
     else
       {:error, :not_found} ->
         :ignore
@@ -532,17 +538,20 @@ defmodule Bonfire.Social.Likes do
   """
   def ap_receive_activity(
         liker,
-        %{data: %{"type" => "Like"}} = _activity,
+        %{data: %{"type" => "Like"}} = activity,
         object
       ) do
     debug(object, "Like object")
 
-    Bonfire.Federate.ActivityPub.AdapterUtils.return_pointable(object,
-      current_user: liker,
-      verbs: [:like]
-    )
-    |> debug("returned pointable")
-    ~> like(liker, ..., local: false)
+    with {:ok, pointable} <-
+           Bonfire.Federate.ActivityPub.AdapterUtils.return_pointable(object,
+             current_user: liker,
+             verbs: [:like]
+           )
+           |> debug("returned pointable"),
+         {:ok, _} = done <- like(liker, pointable, local: false) do
+      maybe_group_relays(pointable, activity, done)
+    end
   end
 
   # TODO: also support custom emoji
@@ -564,7 +573,7 @@ defmodule Bonfire.Social.Likes do
 
   def ap_receive_activity(
         liker,
-        %{data: %{"type" => "Undo"}} = _activity,
+        %{data: %{"type" => "Undo"}} = activity,
         %{data: %{"object" => liked_object}} = _object
       ) do
     with {:ok, object} <-
@@ -573,9 +582,21 @@ defmodule Bonfire.Social.Likes do
            Bonfire.Federate.ActivityPub.AdapterUtils.return_pointable(object,
              current_user: liker,
              verbs: [:like]
-           ) do
-      # the `Undo` being applied IS the federated one (from another server, or posted by a local actor through C2S), so applying it sends nothing more
-      unlike(liker, pointable, skip_boundary_check: true, skip_federation: true)
+           ),
+         # the `Undo` being applied IS the federated one (from another server, or posted by a local actor through C2S), so applying it sends nothing more as the liker, though a group we host still passes it on
+         {:ok, _} = done <-
+           unlike(liker, pointable, skip_boundary_check: true, skip_federation: true) do
+      maybe_group_relays(pointable, activity, done)
     end
+  end
+
+  # A vote on a post in a group we host reaches the group's followers through the group, as the threadiverse relays votes, so their copies count it. `maybe_group_relays/2` does nothing unless we host the group, which also keeps a vote a remote community relayed to us from going round again. Returns `result` unchanged
+  defp maybe_group_relays(object, activity, result) do
+    Bonfire.Federate.ActivityPub.AdapterUtils.maybe_group_relays(
+      e(object, :object, nil) || e(object, :object_id, nil) || object,
+      activity
+    )
+
+    result
   end
 end

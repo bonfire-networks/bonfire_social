@@ -199,7 +199,8 @@ defmodule Bonfire.Social.FeedsDedupThreadTimeLimitTest do
 
       # both replies must be threaded under the root, so the feed groups them as one thread
       for reply <- [old_reply, fresh_reply] do
-        thread_id = e(Bonfire.Common.Repo.preload(reply, :replied, force: true), :replied, :thread_id, nil)
+        thread_id =
+          e(Bonfire.Common.Repo.preload(reply, :replied, force: true), :replied, :thread_id, nil)
 
         assert thread_id == root.id,
                "reply #{reply.id} should be in thread #{root.id}, got thread_id: #{inspect(thread_id)}"
