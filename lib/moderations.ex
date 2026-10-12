@@ -58,6 +58,7 @@ defmodule Bonfire.Social.Moderations do
 
   # `hide` is everything reversible, taking a post out of a group included (the "Remove from group" action)
   defp default_reason(:hide), do: l("Hidden by a moderator")
+  defp default_reason(:block), do: l("Banned by a moderator")
   defp default_reason(_), do: l("No reason given")
 
   # the group the object is in, if any. Through `maybe_apply` since groups live in bonfire_classify, which social doesn't depend on

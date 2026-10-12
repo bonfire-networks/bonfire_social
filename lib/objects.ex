@@ -1334,14 +1334,38 @@ defmodule Bonfire.Social.Objects do
   # Told apart from a deletion by its object: the AP layer tombstones what it has VERIFIED as deleted at its origin before handing the `Delete` over, and hands a removal over with the object untouched, since its origin still has it (`Transformer.handle_remote_delete/4`). So whatever the sender marked it with, an object that is not a `Tombstone` here is one that still exists
   def ap_receive_activity(
         creator,
-        %{data: %{"type" => "Delete"} = data} = _activity,
+        %{data: %{"type" => "Delete"} = data} = activity,
         %{data: %{"type" => object_type}} = object
       )
       when object_type != "Tombstone" do
     with pointer_id when is_binary(pointer_id) <- pointer_id_from_ap_object(object),
          {:ok, post} <- Bonfire.Common.Needles.get(pointer_id, skip_boundary_check: true),
          %{} = group <- removed_from_group(data, pointer_id) do
-      maybe_apply(Bonfire.Classify.Categories, :remove_post_from_group, [creator, group, post])
+      # refused, it is tried again after re-syncing the group's moderators from its origin, for a moderator added since we last synced them
+      case maybe_apply(Bonfire.Classify.Categories, :with_moderators_resynced, [
+             group,
+             fn ->
+               maybe_apply(Bonfire.Classify.Categories, :remove_post_from_group, [
+                 creator,
+                 group,
+                 post
+               ])
+             end
+           ]) do
+        {:ok, _} = removed ->
+          # a group we host passes it on, unchanged, to its followers, as Lemmy's communities do; nothing for a group we only mirror
+          maybe_apply(
+            Bonfire.Federate.ActivityPub.AdapterUtils,
+            :maybe_group_relays,
+            [group, activity],
+            fallback_return: nil
+          )
+
+          removed
+
+        refused ->
+          refused
+      end
     else
       _ ->
         debug(

@@ -449,7 +449,8 @@ defmodule Bonfire.Social.Requests do
 
     case create(requester, type, object, opts) do
       {:ok, request} ->
-        if opts[:incoming] != true,
+        # not one that came from elsewhere, nor one kept as our own bookkeeping (`skip_federation`, eg. a moderator's action on a group hosted elsewhere waiting for the group to apply it, whose real activity goes out separately)
+        if opts[:incoming] != true and opts[:skip_federation] != true,
           do:
             Social.maybe_federate_and_gift_wrap_activity(
               current_user(opts) || requester,
