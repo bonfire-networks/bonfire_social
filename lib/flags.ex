@@ -296,12 +296,25 @@ defmodule Bonfire.Social.Flags do
       [notifications: instance_moderators()]
       |> debug("send flag of actual groups to instance moderators")
 
-  # TODO: flag_feeds should be the group moderators if the object is in a group
+  # In a group, the same recipients as a request to join it (`Categories.moderation_recipients/1`). The grant subjects `moderators/1` returns include the moderators CIRCLE rather than its members, and a circle has no feed, so they never heard of it
+  defp flag_feeds(object, _) do
+    case maybe_apply(Bonfire.Classify.Categories, :group_of_object, [object],
+           fallback_return: nil
+         ) do
+      {:ok, _, %{} = group} ->
+        [
+          notifications:
+            maybe_apply(Bonfire.Classify.Categories, :moderation_recipients, [group],
+              fallback_return: [group]
+            )
+        ]
+        |> debug("send the flag to the group and its moderators")
 
-  defp flag_feeds(object, _),
-    do:
-      [notifications: e(moderators(object), nil) || instance_moderators()]
-      |> debug("send the flag to group moderators if any, otherwise instance moderators")
+      _ ->
+        [notifications: e(moderators(object), nil) || instance_moderators()]
+        |> debug("send the flag to whoever moderates it, otherwise instance moderators")
+    end
+  end
 
   @doc """
   Retrieves instance moderators.
@@ -365,6 +378,9 @@ defmodule Bonfire.Social.Flags do
       {:ok, 1}
   """
   def unflag(%User{} = flagger, %{} = flagged) do
+    # before the Flag is gone, since that is how the anonymous report that went out is found
+    withdraw_sent_reports(flagger, flagged)
+
     # delete the Flag
     Edges.delete_by_both(flagger, Flag, flagged)
 
@@ -375,6 +391,31 @@ defmodule Bonfire.Social.Flags do
   def unflag(%User{} = user, object) when is_binary(object) do
     with {:ok, object} <- Common.Needles.get(object, current_user: user) do
       unflag(user, object)
+    end
+  end
+
+  # A report withdrawn here is withdrawn wherever it went: the anonymous one (linked to the flag by `pointer:`) and the named one sent to a group (which can't be, since an AP object points at one local record, so it is found by reporter and object). Only reports WE sent: a remote reporter's own `Undo` also lands in `unflag/2`, and must not be answered with another in their name
+  defp withdraw_sent_reports(flagger, flagged) do
+    with {:ok, %{id: flag_id}} <- get(flagger, flagged),
+         {:ok, %{data: %{"id" => flagged_ap_id}}} <-
+           ActivityPub.Object.get_cached(pointer: flagged) do
+      anonymous =
+        case ActivityPub.Object.get_cached(pointer: flag_id) do
+          {:ok, %{data: %{"type" => "Flag"}} = sent} -> [sent]
+          _ -> []
+        end
+
+      named =
+        case ActivityPub.Actor.get_cached(pointer: flagger) do
+          {:ok, %{ap_id: reporter}} ->
+            ActivityPub.Object.get_existing_flags(reporter, flagged_ap_id)
+
+          _ ->
+            []
+        end
+
+      for %{local: true} = sent <- Enum.uniq_by(anonymous ++ named, & &1.id),
+          do: ActivityPub.unflag(%{flag: sent})
     end
   end
 
@@ -758,6 +799,43 @@ defmodule Bonfire.Social.Flags do
         object
       ) do
     error(object, "Could not find object(s) to be flagged")
+  end
+
+  # A reporter on another instance withdrawing their report: what it named comes from the undone `Flag`, embedded in the `Undo` or as the stored object. Loaded without a boundary check, since what is undone is the reporter's own report rather than anything they need to see
+  def ap_receive_activity(
+        creator,
+        %{data: %{"type" => "Undo"} = data} = _activity,
+        object
+      ) do
+    flagged = e(data, "object", "object", nil) || e(object, :data, "object", nil)
+
+    case List.wrap(flagged)
+         |> Enum.flat_map(&flagged_pointer_ids/1)
+         |> Enum.map(fn pointer_id ->
+           with {:ok, flagged} <-
+                  Bonfire.Common.Needles.get(pointer_id, skip_boundary_check: true) do
+             unflag(creator, flagged)
+           end
+         end) do
+      [] -> error(flagged, "Could not find what the withdrawn report was about")
+      results -> {:ok, results}
+    end
+  end
+
+  # a report names posts and the account, which are cached as objects and actors respectively
+  defp flagged_pointer_ids(flagged) do
+    ap_id = ActivityPub.Object.get_ap_id(flagged)
+
+    with {:ok, %{pointer_id: pointer_id}} when is_binary(pointer_id) <-
+           ActivityPub.Object.get_cached(ap_id: ap_id) do
+      [pointer_id]
+    else
+      _ ->
+        case ActivityPub.Actor.get_cached(ap_id: ap_id) do
+          {:ok, %{pointer_id: pointer_id}} when is_binary(pointer_id) -> [pointer_id]
+          _ -> []
+        end
+    end
   end
 
   def ap_receive_activity(

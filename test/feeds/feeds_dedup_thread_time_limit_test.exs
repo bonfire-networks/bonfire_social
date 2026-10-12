@@ -27,6 +27,16 @@ defmodule Bonfire.Social.FeedsDedupThreadTimeLimitTest do
     )
   end
 
+  # {activity id, object id} per row plus the page info, so a failure shows whether an entry was missing, replaced or on another page
+  defp feed_rows(%{edges: edges, page_info: page_info}) do
+    %{
+      rows: Enum.map(edges, &{e(&1, :activity, :id, nil), e(&1, :activity, :object_id, nil)}),
+      page_info: page_info
+    }
+  end
+
+  defp feed_rows(other), do: other
+
   describe "dedup_by_thread applies the time window to the thread's latest activity" do
     setup do
       %{user: fake_user!("thread window viewer"), author: fake_user!("thread window author")}
@@ -206,32 +216,42 @@ defmodule Bonfire.Social.FeedsDedupThreadTimeLimitTest do
                "reply #{reply.id} should be in thread #{root.id}, got thread_id: #{inspect(thread_id)}"
       end
 
-      feed =
-        FeedLoader.feed(
-          :recent_discussions,
-          %{feed_ids: [Feeds.feed_id(:outbox, replier)], time_limit: 7},
-          current_user: user
-        )
+      outbox_id = Feeds.feed_id(:outbox, replier)
+      filters = %{feed_ids: [outbox_id], time_limit: 7}
+
+      feed = FeedLoader.feed(:recent_discussions, filters, current_user: user)
 
       # the representative entry (the old first reply) predates the window, but the thread's latest reply is fresh
-      # the message lists what the feed returned, so a failure shows whether the entry was missing, replaced or on another page
+      # this fails only in a full-suite CI run (CI showed fresh_reply representing the thread instead), so the message probes each candidate cause: old_reply missing from the outbox, hidden from the viewer, or dropped by the deferred join / its fallback
       assert FeedLoader.feed_contains?(feed, old_reply, current_user: user),
              "an active rootless thread should stay visible even when its earliest in-feed entry is older than the window. Expected root=#{root.id} old_reply=#{old_reply.id} fresh_reply=#{fresh_reply.id}, got: " <>
                inspect(
-                 case feed do
-                   %{edges: edges, page_info: page_info} ->
-                     %{
-                       rows:
-                         Enum.map(
-                           edges,
-                           &{e(&1, :activity, :id, nil), e(&1, :activity, :object_id, nil)}
-                         ),
-                       page_info: page_info
-                     }
-
-                   other ->
-                     other
-                 end
+                 %{
+                   feed: feed_rows(feed),
+                   old_reply_published_to_outbox:
+                     Bonfire.Common.Repo.exists?(
+                       from(fp in Bonfire.Data.Social.FeedPublish,
+                         where: fp.id == ^old_reply.id and fp.feed_id == ^outbox_id
+                       )
+                     ),
+                   old_reply_visible_to_viewer:
+                     Bonfire.Boundaries.can?(user, [:see, :read], old_reply),
+                   without_deferred_join:
+                     feed_rows(
+                       FeedLoader.feed(:recent_discussions, filters,
+                         current_user: user,
+                         query_with_deferred_join: false
+                       )
+                     ),
+                   without_boundaries:
+                     feed_rows(
+                       FeedLoader.feed(:recent_discussions, filters,
+                         current_user: user,
+                         skip_boundary_check: true
+                       )
+                     )
+                 },
+                 limit: :infinity
                )
     end
 
