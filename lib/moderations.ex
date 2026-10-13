@@ -21,7 +21,8 @@ defmodule Bonfire.Social.Moderations do
       {:ok, %Bonfire.Data.Social.Moderation{}}
   """
   def record(subject, verb, object, opts \\ []) do
-    group = group_of(object)
+    # given when the object doesn't lead to it, as a ban on a group's behalf, whose object is the person
+    group = opts[:group] || group_of(object)
 
     # TODO: for an undo (`unlock`, `unhide`, …), `opts[:reverses]` sets `reply_to_id` to the record it reverses when there is one, with no `thread_id` so records never join a thread
     # TODO: `opts` to widen who reads it (including the person acted on) and to notify the person acted on, as the confirmation's tick boxes ask
@@ -29,7 +30,10 @@ defmodule Bonfire.Social.Moderations do
     |> Activities.put_assoc(verb, subject, object)
     |> maybe_put_reason(opts[:reason])
     # not public: addressed only to who moderates where it happened, so `mentions` (no preset) plus their circle
-    |> Bonfire.Boundaries.Acls.cast(subject, boundary: "mentions", to_circles: readers(group))
+    |> Bonfire.Boundaries.Acls.cast(subject,
+      boundary: "mentions",
+      to_circles: if(opts[:instance_wide], do: instance_readers(), else: readers(group))
+    )
     # the group's log is its notifications feed; an explicit list, so nothing else (eg. the moderator's own outbox) is added
     |> FeedActivities.cast(subject, feed_ids: log_feeds(group))
     |> repo().insert()
@@ -71,7 +75,11 @@ defmodule Bonfire.Social.Moderations do
     end
   end
 
-  # TODO: a record with no group (an instance action, or an author's own lock outside a group) is read by instance moderators and its subject
+  # an instance-wide action is read by who moderates the instance
+  defp instance_readers,
+    do: Enum.map([:admin, :mod], &Bonfire.Boundaries.Circles.get_id!/1)
+
+  # TODO: a record with no group of an action that isn't instance-wide (an author's own lock outside a group) is read by instance moderators too
   defp readers(nil), do: []
 
   # TODO: instance moderators read a group's records too
