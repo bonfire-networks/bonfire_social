@@ -32,7 +32,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         config(:bonfire_social, Bonfire.Social.Feeds, feed_origin_strategy: :addressed)
     end
 
-    # The kinds of notification this instance distinguishes, in display order, read by `Bonfire.Social.Notifications`. ONE declaration per category, shared by the notification centre's chips and its "Notify me about" switches, so a switch can never hide something different from what its chip shows. The key is the verb the category covers, `activity_types` overrides that where a category isn't one verb, `name_pluralized`/`icon` override what the verb registry declares, and `chip`/`row` say where it appears (`false` nowhere, `:unimplemented` only while the instance shows unbuilt UI). Labels and icons are UI-facing but live here because the Mastodon API, the unseen badge and the digest read the same taxonomy, as feed presets already do below
+    # The kinds of notification this instance distinguishes, in display order, read by `Bonfire.Social.Notifications`. ONE declaration per category, shared by the notification centre's chips and its "Notify me about" switches, so a switch can never hide something different from what its chip shows. The key is the verb the category covers, `activity_types` overrides that where a category isn't one verb, `name_pluralized`/`icon` override what the verb registry declares, `chip_name` is a shorter label for the chip where `name_pluralized` would not fit one, and `chip`/`row` say where it appears (`false` nowhere, `:unimplemented` only while the instance shows unbuilt UI). Labels and icons are UI-facing but live here because the Mastodon API, the unseen badge and the digest read the same taxonomy, as feed presets already do below
     # `experiences` is the other half: which of `Bonfire.Social.Activities.experienced_as/2`'s answers this category covers, defaulting to its own key. That is what a preference, an icon and a phrase turn on, while `activity_types` is what a query can select, and the two cannot be derived from each other: the same stored `:create` row is a mention to one person and nothing in particular to another. Declaring both keeps a category wrong in one place rather than in four, and an experience no category claims falls to `other`
     # Each category is read two ways that cannot share code, so keep them in step: queries select by its `filters:` (else its `activity_types`) through `Notifications.query_filters_for/2`, and push, email, wording and the Mastodon type go by its `experiences:` through `Activities.experienced_as/2`. `Bonfire.Social.NotificationCategoriesEquivalenceTest` fails when the two disagree about a kind of notification
     config :bonfire_social, Bonfire.Social.Notifications,
@@ -55,6 +55,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         # replies that do not name you. One that does is a mention (`experienced_as/2` asks that first), which is how Mastodon notifies anyone and so how every reply from there arrives; what is left here is the kind Mastodon would not notify at all. Answering a post and answering something that is not a post are one thing to be told about and two things to render
         extra_replies: %{
           name_pluralized: l("Replies (without mention)"),
+          chip_name: l("Replies"),
           description:
             l(
               "Replies to your posts and comments that don't mention you, however far down. Replies between people on other servers only arrive if they reach this one"
@@ -168,6 +169,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         },
         follow: %{
           name_pluralized: l("New followers"),
+          chip_name: l("Follows"),
           # overrides the verb's own icon, which the other categories inherit (the `follow` verb declares none)
           icon: "ph:user-plus",
           icon_class: "text-info",
@@ -214,6 +216,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         # `catch_all`: its chip shows what no other chip does, which `Notifications` computes from the chips, so a new chip narrows it by itself. Its switch hides the same, and its chip still shows it while the switch is off
         other: %{
           name_pluralized: l("Other activity"),
+          chip_name: l("Other"),
           # its name can't say what it holds, since that is whatever no other row does, so the preferences row shows this beside it. Only what its switches govern
           description:
             l(
@@ -244,6 +247,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         # shows the existing mod queue, whose preset supplies the label, icon, filters, opts and the `instance_permission_required: :mediate` gate that hides this chip from everyone else. Not a row: it is a shared queue, not a kind of notification you get
         flag: %{
           preset: :flagged_content,
+          chip_name: l("Flags"),
           masto: :admin_report,
           icon_class: "text-error",
           row: false,
