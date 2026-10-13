@@ -40,7 +40,13 @@ defmodule Bonfire.Social.Objects do
   alias Bonfire.Epics.Epic
 
   @behaviour Bonfire.Federate.ActivityPub.FederationModules
-  def federation_module, do: ["Delete", {"Create", "Tombstone"}]
+  def federation_module,
+    do: [
+      "Delete",
+      {"Create", "Tombstone"},
+      # a group elsewhere refusing one of our moderators' removals from it
+      {"Reject", "Delete"}
+    ]
 
   @doc """
   Casts various attributes for an object changeset.
@@ -1330,6 +1336,23 @@ defmodule Bonfire.Social.Objects do
     {:ok, pointer |> Map.put(:sensitive, nil)}
   end
 
+  # The group elsewhere REFUSED our moderator's removal from it: its request is refused, and the post put back in the group here in case it was taken out at once (`apply_now:`), by the group boosting it again, only on this instance (the group's own instance decides what it announces, and it refused)
+  def ap_receive_activity(
+        _rejecter,
+        %{data: %{"type" => "Reject"}} = _activity,
+        %{local: true, data: %{"type" => "Delete", "object" => removed} = data} = ours
+      ) do
+    Bonfire.Social.Moderations.refuse_applied(ours, fn _record ->
+      with {:ok, %{pointer_id: post_id}} when is_binary(post_id) <-
+             ActivityPub.Object.get_cached(ap_id: ActivityPub.Object.get_ap_id(removed)),
+           {:ok, post} <- Bonfire.Common.Needles.get(post_id, skip_boundary_check: true),
+           %{} = group <- removed_from_group(data, post_id),
+           false <- Bonfire.Social.Boosts.boosted?(group, post) do
+        Bonfire.Social.Boosts.boost(group, post, skip_federation: true, skip_boundary_check: true)
+      end
+    end)
+  end
+
   # A moderator's REMOVAL, which the threadiverse sends as a `Delete` of the post (Lemmy with the reason in `summary`: "if summary is present, this is a mod action (Remove in Lemmy terms)"). It takes the post out of the group and nothing more: a group's moderator has no standing to erase someone's post from their own profile, so it never deletes it. `remove_post_from_group/3` checks the moderator's `:mediate` on the group, as an incoming `Lock` does.
   # Told apart from a deletion by its object: the AP layer tombstones what it has VERIFIED as deleted at its origin before handing the `Delete` over, and hands a removal over with the object untouched, since its origin still has it (`Transformer.handle_remote_delete/4`). So whatever the sender marked it with, an object that is not a `Tombstone` here is one that still exists
   def ap_receive_activity(
@@ -1341,8 +1364,28 @@ defmodule Bonfire.Social.Objects do
     with pointer_id when is_binary(pointer_id) <- pointer_id_from_ap_object(object),
          {:ok, post} <- Bonfire.Common.Needles.get(pointer_id, skip_boundary_check: true),
          %{} = group <- removed_from_group(data, pointer_id) do
-      # refused, it is tried again after re-syncing the group's moderators from its origin, for a moderator added since we last synced them
-      case maybe_apply(Bonfire.Classify.Categories, :with_moderators_resynced, [
+      if e(activity, :local, nil) == true do
+        # OUR moderator's removal, relayed back by the group elsewhere that applied it (`Categories.remove_post_from_group/4` sent it, pending): that is what takes it out of the group here, if it's still waiting
+        Bonfire.Social.Moderations.confirm_applied(activity, fn _record ->
+          Bonfire.Social.Boosts.unboost(group, post)
+        end)
+      else
+        receive_removal(creator, group, post, activity)
+      end
+    else
+      _ ->
+        debug(
+          object,
+          "a moderator's removal of something we hold in no group, so nothing to remove"
+        )
+
+        {:ok, :skip}
+    end
+  end
+
+  defp receive_removal(creator, group, post, activity) do
+    # refused, it is tried again after re-syncing the group's moderators from its origin, for a moderator added since we last synced them
+    case maybe_apply(Bonfire.Classify.Categories, :with_moderators_resynced, [
              group,
              fn ->
                maybe_apply(Bonfire.Classify.Categories, :remove_post_from_group, [
@@ -1365,15 +1408,6 @@ defmodule Bonfire.Social.Objects do
 
         refused ->
           refused
-      end
-    else
-      _ ->
-        debug(
-          object,
-          "a moderator's removal of something we hold in no group, so nothing to remove"
-        )
-
-        {:ok, :skip}
     end
   end
 
