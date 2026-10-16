@@ -134,7 +134,8 @@ defmodule Bonfire.Social.Bookmarks do
         {:ok, bookmark}
 
       {:error, e} ->
-        case get(bookmarker, bookmarked) do
+        # `:see` rather than the `:read` a single load asks for: this only finds the bookmarker's own bookmark, and bookmarking checks no boundary
+        case get(bookmarker, bookmarked, verbs: [:see]) do
           {:ok, bookmark} ->
             debug(bookmark, "the user already bookmarks this object")
             {:ok, bookmark}

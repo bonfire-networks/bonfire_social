@@ -228,8 +228,10 @@ defmodule Bonfire.Social.Edges do
       when is_atom(type_of_edge_schema) and not is_nil(type_of_edge_schema) do
     # NOTE: type_of_edge_schema has to be a Pointable Ecto Schema
 
+    # cut to 63 characters, as Postgres stores a longer identifier cut to that length, so a long name such as the bookmark one would never match and Ecto would raise instead
     unique_index =
       "bonfire_data_edges_edge_#{type_of_edge_schema.__schema__(:source)}_unique_index"
+      |> String.slice(0, 63)
 
     # the constraint goes on the edge's own changeset, since that's the insert a duplicate violates: on the parent it never matches, and Ecto raises instead of returning an error
     put_edge_assoc(
@@ -277,14 +279,15 @@ defmodule Bonfire.Social.Edges do
   """
   def get(schema_or_context, subject, object, opts \\ [])
 
+  # in this clause the opts are the third argument
   def get(schema_or_context, filters, opts, []) when is_list(filters) and is_list(opts) do
-    edge_query(schema_or_context, filters, opts)
+    edge_query(schema_or_context, filters, opening(opts))
     # |> debug
     |> repo().single()
   end
 
   def get(schema_or_context, subject, object, opts) do
-    edge_query(schema_or_context, subject, object, opts)
+    edge_query(schema_or_context, subject, object, opening(opts))
     |> repo().single()
   end
 
@@ -292,15 +295,18 @@ defmodule Bonfire.Social.Edges do
   def get!(_, _subject, [], _opts), do: []
 
   def get!(schema_or_context, subject, objects, opts) when is_list(objects) do
-    edge_query(schema_or_context, subject, objects, opts)
+    edge_query(schema_or_context, subject, objects, opening(opts))
     |> repo().all()
   end
 
   def get!(schema_or_context, subject, object, opts) do
-    edge_query(schema_or_context, subject, object, opts)
+    edge_query(schema_or_context, subject, object, opening(opts))
     |> limit(1)
     |> repo().one()
   end
+
+  # loading an edge opens its object, so asks for `:read` as any single load does, where a listing asks for `:see`. A caller that only needs to know its own edge exists, such as a dedupe lookup, passes `verbs: [:see]`
+  defp opening(opts), do: Keyword.put_new(to_options(opts), :verbs, [:read])
 
   @doc """
   Retrieves the last edge of a given type, subject, and object from the database.

@@ -511,7 +511,8 @@ defmodule Bonfire.Social.Quotes do
       {:ok, ignored_request}
   """
   def reject(request, opts) do
-    Requests.requested(request)
+    # with the opts, so the lookup runs as the quoted post's author rather than as a guest
+    Requests.requested(request, opts)
     |> info("request to reject")
     ~> reject(..., e(..., :edge, :subject, nil), e(..., :edge, :object, nil), opts)
   end

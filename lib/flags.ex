@@ -280,7 +280,8 @@ defmodule Bonfire.Social.Flags do
   # |> debug("modddds")
 
   defp maybe_dup(flagger, object, e) do
-    case get(flagger, object) do
+    # `:see` rather than the `:read` a single load asks for: this only finds the flagger's own flag, which may be on something they can't read
+    case get(flagger, object, verbs: [:see]) do
       {:ok, flag} ->
         debug(flag, "the user already flagged this object")
         {:ok, flag}
@@ -396,7 +397,8 @@ defmodule Bonfire.Social.Flags do
 
   # A report withdrawn here is withdrawn wherever it went: the anonymous one (linked to the flag by `pointer:`) and the named one sent to a group (which can't be, since an AP object points at one local record, so it is found by reporter and object). Only reports WE sent: a remote reporter's own `Undo` also lands in `unflag/2`, and must not be answered with another in their name
   defp withdraw_sent_reports(flagger, flagged) do
-    with {:ok, %{id: flag_id}} <- get(flagger, flagged),
+    # `:see`: the flagger's own flag, which may be on something they can't read
+    with {:ok, %{id: flag_id}} <- get(flagger, flagged, verbs: [:see]),
          {:ok, %{data: %{"id" => flagged_ap_id}}} <-
            ActivityPub.Object.get_cached(pointer: flagged) do
       anonymous =

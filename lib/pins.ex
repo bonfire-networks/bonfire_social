@@ -287,7 +287,7 @@ defmodule Bonfire.Social.Pins do
         )
 
       {:error, e} ->
-        case get(pinner, pinned) do
+        case get(pinner, pinned, verbs: [:see]) do
           {:ok, pin} ->
             debug(pin, "the user already pinned this object")
             {:ok, pin}
@@ -299,7 +299,8 @@ defmodule Bonfire.Social.Pins do
     end
   rescue
     e in Ecto.ConstraintError ->
-      case get(pinner, pinned) do
+      # `:see`, as above
+      case get(pinner, pinned, verbs: [:see]) do
         {:ok, pin} ->
           debug(pin, "the user already pinned this object")
           {:ok, pin}
@@ -346,7 +347,8 @@ defmodule Bonfire.Social.Pins do
     # `Outgoing` intercepts into a generic object-`Delete` instead of a collection `Remove`).
     # category pins never federate, so skip the `Remove`
     with false <- skip_federation?(pinned),
-         {:ok, pin} <- get(scope, pinned) do
+         # `:see`: the scope's own pin, and the instance scope may pin what it can't read
+         {:ok, pin} <- get(scope, pinned, verbs: [:see]) do
       # federate as the pinner (like `do_pin`), not `scope` which may be a bare container id (not a
       # valid AP actor); preload actor + object `:peered` for the locality check
       Social.maybe_federate(

@@ -243,7 +243,8 @@ defmodule Bonfire.Social.Likes do
           else: {:ok, like}
 
       {:error, e} ->
-        case get(liker, liked) do
+        # `:see` rather than the `:read` a single load asks for: this only finds the liker's own like, and `:like` can be granted without `:read`
+        case get(liker, liked, verbs: [:see]) do
           {:ok, like} ->
             debug(like, "the user already likes this object")
             {:ok, like}
@@ -254,7 +255,8 @@ defmodule Bonfire.Social.Likes do
     end
   rescue
     e in Ecto.ConstraintError ->
-      case get(liker, liked) do
+      # `:see`, as above
+      case get(liker, liked, verbs: [:see]) do
         {:ok, like} ->
           debug(like, "the user already likes this object")
           {:ok, like}
