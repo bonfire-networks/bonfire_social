@@ -1982,15 +1982,14 @@ defmodule Bonfire.Social.Threads do
     result
   end
 
-  # On an UPDATE the same field can also say a thread was REOPENED, which a create cannot: there is nothing to reopen. Only for an object that already has a custom ACL, since one that never had cannot have been locked, and unblocking regardless would write an ACL for every edit of every open thread.
+  # On an UPDATE the same field can also say a thread was REOPENED, which a create cannot: there is nothing to reopen. Only for a thread that is locked (the shared `locked` ACL attached), so an edit of an open thread doesn't run an unlock for nothing.
   def ap_receive_comments_enabled(
         {:ok, object} = result,
         creator,
         %{"commentsEnabled" => true},
         opts
       ) do
-    # `match?` deliberately: `get_object_custom_acl/1` answers `{:error, :not_found}`, which is truthy
-    if opts[:updating] && match?({:ok, _}, Bonfire.Boundaries.Acls.get_object_custom_acl(object)) do
+    if opts[:updating] && Bonfire.Boundaries.Blocks.is_blocked?(object, :lock) do
       debug("updated object says comments are enabled again, so reopen its thread")
       Bonfire.Boundaries.Blocks.unlock(object, current_user: creator)
     end
