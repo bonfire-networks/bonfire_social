@@ -1416,7 +1416,7 @@ defmodule Bonfire.Social.Threads do
   defp query_extras(query, opts) do
     query
     |> Activities.query_object_preload_create_activity(opts)
-    |> Activities.as_permitted_for(opts, opts[:verbs] || [:see, :read])
+    |> Activities.as_permitted_for(opts, opts[:verbs] || [:see])
     |> query_order(opts[:sort_by], opts[:sort_order], opts[:with_pins])
   end
 

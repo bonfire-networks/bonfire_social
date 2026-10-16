@@ -698,7 +698,8 @@ defmodule Bonfire.Social.Objects do
     |> debug("cs")
   end
 
-  def as_permitted_for(q, opts \\ [], verbs \\ [:see, :read]) do
+  # `[:see]`: whether it may be LISTED; opening one object asks for `[:read]` (`read/2`)
+  def as_permitted_for(q, opts \\ [], verbs \\ [:see]) do
     to_options(opts)
     |> Keyword.put_new(:verbs, verbs)
     |> boundarise(q, main_object.id, ...)

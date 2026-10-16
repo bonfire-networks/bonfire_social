@@ -117,13 +117,14 @@ defmodule Bonfire.Social.Activities do
       # Filtered query
 
   """
-  def as_permitted_for(q, opts \\ [], verbs \\ [:see, :read]) do
+  # `[:see]`: whether it may be LISTED; a card shows locked what the viewer may see but not read
+  def as_permitted_for(q, opts \\ [], verbs \\ [:see]) do
     to_options(opts)
     |> Keyword.put_new(:verbs, verbs)
     |> boundarise(q, activity.object_id, ...)
   end
 
-  def reply_to_as_permitted_for(q, opts \\ [], verbs \\ [:see, :read]) do
+  def reply_to_as_permitted_for(q, opts \\ [], verbs \\ [:see]) do
     to_options(opts)
     |> Keyword.put_new(:verbs, verbs)
     |> boundarise(q, replied.reply_to_id, ...)
