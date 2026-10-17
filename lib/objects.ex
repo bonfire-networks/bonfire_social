@@ -1387,28 +1387,28 @@ defmodule Bonfire.Social.Objects do
   defp receive_removal(creator, group, post, activity) do
     # refused, it is tried again after re-syncing the group's moderators from its origin, for a moderator added since we last synced them
     case maybe_apply(Bonfire.Classify.Categories, :with_moderators_resynced, [
-             group,
-             fn ->
-               maybe_apply(Bonfire.Classify.Categories, :remove_post_from_group, [
-                 creator,
-                 group,
-                 post
-               ])
-             end
-           ]) do
-        {:ok, _} = removed ->
-          # a group we host passes it on, unchanged, to its followers, as Lemmy's communities do; nothing for a group we only mirror
-          maybe_apply(
-            Bonfire.Federate.ActivityPub.AdapterUtils,
-            :maybe_group_relays,
-            [group, activity],
-            fallback_return: nil
-          )
+           group,
+           fn ->
+             maybe_apply(Bonfire.Classify.Categories, :remove_post_from_group, [
+               creator,
+               group,
+               post
+             ])
+           end
+         ]) do
+      {:ok, _} = removed ->
+        # a group we host passes it on, unchanged, to its followers, as Lemmy's communities do; nothing for a group we only mirror
+        maybe_apply(
+          Bonfire.Federate.ActivityPub.AdapterUtils,
+          :maybe_group_relays,
+          [group, activity],
+          fallback_return: nil
+        )
 
-          removed
+        removed
 
-        refused ->
-          refused
+      refused ->
+        refused
     end
   end
 
