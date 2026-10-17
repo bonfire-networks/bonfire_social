@@ -1418,6 +1418,11 @@ defmodule Bonfire.Social.Objects do
         removed
 
       refused ->
+        # tells the moderator's instance, so it takes back what it applied (only for a group we host)
+        maybe_apply(Bonfire.Federate.ActivityPub.Outgoing, :send_reject, [group, activity],
+          fallback_return: nil
+        )
+
         refused
     end
   end

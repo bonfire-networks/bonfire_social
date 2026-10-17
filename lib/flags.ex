@@ -10,6 +10,8 @@ defmodule Bonfire.Social.Flags do
   use Arrows
   use Bonfire.Common.Utils
 
+  alias Bonfire.Data.Social.Flag
+
   use Bonfire.Common.Repo,
     schema: Flag,
     searchable_fields: [:flagger_id, :flagged_id]
@@ -19,7 +21,6 @@ defmodule Bonfire.Social.Flags do
 
   alias Bonfire.Data.Identity.User
   alias Bonfire.Data.Identity.Named
-  alias Bonfire.Data.Social.Flag
   # alias Bonfire.Boundaries.Verbs
   alias Bonfire.Common
   # alias Bonfire.Me.Users
@@ -171,11 +172,11 @@ defmodule Bonfire.Social.Flags do
          ~> create(flagger, ..., opts) do
       {:ok, flag} ->
         # looked up once, and only when the report may leave the instance
-        group =
+        destination =
           if opts[:forward] == true or opts[:forward_to_group] == true,
-            do: remote_group_for_report(object)
+            do: report_destination(object)
 
-        maybe_send_to_group(flagger, object, group, opts)
+        maybe_send_to_group(flagger, object, destination, opts)
 
         if opts[:forward] == true and opts[:skip_federation] != true and
              id(flagger) not in maybe_apply(
@@ -186,8 +187,8 @@ defmodule Bonfire.Social.Flags do
              )
              |> debug("do_not_federate_user_ids") do
           Social.maybe_federate_and_gift_wrap_activity(flagger, flag,
-            # the anonymous report names the remote group too, unless the reporter sent the group a named one
-            anonymous_to_group: if(opts[:forward_to_group] != true, do: group)
+            # the anonymous report reaches the group's moderators too, unless the reporter sent them a named one
+            anonymous_to_group: if(opts[:forward_to_group] != true, do: destination)
           )
           |> debug("federated flag activity")
         else
@@ -216,8 +217,46 @@ defmodule Bonfire.Social.Flags do
     end
   end
 
-  # A NAMED report to the moderators of the remote group the object is in, when the reporter asks for it (`forward_to_group: true`). Sent as the reporter, unlike the anonymous one: the threadiverse accepts a report only from a person (Lemmy's `Report.actor` is an `ApubPerson`), which the flag form warns about
-  defp maybe_send_to_group(flagger, object, %{} = group, opts) do
+  @doc """
+  Where a report on `object` can go beyond this instance, for the reporter to choose (the flag form's checkboxes), as `%{group: group, to: ap_ids, audience: group_ap_id}`, or nil:
+
+  - the group it is in, when that group is hosted elsewhere: addressed to the group, whose moderators are there
+  - a group hosted here that has moderators on other instances: addressed to those moderators, as Lemmy's communities relay a report to every moderator's inbox
+
+  A group's moderators here see reports on its moderation page already.
+  """
+  def report_destination(object) do
+    with {:ok, _, %{} = group} <-
+           maybe_apply(Bonfire.Classify.Categories, :group_of_object, [object],
+             fallback_return: nil
+           ),
+         group = repo().maybe_preload(group, character: [:peered]),
+         {:ok, %{ap_id: group_ap_id}} <- ActivityPub.Actor.get_cached(pointer: group),
+         to when to != [] <-
+           if(Social.is_local?(group),
+             do: remote_moderator_ap_ids(group),
+             else: [group_ap_id]
+           ) do
+      %{group: group, to: to, audience: group_ap_id}
+    else
+      _ -> nil
+    end
+  end
+
+  defp remote_moderator_ap_ids(group) do
+    maybe_apply(Bonfire.Classify.Categories, :moderators, [group], fallback_return: [])
+    |> repo().maybe_preload(character: [:peered])
+    |> Enum.reject(&Social.is_local?/1)
+    |> Enum.flat_map(fn moderator ->
+      case ActivityPub.Actor.get_cached(pointer: moderator) do
+        {:ok, %{ap_id: ap_id}} -> [ap_id]
+        _ -> []
+      end
+    end)
+  end
+
+  # A NAMED report to the group's moderators (`report_destination/1`), when the reporter asks for it (`forward_to_group: true`). Sent as the reporter, unlike the anonymous one: the threadiverse accepts a report only from a person (Lemmy's `Report.actor` is an `ApubPerson`), which the flag form warns about
+  defp maybe_send_to_group(flagger, object, %{to: to, audience: audience}, opts) do
     if opts[:forward_to_group] == true and opts[:skip_federation] != true and
          id(flagger) not in maybe_apply(
            Bonfire.Federate.ActivityPub,
@@ -225,8 +264,7 @@ defmodule Bonfire.Social.Flags do
            [],
            fallback_return: []
          ) do
-      with {:ok, %{ap_id: group_ap_id}} <- ActivityPub.Actor.get_cached(pointer: group),
-           {:ok, reporter} <- ActivityPub.Actor.get_cached(pointer: flagger),
+      with {:ok, reporter} <- ActivityPub.Actor.get_cached(pointer: flagger),
            {:ok, ap_object} <- ActivityPub.Object.get_cached(pointer: object) do
         ActivityPub.flag(%{
           actor: reporter,
@@ -234,8 +272,8 @@ defmodule Bonfire.Social.Flags do
           content: opts[:comment],
           # `summary` is where Lemmy reads the reason, `content` where Mastodon-family software does
           additional: %{
-            "to" => [group_ap_id],
-            "audience" => group_ap_id,
+            "to" => to,
+            "audience" => audience,
             "summary" => opts[:comment]
           }
         })
@@ -246,19 +284,12 @@ defmodule Bonfire.Social.Flags do
     end
   end
 
-  # not in a remote group
-  defp maybe_send_to_group(_flagger, _object, _group, _opts), do: nil
+  # nowhere for it to go beyond this instance
+  defp maybe_send_to_group(_flagger, _object, _destination, _opts), do: nil
 
-  # the anonymous report also names the remote group the object is in, so it reaches that group's moderators where their software accepts an anonymous report (Bonfire does, Lemmy does not)
-  defp anonymous_to_group(%{} = group, content) do
-    case ActivityPub.Actor.get_cached(pointer: group) do
-      {:ok, %{ap_id: group_ap_id}} ->
-        %{"to" => [group_ap_id], "audience" => group_ap_id, "summary" => content}
-
-      _ ->
-        %{}
-    end
-  end
+  # the anonymous report also reaches the group's moderators (`report_destination/1`), where their software accepts an anonymous report (Bonfire does, Lemmy does not)
+  defp anonymous_to_group(%{to: to, audience: audience}, content),
+    do: %{"to" => to, "audience" => audience, "summary" => content}
 
   defp anonymous_to_group(_, _), do: %{}
 
