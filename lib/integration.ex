@@ -370,6 +370,11 @@ defmodule Bonfire.Social do
     end
   end
 
+  @doc """
+  Whether the viewer may `verb` the `object`: its creator, or anyone its boundary (`object_boundary`) permits, or anyone who may `verb` on the instance.
+
+  WARNING: The instance fallback lets through anyone holding `verb` on the instance, whatever the object's own boundary says. `instance_care` gives local users the `:contribute` role there (`:create`, `:reply`, `:tag`, `:pin`, `:describe`…), instance moderators `:moderate` (adding `:edit`, `:delete`, `:mediate`, `:block`…) and admins everything. So only use it for a verb meant to be an instance-wide power, such as `:delete` or `:edit` for moderators, never one local users hold.
+  """
   def maybe_can?(context, verb, object, object_boundary \\ nil) do
     current_user_id(context) ==
       (e(object, :created, :creator_id, nil) ||

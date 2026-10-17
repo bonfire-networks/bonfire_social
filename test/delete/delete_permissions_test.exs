@@ -56,6 +56,22 @@ defmodule Bonfire.Social.DeletePermissionsTest do
     assert {:error, _} = Posts.read(context.post.id, current_user: context.owner)
   end
 
+  # an instance moderator is offered Delete on anything (`DeleteObjectLive.can_delete?/3`, through `can?(_, :delete, :instance)`), so deleting has to agree
+  test "an instance moderator can delete another user's post by ID", context do
+    moderator = Fake.instance_moderator!(context.other)
+    refute Accounts.is_admin?(moderator), "control: a moderator, not an admin"
+
+    assert {:ok, _} = Objects.delete(context.post.id, current_user: moderator)
+    assert {:error, _} = Posts.read(context.post.id, current_user: context.owner)
+  end
+
+  test "an instance moderator can delete another user's loaded post", context do
+    moderator = Fake.instance_moderator!(context.other)
+
+    assert {:ok, _} = Objects.delete(context.post, current_user: moderator)
+    assert {:error, _} = Posts.read(context.post.id, current_user: context.owner)
+  end
+
   test "generic queries enforce delete permission for non-admins", context do
     query =
       Needles.query(Created, [id: context.post.id],

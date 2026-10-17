@@ -1080,10 +1080,10 @@ defmodule Bonfire.Social.RuntimeConfig do
           include: [:with_creator, :with_parent],
           exclude: [:with_subject]
         },
-        # a moderation record's reason is its activity's own name
+        # a moderation record's reason is its activity's own name, and an ask's edge says what it was for, so a join request gets its Approve and Decline here as in notifications
         "Moderation feeds" => %{
           match: %{feed_name: :moderation},
-          include: [:activity_name]
+          include: [:activity_name, :with_request_edge]
         },
         "Requests for Me" => %{
           match: %{activity_types: [:request]},

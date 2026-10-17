@@ -723,7 +723,7 @@ defmodule Bonfire.Social.Objects do
              current_user(opts),
              :delete,
              object
-           ) do
+           ) or may_delete_anything?(opts) do
       do_delete(object, opts)
     else
       _ ->
@@ -735,7 +735,13 @@ defmodule Bonfire.Social.Objects do
     opts =
       to_options(opts)
       |> Keyword.put(:verbs, [:delete])
-      |> Keyword.put_new(:skip_boundary_check, :admins)
+
+    opts =
+      Keyword.put_new(
+        opts,
+        :skip_boundary_check,
+        if(may_delete_anything?(opts), do: true, else: :admins)
+      )
 
     # load & check permission
     # TODO: don't load if being passed an obj
@@ -752,6 +758,10 @@ defmodule Bonfire.Social.Objects do
         {:error, :not_found}
     end
   end
+
+  # admins and instance moderators may delete anything, as they are offered to (`DeleteObjectLive.can_delete?/3`, through `Bonfire.Social.maybe_can?/4`)
+  defp may_delete_anything?(opts),
+    do: Bonfire.Boundaries.can?(current_user(opts), :delete, :instance) == true
 
   # for internal use, please call `delete/2` which checks for permissiom
   def do_delete(objects, opts \\ [])
