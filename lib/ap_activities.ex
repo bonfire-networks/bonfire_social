@@ -449,7 +449,8 @@ defmodule Bonfire.Social.APActivities do
       %{
         "id" => id,
         "pointer_id" => pointer_id,
-        "pointer_type" => Types.object_type(pointer || pointer_id),
+        # the schema, since it's read back to load the object by type (`Needles.list_by_type!/2`), where a group's `:group` names no table
+        "pointer_type" => Types.object_type_schema(pointer || pointer_id),
         "type" => type
       }
     else

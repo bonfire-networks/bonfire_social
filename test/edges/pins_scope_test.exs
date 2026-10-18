@@ -87,12 +87,20 @@ defmodule Bonfire.Social.PinsScopeTest do
     end
 
     # pinning to a thread and marking an answer (`Bonfire.Social.Answers`) are both this call
-    test "a thread's author can pin a reply to the thread", %{author: author, root: root, reply: reply} do
+    test "a thread's author can pin a reply to the thread", %{
+      author: author,
+      root: root,
+      reply: reply
+    } do
       assert {:ok, _} = Pins.pin(author, reply, id(root))
       assert Pins.pinned?(id(root), reply)
     end
 
-    test "someone else in the thread can't pin to it", %{bystander: bystander, root: root, reply: reply} do
+    test "someone else in the thread can't pin to it", %{
+      bystander: bystander,
+      root: root,
+      reply: reply
+    } do
       assert {:error, _} = Pins.pin(bystander, reply, id(root))
       refute Pins.pinned?(id(root), reply)
     end

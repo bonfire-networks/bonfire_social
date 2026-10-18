@@ -294,7 +294,7 @@ defmodule Bonfire.Social.Tags do
 
   defp tag_kind(tag) do
     # `only_schemas: true` normalises groups/topics to `Bonfire.Classify.Category`, without it a group resolves to the `:group` and similar atoms and slips past the Category clause below.
-    case Types.object_type(tag, only_schemas: true) do
+    case Types.object_type_schema(tag) do
       Bonfire.Tag.Hashtag ->
         :hashtag
 

@@ -836,7 +836,8 @@ defmodule Bonfire.Social.Objects do
     Activities.delete_by_object(id)
     |> debug("Delete the object's Activity and remove from feeds first")
 
-    object_type = Bonfire.Common.Types.object_type(object)
+    # the schema, which is what context modules are registered by: without `only_schemas` a group is `:group`, which has none, so it fell through to the generic deletion and was deleted outright with everything attached rather than archived by `Categories`
+    object_type = Bonfire.Common.Types.object_type_schema(object)
 
     with object_type when not is_nil(object_type) <- object_type,
          context_module when not is_nil(context_module) <-
@@ -1270,7 +1271,12 @@ defmodule Bonfire.Social.Objects do
               e(opts_or_attrs, :context_id, nil)
         ]
         |> debug("opts")
-        |> set_boundaries(creator, thing, ..., for_module || object_type(thing) || __MODULE__)
+        |> set_boundaries(
+          creator,
+          thing,
+          ...,
+          for_module || object_type_schema(thing) || __MODULE__
+        )
 
       set_opts[:boundaries_as_set] || error("Boundaries not enabled")
     end

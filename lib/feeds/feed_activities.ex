@@ -548,12 +548,17 @@ defmodule Bonfire.Social.FeedActivities do
   end
 
   defp create_activity(subject, verb, object, true) do
-    dump([subject, verb, uid(object), true])
-    Bonfire.Social.APActivities.create(subject, %{verb: verb}, uid(object))
+    # fallback
+    Bonfire.Social.APActivities.ap_receive(subject, %{verb: verb}, uid(object))
   end
 
   defp create_activity(subject, verb, object, %{} = json),
-    do: Bonfire.Social.APActivities.create(subject, Enum.into(json, %{verb: verb}), uid(object))
+    do:
+      Bonfire.Social.APActivities.ap_receive(
+        subject,
+        Enum.into(json, %{verb: verb}),
+        uid(object)
+      )
 
   defp create_activity(subject, verb, object, _), do: Activities.create(subject, verb, object)
 
