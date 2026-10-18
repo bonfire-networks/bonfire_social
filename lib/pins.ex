@@ -228,8 +228,9 @@ defmodule Bonfire.Social.Pins do
 
   def pin(pinner, %{} = object, scope, opts) do
     # pinning a Category you can reach to your own sidebar never needs the `:boost` verb
-    if opts[:skip_boundary_check] || is_struct(object, Bonfire.Classify.Category) ||
-         Bonfire.Boundaries.can?(pinner, @boundary_verb, object) do
+    if may_pin_in?(pinner, scope, opts) and
+         (opts[:skip_boundary_check] || is_struct(object, Bonfire.Classify.Category) ||
+            Bonfire.Boundaries.can?(pinner, @boundary_verb, object)) do
       do_pin(scope || pinner, object, opts)
     else
       error(l("Sorry, you cannot pin this"))
@@ -237,7 +238,8 @@ defmodule Bonfire.Social.Pins do
   end
 
   def pin(pinner, object, scope, opts) when is_binary(object) do
-    with {:ok, object} <-
+    with true <- may_pin_in?(pinner, scope, opts),
+         {:ok, object} <-
            Bonfire.Common.Needles.get(object,
              current_user: pinner,
              verbs: [@boundary_verb],
@@ -339,8 +341,34 @@ defmodule Bonfire.Social.Pins do
   end
 
   def unpin(subject, %{} = pinned, scope) do
-    scope = scope || subject
+    if may_pin_in?(subject, scope),
+      do: do_unpin(subject, pinned, scope || subject),
+      else: error(l("Sorry, you cannot unpin this"))
+  end
 
+  def unpin(subject, pinned, scope) when is_binary(pinned) do
+    # removing a pin doesn't need a read-boundary check on the object, and `subject` may be the
+    # instance scope (a circle id, not a real user) which would otherwise fail the load.
+    with {:ok, pinned} <-
+           Bonfire.Common.Needles.get(pinned, current_user: subject, skip_boundary_check: true) do
+      unpin(subject, pinned, scope)
+    end
+  end
+
+  @doc """
+  Whether `pinner` may pin into (or unpin from) `scope`: their own pins (no scope, or themselves as the scope), or a scope where they hold `:pin`, such as a thread they started or a group they moderate.
+
+  The scope becomes the pin's subject and federates as that actor's `featured` collection, so holding `:boost` on the object isn't enough: without this, anyone could pin onto someone else's profile, thread or group.
+  """
+  def may_pin_in?(pinner, scope, opts \\ [])
+  def may_pin_in?(_pinner, nil, _opts), do: true
+
+  def may_pin_in?(pinner, scope, opts) do
+    opts[:skip_boundary_check] == true or uid(scope) == uid(pinner) or
+      Bonfire.Boundaries.can?(pinner, :pin, scope) == true
+  end
+
+  defp do_unpin(subject, pinned, scope) do
     # federate a `Remove` from the owner's `featured` collection *before* deleting locally — the
     # Remove activity is built synchronously from the pin, so the pin row is safe to delete
     # afterwards. We force the Pins federation module and use `:remove` (not `:delete`, which
@@ -368,15 +396,6 @@ defmodule Bonfire.Social.Pins do
     Activities.delete_by_subject_verb_object(scope, :pin, pinned)
 
     # Note: the pin count is automatically decremented by DB triggers
-  end
-
-  def unpin(subject, pinned, scope) when is_binary(pinned) do
-    # removing a pin doesn't need a read-boundary check on the object, and `subject` may be the
-    # instance scope (a circle id, not a real user) which would otherwise fail the load.
-    with {:ok, pinned} <-
-           Bonfire.Common.Needles.get(pinned, current_user: subject, skip_boundary_check: true) do
-      unpin(subject, pinned, scope)
-    end
   end
 
   @doc """
