@@ -520,4 +520,46 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
       refute Bonfire.Social.show_activity?(received_activity, current_user: viewer)
     end
   end
+
+  # The tests above use `Process.put`, which short-circuits `Settings.get` before the DB path, so the settings load hook never runs. These store the keywords in the user's settings row like production does.
+  describe "keywords stored in the user's DB settings" do
+    setup do
+      user = fake_user!("db_keyword_user")
+      keywords = ["viagra" | for(i <- 1..199, do: "blockedword#{i}")]
+
+      {:ok, _} =
+        Bonfire.Boundaries.BlockKeywords.put_block_keywords_settings(keywords, current_user: user)
+
+      user = Bonfire.Common.Repo.preload(user, :settings, force: true)
+
+      %{user: user}
+    end
+
+    test "the compiled pattern is built once, not on every Settings.get", %{user: user} do
+      a = Bonfire.Boundaries.BlockKeywords.block_keywords_settings(current_user: user)
+      b = Bonfire.Boundaries.BlockKeywords.block_keywords_settings(current_user: user)
+
+      assert {_, _} = a
+      assert a === b
+    end
+
+    test "a feed still filters posts matching one of 200 stored keywords", %{user: user} do
+      other_user = fake_user!("db_keyword_poster")
+
+      normal_post =
+        fake_post!(other_user, "public", %{
+          post_content: %{name: "A normal post", html_body: "Just a regular post"}
+        })
+
+      _spam_post =
+        fake_post!(other_user, "public", %{
+          post_content: %{name: "Buy cheap stuff", html_body: "Amazing deal on viagra"}
+        })
+
+      feed = FeedLoader.feed_postloaded(:explore, limit: 10, current_user: user)
+
+      assert FeedLoader.feed_contains?(feed, normal_post, postload: false)
+      refute FeedLoader.feed_contains?(feed, "Amazing deal on viagra", postload: false)
+    end
+  end
 end
