@@ -432,23 +432,63 @@ defmodule Bonfire.Social do
         if is_list(edges_or_edge) do
           if replace_with do
             debug(patterns, "replace with block_keywords_settings")
-            Enum.map(edges_or_edge, &(matches_keyword_filter(&1, patterns, replace_with) || &1))
+            Enum.map(edges_or_edge, &replace_matching_content(&1, patterns, replace_with))
           else
             debug(patterns, "filter with block_keywords_settings")
             Enum.reject(edges_or_edge, &matches_keyword_filter(&1, patterns))
           end
         else
-          matches_keyword_filter(
+          replace_matching_content(
             edges_or_edge,
             patterns,
             replace_with || l("[Content blocked by filters]")
-          ) || edges_or_edge
+          )
         end
 
         # _ ->
         #   edges_or_edge
     end
   end
+
+  # Replaces the content of the edge's own post, and of the post it replies to when that one is loaded too: a reply shows its parent inline (the reply-to preview), and the parent's keywords must not leak through there.
+  defp replace_matching_content(edge, patterns, replace_with) do
+    (matches_keyword_filter(edge, patterns, replace_with) || edge)
+    |> replace_matching_reply_to_content(patterns, replace_with)
+  end
+
+  defp replace_matching_reply_to_content(edge, patterns, replace_with) do
+    cond do
+      content_matches_keywords?(
+        e(edge, :activity, :replied, :reply_to, :post_content, nil),
+        patterns
+      ) ->
+        put_in(
+          edge,
+          [:activity, :replied, :reply_to, :post_content],
+          %Bonfire.Data.Social.PostContent{summary: replace_with}
+        )
+
+      content_matches_keywords?(e(edge, :replied, :reply_to, :post_content, nil), patterns) ->
+        put_in(
+          edge,
+          [:replied, :reply_to, :post_content],
+          %Bonfire.Data.Social.PostContent{summary: replace_with}
+        )
+
+      true ->
+        edge
+    end
+  end
+
+  defp content_matches_keywords?(%{html_body: _} = content, patterns) do
+    Bonfire.Boundaries.BlockKeywords.text_fields_match?(
+      content,
+      [:html_body, :summary, :name],
+      patterns
+    )
+  end
+
+  defp content_matches_keywords?(_, _patterns), do: false
 
   defp matches_keyword_filter(edge, patterns, replace_with \\ false) do
     {content, content_path} =

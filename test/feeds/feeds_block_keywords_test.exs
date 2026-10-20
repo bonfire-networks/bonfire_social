@@ -535,6 +535,28 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
       %{user: user}
     end
 
+    test "stored keywords reach the filter as a compiled pattern", %{user: user} do
+      assert {_, _} = Bonfire.Boundaries.BlockKeywords.block_keywords_settings(current_user: user)
+    end
+
+    test "saving another setting keeps the stored keywords and persists no compiled pattern", %{
+      user: user
+    } do
+      # an unrelated, harmless user setting whose atoms already exist (`put` drops unknown atoms)
+      assert {:ok, %{__context__: %{current_user: user}}} =
+               Bonfire.Common.Settings.put(
+                 [:bonfire_social, Bonfire.Social.Feeds, :feed_presets, :test],
+                 %{name: :test, filters: %{}},
+                 current_user: user
+               )
+
+      user = Bonfire.Common.Repo.preload(user, :settings, force: true)
+
+      assert length(get_in(user.settings.json, [:activity_pub, :mrf_keyword, :reject])) == 200
+      refute get_in(user.settings.json, [:activity_pub, :mrf_keyword, :reject_compiled])
+      assert Bonfire.Boundaries.BlockKeywords.block_keywords_settings(current_user: user)
+    end
+
     test "the compiled pattern is built once, not on every Settings.get", %{user: user} do
       a = Bonfire.Boundaries.BlockKeywords.block_keywords_settings(current_user: user)
       b = Bonfire.Boundaries.BlockKeywords.block_keywords_settings(current_user: user)
