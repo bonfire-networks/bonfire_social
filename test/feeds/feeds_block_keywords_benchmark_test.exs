@@ -18,8 +18,10 @@ defmodule Bonfire.Social.FeedsBlockKeywordsBenchmarkTest do
   @moduletag timeout: :infinity
 
   @settings_get {Bonfire.Common.Settings, :__get__, 3}
-  @load_hook {BlockKeywords, :settings_load_hook_process, 1}
-  @compile_patterns {BlockKeywords, :compile_patterns, 1}
+  # one call per read of an `:activity_pub` setting
+  @load_hook {BlockKeywords, :settings_loaded, 2}
+  # one call per distinct keyword list (the compile is cached)
+  @compile_patterns {BlockKeywords, :process_mrf_keyword, 1}
 
   setup do
     author = fake_user!("kw_bench_author")
@@ -47,7 +49,9 @@ defmodule Bonfire.Social.FeedsBlockKeywordsBenchmarkTest do
     # correctness: the keywords reach the filter through the DB path, and only for the user who set them
     refute FeedLoader.feed_contains?(
              load_feed.(viewers["200 keywords"]),
-             "Amazing deal on viagra", postload: false)
+             "Amazing deal on viagra",
+             postload: false
+           )
 
     assert FeedLoader.feed_contains?(load_feed.(viewers["0 keywords"]), "Amazing deal on viagra",
              postload: false
@@ -61,8 +65,8 @@ defmodule Bonfire.Social.FeedsBlockKeywordsBenchmarkTest do
 
       IO.puts(
         "#{label}: #{inspect(counts[@settings_get])} Settings.get, " <>
-          "#{inspect(counts[@load_hook])} settings_load_hook_process, " <>
-          "#{inspect(counts[@compile_patterns])} compile_patterns"
+          "#{inspect(counts[@load_hook])} settings_loaded, " <>
+          "#{inspect(counts[@compile_patterns])} process_mrf_keyword"
       )
     end
 
