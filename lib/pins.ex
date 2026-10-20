@@ -87,6 +87,27 @@ defmodule Bonfire.Social.Pins do
 
   defp forget_spotlight(result), do: result
 
+  @doc "The PubSub topic a scope's pin changes go out on: `:instance` for the spotlight and the groups pinned to everyone's sidebar, else the pins' subject (a group, a topic, a user). Pages that show a scope's pins subscribe to it, so a pin made in another tab, by an API client or over federation reaches them too."
+  def pins_topic(:instance), do: pins_topic(instance_scope())
+  def pins_topic(scope), do: "pins:#{uid(scope) || scope}"
+
+  # sent from the context rather than the UI handler, so that pins made without the UI are heard too, as `forget_spotlight/1` is
+  defp broadcast_change({:ok, _} = result, scope, object) do
+    Bonfire.Common.PubSub.broadcast(
+      pins_topic(scope),
+      {{Bonfire.Social.Pins.LiveHandler, :pins_changed},
+       %{scope_id: uid(scope) || scope, object_id: uid(object) || object, kind: pinned_kind(object)}}
+    )
+
+    result
+  end
+
+  defp broadcast_change(result, _scope, _object), do: result
+
+  # what was pinned, so each surface reloads only for its own kind: `:unknown` when there's only an id (a reorder)
+  defp pinned_kind(object) when is_binary(object), do: :unknown
+  defp pinned_kind(object), do: if(is_struct(object, Bonfire.Classify.Category), do: :group, else: :post)
+
   defp pins_ranked_query(subjects, scope) do
     from(p in Pin,
       join: e in Bonfire.Data.Edges.Edge,
@@ -295,8 +316,10 @@ defmodule Bonfire.Social.Pins do
       else: error(l("Sorry, you cannot pin this"))
   end
 
-  defp do_pin_into(pinner, object, scope, opts),
-    do: do_pin(scope || pinner, object, Keyword.put(opts, :pinned_by, pinner))
+  defp do_pin_into(pinner, object, scope, opts) do
+    do_pin(scope || pinner, object, Keyword.put(opts, :pinned_by, pinner))
+    |> broadcast_change(scope || pinner, object)
+  end
 
   defp do_pin(pinner, %{} = pinned, opts \\ []) do
     skip_federation? = skip_federation?(pinned)
@@ -472,6 +495,7 @@ defmodule Bonfire.Social.Pins do
     Edges.delete_by_both(scope, Pin, pinned)
     # delete the pin activity & feed entries
     Activities.delete_by_subject_verb_object(scope, :pin, pinned)
+    |> broadcast_change(scope, pinned)
 
     # Note: the pin count is automatically decremented by DB triggers
   end
@@ -515,6 +539,7 @@ defmodule Bonfire.Social.Pins do
       existing ->
         Ranked.changeset(existing, %{rank_set: position}) |> repo().update()
     end
+    |> broadcast_change(scope, pin)
   end
 
   defp query_base(filters, opts) do
