@@ -136,4 +136,37 @@ defmodule Bonfire.Social.InstancePinsTest do
                e(entry, :activity, :object, :id, nil) == post.id
            end)
   end
+
+  # every user holds `:pin` on the instance, so the spotlight needs `:mediate`
+  test "may_pin_in?/2 lets instance admins pin to the instance, not other users" do
+    admin = fake_admin!(fake_account!())
+    user = fake_user!(fake_account!())
+
+    assert Pins.may_pin_in?(admin, :instance)
+    refute Pins.may_pin_in?(user, :instance)
+  end
+
+  # the spotlight is cached, so a reorder must refresh it as a pin does
+  test "reordering the instance's pins refreshes the spotlight's cached list" do
+    admin = fake_admin!(fake_account!())
+
+    [first, second] =
+      for body <- ["first spotlit", "second spotlit"] do
+        post = Bonfire.Posts.Fake.fake_post!(admin, "public", %{post_content: %{html_body: body}})
+        {:ok, _} = Pins.pin(admin, post, :instance)
+        post
+      end
+
+    on_exit(fn -> Pins.list_spotlight_activities(cache: :reset) end)
+
+    spotlight_ids = fn -> Enum.map(Pins.list_spotlight_activities(), & &1.activity.object_id) end
+
+    # primes the cache, newest pin first
+    assert Enum.take(spotlight_ids.(), 2) == [second.id, first.id]
+
+    {:ok, _} = Pins.rank_pin(first.id, :instance, 0)
+    {:ok, _} = Pins.rank_pin(second.id, :instance, 1)
+
+    assert Enum.take(spotlight_ids.(), 2) == [first.id, second.id]
+  end
 end

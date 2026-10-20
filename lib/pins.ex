@@ -56,6 +56,37 @@ defmodule Bonfire.Social.Pins do
   @doc "Subject id for instance-wide pins (the local instance circle, or a fallback constant)."
   def instance_scope_id, do: instance_scope()
 
+  @spotlight_cache_key "instance_pins_activities"
+
+  @doc """
+  The spotlight: the instance's pinned activities, with their thread's participants. Public, instance-wide data that rarely changes, so cached for 6 hours and forgotten whenever an instance pin changes, however it was made (the UI, an API client, …). Takes the standard `:cache` opt (eg. `cache: :reset`).
+  """
+  def list_spotlight_activities(opts \\ []) do
+    Bonfire.Common.Cache.maybe_apply_cached(
+      &do_list_spotlight_activities/0,
+      [],
+      opts
+      |> Keyword.put_new(:expire, :timer.hours(6))
+      |> Keyword.put(:cache_key, @spotlight_cache_key)
+    )
+  end
+
+  defp do_list_spotlight_activities do
+    list_instance_pins_activities(
+      paginate?: false,
+      preload: [:feed_by_subject, :feed_postload],
+      with_participants: true
+    )
+    |> e(:edges, [])
+  end
+
+  defp forget_spotlight({:ok, _} = result) do
+    Bonfire.Common.Cache.remove(@spotlight_cache_key)
+    result
+  end
+
+  defp forget_spotlight(result), do: result
+
   defp pins_ranked_query(subjects, scope) do
     from(p in Pin,
       join: e in Bonfire.Data.Edges.Edge,
@@ -135,6 +166,10 @@ defmodule Bonfire.Social.Pins do
 
   def pinned?(scope, object),
     do: Edges.exists?(__MODULE__, scope, object, skip_boundary_check: true)
+
+  @doc "Which of `scopes` (ids or structs) `object` is pinned in, as a `MapSet` of their ids, in one query (eg. for a menu offering several places to pin it)."
+  def pinned_in(scopes, object),
+    do: Edges.batch_subjects_exist?(Pin, object, Enum.map(scopes, &uid/1))
 
   @doc """
   Retrieves a Pin edge between a subject and an object.
@@ -221,6 +256,7 @@ defmodule Bonfire.Social.Pins do
   def pin(pinner, object, :instance, opts) do
     if Bonfire.Boundaries.can?(pinner, :mediate, :instance) do
       pin(instance_scope(), object, nil, opts ++ [skip_boundary_check: true, to_feeds: []])
+      |> forget_spotlight()
     else
       error(l("Sorry, you cannot pin to the instance"))
     end
@@ -228,16 +264,16 @@ defmodule Bonfire.Social.Pins do
 
   def pin(pinner, %{} = object, scope, opts) do
     # pinning a Category you can reach to your own sidebar never needs the `:boost` verb
-    if may_pin_in?(pinner, scope, opts) and
-         (opts[:skip_boundary_check] || is_struct(object, Bonfire.Classify.Category) ||
-            Bonfire.Boundaries.can?(pinner, @boundary_verb, object)) do
-      do_pin(scope || pinner, object, opts)
-    else
-      error(l("Sorry, you cannot pin this"))
-    end
+    if opts[:skip_boundary_check] || is_struct(object, Bonfire.Classify.Category) ||
+         Bonfire.Boundaries.can?(pinner, @boundary_verb, object),
+       do: pin_into(pinner, object, scope, opts),
+       else: error(l("Sorry, you cannot pin this"))
   end
 
   def pin(pinner, object, scope, opts) when is_binary(object) do
+    scope = load_scope(scope)
+
+    # the scope first, so a refused pin doesn't load the object
     with true <- may_pin_in?(pinner, scope, opts),
          {:ok, object} <-
            Bonfire.Common.Needles.get(object,
@@ -245,15 +281,27 @@ defmodule Bonfire.Social.Pins do
              verbs: [@boundary_verb],
              skip_boundary_check: opts[:skip_boundary_check]
            ) do
-      do_pin(scope || pinner, object, opts)
+      do_pin_into(pinner, object, scope, opts)
     else
-      _ ->
-        error(l("Sorry, you cannot pin this"))
+      _ -> error(l("Sorry, you cannot pin this"))
     end
   end
 
+  defp pin_into(pinner, object, scope, opts) do
+    scope = load_scope(scope)
+
+    if may_pin_in?(pinner, scope, opts),
+      do: do_pin_into(pinner, object, scope, opts),
+      else: error(l("Sorry, you cannot pin this"))
+  end
+
+  defp do_pin_into(pinner, object, scope, opts),
+    do: do_pin(scope || pinner, object, Keyword.put(opts, :pinned_by, pinner))
+
   defp do_pin(pinner, %{} = pinned, opts \\ []) do
     skip_federation? = skip_federation?(pinned)
+    # before `opts` is rebound below
+    federate_as = federating_actor(pinner, opts)
 
     object_creator =
       opts[:object_creator] ||
@@ -280,9 +328,9 @@ defmodule Bonfire.Social.Pins do
         {:ok, pin}
 
       {:ok, pin} ->
-        # preload pinner + object `:peered` for federation's locality check
+        # preload pinner + object `:peered` for federation's locality check; `prune`, since a thread scope is a post, with no character
         Social.maybe_federate_and_gift_wrap_activity(
-          repo().maybe_preload(pinner, character: [:peered]),
+          repo().maybe_preload(federate_as, [character: [:peered]], prune: true),
           repo().maybe_preload(pin,
             edge: [object: [:peered, created: [creator: [character: [:peered]]]]]
           )
@@ -312,6 +360,11 @@ defmodule Bonfire.Social.Pins do
       end
   end
 
+  # a group's or topic's pins federate as the moderator who pinned them, as Lemmy's do; other pins as their scope
+  defp federating_actor(scope, opts) do
+    if is_struct(scope, Bonfire.Classify.Category), do: opts[:pinned_by], else: scope
+  end
+
   @doc """
   Removes a pin for an object.
 
@@ -335,6 +388,7 @@ defmodule Bonfire.Social.Pins do
   def unpin(user, object, :instance) do
     if Bonfire.Boundaries.can?(user, :mediate, :instance) do
       unpin(instance_scope(), object, nil)
+      |> forget_spotlight()
     else
       error(l("Sorry, you cannot pin to the instance"))
     end
@@ -356,17 +410,41 @@ defmodule Bonfire.Social.Pins do
   end
 
   @doc """
-  Whether `pinner` may pin into (or unpin from) `scope`: their own pins (no scope, or themselves as the scope), or a scope where they hold `:pin`, such as a thread they started or a group they moderate.
+  Whether `pinner` may pin into (or unpin from) `scope`: their own pins (no scope, or themselves as the scope); the spotlight (`:instance`) if they hold `:mediate` on the instance; a group or topic they moderate (`:mediate` on the group, or a topic's group, through `Categories.moderates?/2`), since its members also hold `:pin`; or another scope where they hold `:pin`, such as a thread they started.
 
   The scope becomes the pin's subject and federates as that actor's `featured` collection, so holding `:boost` on the object isn't enough: without this, anyone could pin onto someone else's profile, thread or group.
   """
   def may_pin_in?(pinner, scope, opts \\ [])
   def may_pin_in?(_pinner, nil, _opts), do: true
 
+  # the spotlight is for instance admins, while every user holds `:pin` on the instance
+  def may_pin_in?(pinner, :instance, opts),
+    do:
+      opts[:skip_boundary_check] == true or
+        Bonfire.Boundaries.can?(pinner, :mediate, :instance) == true
+
   def may_pin_in?(pinner, scope, opts) do
+    scope = load_scope(scope)
+
     opts[:skip_boundary_check] == true or uid(scope) == uid(pinner) or
-      Bonfire.Boundaries.can?(pinner, :pin, scope) == true
+      if(is_struct(scope, Bonfire.Classify.Category),
+        do:
+          maybe_apply(Bonfire.Classify.Categories, :moderates?, [pinner, scope],
+            fallback_return: false
+          ) == true,
+        else: Bonfire.Boundaries.can?(pinner, :pin, scope) == true
+      )
   end
+
+  # a bare id is loaded, so `may_pin_in?/3` can tell a group from a thread
+  defp load_scope(scope) when is_binary(scope) do
+    case Bonfire.Common.Needles.get(scope, skip_boundary_check: true) do
+      {:ok, loaded} -> loaded
+      _ -> scope
+    end
+  end
+
+  defp load_scope(scope), do: scope
 
   defp do_unpin(subject, pinned, scope) do
     # federate a `Remove` from the owner's `featured` collection *before* deleting locally — the
@@ -407,6 +485,7 @@ defmodule Bonfire.Social.Pins do
   """
   def rank_pin(pin, :instance, position) do
     rank_pin(pin, instance_scope(), position)
+    |> forget_spotlight()
   end
 
   def rank_pin(pin, scope, position) do
@@ -523,16 +602,30 @@ defmodule Bonfire.Social.Pins do
 
   """
   def list_instance_pins_activities(opts) when is_list(opts) do
+    list_pinned_activities(
+      :instance,
+      Keyword.merge([limit: 5], to_options(opts)) ++ [skip_boundary_check: true]
+    )
+  end
+
+  @doc """
+  The activities pinned to `scope` (a group, topic, user, or `:instance`), in `rank_pin/3` order (unranked last, newest pin first), that the viewer may read, at most `opts[:limit]` (3). With `with_participants: true`, each edge also has its thread's other participants (`Bonfire.Social.Threads.attach_participants/2`).
+
+  Returns the original (create) activities, for rendering with `ActivityLive`, rather than pin edges.
+  """
+  def list_pinned_activities(scope, opts \\ []) do
     opts = to_options(opts)
+    scope_id = if scope == :instance, do: instance_scope(), else: uid(scope)
+    max_pins = opts[:limit] || 3
 
     object_ids =
-      from(p in Pin,
-        join: e in Bonfire.Data.Edges.Edge,
-        on: e.id == p.id,
-        where: e.subject_id in ^List.wrap(instance_scope()),
-        select: e.object_id
-      )
+      pins_ranked_query([scope_id], scope_id)
+      |> order_by([edge: e, ranked: r], asc_nulls_last: r.rank, desc: e.id)
+      |> select([edge: e], e.object_id)
+      # room for pins the viewer can't read; the spotlight skips that check
+      |> limit(^if(opts[:skip_boundary_check], do: max_pins, else: max_pins * 4))
       |> repo().many()
+      |> Enum.uniq()
 
     case object_ids do
       [] ->
@@ -540,24 +633,29 @@ defmodule Bonfire.Social.Pins do
 
       ids ->
         create_verb_id = Activities.verb_id(:create)
-
-        # Plain query on Activity, then postload associations on the results
-        # (read_query is designed for object-base queries, not Activity-base)
-        limit = opts[:limit] || 5
-
+        position = ids |> Enum.with_index() |> Map.new()
+        # a plain query on Activity, then postload associations on the results (read_query is designed for object-base queries, not Activity-base)
         from(a in Bonfire.Data.Social.Activity,
+          as: :activity,
           where: a.object_id in ^ids,
-          where: a.verb_id == ^create_verb_id,
-          order_by: [desc: a.id],
-          limit: ^limit
+          where: a.verb_id == ^create_verb_id
         )
+        # a no-op with `skip_boundary_check`
+        |> Activities.as_permitted_for(opts, [:see, :read])
         |> repo().many()
+        |> Enum.sort_by(&Map.fetch!(position, &1.object_id))
+        |> Enum.take(max_pins)
         |> Activities.activity_preloads(
           [:default, :with_object_more, :with_subject, :with_media],
-          opts ++ [skip_boundary_check: true]
+          opts
         )
-        |> List.wrap()
         |> Enum.map(&%{activity: &1})
+        # opt-in: most callers don't show participants
+        |> then(
+          &if opts[:with_participants],
+            do: Bonfire.Social.Threads.attach_participants(&1, current_user(opts)),
+            else: &1
+        )
         |> then(&%{edges: &1, page_info: %{}})
     end
   end
@@ -717,7 +815,8 @@ defmodule Bonfire.Social.Pins do
   def ap_publish_activity(subject, verb, pin) do
     # user pins federate on the user's `featured`; instance-wide pins (subject = instance scope) on
     # the instance's service/Application actor's `featured`
-    with {:ok, pinner} <- pin_federating_actor(subject || pin.edge.subject_id) do
+    with {:ok, pinner} <- pin_federating_actor(subject || pin.edge.subject_id),
+         true <- featured_owner?(pin.edge.subject_id, pinner) || :ignore do
       # preload locality at the binding so `canonical_url` classifies without an on-demand raise
       # (pinned objects vary — superset pruned per schema; no-op when we only have the id)
       object =
@@ -726,7 +825,11 @@ defmodule Bonfire.Social.Pins do
 
       object_ap_id = Bonfire.Common.URIs.canonical_url(object)
 
-      target = ActivityPub.Utils.collection_ap_id("featured", uid(pinner))
+      # a group's `featured` when a moderator pins to it: the lib then cc's the group, which announces it (`ActivityPub.add/2`)
+      owner_id =
+        if pin.edge.subject_id == instance_scope(), do: uid(pinner), else: pin.edge.subject_id
+
+      target = ActivityPub.Utils.collection_ap_id("featured", owner_id)
       remove? = verb in [:remove, :delete, :undo, :unpin]
 
       params = %{
@@ -743,6 +846,11 @@ defmodule Bonfire.Social.Pins do
     end
   end
 
+  # whether a pin's scope has a `featured` collection: the pinner's own, the instance's, or a group's or topic's. A thread's pins (its root post as scope) stay local, so pin and unpin agree
+  defp featured_owner?(scope_id, pinner) do
+    scope_id == uid(pinner) or scope_id == instance_scope() or not is_nil(featured_group(scope_id))
+  end
+
   defp pin_federating_actor(subject_id) do
     if subject_id == instance_scope(),
       do: ActivityPub.Utils.service_actor(),
@@ -750,21 +858,87 @@ defmodule Bonfire.Social.Pins do
   end
 
   @doc """
-  Receives an incoming `Add`/`Remove` to an actor's `featured` collection (MLS-over-AP / Mastodon
-  featured) and reflects it as a (remote-originated) pin/unpin by that actor. Routed here by
-  `incoming.ex` via the `{activity_type, "featured"}` federation_module key. `local: false` so it is
-  not re-federated.
+  Receives an incoming `Add`/`Remove` to an actor's `featured` collection (MLS-over-AP / Mastodon featured) and reflects it as a (remote-originated) pin/unpin. Routed here by `incoming.ex` via the `{activity_type, "featured"}` federation_module key. `local: false` so it is not re-federated.
+
+  The pin goes to whoever owns the `target` collection, never to the sender by default: their own, or a group's when the sender is the group or has authority over it (`Categories.authority_over_group?/2`), as a Lemmy moderator features a post with an `Add` to the community's `featured`. Anything else is refused.
   """
-  def ap_receive_activity(creator, %{data: %{"type" => type}}, object)
+  def ap_receive_activity(creator, %{data: %{"type" => type} = data}, object)
       when type in ["Add", "Remove"] do
     with object_id when is_binary(object_id) <-
            e(object, :pointer_id, nil) || e(object, :pointer, :id, nil),
          {:ok, pinned} <-
-           Bonfire.Common.Needles.get(object_id, current_user: creator, skip_boundary_check: true) do
-      if type == "Add",
-        do: pin(creator, pinned, nil, local: false),
-        else: unpin(creator, pinned)
+           Bonfire.Common.Needles.get(object_id, current_user: creator, skip_boundary_check: true),
+         {:ok, scope} <- featured_scope(creator, data) do
+      case {type, scope} do
+        {"Add", nil} -> pin(creator, pinned, nil, local: false)
+        {"Remove", nil} -> unpin(creator, pinned)
+        {"Add", group} -> pin(creator, pinned, group, local: false, skip_boundary_check: true)
+        {"Remove", group} -> do_unpin(creator, pinned, group)
+      end
     end
+  end
+
+  # `{:ok, nil}` for the sender's own `featured`, `{:ok, group}` for a group they may feature into
+  defp featured_scope(creator, data) do
+    with owner_id when is_binary(owner_id) <- featured_owner_id(data) do
+      cond do
+        owner_id == uid(creator) ->
+          {:ok, nil}
+
+        group = featured_group(owner_id) ->
+          if uid(group) == uid(creator) or
+               maybe_apply(Bonfire.Classify.Categories, :authority_over_group?, [creator, group],
+                 fallback_return: false
+               ) == true,
+             do: {:ok, group},
+             else: error(:not_permitted, "refusing a featured change from someone with no authority over the group")
+
+        true ->
+          error(:not_permitted, "refusing a change to someone else's featured collection")
+      end
+    else
+      _ -> error(:not_found, "no known owner for the featured collection")
+    end
+  end
+
+  # the owner of the target `featured`: ours from the minted id, else an actor we already know (`get_cached`, never a fetch) that advertises it
+  defp featured_owner_id(data) do
+    with target_id when is_binary(target_id) <-
+           maybe_apply(Bonfire.Federate.ActivityPub.AdapterUtils, :collection_target_id, [data],
+             fallback_return: nil
+           ) do
+      # `parse_collection_ap_id/1` ignores the host, so it's only trusted for our own URLs; the `/` stops `https://example.org.evil.net` passing for `https://example.org`
+      local? =
+        String.starts_with?(
+          target_id,
+          String.trim_trailing(Bonfire.Common.URIs.base_url(), "/") <> "/"
+        )
+
+      case local? and ActivityPub.Utils.parse_collection_ap_id(target_id) do
+        {:ok, "featured", uuid} ->
+          uuid
+
+        _ ->
+          maybe_apply(
+            Bonfire.Federate.ActivityPub.AdapterUtils,
+            :collection_owner_candidates,
+            [data],
+            fallback_return: []
+          )
+          |> Enum.find_value(fn ap_id ->
+            case ActivityPub.Actor.get_cached(ap_id: ap_id) do
+              {:ok, %{data: %{"featured" => ^target_id}, pointer_id: pointer_id}} -> pointer_id
+              _ -> nil
+            end
+          end)
+      end
+    end
+  end
+
+  defp featured_group(owner_id) do
+    group = load_scope(owner_id)
+    # `is_struct/2` rather than matching `%Category{}`: this extension compiles without bonfire_classify
+    if is_struct(group, Bonfire.Classify.Category), do: group
   end
 
   # def ap_receive_activity(

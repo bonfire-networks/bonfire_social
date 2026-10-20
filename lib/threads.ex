@@ -2022,13 +2022,13 @@ defmodule Bonfire.Social.Threads do
            # :with_parent loads tree.parent so ActivityLive can show "published in" (the feed_postload phase that normally loads it doesn't run here, since the widget renders cached activities outside a feed component)
            preload: [:feed, :with_parent]
          ) do
-      %{edges: edges} when is_list(edges) -> attach_trending_participants(edges, current_user)
+      %{edges: edges} when is_list(edges) -> attach_participants(edges, current_user)
       _ -> []
     end
   end
 
-  # Attach up to 3 conversation participants per trending discussion (rendered as a facepile by the widget), using one batched preview query and one batched count query. Both are cached along with the edges by `list_trending/3`. The root author is dropped here since the activity already shows them.
-  defp attach_trending_participants(edges, current_user) do
+  @doc "Attaches up to 3 of each thread's participants (`:participants`), and how many others there are (`:participants_more_count`), to each `%{activity: …}` edge, with one batched query for each. The root author is left out, since the activity already shows them."
+  def attach_participants(edges, current_user) do
     participants_by_thread =
       list_participants_for_threads(edges,
         current_user: current_user,

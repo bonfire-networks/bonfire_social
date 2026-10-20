@@ -118,16 +118,130 @@ defmodule Bonfire.Social.PinsFederationTest do
            }) == []
   end
 
-  test "incoming Add to a featured collection pins the object (ap_receive_activity)" do
+  # an incoming `Add` is pinned onto the owner of the collection it targets, not onto whoever sent it
+  test "an incoming Add to the sender's own featured pins the object for them" do
     user = fake_user!(fake_account!())
     {post, _ap} = publish_post(user, "<p>feature me</p>")
 
     Pins.ap_receive_activity(
       user,
-      %{data: %{"type" => "Add"}},
+      %{
+        data: %{
+          "type" => "Add",
+          "target" => ActivityPub.Utils.collection_ap_id("featured", user.id)
+        }
+      },
       %{pointer_id: post.id, data: %{"type" => "Note"}}
     )
 
     assert Pins.pinned?(user, post)
+  end
+
+  test "an incoming Add to someone else's featured isn't pinned onto the sender, nor onto them" do
+    sender = fake_user!(fake_account!())
+    owner = fake_user!(fake_account!())
+    {post, _ap} = publish_post(sender, "<p>not yours to feature</p>")
+
+    Pins.ap_receive_activity(
+      sender,
+      %{
+        data: %{
+          "type" => "Add",
+          "target" => ActivityPub.Utils.collection_ap_id("featured", owner.id)
+        }
+      },
+      %{pointer_id: post.id, data: %{"type" => "Note"}}
+    )
+
+    refute Pins.pinned?(sender, post)
+    refute Pins.pinned?(owner, post)
+  end
+
+  describe "pins to the top of a group" do
+    setup do
+      creator = fake_user!(fake_account!())
+      moderator = fake_user!(fake_account!())
+      group = Bonfire.Classify.Simulate.fake_group!(creator, %{membership: "open", visibility: "global"})
+      {:ok, _} = Bonfire.Classify.Categories.add_moderator(creator, group, id(moderator))
+      post = Bonfire.Classify.Simulate.fake_post_in_group!(moderator, group, "<p>featured</p>")
+
+      {:ok, %{ap_id: moderator_ap_id}} = ActivityPub.Actor.get_cached(pointer: moderator)
+      {:ok, %{ap_id: group_ap_id}} = ActivityPub.Actor.get_cached(pointer: group)
+
+      %{
+        moderator: moderator,
+        group: group,
+        post: post,
+        moderator_ap_id: moderator_ap_id,
+        group_ap_id: group_ap_id,
+        target: ActivityPub.Utils.collection_ap_id("featured", group.id)
+      }
+    end
+
+    defp sent(type, target) do
+      repo().all(
+        Ecto.Query.from(o in ActivityPub.Object,
+          where:
+            fragment("?->>'type' = ?", o.data, ^type) and
+              fragment("?->>'target' = ?", o.data, ^target)
+        )
+      )
+    end
+
+    defp announced_by(actor_ap_id, activity_ap_id) do
+      repo().all(
+        Ecto.Query.from(o in ActivityPub.Object,
+          where:
+            fragment("?->>'type' = 'Announce'", o.data) and
+              fragment("?->>'actor' = ?", o.data, ^actor_ap_id)
+        )
+      )
+      |> Enum.filter(&(&1.data["object"] == activity_ap_id or e(&1.data, "object", "id", nil) == activity_ap_id))
+    end
+
+    # as Lemmy sends it (`add_featured_post.json`): the moderator adds to the community's featured, cc'd to the community, which announces it
+    test "a pin sends an Add from the moderator to the group's featured, which the group announces",
+         ctx do
+      {:ok, _} = Pins.pin(ctx.moderator, ctx.post, id(ctx.group))
+
+      assert [add] = sent("Add", ctx.target)
+      assert add.data["actor"] == ctx.moderator_ap_id
+      assert ctx.group_ap_id in List.wrap(add.data["cc"])
+
+      assert [_] = announced_by(ctx.group_ap_id, add.data["id"])
+    end
+
+    test "the unpin sends a Remove from the same moderator to the same collection", ctx do
+      {:ok, _} = Pins.pin(ctx.moderator, ctx.post, id(ctx.group))
+      Pins.unpin(ctx.moderator, ctx.post, id(ctx.group))
+
+      assert [remove] = sent("Remove", ctx.target)
+      assert remove.data["actor"] == ctx.moderator_ap_id
+
+      assert ActivityPub.Utils.collection_ap_id("featured", ctx.moderator.id)
+             |> then(&sent("Remove", &1)) == [],
+             "removed from the moderator's own featured (C5)"
+    end
+
+    # `parse_collection_ap_id/1` ignores the host, so a look-alike of our host would otherwise name our group
+    test "an incoming Add to a featured on a look-alike host isn't taken as our group's", ctx do
+      base = Bonfire.Common.URIs.base_url()
+      lookalike = String.replace_prefix(ctx.target, base, base <> ".evil.example")
+      assert lookalike != ctx.target, "control: the target is on our host"
+
+      Pins.ap_receive_activity(
+        ctx.moderator,
+        %{data: %{"type" => "Add", "target" => lookalike}},
+        %{pointer_id: ctx.post.id, data: %{"type" => "Note"}}
+      )
+
+      refute Pins.pinned?(id(ctx.group), ctx.post)
+    end
+
+    test "the group's featured collection serves its pins", ctx do
+      {:ok, _} = Pins.pin(ctx.moderator, ctx.post, id(ctx.group))
+
+      assert Pins.collection_items(%{data: %{"id" => ctx.target}}) == [id(ctx.post)]
+    end
   end
 end
