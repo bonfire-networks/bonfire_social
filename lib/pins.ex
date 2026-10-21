@@ -31,6 +31,12 @@ defmodule Bonfire.Social.Pins do
   # TODO: check for :pin boundary verb instead?
   @boundary_verb :boost
 
+  # `is_struct/2` rather than matching `%Category{}`: this extension compiles without bonfire_classify
+  # a group pinned to someone's sidebar: a private bookmark, so no `:boost`, no activity, no notification, never federated
+  defguardp sidebar_pin?(object) when is_struct(object, Bonfire.Classify.Category)
+  # a post pinned in a group or topic: moderators decide, and it federates as the moderator to the group's `featured`
+  defguardp group_scope?(scope) when is_struct(scope, Bonfire.Classify.Category)
+
   @behaviour Bonfire.Common.QueryModule
   @behaviour Bonfire.Common.ContextModule
   def schema_module, do: Pin
@@ -59,7 +65,7 @@ defmodule Bonfire.Social.Pins do
   @spotlight_cache_key "instance_pins_activities"
 
   @doc """
-  The spotlight: the instance's pinned activities, with their thread's participants. Public, instance-wide data that rarely changes, so cached for 6 hours and forgotten whenever an instance pin changes, however it was made (the UI, an API client, …). Takes the standard `:cache` opt (eg. `cache: :reset`).
+  The spotlight: the instance's pinned activities. Public, instance-wide data that rarely changes, so cached for 6 hours and forgotten whenever an instance pin changes. Takes the standard `:cache` opt (eg. `cache: :reset`).
   """
   def list_spotlight_activities(opts \\ []) do
     Bonfire.Common.Cache.maybe_apply_cached(
@@ -72,11 +78,7 @@ defmodule Bonfire.Social.Pins do
   end
 
   defp do_list_spotlight_activities do
-    list_instance_pins_activities(
-      paginate?: false,
-      preload: [:feed_by_subject, :feed_postload],
-      with_participants: true
-    )
+    list_instance_pins_activities([])
     |> e(:edges, [])
   end
 
@@ -87,9 +89,12 @@ defmodule Bonfire.Social.Pins do
 
   defp forget_spotlight(result), do: result
 
-  @doc "The PubSub topic a scope's pin changes go out on: `:instance` for the spotlight and the groups pinned to everyone's sidebar, else the pins' subject (a group, a topic, a user). Pages that show a scope's pins subscribe to it, so a pin made in another tab, by an API client or over federation reaches them too."
+  @doc "The PubSub topic a scope's pin changes go out on: `:instance` for the spotlight and the groups pinned to everyone's sidebar, else the pins' subject (a group, a topic, a user). Pages that show a scope's pins subscribe to it."
   def pins_topic(:instance), do: pins_topic(instance_scope())
   def pins_topic(scope), do: "pins:#{uid(scope) || scope}"
+
+  @doc "The topics carrying group and sidebar pin changes for a viewer: the instance's, and the viewer's own."
+  def group_pins_topics(user_id), do: [pins_topic(:instance), pins_topic(user_id)]
 
   # sent from the context rather than the UI handler, so that pins made without the UI are heard too, as `forget_spotlight/1` is
   defp broadcast_change({:ok, _} = result, scope, object) do
@@ -106,7 +111,7 @@ defmodule Bonfire.Social.Pins do
 
   # what was pinned, so each surface reloads only for its own kind: `:unknown` when there's only an id (a reorder)
   defp pinned_kind(object) when is_binary(object), do: :unknown
-  defp pinned_kind(object), do: if(is_struct(object, Bonfire.Classify.Category), do: :group, else: :post)
+  defp pinned_kind(object), do: if(sidebar_pin?(object), do: :group, else: :post)
 
   defp pins_ranked_query(subjects, scope) do
     from(p in Pin,
@@ -163,8 +168,7 @@ defmodule Bonfire.Social.Pins do
     instance_ids ++ user_ids
   end
 
-  # category pins are a local sidebar concern, not the Mastodon `featured` (posts) collection — never federate them
-  defp skip_federation?(pinned), do: is_struct(pinned, Bonfire.Classify.Category)
+  defp skip_federation?(pinned), do: sidebar_pin?(pinned)
 
   @doc """
   Checks if an object is pinned by the instance.
@@ -284,11 +288,9 @@ defmodule Bonfire.Social.Pins do
   end
 
   def pin(pinner, %{} = object, scope, opts) do
-    # pinning a Category you can reach to your own sidebar never needs the `:boost` verb
-    if opts[:skip_boundary_check] || is_struct(object, Bonfire.Classify.Category) ||
-         Bonfire.Boundaries.can?(pinner, @boundary_verb, object),
-       do: pin_into(pinner, object, scope, opts),
-       else: error(l("Sorry, you cannot pin this"))
+    if may_pin_object?(pinner, object, opts),
+      do: pin_into(pinner, object, scope, opts),
+      else: error(l("Sorry, you cannot pin this"))
   end
 
   def pin(pinner, object, scope, opts) when is_binary(object) do
@@ -299,14 +301,20 @@ defmodule Bonfire.Social.Pins do
          {:ok, object} <-
            Bonfire.Common.Needles.get(object,
              current_user: pinner,
-             verbs: [@boundary_verb],
              skip_boundary_check: opts[:skip_boundary_check]
-           ) do
+           ),
+         # loaded with `:see` first, so a group by id is judged as the struct would be
+         true <- may_pin_object?(pinner, object, opts) do
       do_pin_into(pinner, object, scope, opts)
     else
       _ -> error(l("Sorry, you cannot pin this"))
     end
   end
+
+  defp may_pin_object?(pinner, object, opts),
+    do:
+      opts[:skip_boundary_check] == true or sidebar_pin?(object) or
+        Bonfire.Boundaries.can?(pinner, @boundary_verb, object) == true
 
   defp pin_into(pinner, object, scope, opts) do
     scope = load_scope(scope)
@@ -384,9 +392,8 @@ defmodule Bonfire.Social.Pins do
   end
 
   # a group's or topic's pins federate as the moderator who pinned them, as Lemmy's do; other pins as their scope
-  defp federating_actor(scope, opts) do
-    if is_struct(scope, Bonfire.Classify.Category), do: opts[:pinned_by], else: scope
-  end
+  defp federating_actor(scope, opts) when group_scope?(scope), do: opts[:pinned_by]
+  defp federating_actor(scope, _opts), do: scope
 
   @doc """
   Removes a pin for an object.
@@ -450,7 +457,7 @@ defmodule Bonfire.Social.Pins do
     scope = load_scope(scope)
 
     opts[:skip_boundary_check] == true or uid(scope) == uid(pinner) or
-      if(is_struct(scope, Bonfire.Classify.Category),
+      if(group_scope?(scope),
         do:
           maybe_apply(Bonfire.Classify.Categories, :moderates?, [pinner, scope],
             fallback_return: false
@@ -634,55 +641,32 @@ defmodule Bonfire.Social.Pins do
   end
 
   @doc """
-  The activities pinned to `scope` (a group, topic, user, or `:instance`), in `rank_pin/3` order (unranked last, newest pin first), that the viewer may read, at most `opts[:limit]` (3). With `with_participants: true`, each edge also has its thread's other participants (`Bonfire.Social.Threads.attach_participants/2`).
+  The activities pinned to `scope` (a group, topic, user, or `:instance`), in `rank_pin/3` order (unranked last, newest pin first), that the viewer may read, at most `opts[:limit]` (3).
 
   Returns the original (create) activities, for rendering with `ActivityLive`, rather than pin edges.
   """
   def list_pinned_activities(scope, opts \\ []) do
     opts = to_options(opts)
     scope_id = if scope == :instance, do: instance_scope(), else: uid(scope)
-    max_pins = opts[:limit] || 3
+    create_verb_id = Activities.verb_id(:create)
 
-    object_ids =
-      pins_ranked_query([scope_id], scope_id)
-      |> order_by([edge: e, ranked: r], asc_nulls_last: r.rank, desc: e.id)
-      |> select([edge: e], e.object_id)
-      # room for pins the viewer can't read; the spotlight skips that check
-      |> limit(^if(opts[:skip_boundary_check], do: max_pins, else: max_pins * 4))
-      |> repo().many()
-      |> Enum.uniq()
-
-    case object_ids do
-      [] ->
-        %{edges: [], page_info: %{}}
-
-      ids ->
-        create_verb_id = Activities.verb_id(:create)
-        position = ids |> Enum.with_index() |> Map.new()
-        # a plain query on Activity, then postload associations on the results (read_query is designed for object-base queries, not Activity-base)
-        from(a in Bonfire.Data.Social.Activity,
-          as: :activity,
-          where: a.object_id in ^ids,
-          where: a.verb_id == ^create_verb_id
-        )
-        # a no-op with `skip_boundary_check`
-        |> Activities.as_permitted_for(opts, [:see, :read])
-        |> repo().many()
-        |> Enum.sort_by(&Map.fetch!(position, &1.object_id))
-        |> Enum.take(max_pins)
-        |> Activities.activity_preloads(
-          [:default, :with_object_more, :with_subject, :with_media],
-          opts
-        )
-        |> Enum.map(&%{activity: &1})
-        # opt-in: most callers don't show participants
-        |> then(
-          &if opts[:with_participants],
-            do: Bonfire.Social.Threads.attach_participants(&1, current_user(opts)),
-            else: &1
-        )
-        |> then(&%{edges: &1, page_info: %{}})
-    end
+    pins_ranked_query([scope_id], scope_id)
+    |> join(:inner, [edge: e], a in Bonfire.Data.Social.Activity,
+      as: :activity,
+      on: a.object_id == e.object_id and a.verb_id == ^create_verb_id
+    )
+    # in the same query as the limit, so pins the viewer can't read don't use up places; a no-op with `skip_boundary_check` (the spotlight)
+    |> Activities.as_permitted_for(opts, [:see, :read])
+    |> order_by([edge: e, ranked: r], asc_nulls_last: r.rank, desc: e.id)
+    |> limit(^(opts[:limit] || 3))
+    |> select([activity: a], a)
+    |> repo().many()
+    |> Activities.activity_preloads(
+      [:default, :with_object_more, :with_subject, :with_media],
+      opts
+    )
+    |> Enum.map(&%{activity: &1})
+    |> then(&%{edges: &1, page_info: %{}})
   end
 
   @doc """
@@ -747,7 +731,7 @@ defmodule Bonfire.Social.Pins do
     )
   end
 
-  defp create(pinner, pinned, opts) when is_struct(pinned, Bonfire.Classify.Category) do
+  defp create(pinner, pinned, opts) when sidebar_pin?(pinned) do
     # Sidebar preferences must not become activities, even in feeds without publication filters.
     Edges.changeset_base(Pin, pinner, pinned, opts)
     |> Bonfire.Boundaries.Acls.cast(pinner, opts)
@@ -962,8 +946,7 @@ defmodule Bonfire.Social.Pins do
 
   defp featured_group(owner_id) do
     group = load_scope(owner_id)
-    # `is_struct/2` rather than matching `%Category{}`: this extension compiles without bonfire_classify
-    if is_struct(group, Bonfire.Classify.Category), do: group
+    if group_scope?(group), do: group
   end
 
   # def ap_receive_activity(

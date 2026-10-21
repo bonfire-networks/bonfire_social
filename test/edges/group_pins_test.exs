@@ -142,36 +142,6 @@ defmodule Bonfire.Social.GroupPinsTest do
   end
 
   describe "list_pinned_activities/2" do
-    # who else is in the thread, not its author
-    test "brings each pin's other thread participants", %{
-      moderator: moderator,
-      member: member,
-      group: group,
-      post: post
-    } do
-      replier = fake_user!(fake_account!())
-
-      {:ok, _} =
-        Bonfire.Posts.publish(
-          current_user: replier,
-          post_attrs: %{reply_to_id: id(post), post_content: %{html_body: "<p>a reply</p>"}},
-          boundary: "public"
-        )
-
-      {:ok, _} = Pins.pin(moderator, post, id(group))
-
-      # only when asked
-      assert [edge] = Pins.list_pinned_activities(group, current_user: member).edges
-      refute Map.has_key?(edge, :participants)
-
-      assert [%{participants: participants, participants_more_count: 0}] =
-               Pins.list_pinned_activities(group, current_user: member, with_participants: true).edges
-
-      ids = Enum.map(participants, &id/1)
-      assert id(replier) in ids
-      refute id(member) in ids, "the post's author shows on the post itself"
-    end
-
     defp pinned_object_ids(%{edges: edges}),
       do: Enum.map(edges, &e(&1, :activity, :object_id, nil))
 
@@ -219,6 +189,31 @@ defmodule Bonfire.Social.GroupPinsTest do
 
       assert id(post) in listed
       refute id(hidden) in listed
+    end
+
+    test "still fills the limit when the top-ranked pins are hidden from the viewer", %{
+      moderator: moderator,
+      member: member,
+      group: group,
+      post: post
+    } do
+      {:ok, _} = Pins.pin(moderator, post, id(group))
+
+      # five hidden pins ranked ahead of the readable one
+      for position <- 0..4 do
+        {:ok, hidden} =
+          Bonfire.Posts.publish(
+            current_user: moderator,
+            post_attrs: %{post_content: %{html_body: "<p>hidden #{position}</p>"}},
+            boundary: "mentions"
+          )
+
+        {:ok, _} = Pins.pin(moderator, hidden, id(group))
+        {:ok, _} = Pins.rank_pin(id(hidden), group, position)
+      end
+
+      assert pinned_object_ids(Pins.list_pinned_activities(group, current_user: member, limit: 1)) ==
+               [id(post)]
     end
 
     test "only lists that scope's pins", %{

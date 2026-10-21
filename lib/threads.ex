@@ -2022,12 +2022,12 @@ defmodule Bonfire.Social.Threads do
            # :with_parent loads tree.parent so ActivityLive can show "published in" (the feed_postload phase that normally loads it doesn't run here, since the widget renders cached activities outside a feed component)
            preload: [:feed, :with_parent]
          ) do
-      %{edges: edges} when is_list(edges) -> attach_participants(edges, current_user)
+      %{edges: edges} when is_list(edges) -> edges
       _ -> []
     end
   end
 
-  @doc "Attaches up to 3 of each thread's participants (`:participants`), and how many others there are (`:participants_more_count`), to each `%{activity: …}` edge, with one batched query for each. The root author is left out, since the activity already shows them."
+  @doc "Attaches up to 3 of each thread's participants (`:participants`), and how many others there are (`:participants_more_count`), to each `%{activity: …}` edge, with one batched query for each, and one for the threads' authors. The author is left out, since the post shows them."
   def attach_participants(edges, current_user) do
     participants_by_thread =
       list_participants_for_threads(edges,
@@ -2036,12 +2036,16 @@ defmodule Bonfire.Social.Threads do
         include_tags: false
       )
 
-    participant_counts_by_thread =
+    thread_ids =
       edges
       |> Enum.map(&e(&1, :activity, :replied, :thread_id, nil))
       |> Enum.reject(&is_nil/1)
       |> Enum.uniq()
-      |> count_participants_for_threads(current_user: current_user)
+
+    participant_counts_by_thread =
+      count_participants_for_threads(thread_ids, current_user: current_user)
+
+    authors_by_thread = thread_authors(thread_ids)
 
     Enum.map(edges, fn edge ->
       thread_id = e(edge, :activity, :replied, :thread_id, nil)
@@ -2049,10 +2053,13 @@ defmodule Bonfire.Social.Threads do
       subject_id =
         e(edge, :activity, :subject_id, nil) || id(e(edge, :activity, :subject, nil))
 
+      # a card's activity can be someone else's (eg. a group announcing the post), so the author is looked up, not taken from it
+      author_id = Map.get(authors_by_thread, thread_id) || subject_id
+
       participants =
         participants_by_thread
         |> Map.get(thread_id, [])
-        |> Enum.reject(&(id(&1) == subject_id))
+        |> Enum.reject(&(id(&1) == author_id))
         |> Enum.take(3)
 
       other_participant_count =
@@ -2069,6 +2076,14 @@ defmodule Bonfire.Social.Threads do
       )
     end)
   end
+
+  defp thread_authors([]), do: %{}
+
+  defp thread_authors(thread_ids),
+    do:
+      from(c in Bonfire.Data.Social.Created, where: c.id in ^thread_ids, select: {c.id, c.creator_id})
+      |> repo().all()
+      |> Map.new()
 
   @doc "Cache key for `list_trending/3` — used by both the loader and any reset, so they can't drift."
   def trending_cache_key(current_user, limit),

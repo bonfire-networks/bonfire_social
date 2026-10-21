@@ -31,6 +31,37 @@ defmodule Bonfire.Social.ThreadsParticipantsTest do
     assert first_participant.id == user.id
   end
 
+  # the facepile on discussion previews: the post already shows its author, and the card's activity may be someone else's (eg. a group announcing the post)
+  test "attach_participants gives each thread's other participants, not its author, even when the card's activity is someone else's" do
+    author = Fake.fake_user!("author")
+    replier = Fake.fake_user!("replier")
+    announcer = Fake.fake_user!("announcer")
+
+    {:ok, post} =
+      Posts.publish(
+        current_user: author,
+        post_attrs: %{post_content: %{html_body: "<p>a discussion</p>"}},
+        boundary: "public"
+      )
+
+    {:ok, _} =
+      Posts.publish(
+        current_user: replier,
+        post_attrs: %{post_content: %{html_body: "<p>a reply</p>"}, reply_to_id: post.id},
+        boundary: "public"
+      )
+
+    assert [%{participants: participants, participants_more_count: 0}] =
+             Threads.attach_participants(
+               [%{activity: %{subject_id: announcer.id, replied: %{thread_id: post.id}}}],
+               author
+             )
+
+    ids = Enum.map(participants, & &1.id)
+    assert replier.id in ids
+    refute author.id in ids
+  end
+
   test "list_participants returns all participants in a thread" do
     first_user = Fake.fake_user!("first")
     second_user = Fake.fake_user!("second")

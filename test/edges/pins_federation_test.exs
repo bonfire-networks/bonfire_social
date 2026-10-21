@@ -220,7 +220,7 @@ defmodule Bonfire.Social.PinsFederationTest do
 
       assert ActivityPub.Utils.collection_ap_id("featured", ctx.moderator.id)
              |> then(&sent("Remove", &1)) == [],
-             "removed from the moderator's own featured (C5)"
+             "not from the moderator's own featured"
     end
 
     # `parse_collection_ap_id/1` ignores the host, so a look-alike of our host would otherwise name our group
