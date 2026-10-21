@@ -171,7 +171,7 @@ defmodule Bonfire.Social.Boosts do
         # do not allow re-boosts
         if !boosted?(booster, boosted),
           do: do_boost(booster, boosted, opts),
-          else: {:error, l("You already boosted this.")}
+          else: {:error, :already_boosted}
     end
   end
 
@@ -505,7 +505,7 @@ defmodule Bonfire.Social.Boosts do
              :return_pointable,
              [object, [current_user: creator, verbs: [:boost]]]
            ),
-         {:ok, _} = boosted <- boost(creator, pointable, local: false) do
+         {:ok, _} = boosted <- boost_or_existing(creator, pointable) do
       maybe_publish_in_announcing_group(creator, data, object, pointable)
       boosted
     end
@@ -526,6 +526,14 @@ defmodule Bonfire.Social.Boosts do
            ) do
       # the `Undo` being applied IS the federated one (from another server, or posted by a local actor through C2S), so applying it sends nothing more
       unboost(creator, pointable, skip_boundary_check: true, skip_federation: true)
+    end
+  end
+
+  # A group announcing a post that it already boosted has nothing to add: that is how a community tells us it accepted what we published into it, after our own group copy boosted it when we did. The existing boost is the answer, not an error. `boost/3` still decides whether a repeat is allowed (`can_reboost_after`), and only when it refuses as `:already_boosted` do we return the one that is there.
+  defp boost_or_existing(creator, pointable) do
+    case boost(creator, pointable, local: false) do
+      {:error, :already_boosted} -> get(creator, pointable)
+      other -> other
     end
   end
 

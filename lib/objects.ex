@@ -833,6 +833,9 @@ defmodule Bonfire.Social.Objects do
       end
     end
 
+    # before anything is deleted, since the boost goes with the object and its `Undo` then has nothing left to be sent from
+    maybe_unboost_in_group(object)
+
     Activities.delete_by_object(id)
     |> debug("Delete the object's Activity and remove from feeds first")
 
@@ -892,6 +895,17 @@ defmodule Bonfire.Social.Objects do
 
       other ->
         error(other, "Unknown deletion error")
+    end
+  end
+
+  # A group's followers hear of a post being deleted through the group's relay of the `Delete` (`Announce{Delete}`), which Lemmy and the threadiverse act on but Mastodon, GoToSocial, Akkoma and Misskey ignore, so they keep the group's boost of a post that is gone. The group taking its boost back federates its `Undo{Announce}` (`Boosts.unboost/3`), which every server understands.
+  defp maybe_unboost_in_group(object) do
+    with {:ok, _object, %{} = group} <-
+           maybe_apply(Bonfire.Classify.Categories, :group_of_object, [object],
+             fallback_return: nil
+           ),
+         true <- Bonfire.Social.Boosts.boosted?(group, object) do
+      Bonfire.Social.Boosts.unboost(group, object, skip_boundary_check: true)
     end
   end
 

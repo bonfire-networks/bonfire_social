@@ -1555,8 +1555,12 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       user = GraphQL.current_user(info)
 
       if user do
-        with {:ok, f} <- Bonfire.Social.Boosts.boost(user, id),
-             do: reaction_status(f, id, info)
+        with {:ok, f} <- Bonfire.Social.Boosts.boost(user, id) do
+          reaction_status(f, id, info)
+        else
+          {:error, :already_boosted} -> {:error, l("You already boosted this.")}
+          other -> other
+        end
       else
         {:error, "Not authenticated"}
       end

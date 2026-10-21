@@ -568,7 +568,14 @@ defmodule Bonfire.Social.Import do
         |> debug("maybe_liked")
 
       :boost ->
-        Bonfire.Social.Boosts.boost(user, object, skip_federation: true, pointer_id: pointer_id)
+        case Bonfire.Social.Boosts.boost(user, object,
+               skip_federation: true,
+               pointer_id: pointer_id
+             ) do
+          # reported as before, for the import status page, which lists this text among the errors it expects from re-importing
+          {:error, :already_boosted} -> {:error, l("You already boosted this.")}
+          other -> other
+        end
         |> debug("maybe_boosted")
     end
   end

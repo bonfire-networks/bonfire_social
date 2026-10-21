@@ -60,13 +60,25 @@ defmodule Bonfire.Social.Acts.Objects.Delete do
               do: ActivityPub.Actor.get_cached!(pointer: id)
             )
 
+        # worked out here, before anything is deleted: a post's access rules go with it, and who may be told is decided by them
+        group_followers =
+          Bonfire.Common.Utils.maybe_apply(
+            Bonfire.Federate.ActivityPub.AdapterUtils,
+            :group_followers_ap_ids,
+            [object],
+            fallback_return: []
+          )
+
         epic
         |> Epic.assign(as, object)
         |> Epic.assign(ap_on, ap_object)
         |> Epic.assign(
           :ap_bcc,
-          ActivityPub.Actor.get_external_followers(ap_object, :deletion)
-          |> Bonfire.Federate.ActivityPub.AdapterUtils.ids_or_object_ids()
+          # the group's followers as well as the author's: a server that follows the group and not the author knows the post only through the group's announce, and would keep it
+          (ActivityPub.Actor.get_external_followers(ap_object, :deletion)
+           |> Bonfire.Federate.ActivityPub.AdapterUtils.ids_or_object_ids()
+           |> Kernel.++(group_followers))
+          |> Enum.uniq()
         )
 
         # |> IO.inspect(label: "deletion epic setup")
