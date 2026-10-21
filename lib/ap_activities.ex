@@ -59,13 +59,24 @@ defmodule Bonfire.Social.APActivities do
   def ap_receive_activity(creator, activity, object, extra_opts \\ []) do
     is_public? = Bonfire.Federate.ActivityPub.AdapterUtils.is_public?(activity, object)
 
-    ap_receive(
-      creator,
-      e(activity, :data, nil) || activity,
-      e(object, :data, nil) || object,
-      is_public?
-    )
-    |> maybe_publish_in(creator, object, extra_opts[:publish_in])
+    with {:ok, apactivity} = result <-
+           ap_receive(
+             creator,
+             e(activity, :data, nil) || activity,
+             e(object, :data, nil) || object,
+             is_public?
+           )
+           |> maybe_publish_in(creator, object, extra_opts[:publish_in]) do
+      # boosts it into the feeds of the categories it was tagged with (see `maybe_cast_tags/3`), as far as the creator may `:tag` them
+      Utils.maybe_apply(
+        Bonfire.Tag,
+        :maybe_boost_tagged,
+        [creator, apactivity, [ap_object: object]],
+        fallback_return: nil
+      )
+
+      result
+    end
   end
 
   # An APActivity is the fallback for object types nothing here models, and it runs no epic, so `Bonfire.Tag.Acts.Tag` never sees it and nothing would file it into the group the activity was addressed to. `maybe_tag/3` is the outside-an-epic equivalent: it tags the object and auto-boosts whichever tags are categories, under the same `:tag` permission check, so an unrecognised object still reaches the group's feed rather than being kept and hidden.
@@ -134,11 +145,14 @@ defmodule Bonfire.Social.APActivities do
   """
   def ap_receive(character, activity, object, public \\ nil)
 
-  # def ap_receive(character, %{verb: verb} = activity, object) when verb in ["update", "Update", :update, :edit, "edit"] is_map(activity) or is_map(object) do
-  #   # TODO: store version history
-  # end
-
   def ap_receive(character, activity, object, public) when is_map(activity) or is_map(object) do
+    case existing_apactivity(activity, object) do
+      %APActivity{} = existing -> do_update(existing, activity, object)
+      _ -> ap_receive_new(character, activity, object, public)
+    end
+  end
+
+  defp ap_receive_new(character, activity, object, public) do
     if uid(character) do
       do_create(character, activity, object, public)
     else
@@ -180,25 +194,7 @@ defmodule Bonfire.Social.APActivities do
       )
       |> debug("incoming_boundary_circles")
 
-    # store what wasn't consumed: a verb we model is already spent by here (its addressing became boundary/to_circles above, its verb becomes the Activity's verb below), so keeping the wrapper would duplicate what Bonfire models natively. A verb we don't model is itself the content, so it is kept whole with the object nested.
-    modelled_verb? =
-      Enum.any?(
-        List.wrap(e(activity, "type", nil)),
-        &(&1 in ActivityPub.Config.supported_activity_types())
-      )
-
-    json =
-      cond do
-        is_map(object) and modelled_verb? ->
-          fetch_and_create_nested_ap_objects(object) || %{}
-
-        is_map(object) ->
-          Enum.into(%{"object" => fetch_and_create_nested_ap_objects(object)}, activity || %{})
-
-        true ->
-          fetch_and_create_nested_ap_objects(activity) || %{}
-      end
-      |> debug("json to store")
+    json = json_to_store(activity, object)
 
     # TODO: reuse logic from Posts for targeting the audience
     opts =
@@ -217,8 +213,49 @@ defmodule Bonfire.Social.APActivities do
     end
   end
 
+  # store what wasn't consumed: a verb we model is already spent by here (its addressing became boundary/to_circles, its verb becomes the Activity's verb), so keeping the wrapper would duplicate what Bonfire models natively. A verb we don't model is itself the content, so it is kept whole with the object nested.
+  defp json_to_store(activity, object) do
+    modelled_verb? =
+      Enum.any?(
+        List.wrap(e(activity, "type", nil)),
+        &(&1 in ActivityPub.Config.supported_activity_types())
+      )
+
+    cond do
+      is_map(object) and modelled_verb? ->
+        fetch_and_create_nested_ap_objects(object) || %{}
+
+      is_map(object) ->
+        Enum.into(%{"object" => fetch_and_create_nested_ap_objects(object)}, activity || %{})
+
+      true ->
+        fetch_and_create_nested_ap_objects(activity) || %{}
+    end
+    |> debug("json to store")
+  end
+
+  # An `Update` is about an object we may already hold, found through the pointer of its AP object (the same AP id is what `ActivityPub.update` just rewrote). Without one it is received as a new object, as before.
+  defp existing_apactivity(activity, object) do
+    with true <- e(activity, "type", nil) == "Update",
+         ap_id when is_binary(ap_id) <- e(object, "id", nil),
+         {:ok, %{pointer_id: pointer_id}} when is_binary(pointer_id) <-
+           ActivityPub.Object.get_cached(ap_id: ap_id),
+         %APActivity{} = existing <- repo().get(APActivity, pointer_id) do
+      existing
+    else
+      _ -> nil
+    end
+  end
+
+  # TODO: store version history
+  defp do_update(%APActivity{} = existing, activity, object) do
+    existing
+    |> APActivity.changeset(%{json: json_to_store(activity, object)})
+    |> repo().update()
+  end
+
   # defp the_object(object) do
-  #   # NOTE: not using as it should come to us already normalised 
+  #   # NOTE: not using as it should come to us already normalised
   #   ActivityPub.Object.normalize(object, false)
   #   |> ret_object()
   # end
@@ -268,11 +305,28 @@ defmodule Bonfire.Social.APActivities do
   # A `Hashtag` in the object's `tag` becomes a real tag, so a federated recipe's #salade is
   # searchable and shows in the hashtag feed like a local post's, instead of being text that each
   # card has to render as badges of its own.
+  #
+  # A `Category` in it (FEP-9b2b) becomes a tag of the local category it names, but only when a local user posted it for now: what a remote actor may tag here is not settled yet.
   defp maybe_cast_tags(changeset, object, character) do
-    case Bonfire.Tag.ap_receive_hashtags(e(object, "tag", nil)) |> Map.values() do
+    tags = e(object, "tag", nil)
+
+    case (Bonfire.Tag.ap_receive_hashtags(tags) |> Map.values()) ++
+           maybe_category_tags(tags, character) do
       [] -> changeset
       tags -> Bonfire.Social.Tags.maybe_cast(changeset, %{tags: tags}, character, [])
     end
+  end
+
+  defp maybe_category_tags(tags, character) do
+    if Bonfire.Social.is_local?(character),
+      do:
+        Utils.maybe_apply(
+          Bonfire.Classify.Categories,
+          :ap_receive_category_tags,
+          [tags, character],
+          fallback_return: []
+        ),
+      else: []
   end
 
   # `json` is the object itself for a verb we model, and the whole activity for one we don't

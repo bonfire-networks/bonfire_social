@@ -2,6 +2,8 @@ defmodule Bonfire.Social.EventsTest do
   use Bonfire.Social.DataCase, async: true
   use Bonfire.Common.Utils
 
+  import Bonfire.Classify.Simulate
+
   alias Bonfire.Social.Events
 
   doctest Bonfire.Social.Events, import: true
@@ -18,6 +20,7 @@ defmodule Bonfire.Social.EventsTest do
         "startTime" => DateTime.to_iso8601(start_time)
       }
       |> put_if("category", attrs[:category])
+      |> put_if("tag", attrs[:tag])
 
     activity_json = %{
       "type" => "Create",
@@ -67,6 +70,32 @@ defmodule Bonfire.Social.EventsTest do
       fake_event!(user, name: "Present Event")
 
       assert "Present Event" in titles(Events.feed(current_user: user))
+    end
+  end
+
+  describe "the events feed filtered by a tag" do
+    test "has the events tagged with the category its Category tag names, and not the others" do
+      user = fake_user!()
+      topic = fake_category!(user, nil, %{type: :topic, name: "Jazz"})
+      iri = Bonfire.Me.Characters.character_url(topic)
+
+      tagged =
+        fake_event!(user,
+          name: "Jazz Night",
+          tag: [%{"type" => "Category", "id" => iri, "name" => "Jazz"}]
+        )
+
+      untagged = fake_event!(user, name: "Gallery Opening")
+
+      assert %{edges: edges} =
+               Bonfire.Social.FeedActivities.feed(%{feed_name: :events, tags: [topic.id]},
+                 current_user: user
+               )
+
+      object_ids = Enum.map(edges, &e(&1, :activity, :object_id, nil))
+
+      assert tagged.id in object_ids
+      refute untagged.id in object_ids
     end
   end
 
