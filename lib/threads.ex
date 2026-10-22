@@ -2081,7 +2081,10 @@ defmodule Bonfire.Social.Threads do
 
   defp thread_authors(thread_ids),
     do:
-      from(c in Bonfire.Data.Social.Created, where: c.id in ^thread_ids, select: {c.id, c.creator_id})
+      from(c in Bonfire.Data.Social.Created,
+        where: c.id in ^thread_ids,
+        select: {c.id, c.creator_id}
+      )
       |> repo().all()
       |> Map.new()
 

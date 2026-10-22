@@ -34,6 +34,7 @@ defmodule Bonfire.Social.Pins do
   # `is_struct/2` rather than matching `%Category{}`: this extension compiles without bonfire_classify
   # a group pinned to someone's sidebar: a private bookmark, so no `:boost`, no activity, no notification, never federated
   defguardp sidebar_pin?(object) when is_struct(object, Bonfire.Classify.Category)
+
   # a post pinned in a group or topic: moderators decide, and it federates as the moderator to the group's `featured`
   defguardp group_scope?(scope) when is_struct(scope, Bonfire.Classify.Category)
 
@@ -101,7 +102,11 @@ defmodule Bonfire.Social.Pins do
     Bonfire.Common.PubSub.broadcast(
       pins_topic(scope),
       {{Bonfire.Social.Pins.LiveHandler, :pins_changed},
-       %{scope_id: uid(scope) || scope, object_id: uid(object) || object, kind: pinned_kind(object)}}
+       %{
+         scope_id: uid(scope) || scope,
+         object_id: uid(object) || object,
+         kind: pinned_kind(object)
+       }}
     )
 
     result
@@ -857,7 +862,8 @@ defmodule Bonfire.Social.Pins do
 
   # whether a pin's scope has a `featured` collection: the pinner's own, the instance's, or a group's or topic's. A thread's pins (its root post as scope) stay local, so pin and unpin agree
   defp featured_owner?(scope_id, pinner) do
-    scope_id == uid(pinner) or scope_id == instance_scope() or not is_nil(featured_group(scope_id))
+    scope_id == uid(pinner) or scope_id == instance_scope() or
+      not is_nil(featured_group(scope_id))
   end
 
   defp pin_federating_actor(subject_id) do
@@ -900,7 +906,11 @@ defmodule Bonfire.Social.Pins do
                  fallback_return: false
                ) == true,
              do: {:ok, group},
-             else: error(:not_permitted, "refusing a featured change from someone with no authority over the group")
+             else:
+               error(
+                 :not_permitted,
+                 "refusing a featured change from someone with no authority over the group"
+               )
 
         true ->
           error(:not_permitted, "refusing a change to someone else's featured collection")

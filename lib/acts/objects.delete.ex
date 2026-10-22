@@ -75,9 +75,9 @@ defmodule Bonfire.Social.Acts.Objects.Delete do
         |> Epic.assign(
           :ap_bcc,
           # the group's followers as well as the author's: a server that follows the group and not the author knows the post only through the group's announce, and would keep it
-          (ActivityPub.Actor.get_external_followers(ap_object, :deletion)
-           |> Bonfire.Federate.ActivityPub.AdapterUtils.ids_or_object_ids()
-           |> Kernel.++(group_followers))
+          ActivityPub.Actor.get_external_followers(ap_object, :deletion)
+          |> Bonfire.Federate.ActivityPub.AdapterUtils.ids_or_object_ids()
+          |> Kernel.++(group_followers)
           |> Enum.uniq()
         )
 

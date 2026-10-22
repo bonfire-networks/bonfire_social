@@ -62,7 +62,9 @@ defmodule Bonfire.Social.GroupPinsTest do
   end
 
   test "a local user of an \"anyone\" group can't pin to it", %{creator: creator} do
-    group = fake_group!(creator, %{membership: "open", visibility: "global", participation: "anyone"})
+    group =
+      fake_group!(creator, %{membership: "open", visibility: "global", participation: "anyone"})
+
     stranger = fake_user!(fake_account!())
     post = fake_post_in_group!(stranger, group, "<p>anyone can post</p>")
 

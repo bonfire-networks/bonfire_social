@@ -161,7 +161,10 @@ defmodule Bonfire.Social.PinsFederationTest do
     setup do
       creator = fake_user!(fake_account!())
       moderator = fake_user!(fake_account!())
-      group = Bonfire.Classify.Simulate.fake_group!(creator, %{membership: "open", visibility: "global"})
+
+      group =
+        Bonfire.Classify.Simulate.fake_group!(creator, %{membership: "open", visibility: "global"})
+
       {:ok, _} = Bonfire.Classify.Categories.add_moderator(creator, group, id(moderator))
       post = Bonfire.Classify.Simulate.fake_post_in_group!(moderator, group, "<p>featured</p>")
 
@@ -196,7 +199,9 @@ defmodule Bonfire.Social.PinsFederationTest do
               fragment("?->>'actor' = ?", o.data, ^actor_ap_id)
         )
       )
-      |> Enum.filter(&(&1.data["object"] == activity_ap_id or e(&1.data, "object", "id", nil) == activity_ap_id))
+      |> Enum.filter(
+        &(&1.data["object"] == activity_ap_id or e(&1.data, "object", "id", nil) == activity_ap_id)
+      )
     end
 
     # as Lemmy sends it (`add_featured_post.json`): the moderator adds to the community's featured, cc'd to the community, which announces it
