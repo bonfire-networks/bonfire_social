@@ -64,7 +64,7 @@ defmodule Bonfire.Social.Acts.Objects.Delete do
         group_followers =
           Bonfire.Common.Utils.maybe_apply(
             Bonfire.Federate.ActivityPub.AdapterUtils,
-            :group_followers_ap_ids,
+            :maybe_object_group_followers_ap_ids,
             [object],
             fallback_return: []
           )

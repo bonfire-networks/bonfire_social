@@ -6,6 +6,7 @@ defmodule Bonfire.Social.APActivities do
   It provides functionality to handle ActivityPub activities, particularly for receiving and creating activities.
   """
 
+  alias ActivityPub.Federator.NestedObjects.Terms
   alias Bonfire.Data.Social.APActivity
   alias Bonfire.Social.Activities
   # alias Bonfire.Social.FeedActivities
@@ -223,13 +224,13 @@ defmodule Bonfire.Social.APActivities do
 
     cond do
       is_map(object) and modelled_verb? ->
-        fetch_and_create_nested_ap_objects(object) || %{}
+        reference_nested_objects(object)
 
       is_map(object) ->
-        Enum.into(%{"object" => fetch_and_create_nested_ap_objects(object)}, activity || %{})
+        Enum.into(%{"object" => reference_nested_objects(object)}, activity || %{})
 
       true ->
-        fetch_and_create_nested_ap_objects(activity) || %{}
+        reference_nested_objects(activity || %{})
     end
     |> debug("json to store")
   end
@@ -363,135 +364,49 @@ defmodule Bonfire.Social.APActivities do
     )
   end
 
-  # detect and fetch nested AP objects
-  def fetch_and_create_nested_ap_objects(object, options \\ []) do
-    options =
-      Keyword.put_new(options, :to, object["to"] || object["cc"] || object["audience"] || [])
+  # an ActivityPub document without a `@context` of its own is read with the ActivityStreams one
+  @as2_context "https://www.w3.org/ns/activitystreams"
 
-    if Keyword.get(options, :fetch_remote?, true) do
-      object
-      |> Enum.reduce(object, fn
-        {key, _value}, acc
-        when key in [
-               # common fields we know shouldn't include nested objects we want to process separately
-               "@context",
-               "id",
-               "actor",
-               "object",
-               "type",
-               "attributedTo",
-               "audience",
-               "contentMap",
-               "name",
-               "nameMap",
-               "startTime",
-               "endTime",
-               "context",
-               "inReplyTo",
-               "published",
-               "replies",
-               "summaryMap",
-               "updated",
-               "url",
-               "to",
-               "bto",
-               "cc",
-               "bcc",
-               "duration"
-             ] ->
-          acc
+  @doc """
+  Turns the AP ids that the fields of an object hold into the references the JSON of an APActivity keeps.
 
-        {key, value}, acc ->
-          case detect_and_fetch_nested_objects(value, options) do
-            {:ok, fetched_object} ->
-              # Replace with pointer ID or keep original based on your needs
-              Map.put(acc, key, fetched_object)
+  The objects nested in an object's fields were stored on their own when it was ingested (`ActivityPub.Federator.NestedObjects`), which left their AP ids in the fields. A reference is what `preload_nested_objects/2` and the cards load the object by: the pointer of the object when it has one, else its ActivityPub id. Which fields hold objects is the document's `@context`'s to say (`ActivityPub.Federator.NestedObjects.Terms`). An id that is not a stored object stays as it is.
+  """
+  def reference_nested_objects(object) when is_map(object) do
+    fields = Terms.fields(object, @as2_context)
 
-            _ ->
-              acc
-          end
-      end)
+    Enum.reduce(object, object, fn
+      {key, value}, acc ->
+        if key in fields, do: Map.put(acc, key, reference(value)), else: acc
+    end)
+  end
+
+  def reference_nested_objects(other), do: other
+
+  defp reference(ids) when is_list(ids), do: Enum.map(ids, &reference/1)
+
+  defp reference(id) when is_binary(id) do
+    with true <- String.starts_with?(id, ["http://", "https://"]),
+         {:ok, %ActivityPub.Object{} = stored} <- ActivityPub.Object.get_cached(ap_id: id) do
+      if actor_object?(stored), do: actor_reference(id), else: build_pointer_map(id, stored, nil)
     else
-      object
+      _ -> id
     end
   end
 
-  defp detect_and_fetch_nested_objects(value, _options) when is_list(value) do
-    # Handle arrays of potential AP objects
-    {:ok,
-     Enum.map(value, fn item ->
-       case detect_and_fetch_nested_objects(item, []) do
-         {:ok, fetched} ->
-           fetched
+  defp reference(other), do: other
 
-         _ ->
-           # fallback to preserving existing data
-           item
-       end
-     end)}
-  end
-
-  defp detect_and_fetch_nested_objects(%{"id" => id, "type" => type} = value, options)
-       when is_binary(id) and (is_binary(type) or is_list(type)) do
-    # Check if this looks like an AP object with an ID and type
-    if ActivityPub.Config.known_fetchable_type?(type) do
-      fetch_and_normalize_nested_object(id, value, options)
-    else
-      # debug(type, "Skip fetching nested type")
-      :skip
+  defp actor_reference(id) do
+    case ActivityPub.Actor.get_cached(ap_id: id) do
+      {:ok, %ActivityPub.Actor{} = actor} -> build_pointer_map(id, actor, nil, "ap_actor_id")
+      _ -> id
     end
   end
 
-  defp detect_and_fetch_nested_objects(value, _options) do
-    #  debug(value, "Skip fetching nested value")
-    :skip
-  end
+  defp actor_object?(%{data: %{"type" => type}}),
+    do: ActivityPub.Config.type_in?(type, ActivityPub.Config.supported_actor_types())
 
-  defp fetch_and_normalize_nested_object(id, embedded_object, options) do
-    # Try to fetch and create the object
-    case ActivityPub.Federator.Fetcher.fetch_object_from_id(
-           id,
-           options
-           |> Keyword.put(:triggered_by, "APActivities.fetch_and_normalize_nested_object")
-         ) do
-      {:ok, %ActivityPub.Object{} = fetched_object} ->
-        debug(fetched_object, "Fetched Object from ActivityPub")
-        {:ok, build_pointer_map(id, fetched_object, embedded_object["type"])}
-
-      {:ok, %ActivityPub.Actor{} = fetched_object} ->
-        debug(fetched_object, "Fetched Actor from ActivityPub")
-        {:ok, build_pointer_map(id, fetched_object, embedded_object["type"], "ap_actor_id")}
-
-      e ->
-        debug(
-          e,
-          "Could not fetch and/or save embedded object, falling back to using embedded data"
-        )
-
-        # Fallback: create object from embedded data if available
-        create_object_from_embedded_data(embedded_object, options)
-    end
-  end
-
-  defp create_object_from_embedded_data(%{"id" => id} = embedded_object, options) do
-    # Create object using the embedded data
-    case embedded_object
-         |> Map.put_new("to", options[:to] || [])
-         # |> ActivityPub.Object.insert(false) 
-         |> debug("WIP: call incoming adapter on this?")
-         |> ActivityPub.Federator.Fetcher.cached_or_handle_incoming(
-           options
-           |> Keyword.put(:triggered_by, "APActivities.create_object_from_embedded_data")
-         )
-         |> debug("Handled incoming for created embedded object") do
-      {:ok, %{} = created_object} ->
-        {:ok, build_pointer_map(id, created_object, embedded_object["type"])}
-
-      e ->
-        err(e, "Could not insert embedded data as Object, falling back to using as-is")
-        :skip
-    end
-  end
+  defp actor_object?(_), do: false
 
   # Helper to build consistent pointer map structure
   defp build_pointer_map(id, object_with_pointer, fallback_type, ap_field \\ "ap_id") do

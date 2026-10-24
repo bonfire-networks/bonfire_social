@@ -1392,7 +1392,8 @@ defmodule Bonfire.Social.Objects do
         %{data: %{"type" => object_type}} = object
       )
       when object_type != "Tombstone" do
-    with pointer_id when is_binary(pointer_id) <- pointer_id_from_ap_object(object),
+    with pointer_id when is_binary(pointer_id) <-
+           Bonfire.Federate.ActivityPub.AdapterUtils.pointer_id_from_ap_object(object),
          {:ok, post} <- Bonfire.Common.Needles.get(pointer_id, skip_boundary_check: true),
          %{} = group <- removed_from_group(data, pointer_id) do
       if e(activity, :local, nil) == true do
@@ -1427,14 +1428,7 @@ defmodule Bonfire.Social.Objects do
            end
          ]) do
       {:ok, _} = removed ->
-        # a group we host passes it on, unchanged, to its followers, as Lemmy's communities do; nothing for a group we only mirror
-        maybe_apply(
-          Bonfire.Federate.ActivityPub.AdapterUtils,
-          :maybe_group_relays,
-          [group, activity],
-          fallback_return: nil
-        )
-
+        # a group we host passes it on to its followers (`Incoming`), as Lemmy's communities do
         removed
 
       refused ->
@@ -1471,7 +1465,7 @@ defmodule Bonfire.Social.Objects do
 
   def ap_receive_activity(creator, _activity, object) do
     # TODO: double check for Delete activity type?
-    case pointer_id_from_ap_object(object) do
+    case Bonfire.Federate.ActivityPub.AdapterUtils.pointer_id_from_ap_object(object) do
       pointer_id when is_binary(pointer_id) ->
         ap_maybe_delete(creator, pointer_id)
 
@@ -1504,59 +1498,6 @@ defmodule Bonfire.Social.Objects do
         other
         |> info("ap_maybe_deleted")
     end
-  end
-
-  @doc """
-  Finds a Bonfire object by its ActivityPub URI or object struct, even if the AP object has been pruned from cache.
-
-  Tries multiple patterns to extract pointer_id:
-  - From pointer field
-  - From pointer_id field
-  - From struct id (for non-AP structs)
-  - From data["id"] via Peered lookup
-
-  Returns the pointer_id if found, allowing the adapter to process activities for pruned objects.
-
-  ## Examples
-
-      iex> pointer_id_from_ap_object("https://remote.example/objects/123")
-      "01FXYZ123ABC"
-
-      iex> pointer_id_from_ap_object(%{pointer_id: "01FXYZ123ABC"})
-      "01FXYZ123ABC"
-
-      iex> pointer_id_from_ap_object(%{data: %{"id" => "https://remote.example/objects/123"}})
-      "01FXYZ123ABC"
-
-      iex> pointer_id_from_ap_object(%{})
-      nil
-  """
-  def pointer_id_from_ap_object(%{pointer: %{id: pointer_id}}) when is_binary(pointer_id) do
-    pointer_id
-  end
-
-  def pointer_id_from_ap_object(%{pointer_id: pointer_id}) when is_binary(pointer_id) do
-    pointer_id
-  end
-
-  def pointer_id_from_ap_object(%struct{id: id})
-      when struct not in [ActivityPub.Actor, ActivityPub.Object] do
-    id
-  end
-
-  def pointer_id_from_ap_object(%{data: %{"id" => uri}}) when is_binary(uri) do
-    Bonfire.Federate.ActivityPub.Peered.get_by_uri(uri)
-    ~> id()
-  end
-
-  def pointer_id_from_ap_object(uri) when is_binary(uri) do
-    Bonfire.Federate.ActivityPub.Peered.get(uri)
-    ~> id()
-  end
-
-  def pointer_id_from_ap_object(o) do
-    error(o, "Unrecognized AP object format for extracting pointer_id")
-    nil
   end
 
   @doc """
