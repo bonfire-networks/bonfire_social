@@ -443,6 +443,20 @@ defmodule Bonfire.Social.Threads do
       ]
   end
 
+  @doc "A query of the ids of the creators of `post` and of every post up its thread (its `Replied.path`). Not boundarised: for a caller that composes it."
+  def query_creator_ids_in_reply_path(post) do
+    post_id = uid(post)
+
+    from(created in Bonfire.Data.Social.Created,
+      left_join: replied in Replied,
+      on: replied.id == type(^post_id, Needle.ULID),
+      where:
+        created.id == type(^post_id, Needle.ULID) or
+          fragment("? = ANY(?)", created.id, replied.path),
+      select: created.creator_id
+    )
+  end
+
   def compute_include_path_ids(reply, opts \\ []) do
     level = Types.maybe_to_integer(opts[:level], nil)
 

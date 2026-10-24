@@ -35,6 +35,16 @@ defmodule Bonfire.Social.Quotes do
     |> repo().many_maybe_paginated(true, opts)
   end
 
+  @doc "A query of the ids of who quoted `quoted`: the creators of the posts `Tagged` with it, which is how a quote links to the post it quotes. Not boundarised: for a caller that composes it (eg. to keep the local ones)."
+  def query_quoter_ids(quoted) do
+    from(tagged in Bonfire.Tag.Tagged,
+      join: created in Bonfire.Data.Social.Created,
+      on: created.id == tagged.id,
+      where: tagged.tag_id == ^uid(quoted),
+      select: created.creator_id
+    )
+  end
+
   defp query_thread_quotes(thread_id, opts) do
     quoted_posts =
       from(tagged in Bonfire.Tag.Tagged,

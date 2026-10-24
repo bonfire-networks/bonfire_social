@@ -365,6 +365,13 @@ defmodule Bonfire.Social.Boosts do
     list_paginated([objects: id], opts ++ [preload: :subject])
   end
 
+  @doc "A query of the ids of who boosted `object`. Not boundarised: for a caller that composes it."
+  def query_booster_ids(object) do
+    query([objects: uid(object)], skip_boundary_check: true)
+    |> exclude(:preload)
+    |> select([edge: edge], edge.subject_id)
+  end
+
   @doc """
   Lists boosts with pagination.
 
