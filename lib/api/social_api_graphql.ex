@@ -1476,7 +1476,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
                |> maybe_put(:verb_grants, verb_grants)
                |> maybe_put(:context_id, args[:context_id])
                |> maybe_put(:quotes, if(args[:quote_id], do: [args[:quote_id]])),
-             {:ok, post} <- Bonfire.Posts.publish(opts) do
+             # through `Nomad`, so a client signed in with an account from elsewhere acts through their server (a local user's post is `publish/1`, as before)
+             {:ok, post} <- Bonfire.Posts.nomad(:publish, opts) do
           {:ok, maybe_put(post, :context_id, args[:context_id])}
         end
       end

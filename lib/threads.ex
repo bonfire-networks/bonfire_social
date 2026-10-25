@@ -198,8 +198,9 @@ defmodule Bonfire.Social.Threads do
       case load_replyable(user, id) do
         %{replied: %{thread_id: thread_id}} = reply
         when is_binary(thread_id) and thread_id != id ->
-          # Also check if user can reply to the thread root
-          if Bonfire.Boundaries.can?(user, :reply, thread_id) do
+          # Also check if user can reply to the thread root, unless it is a placeholder, which has no boundary of its own (see `placeholder/1`)
+          if Bonfire.Boundaries.can?(user, :reply, thread_id) or
+               not is_nil(placeholder(thread_id)) do
             {:ok, reply}
           else
             debug(attrs || thread_id, "reply not permitted on thread")
@@ -211,13 +212,106 @@ defmodule Bonfire.Social.Threads do
           {:ok, reply}
 
         _ ->
-          debug(attrs || id, "reply not permitted on reply_to")
+          case placeholder(id) do
+            %{} = placeholder ->
+              {:ok, placeholder}
 
-          reply_not_permitted!()
+            nil ->
+              debug(attrs || id, "reply not permitted on reply_to")
+
+              reply_not_permitted!()
+          end
       end
     else
       nil
     end
+  end
+
+  # A post known by its URL but not fetched yet, standing in its thread (`Bonfire.Federate.ActivityPub.AdapterUtils.get_or_create_placeholder/1`): a soft-deleted pointer that still has its `Peered`, which a deleted post loses. Replied to without a boundary check, as it has no boundary of its own: whether a reply is welcome is its remote author's server's call, and there is nothing in it to leak.
+  # With its thread loaded, so a reply takes the branch of `cast_replied/3` that keeps the thread rather than starting one at it
+  defp placeholder(id) do
+    from(p in Pointer,
+      join: peered in assoc(p, :peered),
+      left_join: replied in Replied,
+      on: replied.id == p.id,
+      where: p.id == ^id and not is_nil(p.deleted_at),
+      select: replied
+    )
+    |> repo().all()
+    |> case do
+      [] ->
+        nil
+
+      [replied] ->
+        replied =
+          replied ||
+            Changesets.set_state(%Replied{id: id, thread_id: id, path: []}, :loaded)
+
+        %{id: id, replied: Map.put(replied, :thread, %{id: replied.thread_id})}
+    end
+  end
+
+  @doc """
+  Where a placeholder (`placeholder/1`) stands in its thread: under the thread's opener when we hold it, as the post it stands for is somewhere below it, otherwise as the opener of a thread of its own. Its own parent isn't known, so it is no one's reply.
+  """
+  def place_placeholder(id, opener_id \\ nil) do
+    repo().insert_all(
+      Replied,
+      [%{id: id, thread_id: opener_id || id, path: if(opener_id, do: [opener_id], else: [])}],
+      on_conflict: :nothing
+    )
+  end
+
+  @doc "Takes away where a placeholder stood (`place_placeholder/2`), before the post it stands for is created under its id with a `Replied` of its own. The replies under it keep pointing at it."
+  def unplace_placeholder(id) do
+    from(r in Replied, where: r.id == ^id) |> repo().delete_all()
+  end
+
+  @doc """
+  A placeholder's post has arrived, created under its id (`Bonfire.Federate.ActivityPub.Incoming`): the replies that were waiting under it already point at it, so only what depends on where the post itself landed is put right. Its reply counts, as its `Replied` is new, and the `thread_id` and `path` of everything under it, which follow where it landed rather than where its placeholder stood.
+  """
+  def placeholder_filled(id) do
+    with %Replied{} = replied <- repo().get(Replied, id) do
+      repo().transact_with(fn ->
+        # what is above it in each path below it is replaced by its own path
+        from(r in Replied,
+          where: fragment("? @> ?", r.path, type(^[id], {:array, Needle.ULID})),
+          update: [
+            set: [
+              thread_id: ^replied.thread_id,
+              path:
+                fragment(
+                  "? || (?)[array_position(?, ?):]",
+                  type(^replied.path, {:array, Needle.ULID}),
+                  r.path,
+                  r.path,
+                  type(^id, Needle.ULID)
+                )
+            ]
+          ]
+        )
+        |> repo().update_all([])
+
+        recount_replies(id)
+        {:ok, id}
+      end)
+    end
+  end
+
+  # what the `Replied` trigger counts for `id`, over the rows there are now: a direct reply, and every other row in its thread or below it in a path
+  defp recount_replies(id) do
+    direct = from(r in Replied, where: r.reply_to_id == ^id) |> repo().aggregate(:count)
+
+    nested =
+      from(r in Replied,
+        where:
+          r.id != ^id and (is_nil(r.reply_to_id) or r.reply_to_id != ^id) and
+            (r.thread_id == ^id or fragment("? = ANY(?)", type(^id, Needle.ULID), r.path))
+      )
+      |> repo().aggregate(:count)
+
+    from(r in Replied, where: r.id == ^id)
+    |> repo().update_all(set: [direct_replies_count: direct, nested_replies_count: nested])
   end
 
   defp reply_not_permitted! do
@@ -298,6 +392,84 @@ defmodule Bonfire.Social.Threads do
   defp make_threaded(object, thread, reply_to) do
     Changeset.cast(object, %{}, [])
     |> make_threaded(thread, reply_to)
+  end
+
+  @doc """
+  Moves the replies that reached us before `parent` under it, now that it has arrived.
+
+  A federated reply whose parent we could not fetch starts a thread of its own (see `cast_replied/3`). Once the parent arrives (its `ap_object` is linked to it), each such reply, found by its AP `inReplyTo`, becomes a reply to `parent` in `parent`'s thread, and the replies under it move along. The `Replied` trigger recounts the replies as the rows move. A reply whose author may not reply to `parent` stays a thread of its own, as it would have if the two had arrived in order.
+
+  Returns `{:ok, ids}` of the replies moved.
+  """
+  def adopt_orphaned_replies(parent, ap_object)
+
+  def adopt_orphaned_replies(%{id: parent_id} = parent, %{data: %{"id" => ap_id}})
+      when is_binary(ap_id) do
+    # TODO: the replies moved here are not filed into `parent`'s group, as `maybe_publish_in/3` only runs when a reply is created
+    # TODO: if `parent` and a reply are received at the same moment, this can run before the reply is linked to its AP object, and the reply stays a thread of its own
+    case orphaned_replies(ap_id, parent_id) do
+      [] ->
+        {:ok, []}
+
+      orphans ->
+        {adoptable, refused} =
+          Enum.split_with(orphans, fn {_id, creator_id} ->
+            Bonfire.Boundaries.can?(creator_id, :reply, parent)
+          end)
+
+        if refused != [],
+          do:
+            warn(refused, "not permitted to reply to #{parent_id}, so left as their own threads")
+
+        %{path: parent_path} = parent_replied = parent_replied(parent_id)
+        thread_id = parent_replied.thread_id || parent_id
+        path = (parent_path || []) ++ [parent_id]
+        ids = Enum.map(adoptable, &elem(&1, 0))
+
+        repo().transact_with(fn ->
+          Enum.each(ids, &move_thread_under(&1, parent_id, thread_id, path))
+          {:ok, ids}
+        end)
+        |> debug("adopted orphaned replies")
+    end
+  end
+
+  def adopt_orphaned_replies(_parent, _ap_object), do: {:ok, []}
+
+  # `{id, creator_id}` of the objects that reply to `ap_id` over ActivityPub but started threads of their own
+  defp orphaned_replies(ap_id, parent_id) do
+    ActivityPub.Queries.replies(%{"id" => ap_id}, [])
+    |> join(:inner, [o], r in Replied, on: r.id == o.pointer_id)
+    |> join(:left, [o, r], c in Bonfire.Data.Social.Created, on: c.id == r.id)
+    |> where([o, r], is_nil(r.reply_to_id) and r.id != ^parent_id)
+    |> select([o, r, c], {r.id, c.creator_id})
+    |> repo().all()
+  end
+
+  defp parent_replied(parent_id) do
+    repo().get(Replied, parent_id) ||
+      (
+        replied_attrs = %{id: parent_id, thread_id: parent_id}
+        init_parent_replied(struct(Replied, replied_attrs))
+        struct(Replied, Map.put(replied_attrs, :path, []))
+      )
+  end
+
+  # `id` was the opener of its own thread, so the path of every reply under it starts with `id`
+  defp move_thread_under(id, parent_id, thread_id, path) do
+    from(r in Replied, where: r.id == ^id)
+    |> repo().update_all(set: [reply_to_id: parent_id, thread_id: thread_id, path: path])
+
+    from(r in Replied,
+      where: fragment("? @> ?", r.path, type(^[id], {:array, Needle.ULID})),
+      update: [
+        set: [
+          thread_id: ^thread_id,
+          path: fragment("? || ?", type(^path, {:array, Needle.ULID}), r.path)
+        ]
+      ]
+    )
+    |> repo().update_all([])
   end
 
   defp make_child_of(%{id: id, replied: %{path: path}}, attrs) when is_list(path) do
@@ -442,6 +614,36 @@ defmodule Bonfire.Social.Threads do
         Enums.id(reply)
       ]
   end
+
+  @doc "Whether `reply` is in the thread of `post`: a reply to it, in the thread it opens, or anywhere below it (its `Replied.path`). One `exists?` query, not boundarised."
+  def thread_contains?(post, reply, _opts \\ []) do
+    with post_id when is_binary(post_id) <- uid(post),
+         reply_id when is_binary(reply_id) <- uid(reply) do
+      from(r in Replied,
+        where:
+          r.id == ^reply_id and
+            (r.reply_to_id == ^post_id or r.thread_id == ^post_id or
+               fragment("? @> ?", r.path, type(^[post_id], {:array, Needle.ULID})))
+      )
+      |> repo().exists?()
+    else
+      _ -> false
+    end
+  end
+
+  @doc "Runs `action` as the `current_user` in `opts` through `Bonfire.Federate.ActivityPub.Nomad`: `:thread_contains?` as `thread_contains?/3` does, for the posts we hold at the two URIs (never fetched: what we never received is in no thread of ours), or through the Mastodon API of a user from elsewhere with a token for it (`mastodon_api_token`)."
+  def nomad(:thread_contains? = action, post_uri, reply_uri, opts),
+    do:
+      Bonfire.Federate.ActivityPub.Nomad.run(action, [post_uri, reply_uri, opts],
+        local: fn post_uri, reply_uri, opts ->
+          thread_contains?(
+            Bonfire.Federate.ActivityPub.AdapterUtils.get_pointer_id_by_ap_id(post_uri),
+            Bonfire.Federate.ActivityPub.AdapterUtils.get_pointer_id_by_ap_id(reply_uri),
+            opts
+          )
+        end,
+        mastodon_api: action
+      )
 
   @doc "A query of the ids of the creators of `post` and of every post up its thread (its `Replied.path`). Not boundarised: for a caller that composes it."
   def query_creator_ids_in_reply_path(post) do
@@ -1620,7 +1822,34 @@ defmodule Bonfire.Social.Threads do
     replies
     |> debug("repppl")
     |> rescue_orphaned_replies(uid(opts[:thread_id]))
+    |> mark_placeholder_stubs()
     |> Replied.arrange(arrange_opts(opts))
+  end
+
+  # A stub that is a placeholder (`placeholder/1`) stands for a post we know of but haven't fetched, rather than one that is deleted or hidden: given the URL it can be fetched from, so the UI can say so and offer to fetch it
+  defp mark_placeholder_stubs(replies) do
+    case for(%{stub: true, id: id} <- replies, Bonfire.Common.Types.is_uid?(id), do: id) do
+      [] ->
+        replies
+
+      stub_ids ->
+        urls =
+          from(p in Pointer,
+            join: peered in assoc(p, :peered),
+            where: p.id in ^stub_ids and not is_nil(p.deleted_at),
+            select: {p.id, peered.canonical_uri}
+          )
+          |> repo().all()
+          |> Map.new()
+
+        Enum.map(replies, fn
+          %{stub: true, id: id} = stub when is_map_key(urls, id) ->
+            Map.put(stub, :fetch_url, urls[id])
+
+          other ->
+            other
+        end)
+    end
   end
 
   @doc """
@@ -1933,6 +2162,15 @@ defmodule Bonfire.Social.Threads do
 
   def reply_to_ap_object(activity_data, post_data) do
     # TODO: also take the `context` into account as thread_id
+    if reply_to = reply_to_ap_id(activity_data, post_data),
+      do:
+        reply_to
+        |> ActivityPub.Object.get_cached!(ap_id: ...)
+        |> debug()
+  end
+
+  @doc "The AP id of what an incoming object replies to, if anything."
+  def reply_to_ap_id(activity_data, post_data) do
     reply_to =
       post_data["inReplyTo"] ||
         activity_data["inReplyTo"]
@@ -1944,8 +2182,6 @@ defmodule Bonfire.Social.Threads do
         |> List.wrap()
         |> List.first()
         |> debug("reply_to_single_ap_id")
-        |> ActivityPub.Object.get_cached!(ap_id: ...)
-        |> debug()
   end
 
   @doc """

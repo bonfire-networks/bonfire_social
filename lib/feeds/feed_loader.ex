@@ -1600,6 +1600,19 @@ defmodule Bonfire.Social.FeedLoader do
     |> debug("query_optional_extras result")
   end
 
+  @doc "Runs `action` as the `current_user` in `opts` through `Bonfire.Federate.ActivityPub.Nomad`: `:feed_contains?` as `feed_contains?/3` does, for the post we hold at `uri` (never fetched: what we never received is in no feed of ours), or through the Mastodon API of a user from elsewhere with a token for it (`mastodon_api_token`, their home feed being `:my`)."
+  def nomad(:feed_contains? = action, feed, uri, opts),
+    do:
+      Bonfire.Federate.ActivityPub.Nomad.run(action, [feed, uri, opts],
+        local: fn feed, uri, opts ->
+          case Bonfire.Federate.ActivityPub.AdapterUtils.get_pointer_id_by_ap_id(uri) do
+            nil -> false
+            id -> !!feed_contains?(feed, id, opts)
+          end
+        end,
+        mastodon_api: action
+      )
+
   def feed_contains?(feed_name, object, opts \\ [])
 
   def feed_contains?({:error, e}, object, opts) do
