@@ -222,7 +222,7 @@ defmodule Bonfire.Social.FeedsDedupThreadTimeLimitTest do
       feed = FeedLoader.feed(:recent_discussions, filters, current_user: user)
 
       # the representative entry (the old first reply) predates the window, but the thread's latest reply is fresh
-      # this fails only in a full-suite CI run (CI showed fresh_reply representing the thread instead), so the message probes each candidate cause: old_reply missing from the outbox, hidden from the viewer, or dropped by the deferred join / its fallback
+      # this fails only in a full-suite CI run (CI showed fresh_reply representing the thread instead), so the message probes each candidate cause: old_reply missing from the outbox, hidden from the viewer, dropped by the deferred join / its fallback, or dropped by the window (the feed without it, and each row's thread and latest activity as the feed query sees them). CI ruled out the first three on 27 October (run 40539320869)
       assert FeedLoader.feed_contains?(feed, old_reply, current_user: user),
              "an active rootless thread should stay visible even when its earliest in-feed entry is older than the window. Expected root=#{root.id} old_reply=#{old_reply.id} fresh_reply=#{fresh_reply.id}, got: " <>
                inspect(
@@ -249,7 +249,35 @@ defmodule Bonfire.Social.FeedsDedupThreadTimeLimitTest do
                          current_user: user,
                          skip_boundary_check: true
                        )
+                     ),
+                   # if old_reply represents the thread here, the window is what drops it
+                   without_time_limit:
+                     feed_rows(
+                       FeedLoader.feed(:recent_discussions, %{filters | time_limit: 0},
+                         current_user: user
+                       )
+                     ),
+                   window_cutoff: Bonfire.Social.Objects.ulid_for_x_days_ago(7),
+                   # each outbox entry with the thread and latest activity the feed query sees for it, before any dedup or window: a window wide enough to keep every row still runs the same `replied` join and per-thread lookup
+                   rows_before_dedup:
+                     from(fp in Bonfire.Data.Social.FeedPublish,
+                       as: :main_object,
+                       where: fp.feed_id == ^outbox_id,
+                       join: activity in Bonfire.Data.Social.Activity,
+                       on: activity.id == fp.id,
+                       as: :activity
                      )
+                     |> Bonfire.Social.Threads.query_maybe_time_limit_by_latest_activity(3650)
+                     # the `replied` join comes with a preload, which a custom select can't keep
+                     |> Ecto.Query.exclude(:preload)
+                     |> select([activity: activity, replied: replied, latest_reply: lr], %{
+                       activity_id: activity.id,
+                       object_id: activity.object_id,
+                       replied_id: replied.id,
+                       thread_id: replied.thread_id,
+                       last_activity_id: lr.last_activity_id
+                     })
+                     |> Bonfire.Common.Repo.all()
                  },
                  limit: :infinity
                )
