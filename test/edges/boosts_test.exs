@@ -66,6 +66,34 @@ defmodule Bonfire.Social.BoostsTest do
     assert {:ok, _announce} = ActivityPub.Object.get_cached(pointer: boost), "announced"
   end
 
+  # the rule `boost/3` applies, answerable on its own, so a boost from another instance can be held to it too
+  test "duplicate? answers by the same rule as boosting" do
+    me = Fake.fake_user!()
+
+    {:ok, post} =
+      Posts.publish(
+        current_user: me,
+        post_attrs: %{post_content: %{html_body: "<p>boosted</p>"}},
+        boundary: "public"
+      )
+
+    key = [:bonfire_social, Bonfire.Social.Boosts, :can_reboost_after]
+
+    Process.put(key, false)
+    refute Boosts.duplicate?(me, post), "a first boost never is"
+    assert {:ok, _} = Boosts.boost(me, post)
+
+    assert Boosts.duplicate?(me, post), "a repeat is, while reboosts are off"
+    assert {:error, _} = Boosts.boost(me, post), "control: boosting agrees"
+
+    Process.put(key, 60)
+    assert Boosts.duplicate?(me, post), "a repeat is, within the minimum interval"
+
+    Process.put(key, true)
+    refute Boosts.duplicate?(me, post), "a repeat is not, when reboosts are always allowed"
+    assert {:ok, _} = Boosts.boost(me, post), "control: boosting agrees"
+  end
+
   test "cannot boost something repeatedly in too short a time" do
     me = Fake.fake_user!()
 

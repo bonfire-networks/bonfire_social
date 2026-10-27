@@ -147,30 +147,47 @@ defmodule Bonfire.Social.Boosts do
   end
 
   def maybe_boost(%{} = booster, %{} = boosted, opts \\ []) do
+    with :ok <- reboost_check(booster, boosted) do
+      do_boost(booster, boosted, opts)
+    end
+  end
+
+  @doc """
+  Whether another boost of an object by a user would be a duplicate now, by the rule `boost/3` applies: a first boost never is, a repeat is unless `can_reboost_after` allows it (never, always, or once that many seconds have passed since the last). Asked by federation (`Bonfire.Federate.ActivityPub.Adapter.activity_exists?/3`), so a boost from another instance is held to the same rule.
+
+  ## Examples
+
+      iex> Bonfire.Social.Boosts.duplicate?(user, object)
+      false
+
+  """
+  def duplicate?(%{} = booster, %{} = boosted), do: reboost_check(booster, boosted) != :ok
+
+  defp reboost_check(booster, boosted) do
     case Config.get([Bonfire.Social.Boosts, :can_reboost_after], false)
          |> debug("can_reboost_after?") do
       seconds when is_integer(seconds) ->
         # max 1 re-boost every X seconds
         case date_last_boosted(booster, boosted) do
           nil ->
-            do_boost(booster, boosted, opts)
+            :ok
 
           date_last_boosted ->
             if DateTime.diff(DateTime.now!("Etc/UTC"), date_last_boosted, :second)
                |> debug("last boosted X seconds ago") >
                  seconds,
-               do: do_boost(booster, boosted, opts),
+               do: :ok,
                else: {:error, l("You already boosted this recently.")}
         end
 
       true ->
         # unlimited re-boosts
-        do_boost(booster, boosted, opts)
+        :ok
 
       _ ->
         # do not allow re-boosts
         if !boosted?(booster, boosted),
-          do: do_boost(booster, boosted, opts),
+          do: :ok,
           else: {:error, :already_boosted}
     end
   end
