@@ -277,7 +277,20 @@ defmodule Bonfire.Social.FeedsDedupThreadTimeLimitTest do
                        thread_id: replied.thread_id,
                        last_activity_id: lr.last_activity_id
                      })
-                     |> Bonfire.Common.Repo.all()
+                     |> Bonfire.Common.Repo.all(),
+                   # CI showed each row's latest activity as its own id, as if the per-thread lookup found nothing: the thread's replies queried directly, and the lookup's own aggregate run on its own, tell the data apart from the lookup inside the feed query
+                   replies_in_thread:
+                     from(r in Bonfire.Data.Social.Replied,
+                       where: r.thread_id == ^root.id,
+                       select: {r.id, r.reply_to_id, r.thread_id}
+                     )
+                     |> Bonfire.Common.Repo.all(),
+                   thread_latest_reply_standalone:
+                     from(r in Bonfire.Data.Social.Replied,
+                       where: r.thread_id == ^root.id and r.id != r.thread_id,
+                       select: max(r.id)
+                     )
+                     |> Bonfire.Common.Repo.one()
                  },
                  limit: :infinity
                )
