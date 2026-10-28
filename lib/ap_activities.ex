@@ -148,7 +148,7 @@ defmodule Bonfire.Social.APActivities do
 
   def ap_receive(character, activity, object, public) when is_map(activity) or is_map(object) do
     case existing_apactivity(activity, object) do
-      %APActivity{} = existing -> do_update(existing, activity, object)
+      %APActivity{} = existing -> do_update(existing, character, activity, object)
       _ -> ap_receive_new(character, activity, object, public)
     end
   end
@@ -248,11 +248,38 @@ defmodule Bonfire.Social.APActivities do
     end
   end
 
+  # An Update replaces the tags and the media too, with the same functions that edit a Post: both compare what is there with what the object now carries, and change only the difference. Without a character there is no one to tag or attach as, so only the JSON is rewritten.
   # TODO: store version history
-  defp do_update(%APActivity{} = existing, activity, object) do
-    existing
-    |> APActivity.changeset(%{json: json_to_store(activity, object)})
-    |> repo().update()
+  defp do_update(%APActivity{} = existing, character, activity, object) do
+    json = json_to_store(activity, object)
+
+    if uid(character) do
+      existing = repo().maybe_preload(existing, [:tags, :media, :files])
+      attrs = update_attrs(character, object_json(json))
+
+      Bonfire.Tag.maybe_update_tags(character, existing, attrs)
+
+      changeset = APActivity.changeset(existing, %{json: json})
+
+      Bonfire.Files.maybe_update_media_assoc(character, existing, changeset, attrs) ||
+        repo().update(changeset)
+    else
+      existing
+      |> APActivity.changeset(%{json: json})
+      |> repo().update()
+    end
+  end
+
+  # what `maybe_cast_tags/3` and `maybe_attach_media/3` read from the object on a create, in the shape the Post update functions take: a missing `tag`, `image` or `attachment` means none, so tags and media that are no longer there are removed
+  defp update_attrs(character, object) do
+    tags = e(object, "tag", nil)
+
+    %{
+      hashtags: Bonfire.Tag.ap_receive_hashtags(tags),
+      tags: maybe_category_tags(tags, character),
+      primary_image: e(object, "image", nil) || e(object, "icon", nil),
+      attachments: List.wrap(e(object, "attachment", nil))
+    }
   end
 
   # defp the_object(object) do
