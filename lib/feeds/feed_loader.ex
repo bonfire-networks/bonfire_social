@@ -402,7 +402,13 @@ defmodule Bonfire.Social.FeedLoader do
         fetch_cursor_value_fun: &Activities.fetch_cursor_value_fun/2
       )
 
-    case feed_filtered_page(source, filters, Keyword.put(opts, :paginate, paginate)) do
+    case feed_filtered_page(
+           source,
+           filters,
+           opts
+           |> Keyword.put(:paginate, paginate)
+           |> Keyword.put(:newer_than_id, cursor)
+         ) do
       %{edges: edges, page_info: page_info} = page when is_list(edges) ->
         # ascending page: its last entry is the newest, so `end_cursor` (nil once exhausted) is where to continue
         %{
@@ -618,6 +624,7 @@ defmodule Bonfire.Social.FeedLoader do
 
   @decorate time()
   defp paginate_and_boundarise_feed(query, filters, opts) do
+    query = maybe_query_newer_than(query, filters, opts)
     per_media? = :per_media in List.wrap(opts[:preload])
 
     opts =
@@ -708,6 +715,17 @@ defmodule Bonfire.Social.FeedLoader do
             result
         end
     end
+  end
+
+  # Paginator's `id > cursor OR id IS NULL` can't be an index condition, so newer pages scanned the whole history below the cursor; a plain bound (like `maybe_filter_out_future_ulids`) can. Not for thread-deduped feeds, which page by latest activity.
+  defp maybe_query_newer_than(query, %{dedup_by_thread: true}, _opts), do: query
+
+  defp maybe_query_newer_than(query, _filters, opts) do
+    cursor = opts[:newer_than_id]
+
+    if Types.is_ulid?(cursor),
+      do: where(query, [m], m.id > ^cursor),
+      else: query
   end
 
   defp maybe_prepare_and_boundarise_feed_deferred_query(query, filters, opts) do
