@@ -3707,6 +3707,15 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
+  # The cursor fields (see `order_cursor_fields/3`) whose column can be null: the count sorts read a left-joined binding, so an object with no likes, boosts or replies has a null sort key. Paginator only keeps such rows in later pages if their field is listed here; the other cursor fields are ids, and a plain bound on them can use the index.
+  defp order_cursor_fields_nullable(:like_count), do: [{:activity, :like_count, :object_count}]
+  defp order_cursor_fields_nullable(:boost_count), do: [{:activity, :boost_count, :object_count}]
+
+  defp order_cursor_fields_nullable(:reply_count),
+    do: [{:activity, :replied, :total_replies_count}]
+
+  defp order_cursor_fields_nullable(_), do: []
+
   @doc """
   Provides pagination options for ordering.
 
@@ -3724,6 +3733,7 @@ defmodule Bonfire.Social.Activities do
           sort_order || :desc,
           if(:per_media in List.wrap(opts[:preload]), do: :newest_activity_id, else: :id)
         ),
+      cursor_fields_nullable: order_cursor_fields_nullable(sort_by),
       fetch_cursor_value_fun: &fetch_cursor_value_fun/2
     ]
     |> debug("order_pagination_opts")

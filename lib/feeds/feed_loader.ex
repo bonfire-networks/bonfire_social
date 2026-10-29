@@ -407,7 +407,7 @@ defmodule Bonfire.Social.FeedLoader do
            filters,
            opts
            |> Keyword.put(:paginate, paginate)
-           |> Keyword.put(:newer_than_id, cursor)
+           # |> Keyword.put(:newer_than_id, cursor) # only fed `maybe_query_newer_than/3`, see below
          ) do
       %{edges: edges, page_info: page_info} = page when is_list(edges) ->
         # ascending page: its last entry is the newest, so `end_cursor` (nil once exhausted) is where to continue
@@ -624,7 +624,7 @@ defmodule Bonfire.Social.FeedLoader do
 
   @decorate time()
   defp paginate_and_boundarise_feed(query, filters, opts) do
-    query = maybe_query_newer_than(query, filters, opts)
+    # query = maybe_query_newer_than(query, filters, opts) # no longer needed, see below
     per_media? = :per_media in List.wrap(opts[:preload])
 
     opts =
@@ -717,16 +717,16 @@ defmodule Bonfire.Social.FeedLoader do
     end
   end
 
-  # Paginator's `id > cursor OR id IS NULL` can't be an index condition, so newer pages scanned the whole history below the cursor; a plain bound (like `maybe_filter_out_future_ulids`) can. Not for thread-deduped feeds, which page by latest activity.
-  defp maybe_query_newer_than(query, %{dedup_by_thread: true}, _opts), do: query
-
-  defp maybe_query_newer_than(query, _filters, opts) do
-    cursor = opts[:newer_than_id]
-
-    if Types.is_ulid?(cursor),
-      do: where(query, [m], m.id > ^cursor),
-      else: query
-  end
+  # Disabled: Paginator used to write the cursor bound as `id > cursor OR id IS NULL`, which can't be an index condition, so newer pages scanned the whole history below the cursor (2574 ms vs 15 ms on prod, 29 October 2026). This added a plain `id > cursor` bound on top (not for thread-deduped feeds, which page by latest activity). Paginator now writes plain bounds for every cursor field not listed in `cursor_fields_nullable`, `feed_newer_than/5`'s `[id: :asc]` included, so this repeats what it does.
+  # defp maybe_query_newer_than(query, %{dedup_by_thread: true}, _opts), do: query
+  #
+  # defp maybe_query_newer_than(query, _filters, opts) do
+  #   cursor = opts[:newer_than_id]
+  #
+  #   if Types.is_ulid?(cursor),
+  #     do: where(query, [m], m.id > ^cursor),
+  #     else: query
+  # end
 
   defp maybe_prepare_and_boundarise_feed_deferred_query(query, filters, opts) do
     # tries to speed up queries by applying filters (incl. pagination) in a deferred join before boundarising and extra joins/preloads

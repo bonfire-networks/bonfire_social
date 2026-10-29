@@ -194,7 +194,7 @@ defmodule Bonfire.Social.FeedPaginationTest do
 
       # First page should have a limit but not cursor-based filtering
       assert query_string =~ "limit: ^6"
-      refute query_string =~ "where: (f0.id < ^"
+      refute query_string =~ "where: f0.id < ^"
 
       # PART 2: Execute the first page query and get pagination info
       # -----------------------------------------------------
@@ -228,7 +228,10 @@ defmodule Bonfire.Social.FeedPaginationTest do
       assert query_string =~ "order_by: [desc: a1.id]"
       # Second page should have cursor-based filtering
       assert query2_string =~ "limit: ^6"
-      assert query2_string =~ "where: (f0.id < ^\""
+      assert query2_string =~ "where: f0.id < ^\""
+
+      # the id is never null, so its bound stays a plain comparison that Postgres can use as an index condition
+      refute query2_string =~ "is_nil(f0.id)"
       # TODO: The ID corresponding to the cursor value should be in the query
       # assert query2_string =~ after_cursor
 
@@ -476,6 +479,111 @@ defmodule Bonfire.Social.FeedPaginationTest do
       assert List.flatten(pages) == [oldest.id, middle.id, newest.id],
              "expected pages [oldest], [middle], [newest] (oldest=#{oldest.id} middle=#{middle.id} newest=#{newest.id}), got: #{inspect(pages)}"
     end
+  end
+
+  describe "paging all the way down" do
+    # pages after the first bound the cursor field with a plain comparison (no `OR … IS NULL`, which Postgres can't use as an index condition), so the pages together must still equal one big page
+    for {name, extra_filters} <- [
+          {"the id sort", %{}},
+          {"a thread-grouped feed", %{dedup_by_thread: true}}
+        ] do
+      test "#{name} returns what one big page does" do
+        viewer = fake_user!("deep paging viewer")
+        author = fake_user!("deep paging author")
+
+        for n <- 1..7,
+            do: fake_post!(author, "public", %{post_content: %{html_body: "deep paging #{n}"}})
+
+        filters =
+          Map.merge(
+            %{feed_ids: [Feeds.feed_id(:outbox, author)], time_limit: 0},
+            unquote(Macro.escape(extra_filters))
+          )
+
+        object_ids = fn %{edges: edges} -> Enum.map(edges, &e(&1, :activity, :object_id, nil)) end
+
+        all =
+          FeedLoader.feed(:custom, filters, current_user: viewer, paginate: [limit: 10])
+          |> object_ids.()
+
+        assert length(all) == 7
+
+        paged =
+          Stream.unfold({:first, 0}, fn
+            {nil, _} ->
+              nil
+
+            {_, 8} ->
+              nil
+
+            {cursor, n} ->
+              paginate = if cursor == :first, do: [limit: 2], else: [limit: 2, after: cursor]
+
+              page = FeedLoader.feed(:custom, filters, current_user: viewer, paginate: paginate)
+              {object_ids.(page), {page.page_info.end_cursor, n + 1}}
+          end)
+          |> Enum.to_list()
+
+        assert List.flatten(paged) == all,
+               "expected the pages to add up to the big page #{inspect(all)}, got: #{inspect(paged)}"
+
+        assert length(paged) == 4
+      end
+    end
+  end
+
+  describe "count sorts keep posts that have no count on later pages" do
+    # a post nobody reacted to has no count row, so its sort key is null: a plain `count < cursor` bound would drop it from every page after the first, which is why these sorts list their count field in `cursor_fields_nullable`
+    for sort_by <- [:like_count, :boost_count, :reply_count] do
+      test "#{sort_by}: pages from the most to the post with none" do
+        viewer = fake_user!("count paging viewer")
+        author = fake_user!("count paging author")
+        others = for n <- 1..2, do: fake_user!("count paging other #{n}")
+
+        [none, one, two] =
+          for name <- ["none", "one", "two"] do
+            fake_post!(author, "public", %{post_content: %{name: name, html_body: name}})
+          end
+
+        for {post, count} <- [{two, 2}, {one, 1}], other <- Enum.take(others, count) do
+          react(unquote(sort_by), other, post)
+        end
+
+        filters = %{
+          feed_ids: [Feeds.feed_id(:outbox, author)],
+          sort_by: unquote(sort_by),
+          sort_order: :desc,
+          time_limit: 0
+        }
+
+        pages =
+          Stream.unfold({:first, 0}, fn
+            {nil, _} ->
+              nil
+
+            {_, 5} ->
+              nil
+
+            {cursor, n} ->
+              paginate = if cursor == :first, do: [limit: 1], else: [limit: 1, after: cursor]
+
+              %{edges: edges, page_info: page_info} =
+                FeedLoader.feed(:custom, filters, current_user: viewer, paginate: paginate)
+
+              {Enum.map(edges, &e(&1, :activity, :object_id, nil)), {page_info.end_cursor, n + 1}}
+          end)
+          |> Enum.to_list()
+
+        assert List.flatten(pages) == [two.id, one.id, none.id],
+               "expected pages [two], [one], [none] (two=#{two.id} one=#{one.id} none=#{none.id}), got: #{inspect(pages)}"
+      end
+    end
+
+    defp react(:like_count, user, post), do: {:ok, _} = Bonfire.Social.Likes.like(user, post)
+    defp react(:boost_count, user, post), do: {:ok, _} = Bonfire.Social.Boosts.boost(user, post)
+
+    defp react(:reply_count, user, post),
+      do: fake_post!(user, "public", %{post_content: %{html_body: "reply"}, reply_to_id: post.id})
   end
 
   describe "reply_count sorting with exclude_activity_types: [:reply]" do
