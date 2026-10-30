@@ -434,13 +434,37 @@ defmodule Bonfire.Social.Feeds do
     bells = within_boundary(subscribers, if(boundary == "local", do: "local", else: "public"), [])
 
     users =
-      (named ++ bells)
+      (named ++
+         bells ++ moderators_of_mentioned_service_character(boundary, mentions, to_circles))
       # someone both mentioned and with a bell on the author is one person to notify
       |> Enum.uniq_by(&id/1)
       |> debug("users to notify")
 
     {users, wrote_above}
   end
+
+  # A post that mentions the instance's federation bot is for the people who can moderate the instance too. Only where they can read it: a post anyone may read, or a `mentions` one, for which `Acls.mentions_grants/3` grants them. For any other boundary (an incoming private post has none: its readers are the `to_circles`, which include them: `AdapterUtils.recipients_boundary_circles/4`) only those `to_circles` names. Not through the boundary filter above, which keeps only those named in `to_circles`
+  defp moderators_of_mentioned_service_character(boundary, mentions, _to_circles)
+       when boundary in ["public", "public_remote", "local", "mentions"],
+       do: moderators_if_mentioned_service_character(mentions)
+
+  defp moderators_of_mentioned_service_character(_boundary, mentions, to_circles) do
+    granted = to_circles |> List.wrap() |> Enum.reject(&is_tuple/1) |> Enum.map(&id/1)
+
+    mentions
+    |> moderators_if_mentioned_service_character()
+    |> Enum.filter(&(id(&1) in granted))
+  end
+
+  defp moderators_if_mentioned_service_character(mentions),
+    do:
+      maybe_apply(
+        Bonfire.Federate.ActivityPub.AdapterUtils,
+        :moderators_if_service_character,
+        [mentions],
+        fallback_return: []
+      )
+      |> List.wrap()
 
   # whoever enabled a bell on the author or a group the post is in, for a new post, or on any post above a reply: a bell on a person or group covers new posts, not replies, which belong to the threads they are in, and a bell on a post covers the replies below it, however deep (the thread's first post is the top of every path, so a thread bell covers the whole thread). The author of the post being answered is here too, through the bell their post rang when they wrote it. Not for a post only its mentions may read, since the boundary filter lets everyone it is given through for those, and a subscriber was not mentioned
   # Returns `{subscribers, wrote_above_ids}`, the ids only for a reply

@@ -349,19 +349,18 @@ defmodule Bonfire.Social.Flags do
   end
 
   @doc """
-  Retrieves instance moderators.
+  Retrieves the users who can moderate the instance, who are told of reports: everyone who holds `:mediate` for the whole instance, through the admin circle, the mod circle, or any other role or circle the instance gave it to. Not the same as the moderators the instance declares (`Bonfire.Me.Users.list_moderators/1`), who are the members of the mod circle.
 
   ## Returns
 
-  A list of instance moderators.
+  A list of users.
 
   ## Examples
 
       iex> Bonfire.Social.Flags.instance_moderators()
       [%Bonfire.Data.Identity.User{}, ...]
   """
-  # FIXME: should list actual instance moderators rather than admins
-  def instance_moderators, do: Bonfire.Me.Users.list_admins(preload: :internal)
+  def instance_moderators, do: Bonfire.Me.Users.list_instance_wide(:mediate, preload: :internal)
 
   defp check_flag(_flagger, object, opts) do
     #  NOTE: currently allowing anyone to flag anything regardless of boundaries - TODO: make configurable?

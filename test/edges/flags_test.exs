@@ -271,6 +271,64 @@ defmodule Bonfire.Social.FlagsTest do
     assert flag.edge.subject_id == someone.id
   end
 
+  # a post by a third person with no moderators of its own, flagged by a fourth: the flag goes to the instance's moderators
+  defp flagged_post_by_others do
+    author = Fake.fake_user!()
+    flagger = Fake.fake_user!()
+
+    assert {:ok, post} =
+             Posts.publish(
+               current_user: author,
+               post_attrs: %{post_content: %{html_body: "<p>hey you have an epic html post</p>"}},
+               boundary: "public"
+             )
+
+    assert {:ok, flag} = Flags.flag(flagger, post)
+    {post, flag}
+  end
+
+  test "see a flag of something in my notifications (as an instance moderator, not an admin)" do
+    moderator = Fake.instance_moderator!(Fake.fake_user!())
+    {post, flag} = flagged_post_by_others()
+
+    assert %{edges: [feed_publish]} =
+             FeedActivities.feed(:notifications, current_user: moderator)
+
+    assert feed_publish.activity.object_id == post.id
+    assert flag.edge.object_id == post.id
+  end
+
+  test "an admin is told of a flag as well as a moderator: both can moderate the instance" do
+    admin = Fake.fake_user!()
+    {:ok, admin} = Users.make_admin(admin)
+    moderator = Fake.instance_moderator!(Fake.fake_user!())
+    {post, _flag} = flagged_post_by_others()
+
+    for user <- [moderator, admin] do
+      assert %{edges: [feed_publish]} = FeedActivities.feed(:notifications, current_user: user)
+      assert feed_publish.activity.object_id == post.id
+    end
+  end
+
+  test "a user in a circle given :mediate for the whole instance is told of a flag" do
+    reviewer = Fake.fake_user!()
+    assert {:ok, circle} = Bonfire.Boundaries.Circles.create(Fake.fake_user!(), "reviewers")
+    assert {:ok, _} = Bonfire.Boundaries.Circles.add_to_circles(reviewer, circle)
+
+    Bonfire.Boundaries.Grants.grant(
+      circle.id,
+      Bonfire.Boundaries.Scaffold.Instance.instance_acl(),
+      :mediate,
+      true,
+      skip_boundary_check: true
+    )
+
+    {post, _flag} = flagged_post_by_others()
+
+    assert %{edges: [feed_publish]} = FeedActivities.feed(:notifications, current_user: reviewer)
+    assert feed_publish.activity.object_id == post.id
+  end
+
   test "cannot list all flags as non-admin" do
     someone = Fake.fake_user!()
     me = Fake.fake_user!()
