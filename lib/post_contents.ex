@@ -249,21 +249,51 @@ defmodule Bonfire.Social.PostContents do
   end
 
   defp process_local_input(field, creator, attrs, do_not_strip_html?, output_format, opts) do
+    markdown? = (output_format || editor_output_content_type(creator)) == :markdown
+
     # code in markdown is swapped for tokens until `prepare_text/3` is done, so no processing meant for prose can alter it
     {text, unmask_code} =
-      if (output_format || editor_output_content_type(creator)) == :markdown,
+      if markdown?,
         do: Text.mask_markdown_code(get_attr(attrs, field)),
         else: {get_attr(attrs, field), & &1}
+
+    # quote markers too: the HTML sanitizer and `Text.as_html/1` would escape them to `&gt;`, so quotes never rendered
+    {text, unmask_quotes} = if markdown?, do: mask_quote_markers(text), else: {text, & &1}
 
     text
     |> normalise_input(do_not_strip_html?, output_format)
     |> then(&Bonfire.Social.Tags.maybe_process(creator, &1, opts))
     |> case do
-      {:ok, processed} -> {:ok, Map.put(processed, :unmask_code, unmask_code)}
-      other -> other
+      {:ok, processed} ->
+        {:ok, Map.put(processed, :unmask_code, &(&1 |> unmask_quotes.() |> unmask_code.()))}
+
+      other ->
+        other
     end
     |> debug("processed local input")
   end
+
+  # Swaps each `>` that opens a line (nested ones too) for a token that prose processing leaves alone
+  defp mask_quote_markers(markdown) when is_binary(markdown) do
+    if String.contains?(markdown, ">") do
+      token = "bfquote#{System.unique_integer([:positive])}x"
+
+      masked =
+        Regex.replace(~r/^( {0,3})((?:> ?)+)/m, markdown, fn _, indent, markers ->
+          indent <> String.replace(markers, ">", token)
+        end)
+
+      {masked,
+       fn
+         text when is_binary(text) -> String.replace(text, token, ">")
+         other -> other
+       end}
+    else
+      {markdown, & &1}
+    end
+  end
+
+  defp mask_quote_markers(other), do: {other, & &1}
 
   @doc "Given attributes of a remote post (with resolved `:mentions`/`:hashtags` maps), prepares it for processing by detecting languages, and rewriting mentions, hashtags, and urls"
   def prepare_remote_content(attrs, creator, opts) do
