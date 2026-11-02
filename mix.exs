@@ -22,7 +22,7 @@ defmodule Bonfire.Social.MixProject do
       start_permanent: Mix.env() == :prod,
       deps:
         Mess.deps([
-          {:typed_ecto_schema, "~> 0.4.1", runtime: false},
+          {:typed_ecto_schema, "~> 0.4.1 or ~> 0.5.0", runtime: false},
           {:bonfire_me,
            git: "https://github.com/bonfire-networks/bonfire_me",
            optional: true, runtime: false},

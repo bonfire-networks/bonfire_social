@@ -450,15 +450,16 @@ defmodule Bonfire.Social.PostContents do
     # end
   end
 
-  defp do_maybe_detect_languages(text)
-       when is_binary(text) and text != "" and byte_size(text) > 5 do
-    # FIXME: seems to crash when text contains emoji, eg. 🔥
-    Elixir.Text.Language.classify(text)
-  end
+  # TODO: text 0.3 removed `Text.Language.classify/1` (and the n-gram classifiers that used the text_corpus_udhr corpus). Detect with `Text.Language.Classifier.Fasttext.classify/2` instead, which needs the lid.176.bin model (~126 MB, `mix text.download_lid176`) loaded once at boot. Gate the download and loading behind a WITH_ML_LANGUAGES env var. See plans/ml-language-detection.md
+  # defp do_maybe_detect_languages(text)
+  #      when is_binary(text) and text != "" and byte_size(text) > 5 do
+  #   # FIXME: seems to crash when text contains emoji, eg. 🔥
+  #   Elixir.Text.Language.classify(text)
+  # end
 
-  defp do_maybe_detect_languages(_) do
-    nil
-  end
+  # defp do_maybe_detect_languages(_) do
+  #   nil
+  # end
 
   defp get_attr(attrs, key) do
     ed(attrs, key, nil) || ed(attrs, :post, :post_content, key, nil) ||
