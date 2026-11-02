@@ -25,6 +25,7 @@ defmodule Bonfire.Social.Threads do
   import Bonfire.Boundaries.Queries
 
   alias Bonfire.Data.Social.Replied
+  alias Bonfire.Data.ActivityPub.Peered
   alias Bonfire.Data.Social.Pin
 
   alias Bonfire.Social.Activities
@@ -60,6 +61,7 @@ defmodule Bonfire.Social.Threads do
         level -> "/discussion/#{thread_id}/reply/#{level}/#{object_id}"
       end
     else
+      # never loads anything itself, so a list of these is no N+1: callers pass the object as they loaded it
       Bonfire.Common.URIs.path(object)
     end
   end
@@ -214,7 +216,13 @@ defmodule Bonfire.Social.Threads do
         _ ->
           case placeholder(id) do
             %{} = placeholder ->
-              {:ok, placeholder}
+              if may_reply_in_placeholder_thread?(user, placeholder) do
+                {:ok, placeholder}
+              else
+                debug(attrs || id, "reply not permitted in the thread the placeholder stands in")
+
+                reply_not_permitted!()
+              end
 
             nil ->
               debug(attrs || id, "reply not permitted on reply_to")
@@ -234,22 +242,38 @@ defmodule Bonfire.Social.Threads do
       join: peered in assoc(p, :peered),
       left_join: replied in Replied,
       on: replied.id == p.id,
+      left_join: thread_peered in Peered,
+      on: thread_peered.id == replied.thread_id,
       where: p.id == ^id and not is_nil(p.deleted_at),
-      select: replied
+      select: {replied, thread_peered}
     )
     |> repo().all()
     |> case do
       [] ->
         nil
 
-      [replied] ->
+      [{replied, thread_peered}] ->
         replied =
           replied ||
             Changesets.set_state(%Replied{id: id, thread_id: id, path: []}, :loaded)
 
-        %{id: id, replied: Map.put(replied, :thread, %{id: replied.thread_id})}
+        %{
+          id: id,
+          replied: Map.put(replied, :thread, %{id: replied.thread_id, peered: thread_peered})
+        }
     end
   end
+
+  # A placeholder has no boundary of its own, but under an opener we host (`place_placeholder/2`) a reply to it joins that opener's thread, so it needs what replying there needs. That opener is named by the sender of the reply (its `context`) or is the thread of a placeholder a user replied to, so it is checked here, where a reply to the opener itself would be. Under a remote opener, or none, whether a reply is welcome stays its author's server's call
+  defp may_reply_in_placeholder_thread?(
+         user,
+         %{id: id, replied: %{thread_id: thread_id, thread: thread}}
+       ) do
+    thread_id == id or not Bonfire.Social.is_local?(thread) or
+      Bonfire.Boundaries.can?(user, :reply, thread_id)
+  end
+
+  defp may_reply_in_placeholder_thread?(_user, _placeholder), do: true
 
   @doc """
   Where a placeholder (`placeholder/1`) stands in its thread: under the thread's opener when we hold it, as the post it stands for is somewhere below it, otherwise as the opener of a thread of its own. Its own parent isn't known, so it is no one's reply.

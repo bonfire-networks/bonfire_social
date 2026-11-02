@@ -91,34 +91,56 @@ defmodule Bonfire.Social.Moderations do
   end
 
   @doc """
-  One of our moderators' activities on a group hosted elsewhere, relayed back by that group, so applied there: if its record is still waiting (`pending: true`), `apply` puts its effect in place here (given the record) and the request is confirmed. Returns the record, which the incoming activity is linked to.
+  One of our moderators' activities on a group hosted elsewhere, relayed back by that group (`announced_by`, its AP id), so applied there: if its record is still waiting (`pending: true`), `apply` puts its effect in place here (given the record) and the request is confirmed. Returns the record, which the incoming activity is linked to.
+
+  Only the group the activity names may say so: the ids of what a moderator sent are public (a ban goes to Public, and the group relays it), so anyone could otherwise relay it back and have it applied. Without `announced_by` it is not a relay (a local client's own activity), and is applied as it was before.
   """
-  def confirm_applied(our_activity, apply) when is_function(apply, 1) do
-    case record_of(our_activity) do
-      {:ok, record} ->
-        if pending(record) do
-          apply.(record)
-          confirm(record)
-        end
+  def confirm_applied(our_activity, announced_by, apply) when is_function(apply, 1) do
+    with true <-
+           (is_nil(announced_by) or from_named_group?(our_activity, announced_by)) ||
+             error(
+               announced_by,
+               "Not the group this moderation activity names, so not applying it"
+             ) do
+      case record_of(our_activity) do
+        {:ok, record} ->
+          if pending(record) do
+            apply.(record)
+            confirm(record)
+          end
 
-        {:ok, record}
+          {:ok, record}
 
-      _ ->
-        # ours, but with no record to confirm (sent before records, or by a path that keeps none): the group relaying it back says it accepted it, so it applies
-        apply.(nil)
+        _ ->
+          # ours, but with no record to confirm (sent before records, or by a path that keeps none): the group relaying it back says it accepted it, so it applies
+          apply.(nil)
+      end
     end
   end
 
   @doc """
-  One of our moderators' activities on a group hosted elsewhere, which that group REFUSED (its `Reject` of it): the request on its record is refused, and `undo` takes its effect out here, in case it was applied at once (`apply_now:`), checking for itself whether there is anything to undo. Returns the record.
+  One of our moderators' activities on a group hosted elsewhere, which that group REFUSED (its `Reject` of it, from `rejected_by`, its AP id): the request on its record is refused, and `undo` takes its effect out here, in case it was applied at once (`apply_now:`), checking for itself whether there is anything to undo. Returns the record.
+
+  Only the group the activity names may refuse it, and only while it is waiting for the group: a `Reject` after the group applied it does nothing (undoing that takes an `Undo`), and neither does anyone else's.
   """
-  def refuse_applied(our_activity, undo) when is_function(undo, 1) do
-    with {:ok, record} <- record_of(our_activity) do
-      refuse(record)
+  def refuse_applied(our_activity, rejected_by, undo) when is_function(undo, 1) do
+    with true <-
+           from_named_group?(our_activity, rejected_by) ||
+             error(rejected_by, "Not the group this moderation activity names, so not undoing it"),
+         {:ok, record} <- record_of(our_activity),
+         {:ok, _} <- refuse(record) do
       undo.(record)
       {:ok, record}
     end
   end
+
+  # the group a moderation activity of ours names: `audience` on a lock, a removal's `Delete` and a ban, and a ban's `target` too
+  defp from_named_group?(%{data: data}, ap_id) when is_binary(ap_id) do
+    ap_id in (List.wrap(data["audience"] || data["target"])
+              |> Enum.map(&ActivityPub.Object.get_ap_id/1))
+  end
+
+  defp from_named_group?(_our_activity, _ap_id), do: false
 
   @doc "The group applied it: the request on the record gets its `accepted_at`."
   def confirm(record) do
