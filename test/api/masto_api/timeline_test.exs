@@ -66,6 +66,65 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
     end
   end
 
+  # Feeds list what the viewer may SEE (since 16 October), so a post they may discover but not read (the `discover` role: `:see` without `:read`) is listed, and the web shows it as a closed card. A Mastodon client has no closed card: whatever the API gives it, it shows, so it gets what the card shows and nothing more: listed, with why it can't be read, never its body
+  describe "a post the viewer may discover but not read" do
+    test "is listed in the home timeline without its content, while one they may read has it", %{
+      conn: conn
+    } do
+      account = Fake.fake_account!()
+      viewer = Fake.fake_user!(account)
+      author = Fake.fake_user!()
+      {:ok, _} = Follows.follow(viewer, author)
+
+      # addressed to nobody else, so only the roles granted below let the viewer at them
+      publish = fn text ->
+        {:ok, post} =
+          Posts.publish(
+            current_user: author,
+            post_attrs: %{post_content: %{html_body: text}},
+            boundary: "mentions"
+          )
+
+        post
+      end
+
+      discover_only = publish.("<p>discover-only text</p>")
+      readable = publish.("<p>readable text</p>")
+
+      Bonfire.Boundaries.Controlleds.grant_role(viewer, discover_only, :discover,
+        current_user: author
+      )
+
+      Bonfire.Boundaries.Controlleds.grant_role(viewer, readable, :interact, current_user: author)
+
+      assert Bonfire.Boundaries.can?(viewer, :see, discover_only), "control: may see it"
+      refute Bonfire.Boundaries.can?(viewer, :read, discover_only), "control: may not read it"
+      assert Bonfire.Boundaries.can?(viewer, :read, readable), "control: may read the other"
+
+      response =
+        conn
+        |> masto_api_conn(user: viewer, account: account)
+        |> get("/api/v1/timelines/home")
+        |> json_response(200)
+
+      assert Enum.any?(response, &(&1["content"] =~ "readable text")),
+             "control: a post they may read is shown with its content"
+
+      refute Enum.any?(response, &(&1["content"] =~ "discover-only text")),
+             "the API gave a client the text of a post its viewer may not read"
+
+      assert %{"content" => content, "text" => text, "media_attachments" => []} =
+               Enum.find(response, &(&1["id"] == discover_only.id)),
+             "it is listed, as the web lists it"
+
+      assert content != ""
+
+      # the plain text: the HTML escapes its apostrophe
+      assert text =~ Bonfire.Social.RestrictedContent.why_not_shown(nil),
+             "with why it can't be read, as the web's card says. Got: #{inspect(text)}"
+    end
+  end
+
   describe "GET /api/v1/timelines/home" do
     test "returns posts from followed users", %{conn: conn} do
       account = Fake.fake_account!()

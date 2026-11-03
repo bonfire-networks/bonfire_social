@@ -425,6 +425,49 @@ defmodule Bonfire.Social.Flags do
     end
   end
 
+  @doc """
+  Removes `flagger`'s report of `flagged`, as `current_user` in `opts`: the reporter withdraws their own (`unflag/2`, which also withdraws it wherever it went), and a moderator dismisses someone else's, which stays here. Dismissing is for an instance moderator, or a moderator of the group the post is in, named as `context:` (`Bonfire.Classify.Categories.moderates_post_in?/3`): naming a group of one's own, which anyone can make, is not enough.
+  """
+  def unflag(%User{} = flagger, flagged, opts) when is_list(opts) do
+    current_user = current_user(opts)
+
+    with {:ok, flagged} <- load_flagged(flagged, current_user) do
+      cond do
+        is_nil(current_user) or id(current_user) == id(flagger) ->
+          unflag(flagger, flagged)
+
+        may_dismiss?(current_user, flagged, opts[:context]) ->
+          dismiss(flagger, flagged)
+
+        true ->
+          error(
+            :not_permitted,
+            "Only the reporter, or a moderator of where it was posted, can remove a report"
+          )
+      end
+    end
+  end
+
+  defp load_flagged(%{} = flagged, _current_user), do: {:ok, flagged}
+
+  defp load_flagged(id, current_user) when is_binary(id),
+    do: Common.Needles.get(id, current_user: current_user)
+
+  defp may_dismiss?(user, flagged, context) do
+    Bonfire.Boundaries.can?(user, :mediate, :instance) == true or
+      (not is_nil(context) and
+         maybe_apply(Bonfire.Classify.Categories, :moderates_post_in?, [user, context, flagged],
+           fallback_return: false
+         ) == true)
+  end
+
+  # A moderator dismissing a report is not the reporter withdrawing it: the report stays where it went, so nothing is sent (an `Undo` would be in the reporter's name).
+  # TODO: tell a group hosted elsewhere that its report was resolved, with Lemmy's `Resolve{Flag}`, and keep the report with its state rather than deleting it, so the moderation log shows how it was answered
+  defp dismiss(flagger, flagged) do
+    Edges.delete_by_both(flagger, Flag, flagged)
+    Activities.delete_by_subject_verb_object(flagger, :flag, flagged)
+  end
+
   # A report withdrawn here is withdrawn wherever it went: the anonymous one (linked to the flag by `pointer:`) and the named one sent to a group (which can't be, since an AP object points at one local record, so it is found by reporter and object). Only reports WE sent: a remote reporter's own `Undo` also lands in `unflag/2`, and must not be answered with another in their name
   defp withdraw_sent_reports(flagger, flagged) do
     # `:see`: the flagger's own flag, which may be on something they can't read

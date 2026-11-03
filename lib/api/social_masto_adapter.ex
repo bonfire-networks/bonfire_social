@@ -44,6 +44,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     @activity_node_selection """
     id
     object_id: objectId
+    restricted
     verb { verb }
     subject { #{@actor_fields} }
     object {
@@ -618,7 +619,14 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         |> Enum.map(&(get_field(&1, :object_id) || get_field(&1, :id)))
         |> Enum.reject(&is_nil/1)
 
-      batch_opts = batch_load_supplementary(current_user, object_ids)
+      # a post its viewer may only discover comes redacted from the GraphQL feed, which says so (`restricted`, `Bonfire.Social.RestrictedContent.redact_unreadable/2`); its mentions and tags, loaded here by id, are left out as its body is
+      restricted_ids =
+        for node <- nodes,
+            get_field(node, :restricted) == true,
+            do: get_field(node, :object_id) || get_field(node, :id)
+
+      batch_opts =
+        batch_load_supplementary(current_user, object_ids -- restricted_ids)
 
       Enum.flat_map(nodes, fn node ->
         case mapper.(node, batch_opts) do

@@ -136,6 +136,13 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     object :activity do
       field(:id, :id)
 
+      @desc "Whether its viewer may only discover its object, not read it: then its content is only what may be shown of it (name, summary, why the rest isn't shown, and its cover), as the web's closed card shows it"
+      field(:restricted, :boolean) do
+        resolve(fn activity, _, _ ->
+          {:ok, Bonfire.Social.RestrictedContent.restricted?(activity)}
+        end)
+      end
+
       field(:date, :datetime) do
         resolve(fn %{id: id}, _, _ ->
           {:ok, Bonfire.Common.DatesTimes.date_from_pointer(id)}
@@ -1343,6 +1350,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
               skip_boundary_check: true,
               preload_nested: {[:activity], []}
             )
+            # a feed lists what its viewer may see, so it can hold a post they may only discover: shown as the web's closed card shows it, for this API and the Mastodon one built on it, since an API client shows whatever it is given
+            |> Bonfire.Social.RestrictedContent.redact_unreadable(current_user)
 
           feed_paginate(feed_type, %{feed_result | edges: edges}, pagination_args)
 

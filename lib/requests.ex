@@ -444,6 +444,7 @@ defmodule Bonfire.Social.Requests do
       |> Keyword.put_new(:to_feeds, notifications: object)
 
     # asking again after being ignored is a new request (new id and notification), rather than `maybe_already/4` returning the ignored one
+    # TODO: so a declined requester, remote ones included, can notify the moderators again without limit: don't notify again for a request that was already ignored (or only after a while)
     with [_ | _] = ignored_ids <- request_ids(requester, type, object, true),
          do: delete_requests(ignored_ids)
 

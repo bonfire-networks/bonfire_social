@@ -875,7 +875,7 @@ defmodule Bonfire.Social.Pins do
   @doc """
   Receives an incoming `Add`/`Remove` to an actor's `featured` collection (MLS-over-AP / Mastodon featured) and reflects it as a (remote-originated) pin/unpin. Routed here by `incoming.ex` via the `{activity_type, "featured"}` federation_module key. `local: false` so it is not re-federated.
 
-  The pin goes to whoever owns the `target` collection, never to the sender by default: their own, or a group's when the sender is the group or has authority over it (`Categories.authority_over_group?/2`), as a Lemmy moderator features a post with an `Add` to the community's `featured`. Anything else is refused.
+  The pin goes to whoever owns the `target` collection, never to the sender by default: their own, or a group's when the sender is the group or one of its moderators (`Categories.listed_moderator?/2`; sharing the group's host is not enough, as the pin is applied as the activity says), as a Lemmy moderator features a post with an `Add` to the community's `featured`. Anything else is refused.
   """
   def ap_receive_activity(creator, %{data: %{"type" => type} = data}, object)
       when type in ["Add", "Remove"] do
@@ -902,14 +902,14 @@ defmodule Bonfire.Social.Pins do
 
         group = featured_group(owner_id) ->
           if uid(group) == uid(creator) or
-               maybe_apply(Bonfire.Classify.Categories, :authority_over_group?, [creator, group],
+               maybe_apply(Bonfire.Classify.Categories, :listed_moderator?, [creator, group],
                  fallback_return: false
                ) == true,
              do: {:ok, group},
              else:
                error(
                  :not_permitted,
-                 "refusing a featured change from someone with no authority over the group"
+                 "refusing a featured change from someone who is neither the group nor one of its moderators"
                )
 
         true ->

@@ -59,6 +59,38 @@ defmodule Bonfire.Social.Moderations do
   end
 
   @doc "Whether `user`, one of ours, is acting on `object` hosted on another instance, whose authority on it is there: then what they do is sent there, and recorded here as `pending: true`. Both with their locality loaded."
+  @doc "Who made the latest moderation record of `verb` (eg. `:lock`) on `object`: its subject's id, or `nil` when there is none (eg. a lock made before records)."
+  def recorded_by(object, verb) do
+    verb_id = Bonfire.Boundaries.Verbs.get_id!(verb)
+    object_id = uid(object)
+
+    from(a in Bonfire.Data.Social.Activity,
+      where: a.object_id == ^object_id and a.verb_id == ^verb_id,
+      order_by: [desc: a.id],
+      limit: 1,
+      select: a.subject_id
+    )
+    |> repo().one()
+  end
+
+  @doc """
+  Whether `user`, who already has the standing to undo `verb` on `object` (eg. `Blocks.unlock/2`'s, through `:grant` or `:mediate`), may undo the one recorded: a moderator's action is not its author's to undo (a thread a moderator closed, reopened by its author editing it or unlocking it). So the object's own author may undo only what they did themselves, unless they are an admin; anyone else with the standing may undo it. Authorship is told apart this way because an author holds `:mediate` on their own object too. With no record (an action made before records) it may be undone as before.
+  """
+  def may_undo?(user, object, verb) do
+    case recorded_by(object, verb) do
+      nil ->
+        true
+
+      actor_id ->
+        actor_id == id(user) or Bonfire.Boundaries.can?(user, :grant, :instance) or
+          id(user) !=
+            object
+            |> Bonfire.Social.Objects.preload_creator()
+            |> Bonfire.Social.Objects.object_creator()
+            |> id()
+    end
+  end
+
   def moderating_elsewhere?(nil, _user), do: false
   def moderating_elsewhere?(_group, nil), do: false
 
@@ -123,16 +155,22 @@ defmodule Bonfire.Social.Moderations do
 
   Only the group the activity names may refuse it, and only while it is waiting for the group: a `Reject` after the group applied it does nothing (undoing that takes an `Undo`), and neither does anyone else's.
   """
+  # Both refusals are answers that a retry won't change, so they cancel the delivery job rather than fail it (`{:cancel, reason}`, which Oban does not retry)
   def refuse_applied(our_activity, rejected_by, undo) when is_function(undo, 1) do
     with true <-
            from_named_group?(our_activity, rejected_by) ||
-             error(rejected_by, "Not the group this moderation activity names, so not undoing it"),
+             {:cancel, "Not the group this moderation activity names, so not undoing it"},
          {:ok, record} <- record_of(our_activity),
-         {:ok, _} <- refuse(record) do
+         {:ok, _} <- refuse(record) |> cancel_when_not_pending() do
       undo.(record)
       {:ok, record}
     end
   end
+
+  defp cancel_when_not_pending({:error, :not_pending}),
+    do: {:cancel, "Already answered by the group, so a Reject now changes nothing"}
+
+  defp cancel_when_not_pending(other), do: other
 
   # the group a moderation activity of ours names: `audience` on a lock, a removal's `Delete` and a ban, and a ban's `target` too
   defp from_named_group?(%{data: data}, ap_id) when is_binary(ap_id) do
@@ -180,6 +218,7 @@ defmodule Bonfire.Social.Moderations do
       iex> is_binary(Bonfire.Social.Moderations.summary(nil, :hide))
       true
   """
+  # TODO: whom a lock's or a hide's reason is addressed to is not checked, as it is for a removal's and a ban's: address it the same way, so a reason meant for the group's moderators doesn't reach everyone the activity goes to
   def summary(reason, _verb) when is_binary(reason) and reason != "", do: reason
 
   def summary(_, verb),

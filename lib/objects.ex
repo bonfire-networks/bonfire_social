@@ -1442,6 +1442,10 @@ defmodule Bonfire.Social.Objects do
         # a group we host passes it on to its followers (`Incoming`), as Lemmy's communities do
         removed
 
+      # naming a group the post is not in: ignored, with nothing to refuse or pass on
+      {:error, :not_in_group} ->
+        {:ok, :skip}
+
       refused ->
         # tells the moderator's instance, so it takes back what it applied (only for a group we host)
         maybe_apply(Bonfire.Federate.ActivityPub.Outgoing, :send_reject, [group, activity],
