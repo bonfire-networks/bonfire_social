@@ -225,15 +225,7 @@ defmodule Bonfire.Social.Tags do
 
   # whether the software the group's server runs sends its `Announce` of a post back to the server the post came from. Mbin sends it to every follower but that one, so a post made here would never reach our copy of the group's feed. Asked of the server's nodeinfo, which is remembered per server (`ActivityPub.Instances.software/2`); a server whose software can't be told is taken to relay, as before
   defp relays_to_origin?(category) do
-    software =
-      maybe_apply(
-        ActivityPub.Instances,
-        :software,
-        [e(category, :character, :peered, :canonical_uri, nil)],
-        fallback_return: nil
-      )
-
-    e(software, :name, nil) not in Config.get(
+    group_software_name(category) not in Config.get(
       [__MODULE__, :software_not_relaying_to_origin],
       ["mbin"],
       name: l("Group software that doesn't relay posts back"),
@@ -244,8 +236,36 @@ defmodule Bonfire.Social.Tags do
     )
   end
 
-  # our copy of a remote group's feed gets the post as it is, with no boost in the group's name (it never made one) and nothing sent out, which is what the group's `Announce` would have done had it come back
-  defp put_in_mirror_feed(category, object) do
+  @doc """
+  Whether a remote group announces what the users of its own server write in it. Mbin doesn't: such a post or comment goes out only as its author's `Create`, sent to the group's followers, and the group announces only what came from other servers. Asked of the server's nodeinfo, as `relays_to_origin?/1` is; a server whose software can't be told is taken to announce. Expects `character: [:peered]` loaded.
+  """
+  def announces_own_content?(category) do
+    group_software_name(category) not in Config.get(
+      [__MODULE__, :software_not_announcing_own_content],
+      ["mbin"],
+      name: l("Group software that doesn't announce its own users' posts"),
+      description:
+        l(
+          "Software (by its nodeinfo name) whose groups don't announce what users of their own server post in them, so such a post is put in the group's feed here when it arrives."
+        )
+    )
+  end
+
+  # the software the group's server runs, by its nodeinfo name, remembered per server (`ActivityPub.Instances.software/2`), or nil
+  defp group_software_name(category) do
+    maybe_apply(
+      ActivityPub.Instances,
+      :software,
+      [e(category, :character, :peered, :canonical_uri, nil)],
+      fallback_return: nil
+    )
+    |> e(:name, nil)
+  end
+
+  @doc """
+  Puts an object in our copy of a remote group's feed as it is, with no boost in the group's name (it never made one) and nothing sent out, which is what the group's `Announce` would have done had it reached us. Expects `:character` loaded.
+  """
+  def put_in_mirror_feed(category, object) do
     case e(category, :character, :outbox_id, nil) do
       nil ->
         debug(id(category), "no feed to put the post in")
