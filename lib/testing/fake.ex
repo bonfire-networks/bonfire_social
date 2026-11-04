@@ -389,6 +389,38 @@ defmodule Bonfire.Social.Fake do
 
         {article, nil}
 
+      # the group feeds that `bonfire_classify` declares: a post in an open, public group the user joined, so it is in both. Via maybe_apply, as `bonfire_classify` depends on `bonfire_social`. Open dimensions because a group made with none reviews joins, which would leave the join a request
+      preset when preset in [:my_groups, :known_groups] ->
+        group =
+          Bonfire.Common.Utils.maybe_apply(
+            Bonfire.Classify.Simulate,
+            :fake_group!,
+            [
+              other_user,
+              %{
+                membership: "open",
+                visibility: "global",
+                participation: "anyone",
+                default_content_visibility: "public"
+              }
+            ]
+          )
+
+        {:ok, _} =
+          Bonfire.Common.Utils.maybe_apply(Bonfire.Classify.Categories, :join_group, [
+            user,
+            group
+          ])
+
+        post =
+          Bonfire.Common.Utils.maybe_apply(
+            Bonfire.Classify.Simulate,
+            :fake_post_in_group!,
+            [other_user, group, "<p>post in a group #{i}</p>"]
+          )
+
+        {post, nil}
+
       :polls ->
         {:ok, question} =
           Bonfire.Poll.Fake.fake_question_with_choices(

@@ -210,7 +210,11 @@ defmodule Bonfire.Social.Tags do
 
       # a remote group relays its own posts: its `Announce` is the boost, and one we made in its name would make that real one look like a duplicate
       not Bonfire.Social.is_local?(category) ->
-        debug(id(category), "skip boosting, because the group is remote and boosts for itself")
+        if relays_to_origin?(category) do
+          debug(id(category), "skip boosting, because the group is remote and boosts for itself")
+        else
+          put_in_mirror_feed(category, object)
+        end
 
       true ->
         do_auto_boost(category, object, inbox_id, opts)
@@ -218,6 +222,41 @@ defmodule Bonfire.Social.Tags do
   end
 
   def auto_boost(_, _, _), do: debug("not auto-boosting (invalid inputs)")
+
+  # whether the software the group's server runs sends its `Announce` of a post back to the server the post came from. Mbin sends it to every follower but that one, so a post made here would never reach our copy of the group's feed. Asked of the server's nodeinfo, which is remembered per server (`ActivityPub.Instances.software/2`); a server whose software can't be told is taken to relay, as before
+  defp relays_to_origin?(category) do
+    software =
+      maybe_apply(
+        ActivityPub.Instances,
+        :software,
+        [e(category, :character, :peered, :canonical_uri, nil)],
+        fallback_return: nil
+      )
+
+    e(software, :name, nil) not in Config.get(
+      [__MODULE__, :software_not_relaying_to_origin],
+      ["mbin"],
+      name: l("Group software that doesn't relay posts back"),
+      description:
+        l(
+          "Software (by its nodeinfo name) whose groups don't send a post back to the server it was made on, so a post made here into such a group is put in its feed here instead."
+        )
+    )
+  end
+
+  # our copy of a remote group's feed gets the post as it is, with no boost in the group's name (it never made one) and nothing sent out, which is what the group's `Announce` would have done had it come back
+  defp put_in_mirror_feed(category, object) do
+    case e(category, :character, :outbox_id, nil) do
+      nil ->
+        debug(id(category), "no feed to put the post in")
+
+      outbox_id ->
+        Bonfire.Social.FeedActivities.put_in_feeds(
+          [outbox_id],
+          e(object, :activity, nil) || object
+        )
+    end
+  end
 
   defp do_auto_boost(category, object, inbox_id, opts) do
     category

@@ -1040,7 +1040,9 @@ defmodule Bonfire.Social.RuntimeConfig do
         "Local Feed (From the local instance)" => %{
           match: %{origin: :local},
           include: [],
-          exclude: [:with_object_peered]
+          # `:with_object_peered` stays loaded (one join for the page): a local person's boost of a remote post is here too, and what the post shows and links to (its Copy link, where it came from) is read from it
+          # exclude: [:with_object_peered]
+          exclude: []
         },
         "Remote Feed (From the Fediverse)" => %{
           match: %{origin: :remote},

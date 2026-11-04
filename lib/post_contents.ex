@@ -398,16 +398,7 @@ defmodule Bonfire.Social.PostContents do
       # workaround for Pixelfed appending ?src=hash to hashtag URLs in content
       Map.get(map, String.replace(href, "?src=hash", ""))
     end)
-    |> Text.mark_trailing_element("p", "invisible", fn
-      {"a", attrs, _} ->
-        case List.keyfind(attrs, "href", 0) do
-          {"href", "/hashtag/" <> _} -> true
-          _ -> false
-        end
-
-      _ ->
-        false
-    end)
+    |> Text.mark_trailing_hashtags()
     |> debug("replaced links #{inspect(replacement_urls)}")
 
     # |> nomalise_local_links(:html)
@@ -728,9 +719,10 @@ defmodule Bonfire.Social.PostContents do
   """
   def ap_prepare_object_note(subject, verb, post, actor, mentions, context, reply_to) do
     content_format = editor_output_content_type(subject)
+    stored_body = e(post, :post_content, :html_body, nil)
 
     html_body =
-      e(post, :post_content, :html_body, nil)
+      stored_body
       |> Text.prepare_links_for_remote_render(content_format)
 
     hashtags =
@@ -762,11 +754,21 @@ defmodule Bonfire.Social.PostContents do
           # link_rel: nil so ammonia doesn't force-override rel="tag ugc" on hashtag/mention links
           # (Mastodon checks rel="tag" to skip link-preview generation — GH #1754)
           sanitize: true,
-          link_rel: nil
+          link_rel: nil,
+          # so other servers hide the trailing line of hashtags, as we do on our own pages
+          hide_trailing_hashtags: true
         ),
       "source" =>
         if content_format != :html do
-          %{"content" => html_body, "mediaType" => "text/#{content_format}"}
+          %{
+            # servers that read `source` (eg. Mbin) render it as markdown, which escapes any HTML, so this keeps the links markdown (only made absolute) rather than the `rel="tag"` HTML meant for `content`
+            "content" =>
+              stored_body
+              # no special handling for posts stored with their trailing hashtags in a `<span class="invisible">`: their `source` keeps it as stored
+              # |> unwrap_invisible_span()
+              |> Text.prepare_links_for_remote_render(content_format, nil, hashtag_html: false),
+            "mediaType" => "text/#{content_format}"
+          }
         end,
       "inReplyTo" => reply_to,
       "context" => context,
@@ -795,6 +797,17 @@ defmodule Bonfire.Social.PostContents do
     |> Enum.into(%{})
     |> debug("prepared outgoing AP Note object")
   end
+
+  # not used: posts stored before trailing hashtags were hidden at render get no special handling, so their `source` keeps the `<span class="invisible">` as stored. This turned it into a paragraph of its own, as newer posts store them
+  # defp unwrap_invisible_span(body) when is_binary(body) do
+  #   if String.contains?(body, ~s(<span class="invisible">)) do
+  #     Regex.replace(~r{\s*<span class="invisible">\s*(.*?)\s*</span>}s, body, "\n\n\\1")
+  #   else
+  #     body
+  #   end
+  # end
+  #
+  # defp unwrap_invisible_span(body), do: body
 
   # edit an existing post
   def ap_receive_activity(creator, %{data: activity_data}, object) do
@@ -881,7 +894,8 @@ defmodule Bonfire.Social.PostContents do
       tags: quote_tags,
       post_content: %{
         name: post_data["name"],
-        summary: post_data["summary"],
+        summary:
+          unless_repeating(post_data["summary"], post_data["name"], post_data["content"]),
         html_body: post_data["content"]
       },
       created: %{
@@ -934,6 +948,47 @@ defmodule Bonfire.Social.PostContents do
       |> debug("final result from ap_receive_update")
     end
   end
+
+  @doc """
+  An incoming `summary`, unless it only repeats the start of the post's title or body. Mbin gives each thread a `summary` of its title cut short and its #tags, for software that shows `summary` but not `name`; shown here under the title, it says the title twice.
+
+  Compared as plain text: the summary, without its trailing hashtags and its last few characters (where it was cut, and whatever marks the cut, eg. `...`), is the start of the title or of the body.
+
+      iex> Bonfire.Social.PostContents.unless_repeating("A long title for... #tag", "A long title for a thread", nil)
+      nil
+      iex> Bonfire.Social.PostContents.unless_repeating("<p>Its body starts like this… #a #b</p>", nil, "<p>Its body starts like this, then goes on</p>")
+      nil
+      iex> Bonfire.Social.PostContents.unless_repeating("Content warning: spoilers", "A long title for a thread", "<p>Its body</p>")
+      "Content warning: spoilers"
+  """
+  def unless_repeating(summary, name, content) when is_binary(summary) do
+    cut =
+      Bonfire.Common.Config.get([__MODULE__, :repeated_summary_cut], 3,
+        name: l("Characters cut off a repeated summary"),
+        description:
+          l(
+            "How many characters to take off the end of an incoming summary (where it was cut short, eg. `...`) before checking whether it only repeats the start of the post's title or body."
+          )
+      )
+
+    start =
+      summary
+      |> Text.text_only()
+      |> String.replace(~r/(\s+#[\p{L}\p{N}_]+)+\s*$/u, "")
+      |> String.trim()
+      |> String.slice(0..-(cut + 1)//1)
+      |> String.trim()
+
+    repeats? =
+      start != "" and
+        Enum.any?([name, content], fn whole ->
+          is_binary(whole) and String.starts_with?(String.trim(Text.text_only(whole)), start)
+        end)
+
+    if repeats?, do: nil, else: summary
+  end
+
+  def unless_repeating(summary, _name, _content), do: summary
 
   def query_base(), do: from(p in PostContent, as: :main_object)
 

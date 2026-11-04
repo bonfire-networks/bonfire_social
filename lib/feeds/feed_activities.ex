@@ -641,9 +641,10 @@ defmodule Bonfire.Social.FeedActivities do
     end
   end
 
-  defp put_in_feeds(feeds, activity, push? \\ true)
+  @doc "Puts an existing activity in these feeds, and pushes it to whoever is watching them unless `push?` is false. Sends nothing out: `maybe_feed_publish/5` is the one that also federates."
+  def put_in_feeds(feeds, activity, push? \\ true)
 
-  defp put_in_feeds(feeds, activity, push?) do
+  def put_in_feeds(feeds, activity, push?) do
     activity_id = uid(activity)
 
     case feeds |> List.wrap() |> Enum.map(&uid/1) |> Enum.reject(&is_nil/1) |> Enum.uniq() do
