@@ -2024,6 +2024,7 @@ defmodule Bonfire.Social.Activities do
     fetcher_user_id = "1ACT1V1TYPVBREM0TESFETCHER"
 
     # When addressing is deployed AND backfilled, switch the origin filter from the query-time OR to a pure indexed `fp.feed_id IN [buckets]` probe.
+    # TODO: when the query is limited to specific feeds (eg. a group's outbox), use the `peered` checks below instead: no row of those feeds is in a locality bucket, so the probe empties them
     addressed? =
       Bonfire.Common.Config.get([Bonfire.Social.Feeds, :feed_origin_strategy], :or_filter) ==
         :addressed
