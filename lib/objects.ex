@@ -1342,6 +1342,19 @@ defmodule Bonfire.Social.Objects do
     end
   end
 
+  @doc "Whether any of these objects (or ids) is marked sensitive, with one `exists?` query on the `Sensitive` mixin rather than loading them. Eg. the groups a post is published in."
+  def any_sensitive?(objects_or_ids) do
+    case objects_or_ids |> List.wrap() |> Enums.ids() |> Enum.reject(&is_nil/1) do
+      [] ->
+        false
+
+      ids ->
+        repo().exists?(
+          from(s in Bonfire.Data.Social.Sensitive, where: s.id in ^ids and s.is_sensitive == true)
+        )
+    end
+  end
+
   # TODO: also support setting with an ID, or with an object that doesn't have a `sensitive` assoc?
   # def set_sensitivity(pointer, new_sensitive) do
   #   pointer

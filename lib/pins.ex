@@ -666,8 +666,9 @@ defmodule Bonfire.Social.Pins do
     |> limit(^(opts[:limit] || 3))
     |> select([activity: a], a)
     |> repo().many()
+    # `:with_object_peered` as in the feed's own default preloads: the card's Copy link and where the post came from are read from the object's `:peered`
     |> Activities.activity_preloads(
-      [:default, :with_object_more, :with_subject, :with_media],
+      [:default, :with_object_more, :with_subject, :with_media, :with_object_peered],
       opts
     )
     |> Enum.map(&%{activity: &1})

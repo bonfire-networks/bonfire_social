@@ -958,7 +958,8 @@ defmodule Bonfire.Social.Activities do
         :post_content,
         :media,
         :sensitive,
-        # :peered # should not be needed as we can assume if it's remote from the creator peered (and we don't display a canonical link for reply_to)
+        # peered needed: the thread preview shows the post replied to as the thread's root, with its canonical link (Copy link), which is read from its `:peered`
+        :peered,
         created: [
           creator: [character: [:peered], profile: :icon]
         ]
@@ -985,8 +986,9 @@ defmodule Bonfire.Social.Activities do
       [
         :post_content,
         :media,
-        :sensitive
-        # :peered # should not be needed as we can assume if it's remote from the creator peered (and we don't display a canonical link for reply_to)
+        :sensitive,
+        :peered
+        # :peered # needed: the thread preview shows the post replied to as the thread's root, with its canonical link (Copy link), which is read from its `:peered`
       ]
       # }]
     )

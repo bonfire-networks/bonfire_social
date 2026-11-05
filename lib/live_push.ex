@@ -188,8 +188,9 @@ defmodule Bonfire.Social.LivePush do
     end)
   end
 
+  # `:with_object_peered` as in the feed's own default preloads: the card's Copy link and where the post came from are read from the object's `:peered`
   defp live_push_preloads(%Activity{object: object}, opts) do
-    [:feed_metadata, :feed_postload]
+    [:feed_metadata, :feed_postload, :with_object_peered]
     |> Bonfire.Social.FeedLoader.map_activity_preloads()
     |> Kernel.++(notification_preloads(opts))
     |> maybe_skip_object_creator(object)
