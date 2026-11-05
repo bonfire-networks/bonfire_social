@@ -111,10 +111,59 @@ defmodule Bonfire.Social.Feeds do
 
       preset ->
         case check_feed_preset_permitted(preset, opts) do
-          true -> {:ok, localise_tree(preset, __MODULE__)}
-          other -> other
+          # true -> {:ok, localise_tree(preset, __MODULE__)}
+          # replaced: a saved feed also takes the filters of the feed it was saved from
+          true ->
+            with {:ok, preset} <- with_base_filters(preset, name, opts) do
+              {:ok, localise_tree(preset, __MODULE__)}
+            end
+
+          other ->
+            other
         end
     end
+  end
+
+  # A saved feed's `filters.feed_name` names the feed it was saved from (its base), and the saved filters merge over the base's. Built-in presets are not resolved, as some name another feed in their filters (eg. `my_requests`). A name that is no preset leaves the saved filters as they are
+  defp with_base_filters(%{built_in: true} = preset, _name, _opts), do: {:ok, preset}
+
+  defp with_base_filters(%{filters: filters} = preset, name, opts) do
+    case e(filters, :feed_name, nil) do
+      base when is_atom(base) and not is_nil(base) and base != :custom ->
+        if to_string(base) == to_string(name) do
+          {:ok, preset}
+        else
+          case feed_preset_if_permitted(base, opts) do
+            {:ok, %{filters: base_filters}} ->
+              # a saved feed takes only its base's filters: the base's `opts`, `base_query_fun`, `parameterized` and `current_user_required` don't carry over, which is fine for the last two (saved filters are already parameterized, and only their signed-in owner loads them), but a base that relies on `opts` or `base_query_fun` behaves differently once saved
+              {:ok,
+               Map.put(
+                 preset,
+                 :filters,
+                 Enums.merge_as_map(base_filters, without_runtime_ids(filters))
+               )}
+
+            {:error, :not_found} ->
+              {:ok, preset}
+
+            other ->
+              other
+          end
+        end
+
+      _ ->
+        {:ok, preset}
+    end
+  end
+
+  defp with_base_filters(preset, _name, _opts), do: {:ok, preset}
+
+  # Feed ids a page worked out for its reader are no part of a saved feed: feeds saved before they were kept apart hold them, frozen at the time of saving. They are dropped, and a filter whose value names `:feed_ids` (eg. a scope meaning "the groups given in `feed_ids`") is dropped too, so it takes the base's value
+  defp without_runtime_ids(filters) do
+    filters
+    |> Map.new()
+    |> Map.delete(:feed_ids)
+    |> Map.reject(fn {_key, value} -> :feed_ids in List.wrap(value) end)
   end
 
   def feed_preset_if_permitted(other, _opts) do

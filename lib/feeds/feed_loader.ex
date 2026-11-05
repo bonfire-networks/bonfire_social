@@ -70,6 +70,7 @@ defmodule Bonfire.Social.FeedLoader do
       {:ok, %{parameterized: %{} = parameters, filters: preset_filters} = preset} ->
         preset_filters
         |> merge_feed_filters(custom_filters, opts[:feed_filters])
+        |> keep_saved_feed_name(preset)
         |> parameterize_filters(parameters, opts)
         |> merge_some_defaults(opts)
         |> debug("merged feed_filters")
@@ -83,6 +84,7 @@ defmodule Bonfire.Social.FeedLoader do
       {:ok, %{filters: preset_filters} = preset} ->
         preset_filters
         |> merge_feed_filters(custom_filters, opts[:feed_filters])
+        |> keep_saved_feed_name(preset)
         |> merge_some_defaults(opts)
         |> debug("merged feed_filters")
         |> Bonfire.Social.Notifications.exclude_hidden_categories(opts)
@@ -137,6 +139,22 @@ defmodule Bonfire.Social.FeedLoader do
     feed(filters, opts)
   end
 
+  # filters already prepared from a saved feed name the feed it was saved from, which stays the source: the saved feed is passed on as the preset instead of replacing that name
+  def feed(feed_name, %FeedFilters{feed_name: source} = filters, opts)
+      when is_list(opts) and (is_atom(feed_name) or is_binary(feed_name)) and
+             is_atom(source) and not is_nil(source) and source != :custom and
+             not is_nil(feed_name) do
+    case Bonfire.Social.Feeds.feed_preset_if_permitted(feed_name, opts) do
+      {:ok, %{} = preset} ->
+        if preset[:built_in] == true,
+          do: feed(Map.put(filters, :feed_name, feed_name), opts),
+          else: feed(filters, Keyword.put_new(opts, :feed_preset, preset))
+
+      _ ->
+        feed(Map.put(filters, :feed_name, feed_name), opts)
+    end
+  end
+
   def feed(feed_name, filters, opts) when is_list(opts) do
     filters = if is_map(filters), do: filters, else: Map.new(filters)
     feed(Map.put(filters, :feed_name, feed_name), opts)
@@ -189,7 +207,7 @@ defmodule Bonfire.Social.FeedLoader do
         _ ->
           filters[:feed_name] || preset[:filters][:feed_name]
       end
-      |> feed_filtered(filters, opts)
+      |> feed_filtered(with_runtime_filters(filters, opts), opts)
     else
       e ->
         error(e, "Could not process pre-prepared filters")
@@ -306,6 +324,40 @@ defmodule Bonfire.Social.FeedLoader do
 
   #   feed(:explore, opts)
   # end
+
+  # Filters a page worked out for its reader (eg. the outboxes of the groups they joined) go in `opts[:runtime_filters]`: they scope the query only, and never reach the filters handed back to the caller, so saving a feed can't keep them. Only the keys given are merged, not the defaults validation fills in
+  defp with_runtime_filters(filters, opts) do
+    case opts[:runtime_filters] do
+      %{} = runtime when runtime != %{} ->
+        case FeedFilters.validate(runtime) do
+          {:ok, validated} ->
+            keys = Enum.map(Map.keys(runtime), &Types.maybe_to_atom/1)
+            Map.merge(filters, Map.take(Map.from_struct(validated), keys))
+
+          e ->
+            error(e, "Invalid runtime filters, ignored")
+            filters
+        end
+
+      _ ->
+        filters
+    end
+  end
+
+  # A saved feed's filters name the feed it was saved from, which stays the query's source: the saved feed's own name, merged in by the caller, is only how it was looked up. Built-in presets keep the caller's name, as some name another feed in their filters (eg. `my_requests`, whose filters say `:notifications`)
+  defp keep_saved_feed_name(filters, %{built_in: true}), do: filters
+
+  defp keep_saved_feed_name(filters, %{filters: preset_filters}) do
+    case e(preset_filters, :feed_name, nil) do
+      name when is_atom(name) and not is_nil(name) and name != :custom ->
+        Map.put(filters, :feed_name, name)
+
+      _ ->
+        filters
+    end
+  end
+
+  defp keep_saved_feed_name(filters, _preset), do: filters
 
   defp merge_some_defaults(filters, opts) do
     # Saved default sorting is suspended along with its settings control.

@@ -539,7 +539,16 @@ defmodule Bonfire.Social.RuntimeConfig do
           # exclude_from_nav: false,
           icon: "ph:fire-duotone",
           assigns: [
-            hide_filters: true,
+            # hide_filters: true,
+            # replaced: the feed controls show, so a reader can narrow their likes and save the result, less the controls that would empty the feed or make it another one: the activity type, Replies and Boosts (activity types too), and the people controls, which act on who liked, always the reader
+            hidden_filter_controls: [
+              :activity_types,
+              :replies,
+              :boosts,
+              :hide_own,
+              :from_people,
+              :not_people
+            ],
             showing_within: :feed_by_subject,
             page: "likes",
             page_title: l("Likes"),
@@ -603,7 +612,16 @@ defmodule Bonfire.Social.RuntimeConfig do
           # exclude_from_nav: false,
           icon: "ph:rocket-launch-duotone",
           assigns: [
-            hide_filters: true,
+            # hide_filters: true,
+            # replaced: the feed controls show, as on Likes, less the ones that would empty the feed or make it another one, and the people controls, which act on who boosted, always the reader
+            hidden_filter_controls: [
+              :activity_types,
+              :replies,
+              :boosts,
+              :hide_own,
+              :from_people,
+              :not_people
+            ],
             showing_within: :feed_by_subject,
             page: "boosts",
             page_title: l("Boosted"),

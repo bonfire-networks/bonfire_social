@@ -894,8 +894,7 @@ defmodule Bonfire.Social.PostContents do
       tags: quote_tags,
       post_content: %{
         name: post_data["name"],
-        summary:
-          unless_repeating(post_data["summary"], post_data["name"], post_data["content"]),
+        summary: unless_repeating(post_data["summary"], post_data["name"], post_data["content"]),
         html_body: post_data["content"]
       },
       created: %{
