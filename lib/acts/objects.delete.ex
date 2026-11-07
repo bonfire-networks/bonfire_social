@@ -78,6 +78,10 @@ defmodule Bonfire.Social.Acts.Objects.Delete do
           ActivityPub.Actor.get_external_followers(ap_object, :deletion)
           |> Bonfire.Federate.ActivityPub.AdapterUtils.ids_or_object_ids()
           |> Kernel.++(group_followers)
+          |> Kernel.++(
+            remote_followed(ap_object, id)
+            |> Bonfire.Federate.ActivityPub.AdapterUtils.ids_or_object_ids()
+          )
           |> Enum.uniq()
         )
 
@@ -85,4 +89,16 @@ defmodule Bonfire.Social.Acts.Objects.Delete do
         # |> Work.add(:object)
     end
   end
+
+  # A person's `Delete` also goes to the remote actors they follow, who would otherwise keep them among their followers. Read before deleting, as the follows go with the person.
+  defp remote_followed(%{data: %{"type" => "Person"}}, id) do
+    with {:ok, %{local: true} = actor} <- ActivityPub.Actor.get_cached(pointer: id),
+         {:ok, followed} <- ActivityPub.Actor.get_followings(actor, :deletion) do
+      Enum.reject(followed, & &1.local)
+    else
+      _ -> []
+    end
+  end
+
+  defp remote_followed(_ap_object, _id), do: []
 end

@@ -320,6 +320,34 @@ defmodule Bonfire.Social.Tags do
     |> tags_quote()
   end
 
+  @doc "Keeps the quoted objects the viewer in `opts` may read, in one boundary query. A quote shows the post it quotes, so it must not show one its reader is kept out of."
+  def readable_quotes([], _opts), do: []
+
+  def readable_quotes(quoted_objects, opts) when is_list(quoted_objects) do
+    readable_ids =
+      Bonfire.Boundaries.load_pointers(quoted_objects,
+        current_user: current_user(opts),
+        verbs: [:read],
+        ids_only: true
+      )
+      |> MapSet.new(& &1.id)
+
+    Enum.filter(quoted_objects, &MapSet.member?(readable_ids, id(&1)))
+  end
+
+  @doc "From a mix of tags (mentions, hashtags, quoted objects), drops the quoted objects the viewer in `opts` may not read, keeping the rest in order."
+  def drop_unreadable_quotes(tags, opts) when is_list(tags) do
+    case Enum.filter(tags, &(tag_kind(&1) == :quote)) do
+      [] ->
+        tags
+
+      quotes ->
+        readable_ids = quotes |> readable_quotes(opts) |> MapSet.new(&id/1)
+
+        Enum.reject(tags, &(tag_kind(&1) == :quote and not MapSet.member?(readable_ids, id(&1))))
+    end
+  end
+
   def tags_quote(post) do
     post
     |> e(:tags, [])

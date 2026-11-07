@@ -163,7 +163,9 @@ defmodule Bonfire.Social.Flags do
     opts =
       opts
       |> Keyword.put_new(:current_user, flagger)
-      |> Keyword.put_new_lazy(:to_feeds, fn -> flag_feeds(id(object), object_type(object)) end)
+      |> Keyword.put_new_lazy(:to_feeds, fn ->
+        flag_feeds(id(object), object_type(object)) |> with_service_character()
+      end)
       # Default to NOT forwarding for safety
       |> Keyword.put_new(:forward, false)
       |> debug("flag opts")
@@ -319,6 +321,19 @@ defmodule Bonfire.Social.Flags do
 
       _ ->
         error(e)
+    end
+  end
+
+  # Feeds list rows from where activities were published, so a flag made while nobody can moderate (no admin, no mod) would be in no feed, and never listed for whoever moderates later. The instance's service character is always there to receive it (made at install), and its bio already tells people that writing to it reaches the moderators. Only read here: making it inside a flag raced when several flags made it at once
+  defp with_service_character(notifications: recipients) do
+    with id when is_binary(id) <-
+           maybe_apply(Bonfire.Federate.ActivityPub.AdapterUtils, :service_character_id, [],
+             fallback_return: nil
+           ),
+         {:ok, service_character} <- Bonfire.Me.Users.by_id(id) do
+      [notifications: List.wrap(recipients) ++ [service_character]]
+    else
+      _ -> [notifications: recipients]
     end
   end
 

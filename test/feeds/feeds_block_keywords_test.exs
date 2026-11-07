@@ -9,6 +9,10 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
   import Bonfire.Social.Fake
   import Bonfire.Posts.Fake
 
+  # The viewer's keywords to hide, set in the test process (read by `Settings.get` in test env before the DB). At the `mrf_keyword` key, since both lists are read from it in one go (`BlockKeywords.block_keywords_lists/1`)
+  defp put_process_keywords(keywords),
+    do: Process.put([:activity_pub, :mrf_keyword], %{reject: keywords})
+
   defp reply_body_visible?(replies, reply_id, expected_body) do
     Enum.find_value(replies, false, fn edge ->
       if edge.id == reply_id do
@@ -83,7 +87,7 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
       user: user,
       normal_post: normal_post
     } do
-      Process.put([:activity_pub, :mrf_keyword, :reject], ["viagra"])
+      put_process_keywords(["viagra"])
 
       feed = FeedLoader.feed_postloaded(:explore, limit: 10, current_user: user)
 
@@ -98,7 +102,7 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
       user: user,
       normal_post: normal_post
     } do
-      Process.put([:activity_pub, :mrf_keyword, :reject], ["crypto"])
+      put_process_keywords(["crypto"])
 
       feed = FeedLoader.feed_postloaded(:explore, limit: 10, current_user: user)
 
@@ -111,7 +115,7 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
       user: user,
       normal_post: normal_post
     } do
-      Process.put([:activity_pub, :mrf_keyword, :reject], ["viagra"])
+      put_process_keywords(["viagra"])
 
       feed = FeedLoader.feed_postloaded(:explore, limit: 10, current_user: user)
 
@@ -126,7 +130,7 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
       user: user,
       normal_post: normal_post
     } do
-      Process.put([:activity_pub, :mrf_keyword, :reject], ["viagra"])
+      put_process_keywords(["viagra"])
 
       feed = FeedLoader.feed_postloaded(:explore, limit: 10, current_user: user)
 
@@ -141,7 +145,7 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
       user: user,
       normal_post: normal_post
     } do
-      Process.put([:activity_pub, :mrf_keyword, :reject], ["viagra", "crypto"])
+      put_process_keywords(["viagra", "crypto"])
 
       feed = FeedLoader.feed_postloaded(:explore, limit: 10, current_user: user)
 
@@ -170,7 +174,7 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
       normal_post: normal_post,
       spam_post: spam_post
     } do
-      Process.put([:activity_pub, :mrf_keyword, :reject], [])
+      put_process_keywords([])
 
       feed = FeedLoader.feed_postloaded(:explore, limit: 10, current_user: user)
 
@@ -276,7 +280,7 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
       spam_reply: spam_reply,
       another_normal_reply: another_normal_reply
     } do
-      Process.put([:activity_pub, :mrf_keyword, :reject], ["viagra"])
+      put_process_keywords(["viagra"])
 
       %{edges: replies} =
         Threads.list_replies(normal_thread.id, current_user: user, postload: [:with_post_content])
@@ -336,7 +340,7 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
           boundary: "public"
         )
 
-      Process.put([:activity_pub, :mrf_keyword, :reject], ["crypto"])
+      put_process_keywords(["crypto"])
 
       %{edges: replies} =
         Threads.list_replies(normal_thread.id, current_user: user, postload: [:with_post_content])
@@ -399,8 +403,8 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
     end
 
     test "stored keywords reach the filter as a compiled pattern", %{user: user} do
-      assert %{regex: %Regex{}} =
-               Bonfire.Boundaries.BlockKeywords.block_keywords_settings(current_user: user)
+      assert %{reject: %{regex: %Regex{}}, warn: nil} =
+               Bonfire.Boundaries.BlockKeywords.block_keywords_lists(current_user: user)
     end
 
     test "saving another setting keeps the stored keywords and persists no compiled pattern", %{
@@ -418,15 +422,17 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
 
       assert length(get_in(user.settings.json, [:activity_pub, :mrf_keyword, :reject])) == 200
       refute get_in(user.settings.json, [:activity_pub, :mrf_keyword, :reject_compiled])
-      assert Bonfire.Boundaries.BlockKeywords.block_keywords_settings(current_user: user)
+
+      assert %{reject: %{}} =
+               Bonfire.Boundaries.BlockKeywords.block_keywords_lists(current_user: user)
     end
 
     test "the compiled pattern is built once, not on every Settings.get", %{user: user} do
-      a = Bonfire.Boundaries.BlockKeywords.block_keywords_settings(current_user: user)
-      b = Bonfire.Boundaries.BlockKeywords.block_keywords_settings(current_user: user)
+      a = Bonfire.Boundaries.BlockKeywords.block_keywords_lists(current_user: user)
+      b = Bonfire.Boundaries.BlockKeywords.block_keywords_lists(current_user: user)
 
-      assert %{regex: %Regex{}} = a
-      assert a === b
+      assert %{reject: %{regex: %Regex{}}} = a
+      assert a.reject === b.reject
     end
 
     test "a feed still filters posts matching one of 200 stored keywords", %{user: user} do
@@ -518,6 +524,26 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
 
       refute shown?(viewer, "#cats today")
       assert shown?(viewer, "I love cats today")
+    end
+
+    # what isn't the web UI (APIs, email, search) can't show a warning, so a keyword the viewer hides behind one is replaced there too
+    test "a keyword in the list to warn about is replaced too, outside the web UI", %{
+      viewer: viewer,
+      author: author
+    } do
+      post!(author, "a spoiler about the ending")
+      post!(author, "nothing to see")
+
+      {:ok, _} =
+        Bonfire.Boundaries.BlockKeywords.put_warn_keywords_settings(["spoiler"],
+          current_user: viewer
+        )
+
+      viewer = Bonfire.Common.Repo.preload(viewer, :settings, force: true)
+
+      assert shown?(viewer, "nothing to see")
+      refute shown?(viewer, "a spoiler about the ending")
+      assert shown?(viewer, "[Content blocked by filters]")
     end
 
     test "the instance's list does not hide posts from a user's feed", %{

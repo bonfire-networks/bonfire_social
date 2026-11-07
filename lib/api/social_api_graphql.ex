@@ -263,20 +263,20 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       field :quoted, list_of(:any_context) do
         resolve(fn
-          %{object: %Needle.Pointer{} = pointer}, _args, _info ->
-            quoted_from_pointer(pointer)
+          %{object: %Needle.Pointer{} = pointer}, _args, info ->
+            quoted_from_pointer(pointer, info)
 
-          %{object: object}, _args, _info
+          %{object: object}, _args, info
           when is_struct(object) and not is_struct(object, Ecto.Association.NotLoaded) ->
-            quoted_from_pointer(object)
+            quoted_from_pointer(object, info)
 
-          activity, _args, %{context: %{loader: loader}} ->
+          activity, _args, %{context: %{loader: loader}} = info ->
             loader
             |> Dataloader.load(Needle.Pointer, :object, activity)
             |> Helpers.on_load(fn loader ->
               loader
               |> Dataloader.get(Needle.Pointer, :object, activity)
-              |> quoted_from_pointer()
+              |> quoted_from_pointer(info)
             end)
         end)
       end
@@ -1199,10 +1199,16 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     defp thread_context_edge_id(%{id: id}), do: id
     defp thread_context_edge_id(_), do: nil
 
-    defp quoted_from_pointer(pointer_or_object) do
+    # only the quoted posts the reader may read
+    defp quoted_from_pointer(pointer_or_object, info) do
       case follow_pointer(pointer_or_object) do
-        {:ok, %{id: _} = object} -> {:ok, Bonfire.Social.Tags.list_tags_quote(object)}
-        _ -> {:ok, []}
+        {:ok, %{id: _} = object} ->
+          {:ok,
+           Bonfire.Social.Tags.list_tags_quote(object)
+           |> Bonfire.Social.Tags.readable_quotes(current_user: GraphQL.current_user(info))}
+
+        _ ->
+          {:ok, []}
       end
     end
 

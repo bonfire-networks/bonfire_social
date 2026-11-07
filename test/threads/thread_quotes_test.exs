@@ -104,6 +104,28 @@ defmodule Bonfire.Social.ThreadQuotesTest do
       assert {:auto_approve, _} = Quotes.check_quote_permission(alice, post),
              "the control: `:request_needed` above is about permission, not about every path returning it"
     end
+
+    # `cannot_read` keeps the `:request` floor so an excluded person may still ask to follow or join, but asking to quote a post means showing it, so it needs `:read` as well.
+    test "someone excluded from reading a post may not ask to quote it", %{bob: bob} do
+      alice = fake_user!()
+      post = publish(alice, boundary: "public", to_circles: %{bob.id => "cannot_read"})
+
+      refute Bonfire.Boundaries.can?(bob, :read, post)
+
+      assert {:not_permitted, _} = Quotes.check_quote_permission(bob, post)
+    end
+
+    test "publishing a quote of a post I'm excluded from creates no quote and no request", %{
+      bob: bob
+    } do
+      alice = fake_user!()
+      quoted = publish(alice, boundary: "public", to_circles: %{bob.id => "cannot_read"})
+
+      post = publish(bob, quotes: [quoted])
+
+      assert {:error, _} = Quotes.requested(post, quoted)
+      assert Bonfire.Social.Tags.list_tags_quote(post) == []
+    end
   end
 
   defp publish(user, opts \\ []) do

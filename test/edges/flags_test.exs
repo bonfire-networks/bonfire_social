@@ -128,6 +128,31 @@ defmodule Bonfire.Social.FlagsTest do
     assert flag.id == feed_flag.id
   end
 
+  # A flag made while the instance has no admin or moderator has nobody to notify, but it must still be listed once someone can moderate.
+  test "a flag made while the instance has no admin is listed for an admin added later" do
+    author = Fake.fake_user!()
+    flagger = Fake.fake_user!()
+
+    assert {:ok, flagged} =
+             Posts.publish(
+               current_user: author,
+               post_attrs: %{post_content: %{html_body: "<p>flag me</p>"}},
+               boundary: "public"
+             )
+
+    assert Users.list_instance_wide(:mediate) == [],
+           "the condition under test: nobody can moderate when the flag is made"
+
+    assert {:ok, flag} = Flags.flag(flagger, flagged)
+
+    {:ok, admin} = Users.make_admin(Fake.fake_user!())
+
+    assert %{edges: [%{activity: feed_flag}]} =
+             FeedActivities.feed(:flagged_content, current_user: admin)
+
+    assert feed_flag.id == flag.id
+  end
+
   test "can list something's flaggers (as an admin)" do
     me = Fake.fake_user!()
     {:ok, me} = Users.make_admin(me)

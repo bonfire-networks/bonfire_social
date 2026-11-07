@@ -549,7 +549,9 @@ defmodule Bonfire.Social.Requests do
          {:ok, accept_activity} <-
            ActivityPub.accept(%{
              actor: subject_actor,
-             to: [accept_to_actor.data],
+             # an id, as the other side matches addressees by id: a whole actor map there is not one
+             # to: [accept_to_actor.data],
+             to: [accept_to_actor.ap_id],
              object: object,
              local: true
            })

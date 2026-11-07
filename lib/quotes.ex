@@ -130,13 +130,13 @@ defmodule Bonfire.Social.Quotes do
         info(user_id, "User is quoting their own post")
         {:auto_approve, quoted_object}
 
-      # Check if user can annotate the post (auto-approve)
-      Bonfire.Boundaries.can?(user, quote_verb(), quoted_object) ->
+      # quoting shows the post, so both branches need `:read` too: `cannot_read` keeps the `:request` floor (to ask to follow or join), which must not let an excluded person ask to quote what they can't read
+      Bonfire.Boundaries.can?(user, [:read, quote_verb()], quoted_object) ->
         info(user_id, "User has permission to annotate")
         {:auto_approve, quoted_object}
 
       # Check if user can make a request about the post (manual approval)
-      Bonfire.Boundaries.can?(user, :request, quoted_object) ->
+      Bonfire.Boundaries.can?(user, [:read, :request], quoted_object) ->
         info(user_id, "User needs to request")
         {:request_needed, quoted_object}
 
@@ -231,6 +231,9 @@ defmodule Bonfire.Social.Quotes do
            repo().maybe_preload(quoted_object, [character: [:peered], created: [:peered]],
              prune: true
            ),
+         # the request's subject comes with no creator, which is how this is called with just a request (eg. approving from the UI): without it a remote quote post has no author to send the Accept to, and it is skipped as if local
+         quote_post =
+           repo().maybe_preload(quote_post, [created: [creator: [:character]]], prune: true),
          quoted_object_creator =
            (quoted_object_creator ||
               e(request, :edge, :object, :created, :creator, nil) ||

@@ -222,7 +222,8 @@ defmodule Bonfire.Social.Feeds do
       e(assigns, :mentions, []),
       e(assigns, :reply_to, :created, :creator, nil),
       e(assigns, :reply_to, :replied, :thread, :id, nil),
-      notify_feeds: notify_feeds
+      notify_feeds: notify_feeds,
+      skip_global_feeds: e(assigns, :options, :skip_global_feeds, nil)
     )
   end
 
@@ -363,7 +364,16 @@ defmodule Bonfire.Social.Feeds do
     end
   end
 
+  # `skip_global_feeds` (eg. an incoming Mastodon "unlisted" post): no instance-wide feed, only its author's outbox (their profile) and its followers' feeds, while its boundary still lets anyone read it
   defp global_feed_ids(creator, boundary, opts) do
+    if opts[:skip_global_feeds] == true do
+      []
+    else
+      do_global_feed_ids(creator, boundary, opts)
+    end
+  end
+
+  defp do_global_feed_ids(creator, boundary, opts) do
     if opts[:feed_addressing] || Config.get([__MODULE__, :feed_addressing], false) do
       addressed_feed_ids(creator, boundary, opts)
     else

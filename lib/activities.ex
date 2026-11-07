@@ -1480,14 +1480,30 @@ defmodule Bonfire.Social.Activities do
             objects
 
           tags ->
-            by_id = tags |> preload_tag_children(opts) |> Map.new(&{id(&1), &1})
+            # a quote shows the post it quotes, so quoted posts the viewer may not read are dropped here, for the whole page in one boundary query
+            kept =
+              tags
+              |> preload_tag_children(opts)
+              |> Bonfire.Social.Tags.drop_unreadable_quotes(opts)
 
-            Enum.map(objects, &put_preloaded_tags(&1, path, by_id))
+            by_id = Map.new(kept, &{id(&1), &1})
+            dropped = MapSet.new(tags, &id/1) |> MapSet.difference(MapSet.new(kept, &id/1))
+
+            Enum.map(objects, &put_preloaded_tags(&1, path, by_id, dropped))
         end
       else
         case tags_at(objects, path) do
-          [] -> objects
-          tags -> put_in(objects, Enums.access_keys(path), preload_tag_children(tags, opts))
+          [] ->
+            objects
+
+          tags ->
+            put_in(
+              objects,
+              Enums.access_keys(path),
+              tags
+              |> preload_tag_children(opts)
+              |> Bonfire.Social.Tags.drop_unreadable_quotes(opts)
+            )
         end
       end
     else
@@ -1503,14 +1519,20 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
-  defp put_preloaded_tags(object, path, by_id) do
+  defp put_preloaded_tags(object, path, by_id, dropped) do
     case tags_at(object, path) do
       [] ->
         object
 
       tags ->
         # `maybe_preload` groups by schema, so match the loaded tags back up by id rather than position
-        put_in(object, Enums.access_keys(path), Enum.map(tags, &(by_id[id(&1)] || &1)))
+        put_in(
+          object,
+          Enums.access_keys(path),
+          tags
+          |> Enum.reject(&MapSet.member?(dropped, id(&1)))
+          |> Enum.map(&(by_id[id(&1)] || &1))
+        )
     end
   end
 
@@ -3184,16 +3206,18 @@ defmodule Bonfire.Social.Activities do
     subject = e(activity, :subject, nil)
     object = e(activity, :object, nil)
 
+    # a notification of a follow only ever reaches the one followed, so it is about the follower, as its row shows (`show_subject_instead_of_object?/1`): what it says and where it leads
+    about_subject? = show_subject_instead_of_object?(experienced_as(activity))
+
     %{
       subject_name: e(subject, :profile, :name, nil) || e(subject, :character, :username, ""),
       verb: described_verb(activity),
-      # a notification of a follow only ever reaches the one followed, so it is about the follower, as its row shows (`show_subject_instead_of_object?/1`)
-      body:
-        if(show_subject_instead_of_object?(experienced_as(activity)),
-          do: described_bio(subject),
-          else: described_body(object)
+      body: if(about_subject?, do: described_bio(subject), else: described_body(object)),
+      url:
+        if(about_subject?,
+          do: described_url(subject, nil),
+          else: described_url(object, e(activity, :replied, nil))
         ),
-      url: described_url(object, e(activity, :replied, nil)),
       icon: described_icon(subject)
     }
   end

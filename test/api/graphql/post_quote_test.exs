@@ -104,6 +104,47 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       assert Enum.any?(quoted_posts, &(&1["id"] == quoted_id))
     end
 
+    test "status exposes a quoted post only to readers who may read it", %{me: me} do
+      excluded = fake_user!()
+      reader = fake_user!()
+
+      {:ok, quoted} =
+        Bonfire.Posts.publish(
+          post_attrs: %{post_content: %{html_body: "<p>only some may read this</p>"}},
+          current_user: me,
+          boundary: "public",
+          to_circles: %{excluded.id => "cannot_read"}
+        )
+
+      quoted_id = e(quoted, :id, nil)
+
+      {:ok, create_result} =
+        Absinthe.run(@create_quote, Schema,
+          variables: %{"content" => %{"html_body" => "<p>quoting it</p>"}, "quoteId" => quoted_id},
+          context: Schema.context(%{current_user: me})
+        )
+
+      quote_post_id = get_in(create_result, [:data, "create_post", "id"])
+
+      read_quoted = fn user ->
+        {:ok, result} =
+          Absinthe.run(@read_quote, Schema,
+            variables: %{"id" => quote_post_id},
+            context: Schema.context(%{current_user: user})
+          )
+
+        refute result[:errors]
+        assert get_in(result, [:data, "status", "id"]) == quote_post_id
+        get_in(result, [:data, "status", "quoted"]) || []
+      end
+
+      # the positive first
+      assert Enum.any?(read_quoted.(reader), &(&1["id"] == quoted_id))
+
+      refute Enum.any?(read_quoted.(excluded), &(&1["id"] == quoted_id)),
+             "the quoted post was exposed to someone who may not read it"
+    end
+
     test "create_post without quote_id still works (no quote tag)", %{me: me} do
       {:ok, result} =
         Absinthe.run(@create_quote, Schema,

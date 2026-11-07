@@ -79,8 +79,8 @@ defmodule Bonfire.Social.FeedsBlockKeywordsBenchmarkTest do
             current_user: user
           )
         end,
-        "block_keywords_settings" => fn user ->
-          BlockKeywords.block_keywords_settings(current_user: user)
+        "block_keywords_lists" => fn user ->
+          BlockKeywords.block_keywords_lists(current_user: user)
         end,
         "feed_postloaded :explore" => load_feed
       },

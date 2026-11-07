@@ -42,6 +42,8 @@ defmodule Bonfire.Social.Import do
   def import_from_csv_file(:outbox = type, scope, path),
     do: import_from_json_file(type, scope, path)
 
+  # TODO: import keyword filters from a Mastodon-style `custom_filters.json` export: each filter's keywords go into the person's keyword lists, `"action": "hide"` into `[:activity_pub, :mrf_keyword, :reject]` and `"warn"` into `[:activity_pub, :mrf_keyword, :warn]`, a keyword with `"whole_word": false` as `*keyword*`. Titles, contexts, expiry and per-post filters are ignored. Parsed and saved in one write, not queued per row
+
   def import_from_csv_file(_other, _user, _path),
     do: error("Please select a valid type of import")
 

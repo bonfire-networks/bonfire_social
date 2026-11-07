@@ -418,8 +418,9 @@ defmodule Bonfire.Social do
     Map.put(page, :edges, filter_by_keywords(edges, replace_with, opts))
   end
 
+  # Both of the viewer's lists, hidden completely or behind a warning: what reads this (APIs, email, search, the messages list) can't show a warning, so a match on either is replaced (or, without `replace_with`, dropped)
   def filter_by_keywords(edges_or_edge, replace_with \\ false, opts) do
-    case Bonfire.Boundaries.BlockKeywords.block_keywords_settings(opts) do
+    case Bonfire.Boundaries.BlockKeywords.block_keywords_lists(opts) do
       nil ->
         debug(opts, "no block_keywords_settings")
         edges_or_edge
@@ -480,12 +481,11 @@ defmodule Bonfire.Social do
     end
   end
 
-  defp content_matches_keywords?(%{html_body: _} = content, patterns) do
-    Bonfire.Boundaries.BlockKeywords.text_fields_match?(
-      content,
-      [:html_body, :summary, :name],
-      patterns
-    )
+  defp content_matches_keywords?(%{html_body: _} = content, lists) do
+    Bonfire.Boundaries.BlockKeywords.verdict(
+      [content.html_body, content.summary, content.name],
+      lists
+    ) != nil
   end
 
   defp content_matches_keywords?(_, _patterns), do: false
@@ -513,12 +513,7 @@ defmodule Bonfire.Social do
           {nil, nil}
       end
 
-    if content &&
-         Bonfire.Boundaries.BlockKeywords.text_fields_match?(
-           content,
-           [:html_body, :summary, :name],
-           patterns
-         ) do
+    if content && content_matches_keywords?(content, patterns) do
       if replace_with != false,
         do: put_in(edge, content_path, %Bonfire.Data.Social.PostContent{summary: replace_with}),
         else: true

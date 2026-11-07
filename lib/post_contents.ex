@@ -641,6 +641,26 @@ defmodule Bonfire.Social.PostContents do
            # TODO: apply the preparation/sanitation functions?
            |> debug()
            |> PostContent.changeset(post_content, ...),
+         # the instance's keyword lists, checked once against the edited text
+         instance_verdict =
+           Bonfire.Boundaries.BlockKeywords.instance_verdict([
+             Ecto.Changeset.get_field(changeset, :html_body),
+             Ecto.Changeset.get_field(changeset, :summary),
+             Ecto.Changeset.get_field(changeset, :name)
+           ]),
+         # to warn about: the warning is saved with the edit, unless the post has its own
+         changeset =
+           if(
+             instance_verdict == :warn and
+               Ecto.Changeset.get_field(changeset, :summary) in [nil, ""],
+             do:
+               Ecto.Changeset.put_change(
+                 changeset,
+                 :summary,
+                 Bonfire.Boundaries.BlockKeywords.warn_summary()
+               ),
+             else: changeset
+           ),
          #  create the v1 entry if this is the first edit
          {:ok, updated_post_content} <-
            save_edit(current_user, post_content, changeset)
@@ -668,17 +688,24 @@ defmodule Bonfire.Social.PostContents do
         end
       end
 
-      # edited to include one of the instance's filtered keywords: it stays with its author from now on, silently, and the edit doesn't federate. Editing the keyword out later doesn't widen it back
-      kept_to_author? =
-        is_struct(post) and
-          Bonfire.Boundaries.BlockKeywords.instance_match?([
-            e(updated_post_content, :html_body, nil),
-            e(updated_post_content, :summary, nil),
-            e(updated_post_content, :name, nil)
-          ])
+      # edited to include one of the keywords the instance hides completely: it stays with its author from now on, silently, and the edit doesn't federate (editing the keyword out later doesn't widen it back). One it warns about: marked sensitive, and the edit federates with its warning
+      kept_to_author? = is_struct(post) and instance_verdict == :reject
 
-      if kept_to_author?,
-        do: Bonfire.Boundaries.BlockKeywords.keep_to_author(current_user, post)
+      post =
+        cond do
+          kept_to_author? ->
+            Bonfire.Boundaries.BlockKeywords.keep_to_author(current_user, post)
+            post
+
+          is_struct(post) and instance_verdict == :warn ->
+            case Bonfire.Social.Objects.set_sensitivity(post, true) do
+              {:ok, post} -> post
+              _ -> post
+            end
+
+          true ->
+            post
+        end
 
       if post && not kept_to_author? && Social.federate_outgoing?(current_user),
         do:

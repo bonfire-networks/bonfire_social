@@ -1302,15 +1302,15 @@ defmodule Bonfire.Social.Objects do
     end
   end
 
-  # its current text against the instance's filtered keywords, read from the database: a loaded `post_content` may be from before an edit (and `thing` may be an id, as the boundary editor passes it)
+  # its current text against the instance's keywords to hide completely (one only warned about can be widened as usual), read from the database: a loaded `post_content` may be from before an edit (and `thing` may be an id, as the boundary editor passes it)
   defp kept_to_author?(thing) do
     post_content = uid(thing) && repo().get(Bonfire.Data.Social.PostContent, uid(thing))
 
-    Bonfire.Boundaries.BlockKeywords.instance_match?([
+    Bonfire.Boundaries.BlockKeywords.instance_verdict([
       e(post_content, :html_body, nil),
       e(post_content, :summary, nil),
       e(post_content, :name, nil)
-    ])
+    ]) == :reject
   end
 
   @doc """
