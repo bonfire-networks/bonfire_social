@@ -526,27 +526,4 @@ defmodule Bonfire.Social do
       false
     end
   end
-
-  @doc """
-  Checks if an activity should be shown to the current user based on keyword filters.
-  Used by LiveView handlers to filter PubSub activities before displaying.
-
-  ## Parameters
-
-    - activity: The activity to check
-    - opts: Options including current_user for loading user-specific settings
-
-  ## Examples
-
-      iex> should_show_activity?(%{object_post_content: %{html_body: "spam"}}, current_user: user)
-      false
-
-  """
-  def show_activity?(activity, opts) do
-    case Bonfire.Boundaries.BlockKeywords.block_keywords_settings(opts) do
-      nil -> true
-      [] -> true
-      patterns -> !matches_keyword_filter(activity, patterns)
-    end
-  end
 end

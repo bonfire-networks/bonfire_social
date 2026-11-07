@@ -384,143 +384,6 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
     end
   end
 
-  describe "keyword filtering for PubSub activities" do
-    alias Bonfire.Common.PubSub
-    alias Bonfire.Social.Feeds
-
-    test "show_activity?/2 returns false for activities matching blocked keywords" do
-      user = fake_user!("pubsub_filter_user")
-
-      # Set up keyword filter
-      Process.put([:activity_pub, :mrf_keyword, :reject], ["viagra"])
-
-      # Create an activity with blocked content
-      spam_activity = %{
-        id: "test_activity",
-        object_post_content: %{
-          html_body: "Buy cheap viagra now!"
-        }
-      }
-
-      # The activity should be filtered
-      refute Bonfire.Social.show_activity?(spam_activity, current_user: user)
-    end
-
-    test "show_activity?/2 returns true for normal activities" do
-      user = fake_user!("pubsub_normal_user")
-
-      # Set up keyword filter
-      Process.put([:activity_pub, :mrf_keyword, :reject], ["viagra"])
-
-      # Create a normal activity
-      normal_activity = %{
-        id: "test_activity",
-        object_post_content: %{
-          html_body: "This is a normal post about cats"
-        }
-      }
-
-      # The activity should not be filtered
-      assert Bonfire.Social.show_activity?(normal_activity, current_user: user)
-    end
-
-    test "show_activity?/2 returns true when no keywords configured" do
-      user = fake_user!("pubsub_no_filter_user")
-
-      # No filter configured
-
-      # Even spam content should pass through
-      spam_activity = %{
-        id: "test_activity",
-        object_post_content: %{
-          html_body: "Buy cheap viagra now!"
-        }
-      }
-
-      assert Bonfire.Social.show_activity?(spam_activity, current_user: user)
-    end
-
-    test "PubSub receives activity but it should be filtered by keyword" do
-      # subscribes to the legacy :local feed and expects the public post broadcast there; force write- addressing off 
-      Process.put([:bonfire_social, Bonfire.Social.Feeds, :feed_addressing], false)
-      viewer = fake_user!("pubsub_keyword_viewer")
-      poster = fake_user!("pubsub_keyword_poster")
-
-      # Set up keyword filter for viewer
-      viewer =
-        Settings.set(
-          %{activity_pub: %{mrf_keyword: %{reject: ["viagra"]}}},
-          current_user: viewer
-        )
-        |> current_user()
-
-      # Subscribe to local feed
-      feed_id = Feeds.named_feed_id(:local)
-      :ok = PubSub.subscribe(feed_id, current_user: viewer)
-
-      # Post spam content
-      {:ok, spam_post} =
-        Posts.publish(
-          current_user: poster,
-          post_attrs: %{post_content: %{html_body: "Amazing viagra deals today!"}},
-          boundary: "public"
-        )
-
-      # The PubSub message is received (broadcast happens regardless)
-      assert_receive {
-        {Bonfire.Social.Feeds, :new_activity},
-        [feed_ids: _, activity: received_activity]
-      }
-
-      # But when checking if it should be shown, it should be filtered
-      refute Bonfire.Social.show_activity?(received_activity, current_user: viewer)
-    end
-
-    test "PubSub thread reply should be filtered by keyword" do
-      viewer = fake_user!("pubsub_thread_viewer")
-      poster = fake_user!("pubsub_thread_poster")
-
-      # Set up keyword filter for viewer
-      viewer =
-        Settings.set(
-          %{activity_pub: %{mrf_keyword: %{reject: ["crypto"]}}},
-          current_user: viewer
-        )
-        |> current_user()
-
-      # Create a thread
-      {:ok, thread} =
-        Posts.publish(
-          current_user: poster,
-          post_attrs: %{post_content: %{html_body: "Normal thread root"}},
-          boundary: "public"
-        )
-
-      # Subscribe to the thread
-      :ok = PubSub.subscribe(thread.id, current_user: viewer)
-
-      # Post a spam reply
-      {:ok, spam_reply} =
-        Posts.publish(
-          current_user: poster,
-          post_attrs: %{
-            post_content: %{html_body: "Get free crypto giveaway!"},
-            reply_to: thread.id
-          },
-          boundary: "public"
-        )
-
-      # The PubSub message is received
-      assert_receive {
-        {Bonfire.Social.Threads.LiveHandler, :new_reply},
-        {_thread_id, received_activity}
-      }
-
-      # But when checking if it should be shown, it should be filtered
-      refute Bonfire.Social.show_activity?(received_activity, current_user: viewer)
-    end
-  end
-
   # The tests above use `Process.put`, which short-circuits `Settings.get` before the DB path, so the settings load hook never runs. These store the keywords in the user's settings row like production does.
   describe "keywords stored in the user's DB settings" do
     setup do
@@ -536,7 +399,8 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
     end
 
     test "stored keywords reach the filter as a compiled pattern", %{user: user} do
-      assert {_, _} = Bonfire.Boundaries.BlockKeywords.block_keywords_settings(current_user: user)
+      assert %{regex: %Regex{}} =
+               Bonfire.Boundaries.BlockKeywords.block_keywords_settings(current_user: user)
     end
 
     test "saving another setting keeps the stored keywords and persists no compiled pattern", %{
@@ -561,7 +425,7 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
       a = Bonfire.Boundaries.BlockKeywords.block_keywords_settings(current_user: user)
       b = Bonfire.Boundaries.BlockKeywords.block_keywords_settings(current_user: user)
 
-      assert {_, _} = a
+      assert %{regex: %Regex{}} = a
       assert a === b
     end
 
@@ -582,6 +446,107 @@ defmodule Bonfire.Social.FeedsBlockKeywordsTest do
 
       assert FeedLoader.feed_contains?(feed, normal_post, postload: false)
       refute FeedLoader.feed_contains?(feed, "Amazing deal on viagra", postload: false)
+    end
+  end
+
+  # A keyword matches a whole word of what a reader sees; a `*` at either end lets it run into a longer word. Keywords are stored in the viewer's settings row, as the settings page does.
+  describe "keywords match whole words of the visible text" do
+    setup do
+      viewer = fake_user!("kw_words_viewer")
+      author = fake_user!("kw_words_author")
+      %{viewer: viewer, author: author}
+    end
+
+    defp with_keywords(user, keywords) do
+      {:ok, _} =
+        Bonfire.Boundaries.BlockKeywords.put_block_keywords_settings(keywords, current_user: user)
+
+      Bonfire.Common.Repo.preload(user, :settings, force: true)
+    end
+
+    defp post!(author, html_body),
+      do: fake_post!(author, "public", %{post_content: %{html_body: html_body}})
+
+    # the text as the viewer's feed shows it
+    defp shown?(viewer, text) do
+      :explore
+      |> FeedLoader.feed_postloaded(limit: 20, current_user: viewer)
+      |> FeedLoader.feed_contains?(text, postload: false)
+    end
+
+    test "a keyword hides a post with the whole word, not one with a longer word", %{
+      viewer: viewer,
+      author: author
+    } do
+      post!(author, "Spam! again")
+      post!(author, "the spammer is back")
+      viewer = with_keywords(viewer, ["spam"])
+
+      refute shown?(viewer, "Spam! again")
+      assert shown?(viewer, "the spammer is back")
+    end
+
+    test "a * at the end also hides longer words starting with the keyword", %{
+      viewer: viewer,
+      author: author
+    } do
+      post!(author, "the spammer is back")
+      viewer = with_keywords(viewer, ["spam*"])
+
+      refute shown?(viewer, "the spammer is back")
+    end
+
+    test "a short keyword does not hide posts where it is only inside other words", %{
+      viewer: viewer,
+      author: author
+    } do
+      post!(author, "a class on passing")
+      post!(author, ~s(<p>see <a href="https://x.local">this link</a></p>))
+      viewer = with_keywords(viewer, ["ass", "href"])
+
+      assert shown?(viewer, "a class on passing")
+      assert shown?(viewer, "this link")
+    end
+
+    test "a keyword that is a hashtag hides a post with that hashtag", %{
+      viewer: viewer,
+      author: author
+    } do
+      post!(author, "I love #cats today")
+      post!(author, "I love cats today")
+      viewer = with_keywords(viewer, ["#cats"])
+
+      refute shown?(viewer, "#cats today")
+      assert shown?(viewer, "I love cats today")
+    end
+
+    test "the instance's list does not hide posts from a user's feed", %{
+      viewer: viewer,
+      author: author
+    } do
+      # an instance save also puts the list (and what the load hook makes of it) into the app config, which every later test reads: put back exactly what was there (the stored row goes with the test's transaction)
+      previous_config = Application.get_env(:activity_pub, :mrf_keyword)
+
+      on_exit(fn ->
+        if previous_config,
+          do: Application.put_env(:activity_pub, :mrf_keyword, previous_config),
+          else: Application.delete_env(:activity_pub, :mrf_keyword)
+      end)
+
+      # published before the instance's list has the word: a local post published after it would be kept to its author, which is not what this is about
+      post!(author, "a post saying instancebanned")
+
+      {:ok, _} =
+        Bonfire.Common.Settings.put_raw(
+          [:activity_pub, :mrf_keyword, :reject],
+          ["instancebanned"],
+          scope: :instance,
+          skip_boundary_check: true
+        )
+
+      viewer = Bonfire.Common.Repo.preload(viewer, :settings, force: true)
+
+      assert shown?(viewer, "a post saying instancebanned")
     end
   end
 end

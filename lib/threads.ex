@@ -2273,28 +2273,34 @@ defmodule Bonfire.Social.Threads do
 
   def ap_receive_comments_enabled(result, _creator, _object_data, _opts), do: result
 
-  # --- Trending ("Top discussions") widget loader (cached per user + limit) ---
+  # --- Trending ("Top discussions") widget loader (cached for guests and for everyone signed in) ---
 
   @doc """
-  The most-replied discussions of the last day (`:trending_discussions` feed preset), for the "Top discussions" widget. Cached per user and limit for 1h; the key is built once by `trending_cache_key/2` so the load and any reset always agree. Pass the standard `:cache` opt (`cache: :refresh` busts + recomputes — what the widget's refresh button calls).
+  The most-replied discussions of the last day (`:trending_discussions` feed preset), for the "Top discussions" widget. Cached per limit for 1h, once for guests and once for everyone signed in, each loaded as that circle (`Bonfire.Boundaries.Circles.query_as_circle/1`) rather than as one user, so nobody's restricted discussions reach anyone else; the widget then drops what each viewer may not see, eg. from someone they blocked. The key is built once by `trending_cache_key/2` so the load and any reset always agree. Pass the standard `:cache` opt (`cache: :refresh` busts + recomputes — what the widget's refresh button calls).
   """
   def list_trending(current_user, limit, opts \\ []) do
+    {circle, as_circle_opts} = Bonfire.Boundaries.Circles.query_as_circle(current_user)
+
     Cache.maybe_apply_cached(
       &do_list_trending/2,
-      [current_user, limit],
+      [as_circle_opts, limit],
       opts
-      |> Keyword.put(:cache_key, trending_cache_key(current_user, limit))
+      |> Keyword.put(:cache_key, trending_circle_key(circle, limit))
       |> Keyword.put_new(:expire, :timer.minutes(60))
     )
   end
 
-  defp do_list_trending(current_user, limit) do
+  defp do_list_trending(as_circle_opts, limit) do
     case Bonfire.Social.FeedLoader.feed(
            :trending_discussions,
-           current_user: current_user,
-           paginate: %{limit: limit},
-           # :with_parent loads tree.parent so ActivityLive can show "published in" (the feed_postload phase that normally loads it doesn't run here, since the widget renders cached activities outside a feed component)
-           preload: [:feed, :with_parent]
+           as_circle_opts ++
+             [
+               paginate: %{limit: limit},
+               # :with_parent loads tree.parent so ActivityLive can show "published in" (the feed_postload phase that normally loads it doesn't run here, since the widget renders cached activities outside a feed component)
+               preload: [:feed, :with_parent],
+               # loaded as a circle, not a user, so no viewer for `Activities` to match subjects against
+               skip_err: true
+             ]
          ) do
       %{edges: edges} when is_list(edges) -> edges
       _ -> []
@@ -2362,7 +2368,11 @@ defmodule Bonfire.Social.Threads do
       |> repo().all()
       |> Map.new()
 
-  @doc "Cache key for `list_trending/3` — used by both the loader and any reset, so they can't drift."
-  def trending_cache_key(current_user, limit),
-    do: "widget_trending_discussions:#{id(current_user) || "guest"}:#{limit}"
+  @doc "Cache key for `list_trending/3`, the same for everyone signed in, and another for guests. Used by both the loader and any reset, so they can't drift."
+  def trending_cache_key(current_user, limit) do
+    {circle, _opts} = Bonfire.Boundaries.Circles.query_as_circle(current_user)
+    trending_circle_key(circle, limit)
+  end
+
+  defp trending_circle_key(circle, limit), do: "widget_trending_discussions:#{circle}:#{limit}"
 end

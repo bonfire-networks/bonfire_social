@@ -66,25 +66,50 @@ defmodule Bonfire.Social.Pins do
   @spotlight_cache_key "instance_pins_activities"
 
   @doc """
-  The spotlight: the instance's pinned activities. Public, instance-wide data that rarely changes, so cached for 6 hours and forgotten whenever an instance pin changes. Takes the standard `:cache` opt (eg. `cache: :reset`).
+  The spotlight: the instance's pinned activities that `opts[:current_user]` may see. Instance-wide data that rarely changes, so cached for 6 hours, once for guests and once for everyone signed in, each loaded as that circle (`Bonfire.Boundaries.Circles.query_as_circle/1`), so a pinned post that only local users may see never reaches a guest; the widget then drops what each viewer may not see, eg. from someone they blocked. Forgotten whenever an instance pin changes. Takes the standard `:cache` opt (eg. `cache: :reset`, which forgets both lists).
   """
   def list_spotlight_activities(opts \\ []) do
-    Bonfire.Common.Cache.maybe_apply_cached(
-      &do_list_spotlight_activities/0,
-      [],
-      opts
-      |> Keyword.put_new(:expire, :timer.hours(6))
-      |> Keyword.put(:cache_key, @spotlight_cache_key)
-    )
+    opts = to_options(opts)
+
+    if opts[:cache] == :reset do
+      forget_spotlight()
+    else
+      {circle, as_circle_opts} =
+        Bonfire.Boundaries.Circles.query_as_circle(current_user(opts))
+
+      Bonfire.Common.Cache.maybe_apply_cached(
+        &do_list_spotlight_activities/1,
+        [as_circle_opts],
+        opts
+        |> Keyword.delete(:current_user)
+        |> Keyword.put_new(:expire, :timer.hours(6))
+        |> Keyword.put(:cache_key, spotlight_cache_key(circle))
+      )
+    end
   end
 
-  defp do_list_spotlight_activities do
-    list_instance_pins_activities([])
+  defp do_list_spotlight_activities(as_circle_opts) do
+    list_pinned_activities(
+      :instance,
+      [limit: 5] ++
+        as_circle_opts ++
+        [
+          # loaded as a circle, not a user, so no viewer for `Activities` to match subjects against
+          skip_err: true
+        ]
+    )
     |> e(:edges, [])
   end
 
+  defp spotlight_cache_key(circle), do: "#{@spotlight_cache_key}:#{circle}"
+
+  defp forget_spotlight do
+    for circle <- [:guest, :local], do: Bonfire.Common.Cache.remove(spotlight_cache_key(circle))
+    :ok
+  end
+
   defp forget_spotlight({:ok, _} = result) do
-    Bonfire.Common.Cache.remove(@spotlight_cache_key)
+    forget_spotlight()
     result
   end
 
@@ -660,7 +685,7 @@ defmodule Bonfire.Social.Pins do
       as: :activity,
       on: a.object_id == e.object_id and a.verb_id == ^create_verb_id
     )
-    # in the same query as the limit, so pins the viewer can't read don't use up places; a no-op with `skip_boundary_check` (the spotlight)
+    # in the same query as the limit, so pins the viewer can't read don't use up places; a no-op with `skip_boundary_check` (the instance pins feed)
     |> Activities.as_permitted_for(opts, [:see, :read])
     |> order_by([edge: e, ranked: r], asc_nulls_last: r.rank, desc: e.id)
     |> limit(^(opts[:limit] || 3))

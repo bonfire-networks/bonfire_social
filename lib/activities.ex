@@ -436,7 +436,13 @@ defmodule Bonfire.Social.Activities do
           |> Enum.uniq()
           |> debug("accumulated postloads to try")
           |> maybe_repo_preload_activity(query_or_object_or_objects, ..., opts)
-          |> Bonfire.Social.filter_by_keywords(l("[Content blocked by filters]"), opts)
+          # the UI shows keyword matches as a placeholder when it renders each card, so it asks to skip this (`skip_keyword_filter`); APIs, email and search still get the text replaced here
+          |> then(fn loaded ->
+            if opts[:skip_keyword_filter] == true,
+              do: loaded,
+              else:
+                Bonfire.Social.filter_by_keywords(loaded, l("[Content blocked by filters]"), opts)
+          end)
 
           # |> debug()
         end

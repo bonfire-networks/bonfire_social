@@ -668,7 +668,19 @@ defmodule Bonfire.Social.PostContents do
         end
       end
 
-      if post && Social.federate_outgoing?(current_user),
+      # edited to include one of the instance's filtered keywords: it stays with its author from now on, silently, and the edit doesn't federate. Editing the keyword out later doesn't widen it back
+      kept_to_author? =
+        is_struct(post) and
+          Bonfire.Boundaries.BlockKeywords.instance_match?([
+            e(updated_post_content, :html_body, nil),
+            e(updated_post_content, :summary, nil),
+            e(updated_post_content, :name, nil)
+          ])
+
+      if kept_to_author?,
+        do: Bonfire.Boundaries.BlockKeywords.keep_to_author(current_user, post)
+
+      if post && not kept_to_author? && Social.federate_outgoing?(current_user),
         do:
           Social.maybe_federate(
             current_user,

@@ -1267,33 +1267,50 @@ defmodule Bonfire.Social.Objects do
     to_boundaries =
       e(opts_or_attrs, :attrs, :to_boundaries, nil) || e(opts_or_attrs, :to_boundaries, nil)
 
-    if to_boundaries == "private" do
-      # do it here to skip the rest of the logic
-      with {num, nil} <- Bonfire.Boundaries.Controlleds.remove_all_acls(thing) do
-        {:ok, num}
-      end
-    else
-      # debug(thing, "reset boundary of")
-      set_opts =
-        [
-          remove_previous_preset: previous_preset,
-          to_boundaries: to_boundaries,
-          to_circles:
-            e(opts_or_attrs, :attrs, :to_circles, nil) || e(opts_or_attrs, :to_circles, nil),
-          context_id:
-            e(thing, :context_id, nil) || e(opts_or_attrs, :attrs, :context_id, nil) ||
-              e(opts_or_attrs, :context_id, nil)
-        ]
-        |> debug("opts")
-        |> set_boundaries(
-          creator,
-          thing,
-          ...,
-          for_module || object_type_schema(thing) || __MODULE__
-        )
+    cond do
+      # its text has one of the instance's filtered keywords: it stays with its author, whatever is asked, and its author isn't told. Once the keyword is edited out, they can widen it
+      kept_to_author?(thing) ->
+        {:ok, :kept_to_author}
 
-      set_opts[:boundaries_as_set] || error("Boundaries not enabled")
+      to_boundaries == "private" ->
+        # do it here to skip the rest of the logic
+        with {num, nil} <- Bonfire.Boundaries.Controlleds.remove_all_acls(thing) do
+          {:ok, num}
+        end
+
+      true ->
+        # debug(thing, "reset boundary of")
+        set_opts =
+          [
+            remove_previous_preset: previous_preset,
+            to_boundaries: to_boundaries,
+            to_circles:
+              e(opts_or_attrs, :attrs, :to_circles, nil) || e(opts_or_attrs, :to_circles, nil),
+            context_id:
+              e(thing, :context_id, nil) || e(opts_or_attrs, :attrs, :context_id, nil) ||
+                e(opts_or_attrs, :context_id, nil)
+          ]
+          |> debug("opts")
+          |> set_boundaries(
+            creator,
+            thing,
+            ...,
+            for_module || object_type_schema(thing) || __MODULE__
+          )
+
+        set_opts[:boundaries_as_set] || error("Boundaries not enabled")
     end
+  end
+
+  # its current text against the instance's filtered keywords, read from the database: a loaded `post_content` may be from before an edit (and `thing` may be an id, as the boundary editor passes it)
+  defp kept_to_author?(thing) do
+    post_content = uid(thing) && repo().get(Bonfire.Data.Social.PostContent, uid(thing))
+
+    Bonfire.Boundaries.BlockKeywords.instance_match?([
+      e(post_content, :html_body, nil),
+      e(post_content, :summary, nil),
+      e(post_content, :name, nil)
+    ])
   end
 
   @doc """
