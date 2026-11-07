@@ -235,6 +235,7 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
         api_conn
         |> get("/api/v1/statuses/#{post.id}")
         |> json_response(200)
+        |> Bonfire.API.MastoCompat.Test.MastoSchema.assert_masto_entity("Status")
 
       assert response["id"] == post.id
       assert is_binary(response["content"])

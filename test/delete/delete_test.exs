@@ -156,6 +156,10 @@ defmodule Bonfire.Social.DeleteTest do
       assert media.id in Enum.map(repo().preload(kept, :media, force: true).media, & &1.id)
     end
 
+    # bonfire_label is not in every flavour (eg. community), and this test calls into it
+    if not Bonfire.Common.Extend.extension_enabled?(:bonfire_label),
+      do: @tag(skip: "bonfire_label is disabled")
+
     test "deleting a post that links it keeps it on a moderator's label", %{
       user: user,
       url: url,
