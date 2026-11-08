@@ -628,7 +628,9 @@ defmodule Bonfire.Social.Quotes do
          {:ok, result} <-
            ActivityPub.reject(%{
              actor: quoted_actor,
-             to: [quote_actor],
+             # the requester's id, as the Reject is addressed to it (a whole actor map there is stored and sent as the `to`, which Mastodon doesn't read as the quoting account)
+             # to: [quote_actor],
+             to: [quote_actor.ap_id],
              object: quote_request_activity.data,
              local: true
            }) do
