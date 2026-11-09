@@ -485,7 +485,10 @@ defmodule Bonfire.Social.FeedPaginationTest do
     # pages after the first bound the cursor field with a plain comparison (no `OR … IS NULL`, which Postgres can't use as an index condition), so the pages together must still equal one big page
     for {name, extra_filters} <- [
           {"the id sort", %{}},
-          {"a thread-grouped feed", %{dedup_by_thread: true}}
+          {"a thread-grouped feed", %{dedup_by_thread: true}},
+          {"a thread-grouped feed, newest first",
+           %{dedup_by_thread: true, sort_by: :date_created}},
+          {"a thread-grouped feed, most replies", %{dedup_by_thread: true, sort_by: :reply_count}}
         ] do
       test "#{name} returns what one big page does" do
         viewer = fake_user!("deep paging viewer")

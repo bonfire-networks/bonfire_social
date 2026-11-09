@@ -246,6 +246,76 @@ defmodule Bonfire.Social.FeedsMergingActivitiesTest do
       assert thread2_pos != nil, "thread2 should be in the feed"
       assert thread1_pos < thread2_pos, "thread1 (latest reply) should appear before thread2"
     end
+
+    test "with sort_by :date_created, orders threads by when they started, ignoring later replies",
+         %{
+           user: user,
+           thread1: thread1,
+           thread2: thread2
+         } do
+      %{edges: edges} =
+        FeedLoader.feed(:local, %{dedup_by_thread: true, sort_by: :date_created},
+          current_user: user
+        )
+
+      ids = Enum.map(edges, &e(&1, :activity, :object_id, nil))
+
+      assert Enum.filter(ids, &(&1 in [thread1.id, thread2.id])) == [thread2.id, thread1.id],
+             "thread2 (started last) should come before thread1 (replied last), got: #{inspect(ids)}"
+    end
+
+    test "with sort_by :date_created, the next page continues from the last thread shown", %{
+      user: user,
+      thread1: thread1,
+      thread2: thread2
+    } do
+      filters = %{dedup_by_thread: true, sort_by: :date_created}
+
+      %{edges: page1, page_info: %{end_cursor: cursor}} =
+        FeedLoader.feed(:local, filters, current_user: user, paginate: [limit: 1])
+
+      %{edges: page2} =
+        FeedLoader.feed(:local, filters,
+          current_user: user,
+          paginate: [limit: 1, after: cursor]
+        )
+
+      assert Enum.map(page1 ++ page2, &e(&1, :activity, :object_id, nil)) == [
+               thread2.id,
+               thread1.id
+             ]
+    end
+
+    test "with sort_by :reply_count, orders threads by their replies, not by their latest one", %{
+      user: user,
+      other_user: other_user,
+      thread1: thread1,
+      thread2: thread2
+    } do
+      # thread2 ends with 3 replies, thread1 with 2 but the latest one
+      for {thread, n} <- [{thread2, 1}, {thread2, 2}, {thread2, 3}, {thread1, 2}] do
+        fake_post!(other_user, "public", %{
+          post_content: %{html_body: "reply #{n} to #{thread.id}"},
+          reply_to_id: thread.id
+        })
+      end
+
+      object_ids = fn filters ->
+        %{edges: edges} = FeedLoader.feed(:local, filters, current_user: user)
+
+        edges
+        |> Enum.map(&e(&1, :activity, :object_id, nil))
+        |> Enum.filter(&(&1 in [thread1.id, thread2.id]))
+      end
+
+      assert object_ids.(%{dedup_by_thread: true}) == [thread1.id, thread2.id],
+             "control: by latest activity, thread1 (replied last) comes first"
+
+      assert object_ids.(%{dedup_by_thread: true, sort_by: :reply_count}) == [
+               thread2.id,
+               thread1.id
+             ]
+    end
   end
 
   describe "show_objects_only_once dedup for likes and boosts" do

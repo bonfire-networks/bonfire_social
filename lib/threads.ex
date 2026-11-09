@@ -2309,10 +2309,13 @@ defmodule Bonfire.Social.Threads do
 
   @doc "Attaches up to 3 of each thread's participants (`:participants`), and how many others there are (`:participants_more_count`), to each `%{activity: …}` edge, with one batched query for each, and one for the threads' authors. The author is left out, since the post shows them."
   def attach_participants(edges, current_user) do
+    shown = 3
+
     participants_by_thread =
       list_participants_for_threads(edges,
         current_user: current_user,
-        limit: 30,
+        # the ones shown, plus the author, who is left out below: each is loaded with profile, icon and character, so 30 per thread (as before) loaded ~10x what a card shows
+        limit: shown + 1,
         include_tags: false
       )
 
@@ -2340,7 +2343,7 @@ defmodule Bonfire.Social.Threads do
         participants_by_thread
         |> Map.get(thread_id, [])
         |> Enum.reject(&(id(&1) == author_id))
-        |> Enum.take(3)
+        |> Enum.take(shown)
 
       other_participant_count =
         participant_counts_by_thread

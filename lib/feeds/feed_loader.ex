@@ -639,10 +639,16 @@ defmodule Bonfire.Social.FeedLoader do
   # The cursor fields matching the feed's ORDER BY go in the top-level opts and, when a caller passes `paginate:` (e.g. load more's cursor), in there too: Paginator then reads only that list for the outer query, while the deferred inner query reads the full opts, and both must encode and decode the same cursor. Thread-deduped feeds override the caller's cursor fields, because callers derive them from `sort_by` alone (feeds_live_handler) and don't know the feed is thread-deduped. For other feeds the caller's win (e.g. `feed_newer_than/5` pages ascending by id). The caller's `after`/`before`/`limit` always apply.
   defp put_pagination_order_opts(opts, filters) do
     {order_opts, override_callers?} =
-      if e(filters, :dedup_by_thread, nil),
-        do: {Threads.latest_activity_pagination_opts(), true},
-        else:
+      cond do
+        order_threads_by_latest_activity?(filters) ->
+          {Threads.latest_activity_pagination_opts(), true}
+
+        e(filters, :dedup_by_thread, nil) ->
+          {Activities.order_pagination_opts(filters[:sort_by], filters[:sort_order], opts), true}
+
+        true ->
           {Activities.order_pagination_opts(filters[:sort_by], filters[:sort_order], opts), false}
+      end
 
     opts = Keyword.merge(opts, order_opts)
 
@@ -825,7 +831,7 @@ defmodule Bonfire.Social.FeedLoader do
       |> then(
         # For thread dedup the outer query only needs ordering (inner already picked one entry per thread).
         if e(filters, :dedup_by_thread, nil),
-          do: &Threads.order_by_latest_activity/1,
+          do: &maybe_order_threads_by_latest_activity(&1, filters),
           else: &apply_dedup_strategy(&1, filters, opts)
       )
       |> Activities.activity_preloads(
@@ -1242,7 +1248,7 @@ defmodule Bonfire.Social.FeedLoader do
     cond do
       # `e` rather than bracket access so string-keyed filter maps behave the same as in `query_optional_extras`
       e(filters, :dedup_by_thread, nil) ->
-        make_distinct_by_thread(query, opts)
+        make_distinct_by_thread(query, filters, opts)
 
       # filters[:show_objects_only_once] != false ->
       #   make_distinct_by_like_boost_object(query, opts)
@@ -1264,13 +1270,24 @@ defmodule Bonfire.Social.FeedLoader do
   #   )
   # end
 
-  # One feed entry per thread, ordered by each thread's latest activity (see `Threads.distinct_by_thread/1`). The thread-aware time window is applied upstream in `query_optional_extras` so it also bounds this inner query.
-  defp make_distinct_by_thread(query, opts) do
+  # One feed entry per thread, ordered by each thread's latest activity, or by the entry itself with `sort_by: :date_created` (see `maybe_order_threads_by_latest_activity/2`, and `Threads.distinct_by_thread/1`). The thread-aware time window is applied upstream in `query_optional_extras` so it also bounds this inner query.
+  defp make_distinct_by_thread(query, filters, opts) do
     query
     |> Threads.distinct_by_thread()
     # NOTE: the Pointer-rooted outer query (rather than a FeedPublish-rooted one) also collapses the same entry published to several of the queried feeds (e.g. a group and its topic) into one row
     |> make_distinct_by_activity_id_subquery(opts)
-    |> Threads.order_by_latest_activity()
+    |> maybe_order_threads_by_latest_activity(filters)
+  end
+
+  # A thread-grouped feed with no `sort_by` lists threads by latest activity. A chosen `sort_by` (eg. `:date_created` for "Newest first", or `:reply_count`) orders each thread by its own entry (the root, or its earliest entry in this feed), so a reply doesn't move the thread up: that order comes from `FeedActivities.query_order/5`, which every caller applies next.
+  defp maybe_order_threads_by_latest_activity(query, filters) do
+    if order_threads_by_latest_activity?(filters),
+      do: Threads.order_by_latest_activity(query),
+      else: query
+  end
+
+  defp order_threads_by_latest_activity?(filters) do
+    e(filters, :dedup_by_thread, nil) && is_nil(e(filters, :sort_by, nil))
   end
 
   # @decorate time()
