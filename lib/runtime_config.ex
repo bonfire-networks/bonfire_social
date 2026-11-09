@@ -937,7 +937,7 @@ defmodule Bonfire.Social.RuntimeConfig do
             hide_filters: true
           ]
         },
-        # a group's discussions tab uses this preset. Its name (not its filters) makes `Bonfire.UI.Social.FeedLive` show the "View options" dropdown (`DiscussionsViewOptionsLive`), since that hides its feed filters; keying on `dedup_by_thread` instead would hide the dropdown once "All posts" turns it off
+        # a group's discussions tab uses this preset. Its name (not its filters) makes `Bonfire.UI.Social.FeedLive` show the "Discussions" / "Latest updates" tabs with their sort menu (`DiscussionsViewOptionsLive`), since that hides its feed filters; keying on `dedup_by_thread` instead would hide the tabs once "Latest updates" turns it off
         recent_discussions: %{
           name: l("Recent discussions"),
           built_in: true,
@@ -946,7 +946,7 @@ defmodule Bonfire.Social.RuntimeConfig do
             sort_order: :desc,
             # NOTE: should not include :boost to work in groups (maybe can later dynamic exlude it from the exclusions when constructing a group query)
             exclude_activity_types: [:like, :vote, :follow],
-            # one entry per thread (the "Threads" layout; false is "All posts"): ordered by latest activity while `sort_by` is unset, else each thread by its own entry (`Bonfire.Social.FeedLoader`), and while true the page's `custom_actions` (eg. a group's discussion footer) replace each entry's normal actions (`feed_live.sface`)
+            # one entry per thread (the "Discussions" tab; false is "Latest updates"): ordered by latest activity while `sort_by` is unset, else each thread by its own entry (`Bonfire.Social.FeedLoader`), and while true the page's `custom_actions` (eg. a group's discussion footer) replace each entry's normal actions (`feed_live.sface`)
             dedup_by_thread: true
           },
           icon: "ph:chats-circle-duotone",

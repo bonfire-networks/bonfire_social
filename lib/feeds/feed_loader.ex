@@ -1279,7 +1279,7 @@ defmodule Bonfire.Social.FeedLoader do
     |> maybe_order_threads_by_latest_activity(filters)
   end
 
-  # A thread-grouped feed with no `sort_by` lists threads by latest activity. A chosen `sort_by` (eg. `:date_created` for "Newest first", or `:reply_count`) orders each thread by its own entry (the root, or its earliest entry in this feed), so a reply doesn't move the thread up: that order comes from `FeedActivities.query_order/5`, which every caller applies next.
+  # A thread-grouped feed with no `sort_by` lists threads by latest activity. A chosen `sort_by` (eg. `:date_created` for "Recent threads", or `:reply_count`) orders each thread by its own entry (the root, or its earliest entry in this feed), so a reply doesn't move the thread up: that order comes from `FeedActivities.query_order/5`, which every caller applies next.
   defp maybe_order_threads_by_latest_activity(query, filters) do
     if order_threads_by_latest_activity?(filters),
       do: Threads.order_by_latest_activity(query),
