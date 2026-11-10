@@ -300,6 +300,7 @@ defmodule Bonfire.Social.PostContents do
     # debug(creator)
 
     parse_remote_links? = opts[:parse_remote_links]
+    link_base = opts[:link_base]
 
     mentions = e(attrs, :mentions, %{})
     hashtags = e(attrs, :hashtags, %{})
@@ -337,17 +338,17 @@ defmodule Bonfire.Social.PostContents do
             urls: urls1
           }} <-
            get_attr(attrs, :html_body)
-           |> process_remote_input(parse_remote_links?, replacement_urls),
+           |> process_remote_input(parse_remote_links?, replacement_urls, link_base),
          {:ok, %{html: name, urls: urls2}} <-
            get_attr(attrs, :name)
-           |> process_remote_input(parse_remote_links?, replacement_urls),
+           |> process_remote_input(parse_remote_links?, replacement_urls, link_base),
          {:ok,
           %{
             html: summary,
             urls: urls3
           }} <-
            get_attr(attrs, :summary)
-           |> process_remote_input(parse_remote_links?, replacement_urls) do
+           |> process_remote_input(parse_remote_links?, replacement_urls, link_base) do
       urls =
         (urls1 ++ urls2 ++ urls3)
         |> debug("extracted urls")
@@ -370,7 +371,7 @@ defmodule Bonfire.Social.PostContents do
     end
   end
 
-  defp process_remote_input(input, true = _parse_remote_links?, replacement_urls) do
+  defp process_remote_input(input, true = _parse_remote_links?, replacement_urls, link_base) do
     # extract urls from the ORIGINAL html, while anchors still carry their class/rel, so the markup filter in `extract_urls_from_html` can drop mention/hashtag anchors, as the sanitiser in `do_process_remote_input` strips those attrs. `exclude_urls` (the reject upstream) still covers the AP-id/key forms, and `replace_links` still rewrites the anchors in the stored html.
     urls =
       case Text.extract_urls_from_html(input) do
@@ -378,26 +379,30 @@ defmodule Bonfire.Social.PostContents do
         _ -> []
       end
 
-    {:ok, %{html: do_process_remote_input(input, replacement_urls), urls: urls}}
+    {:ok, %{html: do_process_remote_input(input, replacement_urls, link_base), urls: urls}}
   end
 
-  defp process_remote_input(input, _false, replacement_urls) do
+  defp process_remote_input(input, _false, replacement_urls, link_base) do
     {:ok,
      %{
        html:
          input
-         |> do_process_remote_input(replacement_urls),
+         |> do_process_remote_input(replacement_urls, link_base),
        urls: []
      }}
   end
 
-  defp do_process_remote_input(input, replacement_urls) do
+  defp do_process_remote_input(input, replacement_urls, link_base) do
     input
     |> normalise_input(false, :html)
-    |> Text.replace_links(replacement_urls, fn map, href ->
-      # workaround for Pixelfed appending ?src=hash to hashtag URLs in content
-      Map.get(map, String.replace(href, "?src=hash", ""))
-    end)
+    |> Text.replace_links(
+      replacement_urls,
+      fn map, href ->
+        # workaround for Pixelfed appending ?src=hash to hashtag URLs in content
+        Map.get(map, String.replace(href, "?src=hash", ""))
+      end,
+      base: link_base
+    )
     |> Text.mark_trailing_hashtags()
     |> debug("replaced links #{inspect(replacement_urls)}")
 
@@ -759,10 +764,12 @@ defmodule Bonfire.Social.PostContents do
   def ap_prepare_object_note(subject, verb, post, actor, mentions, context, reply_to) do
     content_format = editor_output_content_type(subject)
     stored_body = e(post, :post_content, :html_body, nil)
+    # relative links resolve against the post's page, the same target they have on our own pages
+    link_base = URIs.url_path(post)
 
     html_body =
       stored_body
-      |> Text.prepare_links_for_remote_render(content_format)
+      |> Text.prepare_links_for_remote_render(content_format, link_base)
 
     hashtags =
       Bonfire.Social.Tags.list_tags_hashtags(post)
@@ -805,7 +812,9 @@ defmodule Bonfire.Social.PostContents do
               stored_body
               # no special handling for posts stored with their trailing hashtags in a `<span class="invisible">`: their `source` keeps it as stored
               # |> unwrap_invisible_span()
-              |> Text.prepare_links_for_remote_render(content_format, nil, hashtag_html: false),
+              |> Text.prepare_links_for_remote_render(content_format, link_base,
+                hashtag_html: false
+              ),
             "mediaType" => "text/#{content_format}"
           }
         end,
@@ -960,7 +969,11 @@ defmodule Bonfire.Social.PostContents do
       opts: [
         emoji: e(post_data, "emoji", nil),
         do_not_strip_html: e(post_data, "source", "mediaType", nil) == "text/x.misskeymarkdown",
-        parse_remote_links: regular_links == []
+        parse_remote_links: regular_links == [],
+        # relative links in the content point to the remote instance, so resolve them against the object's web URL, or else its id
+        link_base:
+          Bonfire.Federate.ActivityPub.AdapterUtils.ap_object_web_url(post_data) ||
+            post_data["id"]
       ]
     }
     |> debug("remote post attrs")
