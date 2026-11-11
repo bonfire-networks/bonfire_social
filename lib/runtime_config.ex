@@ -65,11 +65,11 @@ defmodule Bonfire.Social.RuntimeConfig do
           activity_types: [:reply],
           icon: "ph:chat-circle-duotone",
           icon_class: "text-info",
-          # `self` when it answered a post of yours; otherwise it reached you through a bell on its thread
+          # a pair of wordings by what the reader is to the activity: `for_object` when it was done to them (here, it answered a post of yours), `for_subject` when they did it, and `other` otherwise (here, it reached you through a bell on its thread). A wording with no key of its own for the reader is `other`
           phrases: %{
-            reply: %{self: l("replied to you"), other: l("replied to a discussion")},
-            respond: %{self: l("responded to you"), other: l("responded to something")},
-            annotate: %{self: l("annotated your post"), other: l("annotated")}
+            reply: %{for_object: l("replied to you"), other: l("replied to a discussion")},
+            respond: %{for_object: l("responded to you"), other: l("responded to something")},
+            annotate: %{for_object: l("annotated your post"), other: l("annotated")}
           },
           # Mastodon has no reply type, and would not notify a reply that doesn't name you at all. It's a post you're told about, so a client gets it as one, whether it answers your post or reached you through a bell. A reply that names you is a mention, above
           masto: :status,
@@ -88,10 +88,10 @@ defmodule Bonfire.Social.RuntimeConfig do
             ),
           # an ask of a kind nobody is told about separately stays `:request`, and belongs here too
           experiences: [:request, :follow_request, :join_request, :quote_request],
-          # a pair where the wording turns on who was asked: `self` when that is the reader. A bare `:request` has none, and is named after its edge instead ("Request to boost")
+          # a pair where the wording turns on who was asked: `for_object` when that is the reader (`for_subject` is when they asked, `other` anyone else). A bare `:request` has none, and is named after its edge instead ("Request to boost")
           phrases: %{
             follow_request: %{
-              self: l("requested to follow you"),
+              for_object: l("requested to follow you"),
               other: l("requested to follow")
             },
             # always asked of a group, which the row's preview names
@@ -114,10 +114,10 @@ defmodule Bonfire.Social.RuntimeConfig do
         #   name_pluralized: l("Follow requests"),
         #   description: l("People asking to follow you"),
         #   activity_types: [:request],
-        #   # a pair where the wording turns on who was asked: `self` when that is the reader
+        #   # a pair where the wording turns on who was asked: `for_object` when that is the reader
         #   phrases: %{
         #     follow_request: %{
-        #       self: l("requested to follow you"),
+        #       for_object: l("requested to follow you"),
         #       other: l("requested to follow")
         #     }
         #   },
@@ -173,7 +173,14 @@ defmodule Bonfire.Social.RuntimeConfig do
           # overrides the verb's own icon, which the other categories inherit (the `follow` verb declares none)
           icon: "ph:user-plus",
           icon_class: "text-info",
-          phrases: %{follow: %{self: l("followed you"), other: l("followed")}},
+          # `for_subject` is the reader's own request, granted
+          phrases: %{
+            follow: %{
+              for_object: l("followed you"),
+              for_subject: l("You are now following"),
+              other: l("followed")
+            }
+          },
           masto: :follow,
           path_aliases: ["follows", "followers"]
         },
@@ -192,7 +199,15 @@ defmodule Bonfire.Social.RuntimeConfig do
         #   path_aliases: ["quotes", "quote_requests"]
         # },
         # TODO: an accepted quote ("X quoted your post") needs a chip once a filter can read `accepted_at`; the switch already works, as it excludes the verb
-        quote: %{name_pluralized: l("Quotes"), chip: :unimplemented, path_aliases: ["quotes"]},
+        quote: %{
+          name_pluralized: l("Quotes"),
+          chip: :unimplemented,
+          # `:quote` is the ask to quote once approved, read by the one who made it. Its row is the quote post's own card, so it has no phrase
+          # experiences: [:quote, :quote_approved],
+          # phrases: %{quote_approved: l("Your quote of the post is approved")},
+          experiences: [:quote],
+          path_aliases: ["quotes"]
+        },
         # direct messages, so they have switches of their own rather than falling to Other's, where quieting votes and pins would also silence them. A row but no chip, and no "Show in Latest" switch (`centre: false`), since messages arrive in the inbox and never in the notifications feed
         message: %{
           name_pluralized: l("Messages"),
@@ -223,8 +238,12 @@ defmodule Bonfire.Social.RuntimeConfig do
               "Includes new posts from people, groups, and discussions you asked to be notified about, and anything else the other categories don't cover"
             ),
           # a reply with nothing the reader wrote above it, which reached them because they follow that discussion (`experienced_as/3` knows it where the fan-out says so): the same line the Replies chip's `reply_to_creators` draws
-          experiences: [:thread_reply],
-          phrases: %{thread_reply: l("replied in a discussion you follow")},
+          # and a join, which is "You are now a member of" to the one who joined (their request, granted) and "joined" to anyone else
+          experiences: [:thread_reply, :join],
+          phrases: %{
+            thread_reply: l("replied in a discussion you follow"),
+            join: %{for_subject: l("You are now a member of"), other: l("joined")}
+          },
           catch_all: true,
           # what a Mastodon client's list selects this by: a new post from someone the reader asked to hear from is Mastodon's `status`. Without it the Mastodon list never queries this category, so a bell post never reaches a client
           masto: :status,

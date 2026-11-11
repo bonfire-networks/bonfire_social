@@ -209,4 +209,35 @@ defmodule Bonfire.Social.FeedsPubTest do
     # Verify the original author is preserved in the boosted object
     assert received_activity.object.created.creator.id == original_author.id
   end
+
+  test "PubSub pushes a normal post but not one scheduled for later" do
+    user = fake_user!("pubsub_scheduled")
+    feed_id = Feeds.named_feed_id(:local)
+    :ok = PubSub.subscribe(feed_id, current_user: user)
+
+    {:ok, %{id: now_id}} =
+      Posts.publish(
+        current_user: user,
+        post_attrs: %{post_content: %{html_body: "posted now"}},
+        boundary: "public"
+      )
+
+    assert_receive {
+      {Bonfire.Social.Feeds, :new_activity},
+      [feed_ids: _, activity: %{id: ^now_id}]
+    }
+
+    scheduled_at = DateTime.utc_now() |> DateTime.add(7, :day) |> DateTime.to_iso8601()
+
+    {:ok, %{id: later_id}} =
+      Posts.publish(
+        current_user: user,
+        post_attrs: %{post_content: %{html_body: "posted later"}, scheduled_at: scheduled_at},
+        boundary: "public"
+      )
+
+    assert :gt = Bonfire.Common.DatesTimes.compare(later_id, Bonfire.Common.DatesTimes.now())
+
+    refute_receive {{Bonfire.Social.Feeds, :new_activity}, _}, 500
+  end
 end

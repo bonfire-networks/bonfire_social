@@ -385,14 +385,27 @@ defmodule Bonfire.Social.Notifications do
 
   Declared by the category that covers the experience, so one sentence serves the notification row, a push body and a digest line. `nil` for a kind with no phrase, and the caller shows the plain word instead ("alice wrote").
 
-  `object_id` and `current_user_id` decide between a pair like `%{self: "followed you", other: "followed"}`, which is the only thing the wording turns on beyond the kind itself. A caller that has already decided whether it is about the reader passes that instead, as `phrase_for(experience, true | false)`.
+  `object_id`, `current_user_id` and `subject_id` decide between the wordings of a kind like `%{for_object: "followed you", for_subject: "You are now following", other: "followed"}`, which is the only thing the wording turns on beyond the kind itself. A caller that has already decided what the reader is to it passes that instead, as `phrase_for(experience, :subject | :object | :other)`.
 
   Translated here rather than where it was declared: `config/0` runs at boot under the default locale, so what it holds is the msgid.
-  """
-  def phrase_for(experience, object_id \\ nil, current_user_id \\ nil)
 
-  # whether it is about the reader, already decided by a caller that has no single reader to compare with (a notification assembled once for everyone it is about)
-  def phrase_for(experience, about_reader?, nil) when is_boolean(about_reader?) do
+  ## Examples
+
+  The wording turns on what the reader is to the activity, as a role: the one it was done to (`:object`), the one who did it (`:subject`), or neither (`:other`):
+
+      iex> phrase_for(:follow, :object)
+      "followed you"
+
+      iex> phrase_for(:follow, :subject)
+      "You are now following"
+
+      iex> phrase_for(:follow, :other)
+      "followed"
+  """
+  def phrase_for(experience, object_id \\ nil, current_user_id \\ nil, subject_id \\ nil)
+
+  # the role already decided, by a caller that has no single reader to compare with (a notification assembled once for everyone it is about)
+  def phrase_for(experience, role, nil, nil) when role in [:subject, :object, :other] do
     case category_for(experience) do
       nil ->
         nil
@@ -401,11 +414,9 @@ defmodule Bonfire.Social.Notifications do
         e(category(key), :phrases, %{})
         |> Map.get(experience)
         |> case do
-          %{self: self_phrase, other: other_phrase} ->
-            if about_reader?, do: self_phrase, else: other_phrase
-
-          phrase ->
-            phrase
+          # a role with no wording of its own is worded as `other`
+          %{} = by_role -> Map.get(by_role, phrase_key(role)) || Map.get(by_role, :other)
+          phrase -> phrase
         end
         |> case do
           phrase when is_binary(phrase) -> localise_dynamic(phrase, __MODULE__)
@@ -414,8 +425,23 @@ defmodule Bonfire.Social.Notifications do
     end
   end
 
-  def phrase_for(experience, object_id, current_user_id),
-    do: phrase_for(experience, not is_nil(object_id) and object_id == current_user_id, nil)
+  def phrase_for(experience, object_id, current_user_id, subject_id) do
+    reader? = not is_nil(current_user_id)
+
+    role =
+      cond do
+        reader? and subject_id == current_user_id -> :subject
+        reader? and object_id == current_user_id -> :object
+        true -> :other
+      end
+
+    phrase_for(experience, role, nil, nil)
+  end
+
+  # the keys of a phrase pair: `for_object` when the reader is who it was done to, `for_subject` when the reader is who did it, and `other` for anyone else
+  defp phrase_key(:subject), do: :for_subject
+  defp phrase_key(:object), do: :for_object
+  defp phrase_key(:other), do: :other
 
   @doc """
   Whose notification this is about, which `phrase_for/3` compares with the reader to choose between "replied to you" and "replied to a discussion". For a reply, the author of the post it answers, and otherwise its object.

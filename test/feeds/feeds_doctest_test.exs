@@ -11,5 +11,5 @@ defmodule Bonfire.Social.Feeds.DocTest do
   doctest Bonfire.Social.FeedFilters.Atom
   doctest Bonfire.Social.FeedFilters.StringList
   doctest Bonfire.Social.FeedFilters.AtomOrStringList
-  doctest Bonfire.Social.Notifications, only: [about_id: 2], import: true
+  doctest Bonfire.Social.Notifications, only: [about_id: 2, phrase_for: 4], import: true
 end

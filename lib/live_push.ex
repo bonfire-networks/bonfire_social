@@ -34,6 +34,36 @@ defmodule Bonfire.Social.LivePush do
   def emit_live(activity_or_object, feed_ids, opts \\ [])
 
   def emit_live(%Activity{} = activity, feed_ids, opts) do
+    if scheduled_for_later?(activity, opts[:object]) do
+      # an object dated in the future is hidden from reads until then, so a feed that tried to load what was pushed would find nothing
+      debug("not broadcasting an activity scheduled for later")
+      activity
+    else
+      do_emit_live(activity, feed_ids, opts)
+    end
+  end
+
+  @doc "Whether the object (or the activity's own object) has an id dated in the future, so reads hide it until then."
+  def scheduled_for_later?(activity, object \\ nil) do
+    object_id =
+      e(object, :id, nil) || e(activity, :object, :id, nil) || e(activity, :object_id, nil) ||
+        uid(activity)
+
+    is_binary(object_id) and
+      Bonfire.Common.DatesTimes.compare(object_id, Bonfire.Common.DatesTimes.now()) == :gt
+  end
+
+  @doc "The date a scheduled object's id carries, or nil if it is not dated in the future."
+  def scheduled_date(activity, object \\ nil) do
+    if scheduled_for_later?(activity, object) do
+      Bonfire.Common.DatesTimes.date_from_pointer(
+        e(object, :id, nil) || e(activity, :object, :id, nil) || e(activity, :object_id, nil) ||
+          uid(activity)
+      )
+    end
+  end
+
+  defp do_emit_live(%Activity{} = activity, feed_ids, opts) do
     notified = notified_feed_ids(feed_ids, opts)
 
     activity =

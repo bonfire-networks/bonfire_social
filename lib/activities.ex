@@ -2835,6 +2835,14 @@ defmodule Bonfire.Social.Activities do
       iex> experienced_as(%{verb: %{verb: "Create"}, tags: [%{id: "01ARZ3NDEKTSV4RRFFQ69G5FAV"}]}, "01BX5ZZKBKACTAV9WEVGEMMVRZ")
       :create
 
+  A follow or a join is the same kind to everyone, including the one who made it (their request, granted); the wording tells them apart (`Bonfire.Social.Notifications.phrase_for/4`):
+
+      iex> experienced_as(%{verb: %{verb: "Follow"}, subject_id: "01ARZ3NDEKTSV4RRFFQ69G5FAV"}, "01ARZ3NDEKTSV4RRFFQ69G5FAV")
+      :follow
+
+      iex> experienced_as(%{verb: %{verb: "Join"}, subject_id: "01ARZ3NDEKTSV4RRFFQ69G5FAV"}, "01BX5ZZKBKACTAV9WEVGEMMVRZ")
+      :join
+
   An emoji on something is a reaction, whatever verb carried it:
 
       iex> experienced_as(%{verb: %{verb: "Like"}, emoji: %{media_type: "emoji"}})
@@ -2846,7 +2854,7 @@ defmodule Bonfire.Social.Activities do
     else
       case verb_slug(activity) do
         :request ->
-          requested_as(activity)
+          requested_as(activity, recipient)
 
         # a reply that names you is a mention, which is how Mastodon notifies anyone and so how every reply from there arrives; a reply of its own is one that names nobody
         :reply ->
@@ -2858,6 +2866,7 @@ defmodule Bonfire.Social.Activities do
         verb when verb in [:create, nil] ->
           created_as(activity, recipient, opts)
 
+        # a follow or join the reader made themself (their request, granted) is the same kind as anyone's: the wording tells them apart by their role (`Notifications.phrase_for/4`)
         verb ->
           verb
       end
@@ -2897,14 +2906,29 @@ defmodule Bonfire.Social.Activities do
   end
 
   # what was asked for lives on the edge, since asking is one verb for every kind of ask. The kinds somebody is told about separately get a key, and a category carries that same key; any other ask stays `:request`, is named after its edge when displayed, and belongs to whatever category catches what nothing else names
-  defp requested_as(activity) do
+  # whether the reader is who asked, and so is being answered. The asking post's author comes with the ask's edge wherever asks are loaded (`:with_request_edge`), so nothing more is loaded for it. Where it isn't, the reader not being the author of what is quoted (the one asked) says the same if the object's `created` is loaded, and otherwise it reads as asked
+  defp answer_to_recipient?(_activity, nil), do: false
+
+  defp answer_to_recipient?(activity, recipient) do
+    case e(activity, :edge, :subject, :created, :creator_id, nil) do
+      nil ->
+        creator_id = e(activity, :object, :created, :creator_id, nil)
+        not is_nil(creator_id) and creator_id != uid(recipient)
+
+      asker_id ->
+        asker_id == uid(recipient)
+    end
+  end
+
+  defp requested_as(activity, recipient) do
     quote_table_id = Bonfire.Social.Quotes.quote_verb_id()
     join_verb_id = Bonfire.Boundaries.Verbs.get_id(:join)
     # follow_table_id = Bonfire.Common.Types.table_id(Bonfire.Data.Social.Follow)
 
     case e(activity, :edge, :table_id, nil) do
+      # the ask reaches only the author of what is quoted until it is approved, after which it reaches the one who asked too: read by anyone else, it is the answer to their ask
       ^quote_table_id ->
-        :quote_request
+        if answer_to_recipient?(activity, recipient), do: :quote, else: :quote_request
 
       # an ask to join a group, whose edge carries the `:join` verb. Read from the edge rather than the object being a group, since a group can also be asked to be followed. Only where the edge is loaded (`:with_request_edge`, in the notifications views that show asks)
       table_id when not is_nil(table_id) and table_id == join_verb_id ->
@@ -3213,11 +3237,18 @@ defmodule Bonfire.Social.Activities do
       subject_name: e(subject, :profile, :name, nil) || e(subject, :character, :username, ""),
       verb: described_verb(activity),
       body: if(about_subject?, do: described_bio(subject), else: described_body(object)),
+      # url:
+      #   if(about_subject?,
+      #     do: described_url(subject, nil),
+      #     else: described_url(object, e(activity, :replied, nil))
+      #   ),
       url:
-        if(about_subject?,
-          do: described_url(subject, nil),
-          else: described_url(object, e(activity, :replied, nil))
-        ),
+        cond do
+          # an ask (to follow, join or quote) opens where it can be accepted or declined, rather than at who asked, the group or the post
+          verb_slug(activity) == :request -> "/notifications/requests"
+          about_subject? -> described_url(subject, nil)
+          true -> described_url(object, e(activity, :replied, nil))
+        end,
       icon: described_icon(subject)
     }
   end

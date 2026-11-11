@@ -45,16 +45,27 @@ defmodule Bonfire.Social.Moderations do
 
     # TODO: for an undo (`unlock`, `unhide`, …), `opts[:reverses]` sets `reply_to_id` to the record it reverses when there is one, with no `thread_id` so records never join a thread
     # TODO: `opts` to widen who reads it (including the person acted on) and to notify the person acted on, as the confirmation's tick boxes ask
+    # `opts[:notify]`: people whose notifications this one row is also put in, and who are told of it (the same row as in the log, never a second)
+    %{all: notified_feeds, notifications: notifying, notify_users: notify_users} =
+      FeedActivities.get_publish_feed_ids_classified(notifications: List.wrap(opts[:notify]))
+
     Moderation.changeset(%{})
     |> Activities.put_assoc(verb, subject, object)
     |> maybe_put_reason(opts[:reason])
-    # not public: addressed only to who moderates where it happened, so `mentions` (no preset) plus their circle
+    # not public: addressed only to who moderates where it happened, so `mentions` (no preset) plus their circle, and anyone it is also meant for
     |> Bonfire.Boundaries.Acls.cast(subject,
       boundary: "mentions",
-      to_circles: readers(scope)
+      to_circles: readers(scope) ++ Enum.map(List.wrap(opts[:notify]), &id/1)
     )
     # the group's log is its notifications feed; an explicit list, so nothing else (eg. the moderator's own outbox) is added
-    |> FeedActivities.cast(subject, feed_ids: log_feeds(scope))
+    |> FeedActivities.cast(
+      subject,
+      [feed_ids: log_feeds(scope) ++ notified_feeds] ++
+        if(notified_feeds == [],
+          do: [],
+          else: [notifications_class: notifying, notify_users: notify_users]
+        )
+    )
     |> repo().insert()
   end
 

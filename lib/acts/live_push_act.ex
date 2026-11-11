@@ -47,9 +47,19 @@ defmodule Bonfire.Social.Acts.LivePush do
 
           # durable delivery, run here rather than from the write path so that a failure reaches whoever caused it. Only when the write path stood down (`Bonfire.Social.Acts.Activity` with `enqueue_notify: false`), or an activity would be notified twice. This Act is skipped when the epic has errors, so a failed insert never gets this far
           # the activity, not what this Act is `on` (a post): the fan-out checks who may still see its `object`, and a post has none, so handing it the post notified nobody. `emit_live/3` hands back the object with its prepared activity, whose `object` is the post
+          # notified =
+          #   if epic.assigns[:notify_inline],
+          #     do: notify_recipients(e(pushed, :activity, nil) || activity, notify)
           notified =
-            if epic.assigns[:notify_inline],
-              do: notify_recipients(e(pushed, :activity, nil) || activity, notify)
+            if epic.assigns[:notify_inline] do
+              notify_activity = e(pushed, :activity, nil) || activity
+
+              # a post dated in the future is notified at its date, like federation, not now
+              case Bonfire.Social.LivePush.scheduled_date(notify_activity) do
+                %DateTime{} = at -> enqueue_for(notify_activity, notify, at)
+                _ -> notify_recipients(notify_activity, notify)
+              end
+            end
 
           pushed
           # |> debug("pushed")
@@ -61,6 +71,23 @@ defmodule Bonfire.Social.Acts.LivePush do
       maybe_debug(act, length(epic.errors), "Skipping due to errors!")
       epic
     end
+  end
+
+  defp enqueue_for(activity, notify, at) do
+    maybe_apply(
+      Bonfire.Notify.Worker,
+      :enqueue_fan_out,
+      [
+        uid(activity),
+        %{
+          feeds: e(notify, :notify_feeds, []),
+          recipients: e(notify, :notify_users, []),
+          wrote_above: e(notify, :wrote_above, [])
+        },
+        [scheduled_at: at]
+      ],
+      fallback_return: :skip
+    )
   end
 
   defp notify_recipients(activity, notify) do

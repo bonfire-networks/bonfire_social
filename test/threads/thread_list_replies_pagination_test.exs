@@ -196,6 +196,137 @@ defmodule Bonfire.Social.Threads.ListRepliesPaginationTest do
     end
   end
 
+  describe "list_replies/2 — include_descendants_of" do
+    test "returns the focused reply's descendants down to the given depth, and nothing from a sibling branch",
+         %{alice: alice, op: op} do
+      branch_a = Enum.scan(1..6, op, fn n, parent -> publish_reply(alice, parent.id, "a#{n}") end)
+      branch_b = Enum.scan(1..6, op, fn n, parent -> publish_reply(alice, parent.id, "b#{n}") end)
+      a3 = Enum.at(branch_a, 2)
+
+      result =
+        Threads.list_replies(op.id,
+          current_user: alice,
+          max_depth: 2,
+          include_path_ids: Enum.map(Enum.take(branch_a, 3), & &1.id),
+          include_descendants_of: {a3.id, 5}
+        )
+
+      ids = Enum.map(result.edges, & &1.id) |> Enum.sort()
+
+      expected =
+        (Enum.take(branch_a, 5) ++ Enum.take(branch_b, 2)) |> Enum.map(& &1.id) |> Enum.sort()
+
+      # a1..a5 (a1-a2 by depth, a3 as the focused reply, a4-a5 as its descendants), b1..b2 by depth; not a6 (one level too deep), not b3 and below (sibling branch)
+      assert ids == expected
+    end
+
+    test "works on the two-step path too", %{alice: alice, op: op} do
+      Process.put([:bonfire, :thread_pagination_hard_limit], 2)
+      Process.put([:bonfire, :thread_default_root_reply_limit], 5)
+
+      branch_a = Enum.scan(1..6, op, fn n, parent -> publish_reply(alice, parent.id, "a#{n}") end)
+      branch_b = Enum.scan(1..6, op, fn n, parent -> publish_reply(alice, parent.id, "b#{n}") end)
+      a3 = Enum.at(branch_a, 2)
+
+      result =
+        Threads.list_replies(op.id,
+          current_user: alice,
+          max_depth: 2,
+          include_path_ids: Enum.map(Enum.take(branch_a, 3), & &1.id),
+          include_descendants_of: {a3.id, 5}
+        )
+
+      ids = Enum.map(result.edges, & &1.id) |> Enum.sort()
+
+      expected =
+        (Enum.take(branch_a, 5) ++ Enum.take(branch_b, 2)) |> Enum.map(& &1.id) |> Enum.sort()
+
+      assert ids == expected
+    end
+  end
+
+  describe "list_replies/2 — include_path_ids only widens the depth limit" do
+    defp publish_hidden_reply(user, reply_to_id) do
+      {:ok, post} =
+        Posts.publish(
+          current_user: user,
+          post_attrs: %{
+            post_content: %{html_body: "<p>hidden reply</p>"},
+            reply_to_id: reply_to_id
+          },
+          boundary: "mentions"
+        )
+
+      post
+    end
+
+    setup %{alice: alice, op: op} do
+      bob = Fake.fake_user!("bob")
+      chain = Enum.scan(1..5, op, fn n, parent -> publish_reply(alice, parent.id, "c#{n}") end)
+
+      {:ok, other_op} =
+        Posts.publish(
+          current_user: alice,
+          post_attrs: %{post_content: %{html_body: "<p>other thread</p>"}},
+          boundary: "public"
+        )
+
+      other_chain =
+        Enum.scan(1..5, other_op, fn n, parent -> publish_reply(alice, parent.id, "o#{n}") end)
+
+      hidden = publish_hidden_reply(alice, List.last(chain).id)
+
+      {:ok, bob: bob, chain: chain, other_chain: other_chain, hidden: hidden}
+    end
+
+    defp reply_ids(op, opts) do
+      Threads.list_replies(op.id, opts ++ [max_depth: 2]) |> Map.get(:edges) |> Enum.map(& &1.id)
+    end
+
+    test "a deep reply of this thread named in include_path_ids is returned", %{
+      op: op,
+      bob: bob,
+      chain: chain
+    } do
+      deep = List.last(chain)
+
+      refute deep.id in reply_ids(op, current_user: bob)
+      assert deep.id in reply_ids(op, current_user: bob, include_path_ids: [deep.id])
+    end
+
+    test "a reply of another thread named in include_path_ids is not returned", %{
+      op: op,
+      bob: bob,
+      other_chain: other_chain
+    } do
+      ids = Enum.map(other_chain, & &1.id)
+
+      returned = reply_ids(op, current_user: bob, include_path_ids: ids)
+      assert Enum.filter(ids, &(&1 in returned)) == []
+    end
+
+    test "a reply the viewer cannot see, named in include_path_ids, is not returned", %{
+      op: op,
+      bob: bob,
+      hidden: hidden
+    } do
+      refute hidden.id in reply_ids(op, current_user: bob, include_path_ids: [hidden.id])
+    end
+
+    test "a reply a guest cannot see, named in include_path_ids, is not returned", %{
+      op: op,
+      hidden: hidden,
+      chain: chain
+    } do
+      deep = List.last(chain)
+      returned = reply_ids(op, include_path_ids: [hidden.id, deep.id])
+
+      # the positive first: the visible deep reply comes back
+      assert deep.id in returned
+      refute hidden.id in returned
+    end
+  end
+
   describe "list_replies/2 — known_small skip" do
     test "skips two-step when total_replies <= hard_limit", %{alice: alice, op: op} do
       Process.put([:bonfire, :thread_pagination_hard_limit], 10)

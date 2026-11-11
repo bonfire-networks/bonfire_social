@@ -252,10 +252,15 @@ defmodule Bonfire.Social.Quotes do
               e(quote_post, :created, :creator_id, nil))
            |> repo().maybe_preload(character: [:peered])
            |> info("determined_quote_post_author"),
+         # asked before it is approved: only someone here has notifications to tell, and only an author who had to ask is told it was granted (one boundary query)
+         author_to_tell? =
+           Bonfire.Social.is_local?(quote_post_author) and
+             not Bonfire.Boundaries.can?(quote_post_author, [:read, quote_verb()], quoted_object),
          {:ok, quote_post} <-
            update_quote_add(quote_post_author, quote_post, quoted_object, opts)
            |> repo().maybe_preload([:post_content, :activity])
            |> info("updated_quote"),
+         _ <- if(author_to_tell?, do: tell_author_quote_approved(request, quote_post_author)),
          accept_result <-
            if(opts[:incoming] != true,
              do:
@@ -313,6 +318,18 @@ defmodule Bonfire.Social.Quotes do
         # We're the quoted author — the quote author's server handles the Update
         {:ok, quote_post}
       end
+    end
+  end
+
+  # the ask the author made, which only the author of what they quoted was told of, now reaches the author's own notifications too
+  defp tell_author_quote_approved(request, quote_post_author) do
+    with %{id: _} = activity <-
+           request |> repo().maybe_preload(:activity) |> e(:activity, nil) do
+      Bonfire.Social.FeedActivities.put_in_feeds_and_notify(
+        Bonfire.Social.FeedActivities.get_publish_feed_ids(notifications: [quote_post_author]),
+        activity,
+        [quote_post_author]
+      )
     end
   end
 

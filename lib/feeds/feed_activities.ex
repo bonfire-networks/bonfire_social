@@ -671,6 +671,24 @@ defmodule Bonfire.Social.FeedActivities do
     end
   end
 
+  @doc """
+  Puts an existing activity in these feeds, and tells `users` of it as for any other activity that reaches their notifications. For an activity that was published for someone else first, and later concerns another person too, such as an answer to their request. Sends nothing out, as `put_in_feeds/3`.
+  """
+  def put_in_feeds_and_notify(feeds, activity, users) do
+    put = put_in_feeds(feeds, activity)
+
+    enqueue_notify(
+      %{
+        feeds: get_publish_feed_ids(notifications: users),
+        users: List.wrap(users),
+        wrote_above: nil
+      },
+      uid(activity)
+    )
+
+    put
+  end
+
   # one statement rather than a write per feed: a fan-out to a busy thread or a group addresses many feeds at once, and the rows are a two-column mixin with no timestamps, so there is nothing per-row to compute. `on_conflict: :nothing` keeps the upsert semantics of publishing the same activity twice
   defp publish_to_feeds(feed_ids, activity_id) do
     repo().insert_all(

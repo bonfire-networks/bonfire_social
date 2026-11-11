@@ -11,6 +11,26 @@ defmodule Bonfire.Social.ThreadQuotesTest do
     {:ok, alice: alice, bob: bob, post: post}
   end
 
+  # the quote asks in this person's notifications, with what `experienced_as/3` reads loaded
+  defp quote_asks_in_notifications(user) do
+    request_verb_id = Bonfire.Boundaries.Verbs.get_id!(:request)
+
+    %{edges: edges} = Bonfire.Social.FeedLoader.feed(:notifications, current_user: user)
+
+    edges
+    |> Enum.map(& &1.activity)
+    |> Enum.filter(&(&1.verb_id == request_verb_id))
+    |> repo().maybe_preload([:edge, object: [:created]])
+  end
+
+  # A feed read at this level never gets `:with_request_edge`, which the notifications view adds from its filters, so every ask reads as a follow request there. Covered through the real pages in `bonfire_ui_social/test/views/notifications/quote_approved_notification_test.exs`. Kept here as a comment:
+  # test "an approved quote reads as approved in the quoter's Latest and Requests feeds", %{alice: alice, bob: bob, post: quoted} do
+  #   post = publish(bob, quotes: [quoted])
+  #   assert {:ok, _} = Quotes.accept_quote(post, quoted, current_user: alice)
+  #   feed = Bonfire.Social.FeedLoader.feed(:notifications, current_user: bob)
+  #   ... experienced_as(activity, id(bob)) == :quote
+  # end
+
   test "pending quotes are absent from counts and pages until approval", %{
     alice: alice,
     bob: bob,
@@ -23,7 +43,18 @@ defmodule Bonfire.Social.ThreadQuotesTest do
     assert Quotes.count([in_thread: quoted.id], opts) == 0
     assert Quotes.list_paginated([in_thread: quoted.id], opts).edges == []
 
+    # asking tells only the author of what is quoted: the one asking has nothing in their notifications
+    assert [_] = quote_asks_in_notifications(alice),
+           "control: the author of the quoted post is asked"
+
+    assert [] == quote_asks_in_notifications(bob)
+
     assert {:ok, _} = Quotes.accept_quote(post, quoted, current_user: alice)
+
+    # and the answer is yes, which tells the one who asked, from their side. The author of the quoted post reads the same ask as before
+    assert [activity] = quote_asks_in_notifications(bob)
+    assert Bonfire.Social.Activities.experienced_as(activity, id(bob)) == :quote
+    assert Bonfire.Social.Activities.experienced_as(activity, id(alice)) == :quote_request
 
     assert Quotes.count([in_thread: quoted.id], opts) == 1
     assert [quote] = Quotes.list_paginated([in_thread: quoted.id], opts).edges

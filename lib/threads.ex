@@ -1480,7 +1480,14 @@ defmodule Bonfire.Social.Threads do
         if missing_ids == [] do
           []
         else
-          from(replied in Replied, where: replied.id in ^missing_ids)
+          # only of this thread, as `include_path_ids` may come from a link naming any reply
+          root_path = [Bonfire.Common.Needles.id_binary(root_id)]
+
+          from(replied in Replied,
+            where:
+              replied.id in ^missing_ids and
+                (fragment("? @> ?", replied.path, ^root_path) or replied.thread_id == ^root_id)
+          )
           |> query_extras(opts)
           |> repo().many()
         end
@@ -1594,7 +1601,7 @@ defmodule Bonfire.Social.Threads do
       [replied],
       replied.thread_id == ^thread_id or replied.reply_to_id == ^thread_id
     )
-    |> maybe_max_depth(opts[:max_depth], opts[:include_path_ids])
+    |> maybe_max_depth(opts[:max_depth], opts[:include_path_ids], opts[:include_descendants_of])
     |> maybe_with_pins(thread_id, opts)
     |> where([replied], replied.id != ^thread_id)
 
@@ -1811,7 +1818,34 @@ defmodule Bonfire.Social.Threads do
     ~> Bonfire.Social.Seen.mark_seen(opts, ...)
   end
 
-  defp maybe_max_depth(query, max_depth, include_path_ids) when is_integer(max_depth) do
+  defp maybe_max_depth(query, max_depth, include_path_ids, include_descendants_of \\ nil)
+
+  defp maybe_max_depth(query, max_depth, include_path_ids, {reply_id, depth})
+       when is_integer(max_depth) and is_binary(reply_id) and is_integer(depth) do
+    # one `dynamic` ANDed with the rest, so these alternatives only widen the depth filter and never the thread or boundary filters (`where_depth` ends in a bare `or_where` that widens everything before it)
+    reply_path = [Bonfire.Common.Needles.id_binary(reply_id)]
+
+    within_depth = dynamic([replied], fragment("CARDINALITY(?) <= ?", replied.path, ^max_depth))
+
+    with_included =
+      case List.wrap(include_path_ids) do
+        [] -> within_depth
+        ids -> dynamic([replied], ^within_depth or replied.id in ^ids)
+      end
+
+    where(
+      query,
+      ^dynamic(
+        [replied],
+        ^with_included or
+          (fragment("? @> ?", replied.path, ^reply_path) and
+             fragment("CARDINALITY(?) <= ?", replied.path, ^depth))
+      )
+    )
+  end
+
+  defp maybe_max_depth(query, max_depth, include_path_ids, _include_descendants_of)
+       when is_integer(max_depth) do
     # uses EctoMaterializedPath
     Replied.where_depth(query,
       is_smaller_than_or_equal_to: max_depth,
@@ -1819,7 +1853,7 @@ defmodule Bonfire.Social.Threads do
     )
   end
 
-  defp maybe_max_depth(query, _max_depth, _include_path_ids), do: query
+  defp maybe_max_depth(query, _max_depth, _include_path_ids, _include_descendants_of), do: query
 
   def prepare_replies_tree(replies, opts \\ []) do
     Activities.prepare_subject_and_creator(replies, opts)

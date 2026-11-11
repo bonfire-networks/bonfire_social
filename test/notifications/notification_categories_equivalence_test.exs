@@ -156,6 +156,29 @@ defmodule Bonfire.Social.NotificationCategoriesEquivalenceTest do
     assert query_categories(in_followed_thread, me) == [:other]
   end
 
+  # what a request becomes once granted is told to the one who asked: the same Follow, `:follow` to both, worded by what each is to it
+  test "a granted follow request is Follows to the requester, both ways" do
+    account = fake_account!()
+    locked = Fake.fake_user!(account, %{}, request_before_follow: true)
+    requester = Fake.fake_user!(account)
+
+    {:ok, request} = Follows.follow(requester, locked)
+    {:ok, follow} = Follows.accept(request, current_user: locked)
+    thing = %{activity: follow.activity}
+
+    assert push_category(thing, requester) == :follow
+    assert query_categories(thing, requester) == [:follow]
+  end
+
+  # no query selects these two on its own yet: an approved quote is a request row, which the Requests chip shows, and a join belongs to whatever no other category selects (Other, which is what claiming it there says)
+  test "an accepted join and an approved quote each have a category that claims them" do
+    assert Notifications.category_for(:follow) == :follow
+    assert Notifications.category_for(:join) == :other
+
+    # TODO: `:quote_approved` is checked on the notification side only. On the page the Requests chip still selects the approved ask (the filter TODO above `quote` in `bonfire_social/lib/runtime_config.ex`, until a filter can read `accepted_at`), so the Requests switch, not Quotes, hides it
+    assert Notifications.category_for(:quote) == :quote
+  end
+
   # both kinds of ask are one `:request` verb, so the query side cannot tell them apart while the in-memory side reads the edge. Both land in the one Requests category until a filter can read what the edge asked for, and then this is where the two sides have to agree on separate ones
   test "a follow ask and a quote ask are each Requests alone, both ways" do
     account = fake_account!()
