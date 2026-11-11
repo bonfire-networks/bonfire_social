@@ -3788,15 +3788,9 @@ defmodule Bonfire.Social.Activities do
       > order_pagination_opts(:like_count, :desc)
       # returns pagination options for ordering by number of likes in descending order
   """
-  def order_pagination_opts(sort_by, sort_order, opts \\ []) do
-    # [cursor_fields: [{{:activity, :id}, sort_order}]]
+  def order_pagination_opts(sort_by, sort_order) do
     [
-      cursor_fields:
-        order_cursor_fields(
-          sort_by,
-          sort_order || :desc,
-          if(:per_media in List.wrap(opts[:preload]), do: :newest_activity_id, else: :id)
-        ),
+      cursor_fields: order_cursor_fields(sort_by, sort_order || :desc),
       cursor_fields_nullable: order_cursor_fields_nullable(sort_by),
       fetch_cursor_value_fun: &fetch_cursor_value_fun/2
     ]
@@ -3836,20 +3830,6 @@ defmodule Bonfire.Social.Activities do
     id
   end
 
-  def fetch_cursor_value_fun(%{newest_activity_id: id}, :newest_activity_id) do
-    debug(:newest_activity_id)
-    id
-  end
-
-  def fetch_cursor_value_fun(d, {:activity, :id}) do
-    case d do
-      %{activity: %{id: id}} -> id
-      %{activity_id: id} -> id
-      %{id: id} -> id
-      _ -> nil
-    end
-  end
-
   def fetch_cursor_value_fun(d, list) when is_tuple(list) do
     debug(list, "with list")
     apply(E, :ed, [d] ++ Tuple.to_list(list) ++ [nil])
@@ -3869,58 +3849,30 @@ defmodule Bonfire.Social.Activities do
       > order_cursor_fields(:like_count, :asc)
       # returns cursor fields for ordering by number of likes in ascending order
   """
-  def order_cursor_fields(sort_by, sort_order, fallback_sort_field \\ :id)
+  def order_cursor_fields(nil, sort_order), do: [{:id, sort_order}]
 
-  def order_cursor_fields(nil, sort_order, fallback_sort_field),
-    do: [{cursor_fallback_field(fallback_sort_field), sort_order}]
-
-  def order_cursor_fields(:like_count, sort_order, fallback_sort_field) do
-    [
-      {{:activity, :like_count, :object_count}, sort_order},
-      {cursor_fallback_field(fallback_sort_field), sort_order}
-    ]
+  def order_cursor_fields(:like_count, sort_order) do
+    [{{:activity, :like_count, :object_count}, sort_order}, {:id, sort_order}]
   end
 
-  def order_cursor_fields(:boost_count, sort_order, fallback_sort_field) do
-    [
-      {{:activity, :boost_count, :object_count}, sort_order},
-      {cursor_fallback_field(fallback_sort_field), sort_order}
-    ]
+  def order_cursor_fields(:boost_count, sort_order) do
+    [{{:activity, :boost_count, :object_count}, sort_order}, {:id, sort_order}]
   end
 
-  def order_cursor_fields(:reply_count, sort_order, fallback_sort_field) do
-    [
-      {{:activity, :replied, :total_replies_count}, sort_order},
-      {cursor_fallback_field(fallback_sort_field), sort_order}
-    ]
+  def order_cursor_fields(:reply_count, sort_order) do
+    [{{:activity, :replied, :total_replies_count}, sort_order}, {:id, sort_order}]
   end
 
-  def order_cursor_fields(:object_count, sort_order, fallback_sort_field),
-    do: [
-      {:object_count, sort_order},
-      {cursor_fallback_field(fallback_sort_field), sort_order}
-    ]
+  def order_cursor_fields(:object_count, sort_order),
+    do: [{:object_count, sort_order}, {:id, sort_order}]
 
-  def order_cursor_fields(:popularity_score, sort_order, fallback_sort_field),
-    do:
-      [
-        # {:popularity_score, sort_order},
-        # paginated by main ID instead of computer score
-        {:id, sort_order},
-        {cursor_fallback_field(fallback_sort_field), sort_order}
-      ]
-      |> Enum.uniq()
+  # paginated by main ID instead of computed score
+  def order_cursor_fields(:popularity_score, sort_order), do: [{:id, sort_order}]
 
-  def order_cursor_fields(fallback_sort_field, sort_order, fallback_sort_field),
-    do: [{cursor_fallback_field(fallback_sort_field), sort_order}]
+  def order_cursor_fields(:id, sort_order), do: [{:id, sort_order}]
 
-  def order_cursor_fields(sort_field, sort_order, fallback_sort_field) do
+  def order_cursor_fields(sort_field, sort_order) do
     debug(sort_field, "unhandled sort field in order_cursor_fields, defaulting to id")
-    [{cursor_fallback_field(fallback_sort_field), sort_order}]
+    [{:id, sort_order}]
   end
-
-  # use :id for pagination since newest_activity_id is a computed alias that can't be used in WHERE clauses
-  defp cursor_fallback_field(:newest_activity_id), do: :id
-  defp cursor_fallback_field(:id), do: :id
-  defp cursor_fallback_field(_), do: :id
 end

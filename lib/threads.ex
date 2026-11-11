@@ -1292,7 +1292,7 @@ defmodule Bonfire.Social.Threads do
   """
   def latest_activity_pagination_opts do
     [
-      cursor_fields: [{{:latest_reply, :last_activity_id}, :desc}, {{:activity, :id}, :desc}],
+      cursor_fields: [{{:latest_reply, :last_activity_id}, :desc}, {:id, :desc}],
       fetch_cursor_value_fun: &fetch_latest_activity_cursor_value/2
     ]
   end

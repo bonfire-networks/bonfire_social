@@ -644,10 +644,10 @@ defmodule Bonfire.Social.FeedLoader do
           {Threads.latest_activity_pagination_opts(), true}
 
         e(filters, :dedup_by_thread, nil) ->
-          {Activities.order_pagination_opts(filters[:sort_by], filters[:sort_order], opts), true}
+          {Activities.order_pagination_opts(filters[:sort_by], filters[:sort_order]), true}
 
         true ->
-          {Activities.order_pagination_opts(filters[:sort_by], filters[:sort_order], opts), false}
+          {Activities.order_pagination_opts(filters[:sort_by], filters[:sort_order]), false}
       end
 
     opts = Keyword.merge(opts, order_opts)

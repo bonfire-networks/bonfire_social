@@ -209,6 +209,7 @@ defmodule Bonfire.Social.Media do
     |> maybe_add_likes_metric(sort_by in [:like_count, :popularity_score])
     |> maybe_add_replies_metric(sort_by in [:reply_count, :popularity_score])
     |> maybe_add_trending_score(sort_by == :popularity_score, opts)
+    # TODO: this query is ordered by newest_activity_id but Paginator's cursor is the Media's own id (binding 0), so Load more can skip or repeat items; newest_activity_id needs to be a real column (eg. via a subquery) to be the cursor field.
     # sort
     |> Bonfire.Social.Activities.query_order(sort_by, sort_order, :newest_activity_id)
     # |> apply_media_filters(filters, opts)
