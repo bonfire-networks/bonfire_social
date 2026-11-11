@@ -44,8 +44,8 @@ defmodule Bonfire.Social.NotificationCategoriesTest do
     assert Notifications.experiences_for(:react) == [:like, :react]
     assert Notifications.experiences_for(:boost) == [:boost]
 
-    # claims only a reply with nothing the reader wrote above it, which reached them by following that discussion; anything else lands here by claiming nothing
-    assert Notifications.experiences_for(:other) == [:thread_reply]
+    # claims a reply with nothing the reader wrote above it, which reached them by following that discussion, and a join, which has its own wording; anything else lands here by claiming nothing
+    assert Notifications.experiences_for(:other) == [:thread_reply, :join]
     # and Latest claims nothing, so nothing resolves to it by experience
     assert Notifications.experiences_for(:latest) == []
   end
