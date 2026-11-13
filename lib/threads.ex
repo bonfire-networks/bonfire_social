@@ -2336,8 +2336,17 @@ defmodule Bonfire.Social.Threads do
                skip_err: true
              ]
          ) do
-      %{edges: edges} when is_list(edges) -> edges
-      _ -> []
+      %{edges: edges} when is_list(edges) ->
+        # # PROBE
+        # Enum.each(edges, fn ed ->
+        #   obj = ed.activity.object
+        #   debug({Ecto.assoc_loaded?(obj.peered), Ecto.assoc_loaded?(ed.activity.peered)}, "PROBE_peered_loaded obj/activity")
+        # end)
+
+        edges
+
+      _ ->
+        []
     end
   end
 

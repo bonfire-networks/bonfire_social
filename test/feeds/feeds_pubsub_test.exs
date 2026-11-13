@@ -238,6 +238,11 @@ defmodule Bonfire.Social.FeedsPubTest do
 
     assert :gt = Bonfire.Common.DatesTimes.compare(later_id, Bonfire.Common.DatesTimes.now())
 
-    refute_receive {{Bonfire.Social.Feeds, :new_activity}, _}, 500
+    # the local feed is shared by concurrent tests, so the refute is pinned to this post
+    refute_receive {
+                     {Bonfire.Social.Feeds, :new_activity},
+                     [feed_ids: _, activity: %{id: ^later_id}]
+                   },
+                   500
   end
 end
