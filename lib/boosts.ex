@@ -257,7 +257,9 @@ defmodule Bonfire.Social.Boosts do
 
       if !opts[:skip_federation],
         do:
-          Social.maybe_federate_and_gift_wrap_activity(booster, boost)
+          Social.maybe_federate_and_gift_wrap_activity(booster, boost,
+            skip_delivery: opts[:skip_delivery]
+          )
           |> debug("maybe_federated the boost"),
         else: {:ok, boost}
     end
@@ -435,7 +437,9 @@ defmodule Bonfire.Social.Boosts do
       {:ok, _activity}
 
   """
-  def ap_publish_activity(subject, :delete, boost) do
+  def ap_publish_activity(subject, verb, boost, opts \\ [])
+
+  def ap_publish_activity(subject, :delete, boost, _opts) do
     with {:ok, booster} <-
            ActivityPub.Actor.get_cached(
              pointer: subject || e(boost.edge, :subject, nil) || e(boost.edge, :subject_id, nil)
@@ -457,7 +461,7 @@ defmodule Bonfire.Social.Boosts do
     end
   end
 
-  def ap_publish_activity(subject, _verb, boost) do
+  def ap_publish_activity(subject, _verb, boost, opts) do
     boost = repo().maybe_preload(boost, :edge)
 
     boosted = e(boost, :edge, :object, nil) || e(boost, :edge, :object_id, nil)
@@ -487,14 +491,17 @@ defmodule Bonfire.Social.Boosts do
       # the BOOST's id: it is what the announce points back at, and what dates it
       id = Enums.id(boost)
 
-      ActivityPub.announce(%{
-        actor: booster,
-        object: object,
-        pointer: id,
-        published:
-          DatesTimes.date_from_pointer(id)
-          |> DateTime.to_iso8601()
-      })
+      ActivityPub.announce(
+        %{
+          actor: booster,
+          object: object,
+          pointer: id,
+          published:
+            DatesTimes.date_from_pointer(id)
+            |> DateTime.to_iso8601()
+        },
+        Keyword.take(opts, [:skip_delivery])
+      )
     else
       # a miss here silently drops the whole Announce, which is indistinguishable from federation being switched off, so it says so rather than passing quietly. Which of the two was missing is said by whichever lookup failed, not guessed at here
       {:error, :not_found} ->

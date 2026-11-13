@@ -17,6 +17,13 @@ defmodule Bonfire.Social.RuntimeConfig do
         feed_addressing: System.get_env("FEED_ADDRESSING") in @yes
     end
 
+    # How big an uploaded account archive may be, checked before anything is extracted: the total uncompressed size (`IMPORT_ARCHIVE_LIMIT`, in MB) and the number of files in it
+    config :bonfire_social, Bonfire.Social.Import,
+      max_archive_size:
+        (System.get_env("IMPORT_ARCHIVE_LIMIT", "5000") |> String.to_integer()) * 1_000_000,
+      max_archive_entries:
+        System.get_env("IMPORT_ARCHIVE_MAX_ENTRIES", "100000") |> String.to_integer()
+
     # Register the one-shot feed-addressing rollout (backfill legacy feeds → buckets, then enable write-addressing), run once per boot by `Bonfire.Common.StartupTasks` and gated on the flag above. Target `:bonfire_common` (the StartupTasks module's app) so it deep-merges with tasks declared by other extensions rather than clobbering them.
     config :bonfire_common, Bonfire.Common.StartupTasks,
       run: [feeds_addressing: Bonfire.Social.Feeds.Addressing.Rollout]

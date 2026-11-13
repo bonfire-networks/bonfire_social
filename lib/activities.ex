@@ -160,7 +160,14 @@ defmodule Bonfire.Social.Activities do
       })
 
     with {:ok, activity} <- repo().upsert(changeset(attrs)) do
-      {:ok, %{activity | object: object, subject: subject, verb: verb}}
+      # a subject given as a plain map (as ValueFlows passes its agents) is not kept as the loaded association, because Ecto's preloader only accepts a struct there; `subject_id` is set either way
+      {:ok,
+       %{
+         activity
+         | object: object,
+           subject: if(is_struct(subject), do: subject, else: activity.subject),
+           verb: verb
+       }}
     end
   rescue
     e in Ecto.ConstraintError ->
