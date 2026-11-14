@@ -2349,8 +2349,11 @@ defmodule Bonfire.Social.Threads do
                skip_err: true
              ]
          ) do
-      %{edges: edges} when is_list(edges) -> edges
-      _ -> []
+      %{edges: edges} when is_list(edges) ->
+        edges
+
+      _ ->
+        []
     end
   end
 

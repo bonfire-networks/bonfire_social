@@ -160,7 +160,14 @@ defmodule Bonfire.Social.Activities do
       })
 
     with {:ok, activity} <- repo().upsert(changeset(attrs)) do
-      {:ok, %{activity | object: object, subject: subject, verb: verb}}
+      # a subject given as a plain map (as ValueFlows passes its agents) is not kept as the loaded association, because Ecto's preloader only accepts a struct there; `subject_id` is set either way
+      {:ok,
+       %{
+         activity
+         | object: object,
+           subject: if(is_struct(subject), do: subject, else: activity.subject),
+           verb: verb
+       }}
     end
   rescue
     e in Ecto.ConstraintError ->
@@ -1784,7 +1791,13 @@ defmodule Bonfire.Social.Activities do
     cats =
       categories
       |> List.wrap()
-      |> Enum.map(&(&1 |> to_string() |> Bonfire.Social.Events.Categories.normalize()))
+      # |> Enum.map(&(&1 |> to_string() |> Bonfire.Social.Events.Categories.normalize()))
+      # the vocabulary moved to `bonfire_gatherings` (deprecated); without it a category is kept as given
+      |> Enum.map(
+        &maybe_apply(Bonfire.Gatherings.EventCategories, :normalize, [to_string(&1)],
+          fallback_return: to_string(&1)
+        )
+      )
       |> Enum.reject(&is_nil/1)
       |> Enum.uniq()
 
