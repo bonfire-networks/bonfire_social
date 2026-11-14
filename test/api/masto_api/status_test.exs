@@ -594,6 +594,43 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
       assert child.id in descendant_ids
     end
 
+    test "lists descendants oldest first", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+
+      {:ok, root} =
+        Posts.publish(
+          current_user: user,
+          post_attrs: %{post_content: %{html_body: "Root post"}},
+          boundary: "public"
+        )
+
+      reply_ids =
+        for n <- 1..3 do
+          {:ok, reply} =
+            Posts.publish(
+              current_user: user,
+              post_attrs: %{post_content: %{html_body: "Reply #{n}"}, reply_to_id: root.id},
+              boundary: "public"
+            )
+
+          reply.id
+        end
+
+      response =
+        conn
+        |> masto_api_conn(user: user, account: account)
+        |> get("/api/v1/statuses/#{root.id}/context")
+        |> json_response(200)
+
+      descendant_ids =
+        response["descendants"]
+        |> Enum.map(& &1["id"])
+        |> Enum.filter(&(&1 in reply_ids))
+
+      assert descendant_ids == reply_ids
+    end
+
     test "does not leak a reply the viewer is not allowed to see", %{conn: conn} do
       account = Fake.fake_account!()
       author = Fake.fake_user!(account)

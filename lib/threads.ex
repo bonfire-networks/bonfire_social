@@ -1368,7 +1368,12 @@ defmodule Bonfire.Social.Threads do
     do: list_replies(thread_or_comment_id, opts)
 
   def list_replies(thread_or_comment_id, opts) when is_binary(thread_or_comment_id) do
-    opts = opts |> to_options() |> Keyword.put(:thread_id, thread_or_comment_id)
+    opts =
+      opts
+      |> to_options()
+      |> Keyword.put(:thread_id, thread_or_comment_id)
+      |> with_thread_order_default()
+
     paginate_base = opts[:paginate] || opts
     paginate_base = if is_map(paginate_base), do: Enum.to_list(paginate_base), else: paginate_base
 
@@ -1436,6 +1441,14 @@ defmodule Bonfire.Social.Threads do
 
         do_list_replies_postload(result, opts)
     end
+  end
+
+  # A thread with no order chosen reads oldest first, which is what "Thread order" promises in the UI.
+  # A chosen order is kept, and so are metric sorts (replies, likes, boosts, trending), whose own default stays :desc in arrange_opts.
+  defp with_thread_order_default(opts) do
+    if is_nil(opts[:sort_by]) and opts[:sort_order] not in [:asc, :desc],
+      do: Keyword.put(opts, :sort_order, :asc),
+      else: opts
   end
 
   defp query_branch_roots(thread_id, opts) do

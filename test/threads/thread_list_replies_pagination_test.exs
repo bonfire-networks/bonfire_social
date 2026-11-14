@@ -170,10 +170,10 @@ defmodule Bonfire.Social.Threads.ListRepliesPaginationTest do
       Process.put([:bonfire, :thread_pagination_hard_limit], 1)
       Process.put([:bonfire, :thread_default_root_reply_limit], 1)
 
-      # publish r2 first so it's older; r1 (published last) comes first on descending sort
-      _r2 = publish_reply(alice, op.id, 3)
+      # r1 is published first, so it comes first in thread order (oldest first); r2 goes to the next page
       r1 = publish_reply(alice, op.id, 1)
       _child = publish_reply(alice, r1.id, 2)
+      _r2 = publish_reply(alice, op.id, 3)
 
       result = Threads.list_replies(op.id, current_user: alice, total_replies_count: 3)
 

@@ -45,6 +45,27 @@ defmodule Bonfire.Social.Threads.SortTest do
     tree |> List.first() |> elem(0) |> Map.get(:id)
   end
 
+  describe "list_replies/2 — no sort chosen" do
+    test "returns direct replies oldest first (thread order)", %{
+      alice: alice,
+      bob: bob,
+      carol: carol,
+      op: op
+    } do
+      r1 = publish_reply(alice, op.id, 1)
+      r2 = publish_reply(bob, op.id, 2)
+      r3 = publish_reply(carol, op.id, 3)
+      reply_ids = [r1.id, r2.id, r3.id]
+
+      ids =
+        Threads.list_replies(op.id, current_user: alice).edges
+        |> Enum.map(& &1.id)
+        |> Enum.filter(&(&1 in reply_ids))
+
+      assert ids == reply_ids
+    end
+  end
+
   describe "arrange_replies_tree/2 — sort_by: :reply_count" do
     test "branch with more nested replies ranks first", %{alice: alice, op: op} do
       # r1 published first (lower ID) — default desc sort puts it last without implementation
