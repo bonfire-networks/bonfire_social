@@ -1791,7 +1791,13 @@ defmodule Bonfire.Social.Activities do
     cats =
       categories
       |> List.wrap()
-      |> Enum.map(&(&1 |> to_string() |> Bonfire.Social.Events.Categories.normalize()))
+      # |> Enum.map(&(&1 |> to_string() |> Bonfire.Social.Events.Categories.normalize()))
+      # the vocabulary moved to `bonfire_gatherings` (deprecated); without it a category is kept as given
+      |> Enum.map(
+        &maybe_apply(Bonfire.Gatherings.EventCategories, :normalize, [to_string(&1)],
+          fallback_return: to_string(&1)
+        )
+      )
       |> Enum.reject(&is_nil/1)
       |> Enum.uniq()
 

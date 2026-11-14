@@ -210,6 +210,9 @@ defmodule Bonfire.Social.Tags do
 
       # a remote group relays its own posts: its `Announce` is the boost, and one we made in its name would make that real one look like a duplicate
       not Bonfire.Social.is_local?(category) ->
+        # a mirror of a category that is no actor (eg. a value of a vocabulary, such as FEP-8a8e's `MUSIC`) has no server that would announce anything, so it is put in its feed here
+        # if has_origin_actor?(category) and relays_to_origin?(category) do
+        # reverted: those values are local topics now
         if relays_to_origin?(category) do
           debug(id(category), "skip boosting, because the group is remote and boosts for itself")
         else
@@ -222,6 +225,16 @@ defmodule Bonfire.Social.Tags do
   end
 
   def auto_boost(_, _, _), do: debug("not auto-boosting (invalid inputs)")
+
+  # whether there is an ActivityPub actor at the category's origin (a remote group is one; a mirror of a vocabulary value is not)
+  # defp has_origin_actor?(category) do
+  #   match?(
+  #     {:ok, _},
+  #     maybe_apply(ActivityPub.Actor, :get_cached, [[pointer: id(category)]],
+  #       fallback_return: {:error, :not_found}
+  #     )
+  #   )
+  # end
 
   # whether the software the group's server runs sends its `Announce` of a post back to the server the post came from. Mbin sends it to every follower but that one, so a post made here would never reach our copy of the group's feed. Asked of the server's nodeinfo, which is remembered per server (`ActivityPub.Instances.software/2`); a server whose software can't be told is taken to relay, as before
   defp relays_to_origin?(category) do

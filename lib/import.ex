@@ -124,10 +124,12 @@ defmodule Bonfire.Social.Import do
     )
   end
 
+  # only a post that says so: Mastodon writes `"to": []` and `"cc": []`, while a post with no addressing at all is malformed, and fails like any other
   defp addressed_to_nobody?(%{"type" => "Create", "object" => %{} = object} = activity) do
-    [activity["to"], activity["cc"], object["to"], object["cc"], object["bto"], object["bcc"]]
-    |> Enum.flat_map(&List.wrap/1)
-    |> Enum.empty?()
+    (Map.has_key?(activity, "to") or Map.has_key?(object, "to")) and
+      [activity["to"], activity["cc"], object["to"], object["cc"], object["bto"], object["bcc"]]
+      |> Enum.flat_map(&List.wrap/1)
+      |> Enum.empty?()
   end
 
   defp addressed_to_nobody?(_), do: false
