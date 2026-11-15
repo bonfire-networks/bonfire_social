@@ -377,15 +377,15 @@ defmodule Bonfire.Social.Flags do
   """
   def instance_moderators, do: Bonfire.Me.Users.list_instance_wide(:mediate, preload: :internal)
 
-  # only what the flagger may read can be flagged, unless the caller (federation, automod) says `skip_boundary_check: true`
+  # only what the flagger may see or read can be flagged (a group they can see but not read is reportable), unless the caller (federation, automod) says `skip_boundary_check: true`
   defp check_flag(flagger, object, opts) do
     skip? = opts[:skip_boundary_check] == true
 
-    opts = Keyword.merge(opts, current_user: flagger, verbs: [:read])
+    opts = Keyword.merge(opts, current_user: flagger, verbs: {:any, [:see, :read]})
     #  an id or username is loaded with the flagger's :read check
     case object do
       %{id: _} ->
-        if skip? or Bonfire.Boundaries.can?(flagger, :read, object),
+        if skip? or Bonfire.Boundaries.can?(flagger, {:any, [:see, :read]}, object),
           do: {:ok, object},
           else: error(object, :not_found)
 
