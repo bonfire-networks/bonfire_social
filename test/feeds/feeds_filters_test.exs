@@ -722,4 +722,49 @@ defmodule Bonfire.Social.FeedsFiltersTest do
       assert FeedLoader.feed_contains?(feed, regular_post, current_user: user)
     end
   end
+
+  describe "events filter without bonfire_gatherings" do
+    # an instance without gatherings keeps events as APActivities, matched by the `type` in their json
+    setup do
+      # as if the extension were not there (`Bonfire.Common.Extend` caches the modularity per process)
+      Process.put({:modularity_cache, :bonfire_gatherings}, :disabled)
+      refute Bonfire.Common.Types.object_type("Event")
+      :ok
+    end
+
+    test "the Events feed and the Event type filter list an event stored as an APActivity, and not a post" do
+      user = fake_user!("event poster")
+
+      {:ok, event} =
+        Bonfire.Social.APActivities.ap_receive(
+          user,
+          %{
+            "type" => "Create",
+            "actor" => Bonfire.Common.URIs.canonical_url(user),
+            "to" => ["https://www.w3.org/ns/activitystreams#Public"]
+          },
+          %{
+            "type" => "Event",
+            "name" => "Riverside Picnic",
+            "startTime" => DateTime.to_iso8601(DateTime.add(DateTime.utc_now(), 30, :day))
+          },
+          true
+        )
+
+      post = fake_post!(user, "public", %{post_content: %{html_body: "<p>not an event</p>"}})
+
+      # positive control: the event is in the unfiltered feed
+      assert FeedLoader.feed_contains?(FeedLoader.feed(:custom, %{}, current_user: user), event,
+               current_user: user
+             )
+
+      for feed <- [
+            FeedLoader.feed(:custom, %{object_types: ["Event"]}, current_user: user),
+            FeedLoader.feed(:events, %{}, current_user: user)
+          ] do
+        assert FeedLoader.feed_contains?(feed, event, current_user: user)
+        refute FeedLoader.feed_contains?(feed, post, current_user: user)
+      end
+    end
+  end
 end
