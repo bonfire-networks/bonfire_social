@@ -39,7 +39,7 @@ defmodule Bonfire.Social.FeedsCirclesFilterTest do
 
       # Create a circle and a me to it
       {:ok, circle} = Circles.create(me, %{named: %{name: "friends"}})
-      {:ok, _} = Circles.add_to_circles(alice, circle)
+      {:ok, _} = Circles.add_to_circles(alice, circle, skip_boundary_check: true)
 
       # Create posts by different users
       post_by_alice = fake_post!(alice, "public", %{post_content: %{name: "post by alice"}})
@@ -101,11 +101,11 @@ defmodule Bonfire.Social.FeedsCirclesFilterTest do
       post_by_bob: post_by_bob,
       post_by_carl: post_by_carl
     } do
-      {:ok, _} = Circles.add_to_circles(carl, circle)
+      {:ok, _} = Circles.add_to_circles(carl, circle, skip_boundary_check: true)
 
       # Create another circle and add Carl to it
       {:ok, second_circle} = Circles.create(me, %{named: %{name: "coworkers"}})
-      {:ok, _} = Circles.add_to_circles(carl, second_circle)
+      {:ok, _} = Circles.add_to_circles(carl, second_circle, skip_boundary_check: true)
 
       # Load a feed that includes "friends" circle but excludes "coworkers" circle
       feed =

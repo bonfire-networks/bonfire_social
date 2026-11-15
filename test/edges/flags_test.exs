@@ -96,7 +96,7 @@ defmodule Bonfire.Social.FlagsTest do
 
   test "can list all flags (as an admin)" do
     me = Fake.fake_user!()
-    {:ok, me} = Users.make_admin(me)
+    {:ok, me} = Users.make_admin(me, skip_boundary_check: true)
     someone = Fake.fake_user!()
 
     attrs = %{
@@ -145,7 +145,7 @@ defmodule Bonfire.Social.FlagsTest do
 
     assert {:ok, flag} = Flags.flag(flagger, flagged)
 
-    {:ok, admin} = Users.make_admin(Fake.fake_user!())
+    {:ok, admin} = Users.make_admin(Fake.fake_user!(), skip_boundary_check: true)
 
     assert %{edges: [%{activity: feed_flag}]} =
              FeedActivities.feed(:flagged_content, current_user: admin)
@@ -155,7 +155,7 @@ defmodule Bonfire.Social.FlagsTest do
 
   test "can list something's flaggers (as an admin)" do
     me = Fake.fake_user!()
-    {:ok, me} = Users.make_admin(me)
+    {:ok, me} = Users.make_admin(me, skip_boundary_check: true)
     someone = Fake.fake_user!()
 
     attrs = %{
@@ -189,7 +189,7 @@ defmodule Bonfire.Social.FlagsTest do
 
   test "can list someone else's flags (as an admin)" do
     me = Fake.fake_user!()
-    {:ok, me} = Users.make_admin(me)
+    {:ok, me} = Users.make_admin(me, skip_boundary_check: true)
     someone = Fake.fake_user!()
 
     attrs = %{
@@ -223,7 +223,7 @@ defmodule Bonfire.Social.FlagsTest do
 
   test "can include a comment with a flag, which admin can see" do
     me = Fake.fake_user!()
-    {:ok, me} = Users.make_admin(me)
+    {:ok, me} = Users.make_admin(me, skip_boundary_check: true)
     someone = Fake.fake_user!()
 
     attrs = %{
@@ -273,7 +273,7 @@ defmodule Bonfire.Social.FlagsTest do
 
   test "see a flag of something in my notifications (as an admin)" do
     me = Fake.fake_user!()
-    {:ok, me} = Users.make_admin(me)
+    {:ok, me} = Users.make_admin(me, skip_boundary_check: true)
     someone = Fake.fake_user!()
 
     attrs = %{
@@ -325,7 +325,7 @@ defmodule Bonfire.Social.FlagsTest do
 
   test "an admin is told of a flag as well as a moderator: both can moderate the instance" do
     admin = Fake.fake_user!()
-    {:ok, admin} = Users.make_admin(admin)
+    {:ok, admin} = Users.make_admin(admin, skip_boundary_check: true)
     moderator = Fake.instance_moderator!(Fake.fake_user!())
     {post, _flag} = flagged_post_by_others()
 
@@ -338,7 +338,11 @@ defmodule Bonfire.Social.FlagsTest do
   test "a user in a circle given :mediate for the whole instance is told of a flag" do
     reviewer = Fake.fake_user!()
     assert {:ok, circle} = Bonfire.Boundaries.Circles.create(Fake.fake_user!(), "reviewers")
-    assert {:ok, _} = Bonfire.Boundaries.Circles.add_to_circles(reviewer, circle)
+
+    assert {:ok, _} =
+             Bonfire.Boundaries.Circles.add_to_circles(reviewer, circle,
+               skip_boundary_check: true
+             )
 
     Bonfire.Boundaries.Grants.grant(
       circle.id,
@@ -359,8 +363,8 @@ defmodule Bonfire.Social.FlagsTest do
     me = Fake.fake_user!()
 
     # just in case
-    Users.revoke_admin(me)
-    Users.revoke_admin(someone)
+    Users.revoke_admin(me, skip_boundary_check: true)
+    Users.revoke_admin(someone, skip_boundary_check: true)
 
     attrs = %{
       post_content: %{

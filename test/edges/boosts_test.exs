@@ -274,4 +274,44 @@ defmodule Bonfire.Social.BoostsTest do
     assert activity =
              Bonfire.Social.FeedLoader.feed_contains?(:notifications, post, current_user: me)
   end
+
+  # a boost reaches the booster's followers, so it must not show them what they may not read
+  test "a boost-only grant on a private post does not show it to the booster's followers" do
+    author = Fake.fake_user!()
+    booster = Fake.fake_user!()
+    follower = Fake.fake_user!()
+    {:ok, _} = Bonfire.Social.Graph.Follows.follow(follower, booster)
+
+    {:ok, acl} = Bonfire.Boundaries.Acls.simple_create(author, "boost but not read")
+
+    Bonfire.Boundaries.Grants.grant(booster.id, acl.id, [:boost], true, current_user: author)
+
+    {:ok, private_post} =
+      Posts.publish(
+        current_user: author,
+        post_attrs: %{post_content: %{html_body: "<p>private to the author</p>"}},
+        boundary: acl.id
+      )
+
+    {:ok, public_post} =
+      Posts.publish(
+        current_user: author,
+        post_attrs: %{post_content: %{html_body: "<p>for everyone</p>"}},
+        boundary: "public"
+      )
+
+    refute Bonfire.Boundaries.can?(follower, :read, private_post), "control: they cannot read it"
+
+    assert Bonfire.Boundaries.can?(booster, :boost, private_post),
+           "control: the booster may boost it"
+
+    assert {:ok, _} = Boosts.boost(booster, public_post)
+
+    assert Bonfire.Social.FeedLoader.feed_contains?(:my, public_post, current_user: follower),
+           "control: the follower sees what the booster boosts and they may read"
+
+    Boosts.boost(booster, private_post)
+
+    refute Bonfire.Social.FeedLoader.feed_contains?(:my, private_post, current_user: follower)
+  end
 end

@@ -70,7 +70,8 @@ defmodule Bonfire.Social.Requests do
              |> repo().maybe_preload(edge: [:object, subject: [character: [:peered]]])
              |> debug("accepted"),
            # remove the Edge (helps so we can recreate one linked to the Follow, because of the unique key on subject/object/table_id), and the Request Activity from notifications
-           _ <- delete_requests([id(request)]) do
+           # skipped: it is the tail of an accept that has been checked, and the acting user is not the requester whose activity this is
+           _ <- do_delete_requests([id(request)], skip_boundary_check: true) do
         {:ok, request}
       else
         e ->
@@ -446,7 +447,7 @@ defmodule Bonfire.Social.Requests do
     # asking again after being ignored is a new request (new id and notification), rather than `maybe_already/4` returning the ignored one
     # TODO: so a declined requester, remote ones included, can notify the moderators again without limit: don't notify again for a request that was already ignored (or only after a while)
     with [_ | _] = ignored_ids <- request_ids(requester, type, object, true),
-         do: delete_requests(ignored_ids)
+         do: do_delete_requests(ignored_ids, current_user: requester)
 
     case create(requester, type, object, opts) do
       {:ok, request} ->
@@ -514,14 +515,14 @@ defmodule Bonfire.Social.Requests do
         {:error, :not_found}
 
       ids ->
-        delete_requests(ids)
+        do_delete_requests(ids, current_user: requester)
     end
   end
 
   # by id, since every kind of request shares the `:request` verb: deleting notifications by subject/verb/object would also remove a sibling request's (eg. the follow request made alongside a join request). A request's notification shares its id
-  defp delete_requests(ids) do
+  defp do_delete_requests(ids, opts) do
     Edges.delete_by_ids(ids)
-    {:ok, Activities.delete(id: ids)}
+    {:ok, Activities.delete([id: ids], opts)}
   end
 
   defp request_ids(subject, type, object, ignored? \\ false) do

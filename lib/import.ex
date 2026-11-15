@@ -562,7 +562,8 @@ defmodule Bonfire.Social.Import do
         args: %{"op" => op, "user_id" => "instance_wide", "identifier" => identifier} = _args
       }) do
     # debug(args, op)
-    perform(op, identifier, :instance_wide)
+    # the job doesn't say who queued it, so nobody acts when it runs: a system path
+    perform(op, identifier, scope: :instance_wide, skip_boundary_check: true)
   end
 
   def perform(%{
@@ -675,10 +676,13 @@ defmodule Bonfire.Social.Import do
   end
 
   def perform("circles_import" = op, {circle_name, username}, scope) do
+    current_user = Utils.current_user(scope)
+
     with {:ok, user} <- AdapterUtils.get_by_url_ap_id_or_username(username),
          {:ok, circle} <-
-           Bonfire.Boundaries.Circles.get_or_create(circle_name, Utils.current_user(scope)),
-         {:ok, _encircle} <- Bonfire.Boundaries.Circles.add_to_circles(user, circle) do
+           Bonfire.Boundaries.Circles.get_or_create(circle_name, current_user),
+         {:ok, _encircle} <-
+           Bonfire.Boundaries.Circles.add_to_circles(user, circle, current_user: current_user) do
       :ok
     else
       error -> handle_error(op, "#{circle_name}; #{username}", error)

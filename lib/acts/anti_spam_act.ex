@@ -65,7 +65,8 @@ defmodule Bonfire.Social.Acts.AntiSpam do
                        fallback_return: nil
                      ) || current_user,
                      object,
-                     skip_federation: true
+                     skip_federation: true,
+                     skip_boundary_check: true
                    ) do
               error("could not flag for mods to check")
               raise Bonfire.Fail, :spam

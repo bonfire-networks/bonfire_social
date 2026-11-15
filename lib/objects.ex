@@ -680,12 +680,28 @@ defmodule Bonfire.Social.Objects do
       {:ok, %Object{id: "123", named: %{name: "New Name"}}}
   """
   def set_name(id, name, opts) when is_binary(id) do
-    Bonfire.Common.Needles.one(id, opts)
-    ~> set_name(name, opts)
+    opts = to_options(opts)
+
+    # loading it with the `:describe` verb is the permission check, so it is not asked again
+    Bonfire.Common.Needles.one(id, Keyword.put(opts, :verbs, [:describe]))
+    ~> do_set_name(name)
   end
 
-  def set_name(%{} = object, name, _opts) do
-    # TODO: check user's edit permissions
+  def set_name(%{} = object, name, opts) do
+    opts = to_options(opts)
+    user = current_user(opts)
+
+    # naming a thread is describing it, the `:describe` verb the title button is shown for
+    if Keyword.get(opts, :skip_boundary_check) == true or
+         (not is_nil(user) and Bonfire.Boundaries.can?(user, :describe, object) == true) do
+      do_set_name(object, name)
+    else
+      error(object, "No permission to rename this")
+      {:error, :not_permitted}
+    end
+  end
+
+  defp do_set_name(object, name) do
     object
     |> repo().maybe_preload(:named)
     |> changeset_named(%{named: %{id: uid(object), name: name}})
@@ -836,7 +852,7 @@ defmodule Bonfire.Social.Objects do
     # before anything is deleted, since the boost goes with the object and its `Undo` then has nothing left to be sent from
     maybe_unboost_in_group(object)
 
-    Activities.delete_by_object(id)
+    Activities.delete_by_object(id, opts)
     |> debug("Delete the object's Activity and remove from feeds first")
 
     # the schema, which is what context modules are registered by: without `only_schemas` a group is `:group`, which has none, so it fell through to the generic deletion and was deleted outright with everything attached rather than archived by `Categories`
@@ -1193,7 +1209,11 @@ defmodule Bonfire.Social.Objects do
       [boundary: "public", to_circles: [], to_feeds: []]
 
   """
-  def set_boundaries(creator, thing, opts_or_attrs \\ [], for_module \\ __MODULE__) do
+  def set_boundaries(creator, thing, opts_or_attrs \\ [], for_module \\ __MODULE__),
+    do: do_set_boundaries(creator, thing, opts_or_attrs, for_module, false)
+
+  # the acting user is checked by `Bonfire.Boundaries.set_boundaries/3`, unless the caller says `skip_boundary_check: true`, or has checked already (`checked?`)
+  defp do_set_boundaries(creator, thing, opts_or_attrs, for_module, checked?) do
     # TODO: make default audience configurable & per object audience selectable by user in API and UI (note: also in `Federation.ap_prepare_activity`)
     context_id =
       e(opts_or_attrs, :context_id, nil) || e(opts_or_attrs, :attrs, :context_id, nil)
@@ -1236,10 +1256,23 @@ defmodule Bonfire.Social.Objects do
          boundaries_as_set:
            if(module_enabled?(Bonfire.Boundaries),
              do:
-               Bonfire.Boundaries.set_boundaries(
-                 opts[:boundaries_caretaker] || creator,
-                 thing,
-                 opts
+               if(checked?,
+                 do:
+                   Bonfire.Boundaries.do_set_boundaries(
+                     opts[:boundaries_caretaker] || creator,
+                     thing,
+                     opts
+                   ),
+                 else:
+                   Bonfire.Boundaries.set_boundaries(
+                     opts[:boundaries_caretaker] || creator,
+                     thing,
+                     # a named caretaker (eg. a group) is a stand-in for whoever acts, so there is no person to check
+                     if(opts[:boundaries_caretaker],
+                       do: Keyword.put(opts, :skip_boundary_check, true),
+                       else: opts
+                     )
+                   )
                )
            )
        ])
@@ -1249,7 +1282,7 @@ defmodule Bonfire.Social.Objects do
   end
 
   @doc """
-  Resets the preset boundary for an object.
+  Resets the preset boundary for an object, if the user may configure it (or with `skip_boundary_check: true` in the options, for callers that have checked already, such as the system or a group's moderators).
 
   ## Examples
 
@@ -1264,6 +1297,24 @@ defmodule Bonfire.Social.Objects do
         opts_or_attrs \\ [],
         for_module \\ nil
       ) do
+    skip? = is_list(opts_or_attrs) and Keyword.get(opts_or_attrs, :skip_boundary_check) == true
+
+    if skip? or
+         Bonfire.Boundaries.Controlleds.may_configure?(creator, thing) do
+      do_reset_preset_boundary(creator, thing, previous_preset, opts_or_attrs, for_module)
+    else
+      error(thing, "No permission to change the boundary of this")
+      {:error, :not_permitted}
+    end
+  end
+
+  defp do_reset_preset_boundary(
+         creator,
+         thing,
+         previous_preset,
+         opts_or_attrs,
+         for_module
+       ) do
     to_boundaries =
       e(opts_or_attrs, :attrs, :to_boundaries, nil) || e(opts_or_attrs, :to_boundaries, nil)
 
@@ -1291,11 +1342,13 @@ defmodule Bonfire.Social.Objects do
                 e(opts_or_attrs, :context_id, nil)
           ]
           |> debug("opts")
-          |> set_boundaries(
+          # permission has been checked above (or the caller skips), so it is not checked again
+          |> do_set_boundaries(
             creator,
             thing,
             ...,
-            for_module || object_type_schema(thing) || __MODULE__
+            for_module || object_type_schema(thing) || __MODULE__,
+            true
           )
 
         set_opts[:boundaries_as_set] || error("Boundaries not enabled")

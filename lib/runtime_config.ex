@@ -1252,7 +1252,6 @@ defmodule Bonfire.Social.RuntimeConfig do
           :with_replied
         ],
         feed_postload: [
-          :with_thread_name,
           :with_reply_to,
           :with_media,
           :with_parent,
@@ -1260,8 +1259,7 @@ defmodule Bonfire.Social.RuntimeConfig do
         ],
         feed_metadata: [
           :with_subject,
-          :with_creator,
-          :with_thread_name
+          :with_creator
         ],
         feed_by_subject: [
           :with_creator,

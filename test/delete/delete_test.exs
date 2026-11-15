@@ -166,7 +166,7 @@ defmodule Bonfire.Social.DeleteTest do
       media: media
     } do
       moderator = Fake.fake_user!()
-      {:ok, moderator} = Users.make_admin(moderator)
+      {:ok, moderator} = Users.make_admin(moderator, skip_boundary_check: true)
       labelled = fake_post!(user, "public", %{post_content: %{html_body: "a claim"}})
       deleted = fake_post!(user, "public", %{post_content: %{html_body: "see #{url}"}})
       {label_id, label_name, _} = List.first(Bonfire.Label.ContentLabels.built_ins())

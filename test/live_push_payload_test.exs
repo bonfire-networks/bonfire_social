@@ -61,7 +61,7 @@ defmodule Bonfire.Social.LivePushPayloadTest do
   end
 
   test "the pushed activity keeps a loaded assoc that prepare_activity/2 does NOT re-preload" do
-    # `:replied` (above) is covered by `:with_reply_to`/`:with_thread_name` in the live-push preload
+    # `:replied` (above) is covered by `:with_reply_to` in the live-push preload
     # sets, so any merge damage to it is repaired before broadcast. `:sensitive` is NOT in
     # `feed_metadata`/`feed_postload` (see `Bonfire.Social.RuntimeConfig`), so if the merge blanks it
     # nothing puts it back — and a content warning silently disappearing from a live-pushed feed item

@@ -240,7 +240,7 @@ defmodule Bonfire.Social.Fake do
             }
           )
 
-        {:ok, flag} = Bonfire.Social.Flags.flag(other_user, post)
+        {:ok, flag} = Bonfire.Social.Flags.flag(other_user, post, skip_boundary_check: true)
         {post, flag}
 
       :image_standalone ->

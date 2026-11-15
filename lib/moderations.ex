@@ -85,7 +85,7 @@ defmodule Bonfire.Social.Moderations do
   end
 
   @doc """
-  Whether `user`, who already has the standing to undo `verb` on `object` (eg. `Blocks.unlock/2`'s, through `:grant` or `:mediate`), may undo the one recorded: a moderator's action is not its author's to undo (a thread a moderator closed, reopened by its author editing it or unlocking it). So the object's own author may undo only what they did themselves, unless they are an admin; anyone else with the standing may undo it. Authorship is told apart this way because an author holds `:mediate` on their own object too. With no record (an action made before records) it may be undone as before.
+  Whether `user`, who already has the standing to undo `verb` on `object` (eg. `Blocks.unlock/2`'s, through `:grant` or `:mediate`), may undo the one recorded: a moderator's action is not its author's to undo (a thread a moderator closed, reopened by its author editing it or unlocking it). So the object's own author may undo only what they did themselves, unless they are an admin (`:grant` on the instance); an instance moderator (`:mediate` on the instance) may undo it too, even on their own post; anyone else with the standing may undo it. Authorship is told apart this way because an author holds `:mediate` on their own object too. With no record (an action made before records) it may be undone as before.
   """
   def may_undo?(user, object, verb) do
     case recorded_by(object, verb) do
@@ -94,6 +94,7 @@ defmodule Bonfire.Social.Moderations do
 
       actor_id ->
         actor_id == id(user) or Bonfire.Boundaries.can?(user, :grant, :instance) or
+          Bonfire.Boundaries.can?(user, :mediate, :instance) or
           id(user) !=
             object
             |> Bonfire.Social.Objects.preload_creator()

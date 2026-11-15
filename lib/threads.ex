@@ -51,6 +51,7 @@ defmodule Bonfire.Social.Threads do
   `replied` is the post's thread info, when it is loaded somewhere other than on the post (on its activity, say).
   """
   def permalink(object, replied \\ nil) do
+    # TODO: use only the boundary-filtered `replied.thread` (falling back to the post's own page, which redirects into the thread for whoever can read its root): the raw `thread_id` column puts a private root's id in the links of a reply others can see (feeds without the thread loaded, notification links)
     replied = replied || e(object, :replied, nil)
     thread_id = e(replied, :thread_id, nil) || id(e(replied, :thread, nil))
     object_id = id(object)

@@ -325,7 +325,7 @@ defmodule Bonfire.Social.Boosts do
       |> case do
         %Edge{} = edge ->
           case repo().delete(edge) do
-            {:ok, _edge} -> Activities.delete({:id, boost_id})
+            {:ok, _edge} -> Activities.delete({:id, boost_id}, current_user: booster)
             {:error, reason} -> repo().rollback(reason)
           end
 

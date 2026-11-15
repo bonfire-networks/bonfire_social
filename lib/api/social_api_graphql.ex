@@ -579,8 +579,37 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       field(:post, :post)
       field(:post_content, :post_content)
 
-      field(:thread_id, :id)
-      field(:reply_to_id, :id)
+      field :thread_id, :id do
+        description(
+          "The id of the thread root, when it is loaded and readable; a thread the viewer can't read is not named"
+        )
+
+        resolve(fn parent, _args, _info ->
+          case Map.get(parent, :thread) do
+            thread when is_nil(thread) or is_struct(thread, Ecto.Association.NotLoaded) ->
+              {:ok, nil}
+
+            _loaded ->
+              {:ok, Map.get(parent, :thread_id)}
+          end
+        end)
+      end
+
+      field :reply_to_id, :id do
+        description(
+          "The id of the post being replied to, when it is loaded and readable; request `replyTo { id }` to get it"
+        )
+
+        resolve(fn parent, _args, _info ->
+          case Map.get(parent, :reply_to) do
+            reply_to when is_nil(reply_to) or is_struct(reply_to, Ecto.Association.NotLoaded) ->
+              {:ok, nil}
+
+            _loaded ->
+              {:ok, Map.get(parent, :reply_to_id)}
+          end
+        end)
+      end
 
       field :reply_to, :activity do
         description("The post being replied to")
@@ -1605,7 +1634,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       if user do
         # Bookmarks.bookmark expects an object, while Likes.like accepts an id.
-        with {:ok, object} <- Bonfire.Common.Needles.get(id, current_user: user),
+        with {:ok, object} <-
+               Bonfire.Common.Needles.get(id, current_user: user, verbs: [:read]),
              {:ok, f} <- Bonfire.Social.Bookmarks.bookmark(user, object) do
           reaction_status(f, id, info)
         end

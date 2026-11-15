@@ -122,7 +122,17 @@ defmodule Bonfire.Social.Bookmarks do
       {:ok, %Bonfire.Data.Social.Bookmark{}}
 
   """
-  def bookmark(%{} = bookmarker, bookmarked, opts \\ []) do
+  def bookmark(bookmarker, bookmarked, opts \\ [])
+
+  # an id is only bookmarked if the bookmarker may read the object it names
+  def bookmark(%{} = bookmarker, bookmarked, opts) when is_binary(bookmarked) do
+    case Bonfire.Common.Needles.get(bookmarked, current_user: bookmarker, verbs: [:read]) do
+      {:ok, object} -> bookmark(bookmarker, object, opts)
+      _ -> error(bookmarked, l("Sorry, you cannot bookmark this"))
+    end
+  end
+
+  def bookmark(%{} = bookmarker, bookmarked, opts) do
     opts =
       [
         # TODO: make configurable

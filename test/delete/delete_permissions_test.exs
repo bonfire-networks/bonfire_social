@@ -49,7 +49,7 @@ defmodule Bonfire.Social.DeletePermissionsTest do
   end
 
   test "an administrator can delete another user's post by ID", context do
-    {:ok, admin} = Users.make_admin(context.other)
+    {:ok, admin} = Users.make_admin(context.other, skip_boundary_check: true)
     assert Accounts.is_admin?(admin)
 
     assert {:ok, _} = Objects.delete(context.post.id, current_user: admin)
@@ -84,7 +84,7 @@ defmodule Bonfire.Social.DeletePermissionsTest do
   end
 
   test "generic queries retain the administrator exception", context do
-    {:ok, admin} = Users.make_admin(context.other)
+    {:ok, admin} = Users.make_admin(context.other, skip_boundary_check: true)
     assert Accounts.is_admin?(admin)
 
     query =

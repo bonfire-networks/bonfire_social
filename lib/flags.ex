@@ -377,22 +377,17 @@ defmodule Bonfire.Social.Flags do
   """
   def instance_moderators, do: Bonfire.Me.Users.list_instance_wide(:mediate, preload: :internal)
 
-  defp check_flag(_flagger, object, opts) do
-    #  NOTE: currently allowing anyone to flag anything regardless of boundaries - TODO: make configurable?
-    skip? = true
+  # only what the flagger may read can be flagged, unless the caller (federation, automod) says `skip_boundary_check: true`
+  defp check_flag(flagger, object, opts) do
+    skip? = opts[:skip_boundary_check] == true
 
-    opts =
-      opts
-      |> Keyword.put_new(:skip_boundary_check, true)
-
-    # skip? = skip_boundary_check?(opts, object)
-    # skip? = (:admins == skip? && Bonfire.Me.Accounts.is_admin?(flagger)) || skip? == true
-
+    opts = Keyword.merge(opts, current_user: flagger, verbs: [:read])
+    #  an id or username is loaded with the flagger's :read check
     case object do
-      %{id: id} ->
-        if skip?,
+      %{id: _} ->
+        if skip? or Bonfire.Boundaries.can?(flagger, :read, object),
           do: {:ok, object},
-          else: Common.Needles.one(id, opts)
+          else: error(object, :not_found)
 
       _ when is_binary(object) ->
         if is_uid?(object) do
@@ -878,7 +873,7 @@ defmodule Bonfire.Social.Flags do
       # Extract the comment from the ActivityPub flag activity
       comment = e(activity, :data, "content", nil)
 
-      flag(creator, object, comment: comment)
+      flag(creator, object, comment: comment, skip_boundary_check: true)
       |> debug("incoming federated flag created")
     end
   end

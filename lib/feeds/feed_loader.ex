@@ -2678,7 +2678,6 @@ defmodule Bonfire.Social.FeedLoader do
         :with_reply_to,
         :with_seen,
         :with_subject,
-        :with_thread_name,
         :with_verb
       ]
 

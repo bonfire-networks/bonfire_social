@@ -662,6 +662,42 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
       refute private_reply.id in descendant_ids
     end
 
+    test "a public reply doesn't reveal the id of a private parent the viewer can't read", %{
+      conn: conn
+    } do
+      author = Fake.fake_user!(Fake.fake_account!())
+      viewer = Fake.fake_user!()
+
+      {:ok, private_root} =
+        Posts.publish(
+          current_user: author,
+          post_attrs: %{post_content: %{html_body: "private root"}},
+          boundary: "mentions"
+        )
+
+      {:ok, reply} =
+        Posts.publish(
+          current_user: author,
+          post_attrs: %{post_content: %{html_body: "public reply"}, reply_to_id: private_root.id},
+          boundary: "public"
+        )
+
+      viewer_conn = masto_api_conn(conn, user: viewer)
+
+      viewer_conn |> get("/api/v1/statuses/#{private_root.id}") |> json_response(404)
+
+      by_id = viewer_conn |> get("/api/v1/statuses/#{reply.id}") |> json_response(200)
+      assert by_id["id"] == reply.id
+
+      context = viewer_conn |> get("/api/v1/statuses/#{reply.id}/context") |> json_response(200)
+
+      refute by_id["in_reply_to_id"] == private_root.id,
+             "the reply's in_reply_to_id exposes the id of a parent the viewer can't read"
+
+      refute Jason.encode!([by_id, context]) =~ private_root.id,
+             "the private parent's id leaks through the status or its context"
+    end
+
     test "returns 404 for a non-existent root status", %{conn: conn} do
       account = Fake.fake_account!()
       user = Fake.fake_user!(account)

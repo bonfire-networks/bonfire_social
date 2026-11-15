@@ -219,34 +219,65 @@ defmodule Bonfire.Social.Activities do
   end
 
   @doc """
-  Deletes activities by ID or struct, or using specific filters.
+  Deletes activities by ID or struct, or using specific filters, if the current user (provided in opts) may delete them: they are the activity's subject, or may delete its object, or may delete anything on the instance. Pass `skip_boundary_check: true` for system paths that have checked already.
 
   ## Examples
 
-      > delete(activity)
+      > delete(activity, current_user: me)
       # Number of deleted activities
 
-      > delete("1")
+      > delete("1", current_user: me)
       # Number of deleted activities
 
-      > delete([id: "1"])
+      > delete([id: "1"], skip_boundary_check: true)
       # Number of deleted activities
 
   """
-  def delete(id) when is_binary(id) or is_struct(id) do
-    maybe_apply(Bonfire.Search, :maybe_unindex, [id])
-    delete({:id, id})
-  end
+  def delete(id_or_filters, opts)
+      when is_binary(id_or_filters) or is_struct(id_or_filters) or is_list(id_or_filters) or
+             is_tuple(id_or_filters) do
+    opts = to_options(opts)
 
-  def delete(filters) when is_list(filters) or is_tuple(filters) do
+    filters =
+      if is_binary(id_or_filters) or is_struct(id_or_filters),
+        do: {:id, id_or_filters},
+        else: id_or_filters
+
     q =
       Activity
       |> query_filter(filters)
       |> debug("gonna delete")
 
-    # TODO: move call Objects.maybe_unindex here to delete from search index?
-
     activities = repo().many(q)
+
+    if Keyword.get(opts, :skip_boundary_check) == true or
+         may_delete_all?(current_user(opts), activities) do
+      if is_binary(id_or_filters) or is_struct(id_or_filters),
+        do: maybe_apply(Bonfire.Search, :maybe_unindex, [id_or_filters])
+
+      do_delete(q, activities)
+    else
+      error(id_or_filters, "No permission to delete this activity")
+      {:error, :not_permitted}
+    end
+  end
+
+  defp may_delete_all?(nil, _activities), do: false
+
+  defp may_delete_all?(user, activities) do
+    user_id = uid(user)
+
+    Bonfire.Boundaries.can?(user, :delete, :instance) == true or
+      Enum.all?(activities, fn activity ->
+        (not is_nil(user_id) and activity.subject_id == user_id) or
+          (not is_nil(activity.object_id) and
+             Bonfire.Boundaries.can?(user, :delete, activity.object_id) == true)
+      end)
+  end
+
+  # for internal use, please call `delete/2` which checks for permission
+  defp do_delete(q, activities) do
+    # TODO: move call Objects.maybe_unindex here to delete from search index?
 
     # FIXME? does cascading delete take care of deleting the activities from feeds?
     FeedActivities.delete(activities, :id)
@@ -264,12 +295,12 @@ defmodule Bonfire.Social.Activities do
 
   ## Examples
 
-      > delete_by_object("1")
+      > delete_by_object("1", current_user: me)
       # Number of deleted objects
   """
-  def delete_by_object(id) when is_binary(id) or is_struct(id) do
+  def delete_by_object(id, opts) when is_binary(id) or is_struct(id) do
     # maybe_remove_for_deleters_feeds(id)
-    delete({:object_id, id})
+    delete({:object_id, id}, opts)
   end
 
   def maybe_remove_for_deleters_feeds(id) do
@@ -541,7 +572,13 @@ defmodule Bonfire.Social.Activities do
           proload(query, activity: [:replied])
 
         :with_thread_name ->
-          proload(query, activity: [replied: [thread: [:named]]])
+          # the title is read straight off the root's `Named`, whether or not the viewer can read the root itself
+          proload(query, activity: [replied: [:thread_named]])
+
+        :with_thread ->
+          query
+          |> proload(activity: [:replied])
+          |> preload(activity: [replied: [thread: ^maybe_preload_thread(opts)]])
 
         :with_thread_post ->
           # Preload the thread's full post content for showing thread start in feeds
@@ -805,7 +842,10 @@ defmodule Bonfire.Social.Activities do
           [:replied]
 
         :with_thread_name ->
-          [replied: [thread: [:named]]]
+          [replied: [:thread_named]]
+
+        :with_thread ->
+          [replied: [thread: maybe_preload_thread(opts)]]
 
         :with_thread_post ->
           [
@@ -1020,6 +1060,16 @@ defmodule Bonfire.Social.Activities do
       # }]
     )
     |> debug("query to attempt loading reply_to")
+  end
+
+  # just the thread root itself, loaded only when the viewer can read it: for pages that need to know whether there is a readable root (its id, to link the reply into it), not its content
+  defp maybe_preload_thread(opts) do
+    Common.Needles.pointer_query(
+      [],
+      Enums.merge_uniq(opts,
+        skip_boundary_check: false
+      )
+    )
   end
 
   defp maybe_preload_thread_post([], opts) do

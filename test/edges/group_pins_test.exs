@@ -113,7 +113,7 @@ defmodule Bonfire.Social.GroupPinsTest do
   } do
     listed = fake_user!(fake_account!())
     {:ok, circle} = Categories.moderators_circle(group)
-    Bonfire.Boundaries.Circles.add_to_circles(listed, circle)
+    Bonfire.Boundaries.Circles.add_to_circles(listed, circle, skip_boundary_check: true)
 
     assert Bonfire.Boundaries.can?(listed, :mediate, group), "control: a moderator"
     refute Categories.member?(listed, group), "control: not a member"
