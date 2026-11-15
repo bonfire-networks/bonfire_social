@@ -40,14 +40,21 @@ defmodule Bonfire.Social.Import.Source.Archive do
   def stage(zip_path) when is_binary(zip_path) do
     with {:ok, entries} <- table(zip_path),
          :ok <- check_entries(entries),
-         names = Enum.map(entries, &elem(&1, 0)),
+         root = archive_root(Enum.map(entries, &elem(&1, 0))),
+         # the names inside the archive's own folder, as the export wrote them
+         names =
+           for(
+             {name, _size} <- entries,
+             String.starts_with?(name, root),
+             do: String.replace_prefix(name, root, "")
+           ),
          true <-
            Enum.any?(names, &(&1 in @known)) ||
              {:error, l("This archive has nothing we know how to import")},
          {:ok, dir} <- make_dir(),
          zip = Path.join(dir, "archive.zip"),
          :ok <- File.cp(zip_path, zip),
-         {:ok, data} <- read_entries(zip, Enum.filter(names, &data_file?/1)) do
+         {:ok, data} <- read_entries(zip, root, Enum.filter(names, &data_file?/1)) do
       Import.enqueue_archive_cleanup(dir)
 
       {:ok,
@@ -55,6 +62,7 @@ defmodule Bonfire.Social.Import.Source.Archive do
          source: __MODULE__,
          dir: dir,
          zip: zip,
+         root: root,
          items: items(names, data),
          media: Enum.filter(names, &media?/1),
          profile_media:
@@ -70,6 +78,7 @@ defmodule Bonfire.Social.Import.Source.Archive do
   @impl true
   def materialize(%{zip: zip, dir: dir, items: items} = staged, keys) do
     present = Map.new(items, &{&1.key, &1})
+    root = Map.get(staged, :root, "")
 
     list_files =
       for {name, {key, format}} <- @lists,
@@ -81,14 +90,15 @@ defmodule Bonfire.Social.Import.Source.Archive do
     with {:ok, data} <-
            read_entries(
              zip,
+             root,
              Map.keys(list_files) ++
                if(:posts in keys, do: [@outbox], else: []) ++
                if(:posts in keys or :profile in keys, do: [@actor], else: [])
            ),
          {:ok, media_dir} <-
-           maybe_extract(zip, dir, if(:posts in keys, do: staged.media, else: [])),
+           maybe_extract(zip, dir, root, if(:posts in keys, do: staged.media, else: [])),
          {:ok, profile_dir} <-
-           maybe_extract(zip, dir, if(:profile in keys, do: staged.profile_media, else: [])) do
+           maybe_extract(zip, dir, root, if(:profile in keys, do: staged.profile_media, else: [])) do
       lists =
         Enum.reduce(list_files, %{}, fn {name, {key, format}}, acc ->
           identifiers = parse(format, data[name])
@@ -156,24 +166,47 @@ defmodule Bonfire.Social.Import.Source.Archive do
     with :ok <- File.mkdir_p(dir), do: {:ok, dir}
   end
 
-  defp read_entries(_zip, []), do: {:ok, %{}}
-
-  defp read_entries(zip, names) do
-    case :zip.extract(String.to_charlist(zip), [
-           :memory,
-           {:file_list, Enum.map(names, &String.to_charlist/1)}
-         ]) do
-      {:ok, files} -> {:ok, Map.new(files, fn {name, data} -> {to_string(name), data} end)}
-      e -> error(e, l("Could not read this archive"))
+  # The folder in the zip that holds the archive's own files: none, as an export writes it, or the folders around them when someone unzipped the archive and zipped the folder again. Found by the shallowest `outbox.json` or `actor.json`
+  defp archive_root(names) do
+    if Enum.any?(names, &(&1 in @known)) do
+      ""
+    else
+      names
+      |> Enum.filter(&(Path.basename(&1) in [@outbox, @actor]))
+      |> Enum.min_by(&length(Path.split(&1)), fn -> nil end)
+      |> case do
+        nil -> ""
+        name -> Path.dirname(name) <> "/"
+      end
     end
   end
 
-  defp maybe_extract(_zip, _dir, []), do: {:ok, nil}
+  defp read_entries(_zip, _root, []), do: {:ok, %{}}
 
-  defp maybe_extract(zip, dir, names) do
+  # `names` are relative to the archive's folder, and so are the keys returned
+  defp read_entries(zip, root, names) do
+    case :zip.extract(String.to_charlist(zip), [
+           :memory,
+           {:file_list, Enum.map(names, &String.to_charlist(root <> &1))}
+         ]) do
+      {:ok, files} ->
+        {:ok,
+         Map.new(files, fn {name, data} ->
+           {String.replace_prefix(to_string(name), root, ""), data}
+         end)}
+
+      e ->
+        error(e, l("Could not read this archive"))
+    end
+  end
+
+  defp maybe_extract(_zip, _dir, _root, []), do: {:ok, nil}
+
+  # extracts into `dir` as the zip has them, and returns the folder where they're found by their names relative to the archive's folder
+  defp maybe_extract(zip, dir, root, names) do
     with {:ok, paths} <-
            :zip.extract(String.to_charlist(zip), [
-             {:file_list, Enum.map(names, &String.to_charlist/1)},
+             {:file_list, Enum.map(names, &String.to_charlist(root <> &1))},
              {:cwd, String.to_charlist(dir)}
            ]) do
       # only regular files are kept, so a link inside the zip can't point the importer at another file on our disk
@@ -184,7 +217,7 @@ defmodule Bonfire.Social.Import.Source.Archive do
         end
       end
 
-      {:ok, dir}
+      {:ok, Path.join(dir, root)}
     else
       e -> error(e, l("Could not extract the archive's files"))
     end

@@ -29,6 +29,40 @@ defmodule Bonfire.Social.Feeds do
   @behaviour Bonfire.Common.QueryModule
   def schema_module, do: Feed
 
+  @doc "Whether content widgets (top discussions, recent articles, polls, the spotlight…) show only what was posted on this instance. An instance setting, so that each widget's list can stay cached once for everyone."
+  def widget_origin_local? do
+    Bonfire.Common.Config.get([__MODULE__, :widget_origin], :everywhere,
+      name: l("Widgets show"),
+      description:
+        l(
+          "Whether widgets such as top discussions show only what was posted on this instance, or content from everywhere."
+        )
+    ) in [:local, "local"]
+  end
+
+  @doc "The filters a content widget adds to its feed, per `widget_origin_local?/0`."
+  def widget_origin_filters, do: if(widget_origin_local?(), do: %{origin: :local}, else: %{})
+
+  @doc "The part of a content widget's cache key that its origin setting changes, so a change shows at once."
+  def widget_origin_key, do: if(widget_origin_local?(), do: "local", else: "all")
+
+  @doc """
+  Leaves out of `query` what came from another instance, per `widget_origin_local?/0`, for a content widget whose query is not a feed: each `{binding, field}` is an id (eg. the object, its creator) that must not be a remote one, ie. have no `Peered` row.
+  """
+  def maybe_widget_local_only(query, refs) do
+    import Ecto.Query, only: [from: 2, where: 3, subquery: 1]
+
+    if widget_origin_local?() do
+      remote_ids = from(p in Bonfire.Data.ActivityPub.Peered, select: p.id)
+
+      Enum.reduce(refs, query, fn {binding, field}, query ->
+        where(query, [{^binding, x}], field(x, ^field) not in subquery(remote_ids))
+      end)
+    else
+      query
+    end
+  end
+
   def feed_presets(opts) do
     if current_user = current_user(opts) do
       Settings.get([__MODULE__, :feed_presets], [],

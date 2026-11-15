@@ -536,7 +536,11 @@ defmodule Bonfire.Social.Boosts do
              :return_pointable,
              [object, [current_user: creator, verbs: [:boost]]]
            ),
-         {:ok, _} = boosted <- boost_or_existing(creator, pointable) do
+         {:ok, _} = boosted <-
+           boost_or_existing(creator, pointable,
+             # a group relaying a post published in it tells its author nothing they don't know, whereas any other boost still does
+             notify_creator: !relays_post_published_in_it?(data["actor"], object)
+           ) do
       maybe_publish_in_announcing_group(creator, data, object, pointable)
       boosted
     end
@@ -561,8 +565,8 @@ defmodule Bonfire.Social.Boosts do
   end
 
   # A group announcing a post that it already boosted has nothing to add: that is how a community tells us it accepted what we published into it, after our own group copy boosted it when we did. The existing boost is the answer, not an error. `boost/3` still decides whether a repeat is allowed (`can_reboost_after`), and only when it refuses as `:already_boosted` do we return the one that is there.
-  defp boost_or_existing(creator, pointable) do
-    case boost(creator, pointable, local: false) do
+  defp boost_or_existing(creator, pointable, opts) do
+    case boost(creator, pointable, Keyword.put(opts, :local, false)) do
       {:error, :already_boosted} -> get(creator, pointable)
       other -> other
     end
@@ -572,13 +576,10 @@ defmodule Bonfire.Social.Boosts do
   defp maybe_publish_in_announcing_group(
          %{__struct__: Bonfire.Classify.Category} = group,
          %{"actor" => announcer},
-         %{data: %{"audience" => audience}},
+         object,
          pointable
        ) do
-    if ActivityPub.Object.get_ap_id(announcer) in Enum.map(
-         List.wrap(audience),
-         &ActivityPub.Object.get_ap_id/1
-       ) do
+    if relays_post_published_in_it?(announcer, object) do
       # locality loaded here, as the `:tag` check `publish_existing_in/3` makes on the author requires
       author =
         Objects.object_creator(Objects.preload_creator(pointable))
@@ -594,4 +595,15 @@ defmodule Bonfire.Social.Boosts do
   end
 
   defp maybe_publish_in_announcing_group(_group, _data, _object, _pointable), do: nil
+
+  # the one rule for "the announcer relays a post published in it": the post's own `audience` names the announcer
+  defp relays_post_published_in_it?(announcer, %{data: %{"audience" => audience}})
+       when not is_nil(announcer) do
+    ActivityPub.Object.get_ap_id(announcer) in Enum.map(
+      List.wrap(audience),
+      &ActivityPub.Object.get_ap_id/1
+    )
+  end
+
+  defp relays_post_published_in_it?(_announcer, _object), do: false
 end

@@ -2340,6 +2340,7 @@ defmodule Bonfire.Social.Threads do
   defp do_list_trending(as_circle_opts, limit) do
     case Bonfire.Social.FeedLoader.feed(
            :trending_discussions,
+           Bonfire.Social.Feeds.widget_origin_filters(),
            as_circle_opts ++
              [
                paginate: %{limit: limit},
@@ -2427,5 +2428,7 @@ defmodule Bonfire.Social.Threads do
     trending_circle_key(circle, limit)
   end
 
-  defp trending_circle_key(circle, limit), do: "widget_trending_discussions:#{circle}:#{limit}"
+  defp trending_circle_key(circle, limit),
+    do:
+      "widget_trending_discussions:#{circle}:#{limit}:#{Bonfire.Social.Feeds.widget_origin_key()}"
 end

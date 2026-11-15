@@ -95,16 +95,22 @@ defmodule Bonfire.Social.Pins do
         as_circle_opts ++
         [
           # loaded as a circle, not a user, so no viewer for `Activities` to match subjects against
-          skip_err: true
+          skip_err: true,
+          # the spotlight is a content widget, so it follows the instance's choice of local only or everywhere
+          widget_origin: true
         ]
     )
     |> e(:edges, [])
   end
 
-  defp spotlight_cache_key(circle), do: "#{@spotlight_cache_key}:#{circle}"
+  defp spotlight_cache_key(circle, origin \\ Bonfire.Social.Feeds.widget_origin_key()),
+    do: "#{@spotlight_cache_key}:#{circle}:#{origin}"
 
   defp forget_spotlight do
-    for circle <- [:guest, :local], do: Bonfire.Common.Cache.remove(spotlight_cache_key(circle))
+    for circle <- [:guest, :local],
+        origin <- ["local", "all"],
+        do: Bonfire.Common.Cache.remove(spotlight_cache_key(circle, origin))
+
     :ok
   end
 
@@ -687,6 +693,15 @@ defmodule Bonfire.Social.Pins do
     )
     # in the same query as the limit, so pins the viewer can't read don't use up places; a no-op with `skip_boundary_check` (the instance pins feed)
     |> Activities.as_permitted_for(opts, [:see, :read])
+    |> then(fn query ->
+      if opts[:widget_origin],
+        do:
+          Bonfire.Social.Feeds.maybe_widget_local_only(query, [
+            {:activity, :object_id},
+            {:activity, :subject_id}
+          ]),
+        else: query
+    end)
     |> order_by([edge: e, ranked: r], asc_nulls_last: r.rank, desc: e.id)
     |> limit(^(opts[:limit] || 3))
     |> select([activity: a], a)

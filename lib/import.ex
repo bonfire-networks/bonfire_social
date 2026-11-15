@@ -486,9 +486,13 @@ defmodule Bonfire.Social.Import do
     |> results_return()
   end
 
+  # the posts first, so someone moving here sees their own posts before their likes, bookmarks and other lists come in. Oban runs a lower number first, and runs several jobs at once, so the posts start first rather than all finishing first
+  defp job_priority(op) when op in ["outbox_import", "outbox_creations_import"], do: 0
+  defp job_priority(_op), do: 1
+
   defp enqueue(op, scope, {circle_name, username}, _extra_args),
     do:
-      job_enqueue([queue: :import], %{
+      job_enqueue([queue: :import, priority: job_priority(op)], %{
         "op" => op,
         "user_id" => scope,
         "context" => circle_name,
@@ -499,7 +503,7 @@ defmodule Bonfire.Social.Import do
   defp enqueue(op, scope, identifier, extra_args),
     do:
       job_enqueue(
-        [queue: :import],
+        [queue: :import, priority: job_priority(op)],
         Map.merge(extra_args, %{"op" => op, "user_id" => scope, "identifier" => identifier})
       )
 
