@@ -1158,7 +1158,14 @@ defmodule Bonfire.Social.PostContents do
       {:ok, translations} ->
         result =
           Enum.zip(field_names, translations)
-          |> Map.new()
+          |> Map.new(fn {name, translated} ->
+            # what the translation service answers is not trusted, and an HTML translation is put into the page as HTML
+            {name,
+             if(opts[:format] == :html and is_binary(translated),
+               do: Text.maybe_sane_html(translated),
+               else: translated
+             )}
+          end)
 
         {:ok, result}
 

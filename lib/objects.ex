@@ -1485,6 +1485,8 @@ defmodule Bonfire.Social.Objects do
     with pointer_id when is_binary(pointer_id) <-
            Bonfire.Federate.ActivityPub.AdapterUtils.pointer_id_from_ap_object(object),
          {:ok, post} <- Bonfire.Common.Needles.get(pointer_id, skip_boundary_check: true),
+         {:author_delete?, false} <-
+           {:author_delete?, deleted_by_signed_author?(creator, activity, pointer_id)},
          %{} = group <- removed_from_group(data, pointer_id) do
       if e(activity, :local, nil) == true do
         # OUR moderator's removal, relayed back by the group elsewhere that applied it (`Categories.remove_post_from_group/4` sent it, pending): that is what takes it out of the group here, if it's still waiting
@@ -1499,6 +1501,13 @@ defmodule Bonfire.Social.Objects do
         receive_removal(creator, group, post, activity)
       end
     else
+      # the post's own author deleting it, with a signature that says so, while its origin still serves a copy (the AP rows it was made from are pruned): no word from the origin is needed
+      {:author_delete?, true} ->
+        ap_maybe_delete(
+          creator,
+          Bonfire.Federate.ActivityPub.AdapterUtils.pointer_id_from_ap_object(object)
+        )
+
       _ ->
         debug(
           object,
@@ -1508,6 +1517,17 @@ defmodule Bonfire.Social.Objects do
         {:ok, :skip}
     end
   end
+
+  # The author of the post, vouched for by a signature (their HTTP signature, proof or LD signature) of the delivery: only they can delete it without its origin saying it is gone.
+  defp deleted_by_signed_author?(creator, %{data: %{"actor" => actor_id}} = activity, pointer_id)
+       when is_binary(actor_id) do
+    e(activity, :local, nil) != true and
+      e(activity, :authenticated, nil) in [:http_signature, :ld_signature, :integrity_proof] and
+      e(activity, :signed_by, nil) == actor_id and
+      not is_nil(id(creator)) and id(object_creator(pointer_id)) == id(creator)
+  end
+
+  defp deleted_by_signed_author?(_creator, _activity, _pointer_id), do: false
 
   defp receive_removal(creator, group, post, activity) do
     # refused, it is tried again after re-syncing the group's moderators from its origin, for a moderator added since we last synced them

@@ -850,36 +850,42 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       #   resolve(&list_posts/3)
       # end
       connection field :posts, node_type: :post do
+        meta(public: true)
         complexity(&page_complexity/2)
         resolve(&list_posts/3)
       end
 
       @desc "Get a post"
       field :post, :post do
+        meta(public: true)
         arg(:filter, :post_filters)
         resolve(&get_post/3)
       end
 
       @desc "Get an activity"
       field :activity, :activity do
+        meta(public: true)
         arg(:filter, :activity_filter)
         resolve(&get_activity/3)
       end
 
       @desc "Get a single status (an object's create-activity) by object id, with the activity subtree preloaded so sub-fields resolve synchronously (variant-D)"
       field :status, :activity do
+        meta(public: true)
         arg(:id, non_null(:id))
         resolve(&get_status/3)
       end
 
       @desc "Get an object"
       field :object, :any_object do
+        meta(public: true)
         arg(:filter, :object_filter)
         resolve(&get_activity/3)
       end
 
       @desc "Get thread context (ancestors and descendants) for an activity"
       field :thread_context, :thread_context do
+        meta(public: true)
         arg(:id, non_null(:id))
         resolve(&get_thread_context/3)
       end
@@ -891,6 +897,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       #   resolve(&feed/2)
       # end
       connection field :feed_activities, node_type: :activity do
+        meta(public: true)
         arg(:filter, :feed_filters)
 
         complexity(&page_complexity/2)
@@ -899,6 +906,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       @desc "Feed with the activity subtree preloaded so sub-fields resolve synchronously (no Needle.Pointer Dataloader rounds)"
       connection field :feed_activities_preloaded, node_type: :activity do
+        meta(public: true)
         arg(:filter, :feed_filters)
 
         complexity(&page_complexity/2)
@@ -907,6 +915,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       @desc "Activities posted in a group (the group's outbox feed)"
       connection field :group_activities, node_type: :activity do
+        meta(public: true)
         arg(:group_id, non_null(:id))
         arg(:filter, :feed_filters)
         complexity(&page_complexity/2)
@@ -915,6 +924,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       @desc "Get objects in a feed (TODO)"
       connection field :feed_objects, node_type: :any_context do
+        meta(public: true)
         arg(:filter, :feed_filters)
         complexity(&page_complexity/2)
         resolve(&feed_objects/2)
