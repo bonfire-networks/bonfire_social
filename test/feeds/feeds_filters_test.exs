@@ -726,8 +726,8 @@ defmodule Bonfire.Social.FeedsFiltersTest do
   describe "events filter without bonfire_gatherings" do
     # an instance without gatherings keeps events as APActivities, matched by the `type` in their json
     setup do
-      # as if the extension were not there (`Bonfire.Common.Extend` caches the modularity per process)
-      Process.put({:modularity_cache, :bonfire_gatherings}, :disabled)
+      # as if the extension were not there (in tests, Config reads a value put in the process dictionary)
+      Process.put([:bonfire_gatherings, :modularity], :disabled)
       refute Bonfire.Common.Types.object_type("Event")
       :ok
     end
