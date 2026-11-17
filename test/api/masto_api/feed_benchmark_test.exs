@@ -15,6 +15,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     """
     use Bonfire.Social.MastoApiCase, async: false
 
+    import Bonfire.Common.Testing, only: [count_queries: 1]
+
     alias Bonfire.Me.Fake
     alias Bonfire.Posts
     alias Bonfire.Social.Likes
@@ -90,9 +92,12 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       assert is_list(d_out) and d_out != []
 
       IO.puts("\n=== DB query counts (one call) ===")
-      IO.puts("A (direct):            #{count_queries(a)} queries, #{length(a_out)} items")
-      IO.puts("B (graphql+dl):        #{count_queries(b)} queries, #{length(b_out)} items")
-      IO.puts("D (graphql preloaded): #{count_queries(d)} queries, #{length(d_out)} items")
+      {_, a_queries} = count_queries(a)
+      {_, b_queries} = count_queries(b)
+      {_, d_queries} = count_queries(d)
+      IO.puts("A (direct):            #{a_queries} queries, #{length(a_out)} items")
+      IO.puts("B (graphql+dl):        #{b_queries} queries, #{length(b_out)} items")
+      IO.puts("D (graphql preloaded): #{d_queries} queries, #{length(d_out)} items")
 
       IO.puts("\n=== Dataloader batch runs (one call) ===")
       bdb = absinthe_breakdown(b)
@@ -194,8 +199,10 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       assert is_map(direct.()) and is_map(graphql.())
 
       IO.puts("\n=== show_status DB queries (one call) ===")
-      IO.puts("direct:  #{count_queries(direct)} queries")
-      IO.puts("graphql: #{count_queries(graphql)} queries")
+      {_, direct_queries} = count_queries(direct)
+      {_, graphql_queries} = count_queries(graphql)
+      IO.puts("direct:  #{direct_queries} queries")
+      IO.puts("graphql: #{graphql_queries} queries")
 
       IO.puts("\n=== show_status Benchee (p50/p99) ===")
 
@@ -288,8 +295,10 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       assert length(direct.()) > 0 and length(graphql.()) > 0
 
       IO.puts("\n=== timeline DB queries (one call) ===")
-      IO.puts("direct:  #{count_queries(direct)} queries, #{length(direct.())} items")
-      IO.puts("graphql: #{count_queries(graphql)} queries, #{length(graphql.())} items")
+      {_, direct_queries} = count_queries(direct)
+      {_, graphql_queries} = count_queries(graphql)
+      IO.puts("direct:  #{direct_queries} queries, #{length(direct.())} items")
+      IO.puts("graphql: #{graphql_queries} queries, #{length(graphql.())} items")
 
       IO.puts("\n=== timeline Benchee (p50/p99) ===")
 
@@ -363,28 +372,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         _ ->
           flunk("GraphQL variant did not return a feed: #{inspect(result, limit: :infinity)}")
       end
-    end
-
-    # Count DB queries issued while running `fun` once (Ecto derives the prefix from
-    # the repo module: Bonfire.Common.Repo -> [:bonfire, :common, :repo]).
-    defp count_queries(fun) do
-      counter = :counters.new(1, [])
-      handler_id = {__MODULE__, :q, make_ref()}
-
-      :telemetry.attach(
-        handler_id,
-        [:bonfire, :common, :repo, :query],
-        fn _e, _meas, _meta, _cfg -> :counters.add(counter, 1, 1) end,
-        nil
-      )
-
-      try do
-        fun.()
-      after
-        :telemetry.detach(handler_id)
-      end
-
-      :counters.get(counter, 1)
     end
 
     # Total operation time + Dataloader batch-run count via telemetry. Dataloader runs
