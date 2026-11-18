@@ -10,6 +10,7 @@ defmodule Bonfire.Social.Acts.Objects.Delete do
   alias Bonfire.Social
   # alias Ecto.Changeset
   use Arrows
+  use Bonfire.Common.E
   import Bonfire.Epics
   # import Untangle
 
@@ -82,6 +83,7 @@ defmodule Bonfire.Social.Acts.Objects.Delete do
             remote_followed(ap_object, id)
             |> Bonfire.Federate.ActivityPub.AdapterUtils.ids_or_object_ids()
           )
+          |> Kernel.++(allowed_followers(object, ap_object))
           |> Enum.uniq()
         )
 
@@ -101,4 +103,23 @@ defmodule Bonfire.Social.Acts.Objects.Delete do
   end
 
   defp remote_followed(_ap_object, _id), do: []
+
+  # A post that was not public reached only who it was addressed to and the author's followers allowed to see it, so its `Delete` is not sent to all the author's followers, only to those. Read before deleting, as the post's access rules go with it. A public post's `Delete` goes to all the author's followers anyway, and an actor is not a post.
+  defp allowed_followers(object, %{data: %{} = ap_data}) do
+    creator = e(object, :created, :creator, nil)
+
+    if creator && !Map.get(object, :character) && !ActivityPub.Utils.public?(ap_data) do
+      case Bonfire.Federate.ActivityPub.AdapterUtils.external_recipients_for_object(
+             creator,
+             object
+           ) do
+        {:ok, actors} -> Enum.map(actors, & &1.ap_id)
+        _ -> []
+      end
+    else
+      []
+    end
+  end
+
+  defp allowed_followers(_object, _ap_object), do: []
 end
