@@ -42,6 +42,25 @@ defmodule Bonfire.Social.Requests do
     do: exists?(subject, type, object, skip_boundary_check: true)
 
   @doc """
+  The topic on which the requester's open pages hear that their request to `object` (eg. to follow a person or join a group) was answered. A page showing a control in its pending state listens on it.
+  """
+  def answered_topic(requester, object), do: "request_answered:#{id(requester)}:#{id(object)}"
+
+  @doc """
+  Tells the requester's open pages that their request to `object` was answered: each `component` there showing `object` gets `assigns` (eg. `%{my_follow: true}`), through `Bonfire.UI.Common.ComponentID`, plus any further `messages` for the page itself.
+  """
+  def broadcast_answered(requester, object, component, assigns, messages \\ []) do
+    topic = answered_topic(requester, object)
+
+    Bonfire.Common.PubSub.broadcast(
+      topic,
+      {{Bonfire.UI.Common.ComponentID, :send_updates}, {component, id(object), assigns}}
+    )
+
+    Enum.each(messages, &Bonfire.Common.PubSub.broadcast(topic, &1))
+  end
+
+  @doc """
   Requests to do something, and federates it.
 
   ## Examples
