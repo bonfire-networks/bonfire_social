@@ -3,9 +3,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
   defmodule Bonfire.Social.MastoApi.FeedBenchmarkTest do
     @moduledoc """
     Phase 0 benchmark (GRAPHQL_FIRST_MASTO_PLAN.md): cost of producing a feed via
-    the DIRECT context path (A) vs current GraphQL+Dataloader (B) vs variant-D
-    synchronous resolution from preloaded structs (D). Excluded from the normal
-    suite (@tag :benchmark).
+    GraphQL+Dataloader (B) vs variant-D synchronous resolution from preloaded structs (D).
+    The direct struct path (A) it was first measured against is gone (pure-mappers piece 6).
+    Excluded from the normal suite (@tag :benchmark).
 
     Uses a `subjects`-filtered feed (queries activities by author, independent of
     async feed fan-out) so a deterministic N-item feed is available in tests.
@@ -20,7 +20,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     alias Bonfire.Me.Fake
     alias Bonfire.Posts
     alias Bonfire.Social.Likes
-    alias Bonfire.API.MastoCompat.{FeedPipeline, BatchLoaders, Mappers}
     alias Bonfire.API.GraphQL.Schema
 
     @moduletag :benchmark
@@ -77,25 +76,20 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     end
 
     @tag :benchmark
-    test "feed resolution: direct (A) vs GraphQL+Dataloader (B) vs preloaded (D)", ctx do
+    test "feed resolution: GraphQL+Dataloader (B) vs preloaded (D)", ctx do
       %{viewer: viewer, subjects: subjects} = ctx
       limit = @feed_size
-      a = fn -> variant_a(viewer, subjects, limit) end
       b = fn -> variant_gql(@gql, viewer, subjects, limit) end
       d = fn -> variant_gql(@gql_d, viewer, subjects, limit) end
 
-      a_out = a.()
       b_out = b.()
       d_out = d.()
-      assert is_list(a_out) and a_out != []
       assert is_list(b_out) and b_out != []
       assert is_list(d_out) and d_out != []
 
       IO.puts("\n=== DB query counts (one call) ===")
-      {_, a_queries} = count_queries(a)
       {_, b_queries} = count_queries(b)
       {_, d_queries} = count_queries(d)
-      IO.puts("A (direct):            #{a_queries} queries, #{length(a_out)} items")
       IO.puts("B (graphql+dl):        #{b_queries} queries, #{length(b_out)} items")
       IO.puts("D (graphql preloaded): #{d_queries} queries, #{length(d_out)} items")
 
@@ -108,7 +102,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       IO.puts("\n=== Benchee (p50/p99) ===")
 
       Benchee.run(
-        %{"A_direct" => a, "B_graphql" => b, "D_graphql_preloaded" => d},
+        %{"B_graphql" => b, "D_graphql_preloaded" => d},
         time: 5,
         warmup: 2,
         percentiles: [50, 99],
@@ -154,203 +148,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
           percentiles: [50, 99],
           print: [fast_warning: false, configuration: false, benchmarking: false]
         )
-      end
-    end
-
-    # Phase 6/7 reality check (GRAPHQL_FIRST_MASTO_PLAN.md): the REST-on-GraphQL conversions
-    # do Absinthe.run (resolve bonfire-shaped node) + from_graphql (map to Mastodon), which is
-    # strictly more work than the direct path (structs -> mapper). Measure the real overhead
-    # on `show_status` (single item) to validate the per-endpoint perf gate (p99 <= 1.3x direct)
-    # BEFORE converting the hottest path (timelines).
-    @status_query """
-    query Status($id: ID!) {
-      status(id: $id) {
-        id
-        object_id: objectId
-        verb { verb }
-        subject { ... on User { id character { username } profile { name summary } } }
-        object {
-          ... on Post {
-            id
-            post_content: postContent { name summary html_body: rawBody }
-          }
-        }
-        media { id media_type: mediaType url description metadata }
-        liked_by_me: likedByMe
-        boosted_by_me: boostedByMe
-        bookmarked_by_me: bookmarkedByMe
-        replies_count: repliesCount
-      }
-    }
-    """
-
-    @tag :benchmark
-    test "show_status: direct vs GraphQL-backed (Phase 6 overhead)", ctx do
-      %{viewer: viewer, subjects: [author_id]} = ctx
-      # use one of the seeded public posts
-      {:ok, post} =
-        Bonfire.Posts.read(hd(seeded_post_ids(author_id, viewer)), current_user: viewer)
-
-      id = post.id
-
-      direct = fn -> show_direct(id, viewer) end
-      graphql = fn -> show_graphql(id, viewer) end
-
-      assert is_map(direct.()) and is_map(graphql.())
-
-      IO.puts("\n=== show_status DB queries (one call) ===")
-      {_, direct_queries} = count_queries(direct)
-      {_, graphql_queries} = count_queries(graphql)
-      IO.puts("direct:  #{direct_queries} queries")
-      IO.puts("graphql: #{graphql_queries} queries")
-
-      IO.puts("\n=== show_status Benchee (p50/p99) ===")
-
-      Benchee.run(
-        %{"direct" => direct, "graphql" => graphql},
-        time: 4,
-        warmup: 2,
-        percentiles: [50, 99],
-        print: [fast_warning: false, configuration: false, benchmarking: false]
-      )
-    end
-
-    defp seeded_post_ids(author_id, viewer) do
-      %{edges: edges} =
-        Bonfire.Social.FeedActivities.feed(:user_activities, %{subjects: [author_id]},
-          current_user: viewer,
-          paginate: %{first: 5}
-        )
-
-      edges |> Enum.map(&(&1.activity.object_id || &1.activity.id)) |> Enum.reject(&is_nil/1)
-    end
-
-    defp show_direct(id, viewer) do
-      case Bonfire.Social.Objects.read(id,
-             current_user: viewer,
-             preload: FeedPipeline.single_status_preloads()
-           ) do
-        {:ok, %{activity: activity} = object} when is_map(activity) ->
-          act = Map.put(activity, :object, object)
-          ids = [Map.get(act, :object_id) || Map.get(act, :id)] |> Enum.reject(&is_nil/1)
-          batch = BatchLoaders.load(viewer, ids) |> Keyword.put(:current_user, viewer)
-          Mappers.Status.from_activity(act, batch)
-
-        _ ->
-          nil
-      end
-    end
-
-    defp show_graphql(id, viewer) do
-      {:ok, %{data: %{"status" => node}}} =
-        Absinthe.run(@status_query, Schema,
-          variables: %{"id" => id},
-          context: Schema.context(%{current_user: viewer})
-        )
-
-      ids = [node["object_id"] || node["id"]] |> Enum.reject(&is_nil/1)
-      batch = BatchLoaders.load(viewer, ids) |> Keyword.put(:current_user, viewer)
-      Mappers.Status.from_graphql_activity(node, batch)
-    end
-
-    # Phase 7 gate: the timeline conversion runs feedActivitiesPreloaded with the FULL activity
-    # selection (incl. the boost-only object.activity nesting) + from_graphql_activity. Measure
-    # it vs the direct timeline path (FeedPipeline + from_activity) — the nesting is exactly what
-    # blew the show_status gate, so this must be re-checked at the feed level.
-    @feed_activity_query """
-    query Feed($first: Int, $subjects: [String]) {
-      feed: feedActivitiesPreloaded(first: $first, filter: {feedName: "user_activities", subjects: $subjects}) {
-        edges {
-          node {
-            id
-            object_id: objectId
-            verb { verb }
-            subject { ... on User { id character { username } profile { name summary } } }
-            object {
-              ... on Post {
-                id
-                post_content: postContent { name summary html_body: rawBody }
-                media { id media_type: mediaType url description metadata }
-                creator { ... on User { id character { username } profile { name summary } } }
-              }
-            }
-            media { id media_type: mediaType url description metadata }
-            liked_by_me: likedByMe
-            boosted_by_me: boostedByMe
-            bookmarked_by_me: bookmarkedByMe
-            replies_count: repliesCount
-          }
-        }
-      }
-    }
-    """
-
-    @tag :benchmark
-    test "timeline: direct vs GraphQL-backed (Phase 7 overhead)", ctx do
-      %{viewer: viewer, subjects: subjects} = ctx
-
-      direct = fn -> variant_a(viewer, subjects, @feed_size) end
-      graphql = fn -> timeline_graphql(viewer, subjects, @feed_size) end
-
-      assert length(direct.()) > 0 and length(graphql.()) > 0
-
-      IO.puts("\n=== timeline DB queries (one call) ===")
-      {_, direct_queries} = count_queries(direct)
-      {_, graphql_queries} = count_queries(graphql)
-      IO.puts("direct:  #{direct_queries} queries, #{length(direct.())} items")
-      IO.puts("graphql: #{graphql_queries} queries, #{length(graphql.())} items")
-
-      IO.puts("\n=== timeline Benchee (p50/p99) ===")
-
-      Benchee.run(
-        %{"direct" => direct, "graphql" => graphql},
-        time: 4,
-        warmup: 2,
-        percentiles: [50, 99],
-        print: [fast_warning: false, configuration: false, benchmarking: false]
-      )
-    end
-
-    defp timeline_graphql(viewer, subjects, limit) do
-      {:ok, %{data: %{"feed" => %{"edges" => edges}}}} =
-        Absinthe.run(@feed_activity_query, Schema,
-          variables: %{"first" => limit, "subjects" => subjects},
-          context: Schema.context(%{current_user: viewer})
-        )
-
-      nodes = Enum.map(edges, & &1["node"])
-      ids = nodes |> Enum.map(&(&1["object_id"] || &1["id"])) |> Enum.reject(&is_nil/1)
-      batch = BatchLoaders.load(viewer, ids) |> Keyword.put(:current_user, viewer)
-
-      Enum.flat_map(nodes, fn n ->
-        case Mappers.Status.from_graphql_activity(n, batch) do
-          m when is_map(m) -> [m]
-          _ -> []
-        end
-      end)
-    end
-
-    # ---- variant A: direct context path (current production REST read) ----
-    defp variant_a(viewer, subjects, limit) do
-      params = %{
-        filter: %{"feed_name" => "user_activities", "subjects" => subjects},
-        first: limit
-      }
-
-      case FeedPipeline.load(params, viewer) do
-        {:ok, activities, _page_info} ->
-          object_ids = FeedPipeline.object_ids(activities)
-          batch = Keyword.put(BatchLoaders.load(viewer, object_ids), :current_user, viewer)
-
-          Enum.flat_map(activities, fn act ->
-            case Mappers.Status.from_activity(act, batch) do
-              m when is_map(m) -> [m]
-              _ -> []
-            end
-          end)
-
-        _ ->
-          []
       end
     end
 

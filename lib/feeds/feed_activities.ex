@@ -160,6 +160,14 @@ defmodule Bonfire.Social.FeedActivities do
     []
   end
 
+  @doc "Whether an activity was published to any of these feeds, in one query (`feeds_for_activity/1` would list every feed it reached, thousands for a widely delivered post)."
+  def published_in_any?(_activity_id, []), do: false
+
+  def published_in_any?(activity_id, feed_ids) when is_list(feed_ids) do
+    from(f in FeedPublish, where: f.id == ^activity_id and f.feed_id in ^feed_ids)
+    |> repo().exists?()
+  end
+
   @doc """
   Creates a new local activity and publishes to appropriate feeds
   TODO: make this re-use the changeset-based code like in Epics instead of duplicating logic (currently it is only used in VF extension anyway)

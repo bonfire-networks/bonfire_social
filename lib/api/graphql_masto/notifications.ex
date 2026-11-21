@@ -7,18 +7,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     """
 
     use Bonfire.Common.Utils
-    use Bonfire.Common.Repo
 
-    import Ecto.Query
-
-    alias Bonfire.Data.Social.FeedPublish
-    alias Bonfire.Data.Social.Follow
     alias Bonfire.Social.Activities
-    alias Bonfire.Social.Feeds
     alias Bonfire.Social.API.GraphQLMasto.NotificationCandidate, as: Candidate
-    alias Bonfire.Social.Quotes
-    alias Bonfire.API.MastoCompat.FeedPipeline
-    alias Bonfire.API.MastoCompat.BatchLoaders
 
     # Which Mastodon type each kind of notification is, and which activity types to query for one, are both declared by the notification categories (`Bonfire.Social.RuntimeConfig`) and read through `Bonfire.Social.Notifications` (`masto_types/0`), so this API and the notifications feed cannot disagree about what a favourite is. Mastodon's names for them come from `Bonfire.API.MastoCompat.Schemas.Notification`
 
@@ -34,14 +25,50 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     # Actor fields, shared with the timeline adapter — covers User + Category (groups), without
     # which group-authored notifications resolve to an untyped actor and get dropped on validation.
     @actor_fields Bonfire.API.MastoCompat.Fragments.actor_fields()
+    @object_interactions Bonfire.API.MastoCompat.Fragments.object_interactions()
 
-    # What a notification's status needs beyond its object, selected on the notification's own activity so the status comes with the page instead of one read per status: an activity's media, counts and thread are its object's (`object_media`, `like_count` etc. join on `object_id`), so on a like or a boost they describe the post liked or boosted. Whether the reader liked, boosted or bookmarked it is batch-loaded by object alongside (`BatchLoaders.interaction_states/2`)
+    # What a notification's status needs beyond its object; media, counts and thread join on `object_id`, so on a like or boost they describe the post
     @status_fields """
     #{Bonfire.API.MastoCompat.Fragments.status_media()}
+    mentions { #{@actor_fields} }
+    hashtags { id name }
+    visibility
+    # the group or topic it was published in (`context_id`), as the feed selects it
+    context { ... on Category { id } }
+    # the fallback status, for an object that is neither a Post nor a Poll (`Mappers.Notification`)
+    object_post_content: objectPostContent { name summary html_body: rawBody }
     replies_count: repliesCount
     like_count: likeCount
     boost_count: boostCount
     #{Bonfire.API.MastoCompat.Fragments.thread_fields()}
+    """
+
+    # One notification's activity, as the list and the single notification both select it
+    @notification_node """
+    id
+    object_id: objectId
+    date
+    verb { verb }
+    subject { #{@actor_fields} }
+    subjects_more: subjectsMore @include(if: $grouped) { #{@actor_fields} }
+    #{Bonfire.API.MastoCompat.Fragments.status_object()}
+    #{@status_fields}
+    edge {
+      table_id: tableId
+      subject_id: subjectId
+      # the quoting post, on a quote request, read as the viewer
+      subject_object {
+        __typename
+        ... on Post {
+          id
+          #{Bonfire.API.MastoCompat.Fragments.status_post_content()}
+          #{Bonfire.API.MastoCompat.Fragments.status_media()}
+          creator { #{@actor_fields} }
+          #{@object_interactions}
+          activity { mentions { #{@actor_fields} } hashtags { id name } visibility }
+        }
+      }
+    }
     """
 
     # REST-on-GraphQL (Phase 7): verb-filtered notifications feed via `feedActivitiesPreloaded`,
@@ -54,29 +81,17 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         }
         edges {
           node {
-            id
-            object_id: objectId
-            date
-            verb { verb }
-            subject { #{@actor_fields} }
-            subjects_more: subjectsMore @include(if: $grouped) { #{@actor_fields} }
-            object {
-              __typename
-              ... on Post {
-                id
-                post_content: postContent { name summary html_body: rawBody }
-                creator { #{@actor_fields} }
-              }
-              ... on Poll {
-                id
-                post_content: postContent { name summary html_body: rawBody }
-                creator { #{@actor_fields} }
-              }
-            }
-            #{@status_fields}
-            edge { table_id: tableId subject_id: subjectId }
+            #{@notification_node}
           }
         }
+      }
+    }
+    """
+
+    @notification_query """
+    query Notification($id: ID!, $grouped: Boolean!) {
+      notification(id: $id) {
+        #{@notification_node}
       }
     }
     """
@@ -136,16 +151,17 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         |> put_var("after", Map.get(params, :after) || Map.get(params, "after"))
         |> put_var("before", Map.get(params, :before) || Map.get(params, "before"))
 
-      case Absinthe.run(@notifications_query, Bonfire.API.GraphQL.Schema,
-             variables: variables,
-             context: Bonfire.API.GraphQL.Schema.context(%{current_user: current_user})
+      case Bonfire.API.MastoCompat.Helpers.run_query(
+             @notifications_query,
+             current_user,
+             variables
            ) do
-        {:ok, %{data: %{"feed" => %{"edges" => edges, "page_info" => page_info}}}}
+        {:ok, %{data: %{feed: %{edges: edges, page_info: page_info}}}}
         when is_list(edges) ->
           page_info = %{
-            start_cursor: page_info["start_cursor"],
-            end_cursor: page_info["end_cursor"],
-            final_cursor: if(page_info["has_next_page"], do: nil, else: :last)
+            start_cursor: get_map_field(page_info, :start_cursor),
+            end_cursor: get_map_field(page_info, :end_cursor),
+            final_cursor: if(get_map_field(page_info, :has_next_page), do: nil, else: :last)
           }
 
           {:ok, edges |> Enum.map(&get_map_field(&1, :node)) |> Enum.reject(&is_nil/1), page_info}
@@ -178,19 +194,44 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     def get_for_user(current_user, id, opts \\ [])
     def get_for_user(nil, _id, _opts), do: {:error, :unauthorized}
 
-    def get_for_user(current_user, id, opts) when is_binary(id) do
-      with true <- published_to_user_notifications?(current_user, id),
-           {:ok, activity} <- Activities.get(id, current_user: current_user),
-           {:ok, candidate} <- activity_to_candidate(activity, current_user, opts) do
-        {:ok, candidate}
-      else
-        false -> {:error, :not_found}
-        nil -> {:error, :not_found}
-        {:error, _} -> {:error, :not_found}
+    def get_for_user(current_user, id, _opts) when is_binary(id) do
+      case Bonfire.API.MastoCompat.Helpers.run_query(@notification_query, current_user, %{
+             "id" => id,
+             "grouped" => false
+           }) do
+        {:ok, %{data: %{notification: %{} = node}}} ->
+          case build_candidate(node, current_user) do
+            %Candidate{} = candidate -> {:ok, candidate}
+            nil -> {:error, :not_found}
+          end
+
+        _ ->
+          {:error, :not_found}
       end
     end
 
     def get_for_user(_current_user, _id, _opts), do: {:error, :not_found}
+
+    @published_notification_query """
+    subscription PublishedNotification($grouped: Boolean!) {
+      feed_activity: feedActivity {
+        #{@notification_node}
+      }
+    }
+    """
+
+    @doc "A streamed activity as a notification candidate, through the list's node, run with the activity as root (`Helpers.run_published/4`); nil if it is no notification a client knows."
+    def published_candidate(activity, current_user) do
+      case Bonfire.API.MastoCompat.Helpers.run_published(
+             @published_notification_query,
+             activity,
+             current_user,
+             %{"grouped" => false}
+           ) do
+        {:ok, %{data: %{feed_activity: %{} = node}}} -> build_candidate(node, current_user)
+        _ -> nil
+      end
+    end
 
     # Inject the notification-type verb filter (and optional account filter) into the
     # feed query, so a single page contains only mappable notification activities.
@@ -236,54 +277,20 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     defp maybe_put_subjects(filter, nil), do: filter
     defp maybe_put_subjects(filter, account_id), do: Map.put(filter, "subjects", [account_id])
 
-    defp activity_to_candidate(activity, current_user, opts) do
-      activity =
-        activity
-        |> Activities.activity_preloads(
-          FeedPipeline.feed_preloads() ++ FeedPipeline.postload_preloads(),
-          current_user: current_user,
-          skip_boundary_check: true
-        )
-        |> preload_request_edges()
-
-      status_context =
-        BatchLoaders.load(current_user, raw_object_ids([activity]), post_content?: true)
-
-      case build_candidate(activity, current_user, status_context, opts) do
-        %Candidate{} = candidate -> {:ok, candidate}
-        nil -> {:error, :not_found}
-      end
-    end
-
+    # each node carries what its status needs (`@status_fields`), so no batch context
     defp activities_to_candidates(activities, current_user) do
-      status_context =
-        BatchLoaders.load(current_user, raw_object_ids(activities), post_content?: true)
-
       activities
       |> Enum.flat_map(fn activity ->
-        case build_candidate(activity, current_user, status_context, []) do
+        case build_candidate(activity, current_user) do
           %Candidate{} = candidate -> [candidate]
           nil -> []
         end
       end)
     end
 
-    defp preload_request_edges(activities) do
-      repo().maybe_preload(activities,
-        edge: [
-          :request,
-          subject: [
-            :post_content,
-            created: [creator: [:profile, :character]]
-          ]
-        ]
-      )
-    end
-
-    defp build_candidate(activity, current_user, status_context, _opts) do
+    defp build_candidate(activity, current_user) do
       object_id = get_map_field(activity, :object_id)
-      mentions_by_object = Keyword.get(status_context, :mentions_by_object, %{})
-      mentions = Map.get(mentions_by_object, object_id, [])
+      mentions = get_map_field(activity, :mentions) || []
 
       with type when not is_nil(type) <- candidate_type(activity, current_user, mentions) do
         subject = get_map_field(activity, :subject) || get_map_field(activity, :account)
@@ -298,8 +305,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
           object_id: object_id,
           status_post: status_post,
           created_at: get_map_field(activity, :created_at) || get_map_field(activity, :date),
-          status_context:
-            status_context_for_ids([object_id, get_map_field(status_post, :id)], status_context),
+          # each node carries what its status needs (`@status_fields`)
+          status_context: [],
           mentions: mentions
         }
       end
@@ -314,7 +321,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     end
 
     # This pipeline passes activities around as maps that can be keyed by string, which `Activities.experienced_as/2` cannot read: it is built on `e/3`, which only sees atom keys and would answer `nil` for every row. So the few fields it reads are lifted through the same accessor everything else here uses.
-    # `mentions` are the post's, loaded for the whole page (`BatchLoaders.mentions/1`): the query itself carries no tags, and without them a post naming the reader would read as a plain post (`:write`, a `status`) instead of a mention
+    # `mentions` are the node's GraphQL ones (the characters named): without them a post naming the reader would read as a plain post (`:write`, a `status`) instead of a mention
     defp atom_keyed(activity, mentions) do
       verb = get_map_field(activity, :verb)
 
@@ -325,7 +332,10 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         object: atom_keyed_object(get_map_field(activity, :object)),
         tags:
           get_map_field(activity, :tags) ||
-            Enum.map(List.wrap(mentions), &%{id: get_map_field(&1, :tag_id)}),
+            Enum.map(
+              List.wrap(mentions),
+              &%{id: get_map_field(&1, :id)}
+            ),
         replied: get_map_field(activity, :replied),
         emoji: get_map_field(activity, :emoji)
       }
@@ -355,28 +365,15 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       }
     end
 
+    # the quoting post: the node's GraphQL `subject_object`, read as the viewer. One the reader may not read gives no status, and so no notification
     defp status_post(:quote, activity) do
-      edge = get_map_field(activity, :edge)
-
-      case get_map_field(edge, :subject) do
+      case activity |> get_map_field(:edge) |> get_map_field(:subject_object) do
         %{id: _} = post -> post
-        _ -> load_quote_post(get_map_field(edge, :subject_id))
-      end
-    end
-
-    defp status_post(_type, _activity), do: nil
-
-    defp load_quote_post(id) when is_binary(id) do
-      case Bonfire.Social.Objects.read(id,
-             skip_boundary_check: true,
-             preload: [:with_post_content, :with_creator]
-           ) do
-        {:ok, post} -> post
         _ -> nil
       end
     end
 
-    defp load_quote_post(_), do: nil
+    defp status_post(_type, _activity), do: nil
 
     defp candidate_matches?(%Candidate{} = candidate, filters) do
       type_match? =
@@ -410,86 +407,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       |> Enum.reject(&is_nil/1)
     end
 
-    # Mastodon models a direct message as a `mention` notification, so the inbox counts here as well as the notifications feed: reading only the latter made a fetch by id answer "not found" for a DM the list had already shown.
-    # FIXME: one query, not two. 
-    defp published_to_user_notifications?(current_user, activity_id) do
-      case Feeds.notifications_class_ids(current_user) do
-        [] ->
-          false
-
-        feed_ids ->
-          from(fp in FeedPublish,
-            where: fp.id == ^activity_id and fp.feed_id in ^feed_ids,
-            select: true
-          )
-          |> repo().exists?()
-      end
-    end
-
-    defp raw_object_ids(activities) do
-      activities
-      |> Enum.flat_map(fn activity ->
-        [get_map_field(activity, :object_id), quote_request_post_id(activity)]
-      end)
-      |> Enum.reject(&is_nil/1)
-      |> Enum.uniq()
-    end
-
-    defp quote_request_post_id(activity) do
-      edge = get_map_field(activity, :edge)
-
-      if get_map_field(edge, :table_id) == quote_table_id() do
-        get_map_field(edge, :subject_id) ||
-          edge |> get_map_field(:subject) |> get_map_field(:id)
-      end
-    end
-
-    defp status_context_for_ids(ids, status_context) do
-      ids =
-        ids
-        |> Enum.reject(&is_nil/1)
-        |> Enum.uniq()
-
-      [
-        interaction_states:
-          take_map_keys(Keyword.get(status_context, :interaction_states, %{}), ids),
-        mentions_by_object:
-          take_map_keys(Keyword.get(status_context, :mentions_by_object, %{}), ids),
-        hashtags_by_object:
-          take_map_keys(Keyword.get(status_context, :hashtags_by_object, %{}), ids),
-        post_content_by_id:
-          take_map_keys(Keyword.get(status_context, :post_content_by_id, %{}), ids),
-        visibility_by_object:
-          take_map_keys(Keyword.get(status_context, :visibility_by_object, %{}), ids),
-        followers_grant_objects:
-          take_map_set_keys(
-            Keyword.get(status_context, :followers_grant_objects, MapSet.new()),
-            ids
-          )
-      ]
-    end
-
-    defp take_map_keys(map, ids) when is_map(map) do
-      ids
-      |> Enum.flat_map(fn id ->
-        case Map.fetch(map, id) do
-          {:ok, value} -> [{id, value}]
-          :error -> []
-        end
-      end)
-      |> Map.new()
-    end
-
-    defp take_map_keys(_map, _ids), do: %{}
-
-    defp take_map_set_keys(%MapSet{} = set, ids) do
-      ids
-      |> Enum.filter(&MapSet.member?(set, &1))
-      |> MapSet.new()
-    end
-
-    defp take_map_set_keys(_set, _ids), do: MapSet.new()
-
     defp get_map_field(value, field, default \\ nil)
     defp get_map_field(nil, _field, default), do: default
 
@@ -498,7 +415,5 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     end
 
     defp get_map_field(_other, _field, _default), do: nil
-
-    defp quote_table_id, do: Quotes.quote_verb_id()
   end
 end

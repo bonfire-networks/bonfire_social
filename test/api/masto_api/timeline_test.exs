@@ -126,6 +126,34 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
   end
 
   describe "GET /api/v1/timelines/home" do
+    # whether the reader liked it is the post's, not the boost activity's (`likedByMe` on the object, pure-mappers 5c-0)
+    test "a boost of a post the reader liked shows the post as favourited", %{conn: conn} do
+      account = Fake.fake_account!()
+      reader = Fake.fake_user!(account)
+      author = Fake.fake_user!()
+      booster = Fake.fake_user!()
+      {:ok, _} = Follows.follow(reader, booster)
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: author,
+          post_attrs: %{post_content: %{html_body: "liked then boosted"}},
+          boundary: "public"
+        )
+
+      {:ok, _} = Likes.like(reader, post)
+      {:ok, _} = Boosts.boost(booster, post)
+
+      home =
+        conn
+        |> masto_api_conn(user: reader, account: account)
+        |> get("/api/v1/timelines/home")
+        |> json_response(200)
+
+      assert [boost] = Enum.filter(home, &(&1["reblog"]["id"] == post.id))
+      assert boost["reblog"]["favourited"] == true
+    end
+
     test "returns posts from followed users", %{conn: conn} do
       account = Fake.fake_account!()
       user = Fake.fake_user!(account)

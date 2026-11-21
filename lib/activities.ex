@@ -801,8 +801,7 @@ defmodule Bonfire.Social.Activities do
           ]
 
         :tags ->
-          # Tags/mentions
-          [tags: [:character, profile: :icon]]
+          tags_preload()
 
         :quote_tags ->
           # Quote tags are mixed pointers (posts, actors, and hashtags), so their schema-specific children are loaded from the concrete tag list after this association is loaded.
@@ -1647,6 +1646,9 @@ defmodule Bonfire.Social.Activities do
       > get("activity_id", [])
   """
   def get(id, opts) when is_binary(id), do: repo().single(read_query([id: id], opts))
+
+  @doc "An activity's tags as the `:tags` postload loads them: mentioned characters with their profile, and a hashtag's name in `:named` (the API's `mentions`/`hashtags`, the web's chips)."
+  def tags_preload, do: [tags: [:character, :named, profile: :icon]]
 
   @doc """
   Retrieves an activity based on a query and options.

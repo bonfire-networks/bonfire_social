@@ -170,6 +170,34 @@ defmodule Bonfire.Social.Objects do
     end
   end
 
+  @doc "Reads many objects by id, each with its create activity, as `read/2` does for one, in one query. Ids the viewer may not read are left out; the order of `ids` is kept."
+  def read_many([], _opts), do: []
+
+  def read_many(ids, opts) when is_list(ids) do
+    opts =
+      to_options(opts)
+      |> Keyword.merge(skip_opts_check: true, verbs: [:read])
+
+    by_id =
+      Common.Needles.pointer_query([id: ids], opts)
+      |> Activities.read_query(
+        opts
+        |> Keyword.put(:skip_boundary_check, true)
+        # ^ skipping because Needles.pointer_query already checks the boundary, as in `read/2`
+      )
+      |> repo().many()
+      |> Activities.prepare_subject_and_creator(opts)
+      |> Common.Needles.Preload.maybe_preload_nested_pointers([activity: [:object]], opts)
+      |> Enum.map(
+        &(&1
+          |> maybe_preload_direct_creator(opts)
+          |> Activities.activity_under_object())
+      )
+      |> Map.new(&{&1.id, &1})
+
+    Enum.flat_map(ids, &List.wrap(by_id[&1]))
+  end
+
   def maybe_preload_activity_object(
         %{activity: %{object: %{id: _}}} = pointer,
         opts

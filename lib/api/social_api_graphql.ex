@@ -24,8 +24,32 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     # for pagination
     connection(node_type: :any_context)
 
+    @desc "Whether the viewer liked, boosted or bookmarked this object, keyed by the object's own id (`resolve_object_interaction/3`); imported by posts and polls"
+    object :object_interactions do
+      field :liked_by_me, :boolean do
+        resolve(fn object, _, info ->
+          Bonfire.Social.API.GraphQL.resolve_object_interaction(:liked, object, info)
+        end)
+      end
+
+      field :boosted_by_me, :boolean do
+        resolve(fn object, _, info ->
+          Bonfire.Social.API.GraphQL.resolve_object_interaction(:boosted, object, info)
+        end)
+      end
+
+      field :bookmarked_by_me, :boolean do
+        resolve(fn object, _, info ->
+          Bonfire.Social.API.GraphQL.resolve_object_interaction(:bookmarked, object, info)
+        end)
+      end
+    end
+
     object :post do
       field(:id, :id)
+
+      # what the viewer did to this object (`:object_interactions`)
+      import_fields(:object_interactions)
 
       # Use Dataloader to batch-load post content (prevents N+1 queries)
       field :post_content, :post_content do
@@ -47,7 +71,16 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       # Use Dataloader to batch load activity association (prevents N+1)
       field :activity, :activity do
         description("An activity associated with this post (usually the post creation)")
-        resolve(Helpers.dataloader(Needle.Pointer, :activity))
+
+        # use an activity already loaded on the post, with its preloads (favourites' tags): Dataloader would reload it bare
+        resolve(fn
+          %{activity: activity}, _args, _info
+          when is_struct(activity) and not is_struct(activity, Ecto.Association.NotLoaded) ->
+            {:ok, activity}
+
+          parent, args, info ->
+            Helpers.dataloader(Needle.Pointer, :activity).(parent, args, info)
+        end)
       end
 
       # Media is postloaded via Activities.activity_preloads in feed query
@@ -150,6 +183,31 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       end
 
       field(:subject_id, :string)
+
+      @desc "The actors (users, groups) its object mentions, from the `:tags` postload; none when its viewer may only discover it, null when the tags were not loaded"
+      field(:mentions, list_of(:any_character)) do
+        resolve(fn activity, _args, _info ->
+          loaded_tags(activity, &match?(%{character: %{id: _}}, &1))
+        end)
+      end
+
+      @desc "Who may see its object, in Mastodon's words (public, unlisted, private, direct), batched per request (`Bonfire.Boundaries.API.VisibilityDataloader`)"
+      field :visibility, :string do
+        resolve(fn activity, _args, %{context: %{loader: loader}} ->
+          id = Map.get(activity, :object_id) || activity.id
+
+          loader
+          |> Dataloader.load(:visibility, :visibility, id)
+          |> Helpers.on_load(&{:ok, Dataloader.get(&1, :visibility, :visibility, id)})
+        end)
+      end
+
+      @desc "The hashtags its object is tagged with, from the `:tags` postload; none when its viewer may only discover it, null when the tags were not loaded"
+      field(:hashtags, list_of(:hashtag)) do
+        resolve(fn activity, _args, _info ->
+          loaded_tags(activity, &(Types.object_type_schema(&1) == Bonfire.Tag.Hashtag))
+        end)
+      end
 
       @desc "Additional actors retained by the feed's existing page-local like/boost grouping."
       field(:subjects_more, list_of(:any_character)) do
@@ -563,6 +621,19 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         resolve(Helpers.dataloader(Needle.Pointer, :subject))
       end
 
+      @desc "The edge's subject as an object, such as the quoting post on a quote request, read as the viewer (`subject` is for characters)"
+      field :subject_object, :any_context do
+        resolve(fn edge, _args, %{context: %{loader: loader}} ->
+          loader
+          |> Dataloader.load(Needle.Pointer, :subject, edge)
+          |> Helpers.on_load(fn loader ->
+            Dataloader.get(loader, Needle.Pointer, :subject, edge)
+            |> follow_pointer()
+            |> with_activity_tags()
+          end)
+        end)
+      end
+
       field :object, :any_context do
         resolve(fn edge, _args, %{context: %{loader: loader}} ->
           loader
@@ -876,6 +947,19 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         resolve(&get_status/3)
       end
 
+      @desc "Several statuses by object id, in the order given; those the viewer may not read are left out"
+      field :statuses, list_of(:activity) do
+        meta(public: true)
+        arg(:ids, non_null(list_of(non_null(:id))))
+        resolve(&get_statuses/3)
+      end
+
+      @desc "One of the current user's notifications by activity id; not found unless published to their notifications or inbox"
+      field :notification, :activity do
+        arg(:id, non_null(:id))
+        resolve(&get_notification/3)
+      end
+
       @desc "Get an object"
       field :object, :any_object do
         meta(public: true)
@@ -1086,8 +1170,24 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
     # Read the OBJECT's create-activity (subject = author, so liking can't mis-attribute),
     # richly preloaded so the :activity sub-fields resolve synchronously (no Dataloader storm).
-    # Single source of truth shared with the direct read path (`read_single_status`).
+    # Single source of truth shared with `statuses(ids:)` (`FeedPipeline.single_status_preloads/0`).
     @single_status_preloads Bonfire.API.MastoCompat.FeedPipeline.single_status_preloads()
+    @doc "Whether the viewer liked, boosted or bookmarked an object (`batch`: `:liked`, `:boosted`, `:bookmarked`), keyed by the object's own id, so a boost or like row says what the reader did to the post. Shared by posts and polls."
+    def resolve_object_interaction(batch, object, %{context: %{loader: loader} = context}) do
+      case context[:current_user] do
+        %{id: user_id} ->
+          # the source's key is named `activity_id`; it is matched against the edge's object
+          key = %{user_id: user_id, activity_id: object.id}
+
+          loader
+          |> Dataloader.load(:user_interactions, batch, key)
+          |> Helpers.on_load(&{:ok, Dataloader.get(&1, :user_interactions, batch, key) || false})
+
+        _ ->
+          {:ok, false}
+      end
+    end
+
     @doc "Resolves an object's author: synchronously from a `:with_creator`-preloaded `created.creator`, else by loading the `created` mixin. Shared by every object type that has one (posts, polls)."
     def resolve_creator(object, _args, %{context: %{loader: loader}}) do
       case e(object, :created, :creator, nil) || e(object, :creator, nil) do
@@ -1130,16 +1230,47 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       end
     end
 
+    def get_statuses(_parent, %{ids: ids}, info) do
+      current_user = GraphQL.current_user(info)
+
+      {:ok,
+       ids
+       |> Bonfire.Social.Objects.read_many(
+         current_user: current_user,
+         preload: @single_status_preloads
+       )
+       |> Enum.map(&status_activity/1)
+       |> with_tags(current_user)}
+    end
+
+    def get_notification(_parent, %{id: id}, info) do
+      with %{} = current_user <- GraphQL.current_user(info),
+           true <- Bonfire.Social.Notifications.published_to?(current_user, id),
+           {:ok, activity} <- Activities.get(id, current_user: current_user) do
+        {:ok,
+         activity
+         |> Activities.activity_preloads(
+           # the feed's preloads and postloads (`get_feed/3`): `:tags` for `mentions`, `:with_parent` for `context`
+           Bonfire.API.MastoCompat.FeedPipeline.feed_preloads() ++
+             [:with_media, :tags, :with_parent],
+           current_user: current_user,
+           skip_boundary_check: true
+         )
+         |> List.wrap()
+         |> Bonfire.Social.RestrictedContent.redact_unreadable(current_user)
+         |> List.first()}
+      else
+        _ -> {:error, :not_found}
+      end
+    end
+
     defp thread_context_status_activity(id, current_user) when is_binary(id) do
       case Bonfire.Social.Objects.read(id,
              current_user: current_user,
              preload: @single_status_preloads
            ) do
-        {:ok, %{activity: activity} = object} when is_map(activity) ->
-          Map.put(activity, :object, object)
-
         {:ok, object} ->
-          %{id: id, object_id: id, object: object}
+          object |> status_activity() |> List.wrap() |> with_tags(current_user) |> List.first()
 
         _ ->
           nil
@@ -1147,6 +1278,26 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     end
 
     defp thread_context_status_activity(_, _), do: nil
+
+    # the tags `mentions` and `hashtags` read, postloaded once per list: `Objects.read` cannot load `:tags` in its query
+    defp with_tags(activities, current_user) do
+      tagged =
+        activities
+        |> Enum.filter(&is_struct/1)
+        |> Activities.activity_preloads([:tags],
+          current_user: current_user,
+          skip_boundary_check: true
+        )
+        |> Map.new(&{&1.id, &1})
+
+      Enum.map(activities, &Map.get(tagged, &1.id, &1))
+    end
+
+    # a read object as the `:activity` a status query resolves: its create activity, carrying the object
+    defp status_activity(%{activity: activity} = object) when is_map(activity),
+      do: Map.put(activity, :object, object)
+
+    defp status_activity(%{id: id} = object), do: %{id: id, object_id: id, object: object}
 
     def get_thread_context(_parent, %{id: id} = _args, info) do
       current_user = GraphQL.current_user(info)
@@ -1360,7 +1511,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
                     :with_creator,
                     :with_object_more,
                     :with_post_content,
-                    :with_replied
+                    :with_replied,
+                    # tree.parent, the group or topic it was published in, which `context` reads (as the web feeds' defaults load it)
+                    :with_parent
                   ]
 
                 _activities ->
@@ -1385,8 +1538,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
           error
 
         %{edges: edges} when is_list(edges) and length(edges) > 0 ->
-          # Media requires postloading because it uses complex join logic.
-          postloads = [:with_media]
+          # Media requires postloading because it uses complex join logic; tags (mentions) need `Repo.preload` to list more than one (`Activities`, `:tags`).
+          postloads = [:with_media, :tags]
 
           edges =
             edges
@@ -1455,6 +1608,22 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
     defp follow_pointer(object) when is_struct(object), do: {:ok, object}
     defp follow_pointer(_), do: {:ok, nil}
+
+    # the activity's preloaded tags that `keep?` selects: none when its viewer may only discover it, nil when the tags were not loaded
+    defp loaded_tags(%{restricted: true}, _keep?), do: {:ok, []}
+
+    defp loaded_tags(activity, keep?) do
+      case Map.get(activity, :tags) do
+        tags when is_list(tags) -> {:ok, Enum.filter(tags, keep?)}
+        _ -> {:ok, nil}
+      end
+    end
+
+    # the quoting post's activity with its tags, for its `mentions` and `hashtags`: one query per quote
+    defp with_activity_tags({:ok, %Bonfire.Data.Social.Post{} = post}),
+      do: {:ok, Bonfire.Common.Repo.maybe_preload(post, activity: Activities.tags_preload())}
+
+    defp with_activity_tags(other), do: other
 
     defp feed_paginate(feed_type \\ nil, feed, pagination_args) do
       Pagination.connection_paginate(feed, pagination_args,
@@ -1672,13 +1841,22 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
           )
 
         # Batch-preload media on the liked posts so the `:post.media` sub-field resolves
-        # without an N+1 (mirrors the previous direct favourites path).
+        # without an N+1, and their activity's tags, which `mentions` and `hashtags` read (`:post.activity` uses an activity already loaded)
         media_by_id =
           result
           |> e(:edges, [])
           |> Enum.map(&liked_post/1)
           |> Enum.reject(&is_nil/1)
-          |> Bonfire.Common.Repo.maybe_preload(:media)
+          |> Bonfire.Common.Repo.maybe_preload([
+            :media,
+            activity:
+              Activities.tags_preload() ++
+                if(Bonfire.Common.Extend.module_enabled?(Bonfire.Classify.Tree),
+                  # the group or topic it was published in, which `:activity.context` reads (as `:with_parent` loads it)
+                  do: [tree: [parent: [character: [:peered], profile: :icon]]],
+                  else: []
+                )
+          ])
           |> Map.new(&{e(&1, :id, nil), &1})
 
         result

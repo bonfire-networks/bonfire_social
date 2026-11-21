@@ -316,6 +316,19 @@ defmodule Bonfire.Social.Notifications do
     end
   end
 
+  @doc """
+  Whether this activity was published to one of the user's notifications-class feeds (notifications or inbox).
+
+  Mastodon models a direct message as a `mention` notification, so the inbox counts here as well as the notifications feed: reading only the latter made a fetch by id answer "not found" for a DM the list had already shown.
+  """
+  # FIXME: one query, not two.
+  def published_to?(current_user, activity_id) do
+    Bonfire.Social.FeedActivities.published_in_any?(
+      activity_id,
+      Bonfire.Social.Feeds.notifications_class_ids(current_user)
+    )
+  end
+
   # whether an audience depends on who is reading (their circles, `:me`), so it needs a condition per person
   defp reader_relative?(key) do
     audiences() |> e(Types.maybe_to_atom!(key), :parameterized, nil) |> is_map_and_not_empty?()
