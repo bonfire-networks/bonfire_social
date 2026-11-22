@@ -53,39 +53,20 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       # Use Dataloader to batch-load post content (prevents N+1 queries)
       field :post_content, :post_content do
-        resolve(fn
-          # use-parent fast path: resolve from the preloaded assoc, skip Dataloader.
-          %{post_content: pc}, _args, _info
-          when is_struct(pc) and not is_struct(pc, Ecto.Association.NotLoaded) ->
-            {:ok, pc}
-
-          post, _args, %{context: %{loader: loader}} ->
-            loader
-            |> Dataloader.load(Needle.Pointer, :post_content, post)
-            |> Helpers.on_load(fn loader ->
-              {:ok, Dataloader.get(loader, Needle.Pointer, :post_content, post)}
-            end)
-        end)
+        resolve(&Bonfire.Social.API.GraphQL.resolve_post_content/3)
       end
 
       # Use Dataloader to batch load activity association (prevents N+1)
       field :activity, :activity do
         description("An activity associated with this post (usually the post creation)")
 
-        # use an activity already loaded on the post, with its preloads (favourites' tags): Dataloader would reload it bare
-        resolve(fn
-          %{activity: activity}, _args, _info
-          when is_struct(activity) and not is_struct(activity, Ecto.Association.NotLoaded) ->
-            {:ok, activity}
-
-          parent, args, info ->
-            Helpers.dataloader(Needle.Pointer, :activity).(parent, args, info)
-        end)
+        resolve(&Bonfire.Social.API.GraphQL.resolve_loaded_activity/3)
       end
 
-      # Media is postloaded via Activities.activity_preloads in feed query
-      # No custom resolver needed - just return the postloaded :media field
-      field(:media, list_of(:media), description: "Media attached to this post")
+      field :media, list_of(:media) do
+        description("Media attached to this post")
+        resolve(&Bonfire.Social.API.GraphQL.resolve_loaded_media/3)
+      end
 
       @desc "The post's author. Resolves synchronously from a `:with_creator`-preloaded `created.creator`; falls back to loading the `created` mixin."
       field :creator, :any_character do
@@ -347,11 +328,10 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         end)
       end
 
-      # Use Dataloader to batch-load media attachments (prevents N+1 queries)
-      # Skip boundary checks for internal API calls (REST layer already authenticated)
-      # Media is postloaded via Activities.activity_preloads in feed query
-      # No custom resolver needed - just return the postloaded :media field
-      field(:media, list_of(:media), description: "Media attached to this activity")
+      field :media, list_of(:media) do
+        description("Media attached to this activity")
+        resolve(&Bonfire.Social.API.GraphQL.resolve_loaded_media/3)
+      end
 
       # Use Dataloader for association loading to prevent N+1 queries
       # Dataloader batches all post_content loads across activities in a single query
@@ -1189,6 +1169,33 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     end
 
     @doc "Resolves an object's author: synchronously from a `:with_creator`-preloaded `created.creator`, else by loading the `created` mixin. Shared by every object type that has one (posts, polls)."
+    @doc "An object's `post_content`: the preloaded one when there is one, else batched by Dataloader. Shared by posts and messages."
+    def resolve_post_content(%{post_content: pc}, _args, _info)
+        when is_struct(pc) and not is_struct(pc, Ecto.Association.NotLoaded),
+        do: {:ok, pc}
+
+    def resolve_post_content(object, _args, %{context: %{loader: loader}}) do
+      loader
+      |> Dataloader.load(Needle.Pointer, :post_content, object)
+      |> Helpers.on_load(fn loader ->
+        {:ok, Dataloader.get(loader, Needle.Pointer, :post_content, object)}
+      end)
+    end
+
+    @doc "An object's `activity`: one already loaded, with its preloads (favourites' tags), since Dataloader would reload it bare; else batched by Dataloader. Shared by posts and messages."
+    def resolve_loaded_activity(%{activity: activity}, _args, _info)
+        when is_struct(activity) and not is_struct(activity, Ecto.Association.NotLoaded),
+        do: {:ok, activity}
+
+    def resolve_loaded_activity(parent, args, info),
+      do: Helpers.dataloader(Needle.Pointer, :activity).(parent, args, info)
+
+    @doc "A post's or activity's `media`: the preloaded list (the feed's `:with_media`), else batched by Dataloader. An unloaded association would reach Absinthe, which wraps it into one item whose fields are all nil (live run L3)."
+    def resolve_loaded_media(%{media: media}, _args, _info) when is_list(media), do: {:ok, media}
+
+    def resolve_loaded_media(parent, args, info),
+      do: Helpers.dataloader(Needle.Pointer, :media).(parent, args, info)
+
     def resolve_creator(object, _args, %{context: %{loader: loader}}) do
       case e(object, :created, :creator, nil) || e(object, :creator, nil) do
         creator

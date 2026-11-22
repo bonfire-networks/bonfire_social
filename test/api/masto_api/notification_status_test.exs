@@ -67,6 +67,63 @@ defmodule Bonfire.Social.API.NotificationStatusTest do
       assert Map.take(original, ["content", "favourites_count", "reblogs_count", "replies_count"]) ==
                Map.take(status, ["content", "favourites_count", "reblogs_count", "replies_count"])
     end
+
+    # Ice Cubes cannot decode an attachment whose `url` is "" and fails the whole notifications list (live run L3)
+    test "#{type} notification of a post without media has no attachments", context do
+      {:ok, post} =
+        Bonfire.Posts.publish(
+          current_user: context.author,
+          post_attrs: %{post_content: %{html_body: Faker.Lorem.sentence()}},
+          boundary: "public"
+        )
+
+      notification = react_and_find_notification(unquote(action), unquote(type), context, post)
+
+      assert notification["status"]["media_attachments"] == []
+    end
+
+    test "#{type} notification of a post with an image has the status's attachments", context do
+      {:ok, media} =
+        Bonfire.Files.upload(
+          Bonfire.Files.ImageUploader,
+          context.author,
+          Bonfire.Files.Simulation.image_file(),
+          %{}
+        )
+
+      status =
+        context.conn
+        |> post("/api/v1/statuses", %{
+          "status" => Faker.Lorem.sentence(),
+          "media_ids" => [media.id]
+        })
+        |> json_response(200)
+
+      assert [%{"id" => media_id, "url" => "http" <> _}] = status["media_attachments"]
+      assert media_id == media.id
+      {:ok, post} = Bonfire.Posts.read(status["id"], current_user: context.reactor)
+
+      notification = react_and_find_notification(unquote(action), unquote(type), context, post)
+
+      assert Enum.map(notification["status"]["media_attachments"], &Map.take(&1, ["id", "url"])) ==
+               Enum.map(status["media_attachments"], &Map.take(&1, ["id", "url"]))
+    end
+  end
+
+  defp react_and_find_notification(action, type, context, post) do
+    case action do
+      :like -> assert {:ok, _} = Bonfire.Social.Likes.like(context.reactor, post)
+      :boost -> assert {:ok, _} = Bonfire.Social.Boosts.boost(context.reactor, post)
+    end
+
+    notification =
+      context.conn
+      |> get("/api/v1/notifications")
+      |> json_response(200)
+      |> Enum.find(&(&1["type"] == type and get_in(&1, ["status", "id"]) == post.id))
+
+    assert notification, "no #{type} notification about the post"
+    notification
   end
 
   test "poll reaction status contains its author and poll data", context do
