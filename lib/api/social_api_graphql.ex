@@ -940,6 +940,14 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         resolve(&get_notification/3)
       end
 
+      @desc "How many of the current user's notifications they have not seen yet (Mastodon's `unread_count`)"
+      field :unseen_notifications_count, :integer do
+        @desc "Count no further than this, as Mastodon caps `unread_count`"
+        arg(:limit, :integer)
+
+        resolve(&unseen_notifications_count/3)
+      end
+
       @desc "Get an object"
       field :object, :any_object do
         meta(public: true)
@@ -1248,6 +1256,23 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
        )
        |> Enum.map(&status_activity/1)
        |> with_tags(current_user)}
+    end
+
+    def unseen_notifications_count(_parent, args, info) do
+      case GraphQL.current_user(info) do
+        %{} = current_user ->
+          # the account as the context holds it, struct or id: Seen reads either (`Utils.current_account_or_id/1`), so no lookup here
+          account = info.context |> Map.take([:current_account, :current_account_id]) |> Enum.to_list()
+
+          {:ok,
+           Bonfire.Social.Notifications.unseen_count(
+             current_user,
+             Keyword.put(account, :limit, args[:limit])
+           )}
+
+        _ ->
+          {:error, "Not authenticated"}
+      end
     end
 
     def get_notification(_parent, %{id: id}, info) do

@@ -69,6 +69,13 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       Phoenix.Controller.json(conn, [])
     end
 
+    def notification_policy(conn, _params), do: Adapter.notification_policy(conn)
+
+    def notification_policy_v1(conn, _params), do: Adapter.notification_policy(conn, :v1)
+
+    def notifications_unread_count(conn, params),
+      do: Adapter.notifications_unread_count(params, conn)
+
     def bookmarks(conn, params) do
       params
       |> PaginationHelpers.build_feed_params(%{

@@ -329,6 +329,23 @@ defmodule Bonfire.Social.Notifications do
     )
   end
 
+  @doc "How many of the user's notifications are unseen, counted per account as Seen is (bonfire-app#2220); 0 when the feed or the count can't be read. Pass `current_account:` (or `current_account_id:`) when the caller has it: otherwise it is resolved from the user, with one more query; `feed_id:` when the caller has the notifications feed id; `limit:` to count no further. Shared by the GraphQL `unseenNotificationsCount` and the notifications SSE stream (review 4, decision U1-a)."
+  def unseen_count(current_user, opts \\ []) do
+    current_user = Bonfire.Common.Repo.maybe_preload(current_user, :character)
+
+    with feed_id when is_binary(feed_id) <-
+           opts[:feed_id] || Bonfire.Social.Feeds.my_feed_id(:notifications, current_user),
+         count when is_integer(count) and count >= 0 <-
+           Bonfire.Social.FeedActivities.unseen_count(
+             feed_id,
+             Keyword.put(opts, :current_user, current_user)
+           ) do
+      count
+    else
+      _ -> 0
+    end
+  end
+
   # whether an audience depends on who is reading (their circles, `:me`), so it needs a condition per person
   defp reader_relative?(key) do
     audiences() |> e(Types.maybe_to_atom!(key), :parameterized, nil) |> is_map_and_not_empty?()

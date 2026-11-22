@@ -70,6 +70,20 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
                  )
       end
 
+      # it answered the account's creation date (live testing, masto-live-fixes step 4)
+      test "GET /api/v1/accounts/:id answers the date of the newest post as last_status_at", %{
+        api_conn: api_conn
+      } do
+        author = Fake.fake_user!()
+        _older = publish_dated(author, "Ten days ago", 10)
+        newest = publish_dated(author, "Three days ago", 3)
+
+        account = api_conn |> get("/api/v1/accounts/#{author.id}") |> json_response(200)
+
+        assert account["last_status_at"] == date_of(newest)
+        refute account["last_status_at"] == String.slice(account["created_at"], 0, 10)
+      end
+
       test "GET /api/v1/accounts/lookup", %{api_conn: api_conn, other: other} do
         account =
           api_conn
@@ -143,7 +157,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
                  )
       end
 
-      test "GET /api/v1/accounts/familiar_followers lists followers the reader follows, without counts",
+      test "GET /api/v1/accounts/familiar_followers lists followers the reader follows, with real counts",
            %{api_conn: api_conn, viewer: viewer, other: other, fan: fan} do
         {:ok, _} = Follows.follow(viewer, fan)
 
@@ -154,8 +168,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
         assert familiar["id"] == other.id
 
+        # changed on purpose (masto-live-fixes step 2): the counts were 0, the list selected none
         assert familiar["accounts"] == [
-                 expected(fan, [statuses: 0, followers: 0, following: 0],
+                 expected(fan, [statuses: 0, followers: 1, following: 1],
                    url: :actor,
                    nils: :dropped
                  )
@@ -169,6 +184,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         account = Fake.fake_account!()
         locked = Fake.fake_user!(account, %{}, request_before_follow: true)
         requester = Fake.fake_user!()
+        _ = publish(requester, "A requester's post")
         {:ok, _} = Follows.follow(requester, locked)
         assert Follows.requested?(requester, locked)
 
@@ -198,11 +214,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
                  "fields" => []
                }
 
-        # the list of requesters skips the counts
+        # changed on purpose (masto-live-fixes step 2): the list of requesters carries real counts (0 before, it selected none)
         [request] = api_conn |> get("/api/v1/follow_requests") |> json_response(200)
 
         assert request ==
-                 expected(requester, [statuses: 0, followers: 0, following: 0],
+                 expected(requester, [statuses: 1, followers: 0, following: 0],
                    url: :actor,
                    nils: :dropped
                  )
@@ -235,12 +251,13 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
                  )
       end
 
-      test "blocks and mutes skip the counts", %{api_conn: api_conn, other: other} do
+      # changed on purpose (masto-live-fixes step 2): blocks and mutes carry real counts (0 before, they selected none)
+      test "blocks and mutes carry real counts", %{api_conn: api_conn, other: other} do
         api_conn |> post("/api/v1/accounts/#{other.id}/block") |> json_response(200)
         [blocked] = api_conn |> get("/api/v1/blocks") |> json_response(200)
 
         assert blocked ==
-                 expected(other, [statuses: 0, followers: 0, following: 0],
+                 expected(other, [statuses: 2, followers: 1, following: 1],
                    url: :actor,
                    nils: :dropped
                  )
@@ -249,13 +266,14 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         [muted] = api_conn |> get("/api/v1/mutes") |> json_response(200)
 
         assert muted ==
-                 expected(other, [statuses: 0, followers: 0, following: 0],
+                 expected(other, [statuses: 2, followers: 1, following: 1],
                    url: :actor,
                    nils: :dropped
                  )
       end
 
-      test "favourited_by and reblogged_by skip the counts", %{
+      # changed on purpose (masto-live-fixes step 2): Ice Cubes showed a liker with "0 seguaci" while their profile showed 1
+      test "favourited_by and reblogged_by carry real counts", %{
         api_conn: api_conn,
         fan: fan,
         post: post
@@ -267,7 +285,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
           api_conn |> get("/api/v1/statuses/#{post.id}/favourited_by") |> json_response(200)
 
         assert liker ==
-                 expected(fan, [statuses: 0, followers: 0, following: 0],
+                 expected(fan, [statuses: 0, followers: 0, following: 1],
                    url: :actor,
                    nils: :kept
                  )
@@ -276,10 +294,67 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
           api_conn |> get("/api/v1/statuses/#{post.id}/reblogged_by") |> json_response(200)
 
         assert booster ==
-                 expected(fan, [statuses: 0, followers: 0, following: 0],
+                 expected(fan, [statuses: 0, followers: 0, following: 1],
                    url: :actor,
                    nils: :kept
                  )
+      end
+
+      test "the accounts of a list carry real counts", %{api_conn: api_conn, other: other} do
+        %{"id" => list_id} =
+          api_conn |> post("/api/v1/lists", %{"title" => "with counts"}) |> json_response(200)
+
+        api_conn
+        |> post("/api/v1/lists/#{list_id}/accounts", %{"account_ids" => [other.id]})
+        |> json_response(200)
+
+        [member] = api_conn |> get("/api/v1/lists/#{list_id}/accounts") |> json_response(200)
+
+        assert member["id"] == other.id
+
+        assert Map.take(member, ~w(statuses_count followers_count following_count)) == %{
+                 "statuses_count" => 2,
+                 "followers_count" => 1,
+                 "following_count" => 1
+               }
+      end
+
+      # one test for both versions: they share one cached list of suggested profiles, and two async tests clearing it raced (masto-live-fixes step 3)
+      test "suggested accounts carry real counts, in v2 and in v1", %{api_conn: api_conn} do
+        suggested = Fake.fake_user!()
+        _ = publish(suggested, "A suggested user's post")
+
+        # test setup, standing in for an admin choosing a suggested profile
+        Bonfire.Boundaries.Circles.add_to_circles(
+          suggested,
+          Bonfire.Boundaries.Scaffold.Instance.suggested_profiles_circle(),
+          skip_boundary_check: true
+        )
+
+        # the suggested list is cached for a while, under the key of the captured private function (`Bonfire.Common.Cache.key_for_call/2`)
+        Bonfire.Common.Cache.remove("&Bonfire.Boundaries.Circles.do_list_suggested_profiles/0()")
+
+        counts = %{"statuses_count" => 1, "followers_count" => 0, "following_count" => 0}
+
+        suggestion =
+          api_conn
+          |> get("/api/v2/suggestions")
+          |> json_response(200)
+          |> Enum.find(&(get_in(&1, ["account", "id"]) == suggested.id))
+
+        assert suggestion, "the user added to the suggested profiles is suggested"
+        assert Map.take(suggestion["account"], Map.keys(counts)) == counts
+
+        # Ice Cubes' Explore calls v1, which answered 404 (live testing, masto-live-fixes step 3)
+        account =
+          api_conn
+          |> get("/api/v1/suggestions")
+          |> json_response(200)
+          |> Enum.find(&(&1["id"] == suggested.id))
+
+        assert account, "v1 suggests the same user"
+        refute Map.has_key?(account, "source"), "an Account, not a v2 Suggestion"
+        assert Map.take(account, Map.keys(counts)) == counts
       end
     end
 
@@ -443,6 +518,30 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
         assert queries_for.(5) == queries_for.(2)
       end
+
+      # within one page: the test config pages at 2 (`config/test.exs`, `default_pagination_limit`), and favourited_by takes no `limit`
+      test "favourited_by costs the same number of queries for 1 liker and for 2", %{conn: conn} do
+        queries_for = fn likers ->
+          account = Fake.fake_account!()
+          viewer = Fake.fake_user!(account)
+          post = publish(Fake.fake_user!(), "liked by several")
+          for _ <- 1..likers, do: {:ok, _} = Bonfire.Social.Likes.like(Fake.fake_user!(), post)
+          api_conn = masto_api_conn(conn, user: viewer, account: account)
+          path = "/api/v1/statuses/#{post.id}/favourited_by"
+
+          # once before counting, so caches filled by a first request are not counted
+          assert length(api_conn |> get(path) |> json_response(200)) == likers
+
+          {_, queries} =
+            Bonfire.Common.Testing.count_queries(fn ->
+              api_conn |> get(path) |> json_response(200)
+            end)
+
+          queries
+        end
+
+        assert queries_for.(2) == queries_for.(1)
+      end
     end
 
     describe "an account inside another entity" do
@@ -539,6 +638,23 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       post
     end
 
+    # a post whose id, and so its date, is `days_ago` days in the past
+    defp publish_dated(author, text, days_ago) do
+      {:ok, post} =
+        Bonfire.Posts.publish(
+          # the id dates the post, as `fake_post!/4` passes it
+          post_id: Bonfire.Common.DatesTimes.past(days_ago, :day) |> Bonfire.Common.DatesTimes.generate_ulid(),
+          current_user: author,
+          post_attrs: %{post_content: %{html_body: text}},
+          boundary: "public"
+        )
+
+      post
+    end
+
+    defp date_of(post),
+      do: post.id |> Bonfire.Common.DatesTimes.date_from_pointer() |> DateTime.to_date() |> Date.to_iso8601()
+
     # The whole account, built from the fixture rather than from the mapper under test.
     #
     # `url:` is `:actor` everywhere since decision 11 (`/pub/actors/<username>`, the stored canonical
@@ -571,7 +687,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
           "header" => header,
           "header_static" => header,
           "created_at" => created_at,
-          "last_status_at" => String.slice(created_at, 0, 10),
+          # the date of the newest post (masto-live-fixes step 4): today for the posts these tests publish, nil without posts or where the endpoint selects no counts (statuses: 0)
+          "last_status_at" =>
+            Keyword.get_lazy(counts, :last_status_at, fn ->
+              if counts[:statuses] > 0, do: Date.to_iso8601(Date.utc_today())
+            end),
           "statuses_count" => counts[:statuses],
           "followers_count" => counts[:followers],
           "following_count" => counts[:following],

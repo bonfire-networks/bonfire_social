@@ -202,33 +202,83 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     end
 
     describe "POST /api/v1/conversations/:id/read" do
-      # today's behaviour (review E1): every DM thread answers 404, before any read-back
-      test "answers 404 for a single message", %{
+      # changed on purpose by the /read fix (team-docs/plans/masto-conversation-read.md): it answered 404 for every DM thread
+      test "marks a single message read and answers the conversation", %{
         api_conn: api_conn,
         viewer: viewer,
         other: other
       } do
         message = send_dm(other, viewer, "<p>alone</p>")
 
-        assert api_conn
-               |> post("/api/v1/conversations/#{message.id}/read")
-               |> json_response(404) == %{"error" => "Not found"}
+        read = api_conn |> post("/api/v1/conversations/#{message.id}/read") |> json_response(200)
+
+        assert read["id"] == message.id
+        assert read["unread"] == false
+        assert read["last_status"]["id"] == message.id
+        assert ids(read["accounts"]) == [other.id, viewer.id]
+        assert [%{"id" => id, "unread" => false}] = list(api_conn)
+        assert id == message.id
       end
 
-      test "answers 404 for a thread with a reply, by its thread id or the listed id", %{
+      test "marks a thread with a reply read by the id the list gives", %{
         api_conn: api_conn,
         viewer: viewer
       } do
         sender = Fake.fake_user!()
         first = send_dm(sender, viewer, "<p>first</p>")
-        reply = send_dm(viewer, sender, "<p>second</p>", %{reply_to_id: first.id})
+        reply = send_dm(sender, viewer, "<p>second</p>", %{reply_to_id: first.id})
 
-        for id <- [first.id, reply.id] do
-          assert api_conn |> post("/api/v1/conversations/#{id}/read") |> json_response(404) ==
-                   %{"error" => "Not found"}
-        end
+        assert [%{"id" => listed_id, "unread" => true}] = list(api_conn)
 
-        assert [%{"unread" => true}] = list(api_conn)
+        read = api_conn |> post("/api/v1/conversations/#{listed_id}/read") |> json_response(200)
+
+        assert read["unread"] == false
+        assert read["last_status"]["id"] == reply.id
+        assert [%{"unread" => false}] = list(api_conn)
+      end
+
+      test "answers 404 for a message the reader is not part of", %{api_conn: api_conn} do
+        message = send_dm(Fake.fake_user!(), Fake.fake_user!(), "<p>not yours</p>")
+
+        api_conn |> post("/api/v1/conversations/#{message.id}/read") |> json_response(404)
+      end
+    end
+
+    describe "POST /api/v1/notifications/:id/dismiss" do
+      # the same `Seen.mark_seen(conn.assigns, id)` call as `/read` (team-docs/plans/masto-conversation-read.md, decision 3)
+      test "dismisses one of the reader's notifications", %{api_conn: api_conn, viewer: viewer} do
+        {:ok, post} =
+          Bonfire.Posts.publish(
+            current_user: viewer,
+            post_attrs: %{post_content: %{html_body: "<p>like me</p>"}},
+            boundary: "public"
+          )
+
+        {:ok, _} = Bonfire.Social.Likes.like(Fake.fake_user!(), post)
+
+        assert %{"id" => id} =
+                 api_conn
+                 |> get("/api/v1/notifications")
+                 |> json_response(200)
+                 |> Enum.find(&(&1["type"] == "favourite"))
+
+        assert api_conn |> post("/api/v1/notifications/#{id}/dismiss") |> json_response(200) ==
+                 %{}
+      end
+
+      test "answers 404 for someone else's notification", %{api_conn: api_conn} do
+        author = Fake.fake_user!()
+
+        {:ok, post} =
+          Bonfire.Posts.publish(
+            current_user: author,
+            post_attrs: %{post_content: %{html_body: "<p>not yours</p>"}},
+            boundary: "public"
+          )
+
+        {:ok, like} = Bonfire.Social.Likes.like(Fake.fake_user!(), post)
+
+        api_conn |> post("/api/v1/notifications/#{like.id}/dismiss") |> json_response(404)
       end
     end
 

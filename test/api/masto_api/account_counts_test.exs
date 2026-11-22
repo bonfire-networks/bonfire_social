@@ -104,6 +104,62 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       assert get_in(result, [:data, "user", "statuses_count"]) == 2
     end
 
+    # it was the account's creation date (live testing, masto-live-fixes step 4)
+    test "last_post_at is the date of the user's newest post" do
+      user = Fake.fake_user!()
+
+      for days_ago <- [10, 3] do
+        {:ok, _} =
+          Bonfire.Posts.publish(
+            # the id dates the post, as `fake_post!/4` passes it
+            post_id: Bonfire.Common.DatesTimes.past(days_ago, :day) |> Bonfire.Common.DatesTimes.generate_ulid(),
+            current_user: user,
+            post_attrs: %{post_content: %{html_body: "#{days_ago} days ago"}},
+            boundary: "public"
+          )
+      end
+
+      expected = Bonfire.Common.DatesTimes.past(3, :day) |> DateTime.to_date() |> Date.to_iso8601()
+
+      # a datetime (decision 14); the Mastodon mapper keeps its date
+      assert String.slice(last_post_at(user, user), 0, 10) == expected
+    end
+
+    test "last_post_at is null for a user with no posts" do
+      user = Fake.fake_user!()
+
+      assert last_post_at(user, user) == nil
+    end
+
+    test "a group has last_post_at too, null without posts (decision 9)" do
+      user = Fake.fake_user!()
+      group = Bonfire.Classify.Simulate.fake_category!(user)
+
+      {:ok, result} =
+        Absinthe.run(
+          "query ($ids: [ID!]!) { characters(ids: $ids) { ... on Category { id last_post_at } } }",
+          Schema,
+          variables: %{"ids" => [group.id]},
+          context: Schema.context(%{current_user: user})
+        )
+
+      refute result[:errors], "expected no GraphQL errors, got: #{inspect(result[:errors])}"
+      assert [%{"last_post_at" => nil}] = get_in(result, [:data, "characters"])
+    end
+
+    defp last_post_at(user, viewer) do
+      {:ok, result} =
+        Absinthe.run(
+          "query ($id: CharacterFilters) { user(filter: $id) { last_post_at } }",
+          Schema,
+          variables: %{"id" => %{"id" => user.id}},
+          context: Schema.context(%{current_user: viewer})
+        )
+
+      refute result[:errors], "expected no GraphQL errors, got: #{inspect(result[:errors])}"
+      get_in(result, [:data, "user", "last_post_at"])
+    end
+
     test "the counts cost the same number of queries for 2 users and for 6" do
       viewer = Fake.fake_user!()
       two = for _ <- 1..2, do: Fake.fake_user!()
@@ -118,7 +174,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
         {_, with_counts} =
           Bonfire.Common.Testing.count_queries(fn ->
-            queries(users, "id followers_count following_count statuses_count", viewer)
+            queries(users, "id followers_count following_count statuses_count last_post_at", viewer)
           end)
 
         with_counts - without

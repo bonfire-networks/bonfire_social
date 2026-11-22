@@ -823,12 +823,22 @@ defmodule Bonfire.Social.FeedActivities do
 
       > unseen_count(:inbox, current_user: me, since: yesterday)
       2
+
+      > unseen_count(feed_id, current_user: me, limit: 100)
+      100
   """
   def unseen_count(feed_id, opts) do
     unseen_query(feed_id, opts)
+    ~> bounded(to_options(opts)[:limit])
     ~> select(count())
     ~> repo().one()
   end
+
+  # with `limit:`, the count stops at that many rows, so a capped count (Mastodon's `unread_count`, a "99+" badge) does not read every unseen row
+  defp bounded(query, limit) when is_integer(limit) and limit > 0,
+    do: from(q in subquery(query |> select([fp], %{id: fp.id}) |> limit(^limit)))
+
+  defp bounded(query, _), do: query
 
   @doc """
   Whether a feed has at least one unseen item for the current user. Cheaper than `unseen_count/2` when a yes/no is enough.

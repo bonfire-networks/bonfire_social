@@ -153,8 +153,12 @@ defmodule Bonfire.Social.Seen do
   def mark_seen(subject, object, opts) when is_binary(object) do
     normalized_subject = normalize_subject!(subject)
 
+    # the account records the Seen edge, but the object is read as the user: a subject given as assigns, a socket or opts carries both, and passed whole as `current_user` it left the boundary check without its reader, so the API's `mark_seen(conn.assigns, id)` found nothing
     with {:ok, seen} <-
-           Bonfire.Common.Needles.get(object, current_user: subject, verbs: [:see]) do
+           Bonfire.Common.Needles.get(object,
+             current_user: current_user(subject) || subject,
+             verbs: [:see]
+           ) do
       # debug(seen)
       mark_seen(normalized_subject, seen, opts)
     end

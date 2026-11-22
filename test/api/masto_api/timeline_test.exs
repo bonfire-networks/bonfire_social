@@ -607,6 +607,76 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
     end
   end
 
+  # Mastodon serves the public and hashtag timelines without a token, and apps browse an instance logged out; home stays sign-in only ("returns 401 when not authenticated" above) (live testing, masto-live-fixes step 1)
+  describe "a guest (no token)" do
+    test "reads the public timeline and sees a public post", %{conn: conn} do
+      author = Fake.fake_user!()
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: author,
+          post_attrs: %{post_content: %{html_body: "public post for a guest"}},
+          boundary: "public"
+        )
+
+      response =
+        conn
+        |> put_req_header("accept", "application/json")
+        |> get("/api/v1/timelines/public")
+        |> json_response(200)
+
+      assert post.id in Enum.map(response, & &1["id"])
+    end
+
+    test "reads a hashtag timeline and sees a public tagged post", %{conn: conn} do
+      author = Fake.fake_user!()
+      tag = "masto_guest_#{System.unique_integer([:positive])}"
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: author,
+          post_attrs: %{post_content: %{html_body: "tagged for a guest ##{tag}"}},
+          boundary: "public"
+        )
+
+      response =
+        conn
+        |> put_req_header("accept", "application/json")
+        |> get("/api/v1/timelines/tag/#{tag}")
+        |> json_response(200)
+
+      assert post.id in Enum.map(response, & &1["id"])
+    end
+
+    test "does not see a post addressed only to the people it mentions", %{conn: conn} do
+      author = Fake.fake_user!()
+
+      {:ok, public_post} =
+        Posts.publish(
+          current_user: author,
+          post_attrs: %{post_content: %{html_body: "public control post"}},
+          boundary: "public"
+        )
+
+      {:ok, mentions_post} =
+        Posts.publish(
+          current_user: author,
+          post_attrs: %{post_content: %{html_body: "only for the people it mentions"}},
+          boundary: "mentions"
+        )
+
+      ids =
+        conn
+        |> put_req_header("accept", "application/json")
+        |> get("/api/v1/timelines/public")
+        |> json_response(200)
+        |> Enum.map(& &1["id"])
+
+      assert public_post.id in ids, "control: the public post is there"
+      refute mentions_post.id in ids
+    end
+  end
+
   describe "GET /api/v1/notifications" do
     test "returns notifications for authenticated user", %{conn: conn} do
       account = Fake.fake_account!()

@@ -219,6 +219,58 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       end
     end
 
+    @doc "Mastodon's NotificationPolicy: Bonfire filters no notifications, so every kind is accepted and nothing waits (masto-live-fixes decision 3). `:v1` is Mastodon 4.3's shape (booleans), `:v2` 4.4's (`for_*`)."
+    def notification_policy(conn, version \\ :v2) do
+      if is_nil(conn.assigns[:current_user]) do
+        RestAdapter.error_fn({:error, :unauthorized}, conn)
+      else
+        Phoenix.Controller.json(conn, notification_policy_body(version))
+      end
+    end
+
+    @nothing_waits %{"pending_requests_count" => 0, "pending_notifications_count" => 0}
+
+    # false: not filtered
+    defp notification_policy_body(:v1) do
+      %{
+        "filter_not_following" => false,
+        "filter_not_followers" => false,
+        "filter_new_accounts" => false,
+        "filter_private_mentions" => false,
+        "summary" => @nothing_waits
+      }
+    end
+
+    defp notification_policy_body(:v2) do
+      %{
+        "for_not_following" => "accept",
+        "for_not_followers" => "accept",
+        "for_new_accounts" => "accept",
+        "for_private_mentions" => "accept",
+        "for_limited_accounts" => "accept",
+        "summary" => @nothing_waits
+      }
+    end
+
+    @unread_count_query "query ($limit: Int) { count: unseenNotificationsCount(limit: $limit) }"
+
+    @doc "Mastodon's unread notifications count, read through GraphQL (masto-live-fixes decision 5), counted no further than `limit` as Mastodon does (default 100, at most 1000)."
+    def notifications_unread_count(params, conn) do
+      current_user = conn.assigns[:current_user]
+      limit = PaginationHelpers.validate_limit(params["limit"], default: 100, max: 1000)
+
+      with %{} <- current_user,
+           {:ok, %{data: %{count: count}}} when is_integer(count) <-
+             Bonfire.API.MastoCompat.Helpers.run_query(@unread_count_query, current_user, %{
+               "limit" => limit
+             }) do
+        Phoenix.Controller.json(conn, %{"count" => count})
+      else
+        nil -> RestAdapter.error_fn({:error, :unauthorized}, conn)
+        other -> RestAdapter.error_fn(other, conn)
+      end
+    end
+
     @doc "Maps the existing notification feed's page-local grouping to Mastodon v2."
     def grouped_notifications(params, conn) do
       user = conn.assigns[:current_user]
@@ -356,22 +408,28 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     def dismiss_notification(id, conn) do
       current_user = conn.assigns[:current_user]
 
-      if is_nil(current_user) do
-        RestAdapter.error_fn({:error, :unauthorized}, conn)
-      else
-        case Bonfire.Social.Seen.mark_seen(conn.assigns, id) do
-          {:ok, _} ->
-            # Mastodon API returns empty object on success
-            Phoenix.Controller.json(conn, %{})
+      cond do
+        is_nil(current_user) ->
+          RestAdapter.error_fn({:error, :unauthorized}, conn)
 
-          {:error, reason} ->
-            error(reason, "Failed to dismiss notification")
-            RestAdapter.error_fn({:error, reason}, conn)
+        # being in the reader's notification feeds is the authorization: a like or boost notification is the edge, which the boundary read hides from the post's author, so the id is marked as a map to skip it, as `Markers` does
+        not Bonfire.Social.Notifications.published_to?(current_user, id) ->
+          RestAdapter.error_fn({:error, :not_found}, conn)
 
-          _ ->
-            # mark_seen may return different formats, treat as success
-            Phoenix.Controller.json(conn, %{})
-        end
+        true ->
+          case Bonfire.Social.Seen.mark_seen(conn.assigns, %{id: id}) do
+            {:ok, _} ->
+              # Mastodon API returns empty object on success
+              Phoenix.Controller.json(conn, %{})
+
+            {:error, reason} ->
+              error(reason, "Failed to dismiss notification")
+              RestAdapter.error_fn({:error, reason}, conn)
+
+            _ ->
+              # mark_seen may return different formats, treat as success
+              Phoenix.Controller.json(conn, %{})
+          end
       end
     end
 
@@ -842,10 +900,10 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     end
 
     @likers_query """
-    query ($id: ID!) { likers_of: likersOf(id: $id) { #{Bonfire.API.MastoCompat.Fragments.user_profile()} } }
+    query ($id: ID!) { likers_of: likersOf(id: $id) { #{Bonfire.API.MastoCompat.Fragments.account_fields()} } }
     """
     @boosters_query """
-    query ($id: ID!) { boosters_of: boostersOf(id: $id) { #{Bonfire.API.MastoCompat.Fragments.user_profile()} } }
+    query ($id: ID!) { boosters_of: boostersOf(id: $id) { #{Bonfire.API.MastoCompat.Fragments.account_fields()} } }
     """
 
     defp list_status_interactors(conn, interaction_type, id) do
