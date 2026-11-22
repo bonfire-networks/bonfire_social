@@ -30,6 +30,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     # AND Category (groups), without which group-authored activities resolve to an untyped actor
     # and get dropped on validation. See `Bonfire.API.MastoCompat.Fragments.actor_fields/0`.
     @actor_fields Bonfire.API.MastoCompat.Fragments.actor_fields()
+    @author_fields Bonfire.API.MastoCompat.Fragments.author_fields()
     @thread_fields Bonfire.API.MastoCompat.Fragments.thread_fields()
     @status_media Bonfire.API.MastoCompat.Fragments.status_media()
     @object_interactions Bonfire.API.MastoCompat.Fragments.object_interactions()
@@ -45,7 +46,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     id
     object_id: objectId
     verb { verb }
-    subject { #{@actor_fields} }
+    subject { #{@author_fields} }
     #{@status_object}
     #{@status_media}
     mentions { #{@actor_fields} }
@@ -452,7 +453,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     #{@status_post_content}
     #{@status_media}
     activity {
-      subject { #{@actor_fields} }
+      subject { #{@author_fields} }
       context { ... on Category { id } }
       mentions { #{@actor_fields} }
       hashtags { id name }
@@ -840,37 +841,34 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       list_status_interactors(conn, :boost, id)
     end
 
+    @likers_query """
+    query ($id: ID!) { likers_of: likersOf(id: $id) { #{Bonfire.API.MastoCompat.Fragments.user_profile()} } }
+    """
+    @boosters_query """
+    query ($id: ID!) { boosters_of: boostersOf(id: $id) { #{Bonfire.API.MastoCompat.Fragments.user_profile()} } }
+    """
+
     defp list_status_interactors(conn, interaction_type, id) do
-      current_user = conn.assigns[:current_user]
-
-      result =
+      {query, field} =
         case interaction_type do
-          :like ->
-            Bonfire.Social.Likes.by_liked(id, current_user: current_user, preload: :subject)
-
-          :boost ->
-            Bonfire.Social.Boosts.list_of(id, current_user: current_user)
+          :like -> {@likers_query, :likers_of}
+          :boost -> {@boosters_query, :boosters_of}
         end
 
-      edges =
-        case result do
-          list when is_list(list) -> list
-          %{edges: list} when is_list(list) -> list
-          _ -> []
-        end
+      case Helpers.run_query(query, conn.assigns[:current_user], %{"id" => id}) do
+        {:ok, %{data: %{^field => users}}} when is_list(users) ->
+          accounts = users |> Enum.map(&Mappers.Account.from_user/1) |> Enum.reject(&is_nil/1)
+          Phoenix.Controller.json(conn, accounts)
 
-      accounts =
-        edges
-        |> Enum.flat_map(fn edge ->
-          subject = Map.get(edge, :edge, edge) |> Map.get(:subject, nil)
-          if subject, do: [subject], else: []
-        end)
-        |> Enum.map(
-          &Mappers.Account.from_user(&1, current_user: current_user, skip_expensive_stats: true)
-        )
-        |> Enum.reject(&is_nil/1)
+        {:ok, %{errors: [_ | _] = errors}} ->
+          RestAdapter.error_fn({:error, errors}, conn)
 
-      Phoenix.Controller.json(conn, accounts)
+        {:error, _} = error ->
+          RestAdapter.error_fn(error, conn)
+
+        _ ->
+          Phoenix.Controller.json(conn, [])
+      end
     end
 
     defp respond_with_feed(conn, params, {:ok, items, page_info}) do
@@ -1078,7 +1076,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
            opts <- build_flag_opts(params),
            {:ok, flag} <- Flags.flag(current_user, flagged_id, opts) do
         flag = preload_flag_for_api(flag)
-        report = Mappers.Report.from_flag(flag, current_user: current_user)
+        report = Mappers.Report.from_flag(flag, report_opts([flag], current_user))
 
         if report do
           RestAdapter.json(conn, report)
@@ -1108,10 +1106,12 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
         flags = extract_flags(result)
 
+        flags = Enum.map(flags, &preload_flag_for_api/1)
+        opts = report_opts(flags, current_user)
+
         reports =
           flags
-          |> Enum.map(&preload_flag_for_api/1)
-          |> Enum.map(&Mappers.Report.from_flag(&1, current_user: current_user))
+          |> Enum.map(&Mappers.Report.from_flag(&1, opts))
           |> Enum.reject(&is_nil/1)
 
         RestAdapter.json(conn, reports)
@@ -1131,7 +1131,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       with {:ok, current_user} <- require_user(current_user),
            {:ok, flag} <- get_flag_by_id(id, current_user) do
         flag = preload_flag_for_api(flag)
-        report = Mappers.Report.from_flag(flag, current_user: current_user)
+        report = Mappers.Report.from_flag(flag, report_opts([flag], current_user))
 
         if report do
           RestAdapter.json(conn, report)
@@ -1199,6 +1199,16 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       else
         {:error, :not_found}
       end
+    end
+
+    defp report_opts(flags, current_user) do
+      [
+        current_user: current_user,
+        accounts_by_id:
+          flags
+          |> Enum.map(&Mappers.Report.target_user_id/1)
+          |> Bonfire.API.MastoCompat.Accounts.by_ids(current_user)
+      ]
     end
 
     defp preload_flag_for_api(flag) do

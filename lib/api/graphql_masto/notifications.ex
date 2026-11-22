@@ -25,6 +25,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     # Actor fields, shared with the timeline adapter — covers User + Category (groups), without
     # which group-authored notifications resolve to an untyped actor and get dropped on validation.
     @actor_fields Bonfire.API.MastoCompat.Fragments.actor_fields()
+    @author_fields Bonfire.API.MastoCompat.Fragments.author_fields()
     @object_interactions Bonfire.API.MastoCompat.Fragments.object_interactions()
 
     # What a notification's status needs beyond its object; media, counts and thread join on `object_id`, so on a like or boost they describe the post
@@ -49,8 +50,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     object_id: objectId
     date
     verb { verb }
-    subject { #{@actor_fields} }
-    subjects_more: subjectsMore @include(if: $grouped) { #{@actor_fields} }
+    subject { #{@author_fields} }
+    subjects_more: subjectsMore @include(if: $grouped) { #{@author_fields} }
     #{Bonfire.API.MastoCompat.Fragments.status_object()}
     #{@status_fields}
     edge {
@@ -63,7 +64,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
           id
           #{Bonfire.API.MastoCompat.Fragments.status_post_content()}
           #{Bonfire.API.MastoCompat.Fragments.status_media()}
-          creator { #{@actor_fields} }
+          creator { #{@author_fields} }
           #{@object_interactions}
           activity { mentions { #{@actor_fields} } hashtags { id name } visibility }
         }
