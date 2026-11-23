@@ -24,7 +24,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     # for pagination
     connection(node_type: :any_context)
 
-    @desc "Whether the viewer liked, boosted or bookmarked this object, keyed by the object's own id (`resolve_object_interaction/3`); imported by posts and polls"
+    @desc "Whether the viewer liked, boosted, bookmarked or pinned this object, keyed by the object's own id (`resolve_object_interaction/3`); imported by posts and polls"
     object :object_interactions do
       field :liked_by_me, :boolean do
         resolve(fn object, _, info ->
@@ -41,6 +41,12 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       field :bookmarked_by_me, :boolean do
         resolve(fn object, _, info ->
           Bonfire.Social.API.GraphQL.resolve_object_interaction(:bookmarked, object, info)
+        end)
+      end
+
+      field :pinned_by_me, :boolean do
+        resolve(fn object, _, info ->
+          Bonfire.Social.API.GraphQL.resolve_object_interaction(:pinned, object, info)
         end)
       end
     end
@@ -457,6 +463,33 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
               |> Helpers.on_load(fn loader ->
                 result =
                   Dataloader.get(loader, :user_interactions, :bookmarked, %{
+                    user_id: user.id,
+                    activity_id: activity.id
+                  })
+
+                {:ok, result || false}
+              end)
+            else
+              {:ok, false}
+            end
+
+          _activity, _args, _info ->
+            {:ok, false}
+        end)
+      end
+
+      field :pinned_by_me, :boolean do
+        resolve(fn
+          activity, _args, %{context: %{loader: loader, current_user: user}} = _info ->
+            if user && user.id do
+              loader
+              |> Dataloader.load(:user_interactions, :pinned, %{
+                user_id: user.id,
+                activity_id: activity.id
+              })
+              |> Helpers.on_load(fn loader ->
+                result =
+                  Dataloader.get(loader, :user_interactions, :pinned, %{
                     user_id: user.id,
                     activity_id: activity.id
                   })

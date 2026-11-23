@@ -8,7 +8,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     in the current feed, rather than loading ALL of a user's interactions.
     """
 
-    alias Bonfire.Data.Social.{Like, Boost, Bookmark}
+    alias Bonfire.Data.Social.{Like, Boost, Bookmark, Pin}
     alias Bonfire.Data.Edges.Edge
     import Ecto.Query
     use Bonfire.Common.Repo
@@ -55,6 +55,13 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       |> batch_check_interaction(Bookmark)
     end
 
+    # Mastodon's `pinned` is about the reader's own statuses: a pin by the viewer of something they created (Bonfire also lets them pin others' posts)
+    def fetch(:pinned, args) do
+      args
+      |> MapSet.to_list()
+      |> batch_check_interaction(Pin, own_objects_only: true)
+    end
+
     # Fallback for unknown batches
     def fetch(_batch, args) do
       args
@@ -76,7 +83,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         )
         # => %{%{user_id: "user1", activity_id: "act1"} => true}
     """
-    def batch_check_interaction(args, interaction_module) do
+    def batch_check_interaction(args, interaction_module, opts \\ []) do
       # Extract unique user_ids and activity_ids
       user_ids = args |> Enum.map(& &1.user_id) |> Enum.uniq() |> Enum.reject(&is_nil/1)
       activity_ids = args |> Enum.map(& &1.activity_id) |> Enum.uniq() |> Enum.reject(&is_nil/1)
@@ -99,6 +106,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
             where: e.table_id == ^table_id,
             select: {e.subject_id, e.object_id}
           )
+          |> maybe_own_objects_only(opts[:own_objects_only])
           |> repo().all()
           |> MapSet.new()
 
@@ -110,5 +118,13 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         end)
       end
     end
+
+    defp maybe_own_objects_only(query, true),
+      do:
+        join(query, :inner, [e], c in Bonfire.Data.Social.Created,
+          on: c.id == e.object_id and c.creator_id == e.subject_id
+        )
+
+    defp maybe_own_objects_only(query, _), do: query
   end
 end

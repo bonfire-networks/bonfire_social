@@ -1161,6 +1161,54 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
       assert Bonfire.Social.Pins.pinned?(user, post)
     end
 
+    # Mastodon's `pinned` is about the reader's own statuses
+    test "someone else's post the reader pinned does not read pinned", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+      author = Fake.fake_user!()
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: author,
+          post_attrs: %{post_content: %{html_body: "Someone else's post"}},
+          boundary: "public"
+        )
+
+      {:ok, _} = Bonfire.Social.Pins.pin(user, post, nil, skip_boundary_check: true)
+      assert Bonfire.Social.Pins.pinned?(user, post)
+
+      response =
+        conn
+        |> masto_api_conn(user: user, account: account)
+        |> get("/api/v1/statuses/#{post.id}")
+        |> json_response(200)
+
+      assert response["pinned"] == false
+    end
+
+    test "a pinned status reads pinned when fetched, and not after unpin", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: user,
+          post_attrs: %{post_content: %{html_body: "Pin me, then read me"}},
+          boundary: "public"
+        )
+
+      api_conn = masto_api_conn(conn, user: user, account: account)
+      api_conn |> post("/api/v1/statuses/#{post.id}/pin") |> json_response(200)
+
+      assert api_conn |> get("/api/v1/statuses/#{post.id}") |> json_response(200) |> Map.get("pinned") ==
+               true
+
+      api_conn |> post("/api/v1/statuses/#{post.id}/unpin") |> json_response(200)
+
+      assert api_conn |> get("/api/v1/statuses/#{post.id}") |> json_response(200) |> Map.get("pinned") ==
+               false
+    end
+
     test "is idempotent - pinning twice succeeds", %{conn: conn} do
       account = Fake.fake_account!()
       user = Fake.fake_user!(account)
