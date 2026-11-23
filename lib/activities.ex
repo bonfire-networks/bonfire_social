@@ -3587,6 +3587,26 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
+  # when things start (the `time_span` mixin, eg. events), then the activity
+  def query_order(query, :starts_at, sort_order, _fallback_sort_field, _with_pins?) do
+    query =
+      query
+      |> proload(activity: [:object])
+      |> Bonfire.Social.Objects.join_time_span()
+
+    if sort_order == :desc do
+      order_by(query, [activity: activity, object_time_span: ts],
+        desc: ts.has_beginning,
+        desc: activity.id
+      )
+    else
+      order_by(query, [activity: activity, object_time_span: ts],
+        asc: ts.has_beginning,
+        asc: activity.id
+      )
+    end
+  end
+
   def query_order(query, :reply_count, sort_order, fallback_sort_field, _with_pins?) do
     query_order_with_metric(
       query,
@@ -3918,6 +3938,12 @@ defmodule Bonfire.Social.Activities do
     id
   end
 
+  # the start date of the object, which the query loaded with it (`Objects.join_time_span/1`)
+  def fetch_cursor_value_fun(d, {:object_time_span, :has_beginning}) do
+    e(d, :activity, :object, :time_span, :has_beginning, nil) ||
+      e(d, :object, :time_span, :has_beginning, nil)
+  end
+
   def fetch_cursor_value_fun(d, list) when is_tuple(list) do
     debug(list, "with list")
     apply(E, :ed, [d] ++ Tuple.to_list(list) ++ [nil])
@@ -3958,6 +3984,9 @@ defmodule Bonfire.Social.Activities do
   def order_cursor_fields(:popularity_score, sort_order), do: [{:id, sort_order}]
 
   def order_cursor_fields(:id, sort_order), do: [{:id, sort_order}]
+
+  def order_cursor_fields(:starts_at, sort_order),
+    do: [{{:object_time_span, :has_beginning}, sort_order}, {:id, sort_order}]
 
   def order_cursor_fields(sort_field, sort_order) do
     debug(sort_field, "unhandled sort field in order_cursor_fields, defaulting to id")
