@@ -252,7 +252,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       end
 
       # changed on purpose (masto-live-fixes step 2): blocks and mutes carry real counts (0 before, they selected none)
-      test "blocks and mutes carry real counts", %{api_conn: api_conn, other: other} do
+      # changed on purpose (masto-live-fixes step 5, decision 6.1): a blocked account is no longer listed under mutes too, so the mute is of another account
+      test "blocks and mutes carry real counts", %{api_conn: api_conn, other: other, fan: fan} do
         api_conn |> post("/api/v1/accounts/#{other.id}/block") |> json_response(200)
         [blocked] = api_conn |> get("/api/v1/blocks") |> json_response(200)
 
@@ -262,11 +263,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
                    nils: :dropped
                  )
 
-        api_conn |> post("/api/v1/accounts/#{other.id}/mute") |> json_response(200)
+        api_conn |> post("/api/v1/accounts/#{fan.id}/mute") |> json_response(200)
         [muted] = api_conn |> get("/api/v1/mutes") |> json_response(200)
 
         assert muted ==
-                 expected(other, [statuses: 2, followers: 1, following: 1],
+                 expected(fan, [statuses: 0, followers: 0, following: 1],
                    url: :actor,
                    nils: :dropped
                  )
@@ -455,6 +456,54 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         refute last["id"] in Enum.map(page_one, & &1["id"])
       end
 
+      # followed hashtags came back as accounts with no username, which the mapper drops: a short page, and 46 counted against 45 listed (live testing, masto-live-fixes pagination bug 2)
+      test "following leaves out followed hashtags", %{api_conn: api_conn, viewer: viewer} do
+        followed = for _ <- 1..2, do: follow!(viewer, Fake.fake_user!())
+        follow_hashtag!(viewer)
+
+        ids =
+          api_conn
+          |> get("/api/v1/accounts/#{viewer.id}/following")
+          |> json_response(200)
+          |> Enum.map(& &1["id"])
+
+        assert Enum.sort(ids) == followed |> Enum.map(& &1.id) |> Enum.sort()
+      end
+
+      test "following pages past a followed hashtag", %{api_conn: api_conn, viewer: viewer} do
+        [first, second] = for _ <- 1..2, do: follow!(viewer, Fake.fake_user!())
+        follow_hashtag!(viewer)
+        [third, fourth] = for _ <- 1..2, do: follow!(viewer, Fake.fake_user!())
+        path = "/api/v1/accounts/#{viewer.id}/following"
+
+        page_one = get(api_conn, path, %{"limit" => "3"})
+        assert ids(page_one) == [fourth.id, third.id, second.id], "a full page, newest follow first"
+        assert max_id = next_max_id(page_one), "the first page links to the next"
+
+        page_two = get(api_conn, path, %{"limit" => "3", "max_id" => max_id})
+        assert ids(page_two) == [first.id]
+      end
+
+      test "the GraphQL following field holds no hashtags", %{viewer: viewer} do
+        followed = for _ <- 1..2, do: follow!(viewer, Fake.fake_user!())
+        follow_hashtag!(viewer)
+
+        {:ok, result} =
+          Absinthe.run(
+            "query ($filter: CharacterFilters) { user(filter: $filter) { following(first: 10) { edges { node { id } } } } }",
+            Bonfire.API.GraphQL.Schema,
+            variables: %{"filter" => %{"id" => viewer.id}},
+            context: Bonfire.API.GraphQL.Schema.context(%{current_user: viewer})
+          )
+
+        refute result[:errors], "expected no GraphQL errors, got: #{inspect(result[:errors])}"
+
+        ids =
+          result |> get_in([:data, "user", "following", "edges"]) |> Enum.map(&get_in(&1, ["node", "id"]))
+
+        assert Enum.sort(ids) == followed |> Enum.map(& &1.id) |> Enum.sort()
+      end
+
       test "follow requests past the first page can be reached", %{conn: conn} do
         account = Fake.fake_account!()
         locked = Fake.fake_user!(account, %{}, request_before_follow: true)
@@ -613,6 +662,20 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
                  )
       end
     end
+
+    defp follow!(follower, followed) do
+      {:ok, _} = Follows.follow(follower, followed)
+      followed
+    end
+
+    # a hashtag followed as `Bonfire.Tag`'s own API tests do it
+    defp follow_hashtag!(follower) do
+      {:ok, hashtag} = Bonfire.Tag.get_or_create_hashtag("followed#{System.unique_integer([:positive])}")
+      {:ok, _} = Follows.follow(follower, hashtag, skip_boundary_check: true)
+      hashtag
+    end
+
+    defp ids(resp), do: resp |> json_response(200) |> Enum.map(& &1["id"])
 
     # the `max_id` of the response's `rel="next"` Link, or nil when it has none
     defp next_max_id(conn), do: link_cursor(conn, "next", "max_id")

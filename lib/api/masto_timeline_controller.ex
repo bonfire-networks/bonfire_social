@@ -5,7 +5,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     use Bonfire.UI.Common.Web, :controller
 
     alias Bonfire.Social.API.GraphQLMasto.Adapter
-    alias Bonfire.Boundaries.API.GraphQLMasto.Adapter, as: BoundariesAdapter
     alias Bonfire.API.MastoCompat.{PaginationHelpers, Helpers}
 
     # `Markers.timeline_feed_name/1` is the canonical home↔my mapping, shared
@@ -22,10 +21,14 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
     @masto_feed_preloads ["with_subject", "with_object_more", "with_post_content", "with_replied"]
 
+    # a Mastodon timeline holds posts, replies and boosts; a like, vote or edit showed as a second copy of its post. Replies are their own verb
+    @masto_timeline_types ["create", "reply", "boost"]
+
     def feed_by_name(conn, feed_name, params) do
       params
-      |> PaginationHelpers.build_timeline_params(%{
+      |> PaginationHelpers.build_feed_params(%{
         "feed_name" => feed_name,
+        "activity_types" => @masto_timeline_types,
         "preload" => @masto_feed_preloads
       })
       |> then(&Adapter.feed(&1, conn))
@@ -36,9 +39,10 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       normalized_tag = Helpers.normalize_hashtag(hashtag)
 
       params
-      |> PaginationHelpers.build_timeline_params(%{
+      |> PaginationHelpers.build_feed_params(%{
         "feed_name" => feed_name,
         "tags" => [normalized_tag],
+        "activity_types" => @masto_timeline_types,
         "preload" => @masto_feed_preloads
       })
       |> then(&Adapter.feed(&1, conn))
@@ -46,8 +50,17 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
     def timeline(conn, %{"feed" => feed_name} = params), do: feed_by_name(conn, feed_name, params)
 
-    def list_timeline(conn, %{"list_id" => list_id} = params),
-      do: BoundariesAdapter.list_timeline(list_id, params, conn)
+    # the list's members' posts; the GraphQL feed checks the list is the reader's own (404 otherwise)
+    def list_timeline(conn, %{"list_id" => list_id} = params) do
+      params
+      |> PaginationHelpers.build_feed_params(%{
+        "subject_circles" => [list_id],
+        "feed_name" => nil,
+        "activity_types" => @masto_timeline_types,
+        "preload" => @masto_feed_preloads
+      })
+      |> then(&Adapter.feed(&1, conn))
+    end
 
     def grouped_notifications(conn, params), do: Adapter.grouped_notifications(params, conn)
 
@@ -101,6 +114,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         params
         |> PaginationHelpers.build_feed_params(%{
           "feed_name" => "user_activities",
+          # posts, replies and boosts, as the timelines: the outbox also holds follows, and could hold votes or edits
+          "activity_types" => @masto_timeline_types,
           "preload" => @masto_feed_preloads
         })
         |> then(&Adapter.user_activities_feed(user_id, &1, conn))

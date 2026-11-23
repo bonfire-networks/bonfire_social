@@ -137,6 +137,10 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         |> maybe_put_var("feedIds", get_field(filters, :feed_ids))
         |> maybe_put_var("tags", get_field(filters, :tags))
         |> maybe_put_var("subjects", by && List.wrap(by))
+        # the list timeline's members (`MastoTimelineController.list_timeline/2`): without it the list returned home
+        |> maybe_put_var("subjectCircles", get_field(filters, :subject_circles))
+        # set by the Mastodon timelines (posts, replies, boosts), not by bookmarks
+        |> maybe_put_var("activityTypes", get_field(filters, :activity_types))
         # Mastodon wants full id-paginated history, not the feed's default 7-day window — the
         # masto params carry `time_limit: 0` (PaginationHelpers.build_feed_params); forward it
         # (default to 0) so old activities/boosts aren't hidden.
@@ -189,6 +193,22 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       }
       |> Map.reject(fn {_k, v} -> is_nil(v) end)
       |> maybe_fallback_cursors(items)
+    end
+
+    # Favourites page by when each post was liked, so only the likes' own cursors fit the Link: a post's id in their place asks for the wrong likes (`prev` from page 1 brought the newest favourites back). No fallback to item ids, here or in `add_link_headers/5`: a missing cursor means no link
+    defp favourites_page_info(statuses, connection) do
+      pi = get_field(connection, :page_info) || %{}
+      end_cursor = get_field(pi, :end_cursor)
+
+      %{
+        start_cursor: get_field(pi, :start_cursor),
+        end_cursor: end_cursor,
+        cursor_fields: [id: :desc],
+        final_cursor: if(get_field(pi, :has_next_page) && end_cursor, do: nil, else: :last),
+        cursor_for_record_fun: fn _status -> nil end
+      }
+      |> Map.reject(fn {_k, v} -> is_nil(v) end)
+      |> then(fn page_info -> if statuses == [], do: %{}, else: page_info end)
     end
 
     # If the feed connection carried no cursors (e.g. empty page_info), fall back to item ids so
@@ -527,7 +547,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     @favourites_query """
     query Favourites($first: Int, $last: Int, $after: String, $before: String) {
       my_likes: myLikes(first: $first, last: $last, after: $after, before: $before) {
-        page_info: pageInfo { has_next_page: hasNextPage }
+        page_info: pageInfo { start_cursor: startCursor end_cursor: endCursor has_next_page: hasNextPage }
         edges { node { #{@status_node_selection} } }
       }
     }
@@ -575,21 +595,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     #   end
     # end
 
-    # Every status comes from what the feed query returned, completed by the page's batch loads, so a page costs the same whatever number of reactions it holds. A boost renders as a reblog wrapping its post (`Mappers.Status`); a like, vote or edit is shown as the post it's about
-    defp map_timeline_statuses(nodes, current_user) do
-      map_graphql_statuses(nodes, current_user, fn node, opts ->
-        if status_reaction?(node),
-          do: Mappers.Status.from_activity_object(node, opts),
-          else: Mappers.Status.from_graphql_activity(node, opts)
-      end)
-    end
-
-    defp status_reaction?(node) do
-      node
-      |> get_field(:verb)
-      |> get_field(:verb)
-      |> then(&(&1 in ["Vote", "vote", "Like", "like", "Edit", "edit"]))
-    end
+    # Every status comes from what the feed query returned, completed by the page's batch loads, so a page costs the same whatever its size. A boost renders as a reblog wrapping its post (`Mappers.Status`). Timelines no longer hold likes, votes or edits, which were rendered as the post they are about
+    defp map_timeline_statuses(nodes, current_user),
+      do: map_graphql_statuses(nodes, current_user, &Mappers.Status.from_graphql_activity/2)
 
     defp favourite_items(params, current_user) do
       pagination_args =
@@ -621,20 +629,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         _ ->
           {:ok, [], %{}}
       end
-    end
-
-    defp favourites_page_info([], _connection), do: %{}
-
-    defp favourites_page_info(statuses, connection) do
-      ids = statuses |> Enum.map(&get_field(&1, :id)) |> Enum.reject(&is_nil/1)
-      has_next_page = get_field(connection, :page_info) |> get_field(:has_next_page)
-
-      %{
-        start_cursor: List.first(ids),
-        end_cursor: List.last(ids),
-        cursor_fields: [id: :desc],
-        final_cursor: if(has_next_page, do: nil, else: List.last(ids))
-      }
     end
 
     defp maybe_put_var(map, _key, nil), do: map

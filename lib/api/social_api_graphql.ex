@@ -1556,7 +1556,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       ]
 
       feed_result =
-        with {:ok, filters} <- normalize_notification_filters(feed_name_resolved, filters) do
+        with {:ok, filters} <- only_readable_circles(filters, current_user),
+             {:ok, filters} <- normalize_notification_filters(feed_name_resolved, filters) do
           if is_list(explicit_feed_ids) and explicit_feed_ids != [] do
             # Bypass preset resolution for explicit group/topic feed ids.
             Bonfire.Social.FeedLoader.feed_filtered(explicit_feed_ids, filters, feed_opts)
@@ -1589,6 +1590,16 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
           feed_paginate(feed_type, feed_result, pagination_args)
       end
     end
+
+    # A circle filter reads only circles the reader may read (`Circles.readable_ids/2`, as the web feed and the circle page): anyone else's list or block circle would show who is in it through whose posts come back
+    defp only_readable_circles(%{subject_circles: [_ | _] = ids} = filters, user) do
+      case Bonfire.Boundaries.Circles.readable_ids(ids, user) do
+        [] -> {:error, :not_found}
+        readable -> {:ok, Map.put(filters, :subject_circles, readable)}
+      end
+    end
+
+    defp only_readable_circles(filters, _user), do: {:ok, filters}
 
     # Relay uses :first/:last; the Bonfire paginator reads :limit.
     defp feed_paginate_opts(pagination_args) when is_list(pagination_args) do
@@ -1869,7 +1880,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         result =
           Bonfire.Social.Likes.list_my(
             current_user: user,
-            paginate: pagination_args
+            # the paginator reads `:limit`, Relay sends `:first` (it answered 20 whatever the limit)
+            paginate: feed_paginate_opts(pagination_args)
           )
 
         # Batch-preload media on the liked posts so the `:post.media` sub-field resolves

@@ -420,6 +420,190 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
     end
   end
 
+  # scrolling stopped at posts a week old: every page carried the same 7-day bound (live testing, masto-live-fixes pagination bug 1, decision 1.1)
+  describe "timelines carry no 7-day window" do
+    test "home pages past posts older than 7 days", %{conn: conn} do
+      account = Fake.fake_account!()
+      reader = Fake.fake_user!(account)
+      author = Fake.fake_user!()
+      {:ok, _} = Follows.follow(reader, author)
+      old = for i <- 1..2, do: dated_post!(author, "old #{i} #window", 10)
+      _recent = dated_post!(author, "recent #window", 0)
+
+      ids = page_through(masto_api_conn(conn, user: reader, account: account), "/api/v1/timelines/home")
+
+      for post <- old, do: assert(post.id in ids, "an older post is reached by paging")
+    end
+
+    test "a list timeline pages past posts older than 7 days", %{conn: conn} do
+      account = Fake.fake_account!()
+      reader = Fake.fake_user!(account)
+      member = Fake.fake_user!()
+      {:ok, _} = Follows.follow(reader, member)
+
+      {:ok, list} =
+        Bonfire.Boundaries.Circles.create(reader, %{named: %{name: "window #{System.unique_integer([:positive])}"}})
+
+      {:ok, _} = Bonfire.Boundaries.Circles.add_to_circles(member, list, current_user: reader)
+      old = for i <- 1..2, do: dated_post!(member, "old #{i}", 10)
+      _recent = dated_post!(member, "recent", 0)
+
+      ids =
+        page_through(masto_api_conn(conn, user: reader, account: account), "/api/v1/timelines/list/#{list.id}")
+
+      for post <- old, do: assert(post.id in ids, "an older post is reached by paging")
+    end
+
+    test "a hashtag timeline pages past posts older than 7 days", %{conn: conn} do
+      account = Fake.fake_account!()
+      reader = Fake.fake_user!(account)
+      tag = "window#{System.unique_integer([:positive])}"
+      old = for i <- 1..2, do: dated_post!(reader, "old #{i} ##{tag}", 10)
+      _recent = dated_post!(reader, "recent ##{tag}", 0)
+
+      ids = page_through(masto_api_conn(conn, user: reader, account: account), "/api/v1/timelines/tag/#{tag}")
+
+      for post <- old, do: assert(post.id in ids, "an older post is reached by paging")
+    end
+  end
+
+  # a like, vote or edit was rendered as the post it's about, so a post and a reaction to it showed as the same status twice (live testing, masto-live-fixes decision D1): Mastodon timelines hold posts, replies and boosts only
+  describe "timelines hold posts, replies and boosts only" do
+    test "home shows a liked post once, not again as the like", %{conn: conn} do
+      account = Fake.fake_account!()
+      reader = Fake.fake_user!(account)
+      author = Fake.fake_user!()
+      liker = Fake.fake_user!()
+      for followed <- [author, liker], do: {:ok, _} = Follows.follow(reader, followed)
+      post = dated_post!(author, "liked by someone the reader follows", 0)
+      {:ok, _} = Likes.like(liker, post)
+
+      ids =
+        conn
+        |> masto_api_conn(user: reader, account: account)
+        |> get("/api/v1/timelines/home", %{"limit" => "40"})
+        |> json_response(200)
+        |> Enum.map(& &1["id"])
+
+      assert Enum.count(ids, &(&1 == post.id)) == 1
+    end
+
+    test "home shows a poll once, not again as a vote on it", %{conn: conn} do
+      account = Fake.fake_account!()
+      reader = Fake.fake_user!(account)
+
+      {:ok, question} =
+        Bonfire.Poll.Fake.fake_question_with_choices(
+          %{
+            post_content: %{html_body: "a poll in the reader's home"},
+            voting_dates: [DateTime.utc_now(), DateTime.add(DateTime.utc_now(), 3600, :second)]
+          },
+          [%{name: "A"}],
+          current_user: reader
+        )
+
+      [choice] = question.choices
+
+      for _ <- 1..2 do
+        {:ok, _} = Bonfire.Poll.Votes.vote(Fake.fake_user!(), question, [%{choice_id: choice.id, weight: 1}])
+      end
+
+      ids =
+        conn
+        |> masto_api_conn(user: reader, account: account)
+        |> get("/api/v1/timelines/home", %{"limit" => "40"})
+        |> json_response(200)
+        |> Enum.map(& &1["id"])
+
+      assert Enum.count(ids, &(&1 == question.id)) == 1
+    end
+  end
+
+  # the list timeline returned the reader's home: its list never reached the feed query (live testing, masto-live-fixes)
+  describe "GET /api/v1/timelines/list/:list_id" do
+    test "a list timeline holds only its members' posts", %{conn: conn} do
+      account = Fake.fake_account!()
+      reader = Fake.fake_user!(account)
+      member = Fake.fake_user!()
+      other = Fake.fake_user!()
+      for followed <- [member, other], do: {:ok, _} = Follows.follow(reader, followed)
+
+      {:ok, list} =
+        Bonfire.Boundaries.Circles.create(reader, %{named: %{name: "members #{System.unique_integer([:positive])}"}})
+
+      {:ok, _} = Bonfire.Boundaries.Circles.add_to_circles(member, list, current_user: reader)
+      in_list = dated_post!(member, "by a list member", 0)
+      not_in_list = dated_post!(other, "by someone else the reader follows", 0)
+      api_conn = masto_api_conn(conn, user: reader, account: account)
+
+      list_ids =
+        api_conn |> get("/api/v1/timelines/list/#{list.id}", %{"limit" => "40"}) |> json_response(200) |> Enum.map(& &1["id"])
+
+      home_ids =
+        api_conn |> get("/api/v1/timelines/home", %{"limit" => "40"}) |> json_response(200) |> Enum.map(& &1["id"])
+
+      assert in_list.id in list_ids
+      refute not_in_list.id in list_ids, "a post by someone outside the list"
+      assert not_in_list.id in home_ids, "home still has it"
+    end
+
+    # a circle filter only reads the reader's own circles: anyone else's would show who is in them (fresh review, finding 1)
+    test "another person's circle answers 404, not its members' posts", %{conn: conn} do
+      account = Fake.fake_account!()
+      reader = Fake.fake_user!(account)
+      owner = Fake.fake_user!()
+
+      {:ok, circle} =
+        Bonfire.Boundaries.Circles.create(owner, %{named: %{name: "not yours #{System.unique_integer([:positive])}"}})
+
+      conn
+      |> masto_api_conn(user: reader, account: account)
+      |> get("/api/v1/timelines/list/#{circle.id}")
+      |> json_response(404)
+    end
+
+    test "a circle in the query string does not narrow another timeline", %{conn: conn} do
+      account = Fake.fake_account!()
+      reader = Fake.fake_user!(account)
+      followed = Fake.fake_user!()
+      {:ok, _} = Follows.follow(reader, followed)
+      post = dated_post!(followed, "in the reader's home", 0)
+      owner = Fake.fake_user!()
+
+      {:ok, circle} =
+        Bonfire.Boundaries.Circles.create(owner, %{named: %{name: "not yours #{System.unique_integer([:positive])}"}})
+
+      ids =
+        conn
+        |> masto_api_conn(user: reader, account: account)
+        |> get("/api/v1/timelines/home", %{"limit" => "40", "subject_circles" => [circle.id]})
+        |> json_response(200)
+        |> Enum.map(& &1["id"])
+
+      assert post.id in ids
+    end
+  end
+
+  # code review: account statuses read the outbox, which also holds follows (and could hold votes or edits); Mastodon lists posts, replies and boosts
+  describe "GET /api/v1/accounts/:id/statuses holds posts, replies and boosts" do
+    test "a follow is not one of an account's statuses", %{conn: conn} do
+      account = Fake.fake_account!()
+      reader = Fake.fake_user!(account)
+      author = Fake.fake_user!()
+      {:ok, _} = Follows.follow(author, Fake.fake_user!())
+      post = dated_post!(author, "the only status", 0)
+
+      ids =
+        conn
+        |> masto_api_conn(user: reader, account: account)
+        |> get("/api/v1/accounts/#{author.id}/statuses", %{"limit" => "40"})
+        |> json_response(200)
+        |> Enum.map(& &1["id"])
+
+      assert ids == [post.id]
+    end
+  end
+
   describe "GET /api/v1/timelines/public" do
     test "returns public posts", %{conn: conn} do
       account = Fake.fake_account!()
@@ -1158,6 +1342,37 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
         |> json_response(200)
 
       assert response == []
+    end
+  end
+
+  # a public post whose id, and so its date, is `days_ago` days in the past
+  defp dated_post!(author, text, days_ago) do
+    {:ok, post} =
+      Posts.publish(
+        post_id:
+          Bonfire.Common.DatesTimes.past(days_ago, :day) |> Bonfire.Common.DatesTimes.generate_ulid(),
+        current_user: author,
+        post_attrs: %{post_content: %{html_body: text}},
+        boundary: "public"
+      )
+
+    post
+  end
+
+  # the ids a client sees following `rel="next"` with `limit=1`, up to 10 pages
+  defp page_through(api_conn, path, params \\ %{"limit" => "1"}, pages \\ 10, seen \\ [])
+
+  defp page_through(_api_conn, _path, _params, 0, seen), do: seen
+
+  defp page_through(api_conn, path, params, pages, seen) do
+    resp = get(api_conn, path, params)
+    seen = seen ++ (resp |> json_response(200) |> Enum.map(& &1["id"]))
+
+    with [link | _] <- get_resp_header(resp, "link"),
+         [_, query] <- Regex.run(~r/<[^>]*\?([^>]*)>; rel="next"/, link) do
+      page_through(api_conn, path, URI.decode_query(query), pages - 1, seen)
+    else
+      _ -> seen
     end
   end
 end

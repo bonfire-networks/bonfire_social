@@ -185,5 +185,92 @@ defmodule Bonfire.Social.MastoApi.FavouritesTest do
       assert is_binary(link)
       assert link =~ "max_id="
     end
+
+    # it answered 20 whatever the limit: the resolver passed `first:`, the paginator reads `:limit` (masto-live-fixes, pagination plan bug 4)
+    test "honours limit", %{conn: conn} do
+      {conn, _posts} = liked_posts(conn, 5)
+
+      assert conn |> get("/api/v1/favourites", %{"limit" => "3"}) |> json_response(200) |> length() == 3
+    end
+
+    test "the next link reaches older favourites without repeats", %{conn: conn} do
+      {conn, posts} = liked_posts(conn, 5)
+
+      page1 = get(conn, "/api/v1/favourites", %{"limit" => "3"})
+      page2 = get(conn, "/api/v1/favourites", next_params(page1))
+
+      ids = ids(page1) ++ ids(page2)
+      assert length(ids(page1)) == 3
+      assert length(ids(page2)) == 2
+      assert Enum.sort(ids) == posts |> Enum.map(& &1.id) |> Enum.sort()
+      assert next_params(page2) == nil, "the last page has no next link"
+    end
+
+    # the prev link fell back to a post id, so a pull-to-refresh from page 1 asked for likes newer than that post was written and got the newest favourites again (fresh review, finding 4)
+    test "the prev link from the first page brings nothing new", %{conn: conn} do
+      {conn, _posts} = liked_posts(conn, 5)
+
+      page1 = get(conn, "/api/v1/favourites", %{"limit" => "3"})
+
+      case prev_params(page1) do
+        nil -> :ok
+        prev -> assert ids(get(conn, "/api/v1/favourites", prev)) == []
+      end
+    end
+
+    # Mastodon pages favourites by when they were liked; the next link carried the post's id, so page 2 asked for likes older than that post
+    test "pages by when the post was liked, not when it was written", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+      author = Fake.fake_user!()
+      [oldest, middle, newest] = for i <- 1..3, do: publish_post!(author, "written #{i}")
+
+      # the oldest post is liked last
+      for post <- [newest, middle, oldest], do: {:ok, _} = Likes.like(user, post)
+
+      conn = masto_api_conn(conn, user: user, account: account)
+      page1 = get(conn, "/api/v1/favourites", %{"limit" => "2"})
+      assert ids(page1) == [oldest.id, middle.id]
+
+      page2 = get(conn, "/api/v1/favourites", next_params(page1))
+      assert ids(page2) == [newest.id]
+    end
+  end
+
+  # a user who liked `n` posts, oldest liked first; the conn is theirs
+  defp liked_posts(conn, n) do
+    account = Fake.fake_account!()
+    user = Fake.fake_user!(account)
+    author = Fake.fake_user!()
+
+    posts =
+      for i <- 1..n do
+        post = publish_post!(author, "likeable #{i}")
+        {:ok, _} = Likes.like(user, post)
+        post
+      end
+
+    {masto_api_conn(conn, user: user, account: account), posts}
+  end
+
+  defp ids(resp), do: resp |> json_response(200) |> Enum.map(& &1["id"])
+
+  defp prev_params(resp) do
+    with [link | _] <- get_resp_header(resp, "link"),
+         [_, query] <- Regex.run(~r/<[^>]*\?([^>]*)>; rel="prev"/, link) do
+      URI.decode_query(query)
+    else
+      _ -> nil
+    end
+  end
+
+  # the query of the response's `rel="next"` Link, as a client follows it; nil without one
+  defp next_params(resp) do
+    with [link | _] <- get_resp_header(resp, "link"),
+         [_, query] <- Regex.run(~r/<[^>]*\?([^>]*)>; rel="next"/, link) do
+      URI.decode_query(query)
+    else
+      _ -> nil
+    end
   end
 end
