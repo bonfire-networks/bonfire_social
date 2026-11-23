@@ -112,14 +112,17 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         {:ok, _} =
           Bonfire.Posts.publish(
             # the id dates the post, as `fake_post!/4` passes it
-            post_id: Bonfire.Common.DatesTimes.past(days_ago, :day) |> Bonfire.Common.DatesTimes.generate_ulid(),
+            post_id:
+              Bonfire.Common.DatesTimes.past(days_ago, :day)
+              |> Bonfire.Common.DatesTimes.generate_ulid(),
             current_user: user,
             post_attrs: %{post_content: %{html_body: "#{days_ago} days ago"}},
             boundary: "public"
           )
       end
 
-      expected = Bonfire.Common.DatesTimes.past(3, :day) |> DateTime.to_date() |> Date.to_iso8601()
+      expected =
+        Bonfire.Common.DatesTimes.past(3, :day) |> DateTime.to_date() |> Date.to_iso8601()
 
       # a datetime (decision 14); the Mastodon mapper keeps its date
       assert String.slice(last_post_at(user, user), 0, 10) == expected
@@ -174,7 +177,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
         {_, with_counts} =
           Bonfire.Common.Testing.count_queries(fn ->
-            queries(users, "id followers_count following_count statuses_count last_post_at", viewer)
+            queries(
+              users,
+              "id followers_count following_count statuses_count last_post_at",
+              viewer
+            )
           end)
 
         with_counts - without

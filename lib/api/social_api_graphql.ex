@@ -1300,7 +1300,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       case GraphQL.current_user(info) do
         %{} = current_user ->
           # the account as the context holds it, struct or id: Seen reads either (`Utils.current_account_or_id/1`), so no lookup here
-          account = info.context |> Map.take([:current_account, :current_account_id]) |> Enum.to_list()
+          account =
+            info.context |> Map.take([:current_account, :current_account_id]) |> Enum.to_list()
 
           {:ok,
            Bonfire.Social.Notifications.unseen_count(
@@ -2002,7 +2003,10 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
           |> e(:edges, [])
           |> Enum.map(&bookmarked_object_id/1)
           |> Enum.reject(&is_nil/1)
-          |> Bonfire.Social.Objects.read_many(current_user: user, preload: @single_status_preloads)
+          |> Bonfire.Social.Objects.read_many(
+            current_user: user,
+            preload: @single_status_preloads
+          )
 
         # keyed by the bookmarked object: a boost's activity names the boosted post
         activities_by_object_id =

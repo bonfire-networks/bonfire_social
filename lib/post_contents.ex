@@ -412,12 +412,19 @@ defmodule Bonfire.Social.PostContents do
   @doc "Given post content attributes, prepares it for processing by just cleaning up the text and detecting languages."
   defp only_prepare_content(attrs, creator, opts) do
     merge_with_body_or_nil(attrs, %{
-      html_body: get_attr(attrs, :html_body) |> prepare_text(creator, opts),
-      name: get_attr(attrs, :name) |> prepare_text(creator, opts),
-      summary: get_attr(attrs, :summary) |> prepare_text(creator, opts),
+      html_body: get_attr(attrs, :html_body) |> normalise_for_prepare(creator, opts),
+      name: get_attr(attrs, :name) |> normalise_for_prepare(creator, opts),
+      summary: get_attr(attrs, :summary) |> normalise_for_prepare(creator, opts),
       languages: maybe_detect_languages(attrs),
       mentions: e(attrs, :mentions, [])
     })
+  end
+
+  # without tag processing there is no other sanitising step, so the same `normalise_input/3` runs here
+  defp normalise_for_prepare(text, creator, opts) do
+    text
+    |> normalise_input(e(opts, :do_not_strip_html, nil))
+    |> prepare_text(creator, opts)
   end
 
   def all_text_content(attrs) do
@@ -481,6 +488,8 @@ defmodule Bonfire.Social.PostContents do
 
   defp normalise_input(text, _, format) do
     text
+    # decode first, so markup typed or received as entities (`&lt;script&gt;`) is sanitised like any other, instead of being decoded into markup by a later step
+    |> HtmlEntities.decode()
     # maybe remove potentially dangerous or dirty markup
     |> Text.maybe_sane_html()
   end
