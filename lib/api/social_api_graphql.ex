@@ -1014,6 +1014,12 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         resolve(&my_likes/2)
       end
 
+      @desc "The current user's bookmarked statuses, most recently bookmarked first"
+      connection field :my_bookmarks, node_type: :activity do
+        complexity(&page_complexity/2)
+        resolve(&my_bookmarks/2)
+      end
+
       @desc "List users who liked a specific post/activity"
       field :likers_of, list_of(:user) do
         arg(:id, non_null(:id))
@@ -1254,8 +1260,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
          current_user: current_user,
          preload: @single_status_preloads
        )
-       |> Enum.map(&status_activity/1)
-       |> with_tags(current_user)}
+       |> status_activities(current_user)}
     end
 
     def unseen_notifications_count(_parent, args, info) do
@@ -1302,7 +1307,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
              preload: @single_status_preloads
            ) do
         {:ok, object} ->
-          object |> status_activity() |> List.wrap() |> with_tags(current_user) |> List.first()
+          object |> List.wrap() |> status_activities(current_user) |> List.first()
 
         _ ->
           nil
@@ -1325,7 +1330,33 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       Enum.map(activities, &Map.get(tagged, &1.id, &1))
     end
 
-    # a read object as the `:activity` a status query resolves: its create activity, carrying the object
+    # read objects as status activities, with tags; a boost's target is read too, so the reblog wraps the boosted post
+    defp status_activities(objects, current_user) do
+      activities = Enum.map(objects, &status_activity/1)
+
+      boosted_by_id =
+        activities
+        |> Enum.filter(&match?(%{object: nil}, &1))
+        |> Enum.map(& &1.object_id)
+        |> Bonfire.Social.Objects.read_many(
+          current_user: current_user,
+          preload: @single_status_preloads
+        )
+        |> Map.new(&{&1.id, &1})
+
+      activities
+      |> Enum.map(fn
+        %{object: nil, object_id: id} = activity -> Map.put(activity, :object, boosted_by_id[id])
+        activity -> activity
+      end)
+      |> with_tags(current_user)
+    end
+
+    # a boost's activity is about another object, left nil for `status_activities/2` to read
+    defp status_activity(%{id: id, activity: %{object_id: object_id} = activity})
+         when is_binary(object_id) and object_id != id,
+         do: Map.put(activity, :object, nil)
+
     defp status_activity(%{activity: activity} = object) when is_map(activity),
       do: Map.put(activity, :object, object)
 
@@ -1915,6 +1946,54 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     end
 
     defp liked_post(like), do: e(like, :edge, :object, nil) || e(like, :object, nil)
+
+    # bookmarkable, but not statuses
+    @bookmarks_not_statuses [Bonfire.Classify.Category, Bonfire.Data.Identity.User]
+
+    # not the `bookmarks` feed: its deferred join drops bookmarks with no feed entry
+    def my_bookmarks(args, info) do
+      with {:ok, user} <- GraphQL.current_user_or_not_logged_in(info) do
+        {pagination_args, _filters} = Pagination.pagination_args_filter(args)
+
+        result =
+          Bonfire.Social.Bookmarks.list_my(
+            current_user: user,
+            paginate: feed_paginate_opts(pagination_args),
+            # in SQL, so pages stay full
+            exclude_object_types: @bookmarks_not_statuses
+          )
+
+        # as `get_statuses/3` reads them: readable objects only
+        objects =
+          result
+          |> e(:edges, [])
+          |> Enum.map(&bookmarked_object_id/1)
+          |> Enum.reject(&is_nil/1)
+          |> Bonfire.Social.Objects.read_many(current_user: user, preload: @single_status_preloads)
+
+        # keyed by the bookmarked object: a boost's activity names the boosted post
+        activities_by_object_id =
+          objects
+          |> status_activities(user)
+          |> then(&Enum.zip(objects, &1))
+          |> Map.new(fn {object, activity} -> {object.id, activity} end)
+
+        result
+        |> Map.update(
+          :edges,
+          [],
+          &Enum.filter(&1, fn bookmark ->
+            Map.has_key?(activities_by_object_id, bookmarked_object_id(bookmark))
+          end)
+        )
+        |> Pagination.connection_paginate(pagination_args,
+          item_prepare_fun: &Map.get(activities_by_object_id, bookmarked_object_id(&1))
+        )
+      end
+    end
+
+    defp bookmarked_object_id(bookmark),
+      do: e(bookmark, :edge, :object_id, nil) || e(bookmark, :object_id, nil)
 
     defp likers_of(_parent, %{id: id}, info) do
       list_interaction_subjects(Bonfire.Social.Likes, id, info)

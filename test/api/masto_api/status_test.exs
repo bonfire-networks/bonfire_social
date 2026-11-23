@@ -165,6 +165,32 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
       refute response["account"]["id"] == viewer.id
     end
 
+    test "a boost fetched by id is a reblog of the boosted post", %{conn: conn} do
+      account = Fake.fake_account!()
+      viewer = Fake.fake_user!(account)
+      author = Fake.fake_user!()
+      booster = Fake.fake_user!()
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: author,
+          post_attrs: %{post_content: %{html_body: "the boosted post"}},
+          boundary: "public"
+        )
+
+      {:ok, boost} = Boosts.boost(booster, post)
+
+      response =
+        conn
+        |> masto_api_conn(user: viewer, account: account)
+        |> get("/api/v1/statuses/#{boost.id}")
+        |> json_response(200)
+
+      assert response["account"]["id"] == booster.id
+      assert response["reblog"]["id"] == post.id
+      assert response["reblog"]["account"]["id"] == author.id
+    end
+
     test "a poll fetched by id carries a poll object (not a plain note)", %{conn: conn} do
       account = Fake.fake_account!()
       user = Fake.fake_user!(account)

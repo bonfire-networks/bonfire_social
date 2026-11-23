@@ -89,13 +89,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     def notifications_unread_count(conn, params),
       do: Adapter.notifications_unread_count(params, conn)
 
+    # not the `bookmarks` feed: it drops bookmarks with no feed entry
     def bookmarks(conn, params) do
       params
-      |> PaginationHelpers.build_feed_params(%{
-        "feed_name" => "bookmarks",
-        "preload" => @masto_feed_preloads
-      })
-      |> then(&Adapter.feed(&1, conn))
+      |> PaginationHelpers.build_feed_params(%{"preload" => @masto_feed_preloads})
+      |> then(&Adapter.bookmarks(&1, conn))
     end
 
     def favourites(conn, params) do

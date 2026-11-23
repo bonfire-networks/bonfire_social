@@ -1048,6 +1048,177 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
       assert post.id in post_ids
     end
 
+    # older bookmarks have a feed_publish row, newer ones don't
+    test "lists a bookmark with no feed entry alongside an older one that has one, newest bookmark first",
+         %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+      author = Fake.fake_user!()
+
+      [older_post, newer_post] =
+        for text <- ["bookmarked long ago", "bookmarked just now"] do
+          {:ok, post} =
+            Posts.publish(
+              current_user: author,
+              post_attrs: %{post_content: %{html_body: text}},
+              boundary: "public"
+            )
+
+          post
+        end
+
+      {:ok, older_bookmark} = Bookmarks.bookmark(user, older_post)
+
+      # as older bookmarks were: published to the outbox
+      Bonfire.Common.Repo.insert_all(Bonfire.Data.Social.FeedPublish, [
+        %{id: older_bookmark.id, feed_id: Bonfire.Social.Feeds.feed_id(:outbox, user)}
+      ])
+
+      {:ok, _} = Bookmarks.bookmark(user, newer_post)
+
+      response =
+        conn
+        |> masto_api_conn(user: user, account: account)
+        |> get("/api/v1/bookmarks")
+        |> json_response(200)
+
+      assert Enum.map(response, & &1["id"]) == [newer_post.id, older_post.id]
+      assert Enum.map(response, & &1["bookmarked"]) == [true, true]
+    end
+
+    test "pages by when the post was bookmarked, not when it was written", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+      author = Fake.fake_user!()
+
+      [oldest, middle, newest] =
+        for i <- 1..3 do
+          {:ok, post} =
+            Posts.publish(
+              current_user: author,
+              post_attrs: %{post_content: %{html_body: "written #{i}"}},
+              boundary: "public"
+            )
+
+          post
+        end
+
+      # the oldest post is bookmarked last
+      for post <- [newest, middle, oldest], do: {:ok, _} = Bookmarks.bookmark(user, post)
+
+      api_conn = masto_api_conn(conn, user: user, account: account)
+
+      assert page_through(api_conn, "/api/v1/bookmarks") == [oldest.id, middle.id, newest.id]
+    end
+
+    test "a bookmarked boost is listed as a reblog of the boosted post", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+      author = Fake.fake_user!()
+      booster = Fake.fake_user!()
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: author,
+          post_attrs: %{post_content: %{html_body: "the boosted post"}},
+          boundary: "public"
+        )
+
+      {:ok, boost} = Boosts.boost(booster, post)
+      {:ok, _} = Bookmarks.bookmark(user, boost)
+
+      assert [status] =
+               conn
+               |> masto_api_conn(user: user, account: account)
+               |> get("/api/v1/bookmarks")
+               |> json_response(200)
+
+      assert status["reblog"]["id"] == post.id
+      assert status["reblog"]["content"] =~ "the boosted post"
+    end
+
+    test "a bookmarked poll is listed with its options", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+      author = Fake.fake_user!()
+      now = DateTime.utc_now()
+
+      {:ok, question} =
+        Bonfire.Poll.Questions.create(
+          current_user: author,
+          boundary: "public",
+          question_attrs: %{
+            post_content: %{html_body: "a bookmarked poll"},
+            voting_format: "single",
+            voting_dates: [DateTime.add(now, -120), DateTime.add(now, 3600)],
+            choices: [%{name: "Tea"}, %{name: "Coffee"}]
+          }
+        )
+
+      {:ok, _} = Bookmarks.bookmark(user, question)
+
+      assert [status] =
+               conn
+               |> masto_api_conn(user: user, account: account)
+               |> get("/api/v1/bookmarks")
+               |> json_response(200)
+
+      assert status["id"] == question.id
+      assert Enum.map(status["poll"]["options"], & &1["title"]) == ["Tea", "Coffee"]
+    end
+
+    test "bookmarked groups don't take the places of bookmarked posts in a page", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+      author = Fake.fake_user!()
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: author,
+          post_attrs: %{post_content: %{html_body: "bookmarked before the groups"}},
+          boundary: "public"
+        )
+
+      {:ok, _} = Bookmarks.bookmark(user, post)
+
+      for _ <- 1..2 do
+        {:ok, _} = Bookmarks.bookmark(user, Bonfire.Classify.Simulate.fake_category!(author))
+      end
+
+      response =
+        conn
+        |> masto_api_conn(user: user, account: account)
+        |> get("/api/v1/bookmarks", %{"limit" => "2"})
+        |> json_response(200)
+
+      assert Enum.map(response, & &1["id"]) == [post.id]
+    end
+
+    test "marks every listed status as bookmarked", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+      author = Fake.fake_user!()
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: author,
+          post_attrs: %{post_content: %{html_body: "a bookmarked post"}},
+          boundary: "public"
+        )
+
+      {:ok, _} = Bookmarks.bookmark(user, post)
+
+      response =
+        conn
+        |> masto_api_conn(user: user, account: account)
+        |> get("/api/v1/bookmarks")
+        |> json_response(200)
+
+      assert [%{"id" => id, "bookmarked" => bookmarked}] = response
+      assert id == post.id
+      assert bookmarked == true
+    end
+
     test "returns empty list when no bookmarks", %{conn: conn} do
       account = Fake.fake_account!()
       user = Fake.fake_user!(account)

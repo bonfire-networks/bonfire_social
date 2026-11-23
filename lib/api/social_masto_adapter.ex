@@ -523,6 +523,19 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       end
     end
 
+    @doc "Get posts bookmarked by the current user, most recently bookmarked first"
+    def bookmarks(params, conn) do
+      current_user = conn.assigns[:current_user]
+
+      if is_nil(current_user) do
+        RestAdapter.error_fn({:error, :unauthorized}, conn)
+      else
+        params
+        |> bookmark_items(current_user)
+        |> then(&respond_with_feed(conn, params, &1))
+      end
+    end
+
     # Post-shaped node selection (favourites). Snake_case aliases so the shared Status builders
     # read them. TODO(graphql-fix): only `... on Post` is selected — non-Post liked objects
     # (polls/Question, media) are stripped; extend to all object types.
@@ -549,6 +562,15 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       my_likes: myLikes(first: $first, last: $last, after: $after, before: $before) {
         page_info: pageInfo { start_cursor: startCursor end_cursor: endCursor has_next_page: hasNextPage }
         edges { node { #{@status_node_selection} } }
+      }
+    }
+    """
+
+    @bookmarks_query """
+    query Bookmarks($first: Int, $last: Int, $after: String, $before: String) {
+      my_bookmarks: myBookmarks(first: $first, last: $last, after: $after, before: $before) {
+        page_info: pageInfo { start_cursor: startCursor end_cursor: endCursor has_next_page: hasNextPage }
+        edges { node { #{@activity_node_selection} } }
       }
     }
     """
@@ -620,6 +642,39 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
             |> Enum.map(&get_field(&1, :node))
             |> Enum.reject(&is_nil/1)
             |> map_graphql_statuses(current_user)
+
+          {:ok, statuses, favourites_page_info(statuses, connection)}
+
+        {:ok, %{errors: errors}} ->
+          {:error, errors}
+
+        _ ->
+          {:ok, [], %{}}
+      end
+    end
+
+    # as `favourite_items/2`, paged by bookmark; nodes are activities, mapped as timelines
+    defp bookmark_items(params, current_user) do
+      pagination_args =
+        case Map.take(params, [:first, :last, :after, :before]) do
+          empty when map_size(empty) == 0 -> %{first: 20}
+          args -> args
+        end
+
+      variables =
+        %{}
+        |> maybe_put_var("first", Map.get(pagination_args, :first))
+        |> maybe_put_var("last", Map.get(pagination_args, :last))
+        |> maybe_put_var("after", Map.get(pagination_args, :after))
+        |> maybe_put_var("before", Map.get(pagination_args, :before))
+
+      case Helpers.run_query(@bookmarks_query, current_user, variables) do
+        {:ok, %{data: %{my_bookmarks: %{edges: edges} = connection}}} when is_list(edges) ->
+          statuses =
+            edges
+            |> Enum.map(&get_field(&1, :node))
+            |> Enum.reject(&is_nil/1)
+            |> map_timeline_statuses(current_user)
 
           {:ok, statuses, favourites_page_info(statuses, connection)}
 
