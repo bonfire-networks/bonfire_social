@@ -125,4 +125,93 @@ defmodule Bonfire.Social.FeedsCirclesFilterTest do
       refute FeedLoader.feed_contains?(feed, post_by_bob, current_user: me)
     end
   end
+
+  # A circle filter only reads circles the viewer may read (`Circles.readable_ids/2`): filtering by someone else's list or block circle would show who is in it
+  describe "circle filters with a circle the viewer cannot read" do
+    setup do
+      Process.put(:federating, false)
+
+      me = fake_user!("main me")
+      alice = fake_user!("alice")
+      bob = fake_user!("bob")
+      carl = fake_user!("carl")
+
+      # bob's own circle, holding alice; me may not read it
+      {:ok, bobs_circle} = Circles.create(bob, %{named: %{name: "bob's secret list"}})
+      {:ok, _} = Circles.add_to_circles(alice, bobs_circle, skip_boundary_check: true)
+
+      post_by_alice = fake_post!(alice, "public", %{post_content: %{name: "post by alice"}})
+      post_by_carl = fake_post!(carl, "public", %{post_content: %{name: "post by carl"}})
+
+      %{
+        me: me,
+        alice: alice,
+        bobs_circle: bobs_circle,
+        post_by_alice: id(post_by_alice),
+        post_by_carl: id(post_by_carl)
+      }
+    end
+
+    test "`subject_circles` with someone else's circle shows nothing, not that circle's members nor the whole feed",
+         %{
+           me: me,
+           bobs_circle: bobs_circle,
+           post_by_alice: post_by_alice,
+           post_by_carl: post_by_carl
+         } do
+      feed = FeedLoader.feed(:custom, %{subject_circles: [id(bobs_circle)]}, current_user: me)
+
+      refute FeedLoader.feed_contains?(feed, post_by_alice, current_user: me)
+      refute FeedLoader.feed_contains?(feed, post_by_carl, current_user: me)
+    end
+
+    test "`exclude_subject_circles` with someone else's circle excludes no one", %{
+      me: me,
+      bobs_circle: bobs_circle,
+      post_by_alice: post_by_alice,
+      post_by_carl: post_by_carl
+    } do
+      feed =
+        FeedLoader.feed(:custom, %{exclude_subject_circles: [id(bobs_circle)]}, current_user: me)
+
+      assert FeedLoader.feed_contains?(feed, post_by_alice, current_user: me)
+      assert FeedLoader.feed_contains?(feed, post_by_carl, current_user: me)
+    end
+
+    # a caller that already skips boundaries (an admin or system load) filters by any circle
+    test "`subject_circles` with someone else's circle still narrows the feed when the caller skips boundary checks",
+         %{
+           me: me,
+           bobs_circle: bobs_circle,
+           post_by_alice: post_by_alice,
+           post_by_carl: post_by_carl
+         } do
+      feed =
+        FeedLoader.feed(:custom, %{subject_circles: [id(bobs_circle)]},
+          current_user: me,
+          skip_boundary_check: true
+        )
+
+      assert FeedLoader.feed_contains?(feed, post_by_alice, current_user: me)
+      refute FeedLoader.feed_contains?(feed, post_by_carl, current_user: me)
+    end
+
+    # control: the reader's own followed circle (what notification audiences use via `:my_followed`) stays readable
+    test "`exclude_subject_circles` with the viewer's own followed circle still excludes who they follow",
+         %{
+           me: me,
+           alice: alice,
+           post_by_alice: post_by_alice,
+           post_by_carl: post_by_carl
+         } do
+      {:ok, _} = Bonfire.Social.Graph.Follows.follow(me, alice)
+      followed = Circles.stereotype_circle_ids_for(me, [:followed])
+      assert followed != []
+
+      feed = FeedLoader.feed(:custom, %{exclude_subject_circles: followed}, current_user: me)
+
+      refute FeedLoader.feed_contains?(feed, post_by_alice, current_user: me)
+      assert FeedLoader.feed_contains?(feed, post_by_carl, current_user: me)
+    end
+  end
 end

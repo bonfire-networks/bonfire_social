@@ -2039,18 +2039,12 @@ defmodule Bonfire.Social.Activities do
         warn(circle_ids, "unrecognized circle_ids")
         query
 
-      # exclude members of all specified circles
       circle_ids ->
-        query
-        |> reusable_join(
-          :inner,
-          [activity: activity],
-          subject_encircle in Bonfire.Data.AccessControl.Encircle,
-          as: :subject_encircle,
-          on:
-            activity.subject_id == subject_encircle.subject_id and
-              subject_encircle.circle_id in ^circle_ids
-        )
+        case readable_circle_ids(circle_ids, opts) do
+          # none readable: show nothing, rather than the whole feed
+          [] -> where(query, false)
+          circle_ids -> filter_subject_circles(query, circle_ids)
+        end
     end
   end
 
@@ -2071,19 +2065,11 @@ defmodule Bonfire.Social.Activities do
         warn(circle_ids, "unrecognized circle_ids")
         query
 
-      # exclude members of all specified circles
       circle_ids ->
-        query
-        |> reusable_join(
-          :left,
-          [activity: activity],
-          subject_disencircle in Bonfire.Data.AccessControl.Encircle,
-          as: :subject_disencircle,
-          on:
-            activity.subject_id == subject_disencircle.subject_id and
-              subject_disencircle.circle_id in ^circle_ids
-        )
-        |> where([subject_disencircle: subject_disencircle], is_nil(subject_disencircle.id))
+        case readable_circle_ids(circle_ids, opts) do
+          [] -> query
+          circle_ids -> filter_exclude_subject_circles(query, circle_ids)
+        end
     end
   end
 
@@ -2288,6 +2274,43 @@ defmodule Bonfire.Social.Activities do
   def maybe_filter(query, filters, _opts) do
     debug(filters, "no supported activity-related filters defined")
     query
+  end
+
+  # A circle filter only uses circles the reader may read (`Circles.readable_ids/2`, also the circle page's rule): filtering by anyone else's list or block circle, to include or to exclude, would show who is in it
+  # A caller that already skips boundary checks (an admin or system load) keeps every circle
+  defp readable_circle_ids(circle_ids, opts) do
+    if skip_boundary_check?(opts),
+      do: circle_ids,
+      else: Bonfire.Boundaries.Circles.readable_ids(circle_ids, current_user(opts))
+  end
+
+  # include only members of the specified circles
+  defp filter_subject_circles(query, circle_ids) do
+    reusable_join(
+      query,
+      :inner,
+      [activity: activity],
+      subject_encircle in Bonfire.Data.AccessControl.Encircle,
+      as: :subject_encircle,
+      on:
+        activity.subject_id == subject_encircle.subject_id and
+          subject_encircle.circle_id in ^circle_ids
+    )
+  end
+
+  # exclude members of all specified circles
+  defp filter_exclude_subject_circles(query, circle_ids) do
+    query
+    |> reusable_join(
+      :left,
+      [activity: activity],
+      subject_disencircle in Bonfire.Data.AccessControl.Encircle,
+      as: :subject_disencircle,
+      on:
+        activity.subject_id == subject_disencircle.subject_id and
+          subject_disencircle.circle_id in ^circle_ids
+    )
+    |> where([subject_disencircle: subject_disencircle], is_nil(subject_disencircle.id))
   end
 
   # several statuses are either of them. Accepting clears `ignored_at` and ignoring clears `accepted_at` (`Requests.accept/2`, `Requests.ignore/2`), so at most one timestamp is ever set
