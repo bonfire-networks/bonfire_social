@@ -75,6 +75,15 @@ defmodule Bonfire.Social.FeedFilters do
     field :origin, AtomOrStringList
 
     field :time_limit, :integer, default: nil
+
+    # when things happen (objects with the `time_span` mixin, eg. events), unlike `time_limit`, which is when they were published: which side of now, and a range of start times (in UTC: the UI works out "today" or "this weekend" in the viewer's time zone)
+    field :time_span, Ecto.Enum,
+      values: [:upcoming, :current, :past, :past_and_current, :current_and_upcoming],
+      default: nil
+
+    # happening during a period (two fields, not four): ending at or after `happening_from`, and starting at or before `happening_until`, so a festival that started before the weekend is in "this weekend"; either alone means from or until that time. Something with no end ends at the end of the day it starts.
+    field :happening_from, :utc_datetime_usec, default: nil
+    field :happening_until, :utc_datetime_usec, default: nil
     field :sort_order, Ecto.Enum, values: [:asc, :desc], default: :desc
 
     field :sort_by, Ecto.Enum,
@@ -88,7 +97,9 @@ defmodule Bonfire.Social.FeedFilters do
         :latest_reply,
         :popularity_score,
         # media feeds only: how many times a piece of media was shared
-        :object_count
+        :object_count,
+        # when things start (the `time_span` mixin, eg. events); things without one drop out
+        :starts_at
       ],
       default: nil
 
@@ -227,6 +238,166 @@ defmodule Bonfire.Social.FeedFilters do
   end
 
   def normalise_instance_domain(_), do: nil
+
+  @happening_presets [
+    :today,
+    :tomorrow,
+    :this_weekend,
+    :this_week,
+    :next_week,
+    :this_month,
+    :next_month
+  ]
+
+  @doc "The presets `happening_range/3` knows, in the order a menu offers them."
+  def happening_presets, do: @happening_presets
+
+  @doc """
+  The filters for things happening during a period (a preset of `happening_presets/0`), in a time zone: `happening_from` its start and `happening_until` its end, in UTC, so a festival that started before the weekend is in "this weekend". Weeks start on Monday; the weekend is Saturday and Sunday (on a Sunday, the one that day ends). An unknown time zone counts as UTC.
+
+  A Wednesday afternoon in London (UTC in November):
+
+      iex> happening_range(:today, ~U[2026-11-25 15:00:00Z], "Europe/London")
+      %{happening_from: ~U[2026-11-25 00:00:00Z], happening_until: ~U[2026-11-26 00:00:00Z]}
+
+      iex> happening_range(:tomorrow, ~U[2026-11-25 15:00:00Z], "Europe/London")
+      %{happening_from: ~U[2026-11-26 00:00:00Z], happening_until: ~U[2026-11-27 00:00:00Z]}
+
+      iex> happening_range(:this_weekend, ~U[2026-11-25 15:00:00Z], "Europe/London")
+      %{happening_from: ~U[2026-11-28 00:00:00Z], happening_until: ~U[2026-11-30 00:00:00Z]}
+
+      iex> happening_range(:this_week, ~U[2026-11-25 15:00:00Z], "Europe/London")
+      %{happening_from: ~U[2026-11-23 00:00:00Z], happening_until: ~U[2026-11-30 00:00:00Z]}
+
+      iex> happening_range(:next_week, ~U[2026-11-25 15:00:00Z], "Europe/London")
+      %{happening_from: ~U[2026-11-30 00:00:00Z], happening_until: ~U[2026-12-07 00:00:00Z]}
+
+      iex> happening_range(:this_month, ~U[2026-11-25 15:00:00Z], "Europe/London")
+      %{happening_from: ~U[2026-11-01 00:00:00Z], happening_until: ~U[2026-12-01 00:00:00Z]}
+
+      iex> happening_range(:next_month, ~U[2026-11-25 15:00:00Z], "Europe/London")
+      %{happening_from: ~U[2026-12-01 00:00:00Z], happening_until: ~U[2027-01-01 00:00:00Z]}
+
+  The same moment is already Thursday in Auckland (UTC+13), whose day starts at 11:00 UTC:
+
+      iex> happening_range(:today, ~U[2026-11-25 15:00:00Z], "Pacific/Auckland")
+      %{happening_from: ~U[2026-11-25 11:00:00Z], happening_until: ~U[2026-11-26 11:00:00Z]}
+
+  On a Sunday, this weekend is the one ending that day:
+
+      iex> happening_range(:this_weekend, ~U[2026-11-29 10:00:00Z], "Europe/London")
+      %{happening_from: ~U[2026-11-28 00:00:00Z], happening_until: ~U[2026-11-30 00:00:00Z]}
+
+      iex> happening_range(:today, ~U[2026-11-25 15:00:00Z], "Not/A_Zone")
+      %{happening_from: ~U[2026-11-25 00:00:00Z], happening_until: ~U[2026-11-26 00:00:00Z]}
+  """
+  def happening_range(preset, now \\ DateTime.utc_now(), time_zone \\ "Etc/UTC")
+      when preset in @happening_presets do
+    # no time zone database is set for Elixir (`config/config.exs`), so Tzdata's is passed explicitly
+    db = if Code.ensure_loaded?(Tzdata.TimeZoneDatabase), do: Tzdata.TimeZoneDatabase
+
+    time_zone =
+      if db && match?({:ok, _}, DateTime.shift_zone(now, time_zone || "Etc/UTC", db)),
+        do: time_zone,
+        else: "Etc/UTC"
+
+    date =
+      case db do
+        nil -> DateTime.to_date(now)
+        db -> now |> DateTime.shift_zone!(time_zone, db) |> DateTime.to_date()
+      end
+
+    day_of_week = Date.day_of_week(date)
+    monday = Date.add(date, 1 - day_of_week)
+
+    {from, until} =
+      case preset do
+        :today ->
+          {date, Date.add(date, 1)}
+
+        :tomorrow ->
+          {Date.add(date, 1), Date.add(date, 2)}
+
+        :this_weekend ->
+          {Date.add(monday, 5), Date.add(monday, 7)}
+
+        :this_week ->
+          {monday, Date.add(monday, 7)}
+
+        :next_week ->
+          {Date.add(monday, 7), Date.add(monday, 14)}
+
+        :this_month ->
+          {Date.beginning_of_month(date), Date.add(Date.end_of_month(date), 1)}
+
+        :next_month ->
+          next = Date.add(Date.end_of_month(date), 1)
+          {next, Date.add(Date.end_of_month(next), 1)}
+      end
+
+    %{
+      happening_from: midnight_utc(from, time_zone, db),
+      happening_until: midnight_utc(until, time_zone, db)
+    }
+  end
+
+  @doc """
+  The filters for things happening from the start of one day to the end of another (the advanced dates), in a time zone, in UTC. Either day can be left out (`nil` or `""`), for "from" or "until" alone; a date that doesn't parse counts as left out.
+
+  Midnight in Auckland (UTC+13 in December) is 11:00 UTC the day before:
+
+      iex> happening_dates("2026-12-24", "2026-12-26", "Pacific/Auckland")
+      %{happening_from: ~U[2026-12-23 11:00:00Z], happening_until: ~U[2026-12-26 11:00:00Z]}
+
+      iex> happening_dates("2026-12-24", "", "Etc/UTC")
+      %{happening_from: ~U[2026-12-24 00:00:00Z], happening_until: nil}
+
+      iex> happening_dates(nil, "not a date", "Etc/UTC")
+      %{happening_from: nil, happening_until: nil}
+  """
+  def happening_dates(from_date, until_date, time_zone \\ "Etc/UTC") do
+    db = if Code.ensure_loaded?(Tzdata.TimeZoneDatabase), do: Tzdata.TimeZoneDatabase
+
+    time_zone =
+      if db &&
+           match?({:ok, _}, DateTime.shift_zone(DateTime.utc_now(), time_zone || "Etc/UTC", db)),
+         do: time_zone,
+         else: "Etc/UTC"
+
+    %{
+      happening_from:
+        with(%Date{} = date <- parse_date(from_date), do: midnight_utc(date, time_zone, db)),
+      # the end of the last day: the start of the next
+      happening_until:
+        with(
+          %Date{} = date <- parse_date(until_date),
+          do: midnight_utc(Date.add(date, 1), time_zone, db)
+        )
+    }
+  end
+
+  defp parse_date(%Date{} = date), do: date
+
+  defp parse_date(text) when is_binary(text) do
+    case Date.from_iso8601(text) do
+      {:ok, date} -> date
+      _ -> nil
+    end
+  end
+
+  defp parse_date(_), do: nil
+
+  # the start of a day in a time zone, in UTC (on a daylight saving gap, the first moment after it)
+  defp midnight_utc(date, _time_zone, nil), do: DateTime.new!(date, ~T[00:00:00], "Etc/UTC")
+
+  defp midnight_utc(date, time_zone, db) do
+    case DateTime.new(date, ~T[00:00:00], time_zone, db) do
+      {:ok, dt} -> dt
+      {:gap, _before, just_after} -> just_after
+      {:ambiguous, first, _second} -> first
+    end
+    |> DateTime.shift_zone!("Etc/UTC", db)
+  end
 
   # Custom validators
 

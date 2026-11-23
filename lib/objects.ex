@@ -613,10 +613,78 @@ defmodule Bonfire.Social.Objects do
 
   # the `tags` filter moved to `Bonfire.Tag.FeedFilters`, which is the extension that owns a Tagged row, and reaches feed queries through `Bonfire.Common.FeedFilterModule`
 
+  # When something ends: its end, else the end of the day it starts (the next midnight, in its time zone, else UTC), as something with no end lasts that day.
+  defmacrop time_span_end(ts) do
+    quote do
+      fragment(
+        "COALESCE(?, (date_trunc('day', ? AT TIME ZONE COALESCE(?, 'UTC')) + interval '1 day') AT TIME ZONE COALESCE(?, 'UTC'))",
+        unquote(ts).has_end,
+        unquote(ts).has_beginning,
+        unquote(ts).timezone,
+        unquote(ts).timezone
+      )
+    end
+  end
+
+  # when things happen (the `time_span` mixin, eg. events): which side of now. Something with no end lasts until the end of the day it starts, in its time zone (`time_span_end/1`).
+  def maybe_filter(query, {:time_span, side}, _opts)
+      when side in [:upcoming, :current, :past, :past_and_current, :current_and_upcoming] do
+    now = DateTime.utc_now()
+
+    query
+    |> join_time_span()
+    |> where(^time_span_where(side, now))
+  end
+
+  # happening during a period: still going at its start (ends at or after it)...
+  def maybe_filter(query, {:happening_from, %DateTime{} = from}, _opts) do
+    query
+    |> join_time_span()
+    |> where([object_time_span: ts], time_span_end(ts) >= ^from)
+  end
+
+  # ...and begun by its end (starts at or before it)
+  def maybe_filter(query, {:happening_until, %DateTime{} = until}, _opts) do
+    query
+    |> join_time_span()
+    |> where([object_time_span: ts], ts.has_beginning <= ^until)
+  end
+
   def maybe_filter(query, filters, _opts) do
     debug(filters, "no supported object-related filters defined")
     query
   end
+
+  @doc "Joins the object's time span (the `time_span` mixin, eg. of an event) as `:object_time_span`, once; objects without one drop out. It is joined as the object's association, so it comes loaded with the object (no extra query), which a pagination cursor on the start date reads."
+  def join_time_span(query) do
+    if has_named_binding?(query, :object_time_span) do
+      query
+    else
+      proload(query, :inner, activity: [object: {"object_", [:time_span]}])
+    end
+  end
+
+  @doc "The condition for a side of now (`:upcoming`, `:current`, `:past`, `:past_and_current`, `:current_and_upcoming`), on the time span bound as `:object_time_span` (`join_time_span/1`, or a join of the object's `:time_span` association with that name), with something with no end lasting until the end of the day it starts. For a context with its own query on a time span, eg. the events list."
+  def time_span_where(side, now \\ DateTime.utc_now())
+
+  def time_span_where(:upcoming, now),
+    do: dynamic([object_time_span: ts], ts.has_beginning > ^now)
+
+  def time_span_where(:current, now),
+    do:
+      dynamic(
+        [object_time_span: ts],
+        ts.has_beginning <= ^now and time_span_end(ts) >= ^now
+      )
+
+  def time_span_where(:past, now),
+    do: dynamic([object_time_span: ts], time_span_end(ts) < ^now)
+
+  def time_span_where(:past_and_current, now),
+    do: dynamic([object_time_span: ts], ts.has_beginning <= ^now)
+
+  def time_span_where(:current_and_upcoming, now),
+    do: dynamic([object_time_span: ts], time_span_end(ts) >= ^now)
 
   def prepare_object_types(types) do
     cond do

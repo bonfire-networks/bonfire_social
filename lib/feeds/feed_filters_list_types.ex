@@ -271,3 +271,63 @@ defmodule Bonfire.Social.FeedFilters.AtomOrStringList do
   defp normalize_value(value) when is_map(value), do: Enums.id(value)
   defp normalize_value(value) when is_atom(value), do: value
 end
+
+defmodule Bonfire.Social.FeedFilters.StringOrGroupsList do
+  @moduledoc """
+  A list of strings (ids or names), as `Bonfire.Social.FeedFilters.StringList`, which can also hold groups of them: a list of lists. How a filter reads groups is its own: eg. `tags` takes one tag from each group.
+  """
+  use Ecto.Type
+  alias Bonfire.Social.FeedFilters.StringList
+
+  def type, do: :array
+
+  @doc """
+  Casts a value to a list of strings, or to a list of groups (lists of strings) when any item is a list: an item that is not a list then is a group of its own.
+
+  ## Examples
+
+      iex> Bonfire.Social.FeedFilters.StringOrGroupsList.cast(["a", "b"])
+      {:ok, ["a", "b"]}
+
+      iex> Bonfire.Social.FeedFilters.StringOrGroupsList.cast([["a", "b"], ["c"]])
+      {:ok, [["a", "b"], ["c"]]}
+
+      iex> Bonfire.Social.FeedFilters.StringOrGroupsList.cast([["a"], "b"])
+      {:ok, [["a"], ["b"]]}
+
+      iex> Bonfire.Social.FeedFilters.StringOrGroupsList.cast([["a", 1]])
+      :error
+  """
+  def cast(value) when is_list(value) do
+    if Enum.any?(value, &is_list/1) do
+      value
+      |> Enum.reduce_while({:ok, []}, fn group, {:ok, groups} ->
+        case StringList.cast(group) do
+          {:ok, group} -> {:cont, {:ok, [group | groups]}}
+          :error -> {:halt, :error}
+        end
+      end)
+      |> case do
+        {:ok, groups} -> {:ok, groups |> Enum.reverse() |> Enum.uniq()}
+        :error -> :error
+      end
+    else
+      StringList.cast(value)
+    end
+  end
+
+  def cast(value), do: StringList.cast(value)
+
+  def load(values) when is_list(values), do: {:ok, values}
+  def load(_), do: :error
+
+  def dump(values) when is_list(values) do
+    {:ok,
+     Enum.map(values, fn
+       group when is_list(group) -> Enum.map(group, &to_string/1)
+       value -> to_string(value)
+     end)}
+  end
+
+  def dump(_), do: :error
+end

@@ -376,9 +376,19 @@ defmodule Bonfire.Social.FeedLoader do
     |> Map.put(
       :time_limit,
       e(filters, :time_limit, nil) || e(filters, "time_limit", nil) || opts[:time_limit] ||
-        default_time_limit()
+        default_time_limit(filters)
     )
     |> debug("set sort_by and time_limit")
+  end
+
+  # the window is about when things were published, so with a Happening filter (when they happen: eg. an event announced long ago that is still to come) there is none, unless one is asked for
+  defp default_time_limit(filters) do
+    if Enum.any?(
+         [:time_span, :happening_from, :happening_until],
+         &(not is_nil(e(filters, &1, nil)) or not is_nil(e(filters, to_string(&1), nil)))
+       ),
+       do: 0,
+       else: default_time_limit()
   end
 
   # TODO: make per-user?
