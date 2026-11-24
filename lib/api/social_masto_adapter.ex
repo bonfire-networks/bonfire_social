@@ -860,34 +860,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         {:error, :not_found}
     end
 
-    @doc "Delete a status owned by the caller, as required by the Mastodon endpoint."
-    def delete_status(%{"id" => id}, conn) do
-      current_user = conn.assigns[:current_user]
-
-      if is_nil(current_user) do
-        RestAdapter.error_fn({:error, :unauthorized}, conn)
-      else
-        with %{id: creator_id} <- Bonfire.Social.Objects.object_creator(id),
-             true <- creator_id == current_user.id,
-             {:ok, _} <- Bonfire.Social.Objects.delete(id, current_user: current_user) do
-          Phoenix.Controller.json(conn, %{"id" => id})
-        else
-          {:error, :not_found} ->
-            RestAdapter.error_fn({:error, :not_found}, conn)
-
-          {:error, :unauthorized} ->
-            RestAdapter.error_fn({:error, :unauthorized}, conn)
-
-          {:error, reason} ->
-            error(reason, "Failed to delete status")
-            RestAdapter.error_fn({:error, reason}, conn)
-
-          _ ->
-            RestAdapter.error_fn({:error, :not_found}, conn)
-        end
-      end
-    end
-
     @doc "Get thread context (ancestors and descendants)"
     def status_context(%{"id" => id}, conn) do
       current_user = conn.assigns[:current_user]
@@ -1009,6 +981,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     @unlike_mutation "mutation($id: String!) { done: unlike(id: $id) }"
     @unbookmark_mutation "mutation($id: String!) { done: unbookmark(id: $id) }"
     @unboost_mutation "mutation($id: String!) { done: unboost(id: $id) }"
+    @delete_mutation "mutation($id: String!) { done: delete_post(id: $id) }"
 
     def like_status(%{"id" => id}, conn), do: react(conn, @like_mutation, id)
     def unlike_status(%{"id" => id}, conn), do: undo_reaction(conn, @unlike_mutation, id)
@@ -1053,86 +1026,52 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       end
     end
 
+    @doc "Delete a status, answering it as it was read before; only its author may, as in Mastodon. One's own reblog is undone as an unreblog."
+    def delete_status(%{"id" => id}, conn) do
+      with {:ok, user} <- require_user(conn.assigns[:current_user]),
+           {:ok, %{"account" => %{"id" => author_id}} = status} <- read_status(id, user),
+           true <- author_id == user.id,
+           {mutation, target} = deletion(status, id),
+           {:ok, %{data: %{done: true}}} <- Helpers.run_query(mutation, user, %{"id" => target}) do
+        Phoenix.Controller.json(conn, status)
+      else
+        other -> reaction_error(conn, other)
+      end
+    end
+
+    defp deletion(%{"reblog" => %{"id" => boosted_id}}, _id), do: {@unboost_mutation, boosted_id}
+    defp deletion(_status, id), do: {@delete_mutation, id}
+
     defp reaction_error(conn, {:error, :unauthorized} = error),
       do: RestAdapter.error_fn(error, conn)
 
     defp reaction_error(conn, other) do
-      error(other, "reaction failed")
+      error(other, "Mastodon write failed")
       RestAdapter.error_fn({:error, :not_found}, conn)
     end
 
+    @pin_mutation "mutation($id: String!) { status: pin(id: $id) { #{@activity_node_selection} } }"
+    @unpin_mutation "mutation($id: String!) { done: unpin(id: $id) }"
+
+    # Mastodon pins only the reader's own statuses; the GraphQL `pin` follows `Pins.pin`'s boundary
     def pin_status(%{"id" => id}, conn) do
-      current_user = conn.assigns[:current_user]
-
-      if is_nil(current_user) do
-        RestAdapter.error_fn({:error, :unauthorized}, conn)
+      with {:ok, user} <- require_user(conn.assigns[:current_user]),
+           {:ok, %{"account" => %{"id" => author_id}}} <- read_status(id, user),
+           true <- author_id == user.id || :not_owned,
+           {:ok, status} <- run_status(@pin_mutation, user, %{"id" => id}) do
+        Phoenix.Controller.json(conn, status)
       else
-        result = pin_owned_status(current_user, id)
+        :not_owned ->
+          conn
+          |> Plug.Conn.put_status(422)
+          |> Phoenix.Controller.json(%{"error" => "Status is not owned by you"})
 
-        case result do
-          {:ok, _pin} ->
-            fetch_and_respond_with_pin_state(conn, current_user, id, true)
-
-          {:error, reason} ->
-            error(reason, "pin_status error")
-            pin_error(conn, reason)
-        end
+        other ->
+          reaction_error(conn, other)
       end
     end
 
-    defp pin_error(conn, :not_owned) do
-      conn
-      |> Plug.Conn.put_status(422)
-      |> Phoenix.Controller.json(%{"error" => "Status is not owned by you"})
-    end
-
-    defp pin_error(conn, reason), do: RestAdapter.error_fn({:error, reason}, conn)
-
-    defp pin_owned_status(current_user, id) do
-      with {:ok, object} <- Bonfire.Social.Objects.read(id, current_user: current_user),
-           true <- Bonfire.Boundaries.can?(current_user, :edit, object) do
-        # Wrap in try/rescue to handle federation errors gracefully.
-        # The pin creation may succeed but federation may fail.
-        try do
-          Bonfire.Social.Pins.pin(current_user, object)
-        rescue
-          e in RuntimeError ->
-            if Bonfire.Social.Pins.pinned?(current_user, object) do
-              {:ok, :already_pinned}
-            else
-              {:error, e.message}
-            end
-        end
-      else
-        false -> {:error, :not_owned}
-        {:error, reason} -> {:error, reason}
-        _ -> {:error, :not_found}
-      end
-    end
-
-    def unpin_status(%{"id" => id}, conn) do
-      current_user = conn.assigns[:current_user]
-
-      if is_nil(current_user) do
-        RestAdapter.error_fn({:error, :unauthorized}, conn)
-      else
-        case Bonfire.Social.Pins.unpin(current_user, id) do
-          {:ok, _} ->
-            fetch_and_respond_with_pin_state(conn, current_user, id, false)
-
-          _ ->
-            # Unpin is idempotent - still return success
-            fetch_and_respond_with_pin_state(conn, current_user, id, false)
-        end
-      end
-    end
-
-    defp fetch_and_respond_with_pin_state(conn, current_user, id, pinned_value) do
-      case read_status(id, current_user) do
-        {:ok, status} -> Phoenix.Controller.json(conn, Map.put(status, "pinned", pinned_value))
-        {:error, reason} -> RestAdapter.error_fn({:error, reason}, conn)
-      end
-    end
+    def unpin_status(%{"id" => id}, conn), do: undo_reaction(conn, @unpin_mutation, id)
 
     @doc "Search for statuses/posts, called by the Search adapter."
     def search_statuses_for_api(query, opts, _conn) do

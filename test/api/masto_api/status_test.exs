@@ -526,6 +526,73 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
       assert {:error, _} = Posts.read(post.id, skip_boundary_check: true)
     end
 
+    # Mastodon iOS decodes the answer as a status (W7)
+    test "answers the deleted status, as a read of it did", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: user,
+          post_attrs: %{post_content: %{html_body: "Delete me, answer me"}},
+          boundary: "public"
+        )
+
+      api_conn = masto_api_conn(conn, user: user, account: account)
+      before = api_conn |> get("/api/v1/statuses/#{post.id}") |> json_response(200)
+
+      response = api_conn |> delete("/api/v1/statuses/#{post.id}") |> json_response(200)
+
+      assert response == before
+      assert is_binary(response["uri"])
+      assert {:error, _} = Posts.read(post.id, skip_boundary_check: true)
+    end
+
+    # Mastodon deletes one's own reblog as an unreblog: the boost goes, the post stays
+    test "deleting one's own reblog by its id undoes the reblog", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+      author = Fake.fake_user!()
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: author,
+          post_attrs: %{post_content: %{html_body: "Boosted, then the boost deleted"}},
+          boundary: "public"
+        )
+
+      {:ok, boost} = Boosts.boost(user, post)
+      api_conn = masto_api_conn(conn, user: user, account: account)
+
+      response = api_conn |> delete("/api/v1/statuses/#{boost.id}") |> json_response(200)
+
+      assert response["id"] == boost.id
+      assert response["reblog"]["id"] == post.id
+      refute Boosts.boosted?(user, post)
+      assert {:ok, _} = Posts.read(post.id, skip_boundary_check: true)
+    end
+
+    # only the author, as in Mastodon (decision 5b), even where the boundary lets admins delete
+    test "answers 404 to an admin deleting someone else's status, which stays", %{conn: conn} do
+      account = Fake.fake_account!()
+      admin = fake_admin!(account)
+      author = Fake.fake_user!()
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: author,
+          post_attrs: %{post_content: %{html_body: "Not the admin's"}},
+          boundary: "public"
+        )
+
+      conn
+      |> masto_api_conn(user: admin, account: account)
+      |> delete("/api/v1/statuses/#{post.id}")
+      |> json_response(404)
+
+      assert {:ok, _} = Posts.read(post.id, skip_boundary_check: true)
+    end
+
     # TODO: Fix Objects.delete boundary check - see https://github.com/bonfire-networks/bonfire-app/issues/XXX
     @tag :skip
     test "cannot delete another user's status", %{conn: conn} do
@@ -1442,6 +1509,15 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
         |> json_response(401)
 
       assert response["error"] == "You need to login first."
+    end
+
+    test "unpinning an unknown status answers 404", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+
+      masto_api_conn(conn, user: user, account: account)
+      |> post("/api/v1/statuses/01JABCDEF0000000000000000Z/unpin")
+      |> json_response(404)
     end
   end
 end

@@ -1133,6 +1133,24 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         resolve(&unboost/2)
       end
 
+      field :delete_post, :boolean do
+        arg(:id, non_null(:string))
+
+        resolve(&delete_post/2)
+      end
+
+      field :pin, :activity do
+        arg(:id, non_null(:string))
+
+        resolve(&pin/2)
+      end
+
+      field :unpin, :boolean do
+        arg(:id, non_null(:string))
+
+        resolve(&unpin/2)
+      end
+
       field :like, :activity do
         arg(:id, non_null(:string))
 
@@ -1942,6 +1960,29 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     defp unboost(%{id: id}, info) do
       with {:ok, user} <- GraphQL.current_user_or_not_logged_in(info),
            {:ok, _} <- Bonfire.Social.Boosts.unboost(user, id) do
+        {:ok, true}
+      end
+    end
+
+    # who may pin is `Pins.pin`'s call (others' posts too); a repeat pin answers the existing one
+    defp pin(%{id: id}, info) do
+      with {:ok, user} <- GraphQL.current_user_or_not_logged_in(info),
+           {:ok, pin} <- Bonfire.Social.Pins.pin(user, id) do
+        reaction_status(pin, id, info)
+      end
+    end
+
+    defp unpin(%{id: id}, info) do
+      with {:ok, user} <- GraphQL.current_user_or_not_logged_in(info),
+           {:ok, _} <- Bonfire.Social.Pins.unpin(user, id) do
+        {:ok, true}
+      end
+    end
+
+    # who may delete is the `:delete` boundary's call, in `Objects.delete/2`
+    defp delete_post(%{id: id}, info) do
+      with {:ok, user} <- GraphQL.current_user_or_not_logged_in(info),
+           {:ok, _} <- Bonfire.Social.Objects.delete(id, current_user: user) do
         {:ok, true}
       end
     end

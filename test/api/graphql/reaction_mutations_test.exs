@@ -28,6 +28,12 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     }
     """
 
+    @delete_post """
+    mutation($id: String!) {
+      delete_post(id: $id)
+    }
+    """
+
     @boost """
     mutation($id: String!) {
       boost(id: $id) {
@@ -50,6 +56,21 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     @unbookmark """
     mutation($id: String!) {
       unbookmark(id: $id)
+    }
+    """
+
+    @pin """
+    mutation($id: String!) {
+      pin(id: $id) {
+        id
+        pinned_by_me
+      }
+    }
+    """
+
+    @unpin """
+    mutation($id: String!) {
+      unpin(id: $id)
     }
     """
 
@@ -112,6 +133,33 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       refute Bonfire.Social.Boosts.boosted?(viewer, post)
     end
 
+    test "delete_post deletes the author's own post", %{author: author} do
+      post = publish_post!(author, "GraphQL delete target")
+
+      {:ok, result} =
+        Absinthe.run(@delete_post, Schema,
+          variables: %{"id" => post.id},
+          context: Schema.context(%{current_user: author})
+        )
+
+      refute result[:errors]
+      assert get_in(result, [:data, "delete_post"]) == true
+      assert {:error, _} = Bonfire.Posts.read(post.id, skip_boundary_check: true)
+    end
+
+    test "delete_post refuses someone else's post, which stays", %{author: author, viewer: viewer} do
+      post = publish_post!(author, "GraphQL delete, not yours")
+
+      {:ok, result} =
+        Absinthe.run(@delete_post, Schema,
+          variables: %{"id" => post.id},
+          context: Schema.context(%{current_user: viewer})
+        )
+
+      assert result[:errors]
+      assert {:ok, _} = Bonfire.Posts.read(post.id, skip_boundary_check: true)
+    end
+
     test "boost returns the acted-on status with updated viewer state", %{
       author: author,
       viewer: viewer
@@ -162,6 +210,79 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
       refute result[:errors]
       assert get_in(result, [:data, "unbookmark"]) == true
+    end
+
+    test "pin returns the acted-on status with updated viewer state", %{author: author} do
+      post = publish_post!(author, "GraphQL pin target")
+
+      {:ok, result} =
+        Absinthe.run(@pin, Schema,
+          variables: %{"id" => post.id},
+          context: Schema.context(%{current_user: author})
+        )
+
+      refute result[:errors]
+      assert get_in(result, [:data, "pin", "id"]) == post.id
+      assert get_in(result, [:data, "pin", "pinned_by_me"]) == true
+      assert Bonfire.Social.Pins.pinned?(author, post)
+    end
+
+    # who may pin is `Pins.pin`'s call; only the Mastodon API is author-only
+    test "pin accepts someone else's public post", %{author: author, viewer: viewer} do
+      post = publish_post!(author, "GraphQL pin, someone else's")
+
+      {:ok, result} =
+        Absinthe.run(@pin, Schema,
+          variables: %{"id" => post.id},
+          context: Schema.context(%{current_user: viewer})
+        )
+
+      refute result[:errors]
+      # `pinned_by_me` is Mastodon's `pinned`: only for pins of the viewer's own posts
+      assert get_in(result, [:data, "pin", "pinned_by_me"]) == false
+      assert Bonfire.Social.Pins.pinned?(viewer, post)
+    end
+
+    test "unpin returns true only after the domain action succeeds", %{author: author} do
+      post = publish_post!(author, "GraphQL unpin target")
+      assert {:ok, _pin} = Bonfire.Social.Pins.pin(author, post)
+
+      {:ok, result} =
+        Absinthe.run(@unpin, Schema,
+          variables: %{"id" => post.id},
+          context: Schema.context(%{current_user: author})
+        )
+
+      refute result[:errors]
+      assert get_in(result, [:data, "unpin"]) == true
+      refute Bonfire.Social.Pins.pinned?(author, post)
+    end
+
+    test "unpin of a post never pinned returns true", %{author: author} do
+      post = publish_post!(author, "GraphQL unpin, never pinned")
+
+      {:ok, result} =
+        Absinthe.run(@unpin, Schema,
+          variables: %{"id" => post.id},
+          context: Schema.context(%{current_user: author})
+        )
+
+      refute result[:errors]
+      assert get_in(result, [:data, "unpin"]) == true
+    end
+
+    test "pin without a user returns an error and pins nothing", %{author: author} do
+      post = publish_post!(author, "GraphQL pin, logged out")
+
+      {:ok, result} =
+        Absinthe.run(@pin, Schema,
+          variables: %{"id" => post.id},
+          context: Schema.context(%{})
+        )
+
+      assert result[:errors]
+      assert get_in(result, [:data, "pin"]) == nil
+      refute Bonfire.Social.Pins.pinned?(author, post)
     end
 
     test "like returns a GraphQL error instead of a success-shaped object when status cannot resolve",
