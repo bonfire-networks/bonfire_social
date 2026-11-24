@@ -9,7 +9,8 @@ defmodule Bonfire.Social.Bonfire.Social.TrendingLinksTest do
 
   import Tesla.Mock
 
-  @moduletag :todo
+  # was :todo while the `trending_links` preset was disabled, which made `Media.trending_links/1` return `{:error, :not_found}`
+  # @moduletag :todo
 
   setup_all tags do
     Bonfire.Common.Test.Interactive.setup_test_repo(tags)
@@ -92,14 +93,15 @@ defmodule Bonfire.Social.Bonfire.Social.TrendingLinksTest do
         post3: post3,
         old_post: old_post
       },
+      # `cache: false`: the cache is global, so a result cached by another test file (before these fixtures existed) would be served instead
       results:
-        Bonfire.Social.Media.trending_links()
+        Bonfire.Social.Media.trending_links(cache: false)
         |> debug("shared fixture trending links results"),
       results_30days:
-        Bonfire.Social.Media.trending_links(time_limit: 30)
+        Bonfire.Social.Media.trending_links(time_limit: 30, cache: false)
         |> debug("Results with 30-day time limit"),
       results_by_trending_score:
-        Bonfire.Social.Media.trending_links(sort_by: :popularity_score)
+        Bonfire.Social.Media.trending_links(sort_by: :popularity_score, cache: false)
         |> debug("Results sorted by popularity_score")
     }
   end
@@ -207,7 +209,7 @@ defmodule Bonfire.Social.Bonfire.Social.TrendingLinksTest do
       {:ok, _} = Boosts.boost(user, post)
     end)
 
-    results = Bonfire.Social.Media.trending_links(limit: 3)
+    results = Bonfire.Social.Media.trending_links(limit: 3, cache: false)
     assert length(results) <= 3
   end
 
@@ -259,6 +261,12 @@ defmodule Bonfire.Social.Bonfire.Social.TrendingLinksTest do
       })
 
     {:ok, _} = Boosts.boost(user, new_post)
+
+    # the new link is trending when queried directly, so a miss below is the cache's
+    uncached = Bonfire.Social.Media.trending_links(limit: 10, cache: false)
+
+    assert Enum.any?(uncached, &String.contains?(&1.path, "articleII")),
+           "expected articleII when bypassing the cache, got: #{inspect(Enum.map(uncached, & &1.path))}"
 
     # After reset, fresh query should pick up new data
     results2 = Bonfire.Social.Media.trending_links(limit: 10)

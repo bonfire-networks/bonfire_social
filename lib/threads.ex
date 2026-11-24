@@ -2369,7 +2369,7 @@ defmodule Bonfire.Social.Threads do
   # --- Trending ("Top discussions") widget loader (cached for guests and for everyone signed in) ---
 
   @doc """
-  The most-replied discussions of the last day (`:trending_discussions` feed preset), for the "Top discussions" widget. Cached per limit for 1h, once for guests and once for everyone signed in, each loaded as that circle (`Bonfire.Boundaries.Circles.query_as_circle/1`) rather than as one user, so nobody's restricted discussions reach anyone else; the widget then drops what each viewer may not see, eg. from someone they blocked. The key is built once by `trending_cache_key/2` so the load and any reset always agree. Pass the standard `:cache` opt (`cache: :refresh` busts + recomputes — what the widget's refresh button calls).
+  The most-replied discussions of the last few days (`:trending_discussions` feed preset), for the "Top discussions" widget. Cached per limit for 1h, once for guests and once for everyone signed in, each loaded as that circle (`Bonfire.Boundaries.Circles.query_as_circle/1`) rather than as one user, so nobody's restricted discussions reach anyone else; the widget then drops what each viewer may not see, eg. from someone they blocked. The key is built once by `trending_cache_key/2` so the load and any reset always agree. Pass the standard `:cache` opt (`cache: :refresh` busts + recomputes — what the widget's refresh button calls).
   """
   def list_trending(current_user, limit, opts \\ []) do
     {circle, as_circle_opts} = Bonfire.Boundaries.Circles.query_as_circle(current_user)

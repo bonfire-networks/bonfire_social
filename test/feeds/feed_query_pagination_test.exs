@@ -494,8 +494,21 @@ defmodule Bonfire.Social.FeedPaginationTest do
         viewer = fake_user!("deep paging viewer")
         author = fake_user!("deep paging author")
 
-        for n <- 1..7,
-            do: fake_post!(author, "public", %{post_content: %{html_body: "deep paging #{n}"}})
+        posts =
+          for n <- 1..7,
+              do: fake_post!(author, "public", %{post_content: %{html_body: "deep paging #{n}"}})
+
+        # a reply-count feed lists only posts with replies
+        if unquote(extra_filters[:sort_by]) == :reply_count do
+          replier = fake_user!("deep paging replier")
+
+          for post <- posts,
+              do:
+                fake_post!(replier, "public", %{
+                  post_content: %{html_body: "reply"},
+                  reply_to_id: post.id
+                })
+        end
 
         filters =
           Map.merge(
@@ -535,10 +548,59 @@ defmodule Bonfire.Social.FeedPaginationTest do
     end
   end
 
-  describe "count sorts keep posts that have no count on later pages" do
-    # a post nobody reacted to has no count row, so its sort key is null: a plain `count < cursor` bound would drop it from every page after the first, which is why these sorts list their count field in `cursor_fields_nullable`
+  describe "popularity sort time window" do
+    # the score is computed over three joins, so no index can give its order: without a window Postgres scores every post (35s on a real instance), so asking for none gets the max window instead
+    test "popularity_score with no window gets the max window" do
+      max = Bonfire.Common.Config.get([Bonfire.Social.FeedLoader, :max_sort_window_days], 30)
+
+      assert feed_sql(%{sort_by: :popularity_score, time_limit: 0}, []) ==
+               feed_sql(%{sort_by: :popularity_score, time_limit: max}, []),
+             "expected time_limit 0 to be clamped to #{max} days"
+    end
+
+    test "unbounded_sort keeps popularity_score without a window" do
+      refute feed_sql(%{sort_by: :popularity_score, time_limit: 0}, unbounded_sort: true) ==
+               feed_sql(%{sort_by: :popularity_score, time_limit: 30}, unbounded_sort: true)
+    end
+
+    test "count sorts keep no window (their index gives the order)" do
+      refute feed_sql(%{sort_by: :like_count, time_limit: 0}, []) ==
+               feed_sql(%{sort_by: :like_count, time_limit: 30}, [])
+    end
+
+    defp feed_sql(filters, opts) do
+      query = FeedLoader.feed(:custom, filters, [return: :query, preload: false] ++ opts)
+      {sql, _params} = Ecto.Adapters.SQL.to_sql(:all, Bonfire.Common.Repo, query)
+      sql
+    end
+  end
+
+  describe "count sort indexes" do
+    # a count-sorted feed orders by `desc_nulls_last` and keeps only posts with a count, so an index in that same order lets Postgres walk the posts from the most counted and stop at the page limit, with no time window
+    for {table, expected} <- [
+          {"bonfire_data_edges_edge_total", ["(table_id, object_count DESC NULLS LAST)"]},
+          {"bonfire_data_social_replied",
+           ["(total_replies_count DESC NULLS LAST)", "WHERE (total_replies_count > 0)"]}
+        ] do
+      test "#{table} has an index in count-sort order" do
+        %{rows: rows} =
+          Bonfire.Common.Repo.query!(
+            "SELECT indexdef FROM pg_indexes WHERE tablename = $1",
+            [unquote(table)]
+          )
+
+        assert Enum.any?(rows, fn [indexdef] ->
+                 Enum.all?(unquote(expected), &String.contains?(indexdef, &1))
+               end),
+               "expected an index on #{unquote(table)} with #{inspect(unquote(expected))}, got: #{inspect(rows)}"
+      end
+    end
+  end
+
+  describe "count sorts list only posts with a count" do
+    # a post nobody reacted to isn't trending, and leaving it out lets the count index drive the sort (with posts that have no count row in the result, Postgres has to sort every post in the window)
     for sort_by <- [:like_count, :boost_count, :reply_count] do
-      test "#{sort_by}: pages from the most to the post with none" do
+      test "#{sort_by}: pages from the most to the least, without the post with none" do
         viewer = fake_user!("count paging viewer")
         author = fake_user!("count paging author")
         others = for n <- 1..2, do: fake_user!("count paging other #{n}")
@@ -577,8 +639,8 @@ defmodule Bonfire.Social.FeedPaginationTest do
           end)
           |> Enum.to_list()
 
-        assert List.flatten(pages) == [two.id, one.id, none.id],
-               "expected pages [two], [one], [none] (two=#{two.id} one=#{one.id} none=#{none.id}), got: #{inspect(pages)}"
+        assert List.flatten(pages) == [two.id, one.id],
+               "expected pages [two], [one] and never none (two=#{two.id} one=#{one.id} none=#{none.id}), got: #{inspect(pages)}"
       end
     end
 
@@ -620,9 +682,10 @@ defmodule Bonfire.Social.FeedPaginationTest do
     end
 
     test "pagination has no overlap between pages", %{user: user} do
+      # 5 posts have replies, so a limit of 2 leaves a second page
       opts = [
         current_user: user,
-        limit: 5,
+        limit: 2,
         show_objects_only_once: false,
         preload: false
       ]
@@ -656,7 +719,7 @@ defmodule Bonfire.Social.FeedPaginationTest do
     test "pagination returns all items across pages", %{user: user} do
       opts = [
         current_user: user,
-        limit: 5,
+        limit: 2,
         show_objects_only_once: false,
         preload: false
       ]
@@ -683,9 +746,9 @@ defmodule Bonfire.Social.FeedPaginationTest do
         end)
         |> Enum.flat_map(fn edges -> Enum.map(edges, & &1.activity.id) end)
 
-      # Should have 12 unique items (the root posts, no replies)
-      assert length(Enum.uniq(all_ids)) == 12,
-             "Expected 12 unique items across all pages, got #{length(Enum.uniq(all_ids))}"
+      # the 5 root posts that have replies: no replies (excluded) and no posts without replies (not trending)
+      assert length(Enum.uniq(all_ids)) == 5,
+             "Expected 5 unique items across all pages, got #{length(Enum.uniq(all_ids))}"
     end
   end
 

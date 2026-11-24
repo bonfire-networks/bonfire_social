@@ -3879,6 +3879,20 @@ defmodule Bonfire.Social.Activities do
     end
   end
 
+  @doc """
+  Keeps only rows with a count above 0 for a like, boost or reply count sort, to call after `query_order/5` (which joins the count). A feed lists only posts with a count, since one nobody reacted to isn't trending; this also turns the count's left join into an inner one, so the count-sort index can give the order and Postgres stops at the page limit instead of sorting every post in the time window. Thread replies don't call it: a reply nobody reacted to still belongs in its thread.
+  """
+  def query_only_counted(query, :like_count),
+    do: where(query, [like_count: like_count], like_count.object_count > 0)
+
+  def query_only_counted(query, :boost_count),
+    do: where(query, [boost_count: boost_count], boost_count.object_count > 0)
+
+  def query_only_counted(query, :reply_count),
+    do: where(query, [replied: replied], replied.total_replies_count > 0)
+
+  def query_only_counted(query, _sort_by), do: query
+
   # The cursor fields (see `order_cursor_fields/3`) whose column can be null: the count sorts read a left-joined binding, so an object with no likes, boosts or replies has a null sort key. Paginator only keeps such rows in later pages if their field is listed here; the other cursor fields are ids, and a plain bound on them can use the index.
   defp order_cursor_fields_nullable(:like_count), do: [{:activity, :like_count, :object_count}]
   defp order_cursor_fields_nullable(:boost_count), do: [{:activity, :boost_count, :object_count}]
