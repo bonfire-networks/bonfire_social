@@ -3,7 +3,7 @@ defmodule Bonfire.Social.Import.InstanceWideImportTest do
   use Bonfire.Social.DataCase, async: true
 
   alias Bonfire.Boundaries.Blocks
-  alias Bonfire.Social.Import
+  alias Bonfire.Common.Import
 
   @moduletag :backend
 

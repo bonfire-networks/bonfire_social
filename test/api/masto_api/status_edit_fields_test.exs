@@ -169,6 +169,29 @@ defmodule Bonfire.Social.MastoApi.StatusEditFieldsTest do
     assert json_response(conn, 404)["error"]
   end
 
+  # an edit sent through the API stores no markup that would run, in the body or the warning; the tests above, which edit plain text, are the control
+  test "markup that would run in an edited body or warning isn't stored", context do
+    context.conn
+    |> put(
+      "/api/v1/statuses/#{context.post.id}",
+      Jason.encode!(%{
+        "status" => "<img src=x onerror=alert(1)><script>alert(2)</script>Body kept",
+        "spoiler_text" => "<img src=x onerror=alert(3)>Warning kept"
+      })
+    )
+    |> json_response(200)
+
+    {:ok, saved_post} =
+      Objects.read(context.post.id, current_user: context.user, preload: [:with_post_content])
+
+    for value <- [saved_post.post_content.html_body, saved_post.post_content.summary] do
+      refute value =~ ~r/onerror|<script/i
+    end
+
+    assert saved_post.post_content.html_body =~ "Body kept"
+    assert saved_post.post_content.summary =~ "Warning kept"
+  end
+
   defp assert_edit(context, params, expected_body, expected_summary) do
     response =
       context.conn

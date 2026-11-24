@@ -477,7 +477,10 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         path = "/api/v1/accounts/#{viewer.id}/following"
 
         page_one = get(api_conn, path, %{"limit" => "3"})
-        assert ids(page_one) == [fourth.id, third.id, second.id], "a full page, newest follow first"
+
+        assert ids(page_one) == [fourth.id, third.id, second.id],
+               "a full page, newest follow first"
+
         assert max_id = next_max_id(page_one), "the first page links to the next"
 
         page_two = get(api_conn, path, %{"limit" => "3", "max_id" => max_id})
@@ -499,7 +502,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         refute result[:errors], "expected no GraphQL errors, got: #{inspect(result[:errors])}"
 
         ids =
-          result |> get_in([:data, "user", "following", "edges"]) |> Enum.map(&get_in(&1, ["node", "id"]))
+          result
+          |> get_in([:data, "user", "following", "edges"])
+          |> Enum.map(&get_in(&1, ["node", "id"]))
 
         assert Enum.sort(ids) == followed |> Enum.map(& &1.id) |> Enum.sort()
       end
@@ -670,7 +675,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
     # a hashtag followed as `Bonfire.Tag`'s own API tests do it
     defp follow_hashtag!(follower) do
-      {:ok, hashtag} = Bonfire.Tag.get_or_create_hashtag("followed#{System.unique_integer([:positive])}")
+      {:ok, hashtag} =
+        Bonfire.Tag.get_or_create_hashtag("followed#{System.unique_integer([:positive])}")
+
       {:ok, _} = Follows.follow(follower, hashtag, skip_boundary_check: true)
       hashtag
     end
@@ -706,7 +713,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       {:ok, post} =
         Bonfire.Posts.publish(
           # the id dates the post, as `fake_post!/4` passes it
-          post_id: Bonfire.Common.DatesTimes.past(days_ago, :day) |> Bonfire.Common.DatesTimes.generate_ulid(),
+          post_id:
+            Bonfire.Common.DatesTimes.past(days_ago, :day)
+            |> Bonfire.Common.DatesTimes.generate_ulid(),
           current_user: author,
           post_attrs: %{post_content: %{html_body: text}},
           boundary: "public"
@@ -716,7 +725,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     end
 
     defp date_of(post),
-      do: post.id |> Bonfire.Common.DatesTimes.date_from_pointer() |> DateTime.to_date() |> Date.to_iso8601()
+      do:
+        post.id
+        |> Bonfire.Common.DatesTimes.date_from_pointer()
+        |> DateTime.to_date()
+        |> Date.to_iso8601()
 
     # The whole account, built from the fixture rather than from the mapper under test.
     #

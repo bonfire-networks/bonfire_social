@@ -114,7 +114,7 @@ defmodule Bonfire.Social.Acts.Federate do
         nil
 
       not Social.is_local?(current_user) or
-          not Social.is_local?(object) ->
+          not local_for_action?(action, object) ->
         # nothing to push, but this is where an incoming object should get tied to the local one just created for it, because the epic promises later acts (the group auto-boost, mentions of local categories) that the object exists "including in AP db". Linking after the epic instead would be too late for them, and they would relay nothing, silently
         # ONLY the AP object an ingest passed in on purpose (`Posts.ap_receive_activity/4` does), never `assigns[ap_on]`: other flows put an AP object there for their own reasons, and linking one of those to the object being created would tie together two unrelated things
         Utils.maybe_apply(
@@ -210,6 +210,16 @@ defmodule Bonfire.Social.Acts.Federate do
     end
     |> Epic.assign(epic, on, from_ok(...) || object)
   end
+
+  # Whether this instance federates `action` on `object`. A delete asks whether the object's creator is local, when it has one: a post published here keeps a Peered row when it was imported from elsewhere (its original URL), which makes the object itself read as remote, yet its Create went out from here, so its Delete must too. A remote post deleted here (eg. by a moderator) has a remote creator, so it's still not pushed. Other actions, and objects with no creator (eg. a user), ask the object itself.
+  defp local_for_action?(:delete, object) do
+    case e(object, :created, :creator, nil) do
+      %{} = creator -> Social.is_local?(creator)
+      _ -> Social.is_local?(object)
+    end
+  end
+
+  defp local_for_action?(_action, object), do: Social.is_local?(object)
 
   defp maybe_create_pending_quote_requests(
          current_user,

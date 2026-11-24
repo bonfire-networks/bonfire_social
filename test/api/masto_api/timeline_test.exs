@@ -430,7 +430,11 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
       old = for i <- 1..2, do: dated_post!(author, "old #{i} #window", 10)
       _recent = dated_post!(author, "recent #window", 0)
 
-      ids = page_through(masto_api_conn(conn, user: reader, account: account), "/api/v1/timelines/home")
+      ids =
+        page_through(
+          masto_api_conn(conn, user: reader, account: account),
+          "/api/v1/timelines/home"
+        )
 
       for post <- old, do: assert(post.id in ids, "an older post is reached by paging")
     end
@@ -442,14 +446,19 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
       {:ok, _} = Follows.follow(reader, member)
 
       {:ok, list} =
-        Bonfire.Boundaries.Circles.create(reader, %{named: %{name: "window #{System.unique_integer([:positive])}"}})
+        Bonfire.Boundaries.Circles.create(reader, %{
+          named: %{name: "window #{System.unique_integer([:positive])}"}
+        })
 
       {:ok, _} = Bonfire.Boundaries.Circles.add_to_circles(member, list, current_user: reader)
       old = for i <- 1..2, do: dated_post!(member, "old #{i}", 10)
       _recent = dated_post!(member, "recent", 0)
 
       ids =
-        page_through(masto_api_conn(conn, user: reader, account: account), "/api/v1/timelines/list/#{list.id}")
+        page_through(
+          masto_api_conn(conn, user: reader, account: account),
+          "/api/v1/timelines/list/#{list.id}"
+        )
 
       for post <- old, do: assert(post.id in ids, "an older post is reached by paging")
     end
@@ -461,7 +470,11 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
       old = for i <- 1..2, do: dated_post!(reader, "old #{i} ##{tag}", 10)
       _recent = dated_post!(reader, "recent ##{tag}", 0)
 
-      ids = page_through(masto_api_conn(conn, user: reader, account: account), "/api/v1/timelines/tag/#{tag}")
+      ids =
+        page_through(
+          masto_api_conn(conn, user: reader, account: account),
+          "/api/v1/timelines/tag/#{tag}"
+        )
 
       for post <- old, do: assert(post.id in ids, "an older post is reached by paging")
     end
@@ -505,7 +518,10 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
       [choice] = question.choices
 
       for _ <- 1..2 do
-        {:ok, _} = Bonfire.Poll.Votes.vote(Fake.fake_user!(), question, [%{choice_id: choice.id, weight: 1}])
+        {:ok, _} =
+          Bonfire.Poll.Votes.vote(Fake.fake_user!(), question, [
+            %{choice_id: choice.id, weight: 1}
+          ])
       end
 
       ids =
@@ -529,7 +545,9 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
       for followed <- [member, other], do: {:ok, _} = Follows.follow(reader, followed)
 
       {:ok, list} =
-        Bonfire.Boundaries.Circles.create(reader, %{named: %{name: "members #{System.unique_integer([:positive])}"}})
+        Bonfire.Boundaries.Circles.create(reader, %{
+          named: %{name: "members #{System.unique_integer([:positive])}"}
+        })
 
       {:ok, _} = Bonfire.Boundaries.Circles.add_to_circles(member, list, current_user: reader)
       in_list = dated_post!(member, "by a list member", 0)
@@ -537,10 +555,16 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
       api_conn = masto_api_conn(conn, user: reader, account: account)
 
       list_ids =
-        api_conn |> get("/api/v1/timelines/list/#{list.id}", %{"limit" => "40"}) |> json_response(200) |> Enum.map(& &1["id"])
+        api_conn
+        |> get("/api/v1/timelines/list/#{list.id}", %{"limit" => "40"})
+        |> json_response(200)
+        |> Enum.map(& &1["id"])
 
       home_ids =
-        api_conn |> get("/api/v1/timelines/home", %{"limit" => "40"}) |> json_response(200) |> Enum.map(& &1["id"])
+        api_conn
+        |> get("/api/v1/timelines/home", %{"limit" => "40"})
+        |> json_response(200)
+        |> Enum.map(& &1["id"])
 
       assert in_list.id in list_ids
       refute not_in_list.id in list_ids, "a post by someone outside the list"
@@ -554,7 +578,9 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
       owner = Fake.fake_user!()
 
       {:ok, circle} =
-        Bonfire.Boundaries.Circles.create(owner, %{named: %{name: "not yours #{System.unique_integer([:positive])}"}})
+        Bonfire.Boundaries.Circles.create(owner, %{
+          named: %{name: "not yours #{System.unique_integer([:positive])}"}
+        })
 
       conn
       |> masto_api_conn(user: reader, account: account)
@@ -571,7 +597,9 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
       owner = Fake.fake_user!()
 
       {:ok, circle} =
-        Bonfire.Boundaries.Circles.create(owner, %{named: %{name: "not yours #{System.unique_integer([:positive])}"}})
+        Bonfire.Boundaries.Circles.create(owner, %{
+          named: %{name: "not yours #{System.unique_integer([:positive])}"}
+        })
 
       ids =
         conn
@@ -1553,7 +1581,8 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
     {:ok, post} =
       Posts.publish(
         post_id:
-          Bonfire.Common.DatesTimes.past(days_ago, :day) |> Bonfire.Common.DatesTimes.generate_ulid(),
+          Bonfire.Common.DatesTimes.past(days_ago, :day)
+          |> Bonfire.Common.DatesTimes.generate_ulid(),
         current_user: author,
         post_attrs: %{post_content: %{html_body: text}},
         boundary: "public"

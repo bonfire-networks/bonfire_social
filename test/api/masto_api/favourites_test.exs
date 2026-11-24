@@ -190,7 +190,10 @@ defmodule Bonfire.Social.MastoApi.FavouritesTest do
     test "honours limit", %{conn: conn} do
       {conn, _posts} = liked_posts(conn, 5)
 
-      assert conn |> get("/api/v1/favourites", %{"limit" => "3"}) |> json_response(200) |> length() == 3
+      assert conn
+             |> get("/api/v1/favourites", %{"limit" => "3"})
+             |> json_response(200)
+             |> length() == 3
     end
 
     test "the next link reaches older favourites without repeats", %{conn: conn} do
