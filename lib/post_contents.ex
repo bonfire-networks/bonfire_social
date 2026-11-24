@@ -233,7 +233,8 @@ defmodule Bonfire.Social.PostContents do
             |> unmask_summary.(),
           html_body:
             prepare_text(html_body, creator, opts ++ [do_not_strip_html: true])
-            |> unmask_html_body.(),
+            |> unmask_html_body.()
+            |> maybe_own_paragraph_urls(output_format, creator),
           mentions: e(attrs, :mentions, []) ++ mentions1 ++ mentions2 ++ mentions3,
           hashtags: e(attrs, :hashtags, []) ++ hashtags1 ++ hashtags2 ++ hashtags3,
           urls: urls1 ++ urls2 ++ urls3,
@@ -280,6 +281,14 @@ defmodule Bonfire.Social.PostContents do
         other
     end
     |> debug("processed local input")
+  end
+
+  # a markdown body gives each URL ending a line its own paragraph, so it federates alone on its line, where another instance places its media (see `Bonfire.Common.Text.own_paragraph_urls/1`)
+  defp maybe_own_paragraph_urls(body, output_format, creator) do
+    if is_binary(body) and not String.starts_with?(body, "<") and
+         (output_format || editor_output_content_type(creator)) == :markdown,
+       do: Text.own_paragraph_urls(body),
+       else: body
   end
 
   # Swaps each `>` that opens a line (nested ones too) for a token that prose processing leaves alone
@@ -760,6 +769,13 @@ defmodule Bonfire.Social.PostContents do
   # an edit's title, content warning and body are shown as stored (titles, and remote bodies, without sanitising again), so markup that would run is removed here, with the sanitiser publishing uses. Unlike on publishing, entities aren't decoded first: an edit starts from the stored HTML, where an encoded `&lt;tag&gt;` is text meant to show (eg. in code), and nothing after an edit decodes it into markup
   defp sanitise_edit(attrs) when is_map(attrs) do
     Map.new(attrs, fn
+      # a markdown body (not a remote post's HTML): each URL ending a line gets its own paragraph, as on publishing
+      {key, "<" <> _ = value} when key in [:html_body, "html_body"] ->
+        {key, Text.maybe_sane_html(value)}
+
+      {key, value} when key in [:html_body, "html_body"] and is_binary(value) ->
+        {key, value |> Text.maybe_sane_html() |> Text.own_paragraph_urls()}
+
       {key, value}
       when key in [:name, :summary, :html_body, "name", "summary", "html_body"] and
              is_binary(value) ->

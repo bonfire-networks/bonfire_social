@@ -2232,6 +2232,28 @@ defmodule Bonfire.Social.Threads do
     nil
   end
 
+  @doc """
+  The AP ids of the thread (`context`) and of what an outgoing object replies to (`reply_to`), as `{context, reply_to}`.
+
+  Works for any object type with a `replied` (preloaded, or loaded here when missing), so each type federating a reply calls this rather than working it out itself.
+  """
+  def ap_prepare_context_and_reply_to(object) do
+    id = uid!(object)
+
+    object = repo().maybe_preload(object, :replied)
+
+    reply_to_id = e(object, :replied, :reply_to_id, nil)
+    thread_id = e(object, :replied, :thread_id, nil)
+
+    context = if(thread_id && thread_id != id, do: ap_prepare(thread_id))
+
+    reply_to =
+      if(reply_to_id == thread_id, do: context) ||
+        if(reply_to_id && reply_to_id != id, do: ap_prepare(reply_to_id))
+
+    {context, reply_to}
+  end
+
   def reply_to_ap_object(activity_data, post_data) do
     # TODO: also take the `context` into account as thread_id
     if reply_to = reply_to_ap_id(activity_data, post_data),
@@ -2239,6 +2261,29 @@ defmodule Bonfire.Social.Threads do
         reply_to
         |> ActivityPub.Object.get_cached!(ap_id: ...)
         |> debug()
+  end
+
+  @doc """
+  What an incoming AP object replies to, as `{reply_to_ap_object, thread_under_id}`, for any object type.
+
+  `reply_to_ap_object` is what we hold of it (or nil). `thread_under_id` is the id to thread the new object under: the pointer of that, or a placeholder for it when it can't be fetched, which the real object fills when it arrives (nil when it replies to nothing). Whether the new object is a message still goes by what we actually hold, so callers deciding that use `reply_to_ap_object`.
+  """
+  def ap_receive_reply_to(activity_data, post_data) do
+    reply_to_ap_object = reply_to_ap_object(activity_data, post_data)
+
+    thread_under_id =
+      e(reply_to_ap_object, :pointer_id, nil) ||
+        with {:ok, placeholder_id} <-
+               Bonfire.Federate.ActivityPub.AdapterUtils.get_or_create_placeholder(
+                 reply_to_ap_id(activity_data, post_data),
+                 Bonfire.Federate.ActivityPub.AdapterUtils.thread_opener_id(post_data)
+               ) do
+          placeholder_id
+        else
+          _ -> nil
+        end
+
+    {reply_to_ap_object, thread_under_id}
   end
 
   @doc "The AP id of what an incoming object replies to, if anything."
