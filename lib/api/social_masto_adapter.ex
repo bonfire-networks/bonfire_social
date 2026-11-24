@@ -1355,8 +1355,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
             edges
             |> Enum.map(&(get_field(&1, :edge) |> get_field(:object_id)))
             |> Enum.reject(&is_nil/1)
+            # `pinned` comes from `pinnedByMe`: true only for the reader's own pins
             |> read_statuses(current_user)
-            |> Enum.map(&Map.put(&1, "pinned", true))
 
           Phoenix.Controller.json(conn, statuses)
 

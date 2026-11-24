@@ -1460,6 +1460,38 @@ defmodule Bonfire.Social.MastoApi.TimelineTest do
       assert is_list(response)
     end
 
+    test "pinned list reads pinned for its author only", %{conn: conn} do
+      account = Fake.fake_account!()
+      author = Fake.fake_user!(account)
+      reader_account = Fake.fake_account!()
+      reader = Fake.fake_user!(reader_account)
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: author,
+          post_attrs: %{post_content: %{html_body: "Pinned on my profile"}},
+          boundary: "public"
+        )
+
+      author_conn = masto_api_conn(conn, user: author, account: account)
+      author_conn |> post("/api/v1/statuses/#{post.id}/pin") |> json_response(200)
+
+      as_author =
+        author_conn
+        |> get("/api/v1/accounts/#{author.id}/statuses?pinned=true")
+        |> json_response(200)
+
+      as_reader =
+        conn
+        |> masto_api_conn(user: reader, account: reader_account)
+        |> get("/api/v1/accounts/#{author.id}/statuses?pinned=true")
+        |> json_response(200)
+
+      assert [%{"id" => id, "pinned" => true}] = as_author
+      assert id == post.id
+      assert [%{"id" => ^id, "pinned" => false}] = as_reader
+    end
+
     test "supports pagination", %{conn: conn} do
       account = Fake.fake_account!()
       user = Fake.fake_user!(account)
