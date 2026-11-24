@@ -111,6 +111,9 @@ defmodule Bonfire.Social.Pins do
         origin <- ["local", "all"],
         do: Bonfire.Common.Cache.remove(spotlight_cache_key(circle, origin))
 
+    # and the copies of the Spotlight's embed that guests and other sites are served
+    maybe_apply(Bonfire.UI.Common.Widgets, :bust_embed, [:instance_pinned], fallback_return: nil)
+
     :ok
   end
 
@@ -878,7 +881,7 @@ defmodule Bonfire.Social.Pins do
         (e(pin.edge, :object, nil) || pin.edge.object_id)
         |> repo().maybe_preload([character: [:peered], created: [:peered]], prune: true)
 
-      object_ap_id = Bonfire.Common.URIs.canonical_url(object)
+      object_ap_id = Bonfire.Federate.ActivityPub.AdapterUtils.federated_object_id(object)
 
       # a group's `featured` when a moderator pins to it: the lib then cc's the group, which announces it (`ActivityPub.add/2`)
       owner_id =

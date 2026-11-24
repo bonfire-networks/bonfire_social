@@ -275,7 +275,7 @@ defmodule Bonfire.Social.Quotes do
       # FEP-044f: determine the QuoteAuthorization URL
       quoted_object_ap_id =
         opts[:quoted_object_ap_id] ||
-          Bonfire.Common.URIs.canonical_url(quoted_object)
+          Bonfire.Federate.ActivityPub.AdapterUtils.federated_object_id(quoted_object)
 
       quote_authorization_url =
         case accept_result do
@@ -336,7 +336,7 @@ defmodule Bonfire.Social.Quotes do
   defp create_quote_authorization(quoted_object_creator, quote_post, quoted_object_ap_id) do
     # preload `:peered` at source so `canonical_url(quote_post)` can classify locality without tripping the guard
     quote_post = repo().maybe_preload(quote_post, [created: [:peered]], prune: true)
-    quote_post_ap_id = Bonfire.Common.URIs.canonical_url(quote_post)
+    quote_post_ap_id = Bonfire.Federate.ActivityPub.AdapterUtils.federated_object_id(quote_post)
 
     with {:ok, actor} <- ActivityPub.Actor.get_cached(pointer: quoted_object_creator),
          {:ok, %{data: %{"id" => id}}} <-
@@ -439,7 +439,8 @@ defmodule Bonfire.Social.Quotes do
 
     case quoted_objects do
       [first_quote | _] ->
-        quoted_object_ap_id = Bonfire.Common.URIs.canonical_url(first_quote)
+        quoted_object_ap_id =
+          Bonfire.Federate.ActivityPub.AdapterUtils.federated_object_id(first_quote)
 
         auth =
           case stored do
@@ -451,7 +452,8 @@ defmodule Bonfire.Social.Quotes do
               # Fall back to creating/finding QuoteAuthorization locally
               # only when we're the quoted author's server
               if Bonfire.Social.is_local?(first_quote) do
-                quote_post_ap_id = Bonfire.Common.URIs.canonical_url(post)
+                quote_post_ap_id =
+                  Bonfire.Federate.ActivityPub.AdapterUtils.federated_object_id(post)
 
                 case ActivityPub.quote_authorization(
                        actor,
@@ -466,7 +468,9 @@ defmodule Bonfire.Social.Quotes do
 
         quote_tags =
           Enum.map(quoted_objects, fn quoted_object ->
-            quote_link_tag(Bonfire.Common.URIs.canonical_url(quoted_object))
+            quote_link_tag(
+              Bonfire.Federate.ActivityPub.AdapterUtils.federated_object_id(quoted_object)
+            )
           end)
 
         {%{"quote" => quoted_object_ap_id, "quoteAuthorization" => auth}, quote_tags}

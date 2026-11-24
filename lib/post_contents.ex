@@ -257,6 +257,10 @@ defmodule Bonfire.Social.PostContents do
         do: Text.mask_markdown_code(get_attr(attrs, field)),
         else: {get_attr(attrs, field), & &1}
 
+    # images too: their URL has to reach the stored body as written, to still match its media (see `Bonfire.Files.InlineMedia`), rather than be linkified or made a local path
+    {text, unmask_images} =
+      if markdown?, do: Text.mask_markdown_images(text), else: {text, & &1}
+
     # quote markers too: the HTML sanitizer and `Text.as_html/1` would escape them to `&gt;`, so quotes never rendered
     {text, unmask_quotes} = if markdown?, do: mask_quote_markers(text), else: {text, & &1}
 
@@ -265,7 +269,12 @@ defmodule Bonfire.Social.PostContents do
     |> then(&Bonfire.Social.Tags.maybe_process(creator, &1, opts))
     |> case do
       {:ok, processed} ->
-        {:ok, Map.put(processed, :unmask_code, &(&1 |> unmask_quotes.() |> unmask_code.()))}
+        {:ok,
+         Map.put(
+           processed,
+           :unmask_code,
+           &(&1 |> unmask_quotes.() |> unmask_images.() |> unmask_code.())
+         )}
 
       other ->
         other
@@ -394,6 +403,11 @@ defmodule Bonfire.Social.PostContents do
 
   defp do_process_remote_input(input, replacement_urls, link_base) do
     input
+    # players (`iframe`, `video`, `audio`) become links where they were, rather than be dropped by the sanitiser
+    |> then(
+      &(maybe_apply(Bonfire.Files.InlineMedia, :embeds_as_links, [&1], fallback_return: {&1, []})
+        |> elem(0))
+    )
     |> normalise_input(false, :html)
     |> Text.replace_links(
       replacement_urls,
@@ -652,7 +666,7 @@ defmodule Bonfire.Social.PostContents do
            |> repo().maybe_preload(:created),
          changeset =
            attrs
-           # TODO: apply the preparation/sanitation functions?
+           |> sanitise_edit()
            |> debug()
            |> PostContent.changeset(post_content, ...),
          # the instance's keyword lists, checked once against the edited text
@@ -742,6 +756,21 @@ defmodule Bonfire.Social.PostContents do
       # {:ok, updated_post_content}
     end
   end
+
+  # an edit's title, content warning and body are shown as stored (titles, and remote bodies, without sanitising again), so markup that would run is removed here, with the sanitiser publishing uses. Unlike on publishing, entities aren't decoded first: an edit starts from the stored HTML, where an encoded `&lt;tag&gt;` is text meant to show (eg. in code), and nothing after an edit decodes it into markup
+  defp sanitise_edit(attrs) when is_map(attrs) do
+    Map.new(attrs, fn
+      {key, value}
+      when key in [:name, :summary, :html_body, "name", "summary", "html_body"] and
+             is_binary(value) ->
+        {key, Text.maybe_sane_html(value)}
+
+      other ->
+        other
+    end)
+  end
+
+  defp sanitise_edit(attrs), do: attrs
 
   defp save_edit(current_user, %PostContent{} = post_content, changeset) do
     if versioning_enabled?(current_user) do

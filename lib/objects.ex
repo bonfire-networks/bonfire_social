@@ -1398,10 +1398,22 @@ defmodule Bonfire.Social.Objects do
     if skip? or
          Bonfire.Boundaries.Controlleds.may_configure?(creator, thing) do
       do_reset_preset_boundary(creator, thing, previous_preset, opts_or_attrs, for_module)
+      |> maybe_purge_circle_members_embed(thing)
     else
       error(thing, "No permission to change the boundary of this")
       {:error, :not_permitted}
     end
+  end
+
+  # a circle's boundary decides whether guests see its members, so the saved copies of that widget's embed go; passes the result through
+  defp maybe_purge_circle_members_embed(result, thing) do
+    if Bonfire.Common.Types.object_type(thing) == Bonfire.Data.AccessControl.Circle,
+      do:
+        maybe_apply(Bonfire.UI.Common.Widgets, :bust_embed, [:circle_members],
+          fallback_return: nil
+        )
+
+    result
   end
 
   defp do_reset_preset_boundary(

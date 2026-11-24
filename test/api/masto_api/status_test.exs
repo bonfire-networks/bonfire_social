@@ -1200,12 +1200,18 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
       api_conn = masto_api_conn(conn, user: user, account: account)
       api_conn |> post("/api/v1/statuses/#{post.id}/pin") |> json_response(200)
 
-      assert api_conn |> get("/api/v1/statuses/#{post.id}") |> json_response(200) |> Map.get("pinned") ==
+      assert api_conn
+             |> get("/api/v1/statuses/#{post.id}")
+             |> json_response(200)
+             |> Map.get("pinned") ==
                true
 
       api_conn |> post("/api/v1/statuses/#{post.id}/unpin") |> json_response(200)
 
-      assert api_conn |> get("/api/v1/statuses/#{post.id}") |> json_response(200) |> Map.get("pinned") ==
+      assert api_conn
+             |> get("/api/v1/statuses/#{post.id}")
+             |> json_response(200)
+             |> Map.get("pinned") ==
                false
     end
 
