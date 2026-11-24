@@ -19,7 +19,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
     alias Bonfire.API.MastoCompat.{
       Mappers,
-      InteractionHandler,
       Helpers,
       PaginationHelpers
     }
@@ -710,15 +709,23 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
     @doc "Reads a Mastodon status through GraphQL, shared by GET and interaction responses."
     def read_status(id, current_user) do
-      result = Helpers.run_query(@status_query, current_user, %{"id" => id})
+      case run_status(@status_query, current_user, %{"id" => id}) do
+        {:ok, _} = ok -> ok
+        _ -> {:error, :not_found}
+      end
+    end
 
-      with {:ok, %{data: %{status: node}}} when is_map(node) <- result,
+    # Maps the one activity node at `path` as a Mastodon status; a failed run (`{:ok, %{errors: ...}}`) is an error.
+    defp run_status(document, current_user, variables, path \\ [:status]) do
+      with {:ok, %{data: data}} when is_map(data) <-
+             Helpers.run_query(document, current_user, variables),
+           %{} = node <- get_in(data, path),
            [status] <-
              map_graphql_statuses([node], current_user, &Mappers.Status.from_graphql_activity/2),
            true <- is_map(status) and not is_nil(Map.get(status, "id")) do
         {:ok, status}
       else
-        _ -> {:error, :not_found}
+        other -> {:error, other}
       end
     end
 
@@ -993,58 +1000,65 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       Phoenix.Controller.json(conn, [])
     end
 
-    def like_status(%{"id" => id}, conn) do
-      InteractionHandler.handle_interaction(conn, id,
-        interaction_type: :like,
-        context_fn: &Bonfire.Social.Likes.like/2,
-        flag: "favourited",
-        flag_value: true
-      )
-    end
+    # `like`, `bookmark` and `boost` answer the acted-on status; `unlike`, `unbookmark` and `unboost` a boolean, so those read it back.
+    @like_mutation "mutation($id: String!) { status: like(id: $id) { #{@activity_node_selection} } }"
+    @bookmark_mutation "mutation($id: String!) { status: bookmark(id: $id) { #{@activity_node_selection} } }"
+    # Mastodon answers a reblog with the boost itself, read through `my_boost`
+    @boost_mutation "mutation($id: String!) { boosted: boost(id: $id) { status: my_boost { #{@activity_node_selection} } } }"
+    @my_boost_query "query($id: ID!) { boosted: status(id: $id) { status: my_boost { #{@activity_node_selection} } } }"
+    @unlike_mutation "mutation($id: String!) { done: unlike(id: $id) }"
+    @unbookmark_mutation "mutation($id: String!) { done: unbookmark(id: $id) }"
+    @unboost_mutation "mutation($id: String!) { done: unboost(id: $id) }"
 
-    def unlike_status(%{"id" => id}, conn) do
-      InteractionHandler.handle_interaction(conn, id,
-        interaction_type: :unlike,
-        context_fn: &Bonfire.Social.Likes.unlike/2,
-        flag: "favourited",
-        flag_value: false
-      )
-    end
-
+    def like_status(%{"id" => id}, conn), do: react(conn, @like_mutation, id)
+    def unlike_status(%{"id" => id}, conn), do: undo_reaction(conn, @unlike_mutation, id)
+    # a failed reblog answers the viewer's existing boost, as Mastodon does on a repeat
     def boost_status(%{"id" => id}, conn) do
-      InteractionHandler.handle_interaction(conn, id,
-        interaction_type: :boost,
-        context_fn: &Bonfire.Social.Boosts.boost/2,
-        flag: "reblogged",
-        flag_value: true
-      )
+      with {:ok, user} <- require_user(conn.assigns[:current_user]),
+           {:ok, status} <-
+             run_status(@boost_mutation, user, %{"id" => id}, [:boosted, :status])
+             |> or_else(fn ->
+               run_status(@my_boost_query, user, %{"id" => id}, [:boosted, :status])
+             end) do
+        Phoenix.Controller.json(conn, status)
+      else
+        other -> reaction_error(conn, other)
+      end
     end
 
-    def unboost_status(%{"id" => id}, conn) do
-      InteractionHandler.handle_interaction(conn, id,
-        interaction_type: :unboost,
-        context_fn: &Bonfire.Social.Boosts.unboost/2,
-        flag: "reblogged",
-        flag_value: false
-      )
+    defp or_else({:ok, _} = ok, _fun), do: ok
+    defp or_else(_, fun), do: fun.()
+
+    def unboost_status(%{"id" => id}, conn), do: undo_reaction(conn, @unboost_mutation, id)
+
+    def bookmark_status(%{"id" => id}, conn), do: react(conn, @bookmark_mutation, id)
+    def unbookmark_status(%{"id" => id}, conn), do: undo_reaction(conn, @unbookmark_mutation, id)
+
+    defp react(conn, mutation, id) do
+      with {:ok, user} <- require_user(conn.assigns[:current_user]),
+           {:ok, status} <- run_status(mutation, user, %{"id" => id}) do
+        Phoenix.Controller.json(conn, status)
+      else
+        other -> reaction_error(conn, other)
+      end
     end
 
-    def bookmark_status(%{"id" => id}, conn) do
-      InteractionHandler.handle_interaction(conn, id,
-        interaction_type: :bookmark,
-        context_fn: &Bonfire.Social.Bookmarks.bookmark/2,
-        flag: "bookmarked",
-        flag_value: true
-      )
+    defp undo_reaction(conn, mutation, id) do
+      with {:ok, user} <- require_user(conn.assigns[:current_user]),
+           {:ok, %{data: %{done: true}}} <- Helpers.run_query(mutation, user, %{"id" => id}),
+           {:ok, status} <- read_status(id, user) do
+        Phoenix.Controller.json(conn, status)
+      else
+        other -> reaction_error(conn, other)
+      end
     end
 
-    def unbookmark_status(%{"id" => id}, conn) do
-      InteractionHandler.handle_interaction(conn, id,
-        interaction_type: :unbookmark,
-        context_fn: &Bonfire.Social.Bookmarks.unbookmark/2,
-        flag: "bookmarked",
-        flag_value: false
-      )
+    defp reaction_error(conn, {:error, :unauthorized} = error),
+      do: RestAdapter.error_fn(error, conn)
+
+    defp reaction_error(conn, other) do
+      error(other, "reaction failed")
+      RestAdapter.error_fn({:error, :not_found}, conn)
     end
 
     def pin_status(%{"id" => id}, conn) do

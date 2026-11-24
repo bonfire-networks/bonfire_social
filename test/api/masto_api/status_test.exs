@@ -986,6 +986,63 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
       assert Boosts.boosted?(user, post)
     end
 
+    # Mastodon iOS needs `uri` on the reblog answer (W4)
+    test "answers the boost itself, wrapping the post, as a later read of it does", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+      author = Fake.fake_user!()
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: author,
+          post_attrs: %{post_content: %{html_body: "Boost me, with a uri"}},
+          boundary: "public"
+        )
+
+      api_conn = masto_api_conn(conn, user: user, account: account)
+
+      response =
+        api_conn
+        |> post("/api/v1/statuses/#{post.id}/reblog")
+        |> json_response(200)
+
+      assert {:ok, boost} = Boosts.get(user, post)
+      assert response["id"] == boost.id
+      assert is_binary(response["uri"])
+      assert response["account"]["id"] == user.id
+      assert response["reblogged"] == true
+      assert response["reblog"]["id"] == post.id
+      assert response["reblog"]["reblogged"] == true
+
+      read =
+        api_conn
+        |> get("/api/v1/statuses/#{boost.id}")
+        |> json_response(200)
+
+      assert response == read
+    end
+
+    test "is idempotent - reblogging twice answers the same boost", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+      author = Fake.fake_user!()
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: author,
+          post_attrs: %{post_content: %{html_body: "Boost me twice"}},
+          boundary: "public"
+        )
+
+      api_conn = masto_api_conn(conn, user: user, account: account)
+
+      first = api_conn |> post("/api/v1/statuses/#{post.id}/reblog") |> json_response(200)
+      second = api_conn |> post("/api/v1/statuses/#{post.id}/reblog") |> json_response(200)
+
+      assert second["id"] == first["id"]
+      assert second["reblog"]["id"] == post.id
+    end
+
     test "returns 401 when not authenticated", %{conn: conn} do
       author = Fake.fake_user!()
 
@@ -1033,6 +1090,35 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
       assert response["id"] == post.id
       assert response["reblogged"] == false
       refute Boosts.boosted?(user, post)
+    end
+
+    # Mastodon iOS needs `uri` on the unreblog answer: the post itself, not a reblog wrapper (W4)
+    test "answers the post, as a read of it does, with reblogged false", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+      author = Fake.fake_user!()
+
+      {:ok, post} =
+        Posts.publish(
+          current_user: author,
+          post_attrs: %{post_content: %{html_body: "Unboost me, with a uri"}},
+          boundary: "public"
+        )
+
+      {:ok, _} = Boosts.boost(user, post)
+      api_conn = masto_api_conn(conn, user: user, account: account)
+
+      response =
+        api_conn
+        |> post("/api/v1/statuses/#{post.id}/unreblog")
+        |> json_response(200)
+
+      assert response["id"] == post.id
+      assert is_binary(response["uri"])
+      assert response["reblog"] == nil
+      assert response["reblogged"] == false
+
+      assert response == api_conn |> get("/api/v1/statuses/#{post.id}") |> json_response(200)
     end
   end
 

@@ -382,10 +382,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         boost = api_conn |> post("/api/v1/statuses/#{post.id}/reblog") |> json_response(200)
 
         # changed on purpose in unit 5 (decision 3): the boost status's account has its counts
+        # nil keys dropped: the answer is the boost read through GraphQL, as every status read
         assert boost["account"] ==
                  expected(viewer, [statuses: 0, followers: 0, following: 1],
                    url: :actor,
-                   nils: :kept
+                   nils: :dropped
                  )
       end
 

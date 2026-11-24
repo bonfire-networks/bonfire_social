@@ -22,6 +22,12 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     }
     """
 
+    @unboost """
+    mutation($id: String!) {
+      unboost(id: $id)
+    }
+    """
+
     @boost """
     mutation($id: String!) {
       boost(id: $id) {
@@ -86,6 +92,24 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
       refute result[:errors]
       assert get_in(result, [:data, "unlike"]) == true
+    end
+
+    test "unboost returns true only after the domain action succeeds", %{
+      author: author,
+      viewer: viewer
+    } do
+      post = publish_post!(author, "GraphQL unboost target")
+      assert {:ok, _boost} = Bonfire.Social.Boosts.boost(viewer, post)
+
+      {:ok, result} =
+        Absinthe.run(@unboost, Schema,
+          variables: %{"id" => post.id},
+          context: Schema.context(%{current_user: viewer})
+        )
+
+      refute result[:errors]
+      assert get_in(result, [:data, "unboost"]) == true
+      refute Bonfire.Social.Boosts.boosted?(viewer, post)
     end
 
     test "boost returns the acted-on status with updated viewer state", %{

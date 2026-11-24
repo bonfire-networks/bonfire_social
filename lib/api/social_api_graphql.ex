@@ -451,6 +451,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         end)
       end
 
+      @desc "The viewer's own boost of this activity's object, or null. One lookup per activity: not for lists."
+      field :my_boost, :activity do
+        resolve(&my_boost/3)
+      end
+
       field :bookmarked_by_me, :boolean do
         resolve(fn
           activity, _args, %{context: %{loader: loader, current_user: user}} = _info ->
@@ -1122,6 +1127,12 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         resolve(&boost/2)
       end
 
+      field :unboost, :boolean do
+        arg(:id, non_null(:string))
+
+        resolve(&unboost/2)
+      end
+
       field :like, :activity do
         arg(:id, non_null(:string))
 
@@ -1349,6 +1360,18 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     end
 
     defp thread_context_status_activity(_, _), do: nil
+
+    # loaded as `status(id:)` loads a boost, so its `object` is the boosted post
+    defp my_boost(%{object_id: object_id}, _args, info) when is_binary(object_id) do
+      with %{id: _} = user <- GraphQL.current_user(info),
+           {:ok, boost} <- Bonfire.Social.Boosts.get(user, object_id) do
+        {:ok, thread_context_status_activity(boost.id, user)}
+      else
+        _ -> {:ok, nil}
+      end
+    end
+
+    defp my_boost(_activity, _args, _info), do: {:ok, nil}
 
     # the tags `mentions` and `hashtags` read, postloaded once per list: `Objects.read` cannot load `:tags` in its query
     defp with_tags(activities, current_user) do
@@ -1912,6 +1935,13 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     defp unlike(%{id: id}, info) do
       with {:ok, user} <- GraphQL.current_user_or_not_logged_in(info),
            {:ok, _} <- Bonfire.Social.Likes.unlike(user, id) do
+        {:ok, true}
+      end
+    end
+
+    defp unboost(%{id: id}, info) do
+      with {:ok, user} <- GraphQL.current_user_or_not_logged_in(info),
+           {:ok, _} <- Bonfire.Social.Boosts.unboost(user, id) do
         {:ok, true}
       end
     end
