@@ -140,6 +140,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         |> maybe_put_var("subjectCircles", get_field(filters, :subject_circles))
         # set by the Mastodon timelines (posts, replies, boosts), not by bookmarks
         |> maybe_put_var("activityTypes", get_field(filters, :activity_types))
+        # `only_media=true` arrives as `media_types: ["attachment"]` (PaginationHelpers.build_feed_params)
+        |> maybe_put_var("mediaTypes", get_field(filters, :media_types))
         # Mastodon wants full id-paginated history, not the feed's default 7-day window — the
         # masto params carry `time_limit: 0` (PaginationHelpers.build_feed_params); forward it
         # (default to 0) so old activities/boosts aren't hidden.

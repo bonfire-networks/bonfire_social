@@ -83,6 +83,24 @@ defmodule Bonfire.Social.MastoApi.StatusTest do
       assert is_list(response["media_attachments"])
     end
 
+    # an image with no description has none (null), not "": Mastodon iOS shows an ALT badge for any string (W6)
+    test "an image posted without a description has no description", %{conn: conn} do
+      account = Fake.fake_account!()
+      user = Fake.fake_user!(account)
+
+      {:ok, media} = Files.upload(ImageUploader, user, image_file(), %{})
+
+      api_conn = masto_api_conn(conn, user: user, account: account)
+
+      response =
+        api_conn
+        |> post("/api/v1/statuses", %{"status" => "No alt text", "media_ids" => [media.id]})
+        |> json_response(200)
+
+      assert [attachment] = response["media_attachments"]
+      assert attachment["description"] == nil
+    end
+
     test "creates a status with media_ids as indexed map params", %{conn: conn} do
       account = Fake.fake_account!()
       user = Fake.fake_user!(account)
