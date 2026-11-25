@@ -442,19 +442,49 @@ defmodule Bonfire.Social.FeedLoader do
       # )
     )
     |> then(fn filters ->
+      asked = e(filters, :time_limit, nil) || e(filters, "time_limit", nil) || opts[:time_limit]
+
       Map.put(
         filters,
         :time_limit,
-        (e(filters, :time_limit, nil) || e(filters, "time_limit", nil) || opts[:time_limit] ||
-           default_time_limit(filters))
-        |> maybe_clamp_sort_window(filters[:sort_by], opts)
+        (asked || default_time_limit(filters))
+        |> maybe_clamp_sort_window(filters, opts, is_nil(asked))
       )
     end)
     |> debug("set sort_by and time_limit")
   end
 
+  @metric_sorts [:popularity_score, :like_count, :boost_count, :reply_count, :object_count]
+
+  # a feed of media aggregates every activity in its window, boundary checks included, so a popularity or count sort on one gets a short default window when none was asked for (not the instance's, which may be a year), and one asked for is kept up to `max_sort_window_days`, with none or a wider one cut to it (`unbounded_sort: true` skips this, eg. for benchmarks). A date sort pages by media id, so it keeps the window it was asked for
+  defp maybe_clamp_sort_window(time_limit, filters, opts, not_asked?) do
+    sort_by = filters[:sort_by] || opts[:sort_by]
+
+    if media_metric_sort?(filters, sort_by) and !opts[:unbounded_sort] do
+      max = max_sort_window_days()
+      days = Types.maybe_to_integer(time_limit, nil)
+
+      cond do
+        not_asked? -> default_media_sort_window_days()
+        days in [nil, 0] or days > max -> max
+        true -> time_limit
+      end
+    else
+      maybe_clamp_popularity_window(time_limit, sort_by, opts)
+    end
+  end
+
+  defp media_metric_sort?(filters, sort_by) do
+    is_list(e(filters, :media_types, nil)) and e(filters, :media_types, nil) != [] and
+      (sort_by in @metric_sorts or sort_by in Enum.map(@metric_sorts, &to_string/1))
+  end
+
+  @doc "The time window (in days) a popularity or count sort of media gets when none was asked for (the aggregate reads every activity in it)."
+  def default_media_sort_window_days,
+    do: Config.get([__MODULE__, :default_media_sort_window_days], 7)
+
   # the popularity score is computed over three joins, so no index can give its order: without a window Postgres scores every post in the instance, so no window means the max one (`unbounded_sort: true` skips this, eg. for benchmarks)
-  defp maybe_clamp_sort_window(time_limit, sort_by, opts)
+  defp maybe_clamp_popularity_window(time_limit, sort_by, opts)
        when time_limit in [0, "0"] and sort_by in [:popularity_score, "popularity_score"] do
     if opts[:unbounded_sort] do
       time_limit
@@ -465,7 +495,7 @@ defmodule Bonfire.Social.FeedLoader do
     end
   end
 
-  defp maybe_clamp_sort_window(time_limit, _sort_by, _opts), do: time_limit
+  defp maybe_clamp_popularity_window(time_limit, _sort_by, _opts), do: time_limit
 
   @doc "The widest time window (in days) a popularity-sorted feed gets: asked for none, it gets this, so the UI offers nothing older once there."
   def max_sort_window_days, do: Config.get([__MODULE__, :max_sort_window_days], 30)

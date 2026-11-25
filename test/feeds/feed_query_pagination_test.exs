@@ -575,6 +575,62 @@ defmodule Bonfire.Social.FeedPaginationTest do
     end
   end
 
+  # a feed of media aggregates every activity in its window, boundary checks included, so a popularity or count sort gets a tighter cap than the 30 days of an activity feed; a date sort pages by media id, so it keeps the instance's window
+  describe "media feed sort windows" do
+    @default 7
+    @max 30
+
+    test "a popularity or count sort asked for no window at all gets the short default" do
+      for sort_by <- [:popularity_score, :like_count, :boost_count, :reply_count] do
+        assert_days(media_window_days(%{sort_by: sort_by}), @default)
+      end
+    end
+
+    test "a window asked for is kept up to the max, and a wider one or none is cut to it" do
+      assert_days(media_window_days(%{sort_by: :like_count, time_limit: 3}), 3)
+      assert_days(media_window_days(%{sort_by: :like_count, time_limit: 20}), 20)
+      assert_days(media_window_days(%{sort_by: :like_count, time_limit: 365}), @max)
+
+      for sort_by <- [:popularity_score, :like_count, :boost_count, :reply_count] do
+        assert_days(media_window_days(%{sort_by: sort_by, time_limit: 0}), @max)
+      end
+    end
+
+    test "control: a date sort keeps the window asked for, or none" do
+      assert_days(media_window_days(%{time_limit: 365}), 365)
+      assert media_window_days(%{time_limit: 0}) == nil
+    end
+
+    test "control: an activity feed's count sort is not capped" do
+      assert_days(activity_window_days(%{sort_by: :like_count, time_limit: 365}), 365)
+    end
+
+    # the cutoff is up to a day wider than the days asked for
+    defp assert_days(days, expected),
+      do: assert(days in [expected, expected + 1], "expected a #{expected} day window, got #{inspect(days)}")
+
+    defp media_window_days(filters), do: window_days(:local_media, filters)
+    defp activity_window_days(filters), do: window_days(:explore, filters)
+
+    # the days back of the oldest activity the query reads: the time of the id it compares activity ids with
+    defp window_days(feed, filters) do
+      query = FeedLoader.feed(feed, filters, return: :query)
+      {_sql, params} = Ecto.Adapters.SQL.to_sql(:all, Bonfire.Common.Repo, query)
+      now = System.system_time(:millisecond)
+
+      params
+      |> Enum.flat_map(fn
+        <<ms::48, _::80>> when ms > 0 ->
+          days = (now - ms) / 86_400_000
+          if days > 0.5 and days < 1500, do: [round(days)], else: []
+
+        _ ->
+          []
+      end)
+      |> Enum.max(fn -> nil end)
+    end
+  end
+
   describe "count sort indexes" do
     # a count-sorted feed orders by `desc_nulls_last` and keeps only posts with a count, so an index in that same order lets Postgres walk the posts from the most counted and stop at the page limit, with no time window
     for {table, expected} <- [

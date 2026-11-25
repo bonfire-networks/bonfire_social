@@ -185,6 +185,55 @@ defmodule Bonfire.Social.Feeds.MediaTest do
     end
   end
 
+  # the aggregate reads only the newest activities for a page (`per_media_multiply_limit` of them per row of the page), so a media with older activities must still come in the pages after
+  describe "media feed paging with few candidate activities" do
+    test "pages through every media once, even when each page reads only a few activities" do
+      me = fake_user!("pager")
+
+      media =
+        for name <- ~w(a b c d e) do
+          url = "https://files.example.org/#{name}/#{Faker.UUID.v4()}"
+
+          {:ok, media} =
+            Bonfire.Files.Media.insert(me, url, %{media_type: "image/png", size: 0}, %{url: url})
+
+          media
+        end
+
+      # oldest to newest, each media with two posts, so a page of two reads four activities at most
+      for round <- 1..2, m <- media do
+        fake_post!(me, "public", %{
+          post_content: %{html_body: "#{id(m)} #{round}"},
+          uploaded_media: [m]
+        })
+      end
+
+      listed =
+        Stream.unfold(:first, fn
+          :done ->
+            nil
+
+          cursor ->
+            paginate = [limit: 2] ++ if(cursor == :first, do: [], else: [after: cursor])
+
+            %{edges: edges, page_info: info} =
+              FeedLoader.feed(:local_media, %{},
+                current_user: me,
+                paginate: paginate,
+                per_media_multiply_limit: 1
+              )
+
+            {edges, if(edges == [] or is_nil(e(info, :end_cursor, nil)), do: :done, else: e(info, :end_cursor, nil))}
+        end)
+        |> Enum.take(10)
+        |> List.flatten()
+        |> Enum.map(&id/1)
+
+      assert Enum.sort(listed) == Enum.sort(Enum.map(media, &id/1)),
+             "expected each media once across the pages, got #{inspect(listed)}"
+    end
+  end
+
   describe "media feed query shape" do
     # an activity reaches its media either through an attachment (`files.id`) or by being the media itself (`media.id`): joining on either one with an OR can't use any index, so Postgres merge-joined every media row once per activity (48.8s for `local_media` on a large instance)
     test "joins activities to media without an OR across files and media" do
