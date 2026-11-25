@@ -184,13 +184,81 @@ defmodule Bonfire.Social.FeedLoader do
   # end
 
   def feed(%FeedFilters{} = filters, opts) when is_list(opts) do
-    with preset <-
-           opts[:feed_preset] ||
-             (case Bonfire.Social.Feeds.feed_preset_if_permitted(filters, opts) do
-                {:ok, preset} -> preset
-                _ -> %{}
-              end)
-             |> debug("using preset from opts or looked up from filters"),
+    preset =
+      opts[:feed_preset] ||
+        case Bonfire.Social.Feeds.feed_preset_if_permitted(filters, opts) do
+          {:ok, preset} -> preset
+          _ -> %{}
+        end
+        |> debug("using preset from opts or looked up from filters")
+
+    if preset[:cache] && !opts[:loading_cached_preset] do
+      cached_preset_feed(filters, preset, opts)
+    else
+      feed_from_filters(filters, Keyword.put(opts, :feed_preset, preset))
+    end
+  end
+
+  # A preset with `cache: true` (eg. `trending`, whose ranking can't use an index) is served from a cached list of its ranked, preloaded entries, as the cached widgets are: one list for guests and one for everyone signed in, each loaded as that circle (`Circles.query_as_circle/1`), so nobody's restricted posts reach anyone else, and the cards drop what each viewer may not see when they render. The list holds `cached_preset_pages` pages (clamped to 1..50); a page is a slice of it, and the cursor is the position of the next one. A refresh replaces the list, so someone paging across it may see a few posts again or miss a few.
+  defp cached_preset_feed(filters, preset, opts) do
+    {circle, as_circle_opts} = Bonfire.Boundaries.Circles.query_as_circle(current_user(opts))
+    paginate = opts[:paginate] || []
+    limit = e(paginate, :limit, nil) || opts[:limit] || Config.get(:default_pagination_limit, 20)
+
+    pages =
+      Config.get([__MODULE__, :cached_preset_pages], 10)
+      |> Types.maybe_to_integer(10)
+      |> max(1)
+      |> min(50)
+
+    entries =
+      Cache.maybe_apply_cached(
+        &load_cached_preset_entries/3,
+        [filters, preset, as_circle_opts ++ [paginate: [limit: limit * pages]]],
+        cache_key: "feed_preset:#{filters.feed_name}:#{circle}:#{limit}:#{pages}",
+        cache: opts[:cache],
+        expire: Config.get([__MODULE__, :cached_preset_ttl], to_timeout(minute: 15))
+      )
+      # `cache: :reset` only removes the list, and returns that removal's result
+      |> then(&if(is_list(&1), do: &1, else: []))
+
+    position = cached_preset_position(e(paginate, :after, nil) || opts[:after])
+    next = position + limit
+
+    %{
+      edges: Enum.slice(entries, position, limit),
+      page_info: %{
+        start_cursor: if(position > 0, do: cached_preset_cursor(position)),
+        end_cursor: if(next < length(entries), do: cached_preset_cursor(next))
+      }
+    }
+  end
+
+  defp load_cached_preset_entries(filters, preset, opts) do
+    case feed_from_filters(
+           filters,
+           opts ++
+             [
+               feed_preset: preset,
+               loading_cached_preset: true,
+               # loaded as a circle, not a user, so no viewer for `Activities` to match subjects against
+               skip_err: true
+             ]
+         ) do
+      %{edges: edges} when is_list(edges) -> edges
+      _ -> []
+    end
+  end
+
+  defp cached_preset_cursor(position), do: "position:#{position}"
+
+  defp cached_preset_position("position:" <> position),
+    do: Types.maybe_to_integer(position, 0) |> max(0)
+
+  defp cached_preset_position(_), do: 0
+
+  defp feed_from_filters(%FeedFilters{} = filters, opts) do
+    with preset <- opts[:feed_preset] || %{},
          # NOTE: we're not calling prepare_feed_filters/3 here because they must have already been prepared/validated since we're getting a FeedFilters struct
          {filters, opts} <-
            prepare_filters_and_opts(filters, preset[:opts] || [], opts)
@@ -373,13 +441,34 @@ defmodule Bonfire.Social.FeedLoader do
       #   description: l("Default sorting order for feeds.")
       # )
     )
-    |> Map.put(
-      :time_limit,
-      e(filters, :time_limit, nil) || e(filters, "time_limit", nil) || opts[:time_limit] ||
-        default_time_limit(filters)
-    )
+    |> then(fn filters ->
+      Map.put(
+        filters,
+        :time_limit,
+        (e(filters, :time_limit, nil) || e(filters, "time_limit", nil) || opts[:time_limit] ||
+           default_time_limit(filters))
+        |> maybe_clamp_sort_window(filters[:sort_by], opts)
+      )
+    end)
     |> debug("set sort_by and time_limit")
   end
+
+  # the popularity score is computed over three joins, so no index can give its order: without a window Postgres scores every post in the instance, so no window means the max one (`unbounded_sort: true` skips this, eg. for benchmarks)
+  defp maybe_clamp_sort_window(time_limit, sort_by, opts)
+       when time_limit in [0, "0"] and sort_by in [:popularity_score, "popularity_score"] do
+    if opts[:unbounded_sort] do
+      time_limit
+    else
+      max = max_sort_window_days()
+      warn(max, "A popularity sort needs a time window, so using the max (in days)")
+      max
+    end
+  end
+
+  defp maybe_clamp_sort_window(time_limit, _sort_by, _opts), do: time_limit
+
+  @doc "The widest time window (in days) a popularity-sorted feed gets: asked for none, it gets this, so the UI offers nothing older once there."
+  def max_sort_window_days, do: Config.get([__MODULE__, :max_sort_window_days], 30)
 
   # the window is about when things were published, so with a Happening filter (when they happen: eg. an event announced long ago that is still to come) there is none, unless one is asked for
   defp default_time_limit(filters) do
@@ -629,6 +718,8 @@ defmodule Bonfire.Social.FeedLoader do
 
   defp prepare_opts_for_pagination(query, filters, opts) do
     opts = to_options(opts)
+    # read before the opts below are rebuilt from the pagination opts only
+    per_media? = :per_media in List.wrap(opts[:preload])
 
     deferred_join_multiply_limit = opts[:deferred_join_multiply_limit]
 
@@ -642,14 +733,18 @@ defmodule Bonfire.Social.FeedLoader do
     else
       opts
     end
-    |> put_pagination_order_opts(filters)
+    |> put_pagination_order_opts(filters, per_media?)
     |> debug("prepared opts for pagination")
   end
 
   # The cursor fields matching the feed's ORDER BY go in the top-level opts and, when a caller passes `paginate:` (e.g. load more's cursor), in there too: Paginator then reads only that list for the outer query, while the deferred inner query reads the full opts, and both must encode and decode the same cursor. Thread-deduped feeds override the caller's cursor fields, because callers derive them from `sort_by` alone (feeds_live_handler) and don't know the feed is thread-deduped. For other feeds the caller's win (e.g. `feed_newer_than/5` pages ascending by id). The caller's `after`/`before`/`limit` always apply.
-  defp put_pagination_order_opts(opts, filters) do
+  defp put_pagination_order_opts(opts, filters, per_media?) do
     {order_opts, override_callers?} =
       cond do
+        # media feeds page a Media-rooted aggregate, which activity cursor fields don't fit
+        per_media? ->
+          {Bonfire.Social.Media.pagination_opts(filters[:sort_by], filters[:sort_order]), true}
+
         order_threads_by_latest_activity?(filters) ->
           {Threads.latest_activity_pagination_opts(), true}
 
@@ -819,6 +914,8 @@ defmodule Bonfire.Social.FeedLoader do
           :id,
           opts[:with_pins?]
         )
+        # the outer query only gets what this inner query picked, so it needs no filter of its own
+        |> Activities.query_only_counted(filters[:sort_by])
         |> repo().build_deferred_inner_subquery(
           filters,
           Keyword.put(
@@ -1006,6 +1103,7 @@ defmodule Bonfire.Social.FeedLoader do
         :id,
         opts[:with_pins?]
       )
+      |> Activities.query_only_counted(filters[:sort_by])
       |> debug("non_deferred query")
 
     # |> debug()

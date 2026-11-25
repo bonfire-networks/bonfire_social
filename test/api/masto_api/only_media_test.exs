@@ -38,7 +38,8 @@ defmodule Bonfire.Social.MastoApi.OnlyMediaTest do
       )
 
     # link previews are media too, but clients get them as `card`; the second has a non-link type and is a preview by its `text/html`
-    link_post = publish_with(user, "a post with only a link preview", [link_media(user, "website")])
+    link_post =
+      publish_with(user, "a post with only a link preview", [link_media(user, "website")])
 
     html_typed_link_post =
       publish_with(user, "a link preview with an unusual type", [link_media(user, "video.other")])

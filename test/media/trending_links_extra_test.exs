@@ -9,7 +9,8 @@ defmodule Bonfire.Social.Bonfire.Social.TrendingLinksExtraTest do
 
   import Tesla.Mock
 
-  @moduletag :todo
+  # was :todo while the `trending_links` preset was disabled, which made `Media.trending_links/1` return `{:error, :not_found}`
+  # @moduletag :todo
 
   setup do
     Bonfire.Social.Test.FakeHelpers.setup_url_mocks()

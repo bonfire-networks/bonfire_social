@@ -881,6 +881,10 @@ defmodule Bonfire.Social.Feeds do
       when concept in [:local, :remote, :public, :custom_boundaries, :explore],
       do: Enum.map(feed_names(concept), &named_feed_id/1)
 
+  # the trending presets rank what explore lists
+  def named_feed_ids(trending, opts) when trending in [:trending, :trending_links],
+    do: named_feed_ids(:explore, opts)
+
   # everything somebody was notified about, wherever it was delivered: a direct message arrives in the inbox rather than the notifications feed, and it is still a notification
   def named_feed_ids(:notifications_class, opts), do: notifications_class_ids(opts)
 

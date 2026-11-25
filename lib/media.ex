@@ -16,8 +16,15 @@ defmodule Bonfire.Social.Media do
   alias Bonfire.Files.Media
 
   @default_limit 5
-  # days - reduced from 7 to 2 for better query performance
-  @default_time_limit 2
+  @default_time_limit 7
+  @media_metric_sorts [
+    :popularity_score,
+    :object_count,
+    :boost_count,
+    :like_count,
+    :reply_count,
+    :last_used
+  ]
   # 1 hour cache TTL in milliseconds (Cachex uses ms)
   @default_cache_ttl :timer.hours(1)
 
@@ -34,7 +41,7 @@ defmodule Bonfire.Social.Media do
   # - `unique_sharers` - Count of unique users who shared this link
 
   ## Options
-  - `:time_limit` - Time window in days to consider activities (default: 2)
+  - `:time_limit` - Time window in days to consider activities (default: 7)
   - `:limit` - Maximum number of links to return (default: 5)
   - `:exclude_activity_types` - Activity types to exclude (default: [:reply, :boost])
 
@@ -167,17 +174,12 @@ defmodule Bonfire.Social.Media do
       |> maybe_preload_and_select_replies_metric(sort_by in [:reply_count, :popularity_score])
       |> debug("qualifying_activities_query")
 
-    # Start from Media table and join the qualifying activities
+    # Start from Media table and join the qualifying activities, each with the media it reaches
     from(media in Bonfire.Files.Media,
       as: :main_object,
-      # Join qualifying activities via Files (attachment mixin)
-      inner_join: files in Bonfire.Files,
-      as: :files,
-      on: files.media_id == media.id,
-      # Join to the filtered/paginated activities subquery
-      inner_join: per_media_subquery in subquery(qualifying_activities_query),
+      inner_join: per_media_subquery in subquery(with_media_ids(qualifying_activities_query)),
       as: :per_media_subquery,
-      on: per_media_subquery.id == files.id or per_media_subquery.id == media.id,
+      on: per_media_subquery.media_id == media.id,
       # Group by media path (URL) and id
       group_by: [media.path, media.id],
       # Select into Media struct with virtual fields
@@ -209,13 +211,91 @@ defmodule Bonfire.Social.Media do
     |> maybe_add_likes_metric(sort_by in [:like_count, :popularity_score])
     |> maybe_add_replies_metric(sort_by in [:reply_count, :popularity_score])
     |> maybe_add_trending_score(sort_by == :popularity_score, opts)
-    # TODO: this query is ordered by newest_activity_id but Paginator's cursor is the Media's own id (binding 0), so Load more can skip or repeat items; newest_activity_id needs to be a real column (eg. via a subquery) to be the cursor field.
-    # sort
-    |> Bonfire.Social.Activities.query_order(sort_by, sort_order, :newest_activity_id)
+    |> order_media(sort_by, sort_order)
     # |> apply_media_filters(filters, opts)
     # boundarise
     |> debug("media aggregated query")
     |> repo().print_sql("media aggregated query SQL")
+  end
+
+  # Paginator's cursor is the Media's own id (binding 0), so a chronological media feed orders by it too: ordered by newest activity instead, Load more skipped or repeated items whenever media ids and newest-activity ids ordered differently
+  defp order_media(query, sort_by, :asc) when sort_by in [nil, :date_created],
+    do: order_by(query, [main_object: media], asc: media.id)
+
+  defp order_media(query, sort_by, _sort_order) when sort_by in [nil, :date_created],
+    do: order_by(query, [main_object: media], desc: media.id)
+
+  # a metric sort orders by a value the aggregate computes, which Paginator can only bound on page 2 once it is a column: so the aggregated query becomes a subquery, ordered by that column then the Media id, matching `pagination_opts/2`
+  defp order_media(query, sort_by, sort_order) when sort_by in @media_metric_sorts do
+    {metric_order, id_order} =
+      if sort_order == :asc, do: {:asc_nulls_first, :asc}, else: {:desc_nulls_last, :desc}
+
+    metric = metric_field(sort_by)
+
+    from(ranked in subquery(query), as: :ranked_media, select: ranked)
+    |> order_by(
+      ^[
+        {metric_order, dynamic([ranked_media: ranked], field(ranked, ^metric))},
+        {id_order, dynamic([ranked_media: ranked], ranked.id)}
+      ]
+    )
+  end
+
+  defp order_media(query, sort_by, sort_order),
+    do: Bonfire.Social.Activities.query_order(query, sort_by, sort_order, :newest_activity_id)
+
+  @doc "Paginator opts for a media feed, matching its order: the metric then the Media id for a metric sort, else the Media id. They replace the caller's cursor fields, which callers derive from `sort_by` for activity feeds."
+  def pagination_opts(sort_by, sort_order) do
+    order = sort_order || :desc
+
+    if sort_by in @media_metric_sorts do
+      [
+        cursor_fields: [{metric_field(sort_by), order}, {:id, order}],
+        # a sum over activities with no boosts, likes or replies is null
+        cursor_fields_nullable:
+          if(sort_by in [:boost_count, :like_count, :reply_count], do: [sort_by], else: []),
+        fetch_cursor_value_fun: &media_cursor_value/2
+      ]
+    else
+      [
+        cursor_fields: [{:id, order}],
+        cursor_fields_nullable: [],
+        fetch_cursor_value_fun: &media_cursor_value/2
+      ]
+    end
+  end
+
+  defp media_cursor_value(media, field), do: Map.get(media, field)
+
+  # the column a metric sort orders by: `:last_used` is the latest activity reaching the media (a ULID, so its time), which the aggregate already selects as `newest_activity_id`
+  defp metric_field(:last_used), do: :newest_activity_id
+  defp metric_field(sort_by), do: sort_by
+
+  # An activity reaches media in two ways: its object has them attached (a `Bonfire.Files` row keyed by the object, pointing to the media), or its object is the media. One arm per way, each an equality join that an index serves, instead of one join with an OR across both tables, which no index can serve (Postgres then merge-joined every media row once per activity). The second arm keeps only media attached somewhere, as the OR join did, which required a `Bonfire.Files` row for every media.
+  defp with_media_ids(qualifying_activities_query) do
+    qualifying = subquery(qualifying_activities_query)
+
+    via_attachment =
+      from(per_activity in qualifying,
+        inner_join: files in Bonfire.Files,
+        on: files.id == per_activity.id,
+        select: merge(per_activity, %{media_id: files.media_id})
+      )
+
+    from(per_activity in qualifying,
+      inner_join: media in Bonfire.Files.Media,
+      as: :media_itself,
+      on: media.id == per_activity.id,
+      where:
+        exists(
+          from(files in Bonfire.Files,
+            where: files.media_id == parent_as(:media_itself).id,
+            select: 1
+          )
+        ),
+      select: merge(per_activity, %{media_id: media.id})
+    )
+    |> union_all(^via_attachment)
   end
 
   #   defp raise_debug_query(query) do

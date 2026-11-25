@@ -185,6 +185,19 @@ defmodule Bonfire.Social.Feeds.MediaTest do
     end
   end
 
+  describe "media feed query shape" do
+    # an activity reaches its media either through an attachment (`files.id`) or by being the media itself (`media.id`): joining on either one with an OR can't use any index, so Postgres merge-joined every media row once per activity (48.8s for `local_media` on a large instance)
+    test "joins activities to media without an OR across files and media" do
+      query = FeedLoader.feed(:local_media, %{}, return: :query)
+      {sql, _params} = Ecto.Adapters.SQL.to_sql(:all, Bonfire.Common.Repo, query)
+
+      assert sql =~ "bonfire_files_media", "expected the media query, got: #{sql}"
+
+      refute sql =~ ~r/ON \(\w+\."id" = \w+\."id"\) OR \(\w+\."id" = \w+\."id"\)/,
+             "expected no OR join, got: #{sql}"
+    end
+  end
+
   defp verify_feed(preset, feed, activity, object, user, other_user, preloads, postloads) do
     assert loaded_media =
              FeedLoader.feed_contains?(feed, activity || object,

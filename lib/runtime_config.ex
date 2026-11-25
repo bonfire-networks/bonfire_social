@@ -901,6 +901,8 @@ defmodule Bonfire.Social.RuntimeConfig do
         moderation: %{
           name: l("Moderation"),
           built_in: true,
+          # `hidden` until it also serves the instance or personal moderation log: without a caller's feeds it has no feed of its own and lists every activity, so it's loaded by name (the group moderation page passes its feeds) and never offered in the feed pickers
+          hidden: true,
           description: l("Reports, requests and moderation actions"),
           filters: %FeedFilters{
             feed_name: :moderation,
@@ -944,9 +946,9 @@ defmodule Bonfire.Social.RuntimeConfig do
         trending_discussions: %{
           name: l("Top discussions"),
           built_in: true,
-          description: l("Popular discussions from the last day"),
+          description: l("Popular discussions from the last few days"),
           filters: %FeedFilters{
-            time_limit: 1,
+            time_limit: 3,
             sort_by: :reply_count,
             sort_order: :desc,
             exclude_activity_types: [:boost, :like, :vote, :follow, :reply]
@@ -973,50 +975,58 @@ defmodule Bonfire.Social.RuntimeConfig do
             hide_filters: true
           ]
         },
-        # TEMPORARILY DISABLED:
-        # trending: %{
-        #   name: l("Trending"),
-        #   built_in: true,
-        #   description: l("Most boosted activities from the last week"),
-        #   filters: %FeedFilters{
-        #     feed_name: :trending,
-        #     exclude_activity_types: [:reply],
-        #     sort_by: :popularity_score,
-        #     sort_order: :desc,
-        #     time_limit: 7
-        #   },
-        #   exclude_from_nav: false,
-        #   icon: "ph:trend-up-duotone",
-        #   assigns: [
-        #     page: "trending",
-        #     page_title: l("Trending"),
-        #     feedback_title: l("No trending posts yet"),
-        #     feedback_message: l("Posts need to be boosted to appear in trending")
-        #   ]
-        # },
-        # trending_links: %{
-        #   name: l("Trending links"),
-        #   built_in: true,
-        #   description: l("Most boosted posts with links"),
-        #   filters: %FeedFilters{
-        #     feed_name: :trending_links,
-        #     exclude_activity_types: [:reply, :boost],
-        #     media_types: [:link],
-        #     sort_by: :popularity_score,
-        #     sort_order: :desc,
-        #     time_limit: 2,
-        #     show_objects_only_once: false
-        #   },
-        #   exclude_from_nav: false,
-        #   icon: "ph:newspaper-duotone",
-        #   assigns: [
-        #     page: "trending_links",
-        #     page_title: l("Trending links"),
-        #     feedback_title: l("No trending links yet"),
-        #     feedback_message: l("Share interesting links to see them here")
-        #     # hide_filters: true
-        #   ]
-        # },
+        # the popularity score can't be indexed, so ranking scores every post in the window: this preset is served from a cached list of its ranked entries (`cache: true`, see `Bonfire.Social.FeedLoader`), and its filters are fixed (`hide_filters`) so there's one list to cache
+        trending: %{
+          name: l("Trending"),
+          built_in: true,
+          description: l("Most boosted activities from the last week"),
+          filters: %FeedFilters{
+            feed_name: :trending,
+            # a like or boost is an activity scored as its post: kept in, they fill the ranking with copies of a few popular posts
+            exclude_activity_types: [:boost, :like, :vote, :follow, :reply],
+            sort_by: :popularity_score,
+            sort_order: :desc,
+            time_limit: 7
+          },
+          cache: true,
+          exclude_from_nav: false,
+          icon: "ph:trend-up-duotone",
+          assigns: [
+            page: "trending",
+            page_title: l("Trending"),
+            feedback_title: l("No trending posts yet"),
+            feedback_message: l("Posts need to be boosted to appear in trending"),
+            hide_filters: true,
+            # the cached list is shared by everyone signed in, so each card checks the viewer (eg. drops an author they silenced), as the cached widgets do; not guests, whose list holds only what guests may see
+            check_object_boundary: {:signed_in, [:see, :read]},
+            # the window is part of the cached ranking, and the list may end at its page cap: no "Show older"
+            time_limit_fixed: true
+          ]
+        },
+        # `Bonfire.Social.Media.trending_links/1` (the trending links widget, through its hourly cache, and the Mastodon trends API) loads this preset by name, so it must exist. Kept out of the nav until its media query is fast enough for live requests
+        trending_links: %{
+          name: l("Trending links"),
+          built_in: true,
+          description: l("Most boosted posts with links"),
+          filters: %FeedFilters{
+            feed_name: :trending_links,
+            exclude_activity_types: [:reply, :boost],
+            media_types: [:link],
+            sort_by: :popularity_score,
+            sort_order: :desc,
+            time_limit: 7,
+            show_objects_only_once: false
+          },
+          exclude_from_nav: true,
+          icon: "ph:newspaper-duotone",
+          assigns: [
+            page: "trending_links",
+            page_title: l("Trending links"),
+            feedback_title: l("No trending links yet"),
+            feedback_message: l("Share interesting links to see them here")
+            # hide_filters: true
+          ]
+        },
         local_media: %{
           name: l("Local Media"),
           built_in: true,

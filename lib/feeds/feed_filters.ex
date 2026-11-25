@@ -98,6 +98,8 @@ defmodule Bonfire.Social.FeedFilters do
         :popularity_score,
         # media feeds only: how many times a piece of media was shared
         :object_count,
+        # media feeds only: the media shared most recently first, by the latest activity reaching it
+        :last_used,
         # when things start (the `time_span` mixin, eg. events); things without one drop out
         :starts_at
       ],

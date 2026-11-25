@@ -266,7 +266,7 @@ defmodule Bonfire.Social.PostContents do
     {text, unmask_quotes} = if markdown?, do: mask_quote_markers(text), else: {text, & &1}
 
     text
-    |> normalise_input(do_not_strip_html?, output_format)
+    |> normalise_input(do_not_strip_html?, output_format, body_sanitise(field, opts))
     |> then(&Bonfire.Social.Tags.maybe_process(creator, &1, opts))
     |> case do
       {:ok, processed} ->
@@ -435,20 +435,24 @@ defmodule Bonfire.Social.PostContents do
   @doc "Given post content attributes, prepares it for processing by just cleaning up the text and detecting languages."
   defp only_prepare_content(attrs, creator, opts) do
     merge_with_body_or_nil(attrs, %{
-      html_body: get_attr(attrs, :html_body) |> normalise_for_prepare(creator, opts),
-      name: get_attr(attrs, :name) |> normalise_for_prepare(creator, opts),
-      summary: get_attr(attrs, :summary) |> normalise_for_prepare(creator, opts),
+      html_body: get_attr(attrs, :html_body) |> normalise_for_prepare(creator, opts, :html_body),
+      name: get_attr(attrs, :name) |> normalise_for_prepare(creator, opts, :name),
+      summary: get_attr(attrs, :summary) |> normalise_for_prepare(creator, opts, :summary),
       languages: maybe_detect_languages(attrs),
       mentions: e(attrs, :mentions, [])
     })
   end
 
-  # without tag processing there is no other sanitising step, so the same `normalise_input/3` runs here
-  defp normalise_for_prepare(text, creator, opts) do
+  # without tag processing there is no other sanitising step, so the same `normalise_input/4` runs here
+  defp normalise_for_prepare(text, creator, opts, field) do
     text
-    |> normalise_input(e(opts, :do_not_strip_html, nil))
+    |> normalise_input(e(opts, :do_not_strip_html, nil), false, body_sanitise(field, opts))
     |> prepare_text(creator, opts)
   end
+
+  # only a body takes an import source's choice (opt `sanitise`, see `Bonfire.Posts.publish_imported/3`): a title and summary stay as strict as any other
+  defp body_sanitise(field, opts) when field in [:html_body, "html_body"], do: opts[:sanitise]
+  defp body_sanitise(_field, _opts), do: nil
 
   def all_text_content(attrs) do
     "#{get_attr(attrs, :name)}\n#{get_attr(attrs, :summary)}\n#{get_attr(attrs, :html_body)}\n#{get_attr(attrs, :note)}"
@@ -492,29 +496,41 @@ defmodule Bonfire.Social.PostContents do
       e(attrs, :post_content, key, nil) || e(attrs, :post, key, nil)
   end
 
-  defp normalise_input(text, do_not_strip_html? \\ false, fix_wysiwyg_input \\ false)
-  defp normalise_input(nil, _, _), do: nil
+  # `sanitise`: the kind `Text.maybe_sane_html/2` takes, chosen by an import source's admin for its articles' bodies (`:imported`, `:strict`, `:unsafe`); nil for anything else
+  defp normalise_input(
+         text,
+         do_not_strip_html? \\ false,
+         fix_wysiwyg_input \\ false,
+         sanitise \\ nil
+       )
 
-  defp normalise_input(text, do_not_strip_html?, :markdown) when is_binary(text) do
+  defp normalise_input(nil, _, _, _), do: nil
+
+  defp normalise_input(text, do_not_strip_html?, :markdown, sanitise) when is_binary(text) do
     text
     # undo the escaping milkdown's CommonMark serializer applies to bare URLs and `@mentions`
     |> Text.unwrap_markdown_autolinks()
     |> Text.normalise_markdown_urls()
     # Keep older editor clients compatible without rewriting literal Markdown code.
     |> Text.normalise_markdown_hard_breaks()
-    |> normalise_input(do_not_strip_html?, nil)
+    |> normalise_input(do_not_strip_html?, nil, sanitise)
   end
 
-  defp normalise_input(text, true, format) do
+  defp normalise_input(text, true, _format, _sanitise) do
     text
   end
 
-  defp normalise_input(text, _, format) do
+  # the admin chose to keep the source's HTML as it came: neither decoded nor sanitised
+  defp normalise_input(text, _, _format, :unsafe) do
+    text
+  end
+
+  defp normalise_input(text, _, _format, sanitise) do
     text
     # decode first, so markup typed or received as entities (`&lt;script&gt;`) is sanitised like any other, instead of being decoded into markup by a later step
     |> HtmlEntities.decode()
     # maybe remove potentially dangerous or dirty markup
-    |> Text.maybe_sane_html()
+    |> Text.maybe_sane_html(sanitise)
   end
 
   def prepare_text(nil, _, _opts), do: nil
@@ -648,7 +664,10 @@ defmodule Bonfire.Social.PostContents do
     Exdiff.diff(previous_version, current_version, wrapper_tag: "span")
   end
 
-  def edit(current_user, id, attrs) when is_binary(id) do
+  # `opts`: `sanitise`, an import source's choice for its articles' bodies, for an edit the import brings in from its site (see `normalise_input/4`)
+  def edit(current_user, post_content_or_id, attrs, opts \\ [])
+
+  def edit(current_user, id, attrs, opts) when is_binary(id) do
     # post_content = repo().get!(PostContent, id)
     # if Bonfire.Boundaries.can?(current_user, :edit, post_content) do
     with %PostContent{} = post_content <-
@@ -657,17 +676,17 @@ defmodule Bonfire.Social.PostContents do
              from: query_base(),
              current_user: current_user
            ) do
-      edit(current_user, post_content, attrs)
+      edit(current_user, post_content, attrs, opts)
     end
   end
 
-  def edit(current_user, %{post_content: %PostContent{} = post_content}, attrs),
-    do: edit(current_user, post_content, attrs)
+  def edit(current_user, %{post_content: %PostContent{} = post_content}, attrs, opts),
+    do: edit(current_user, post_content, attrs, opts)
 
-  def edit(current_user, post_content, %{post_content: post_content_attrs}),
-    do: edit(current_user, post_content, post_content_attrs)
+  def edit(current_user, post_content, %{post_content: post_content_attrs}, opts),
+    do: edit(current_user, post_content, post_content_attrs, opts)
 
-  def edit(current_user, %PostContent{} = post_content, attrs) do
+  def edit(current_user, %PostContent{} = post_content, attrs, opts) do
     # post_content = repo().get!(PostContent, id)
     # if Bonfire.Boundaries.can?(current_user, :edit, post_content) do
     with post_content <-
@@ -675,7 +694,7 @@ defmodule Bonfire.Social.PostContents do
            |> repo().maybe_preload(:created),
          changeset =
            attrs
-           |> sanitise_edit()
+           |> sanitise_edit(opts[:sanitise])
            |> debug()
            |> PostContent.changeset(post_content, ...),
          # the instance's keyword lists, checked once against the edited text
@@ -767,14 +786,15 @@ defmodule Bonfire.Social.PostContents do
   end
 
   # an edit's title, content warning and body are shown as stored (titles, and remote bodies, without sanitising again), so markup that would run is removed here, with the sanitiser publishing uses. Unlike on publishing, entities aren't decoded first: an edit starts from the stored HTML, where an encoded `&lt;tag&gt;` is text meant to show (eg. in code), and nothing after an edit decodes it into markup
-  defp sanitise_edit(attrs) when is_map(attrs) do
+  # `sanitise`: an import source's choice for its articles' bodies (see `Text.maybe_sane_html/2`); a title and summary stay as strict as any other
+  defp sanitise_edit(attrs, sanitise) when is_map(attrs) do
     Map.new(attrs, fn
       # a markdown body (not a remote post's HTML): each URL ending a line gets its own paragraph, as on publishing
       {key, "<" <> _ = value} when key in [:html_body, "html_body"] ->
-        {key, Text.maybe_sane_html(value)}
+        {key, Text.maybe_sane_html(value, sanitise)}
 
       {key, value} when key in [:html_body, "html_body"] and is_binary(value) ->
-        {key, value |> Text.maybe_sane_html() |> Text.own_paragraph_urls()}
+        {key, value |> Text.maybe_sane_html(sanitise) |> Text.own_paragraph_urls()}
 
       {key, value}
       when key in [:name, :summary, :html_body, "name", "summary", "html_body"] and
@@ -786,7 +806,7 @@ defmodule Bonfire.Social.PostContents do
     end)
   end
 
-  defp sanitise_edit(attrs), do: attrs
+  defp sanitise_edit(attrs, _sanitise), do: attrs
 
   defp save_edit(current_user, %PostContent{} = post_content, changeset) do
     if versioning_enabled?(current_user) do
