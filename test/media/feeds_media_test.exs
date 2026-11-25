@@ -223,7 +223,11 @@ defmodule Bonfire.Social.Feeds.MediaTest do
                 per_media_multiply_limit: 1
               )
 
-            {edges, if(edges == [] or is_nil(e(info, :end_cursor, nil)), do: :done, else: e(info, :end_cursor, nil))}
+            {edges,
+             if(edges == [] or is_nil(e(info, :end_cursor, nil)),
+               do: :done,
+               else: e(info, :end_cursor, nil)
+             )}
         end)
         |> Enum.take(10)
         |> List.flatten()
@@ -244,7 +248,9 @@ defmodule Bonfire.Social.Feeds.MediaTest do
         |> then(&Ecto.Adapters.SQL.to_sql(:all, Bonfire.Common.Repo, &1))
 
       assert [candidates] = Regex.run(@candidate_media, sql)
-      assert candidates =~ "ILIKE", "expected the media type in the candidates, got: #{candidates}"
+
+      assert candidates =~ "ILIKE",
+             "expected the media type in the candidates, got: #{candidates}"
     end
 
     test "a feed of any media limits its activities to the newest media too" do

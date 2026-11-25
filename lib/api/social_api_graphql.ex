@@ -1850,6 +1850,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
                |> maybe_put(:quotes, if(args[:quote_id], do: [args[:quote_id]])),
              # through `Nomad`, so a client signed in with an account from elsewhere acts through their server (a local user's post is `publish/1`, as before)
              {:ok, post} <- Bonfire.Posts.nomad(:publish, opts) do
+          # the published post has no Dataloader batch behind it, and `canonical_uri` classifies its locality from `created.peered`
+          post = Bonfire.Common.Repo.maybe_preload(post, activity: [created: :peered])
+
           {:ok, maybe_put(post, :context_id, args[:context_id])}
         end
       end

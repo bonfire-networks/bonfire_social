@@ -832,6 +832,7 @@ defmodule Bonfire.Social.RuntimeConfig do
             feedback_title: l("Nothing curated yet?")
           ]
         },
+        # TODO: kind feeds (books, events, and a recipes one for `Preparation`) could also match posts linking to a page of that kind (a link preview typed `book`, `event` or `recipe`), which needs a filter that ORs `object_types` with those link kinds, since filters combine with AND
         books: %{
           name: l("Books"),
           built_in: true,
@@ -1019,7 +1020,7 @@ defmodule Bonfire.Social.RuntimeConfig do
             time_limit_fixed: true
           ]
         },
-        # `Bonfire.Social.Media.trending_links/1` (the trending links widget, through its hourly cache, and the Mastodon trends API) loads this preset by name, so it must exist. Kept out of the nav until its media query is fast enough for live requests
+        # `Bonfire.Social.Media.trending_links/1` (the trending links widget and the Mastodon trends API) loads this preset by name, so it must exist. Kept out of the nav until its media query is fast enough for live requests
         trending_links: %{
           name: l("Trending links"),
           built_in: true,
@@ -1033,6 +1034,8 @@ defmodule Bonfire.Social.RuntimeConfig do
             time_limit: 7,
             show_objects_only_once: false
           },
+          # served from a cached list for the viewer's circle, as `trending` is: the widget, the Mastodon trends API and this page read it
+          cache: true,
           exclude_from_nav: true,
           icon: "ph:newspaper-duotone",
           assigns:
@@ -1040,7 +1043,9 @@ defmodule Bonfire.Social.RuntimeConfig do
               page: "trending_links",
               page_title: l("Trending links"),
               feedback_title: l("No trending links yet"),
-              feedback_message: l("Share interesting links to see them here")
+              feedback_message: l("Share interesting links to see them here"),
+              # the cached list is shared by everyone signed in, so what a viewer may not see (eg. an author they silenced) is checked when it is shown
+              check_object_boundary: {:signed_in, [:see, :read]}
               # hide_filters: true
             ] ++ media_feed_assigns
         },

@@ -62,7 +62,12 @@ defmodule Bonfire.Social.MastoApi.PublishPrivacyTest do
       assert is_list(response["media_attachments"])
       refute Map.has_key?(response, "content")
 
-      timeline = build_conn() |> masto_api_conn([]) |> get("/api/v1/timelines/public") |> json_response(200)
+      timeline =
+        build_conn()
+        |> masto_api_conn([])
+        |> get("/api/v1/timelines/public")
+        |> json_response(200)
+
       refute Enum.any?(timeline, &(&1["id"] == response["id"]))
     end
 
@@ -75,7 +80,10 @@ defmodule Bonfire.Social.MastoApi.PublishPrivacyTest do
 
       response =
         api_conn(conn, user, account)
-        |> post("/api/v1/statuses", %{"status" => "Later, locally", "scheduled_at" => in_minutes(24 * 60)})
+        |> post("/api/v1/statuses", %{
+          "status" => "Later, locally",
+          "scheduled_at" => in_minutes(24 * 60)
+        })
         |> json_response(200)
 
       assert response["params"]["visibility"] == "direct"

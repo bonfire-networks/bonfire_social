@@ -215,7 +215,9 @@ defmodule Bonfire.Social.FeedLoader do
       Cache.maybe_apply_cached(
         &load_cached_preset_entries/3,
         [filters, preset, as_circle_opts ++ [paginate: [limit: limit * pages]]],
-        cache_key: "feed_preset:#{filters.feed_name}:#{circle}:#{limit}:#{pages}",
+        # the filters are in the key: a caller may ask for another window, or the instance for another origin
+        cache_key:
+          "feed_preset:#{filters.feed_name}:#{circle}:#{limit}:#{pages}:#{:erlang.phash2(filters)}",
         cache: opts[:cache],
         expire: Config.get([__MODULE__, :cached_preset_ttl], to_timeout(minute: 15))
       )
@@ -1474,7 +1476,7 @@ defmodule Bonfire.Social.FeedLoader do
     specific_feed_ids =
       case e(filters, :origin, nil) do
         nil -> Types.uids(feed_id_or_ids)
-        _origin -> Types.uids(feed_id_or_ids) -- Feeds.locality_feed_ids()
+        _origin -> specific_feed_ids_beyond_origin(Types.uids(feed_id_or_ids))
       end
 
     cond do
@@ -1494,6 +1496,15 @@ defmodule Bonfire.Social.FeedLoader do
         query_extras(filters, opts)
     end
     |> debug("feed query")
+  end
+
+  # a list that covers all of explore (what the trending feeds rank) includes the guest bucket, which is not a locality bucket, so it would be kept as a scope and intersect with the origin's buckets into nothing: the whole explore set is dropped then, not only the locality buckets
+  defp specific_feed_ids_beyond_origin(feed_ids) do
+    explore_ids = Feeds.named_feed_ids(:explore)
+
+    if explore_ids -- feed_ids == [],
+      do: feed_ids -- explore_ids,
+      else: feed_ids -- Feeds.locality_feed_ids()
   end
 
   @doc "Return a boundarised query for a feed"

@@ -25,8 +25,9 @@ defmodule Bonfire.Social.Media do
     :reply_count,
     :last_used
   ]
-  # 1 hour cache TTL in milliseconds (Cachex uses ms)
-  @default_cache_ttl :timer.hours(1)
+
+  # # 1 hour cache TTL in milliseconds (Cachex uses ms)
+  # @default_cache_ttl :timer.hours(1)
 
   @doc """
   Returns trending links grouped by URL with aggregated metrics.
@@ -51,25 +52,33 @@ defmodule Bonfire.Social.Media do
       #=> [%{media: %Bonfire.Files.Media{}, path: "https://...", boost_count: 42, unique_sharers: 5}]
   """
   def trending_links(opts \\ []) do
-    Cache.maybe_apply_cached(
-      &list_trending_paginated/1,
-      [trending_links_args(opts)],
-      cache: opts[:cache],
-      expire:
-        Keyword.get(opts, :cache_ttl) ||
-          Config.get([Bonfire.Social.Media, :default_cache_ttl]) || @default_cache_ttl
-    )
-    # list_trending_paginated(opts)
+    # read from the list the feed loader caches for the viewer's circle (the `trending_links` preset has `cache: true`), then what this viewer may not see is left out
+    list_trending_paginated(opts)
     |> e(:edges, [])
+    |> only_visible_to(current_user(opts))
   rescue
     e ->
       err(e, "Error fetching trending links")
       []
   end
 
-  # the args the cache key is derived from — strips cache-control opts so the key stays stable
-  # whether or not `:cache`/`:cache_ttl` are passed (so reset/refresh hit the same key as the load)
-  defp trending_links_args(opts), do: Keyword.drop(opts, [:cache_ttl, :cache])
+  # the cached list is loaded for a circle, not a person: a signed in viewer's own limits (eg. an author they silenced, a post for some people only) apply when it is read
+  defp only_visible_to(links, nil), do: links
+
+  defp only_visible_to(links, viewer) do
+    links
+    |> preload_newest_activity()
+    |> Enum.filter(fn link ->
+      case e(link, :activity, :object_id, nil) do
+        nil -> true
+        object_id -> Bonfire.Boundaries.can?(viewer, [:see, :read], object_id)
+      end
+    end)
+  end
+
+  # # the args the cache key is derived from — strips cache-control opts so the key stays stable
+  # # whether or not `:cache`/`:cache_ttl` are passed (so reset/refresh hit the same key as the load)
+  # defp trending_links_args(opts), do: Keyword.drop(opts, [:cache_ttl, :cache])
 
   @doc """
   Warms the trending links cache by pre-computing results.
@@ -87,21 +96,22 @@ defmodule Bonfire.Social.Media do
       {:error, e}
   end
 
-  @doc """
-  Checks if trending links data is available in cache.
-  Returns the cached data if available, nil otherwise.
-  """
-  def cached_trending_links(opts \\ []) do
-    # Use key_for_call to generate the same key format that maybe_apply_cached uses
-    key =
-      Cache.key_for_call(
-        {Bonfire.Social.Media, :list_trending_paginated},
-        [trending_links_args(opts)]
-      )
-
-    Cache.get!(key)
-    |> e(:edges, nil)
-  end
+  # replaced by `trending_links/1`, which reads the list the feed loader caches for the viewer's circle (the old cache was only filled by `TrendingLinksCacheWorker`, which was not scheduled, so the widget showed nothing)
+  # @doc """
+  # Checks if trending links data is available in cache.
+  # Returns the cached data if available, nil otherwise.
+  # """
+  # def cached_trending_links(opts \\ []) do
+  #   # Use key_for_call to generate the same key format that maybe_apply_cached uses
+  #   key =
+  #     Cache.key_for_call(
+  #       {Bonfire.Social.Media, :list_trending_paginated},
+  #       [trending_links_args(opts)]
+  #     )
+  #
+  #   Cache.get!(key)
+  #   |> e(:edges, nil)
+  # end
 
   @doc """
   Returns trending links in paginated format compatible with FeedLive.
@@ -118,6 +128,8 @@ defmodule Bonfire.Social.Media do
   - `:paginate` - Standard Bonfire pagination options (after, before, limit)
   """
   def list_trending_paginated(opts \\ []) do
+    {filters, opts} = Keyword.pop(opts, :filters, %{})
+
     opts =
       opts
       |> Keyword.put_new(
@@ -128,11 +140,14 @@ defmodule Bonfire.Social.Media do
 
     Bonfire.Social.FeedLoader.feed(
       :trending_links,
-      %{
-        time_limit:
-          opts[:time_limit] || Config.get([Bonfire.Social.TrendingLinks, :default_time_limit]) ||
-            @default_time_limit
-      },
+      Map.merge(
+        %{
+          time_limit:
+            opts[:time_limit] || Config.get([Bonfire.Social.TrendingLinks, :default_time_limit]) ||
+              @default_time_limit
+        },
+        Map.new(filters)
+      ),
       opts
     )
     |> debug("queried trending links")
@@ -329,7 +344,8 @@ defmodule Bonfire.Social.Media do
 
   defp candidates_beyond_cursor(query, _scan_order, nil), do: query
 
-  defp candidates_beyond_cursor(query, :desc, id), do: where(query, [media: media], media.id < ^id)
+  defp candidates_beyond_cursor(query, :desc, id),
+    do: where(query, [media: media], media.id < ^id)
 
   defp candidates_beyond_cursor(query, :asc, id), do: where(query, [media: media], media.id > ^id)
 
@@ -367,7 +383,8 @@ defmodule Bonfire.Social.Media do
     end
   end
 
-  defp candidate_limit(opts), do: repo().pagination_opts(opts)[:limit] * per_media_multiply_limit(opts)
+  defp candidate_limit(opts),
+    do: repo().pagination_opts(opts)[:limit] * per_media_multiply_limit(opts)
 
   defp restrict_to_candidates(query, filters, opts) do
     case candidate_media_ids_query(filters, opts) do

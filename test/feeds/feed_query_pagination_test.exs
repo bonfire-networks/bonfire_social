@@ -607,7 +607,11 @@ defmodule Bonfire.Social.FeedPaginationTest do
 
     # the cutoff is up to a day wider than the days asked for
     defp assert_days(days, expected),
-      do: assert(days in [expected, expected + 1], "expected a #{expected} day window, got #{inspect(days)}")
+      do:
+        assert(
+          days in [expected, expected + 1],
+          "expected a #{expected} day window, got #{inspect(days)}"
+        )
 
     defp media_window_days(filters), do: window_days(:local_media, filters)
     defp activity_window_days(filters), do: window_days(:explore, filters)
