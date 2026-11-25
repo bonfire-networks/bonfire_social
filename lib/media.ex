@@ -17,7 +17,14 @@ defmodule Bonfire.Social.Media do
 
   @default_limit 5
   @default_time_limit 7
-  @media_metric_sorts [:popularity_score, :object_count, :boost_count, :like_count, :reply_count]
+  @media_metric_sorts [
+    :popularity_score,
+    :object_count,
+    :boost_count,
+    :like_count,
+    :reply_count,
+    :last_used
+  ]
   # 1 hour cache TTL in milliseconds (Cachex uses ms)
   @default_cache_ttl :timer.hours(1)
 
@@ -223,10 +230,12 @@ defmodule Bonfire.Social.Media do
     {metric_order, id_order} =
       if sort_order == :asc, do: {:asc_nulls_first, :asc}, else: {:desc_nulls_last, :desc}
 
+    metric = metric_field(sort_by)
+
     from(ranked in subquery(query), as: :ranked_media, select: ranked)
     |> order_by(
       ^[
-        {metric_order, dynamic([ranked_media: ranked], field(ranked, ^sort_by))},
+        {metric_order, dynamic([ranked_media: ranked], field(ranked, ^metric))},
         {id_order, dynamic([ranked_media: ranked], ranked.id)}
       ]
     )
@@ -241,7 +250,7 @@ defmodule Bonfire.Social.Media do
 
     if sort_by in @media_metric_sorts do
       [
-        cursor_fields: [{sort_by, order}, {:id, order}],
+        cursor_fields: [{metric_field(sort_by), order}, {:id, order}],
         # a sum over activities with no boosts, likes or replies is null
         cursor_fields_nullable:
           if(sort_by in [:boost_count, :like_count, :reply_count], do: [sort_by], else: []),
@@ -257,6 +266,10 @@ defmodule Bonfire.Social.Media do
   end
 
   defp media_cursor_value(media, field), do: Map.get(media, field)
+
+  # the column a metric sort orders by: `:last_used` is the latest activity reaching the media (a ULID, so its time), which the aggregate already selects as `newest_activity_id`
+  defp metric_field(:last_used), do: :newest_activity_id
+  defp metric_field(sort_by), do: sort_by
 
   # An activity reaches media in two ways: its object has them attached (a `Bonfire.Files` row keyed by the object, pointing to the media), or its object is the media. One arm per way, each an equality join that an index serves, instead of one join with an OR across both tables, which no index can serve (Postgres then merge-joined every media row once per activity). The second arm keeps only media attached somewhere, as the OR join did, which required a `Bonfire.Files` row for every media.
   defp with_media_ids(qualifying_activities_query) do

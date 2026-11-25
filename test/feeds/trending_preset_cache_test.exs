@@ -92,6 +92,33 @@ defmodule Bonfire.Social.Feeds.TrendingPresetCacheTest do
     assert guest != [], "expected the public posts for guests"
   end
 
+  test "ranks the instance's feeds, as explore does" do
+    explore = Bonfire.Social.Feeds.named_feed_ids(:explore)
+    assert is_list(explore) and explore != []
+    assert Bonfire.Social.Feeds.named_feed_ids(:trending) == explore
+    assert Bonfire.Social.Feeds.named_feed_ids(:trending_links) == explore
+  end
+
+  test "a post with more boosts than the ranking's candidates doesn't push the others out", %{
+    mid: mid,
+    high: high,
+    boosters: boosters
+  } do
+    # each boost is an activity with its post's score: the list must rank posts, not their boosts
+    more_boosters = for n <- 1..4, do: Fake.fake_user!("trending extra booster #{n}")
+
+    for booster <- Enum.drop(boosters, 3) ++ more_boosters,
+        do: {:ok, _} = Boosts.boost(booster, high)
+
+    Process.put([:bonfire_social, Bonfire.Social.FeedLoader, :cached_preset_pages], 2)
+
+    {page1, info1} = page(paginate: [limit: 1], cache: :refresh)
+    assert page1 == [high.id]
+
+    {page2, _} = page(paginate: [limit: 1, after: end_cursor(info1)])
+    assert page2 == [mid.id]
+  end
+
   test "caches at least one page, whatever the configured number of pages", %{high: high} do
     Process.put([:bonfire_social, Bonfire.Social.FeedLoader, :cached_preset_pages], 0)
 

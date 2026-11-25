@@ -982,7 +982,8 @@ defmodule Bonfire.Social.RuntimeConfig do
           description: l("Most boosted activities from the last week"),
           filters: %FeedFilters{
             feed_name: :trending,
-            exclude_activity_types: [:reply],
+            # a like or boost is an activity scored as its post: kept in, they fill the ranking with copies of a few popular posts
+            exclude_activity_types: [:boost, :like, :vote, :follow, :reply],
             sort_by: :popularity_score,
             sort_order: :desc,
             time_limit: 7
