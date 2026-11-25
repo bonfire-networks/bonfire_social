@@ -234,6 +234,109 @@ defmodule Bonfire.Social.Feeds.MediaTest do
     end
   end
 
+  # a date-sorted media feed picks its newest candidate media by id first, so Postgres drives from those few media into their activities instead of reading every activity in the window
+  describe "media feed candidate media" do
+    @candidate_media ~r/IN \(SELECT \w+\."id" FROM "bonfire_files_media" AS \w+ .*?ORDER BY \w+\."id" DESC LIMIT \$\d+\)/s
+
+    test "a date-sorted feed limits its activities to the newest media of the requested type" do
+      {sql, _params} =
+        FeedLoader.feed(:images, %{}, return: :query)
+        |> then(&Ecto.Adapters.SQL.to_sql(:all, Bonfire.Common.Repo, &1))
+
+      assert [candidates] = Regex.run(@candidate_media, sql)
+      assert candidates =~ "ILIKE", "expected the media type in the candidates, got: #{candidates}"
+    end
+
+    test "a feed of any media limits its activities to the newest media too" do
+      {sql, _params} =
+        FeedLoader.feed(:local_media, %{}, return: :query)
+        |> then(&Ecto.Adapters.SQL.to_sql(:all, Bonfire.Common.Repo, &1))
+
+      assert sql =~ @candidate_media
+    end
+
+    test "a feed sorted by a metric has no candidate media" do
+      {sql, _params} =
+        FeedLoader.feed(:images, %{sort_by: :like_count}, return: :query)
+        |> then(&Ecto.Adapters.SQL.to_sql(:all, Bonfire.Common.Repo, &1))
+
+      refute sql =~ @candidate_media
+    end
+
+    test "pages through every visible media once, in media id order, across pages with no visible media" do
+      me = fake_user!("viewer")
+      author = fake_user!("author")
+
+      media =
+        for name <- ~w(m1 m2 m3 m4 m5 m6 m7 m8 m9), into: %{} do
+          url = "https://files.example.org/#{name}/#{Faker.UUID.v4()}"
+
+          {:ok, media} =
+            Bonfire.Files.Media.insert(author, url, %{media_type: "image/png", size: 0}, %{
+              url: url
+            })
+
+          {name, media}
+        end
+
+      # m4 to m7 are only on posts the viewer can't see: a whole window of candidates with nothing to show. m2 and m9 are on several posts
+      posts = [
+        {"m1", "public"},
+        {"m2", "public"},
+        {"m2", "public"},
+        {"m2", "public"},
+        {"m3", "public"},
+        {"m4", "mentions"},
+        {"m5", "mentions"},
+        {"m6", "mentions"},
+        {"m7", "mentions"},
+        {"m8", "public"},
+        {"m9", "public"},
+        {"m9", "public"}
+      ]
+
+      for {{name, boundary}, i} <- Enum.with_index(posts) do
+        fake_post!(author, boundary, %{
+          post_content: %{html_body: "post #{i} of #{name}"},
+          uploaded_media: [media[name]]
+        })
+      end
+
+      visible = ~w(m9 m8 m3 m2 m1)
+      expected = visible |> Enum.map(&id(media[&1])) |> Enum.sort(:desc)
+
+      pages =
+        Stream.unfold(:first, fn
+          :done ->
+            nil
+
+          cursor ->
+            paginate = [limit: 2] ++ if(cursor == :first, do: [], else: [after: cursor])
+
+            # candidates per page: 2 * 2, fewer than the 9 media
+            %{edges: edges, page_info: info} =
+              FeedLoader.feed(:images, %{},
+                current_user: me,
+                paginate: paginate,
+                per_media_multiply_limit: 2
+              )
+
+            {edges, e(info, :end_cursor, nil) || :done}
+        end)
+        |> Enum.take(10)
+
+      listed = pages |> List.flatten()
+
+      assert Enum.map(listed, &id/1) == expected
+      assert Enum.all?(pages, &(length(&1) <= 2))
+
+      counts = Map.new(listed, &{id(&1), &1.object_count})
+      assert counts[id(media["m2"])] == 3
+      assert counts[id(media["m9"])] == 2
+      assert counts[id(media["m1"])] == 1
+    end
+  end
+
   describe "media feed query shape" do
     # an activity reaches its media either through an attachment (`files.id`) or by being the media itself (`media.id`): joining on either one with an OR can't use any index, so Postgres merge-joined every media row once per activity (48.8s for `local_media` on a large instance)
     test "joins activities to media without an OR across files and media" do

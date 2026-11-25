@@ -873,6 +873,9 @@ defmodule Bonfire.Social.FeedLoader do
       :stream ->
         repo().many_stream(query, Social.maybe_set_pre_execute_fn(opts))
 
+      _ when per_media? ->
+        paginate_per_media_feed(query, filters, opts)
+
       _ ->
         # deferred_opts =
         #   opts
@@ -907,6 +910,32 @@ defmodule Bonfire.Social.FeedLoader do
 
             result
         end
+    end
+  end
+
+  # A date-sorted media page reads the activities of its newest candidate media only (see `Bonfire.Social.Media.candidate_media_ids_query/3`), and some of those may have none to show (out of the time window, not visible, not in the feed). A page that comes up short (Paginator gives no `end_cursor` for it, so the feed would end) is read again from the same cursor with twice as many candidates, until the page fills or no media remain beyond them.
+  defp paginate_per_media_feed(query, filters, opts) do
+    with %Ecto.Query{} = media_query <- maybe_prepare_per_media_query(query, filters, opts) do
+      case repo().many_maybe_paginated(media_query, opts[:paginate] || opts, opts) do
+        %{page_info: page_info} = page ->
+          if is_nil(e(page_info, :end_cursor, nil)) and
+               Bonfire.Social.Media.more_candidate_media?(filters, opts) do
+            paginate_per_media_feed(
+              query,
+              filters,
+              Keyword.put(
+                opts,
+                :per_media_multiply_limit,
+                2 * Bonfire.Social.Media.per_media_multiply_limit(opts)
+              )
+            )
+          else
+            page
+          end
+
+        other ->
+          other
+      end
     end
   end
 
@@ -1004,6 +1033,8 @@ defmodule Bonfire.Social.FeedLoader do
 
       qualifying_activities_query =
         initial_query
+        # a date-sorted page only needs the activities of its newest media, so they are chosen first, before the dedup moves the filters into a subquery
+        |> Bonfire.Social.Media.restrict_to_candidate_media(filters, opts)
         # TODO: needed for per_media?
         |> apply_dedup_strategy(filters, opts)
         |> FeedActivities.query_order(subquery_sort_by, sort_order, :id, opts[:with_pins?])

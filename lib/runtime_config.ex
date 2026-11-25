@@ -331,6 +331,9 @@ defmodule Bonfire.Social.RuntimeConfig do
     # locale, so the stored value is effectively the untranslated msgid. The actual per-request
     # translation happens at the point of display, via `Bonfire.Social.Feeds.localise_tree/3` — which
     # covers `name`/`description` plus the `assigns` display keys (`page_title`/`feed_title`/`feedback_*`).
+    # what a media feed's rows (one per `Media`) show: each file as a post shows it, one per row, as `/media` does (only the composer's media picker lays them out in a grid). A preset without it shows its rows as link cards
+    media_feed_assigns = [custom_preview: Bonfire.UI.Social.Activity.MediaTileLive]
+
     config :bonfire_social, Bonfire.Social.Feeds,
       query_with_deferred_join: true,
       # boundary class → the guest/local/federated instance feeds an activity fans out to (read by `Feeds.global_feed_ids/1`). Promoted from a module attribute so instances can override:
@@ -697,7 +700,8 @@ defmodule Bonfire.Social.RuntimeConfig do
         # user_research: %{
         #   built_in: true, description: "Publications by a specific user",
         #   filters: %{media_types: [:research]},
-        #   parameterized: %{creators: :by}
+        #   parameterized: %{creators: :by},
+        #   assigns: media_feed_assigns
         # },
 
         # Content type feeds
@@ -751,9 +755,7 @@ defmodule Bonfire.Social.RuntimeConfig do
             media_types: [:research]
           },
           icon: "ph:microscope-duotone",
-          assigns: [
-            enable_marker: true
-          ]
+          assigns: [enable_marker: true] ++ media_feed_assigns
         },
         # the media feeds list files and embeds together: a link's kind is decided when it is saved (`Bonfire.Files.link_type/2`), so each filter only matches a stored type
         # TODO: move these presets to `bonfire_files`' config, beside the `media_types` field they filter by; maps for the same reason as `research` above
@@ -764,7 +766,8 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %{
             media_types: ["image"]
           },
-          icon: "ph:image-duotone"
+          icon: "ph:image-duotone",
+          assigns: media_feed_assigns
         },
         videos: %{
           name: l("Videos"),
@@ -773,7 +776,8 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %{
             media_types: ["video"]
           },
-          icon: "ph:video-duotone"
+          icon: "ph:video-duotone",
+          assigns: media_feed_assigns
         },
         audio: %{
           name: l("Audio"),
@@ -782,7 +786,8 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %{
             media_types: ["audio"]
           },
-          icon: "ph:waveform-duotone"
+          icon: "ph:waveform-duotone",
+          assigns: media_feed_assigns
         },
         documents: %{
           name: l("Documents"),
@@ -791,7 +796,8 @@ defmodule Bonfire.Social.RuntimeConfig do
           filters: %{
             media_types: ["document"]
           },
-          icon: "ph:file-text-duotone"
+          icon: "ph:file-text-duotone",
+          assigns: media_feed_assigns
         },
 
         # Hashtag feeds
@@ -1029,13 +1035,14 @@ defmodule Bonfire.Social.RuntimeConfig do
           },
           exclude_from_nav: true,
           icon: "ph:newspaper-duotone",
-          assigns: [
-            page: "trending_links",
-            page_title: l("Trending links"),
-            feedback_title: l("No trending links yet"),
-            feedback_message: l("Share interesting links to see them here")
-            # hide_filters: true
-          ]
+          assigns:
+            [
+              page: "trending_links",
+              page_title: l("Trending links"),
+              feedback_title: l("No trending links yet"),
+              feedback_message: l("Share interesting links to see them here")
+              # hide_filters: true
+            ] ++ media_feed_assigns
         },
         local_media: %{
           name: l("Local Media"),
@@ -1047,7 +1054,8 @@ defmodule Bonfire.Social.RuntimeConfig do
             origin: :local,
             media_types: ["*"]
           },
-          icon: "ph:file-duotone"
+          icon: "ph:file-duotone",
+          assigns: media_feed_assigns
         }
       ]
 

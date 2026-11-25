@@ -199,6 +199,8 @@ defmodule Bonfire.Social.Media do
     #     opts[:preload],
     #     opts
     #   )
+    # the activities are those of the candidate media, but one of them can carry other media too, which are not among the page's
+    |> restrict_to_candidates(filters, opts)
     |> debug("media query before calculating metrics")
     # Conditionally add expensive metrics
     # |> reusable_join(
@@ -266,6 +268,123 @@ defmodule Bonfire.Social.Media do
   end
 
   defp media_cursor_value(media, field), do: Map.get(media, field)
+
+  @default_per_media_multiply_limit 10
+
+  @doc """
+  How many candidate media a date-sorted media feed reads per row of the page: the activities of that many of the newest media (by id) are looked at, instead of every activity in the time window.
+
+  A page that comes back short from them is retried with twice as many (see `Bonfire.Social.FeedLoader`), so this only trades how often that happens against how much one read costs. Ten pages' worth keeps a page of twenty media to the activities of two hundred, and is rarely short for a type most media have. Set with the `per_media_multiply_limit` option or the `[Bonfire.Social.Media, :per_media_multiply_limit]` config.
+  """
+  def per_media_multiply_limit(opts) do
+    case opts[:per_media_multiply_limit] ||
+           Config.get([__MODULE__, :per_media_multiply_limit], @default_per_media_multiply_limit) do
+      n when is_integer(n) and n > 0 -> n
+      _ -> @default_per_media_multiply_limit
+    end
+  end
+
+  @doc """
+  The newest media (by id, in the feed's order and after its cursor) that match the feed's media filters, limited to as many as one read looks at, as a query of their ids. `nil` for a metric sort, which orders by what the activities add up to, and when there are no media filters or `Bonfire.Files.FeedFilters` is not there to build them.
+
+  The `limit:` and `offset:` query options replace how many it takes and skip the first ones, to see whether any more come after those one read looks at.
+  """
+  def candidate_media_ids_query(filters, opts, query_opts \\ []) do
+    sort_by = filters[:sort_by] || opts[:sort_by]
+
+    with true <- sort_by in [nil, :date_created],
+         [_ | _] = conditions <- media_filter_conditions(filters) do
+      pagination = repo().pagination_opts(opts)
+      order = if (filters[:sort_order] || opts[:sort_order]) == :asc, do: :asc, else: :desc
+      limit = Keyword.get(query_opts, :limit, candidate_limit(opts))
+
+      # `before` reads the page the other way round, so the media nearest the cursor come first
+      {scan_order, cursor_id} =
+        cond do
+          pagination[:after] -> {order, cursor_media_id(pagination[:after])}
+          pagination[:before] -> {flip_order(order), cursor_media_id(pagination[:before])}
+          true -> {order, nil}
+        end
+
+      condition = Enum.reduce(conditions, fn condition, acc -> dynamic(^acc and ^condition) end)
+
+      from(media in Bonfire.Files.Media,
+        as: :media,
+        where: ^condition,
+        select: media.id,
+        limit: ^limit
+      )
+      |> then(fn query ->
+        case Keyword.get(query_opts, :offset, 0) do
+          0 -> query
+          offset -> offset(query, ^offset)
+        end
+      end)
+      |> order_by([media: media], [{^scan_order, media.id}])
+      |> candidates_beyond_cursor(scan_order, cursor_id)
+    else
+      _ -> nil
+    end
+  end
+
+  defp candidates_beyond_cursor(query, _scan_order, nil), do: query
+
+  defp candidates_beyond_cursor(query, :desc, id), do: where(query, [media: media], media.id < ^id)
+
+  defp candidates_beyond_cursor(query, :asc, id), do: where(query, [media: media], media.id > ^id)
+
+  defp flip_order(:asc), do: :desc
+  defp flip_order(:desc), do: :asc
+
+  # a cursor over the Media id alone is that id, or else an encoded map holding it
+  defp cursor_media_id(cursor) do
+    case Paginator.Cursor.maybe_decode(cursor) do
+      %{id: id} -> id
+      _ -> nil
+    end
+  end
+
+  # the media filters are `bonfire_files`' (`Bonfire.Files.FeedFilters`), an optional dependency here
+  defp media_filter_conditions(filters) do
+    Enum.flat_map([:media_types, :exclude_media_types], fn key ->
+      with types when not is_nil(types) <- filters[key],
+           condition when not is_nil(condition) <-
+             maybe_apply(Bonfire.Files.FeedFilters, :media_condition, [{key, types}],
+               fallback_return: nil
+             ) do
+        [condition]
+      else
+        _ -> []
+      end
+    end)
+  end
+
+  @doc "Whether more candidate media come after those one read looks at, so a short page may still have media beyond them."
+  def more_candidate_media?(filters, opts) do
+    case candidate_media_ids_query(filters, opts, limit: 1, offset: candidate_limit(opts)) do
+      nil -> false
+      query -> repo().one(query) != nil
+    end
+  end
+
+  defp candidate_limit(opts), do: repo().pagination_opts(opts)[:limit] * per_media_multiply_limit(opts)
+
+  defp restrict_to_candidates(query, filters, opts) do
+    case candidate_media_ids_query(filters, opts) do
+      nil -> query
+      candidates -> where(query, [main_object: media], media.id in subquery(candidates))
+    end
+  end
+
+  @doc "Limits a query with a `media` binding to the activities of the candidate media. Leaves it as it is when there are none (see `candidate_media_ids_query/3`)."
+  def restrict_to_candidate_media(%Ecto.Query{} = query, filters, opts) do
+    with true <- has_named_binding?(query, :media),
+         %Ecto.Query{} = candidates <- candidate_media_ids_query(filters, opts) do
+      where(query, [media: media], media.id in subquery(candidates))
+    else
+      _ -> query
+    end
+  end
 
   # the column a metric sort orders by: `:last_used` is the latest activity reaching the media (a ULID, so its time), which the aggregate already selects as `newest_activity_id`
   defp metric_field(:last_used), do: :newest_activity_id
