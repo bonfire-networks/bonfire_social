@@ -755,34 +755,44 @@ defmodule Bonfire.Social.RuntimeConfig do
             enable_marker: true
           ]
         },
-        # TEMPORARILY DISABLED:
-        # images: %{
-        #   name: l("Images"),
-        #   built_in: true,
-        #   description: l("All known images"),
-        #   filters: %FeedFilters{
-        #     media_types: ["image"]
-        #   },
-        #   icon: "ph:image-duotone"
-        # },
-        # videos: %{
-        #   name: l("Videos"),
-        #   built_in: true,
-        #   description: l("All known videos"),
-        #   filters: %FeedFilters{
-        #     media_types: ["video"]
-        #   },
-        #   icon: "ph:video-duotone"
-        # },
-        # audio: %{
-        #   name: l("Audio"),
-        #   built_in: true,
-        #   description: l("All known audio"),
-        #   filters: %FeedFilters{
-        #     media_types: ["audio"]
-        #   },
-        #   icon: "ph:waveform-duotone"
-        # },
+        # the media feeds list files and embeds together: a link's kind is decided when it is saved (`Bonfire.Files.link_type/2`), so each filter only matches a stored type
+        # TODO: move these presets to `bonfire_files`' config, beside the `media_types` field they filter by; maps for the same reason as `research` above
+        images: %{
+          name: l("Images"),
+          built_in: true,
+          description: l("All known images"),
+          filters: %{
+            media_types: ["image"]
+          },
+          icon: "ph:image-duotone"
+        },
+        videos: %{
+          name: l("Videos"),
+          built_in: true,
+          description: l("All known videos"),
+          filters: %{
+            media_types: ["video"]
+          },
+          icon: "ph:video-duotone"
+        },
+        audio: %{
+          name: l("Audio"),
+          built_in: true,
+          description: l("All known audio"),
+          filters: %{
+            media_types: ["audio"]
+          },
+          icon: "ph:waveform-duotone"
+        },
+        documents: %{
+          name: l("Documents"),
+          built_in: true,
+          description: l("All known documents"),
+          filters: %{
+            media_types: ["document"]
+          },
+          icon: "ph:file-text-duotone"
+        },
 
         # Hashtag feeds
         # TODO: move this preset and `mentions` below to `bonfire_tag`'s config, beside the `tags` field they filter by

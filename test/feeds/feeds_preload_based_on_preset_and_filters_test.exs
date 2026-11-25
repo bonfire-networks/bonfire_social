@@ -47,7 +47,11 @@ defmodule Bonfire.Social.Feeds.PreloadPresetTest do
              :user_following,
              :images,
              :local_media,
+             # one row per Media, like local_media: covered by bonfire_files' my_media_feed_test
+             :my_media,
              :audio,
+             # the media presets: covered by bonfire_files' media_presets_test
+             :documents,
              :videos,
              :research,
              :mentions,

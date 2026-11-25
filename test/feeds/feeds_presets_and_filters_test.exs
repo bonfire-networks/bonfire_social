@@ -43,10 +43,14 @@ defmodule Bonfire.Social.Feeds.PresetFiltersTest do
   for %{preset: preset, filters: filters} = params
       when preset not in [
              :audio,
+             # the media presets: covered by bonfire_files' media_presets_test
+             :documents,
              :videos,
              :images,
              :research,
              :local_media,
+             # one row per Media, like local_media: covered by bonfire_files' my_media_feed_test
+             :my_media,
              :mentions,
              :curated,
              :user_following,
