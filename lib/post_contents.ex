@@ -835,6 +835,27 @@ defmodule Bonfire.Social.PostContents do
 
   Carries the post's own content only; callers add the object's media with `Bonfire.Files.ap_merge_media/2`.
   """
+  # mention links in the body point at the actor's id, or for one of our actors at its page here (`normalise_local_links` stores `/pub/person/x` as `/user/x`); other servers recognise a mention by its `url` (eg. `/@name` on Mastodon, where the id is `/users/name`), which for our actors is their id
+  defp ap_mention_links(mentions) do
+    base_url = URIs.base_url()
+
+    for %{ap_id: ap_id} = actor <- List.wrap(mentions), is_binary(ap_id) do
+      url =
+        case e(actor, :data, "url", nil) do
+          url when is_binary(url) -> url
+          _ -> ap_id
+        end
+
+      local_page =
+        case String.replace_prefix(ap_id, base_url, "") do
+          "/" <> _ = path when path != ap_id -> URIs.based_url(URIs.localise_ap_path(path))
+          _ -> nil
+        end
+
+      %{hrefs: Enum.reject([ap_id, url, local_page], &is_nil/1), url: url}
+    end
+  end
+
   def ap_prepare_object_note(subject, verb, post, actor, mentions, context, reply_to) do
     content_format = editor_output_content_type(subject)
     stored_body = e(post, :post_content, :html_body, nil)
@@ -876,8 +897,11 @@ defmodule Bonfire.Social.PostContents do
           sanitize: true,
           link_rel: nil,
           # so other servers hide the trailing line of hashtags, as we do on our own pages
-          hide_trailing_hashtags: true
-        ),
+          hide_trailing_hashtags: true,
+          # a markdown body can start with a hashtag link already made HTML above
+          content_format: content_format
+        )
+        |> Text.mark_mention_links(ap_mention_links(mentions)),
       "source" =>
         if content_format != :html do
           %{
